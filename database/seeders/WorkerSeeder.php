@@ -18,25 +18,25 @@ final class WorkerSeeder extends Seeder
         $workers = [
             [
                 'email' => 'worker1@example.com',
-                'first_name' => 'Sara',
-                'bio' => 'Professional cleaner with 5+ years experience. Specializes in deep cleaning and eco-friendly products.',
-                'address' => '123 Main St, Downtown',
+                'first_name' => 'سارة',
+                'bio' => 'منظفة محترفة بخبرة أكثر من 5 سنوات. متخصصة في التنظيف العميق والمنتجات الصديقة للبيئة.',
+                'address' => '123 الشارع الرئيسي، وسط البلد',
                 'lat' => 31.963158,
                 'lng' => 35.930359,
             ],
             [
                 'email' => 'worker2@example.com',
-                'first_name' => 'Ahmed',
-                'bio' => 'Reliable and punctual. Experienced in event assistance and large gatherings.',
-                'address' => '456 Oak Ave, North District',
+                'first_name' => 'أحمد',
+                'bio' => 'موثوق ومنضبط. ذو خبرة في مساعدة المناسبات والتجمعات الكبيرة.',
+                'address' => '456 جادة البلوط، الحي الشمالي',
                 'lat' => 31.970000,
                 'lng' => 35.940000,
             ],
             [
                 'email' => 'worker3@example.com',
-                'first_name' => 'Layla',
-                'bio' => 'Detail-oriented cleaner. Available for regular and one-time cleaning.',
-                'address' => '789 Pine Rd, East Side',
+                'first_name' => 'ليلى',
+                'bio' => 'منظفة تهتم بالتفاصيل. متاحة للتنظيف الدوري والمرة الواحدة.',
+                'address' => '789 طريق الصنوبر، الجانب الشرقي',
                 'lat' => 31.955000,
                 'lng' => 35.920000,
             ],
@@ -46,7 +46,7 @@ final class WorkerSeeder extends Seeder
             $user = User::firstOrCreate(
                 ['email' => $data['email']],
                 [
-                    'name' => $data['first_name'].' Worker',
+                    'name' => $data['first_name'].' عامل',
                     'password' => bcrypt('password'),
                     'email_verified_at' => now(),
                 ]
@@ -80,7 +80,7 @@ final class WorkerSeeder extends Seeder
             );
 
             WorkerZone::firstOrCreate(
-                ['worker_id' => $worker->id, 'name' => 'Primary Zone'],
+                ['worker_id' => $worker->id, 'name' => 'المنطقة الأساسية'],
                 [
                     'polygon' => [
                         ['lat' => $data['lat'] - 0.05, 'lng' => $data['lng'] - 0.05],

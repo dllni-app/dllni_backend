@@ -14,8 +14,8 @@ final class CancellationPolicySeeder extends Seeder
         $policies = [
             [
                 'module' => 'restaurant',
-                'name' => 'Standard Restaurant Policy',
-                'description' => 'Free cancellation up to 2 hours before pickup. 50% charge within 2 hours.',
+                'name' => 'سياسة المطعم المعيارية',
+                'description' => 'إلغاء مجاني حتى ساعتين قبل الاستلام. رسوم 50% خلال ساعتين.',
                 'rules' => [
                     'free_until_hours' => 2,
                     'late_percentage' => 50,
@@ -25,8 +25,8 @@ final class CancellationPolicySeeder extends Seeder
             ],
             [
                 'module' => 'restaurant',
-                'name' => 'Strict Restaurant Policy',
-                'description' => 'Free cancellation up to 4 hours before. 100% charge within 4 hours.',
+                'name' => 'سياسة المطعم الصارمة',
+                'description' => 'إلغاء مجاني حتى 4 ساعات قبل. رسوم 100% خلال 4 ساعات.',
                 'rules' => [
                     'free_until_hours' => 4,
                     'late_percentage' => 100,
@@ -36,8 +36,8 @@ final class CancellationPolicySeeder extends Seeder
             ],
             [
                 'module' => 'cleaning',
-                'name' => 'Standard Cleaning Policy',
-                'description' => 'Free cancellation up to 24 hours before. 25% within 24h, 50% within 12h.',
+                'name' => 'سياسة التنظيف المعيارية',
+                'description' => 'إلغاء مجاني حتى 24 ساعة قبل. 25% خلال 24 ساعة، 50% خلال 12 ساعة.',
                 'rules' => [
                     'free_until_hours' => 24,
                     'within_24h_percentage' => 25,
@@ -48,8 +48,8 @@ final class CancellationPolicySeeder extends Seeder
             ],
             [
                 'module' => 'cleaning',
-                'name' => 'Flexible Cleaning Policy',
-                'description' => 'Free cancellation up to 12 hours before.',
+                'name' => 'سياسة التنظيف المرنة',
+                'description' => 'إلغاء مجاني حتى 12 ساعة قبل.',
                 'rules' => [
                     'free_until_hours' => 12,
                 ],
@@ -58,8 +58,8 @@ final class CancellationPolicySeeder extends Seeder
             ],
             [
                 'module' => 'supermarket',
-                'name' => 'Standard Supermarket Policy',
-                'description' => 'Free cancellation up to 1 hour before delivery.',
+                'name' => 'سياسة السوبرماركت المعيارية',
+                'description' => 'إلغاء مجاني حتى ساعة واحدة قبل التوصيل.',
                 'rules' => [
                     'free_until_hours' => 1,
                 ],

@@ -13,21 +13,21 @@ final class TravelCostConfigSeeder extends Seeder
     {
         $configs = [
             [
-                'name' => 'Local Zone',
+                'name' => 'المنطقة المحلية',
                 'max_km' => 10,
                 'cost_per_km' => 0.50,
                 'fixed_fee' => 5.00,
                 'is_active' => true,
             ],
             [
-                'name' => 'Extended Zone',
+                'name' => 'المنطقة الممتدة',
                 'max_km' => 25,
                 'cost_per_km' => 0.75,
                 'fixed_fee' => 10.00,
                 'is_active' => true,
             ],
             [
-                'name' => 'Outer Zone',
+                'name' => 'المنطقة الخارجية',
                 'max_km' => 50,
                 'cost_per_km' => 1.00,
                 'fixed_fee' => 15.00,

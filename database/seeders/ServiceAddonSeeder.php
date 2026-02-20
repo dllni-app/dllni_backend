@@ -14,42 +14,42 @@ final class ServiceAddonSeeder extends Seeder
     {
         $addons = [
             [
-                'name' => 'Inside Fridge',
+                'name' => 'داخل الثلاجة',
                 'slug' => 'inside-fridge',
                 'pricing_type' => AddonPricingType::Fixed->value,
                 'price_value' => 25.00,
                 'is_active' => true,
             ],
             [
-                'name' => 'Inside Oven',
+                'name' => 'داخل الفرن',
                 'slug' => 'inside-oven',
                 'pricing_type' => AddonPricingType::Fixed->value,
                 'price_value' => 20.00,
                 'is_active' => true,
             ],
             [
-                'name' => 'Window Cleaning',
+                'name' => 'تنظيف النوافذ',
                 'slug' => 'window-cleaning',
                 'pricing_type' => AddonPricingType::Fixed->value,
                 'price_value' => 15.00,
                 'is_active' => true,
             ],
             [
-                'name' => 'Laundry & Ironing',
+                'name' => 'غسيل وكي',
                 'slug' => 'laundry-ironing',
                 'pricing_type' => AddonPricingType::Fixed->value,
                 'price_value' => 35.00,
                 'is_active' => true,
             ],
             [
-                'name' => 'Deep Clean Extra',
+                'name' => 'تنظيف عميق إضافي',
                 'slug' => 'deep-clean-extra',
                 'pricing_type' => AddonPricingType::Percentage->value,
                 'price_value' => 25.00,
                 'is_active' => true,
             ],
             [
-                'name' => 'Inside Cabinets',
+                'name' => 'داخل الخزائن',
                 'slug' => 'inside-cabinets',
                 'pricing_type' => AddonPricingType::Fixed->value,
                 'price_value' => 30.00,

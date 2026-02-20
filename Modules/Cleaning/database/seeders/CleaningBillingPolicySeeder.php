@@ -14,7 +14,7 @@ final class CleaningBillingPolicySeeder extends Seeder
     {
         $policies = [
             [
-                'name' => 'Full Booked Time',
+                'name' => 'الوقت المحجوز كاملاً',
                 'billing_mode' => CleaningBillingMode::FullBookedTime->value,
                 'rules' => [
                     'charge_full_booked_hours' => true,
@@ -24,7 +24,7 @@ final class CleaningBillingPolicySeeder extends Seeder
                 'is_default' => true,
             ],
             [
-                'name' => 'Actual Working Time',
+                'name' => 'وقت العمل الفعلي',
                 'billing_mode' => CleaningBillingMode::ActualWorkingTime->value,
                 'rules' => [
                     'charge_actual_hours' => true,

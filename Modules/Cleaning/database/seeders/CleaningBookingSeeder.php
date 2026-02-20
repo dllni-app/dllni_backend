@@ -21,7 +21,7 @@ final class CleaningBookingSeeder extends Seeder
         $customer = User::firstOrCreate(
             ['email' => 'cleaning.customer@example.com'],
             [
-                'name' => 'Cleaning Customer',
+                'name' => 'عميل التنظيف',
                 'password' => bcrypt('password'),
                 'email_verified_at' => now(),
             ]

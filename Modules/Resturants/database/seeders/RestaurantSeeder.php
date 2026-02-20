@@ -23,7 +23,7 @@ final class RestaurantSeeder extends Seeder
         $owner = User::firstOrCreate(
             ['email' => 'restaurant.owner@example.com'],
             [
-                'name' => 'Restaurant Owner',
+                'name' => 'مالك المطعم',
                 'password' => bcrypt('password'),
                 'email_verified_at' => now(),
             ]
@@ -31,10 +31,10 @@ final class RestaurantSeeder extends Seeder
 
         $restaurants = [
             [
-                'name' => 'La Piazza Italian Kitchen',
+                'name' => 'مطبخ لا بيازا الإيطالي',
                 'slug' => 'la-piazza-italian',
-                'description' => 'Authentic Italian cuisine with wood-fired pizzas and homemade pasta. Family recipes passed down for generations.',
-                'address' => '15 Restaurant Row, Downtown',
+                'description' => 'مطبخ إيطالي أصيل مع بيتزا بالخشب ومعكرونة منزلية. وصفات عائلية تتوارثها الأجيال.',
+                'address' => '15 شارع المطاعم، وسط البلد',
                 'latitude' => 31.963158,
                 'longitude' => 35.930359,
                 'phone' => '+962 6 555 1234',
@@ -45,10 +45,10 @@ final class RestaurantSeeder extends Seeder
                 'is_featured' => true,
             ],
             [
-                'name' => 'Golden Dragon Asian Bistro',
+                'name' => 'التنين الذهبي - بسترو آسيوي',
                 'slug' => 'golden-dragon-asian',
-                'description' => 'Modern Asian fusion with sushi, dim sum, and wok dishes. Fresh ingredients daily.',
-                'address' => '88 Food Street, West District',
+                'description' => 'مطبخ آسيوي عصري مع سوشي ودمبلنغ وأطباق الووك. مكونات طازجة يومياً.',
+                'address' => '88 شارع الطعام، الحي الغربي',
                 'latitude' => 31.970000,
                 'longitude' => 35.935000,
                 'phone' => '+962 6 555 5678',
@@ -59,10 +59,10 @@ final class RestaurantSeeder extends Seeder
                 'is_featured' => true,
             ],
             [
-                'name' => 'Burger Haven',
+                'name' => 'ملاذ البرغر',
                 'slug' => 'burger-haven',
-                'description' => 'Gourmet burgers and hand-cut fries. Quick service for pickup and dine-in.',
-                'address' => '42 Fast Food Lane',
+                'description' => 'برغر فاخر وبطاطس مقطعة يدوياً. خدمة سريعة للاستلام وتناول الطعام.',
+                'address' => '42 شارع الوجبات السريعة',
                 'latitude' => 31.955000,
                 'longitude' => 35.925000,
                 'phone' => '+962 6 555 9012',
@@ -119,10 +119,10 @@ final class RestaurantSeeder extends Seeder
             }
 
             $categories = [
-                ['name' => 'Starters', 'slug' => 'starters'],
-                ['name' => 'Main Course', 'slug' => 'main-course'],
-                ['name' => 'Desserts', 'slug' => 'desserts'],
-                ['name' => 'Drinks', 'slug' => 'drinks'],
+                ['name' => 'مقبلات', 'slug' => 'starters'],
+                ['name' => 'الطبق الرئيسي', 'slug' => 'main-course'],
+                ['name' => 'حلويات', 'slug' => 'desserts'],
+                ['name' => 'مشروبات', 'slug' => 'drinks'],
             ];
 
             foreach ($categories as $i => $cat) {
@@ -169,27 +169,27 @@ final class RestaurantSeeder extends Seeder
     {
         $baseProducts = match ($categorySlug) {
             'starters' => [
-                ['name' => 'Caesar Salad', 'price' => 8.99],
-                ['name' => 'Soup of the Day', 'price' => 6.50],
-                ['name' => 'Garlic Bread', 'price' => 5.99],
-                ['name' => 'Bruschetta', 'price' => 7.50],
+                ['name' => 'سلطة سيزر', 'price' => 8.99],
+                ['name' => 'شوربة اليوم', 'price' => 6.50],
+                ['name' => 'خبز بالثوم', 'price' => 5.99],
+                ['name' => 'بروشيتا', 'price' => 7.50],
             ],
             'main-course' => [
-                ['name' => 'Grilled Chicken', 'price' => 14.99],
-                ['name' => 'Beef Burger', 'price' => 12.99],
-                ['name' => 'Pasta Carbonara', 'price' => 13.50],
-                ['name' => 'Fish & Chips', 'price' => 15.99],
+                ['name' => 'دجاج مشوي', 'price' => 14.99],
+                ['name' => 'برغر لحم', 'price' => 12.99],
+                ['name' => 'باستا كاربونارا', 'price' => 13.50],
+                ['name' => 'سمك ورقاص', 'price' => 15.99],
             ],
             'desserts' => [
-                ['name' => 'Chocolate Cake', 'price' => 7.99],
-                ['name' => 'Ice Cream', 'price' => 5.50],
-                ['name' => 'Tiramisu', 'price' => 8.99],
+                ['name' => 'كيك شوكولاتة', 'price' => 7.99],
+                ['name' => 'آيس كريم', 'price' => 5.50],
+                ['name' => 'تيراميسو', 'price' => 8.99],
             ],
             'drinks' => [
-                ['name' => 'Fresh Juice', 'price' => 4.50],
-                ['name' => 'Soft Drink', 'price' => 2.99],
-                ['name' => 'Coffee', 'price' => 3.50],
-                ['name' => 'Water', 'price' => 1.50],
+                ['name' => 'عصير طازج', 'price' => 4.50],
+                ['name' => 'مشروب غازي', 'price' => 2.99],
+                ['name' => 'قهوة', 'price' => 3.50],
+                ['name' => 'ماء', 'price' => 1.50],
             ],
             default => [],
         };
@@ -224,10 +224,10 @@ final class RestaurantSeeder extends Seeder
     private function ensureCuisineTypes(): array
     {
         $types = [
-            'italian' => ['name' => 'Italian', 'slug' => 'italian'],
-            'asian' => ['name' => 'Asian', 'slug' => 'asian'],
-            'american' => ['name' => 'American', 'slug' => 'american'],
-            'mediterranean' => ['name' => 'Mediterranean', 'slug' => 'mediterranean'],
+            'italian' => ['name' => 'إيطالي', 'slug' => 'italian'],
+            'asian' => ['name' => 'آسيوي', 'slug' => 'asian'],
+            'american' => ['name' => 'أمريكي', 'slug' => 'american'],
+            'mediterranean' => ['name' => 'متوسطي', 'slug' => 'mediterranean'],
         ];
 
         $ids = [];
@@ -251,7 +251,7 @@ final class RestaurantSeeder extends Seeder
         $customer = User::firstOrCreate(
             ['email' => 'restaurant.customer@example.com'],
             [
-                'name' => 'Restaurant Customer',
+                'name' => 'عميل المطعم',
                 'password' => bcrypt('password'),
                 'email_verified_at' => now(),
             ]

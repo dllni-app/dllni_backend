@@ -17,10 +17,10 @@ final class CleaningServiceSeeder extends Seeder
     {
         $services = [
             [
-                'name' => 'Standard Apartment Cleaning',
+                'name' => 'تنظيف الشقة المعياري',
                 'slug' => 'standard-apartment-cleaning',
                 'category' => ServiceCategory::Cleaning->value,
-                'description' => 'Regular cleaning for apartments. Includes dusting, vacuuming, mopping, bathroom and kitchen cleaning.',
+                'description' => 'تنظيف دوري للشقق. يشمل المسح والكنس والغسيل وتنظيف الحمام والمطبخ.',
                 'pricing' => [
                     [PropertyType::Studio->value, null, 45.00, 0.50, 2],
                     [PropertyType::Apartment->value, LivingRoomSize::Small->value, 55.00, 0.45, 3],
@@ -30,10 +30,10 @@ final class CleaningServiceSeeder extends Seeder
                 ],
             ],
             [
-                'name' => 'Deep Cleaning',
+                'name' => 'تنظيف عميق',
                 'slug' => 'deep-cleaning',
                 'category' => ServiceCategory::Cleaning->value,
-                'description' => 'Thorough deep clean including inside cabinets, appliances, and hard-to-reach areas.',
+                'description' => 'تنظيف شامل يشمل داخل الخزائن والأجهزة والمناطق صعبة الوصول.',
                 'pricing' => [
                     [PropertyType::Studio->value, null, 85.00, 1.00, 3],
                     [PropertyType::Apartment->value, LivingRoomSize::Small->value, 110.00, 0.90, 4],
@@ -43,10 +43,10 @@ final class CleaningServiceSeeder extends Seeder
                 ],
             ],
             [
-                'name' => 'Move-in/Move-out Cleaning',
+                'name' => 'تنظيف نقل سكن',
                 'slug' => 'move-in-move-out-cleaning',
                 'category' => ServiceCategory::Cleaning->value,
-                'description' => 'Comprehensive cleaning for moving. Ensures property is spotless for new tenants.',
+                'description' => 'تنظيف شامل عند الانتقال. يضمن أن تكون العقار نظيفة للمستأجرين الجدد.',
                 'pricing' => [
                     [PropertyType::Studio->value, null, 95.00, 1.20, 3],
                     [PropertyType::Apartment->value, LivingRoomSize::Small->value, 125.00, 1.10, 4],
@@ -55,20 +55,20 @@ final class CleaningServiceSeeder extends Seeder
                 ],
             ],
             [
-                'name' => 'Event Assistance',
+                'name' => 'مساعدة في المناسبات',
                 'slug' => 'event-assistance',
                 'category' => ServiceCategory::EventAssistance->value,
-                'description' => 'Help with setup, serving, and cleanup for events and gatherings.',
+                'description' => 'مساعدة في التحضير والتقديم والتنظيف للمناسبات والتجمعات.',
                 'pricing' => [
                     [PropertyType::Apartment->value, null, 25.00, null, 4],
                     [PropertyType::Villa->value, null, 25.00, null, 6],
                 ],
             ],
             [
-                'name' => 'Office Cleaning',
+                'name' => 'تنظيف المكاتب',
                 'slug' => 'office-cleaning',
                 'category' => ServiceCategory::Cleaning->value,
-                'description' => 'Professional office cleaning. Desks, common areas, restrooms.',
+                'description' => 'تنظيف مكاتب احترافي. المكاتب والمناطق المشتركة ودورات المياه.',
                 'pricing' => [
                     [PropertyType::Office->value, null, 60.00, 0.35, 4],
                 ],

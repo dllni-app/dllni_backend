@@ -20,7 +20,7 @@ final class EventBookingSeeder extends Seeder
         $customer = User::firstOrCreate(
             ['email' => 'event.customer@example.com'],
             [
-                'name' => 'Event Customer',
+                'name' => 'عميل المناسبات',
                 'password' => bcrypt('password'),
                 'email_verified_at' => now(),
             ]
