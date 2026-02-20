@@ -1,0 +1,78 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Modules\Supermarket\Models;
+
+use App\Models\MasterProduct;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Modules\Supermarket\Enums\SmProductSource;
+
+final class SmProduct extends Model
+{
+    protected $table = 'sm_products';
+
+    protected $fillable = [
+        'store_id',
+        'category_id',
+        'master_product_id',
+        'name',
+        'barcode',
+        'source_type',
+        'description',
+        'price',
+        'discounted_price',
+        'stock_quantity',
+        'low_stock_threshold',
+        'expires_at',
+        'is_available',
+    ];
+
+    public function store(): BelongsTo
+    {
+        return $this->belongsTo(SmStore::class, 'store_id');
+    }
+
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(SmCategory::class, 'category_id');
+    }
+
+    public function masterProduct(): BelongsTo
+    {
+        return $this->belongsTo(MasterProduct::class, 'master_product_id');
+    }
+
+    public function inventoryLogs(): HasMany
+    {
+        return $this->hasMany(SmInventoryLog::class, 'product_id');
+    }
+
+    public function offerProducts(): HasMany
+    {
+        return $this->hasMany(SmOfferProduct::class, 'product_id');
+    }
+
+    public function cartItems(): HasMany
+    {
+        return $this->hasMany(SmCartItem::class, 'product_id');
+    }
+
+    public function orderItems(): HasMany
+    {
+        return $this->hasMany(SmOrderItem::class, 'product_id');
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'price' => 'decimal:2',
+            'discounted_price' => 'decimal:2',
+            'source_type' => SmProductSource::class,
+            'expires_at' => 'datetime',
+            'is_available' => 'boolean',
+        ];
+    }
+}
