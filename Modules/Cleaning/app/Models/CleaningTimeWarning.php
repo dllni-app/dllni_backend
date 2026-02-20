@@ -7,9 +7,12 @@ namespace Modules\Cleaning\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Modules\Cleaning\Enums\CleaningTimeWarningResponse;
+use Modules\Cleaning\Traits\FilterQueries\CleaningTimeWarningFilterQuery;
 
 final class CleaningTimeWarning extends Model
 {
+    use CleaningTimeWarningFilterQuery;
+
     protected $fillable = [
         'booking_id',
         'booking_type',

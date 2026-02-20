@@ -6,9 +6,12 @@ namespace Modules\Cleaning\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Modules\Cleaning\Traits\FilterQueries\ServicePricingFilterQuery;
 
 final class ServicePricing extends Model
 {
+    use ServicePricingFilterQuery;
+
     protected $table = 'service_pricing';
 
     protected $fillable = [
