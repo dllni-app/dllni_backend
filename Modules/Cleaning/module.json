@@ -1,0 +1,11 @@
+{
+    "name": "Cleaning",
+    "alias": "cleaning",
+    "description": "",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\Cleaning\\Providers\\CleaningServiceProvider"
+    ],
+    "files": []
+}

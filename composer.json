@@ -45,7 +45,10 @@
             "Database\\Factories\\": "database/factories/",
             "Database\\Seeders\\": "database/seeders/",
             "Mrmarchone\\LaravelAutoCrud\\": "AutoCrud/",
-            "Modules\\Resturants\\": "Modules/Resturants/app/"
+            "Modules\\Cleaning\\Database\\Seeders\\": "Modules/Cleaning/database/seeders/",
+            "Modules\\Resturants\\Database\\Seeders\\": "Modules/Resturants/database/seeders/",
+            "Modules\\Resturants\\": "Modules/Resturants/app/",
+            "Modules\\Cleaning\\": "Modules/Cleaning/app/"
         }
     },
     "autoload-dev": {

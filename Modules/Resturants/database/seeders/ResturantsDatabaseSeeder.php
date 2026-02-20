@@ -1,16 +1,17 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Modules\Resturants\Database\Seeders;
 
 use Illuminate\Database\Seeder;
 
-class ResturantsDatabaseSeeder extends Seeder
+final class ResturantsDatabaseSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
-        // $this->call([]);
+        $this->call([
+            RestaurantSeeder::class,
+        ]);
     }
 }
