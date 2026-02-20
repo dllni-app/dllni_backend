@@ -53,7 +53,7 @@ jobs:
           DB_PASSWORD: root
 
       - name: Run Tests
-        run: php artisan test tests/Feature/ 
+        run: php artisan test tests/Feature/
 
   deploy:
     name: Deploy to Hostinger
@@ -75,9 +75,10 @@ jobs:
           ssh -o StrictHostKeyChecking=no -p ${{ secrets.PORT }} ${{ secrets.USERNAME }}@${{ secrets.HOST }} << 'EOF'
             cd domains/mustafafares.com/public_html/dllni
 
-            git pull origin dev
+            git fetch
+            git reset --hard origin/dev
 
-            composer install --no-dev --optimize-autoloader
+            composer install --optimize-autoloader
 
             php artisan config:clear
             php artisan cache:clear
