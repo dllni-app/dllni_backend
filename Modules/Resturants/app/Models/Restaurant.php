@@ -7,11 +7,15 @@ namespace Modules\Resturants\Models;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Resturants\Enums\PriceRange;
+use Modules\Resturants\Traits\FilterQueries\RestaurantFilterQuery;
 
 final class Restaurant extends Model
 {
+    use RestaurantFilterQuery;
+
     protected $fillable = [
         'user_id',
         'name',
@@ -49,6 +53,67 @@ final class Restaurant extends Model
     public function carts(): HasMany
     {
         return $this->hasMany(Cart::class);
+    }
+
+    public function categories(): HasMany
+    {
+        return $this->hasMany(Category::class);
+    }
+
+    public function products(): HasMany
+    {
+        return $this->hasMany(Product::class);
+    }
+
+    public function operatingHours(): HasMany
+    {
+        return $this->hasMany(OperatingHour::class, 'restaurant_id');
+    }
+
+    public function documents(): HasMany
+    {
+        return $this->hasMany(RestaurantDocument::class, 'restaurant_id');
+    }
+
+    public function cuisineTypes(): BelongsToMany
+    {
+        return $this->belongsToMany(CuisineType::class, 'cuisine_type_restaurant')
+            ->withTimestamps();
+    }
+
+    public function reputationLogs(): HasMany
+    {
+        return $this->hasMany(RestaurantReputationLog::class, 'restaurant_id');
+    }
+
+    public function penalties(): HasMany
+    {
+        return $this->hasMany(RestaurantPenalty::class, 'restaurant_id');
+    }
+
+    public function offers(): HasMany
+    {
+        return $this->hasMany(Offer::class);
+    }
+
+    public function promoCodes(): HasMany
+    {
+        return $this->hasMany(PromoCode::class);
+    }
+
+    public function staff(): HasMany
+    {
+        return $this->hasMany(RestaurantStaff::class, 'restaurant_id');
+    }
+
+    public function roles(): HasMany
+    {
+        return $this->hasMany(RestaurantRole::class, 'restaurant_id');
+    }
+
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(Review::class);
     }
 
     protected function casts(): array

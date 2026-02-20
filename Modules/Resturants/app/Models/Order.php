@@ -8,12 +8,16 @@ use App\Models\CancellationPolicy;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Enums\OrderType;
 use Modules\Resturants\Enums\RestaurantPickupMode;
+use Modules\Resturants\Traits\FilterQueries\OrderFilterQuery;
 
 final class Order extends Model
 {
+    use OrderFilterQuery;
+
     protected $fillable = [
         'user_id',
         'restaurant_id',
@@ -53,9 +57,39 @@ final class Order extends Model
         return $this->belongsTo(Restaurant::class);
     }
 
+    public function promoCode(): BelongsTo
+    {
+        return $this->belongsTo(PromoCode::class);
+    }
+
+    public function assignedStaff(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assigned_staff_id');
+    }
+
     public function cancellationPolicy(): BelongsTo
     {
         return $this->belongsTo(CancellationPolicy::class);
+    }
+
+    public function orderItems(): HasMany
+    {
+        return $this->hasMany(OrderItem::class);
+    }
+
+    public function orderStatusLogs(): HasMany
+    {
+        return $this->hasMany(OrderStatusLog::class);
+    }
+
+    public function disputes(): HasMany
+    {
+        return $this->hasMany(RestaurantOrderDispute::class, 'order_id');
+    }
+
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(Review::class);
     }
 
     protected function casts(): array

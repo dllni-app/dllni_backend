@@ -7,9 +7,12 @@ namespace Modules\Resturants\Models;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Modules\Resturants\Traits\FilterQueries\ReviewFilterQuery;
 
 final class Review extends Model
 {
+    use ReviewFilterQuery;
+
     protected $fillable = [
         'user_id',
         'order_id',
