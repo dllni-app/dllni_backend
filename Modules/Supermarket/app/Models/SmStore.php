@@ -8,9 +8,12 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Modules\Supermarket\Traits\FilterQueries\SmStoreFilterQuery;
 
 final class SmStore extends Model
 {
+    use SmStoreFilterQuery;
+
     protected $table = 'sm_stores';
 
     protected $fillable = [
