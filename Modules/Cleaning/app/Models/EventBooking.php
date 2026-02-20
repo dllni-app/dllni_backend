@@ -6,15 +6,26 @@ namespace Modules\Cleaning\Models;
 
 use App\Models\CancellationPolicy;
 use App\Models\User;
+use Database\Factories\EventBookingFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Modules\Cleaning\Enums\EventBookingStatus;
 use Modules\Cleaning\Enums\EventType;
+use Modules\Cleaning\Traits\FilterQueries\EventBookingFilterQuery;
 
+/**
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\Dispute> $disputes
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\SosAlert> $sosAlerts
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\SystemAlert> $systemAlerts
+ */
 final class EventBooking extends Model
 {
+    use EventBookingFilterQuery;
+    use HasFactory;
+
     protected $fillable = [
         'customer_id',
         'cancellation_policy_id',
@@ -61,6 +72,26 @@ final class EventBooking extends Model
     public function timeWarnings(): MorphMany
     {
         return $this->morphMany(CleaningTimeWarning::class, 'booking');
+    }
+
+    public function disputes(): MorphMany
+    {
+        return $this->morphMany(\App\Models\Dispute::class, 'booking', 'booking_type', 'booking_id');
+    }
+
+    public function sosAlerts(): MorphMany
+    {
+        return $this->morphMany(\App\Models\SosAlert::class, 'booking', 'booking_type', 'booking_id');
+    }
+
+    public function systemAlerts(): MorphMany
+    {
+        return $this->morphMany(\App\Models\SystemAlert::class, 'booking', 'booking_type', 'booking_id');
+    }
+
+    protected static function newFactory(): EventBookingFactory
+    {
+        return EventBookingFactory::new();
     }
 
     protected function casts(): array

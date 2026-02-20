@@ -39,15 +39,6 @@ composer setup
 composer dev
 ```
 
-### Optional: Browser Testing Setup
-
-If you plan to use Pest's browser testing capabilities:
-
-```bash
-npm install playwright
-npx playwright install
-```
-
 ### Verify Installation
 
 Run the test suite to ensure everything is configured correctly:
