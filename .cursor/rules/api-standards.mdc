@@ -1,0 +1,461 @@
+---
+description: API CRUD standards (Spatie Data, Service, Policy, Filters, Pest) + modular architecture
+globs: app/Http/Controllers/API/**/*.php, app/Services/**/*.php, app/Data/**/*.php, app/Policies/**/*.php, app/Http/Requests/**/*.php, app/Traits/FilterQueries/**/*.php, app/Http/Resources/**/*.php, database/seeders/Permissions/**/*.php, tests/Feature/**/*.php, Modules/**/*.php
+alwaysApply: false
+---
+
+# API CRUD Standards
+
+When adding or changing API CRUD (e.g. via `php artisan auto-crud:generate`), follow these conventions. Reference the **User**-generated files as the canonical shape.
+
+---
+
+## Modular architecture (important)
+
+This application uses a **modular architecture**. API and domain code can live in either:
+
+- **Standard Laravel** — under `app/`, `routes/api.php`, `database/seeders/`, `tests/Feature/` (e.g. User CRUD).
+- **Modules** — under `Modules/{ModuleName}/` (e.g. **Cleaning**, **Resturants**, **Supermarket**).
+
+**Before generating or editing API CRUD:**
+
+1. **Decide scope**: Is the resource part of a module or global? (e.g. `CleaningBooking` → Cleaning module; `User` → standard app.)
+2. **Module layout** (when working inside a module):
+   - **Paths**: `Modules/{ModuleName}/app/` (Models, Http/Controllers, Services, etc.), `Modules/{ModuleName}/routes/api.php`, `Modules/{ModuleName}/database/seeders/`.
+   - **Namespaces**: `Modules\{ModuleName}\...` (e.g. `Modules\Cleaning\Http\Controllers\API\CleaningBookingController`, `Modules\Cleaning\Models\CleaningBooking`).
+   - **Routes**: Registered in the module’s `routes/api.php`; often prefixed with `api` by the module’s `RouteServiceProvider`. Use the same patterns (e.g. `Route::apiResource(...)`) inside the module.
+3. **Same standards apply**: Data/DTOs, Form Requests, FilterRequest, Service, Policy, Permissions seeder, Filter trait, API Resource, Factory, Pest tests — but **place them under the chosen scope** (app vs `Modules/{ModuleName}/`) and use the correct namespace.
+4. **Cross-module references**: App models (e.g. `User`) live in `App\Models`; module models live in `Modules\{ModuleName}\Models`. Use full namespace when one references the other.
+
+When the user mentions a module name or a file under `Modules/`, always follow the module layout and namespaces above.
+
+---
+
+## 1. Routes
+
+- **Where (standard)**: `routes/api.php`. **Where (module)**: `Modules/{ModuleName}/routes/api.php`.
+- **How**: One `Route::apiResource()` per resource; no custom route names unless needed.
+
+**User example (standard Laravel):**
+```php
+Route::apiResource('/users', App\Http\Controllers\API\UserController::class);
+```
+
+**Module example (e.g. Resturants):**
+```php
+// Modules/Resturants/routes/api.php
+Route::middleware(['auth:sanctum'])->group(function () {
+    Route::apiResource('resturants', \Modules\Resturants\Http\Controllers\ResturantsController::class)->names('resturants');
+});
+```
+
+---
+
+## 2. API Controller
+
+- **Where**: `App\Http\Controllers\API\{Model}Controller`
+- **Requirements**:
+  - `declare(strict_types=1)`; explicit return types.
+  - Constructor: inject `{Model}Service` when used in more than one method.
+  - `index`: type-hint `{Model}FilterRequest`; use `Model::getQuery()->paginate($request->get('per_page', 20))` (or `perPage` if FilterRequest uses camelCase); return `Resource::collection($paginator)`.
+  - `store`: type-hint Form Request; call `$this->service->store(Data::from($request->validated()))`; return `Resource::make($model->load(...))`.
+  - `show`: type-hint `Model $model` (route binding); return `Resource::make($model->load(...))`.
+  - `update`: Form Request + `Model $model`; call `$this->service->update(Data::from($request->validated()), $model)`; return resource.
+  - `destroy`: `Model $model`; `$model->delete()`; `return response()->noContent()`.
+  - Do not put business logic in controller; keep it in Service.
+
+**User example:**
+```php
+class UserController
+{
+    public function __construct(protected UserService $userService) {}
+
+    public function index(UserFilterRequest $request): AnonymousResourceCollection
+    {
+        $users = User::getQuery()->paginate($request->get('perPage', 20));
+        return UserResource::collection($users);
+    }
+
+    public function store(UserRequest $request): UserResource
+    {
+        $user = $this->userService->store(UserData::from($request->validated()));
+        return UserResource::make($user->load('media'));
+    }
+
+    public function show(User $user): UserResource
+    {
+        return UserResource::make($user->load('media'));
+    }
+
+    public function update(UserRequest $request, User $user): UserResource
+    {
+        $updatedUser = $this->userService->update(UserData::from($request->validated()), $user);
+        return UserResource::make($updatedUser->load('media'));
+    }
+
+    public function destroy(User $user): Response
+    {
+        $user->delete();
+        return response()->noContent();
+    }
+}
+```
+
+---
+
+## 3. Data (DTO)
+
+- **Where**: `App\Data\{Model}Data`
+- **Requirements**:
+  - Extend `Spatie\LaravelData\Data`.
+  - Use `HasModelAttributes` and set `protected static string $model = Model::class`.
+  - PHPDoc: `/** @var class-string<Model> */` above `$model`.
+  - Constructor: promoted properties only; use Spatie validation attributes (`#[Max(255)]`, `#[Unique(...)]`, `#[Date]`, `#[Exists('table','column')]`, etc.).
+  - Property names: camelCase; map to model columns via the trait where names differ.
+  - Nullable types for optional fields.
+
+**User example:**
+```php
+class UserData extends Data
+{
+    use HasModelAttributes;
+
+    /** @var class-string<User> */
+    protected static string $model = User::class;
+
+    public function __construct(
+        #[Max(255)]
+        public ?string $name,
+        #[Max(255), Unique('users', 'email')]
+        public ?string $email,
+        #[Date]
+        public ?Carbon $emailVerifiedAt,
+        #[Exists('workers', 'id')]
+        public ?int $userId,
+        // ... other fields
+    ) {}
+}
+```
+
+---
+
+## 4. Form Request (store/update)
+
+- **Where**: `App\Http\Requests\{Model}Request` (or `UserRequests\UserStoreRequest` / `UserUpdateRequest` if split).
+- **Requirements**:
+  - `authorize(): bool` (or delegate to policy).
+  - `rules(): array` with string keys matching payload (camelCase if API uses it): e.g. `name`, `email`, `emailVerifiedAt`, `password`, file rules for images if any.
+
+**User example:**
+```php
+class UserRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return true;
+    }
+
+    public function rules(): array
+    {
+        return [
+            'name' => 'string|max:255',
+            'email' => 'string|max:255|unique:users,email',
+            'emailVerifiedAt' => 'date',
+            'password' => 'string|max:255',
+            'rememberToken' => 'string|max:100',
+            'primaryImage' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:2048',
+            'images' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:2048|array',
+        ];
+    }
+}
+```
+
+---
+
+## 5. Filter Request (index)
+
+- **Where**: `App\Http\Requests\{Model}Requests\{Model}FilterRequest`
+- **Requirements**:
+  - Rules: `perPage` `sometimes|integer|min:1|max:100`; `search`; `filter.{field}` for each filterable attribute; `sort` with `in:field,-field,...` listing allowed sorts.
+
+**User example:**
+```php
+class UserFilterRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return true;
+    }
+
+    public function rules(): array
+    {
+        return [
+            'perPage' => 'sometimes|integer|min:1|max:100',
+            'search'  => 'sometimes|string|max:255',
+            'filter.name' => 'sometimes|string|max:255',
+            'filter.email' => 'sometimes|email|max:255',
+            'filter.emailVerifiedAt' => 'sometimes|date',
+            'filter.createdAfter' => 'sometimes|date',
+            'filter.createdBefore' => 'sometimes|date|after_or_equal:filter.createdAfter',
+            'filter.search' => 'sometimes|string|max:255',
+            'sort' => 'sometimes|string|in:name,-name,email,-email,emailVerifiedAt,-emailVerifiedAt',
+        ];
+    }
+}
+```
+
+---
+
+## 6. Service
+
+- **Where**: `App\Services\{Model}Service`
+- **Requirements**:
+  - `store({Model}Data $data): Model` — inside `DB::transaction()` use `Model::create($data->onlyModelAttributes())`; return created model.
+  - `update({Model}Data $data, Model $model): Model` — inside `DB::transaction()` use `tap($model)->update($data->onlyModelAttributes())`; return updated model.
+  - No `::query()` before `create()`.
+
+**User example:**
+```php
+class UserService
+{
+    public function store(UserData $data): User
+    {
+        return DB::transaction(static function () use ($data) {
+            $user = User::create($data->onlyModelAttributes());
+            return $user;
+        });
+    }
+
+    public function update(UserData $data, User $user): User
+    {
+        return DB::transaction(static function () use ($data, $user) {
+            tap($user)->update($data->onlyModelAttributes());
+            return $user;
+        });
+    }
+}
+```
+
+---
+
+## 7. Policy
+
+- **Where**: `App\Policies\{Model}Policy`
+- **Requirements**:
+  - Use trait `AuthorizesByPermissionGroup`.
+  - Methods: `viewAny`, `view`, `create`, `update`, `delete`; each returns `$this->authorizeAction($user, 'view'|'create'|'update'|'delete')`.
+  - Single `use App\Models\User` (no duplicate imports).
+
+**User example:**
+```php
+class UserPolicy
+{
+    use AuthorizesByPermissionGroup;
+
+    public function viewAny(User $user): bool
+    {
+        return $this->authorizeAction($user, 'view');
+    }
+
+    public function view(User $user, User $model): bool
+    {
+        return $this->authorizeAction($user, 'view');
+    }
+
+    public function create(User $user): bool
+    {
+        return $this->authorizeAction($user, 'create');
+    }
+
+    public function update(User $user, User $model): bool
+    {
+        return $this->authorizeAction($user, 'update');
+    }
+
+    public function delete(User $user, User $model): bool
+    {
+        return $this->authorizeAction($user, 'delete');
+    }
+}
+```
+
+---
+
+## 8. Permissions Seeder & PermissionGroup
+
+- **Where**: `database/seeders/Permissions/{Model}PermissionsSeeder.php` and `App\Enums\PermissionGroup`
+- **Requirements**:
+  - Seeder: `$group = 'users'` (plural, kebab-friendly); `$actions = ['view', 'create', 'update', 'delete']`; loop and `Permission::firstOrCreate(['name' => PermissionNameResolver::resolve($group, $action)])`.
+  - Enum: add `case USER = 'users';` (or equivalent) for the resource; use same string as `$group`.
+
+**User example (Seeder):**
+```php
+class UserPermissionsSeeder extends Seeder
+{
+    public function run(): void
+    {
+        $group = 'users';
+        $actions = ['view', 'create', 'update', 'delete'];
+        foreach ($actions as $action) {
+            $permissionName = PermissionNameResolver::resolve($group, $action);
+            Permission::firstOrCreate(['name' => $permissionName]);
+        }
+    }
+}
+```
+
+**User example (Enum):**
+```php
+enum PermissionGroup: string
+{
+    case USER = 'users';
+}
+```
+
+---
+
+## 9. Filter Query trait
+
+- **Where**: `App\Traits\FilterQueries\{Model}FilterQuery`
+- **Requirements**:
+  - Static method `getQuery(): QueryBuilder` returning `QueryBuilder::for(Model::class)->allowedFilters([...])->allowedSorts([...])->defaultSort('-created_at')`.
+  - Use `AllowedFilter::partial('name')`, `AllowedFilter::exact('column')`, `AllowedFilter::scope('createdAfter')`, `AllowedFilter::scope('search')`, etc.
+  - Use `AllowedSort::field('name')`, `AllowedSort::field('emailVerifiedAt', 'email_verified_at')` for snake_case columns.
+  - Define model scopes used by filters (e.g. `scopeCreatedAfter`, `scopeCreatedBefore`, `scopeSearch`) on the model; trait can define them if not on model.
+  - Model must `use {Model}FilterQuery` so `Model::getQuery()` exists.
+
+**User example:**
+```php
+trait UserFilterQuery
+{
+    public static function getQuery(): QueryBuilder
+    {
+        return QueryBuilder::for(User::class)
+            ->allowedFilters([
+                AllowedFilter::partial('name'),
+                AllowedFilter::partial('email'),
+                AllowedFilter::exact('email_verified_at'),
+                AllowedFilter::scope('createdAfter'),
+                AllowedFilter::scope('createdBefore'),
+                AllowedFilter::scope('search'),
+            ])
+            ->allowedSorts([
+                AllowedSort::field('name'),
+                AllowedSort::field('email'),
+                AllowedSort::field('emailVerifiedAt', 'email_verified_at'),
+            ])
+            ->defaultSort('-created_at');
+    }
+
+    public function scopeCreatedAfter($query, $date) { return $query->where('created_at', '>=', $date); }
+    public function scopeCreatedBefore($query, $date) { return $query->where('created_at', '<=', $date); }
+    public function scopeSearch($query, $search): Builder { /* LIKE escape logic */ return $query; }
+}
+```
+
+---
+
+## 10. API Resource
+
+- **Where**: `App\Http\Resources\{Model}Resource`
+- **Requirements**:
+  - Extend `JsonResource`; `@mixin Model` in PHPDoc.
+  - `toArray(Request $request): array` returning camelCase keys; use `$this->attribute`, `$this->whenLoaded('relation')`, nested resources for relations; `createdAt`/`updatedAt` if exposed.
+
+**User example:**
+```php
+class UserResource extends JsonResource
+{
+    /** @mixin User */
+    public function toArray(Request $request): array
+    {
+        return [
+            'id' => $this->id,
+            'name' => $this->name,
+            'email' => $this->email,
+            'emailVerifiedAt' => $this->email_verified_at,
+            'primaryImage' => MediaResource::make($this->whenLoaded('media', fn() => $this->getFirstMedia('primary-image'))),
+            'images' => MediaResource::collection($this->whenLoaded('media', fn() => $this->getMedia('images'))),
+            'createdAt' => $this->created_at->toDateTimeString(),
+            'updatedAt' => $this->updated_at->toDateTimeString(),
+        ];
+    }
+}
+```
+
+---
+
+## 11. Factory
+
+- **Where**: `database/factories/{Model}Factory.php`
+- **Requirements**:
+  - Use `fake()` for values; `fake()->unique()->safeEmail()` for emails; `bcrypt('password')` or hashed password if needed.
+  - Return array with model fillable columns; match types and constraints.
+
+**User example:**
+```php
+class UserFactory extends Factory
+{
+    protected $model = User::class;
+
+    public function definition(): array
+    {
+        return [
+            'name' => fake()->name(),
+            'email' => fake()->unique()->safeEmail(),
+            'email_verified_at' => fake()->dateTime(),
+            'password' => bcrypt('password'),
+        ];
+    }
+}
+```
+
+---
+
+## 12. Pest tests
+
+- **Where**: `tests/Feature/{Model}/` — e.g. `UserEndpointsTest.php`, `UserValidationTest.php`, `UserAuthorizationTest.php`, `UserFiltersTest.php`, `UserPaginationTest.php`, `UserEdgeCasesTest.php`.
+- **Requirements**:
+  - `beforeEach`: create user with factory; `Sanctum::actingAs($user)`.
+  - Assert HTTP status: `assertOk()`, `assertCreated()`, `assertNoContent()`, `assertForbidden()`, `assertNotFound()`.
+  - Assert message: `assertJsonPath('message', ResponseMessages::RETRIEVED->message())` (or `CREATED`, `UPDATED`, `DELETED` from package enum).
+  - Assert structure: `expect($response->json('data'))->toHaveKey('name')`, `assertDatabaseHas('users', ['id' => $id])`.
+  - Use descriptive variable names in arrange: e.g. `$adminUser = User::factory()->create(['email' => 'admin@example.com'])`.
+
+**User example (excerpt):**
+```php
+beforeEach(function () {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+});
+
+it('lists users', function () {
+    User::factory()->count(3)->create();
+    $response = $this->getJson('/api/users');
+    $response->assertOk()->assertJsonPath('message', ResponseMessages::RETRIEVED->message());
+    expect($response->json('data'))->toBeArray();
+});
+
+it('creates a user', function () {
+    $payload = ['name' => 'Sample name', 'email' => 'test@example.com', 'emailVerifiedAt' => '...'];
+    $response = $this->postJson('/api/users', $payload);
+    $response->assertCreated()->assertJsonPath('message', ResponseMessages::CREATED->message());
+    $this->assertDatabaseHas('users', ['id' => $response->json('data.id')]);
+});
+```
+
+---
+
+## Checklist for a new API resource
+
+- [ ] **Scope**: Resource is standard Laravel (app/) or inside a **module** (Modules/{ModuleName}/) — use correct paths and namespaces (`Modules\{ModuleName}\...`).
+- [ ] Route: `Route::apiResource(...)` in `routes/api.php` (standard) or `Modules/{ModuleName}/routes/api.php` (module).
+- [ ] Controller in `App\Http\Controllers\API` or `Modules\{ModuleName}\Http\Controllers\API`, Service injected, index uses FilterRequest + `Model::getQuery()->paginate()`, store/update use Data + Service
+- [ ] `App\Data\{Model}Data` with HasModelAttributes, `$model`, validation attributes
+- [ ] Form Request (store/update) and FilterRequest in `{Model}Requests\`
+- [ ] Service with `store`/`update` and `DB::transaction`
+- [ ] Policy with AuthorizesByPermissionGroup and view/create/update/delete
+- [ ] Permissions seeder + PermissionGroup enum case
+- [ ] Filter trait with getQuery(), allowedFilters, allowedSorts, scopes; model uses trait
+- [ ] API Resource with toArray (camelCase)
+- [ ] Factory; Pest tests in `tests/Feature/{Model}/` using ResponseMessages and factories
