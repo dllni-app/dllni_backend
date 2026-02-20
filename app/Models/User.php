@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Traits\FilterQueries\UserFilterQuery;
 use Carbon\CarbonInterface;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -26,7 +27,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
 final class User extends Authenticatable implements HasMedia
 {
     /** @use HasFactory<UserFactory> */
-    use HasApiTokens, HasFactory , InteractsWithMedia , Notifiable;
+    use HasApiTokens, HasFactory, InteractsWithMedia, Notifiable, UserFilterQuery;
 
     protected $fillable = [
         'name',
@@ -98,5 +99,40 @@ final class User extends Authenticatable implements HasMedia
     public function eventBookings(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(\Modules\Cleaning\Models\EventBooking::class, 'customer_id');
+    }
+
+    public function smStores(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(\Modules\Supermarket\Models\SmStore::class, 'owner_user_id');
+    }
+
+    public function smCarts(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(\Modules\Supermarket\Models\SmCart::class);
+    }
+
+    public function smOrders(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(\Modules\Supermarket\Models\SmOrder::class, 'customer_id');
+    }
+
+    public function smSmartLists(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(\Modules\Supermarket\Models\SmSmartList::class);
+    }
+
+    public function smRecurringOrders(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(\Modules\Supermarket\Models\SmRecurringOrder::class);
+    }
+
+    public function smAssistantQueries(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(\Modules\Supermarket\Models\SmAssistantQuery::class);
+    }
+
+    public function smOrderDisputes(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(\Modules\Supermarket\Models\SmOrderDispute::class, 'opened_by_user_id');
     }
 }
