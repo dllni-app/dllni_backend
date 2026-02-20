@@ -53,7 +53,7 @@ jobs:
           DB_PASSWORD: root
 
       - name: Run Tests
-        run: php artisan test --filter=Feature
+        run: php artisan test tests/Feature/ 
 
   deploy:
     name: Deploy to Hostinger
