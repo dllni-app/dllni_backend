@@ -73,7 +73,7 @@ jobs:
       - name: Deploy via SSH
         run: |
           ssh -o StrictHostKeyChecking=no -p ${{ secrets.PORT }} ${{ secrets.USERNAME }}@${{ secrets.HOST }} << 'EOF'
-            cd /domains/mustafafares.com/public_html/dllni
+            cd domains/mustafafares.com/public_html/dllni
 
             git pull origin dev
 
