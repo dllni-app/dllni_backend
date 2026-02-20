@@ -6,7 +6,9 @@ use Illuminate\Support\Facades\Route;
 use Modules\Resturants\Http\Controllers\API\CategoryController;
 use Modules\Resturants\Http\Controllers\API\DashboardOverviewController;
 use Modules\Resturants\Http\Controllers\API\OfferController;
+use Modules\Resturants\Http\Controllers\API\OrderAcceptController;
 use Modules\Resturants\Http\Controllers\API\OrderController;
+use Modules\Resturants\Http\Controllers\API\OrderRejectController;
 use Modules\Resturants\Http\Controllers\API\ProductController;
 use Modules\Resturants\Http\Controllers\API\PromoCodeController;
 use Modules\Resturants\Http\Controllers\API\RestaurantAnalyticsController;
@@ -29,6 +31,8 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     Route::apiResource('restaurants', RestaurantController::class);
     Route::apiResource('categories', CategoryController::class);
     Route::apiResource('products', ProductController::class);
+    Route::post('orders/{order}/accept', OrderAcceptController::class)->name('orders.accept');
+    Route::post('orders/{order}/reject', OrderRejectController::class)->name('orders.reject');
     Route::apiResource('orders', OrderController::class);
     Route::apiResource('offers', OfferController::class);
     Route::apiResource('promo-codes', PromoCodeController::class);

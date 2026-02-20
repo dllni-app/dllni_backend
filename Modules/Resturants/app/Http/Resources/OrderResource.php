@@ -53,7 +53,19 @@ final class OrderResource extends JsonResource
                 'name' => $this->restaurant->name,
                 'slug' => $this->restaurant->slug,
             ]),
-            'orderItems' => $this->whenLoaded('orderItems'),
+            'orderItems' => $this->whenLoaded('orderItems', fn () => $this->orderItems->map(fn ($item) => [
+                'id' => $item->id,
+                'orderId' => $item->order_id,
+                'productId' => $item->product_id,
+                'quantity' => $item->quantity,
+                'unitPrice' => $item->unit_price ? (float) $item->unit_price : null,
+                'totalPrice' => $item->total_price ? (float) $item->total_price : null,
+                'specialInstructions' => $item->special_instructions,
+                'product' => $item->relationLoaded('product') && $item->product ? [
+                    'id' => $item->product->id,
+                    'name' => $item->product->name,
+                ] : null,
+            ])->values()->all()),
             'orderStatusLogs' => $this->whenLoaded('orderStatusLogs'),
             'promoCode' => $this->whenLoaded('promoCode'),
             'assignedStaff' => $this->whenLoaded('assignedStaff', fn () => $this->assignedStaff ? [

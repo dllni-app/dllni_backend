@@ -19,6 +19,7 @@ use Spatie\Permission\Traits\HasRoles;
  * @property-read int $id
  * @property-read string $name
  * @property-read string $email
+ * @property-read string|null $phone
  * @property-read CarbonInterface|null $email_verified_at
  * @property-read string $password
  * @property-read string|null $remember_token
@@ -33,6 +34,7 @@ final class User extends Authenticatable implements HasMedia
     protected $fillable = [
         'name',
         'email',
+        'phone',
         'email_verified_at',
         'password',
     ];
@@ -54,6 +56,7 @@ final class User extends Authenticatable implements HasMedia
             'id' => 'integer',
             'name' => 'string',
             'email' => 'string',
+            'phone' => 'string',
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'remember_token' => 'string',
