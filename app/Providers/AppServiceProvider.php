@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\ServiceProvider;
@@ -30,6 +31,7 @@ final class AppServiceProvider extends ServiceProvider
     private function bootMorphMap(): void
     {
         Relation::enforceMorphMap([
+            'user' => User::class,
             'cleaning_booking' => \Modules\Cleaning\Models\CleaningBooking::class,
             'event_booking' => \Modules\Cleaning\Models\EventBooking::class,
         ]);

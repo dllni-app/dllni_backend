@@ -13,6 +13,7 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
+use Spatie\Permission\Traits\HasRoles;
 
 /**
  * @property-read int $id
@@ -27,7 +28,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
 final class User extends Authenticatable implements HasMedia
 {
     /** @use HasFactory<UserFactory> */
-    use HasApiTokens, HasFactory, InteractsWithMedia, Notifiable, UserFilterQuery;
+    use HasApiTokens, HasFactory, HasRoles, InteractsWithMedia, Notifiable, UserFilterQuery;
 
     protected $fillable = [
         'name',

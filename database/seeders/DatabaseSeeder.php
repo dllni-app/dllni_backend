@@ -17,6 +17,8 @@ final class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call([
+            DashboardPermissionsSeeder::class,
+            AdminUserSeeder::class,
             CancellationPolicySeeder::class,
             MasterProductSeeder::class,
             RecipeSeeder::class,

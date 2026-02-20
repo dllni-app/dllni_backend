@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\DisputeController;
 use App\Http\Controllers\API\ServiceAddonController;
 use App\Http\Controllers\API\SosAlertController;
@@ -10,6 +11,14 @@ use App\Http\Controllers\API\TravelCostConfigController;
 use App\Http\Controllers\API\UserController;
 use App\Http\Controllers\API\WorkerController;
 use Illuminate\Support\Facades\Route;
+
+Route::post('login', [AuthController::class, 'login']);
+Route::post('forgot-password', [AuthController::class, 'forgotPassword']);
+
+Route::middleware(['auth:sanctum'])->group(function () {
+    Route::post('logout', [AuthController::class, 'logout']);
+    Route::get('me', [AuthController::class, 'me']);
+});
 
 Route::apiResource('users', UserController::class);
 
