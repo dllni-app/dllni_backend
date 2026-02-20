@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\User;
+use Database\Factories\SmStoreFactory;
 use Laravel\Sanctum\Sanctum;
 use Modules\Supermarket\Models\SmStore;
 
@@ -12,7 +13,7 @@ beforeEach(function (): void {
 });
 
 it('rejects duplicate slugs', function (): void {
-    SmStore::factory()->create(['slug' => 'unique-slug']);
+    SmStoreFactory::new()->create(['slug' => 'unique-slug']);
     $owner = User::factory()->create();
 
     $payload = [

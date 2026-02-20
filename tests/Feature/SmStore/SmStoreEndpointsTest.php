@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\User;
+use Database\Factories\SmStoreFactory;
 use Laravel\Sanctum\Sanctum;
 use Modules\Supermarket\Models\SmStore;
 
@@ -12,7 +13,7 @@ beforeEach(function (): void {
 });
 
 it('lists stores', function (): void {
-    SmStore::factory()->count(3)->create();
+    SmStoreFactory::new()->count(3)->create();
 
     $response = $this->getJson('/api/v1/sm-stores?perPage=10');
 
@@ -21,7 +22,7 @@ it('lists stores', function (): void {
 });
 
 it('shows a store', function (): void {
-    $store = SmStore::factory()->create();
+    $store = SmStoreFactory::new()->create();
 
     $response = $this->getJson("/api/v1/sm-stores/{$store->id}");
 
@@ -48,7 +49,7 @@ it('creates a store', function (): void {
 });
 
 it('updates a store', function (): void {
-    $store = SmStore::factory()->create([
+    $store = SmStoreFactory::new()->create([
         'name' => 'Old Name',
         'slug' => 'old-name',
     ]);
@@ -69,7 +70,7 @@ it('updates a store', function (): void {
 });
 
 it('deletes a store', function (): void {
-    $store = SmStore::factory()->create();
+    $store = SmStoreFactory::new()->create();
 
     $response = $this->deleteJson("/api/v1/sm-stores/{$store->id}");
 
