@@ -72,7 +72,29 @@ Base path: `/api/v1/` (all under `auth:sanctum`).
 }
 ```
 
-### 3.2 Cleaning bookings (full CRUD)
+### 3.2 Worker homepage (custom)
+
+| Method | Path                                  | Description                                      |
+| ------ | ------------------------------------- | ------------------------------------------------ |
+| GET    | `/api/v1/cleaning/worker/homepage`    | Total order stats for the authenticated worker   |
+
+**Response (200):**
+
+```json
+{
+  "totalBookings": 42,
+  "todayCount": 2,
+  "completedCount": 35,
+  "pendingCount": 5,
+  "inProgressCount": 1,
+  "cancelledCount": 1,
+  "totalEarnings": 5250.00
+}
+```
+
+**Note:** Requires authenticated user with an associated worker. Returns zeros if user has no worker.
+
+### 3.3 Cleaning bookings (full CRUD)
 
 | Method    | Path                             | Description                  |
 | --------- | -------------------------------- | ---------------------------- |
@@ -86,12 +108,20 @@ Base path: `/api/v1/` (all under `auth:sanctum`).
 
 - `filter[status]` – CleaningBookingStatus (use snake_case values from Section 6)
 - `filter[scheduledDateFrom]`, `filter[scheduledDateTo]` – date (YYYY-MM-DD)
+- `filter[scheduledDate]` – exact date (e.g. for "Tasks for Today")
 - `filter[customerId]`, `filter[workerId]` – integer IDs
+- `filter[forCurrentWorker]` – boolean; when true, filters by authenticated worker (worker app)
 - `filter[hasDispute]` – boolean/scope
+
+**Worker homepage usage:**
+- **Tasks for Today:** `filter[forCurrentWorker]=true&filter[scheduledDate]=YYYY-MM-DD`
+- **Calendar (month):** `filter[forCurrentWorker]=true&filter[scheduledDateFrom]=YYYY-MM-01&filter[scheduledDateTo]=YYYY-MM-DD`
 
 **Show relations:** customer, worker, services, addons, billingPolicy, timeWarnings, disputes.
 
-### 3.3 Event bookings (full CRUD)
+**Resource fields for worker cards:** `locationName`, `numberOfRooms`, `customer.phone`, `estimatedHours`, `totalHours`, `status`.
+
+### 3.4 Event bookings (full CRUD)
 
 | Method    | Path                          | Description                  |
 | --------- | ----------------------------- | ---------------------------- |
@@ -103,7 +133,7 @@ Base path: `/api/v1/` (all under `auth:sanctum`).
 
 **Index query params:** `filter[status]` (EventBookingStatus), `filter[eventType]` (EventType), `filter[scheduledDateFrom]`, `filter[scheduledDateTo]`.
 
-### 3.4 Cleaning time warnings (read-only)
+### 3.5 Cleaning time warnings (read-only)
 
 | Method | Path                                  | Description      |
 | ------ | ------------------------------------- | ---------------- |
@@ -112,7 +142,7 @@ Base path: `/api/v1/` (all under `auth:sanctum`).
 
 **Index query params:** `filter[bookingId]`, `filter[bookingType]`, `filter[sentAtFrom]`, `filter[sentAtTo]` (if supported).
 
-### 3.5 Cleaning services and pricing (full CRUD)
+### 3.6 Cleaning services and pricing (full CRUD)
 
 | Method    | Path                             | Description            |
 | --------- | -------------------------------- | ---------------------- |
@@ -130,7 +160,7 @@ Base path: `/api/v1/` (all under `auth:sanctum`).
 | PUT/PATCH | `/api/v1/pricing/{id}`                                 | Update pricing             |
 | DELETE    | `/api/v1/pricing/{id}`                                 | Delete pricing             |
 
-### 3.6 Cleaning billing policies (full CRUD)
+### 3.7 Cleaning billing policies (full CRUD)
 
 | Method    | Path                                     | Description |
 | --------- | ---------------------------------------- | ----------- |
@@ -140,7 +170,7 @@ Base path: `/api/v1/` (all under `auth:sanctum`).
 | PUT/PATCH | `/api/v1/cleaning-billing-policies/{id}` | Update      |
 | DELETE    | `/api/v1/cleaning-billing-policies/{id}` | Delete      |
 
-### 3.7 Geographic coverage (custom)
+### 3.8 Geographic coverage (custom)
 
 | Method | Path                                             | Description                                                    |
 | ------ | ------------------------------------------------ | -------------------------------------------------------------- |

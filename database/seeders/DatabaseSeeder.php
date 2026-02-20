@@ -26,6 +26,7 @@ final class DatabaseSeeder extends Seeder
         $this->call([
             DashboardPermissionsSeeder::class,
             AdminUserSeeder::class,
+            CleaningWorkerAndSellerSeeder::class,
             CancellationPolicySeeder::class,
             MasterProductSeeder::class,
             RecipeSeeder::class,

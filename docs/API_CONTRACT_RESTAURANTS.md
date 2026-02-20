@@ -51,22 +51,34 @@ Base path: `/api/v1/` (all under `auth:sanctum`).
 
 ### 3.1 Dashboard overview (custom)
 
-| Method | Path                                    | Description                                             |
-| ------ | --------------------------------------- | ------------------------------------------------------- |
-| GET    | `/api/v1/restaurant/dashboard/overview` | KPIs for today orders, restaurants, disputes, low stock |
+| Method | Path                                    | Description                                                                 |
+| ------ | --------------------------------------- | --------------------------------------------------------------------------- |
+| GET    | `/api/v1/restaurant/dashboard/overview` | KPIs for today orders, sales, disputes, low stock (seller-scoped by restaurant) |
+
+**Query params:** `restaurantId` (required, exists:restaurants,id)
 
 **Response (200):**
 
 ```json
 {
   "kpis": {
-    "todayOrders": 42,
-    "ordersByStatus": { "pending": 5, "accepted": 3, "preparing": 8, "ready_for_pickup": 4, "completed": 20, "cancelled": 2 },
-    "activeRestaurants": 12,
+    "todayTotalSales": 12450,
+    "yesterdayTotalSales": 10826,
+    "salesChangePercent": 15,
+    "todayOrders": 188,
+    "ordersByStatus": { "pending": 24, "accepted": 0, "preparing": 8, "completed": 156, "cancelled": 0, "ready_for_pickup": 0, "picked_up": 0 },
+    "activeRestaurants": 1,
     "openDisputes": 2,
     "ordersPendingPickup": 4,
     "ordersReadyForPickup": 4,
-    "lowStockAlertsCount": 7
+    "lowStockAlertsCount": 1,
+    "orderActivityByHour": [
+      { "hour": 10, "count": 12 },
+      { "hour": 11, "count": 18 }
+    ],
+    "lowStockProducts": [
+      { "id": 1, "name": "Product name", "stockQuantity": 5, "lowStockThreshold": 5 }
+    ]
   }
 }
 ```
@@ -113,12 +125,14 @@ Base path: `/api/v1/` (all under `auth:sanctum`).
 | Method    | Path                  | Description                                                                              |
 | --------- | --------------------- | ---------------------------------------------------------------------------------------- |
 | GET       | `/api/v1/orders`      | List                                                                                     |
-| GET       | `/api/v1/orders/{id}` | Show (user, restaurant, orderItems, orderStatusLogs, promoCode, assignedStaff, disputes) |
+| GET       | `/api/v1/orders/{id}` | Show (user, restaurant, orderItems with product, orderStatusLogs, promoCode, assignedStaff, disputes) |
 | POST      | `/api/v1/orders`      | Create                                                                                   |
 | PUT/PATCH | `/api/v1/orders/{id}` | Update                                                                                   |
 | DELETE    | `/api/v1/orders/{id}` | Delete                                                                                   |
+| POST      | `/api/v1/orders/{id}/accept` | Accept order (status → accepted, accepted_at)                                    |
+| POST      | `/api/v1/orders/{id}/reject` | Reject order (status → cancelled, cancellation_reason)                             |
 
-**Index query params:** `filter[status]`, `filter[restaurantId]`, `filter[orderType]`, `filter[pickupMode]`, `filter[dateFrom]`, `filter[dateTo]`, `filter[hasDispute]`.
+**Index query params:** `filter[status]`, `filter[restaurantId]`, `filter[orderType]`, `filter[pickupMode]`, `filter[dateFrom]`, `filter[dateTo]`, `filter[createdToday]` (boolean), `filter[hasDispute]`.
 
 ### 3.6 Offers (full CRUD)
 

@@ -20,10 +20,12 @@ final class CleaningBookingFilterRequest extends FormRequest
             'filter.status' => 'sometimes|string|in:pending,confirmed,worker_assigned,worker_on_the_way,worker_arrived,in_progress,completed,cancelled',
             'filter.scheduledDateFrom' => 'sometimes|date',
             'filter.scheduledDateTo' => 'sometimes|date|after_or_equal:filter.scheduledDateFrom',
+            'filter.scheduledDate' => 'sometimes|date',
             'filter.customerId' => 'sometimes|exists:users,id',
             'filter.workerId' => 'sometimes|exists:workers,id',
+            'filter.forCurrentWorker' => 'sometimes|boolean',
             'filter.hasDispute' => 'sometimes|boolean',
-            'sort' => 'sometimes|string|in:scheduled_date,-scheduled_date,created_at,-created_at,status,-status,total_price,-total_price',
+            'sort' => 'sometimes|string|in:scheduledDate,-scheduledDate,createdAt,-createdAt,status,-status,totalPrice,-totalPrice',
         ];
     }
 }

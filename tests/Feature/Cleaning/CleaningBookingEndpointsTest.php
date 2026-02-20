@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\User;
+use App\Models\Worker;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
@@ -140,4 +141,90 @@ it('deletes a cleaning booking', function () {
 
     $response->assertNoContent();
     $this->assertDatabaseMissing('cleaning_bookings', ['id' => $booking->id]);
+});
+
+it('filters cleaning bookings by forCurrentWorker and scheduledDate', function () {
+    $workerUser = User::factory()->create(['email' => 'worker@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
+        'name' => 'Default',
+        'billing_mode' => 'actual_working_time',
+        'rules' => [],
+        'is_active' => true,
+        'is_default' => true,
+    ]);
+
+    $today = now()->format('Y-m-d');
+    CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $billingPolicy->id,
+        'scheduled_date' => $today,
+        'status' => CleaningBookingStatus::Confirmed,
+    ]);
+    CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $billingPolicy->id,
+        'scheduled_date' => now()->addDays(5),
+        'status' => CleaningBookingStatus::Confirmed,
+    ]);
+
+    $response = $this->getJson("/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[scheduledDate]={$today}");
+
+    $response->assertOk();
+    expect($response->json('data'))->toBeArray()->toHaveCount(1);
+    expect($response->json('data.0.scheduledDate'))->toBe($today);
+});
+
+it('returns worker homepage stats for authenticated worker', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-homepage@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
+        'name' => 'Default',
+        'billing_mode' => 'actual_working_time',
+        'rules' => [],
+        'is_active' => true,
+        'is_default' => true,
+    ]);
+
+    CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $billingPolicy->id,
+        'status' => CleaningBookingStatus::Completed,
+        'total_price' => 100,
+    ]);
+    CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $billingPolicy->id,
+        'status' => CleaningBookingStatus::Completed,
+        'total_price' => 50,
+    ]);
+    CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $billingPolicy->id,
+        'status' => CleaningBookingStatus::Pending,
+    ]);
+
+    $response = $this->getJson('/api/v1/cleaning/worker/homepage');
+
+    $response->assertOk();
+    expect($response->json('totalBookings'))->toBe(3);
+    expect($response->json('completedCount'))->toBe(2);
+    expect($response->json('pendingCount'))->toBeGreaterThanOrEqual(0);
+    expect((float) $response->json('totalEarnings'))->toBe(150.0);
+});
+
+it('returns zeros for worker homepage when user has no worker', function () {
+    $regularUser = User::factory()->create(['email' => 'nobody@example.com']);
+    Sanctum::actingAs($regularUser);
+
+    $response = $this->getJson('/api/v1/cleaning/worker/homepage');
+
+    $response->assertOk();
+    expect($response->json('totalBookings'))->toBe(0);
+    expect($response->json('todayCount'))->toBe(0);
+    expect($response->json('totalEarnings'))->toBe(0);
 });

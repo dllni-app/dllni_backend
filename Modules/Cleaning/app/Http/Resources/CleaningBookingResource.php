@@ -6,6 +6,7 @@ namespace Modules\Cleaning\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Arr;
 use Modules\Cleaning\Models\CleaningBooking;
 
 /**
@@ -26,6 +27,8 @@ final class CleaningBookingResource extends JsonResource
             'status' => $this->status?->value ?? $this->status,
             'propertyType' => $this->property_type,
             'propertyDetails' => $this->property_details,
+            'locationName' => Arr::get($this->property_details, 'location_name') ?? Arr::get($this->property_details, 'address') ?? $this->property_type,
+            'numberOfRooms' => Arr::get($this->property_details, 'bedrooms') ?? Arr::get($this->property_details, 'rooms'),
             'estimatedSqm' => $this->estimated_sqm,
             'estimatedHours' => $this->estimated_hours,
             'scheduledDate' => $this->scheduled_date?->format('Y-m-d'),
@@ -45,6 +48,7 @@ final class CleaningBookingResource extends JsonResource
                 'id' => $this->customer->id,
                 'name' => $this->customer->name,
                 'email' => $this->customer->email,
+                'phone' => $this->customer->phone,
             ]),
             'worker' => $this->whenLoaded('worker', fn () => $this->worker ? [
                 'id' => $this->worker->id,

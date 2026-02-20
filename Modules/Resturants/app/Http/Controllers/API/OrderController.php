@@ -23,7 +23,7 @@ final class OrderController
     public function index(OrderFilterRequest $request): AnonymousResourceCollection
     {
         $orders = Order::getQuery()
-            ->with(['user', 'restaurant', 'orderItems', 'orderStatusLogs', 'promoCode', 'assignedStaff', 'disputes'])
+            ->with(['user', 'restaurant', 'orderItems.product', 'orderStatusLogs', 'promoCode', 'assignedStaff', 'disputes'])
             ->paginate($request->get('perPage', 20));
 
         return OrderResource::collection($orders);
@@ -37,14 +37,14 @@ final class OrderController
         );
 
         return OrderResource::make(
-            $order->load(['user', 'restaurant', 'orderItems', 'orderStatusLogs', 'promoCode', 'assignedStaff', 'disputes'])
+            $order->load(['user', 'restaurant', 'orderItems.product', 'orderStatusLogs', 'promoCode', 'assignedStaff', 'disputes'])
         );
     }
 
     public function show(Order $order): OrderResource
     {
         $order->load([
-            'user', 'restaurant', 'orderItems', 'orderStatusLogs', 'promoCode', 'assignedStaff', 'disputes',
+            'user', 'restaurant', 'orderItems.product', 'orderStatusLogs', 'promoCode', 'assignedStaff', 'disputes',
         ]);
 
         return OrderResource::make($order);
@@ -59,7 +59,7 @@ final class OrderController
         );
 
         return OrderResource::make(
-            $updated->load(['user', 'restaurant', 'orderItems', 'orderStatusLogs', 'promoCode', 'assignedStaff', 'disputes'])
+            $updated->load(['user', 'restaurant', 'orderItems.product', 'orderStatusLogs', 'promoCode', 'assignedStaff', 'disputes'])
         );
     }
 

@@ -2,50 +2,146 @@
 
 **Audience:** Frontend / Flutter developer  
 **Domain:** `dllni.mustafafares.com`  
-**Scope:** Login, logout, forgot password, and current user (me). For module endpoints (Restaurants, Cleaning, etc.), see the respective API contract docs.
+**Scope:** Two auth flows — **User** (app login with phone) and **Dashboard** (admin login with email, forgot password, me). For module endpoints (Restaurants, Cleaning, etc.), see the respective API contract docs.
 
 ---
 
-## 1. Base URL and authentication
+## 1. Seeded test users
+
+The following users are created by the database seeders (`DashboardPermissionsSeeder`, `AdminUserSeeder`, `CleaningWorkerAndSellerSeeder`). Use these for development and testing.
+
+| Type            | Login (email or phone)   | Password  | Role / Notes |
+| --------------- | ------------------------ | --------- | ------------ |
+| **Dashboard admin** | `admin@admin.com`        | `password` | Role: `admin`. All dashboard permissions (orders, products, inventory, offers, stores, staff, reports, settings, bookings, workers, disputes, system_alerts, pricing, catalog). |
+| **User (cleaning worker)** | `+962790000001` (phone)  | `password` | Role: `cleaning_worker`. Cleaning API permissions (bookings, services, etc.). Has linked Worker record. |
+| **User (restaurant seller)** | `+962790000002` (phone)  | `password` | Role: `restaurant_seller`. Seller API permissions (restaurants, orders, products, etc.). Has linked Restaurant. |
+
+- **Dashboard:** use **email** + password with `POST /api/dashboard/login`.
+- **User (app):** use **phone** + password with `POST /api/login`.
+
+---
+
+## 2. Base URL and authentication
 
 - **Base URL:** `https://dllni.mustafafares.com`
-- **Auth endpoints base:** `https://dllni.mustafafares.com/api/` (no `v1` prefix).
-- **Protected endpoints:** After login, send the token on every request:
-  - Header: `Authorization: Bearer {token}`
+- **API base:** `https://dllni.mustafafares.com/api/`
+- **Protected endpoints:** Send the token: `Authorization: Bearer {token}`
 - **Content-Type:** `application/json` for request bodies; responses are JSON.
 
 ---
 
-## 2. Request/response conventions
+## 3. Request/response conventions
 
-- **JSON keys:** camelCase (e.g. `email`, `emailVerifiedAt`, `permissions`).
+- **JSON keys:** camelCase (e.g. `phone`, `emailVerifiedAt`, `permissions`).
 - **Errors:** 4xx/5xx with JSON body; Laravel validation errors under `errors` (keyed by field).
 
 ---
 
-## 3. Auth endpoints
+## 4. User authentication (app)
 
-### 3.1 Login
+For end-users: login with **phone + password**, logout. No permissions in response.
 
-| Method | Path         | Auth required | Description                    |
-| ------ | ------------ | ------------- | ------------------------------ |
-| POST   | `/api/login` | No            | Authenticate with email/password and receive token and permissions |
+### 4.1 User login
 
-**Request body:**
+| Method | Path         | Auth required | Description                         |
+| ------ | ------------ | ------------- | ----------------------------------- |
+| POST   | `/api/login` | No            | Authenticate with phone and password; returns user and token |
+
+**Request body (example — seeded cleaning worker):**
 
 ```json
 {
-  "email": "admin@dllni.com",
+  "phone": "+962790000001",
   "password": "password"
 }
 ```
 
-| Field    | Type   | Required | Description |
-| -------- | ------ | -------- | ----------- |
-| email    | string | Yes      | Valid email address |
-| password | string | Yes      | User password |
+| Field    | Type   | Required | Description        |
+| -------- | ------ | -------- | ------------------ |
+| phone    | string | Yes      | User’s phone number |
+| password | string | Yes      | User password      |
+
+**Response (200 OK) — example (seeded cleaning worker):**
+
+```json
+{
+  "user": {
+    "id": 2,
+    "name": "Cleaning Worker",
+    "email": "cleaning.worker@example.com",
+    "phone": "+962790000001",
+    "emailVerifiedAt": "2025-02-21T12:00:00.000000Z",
+    "primaryImage": null,
+    "images": [],
+    "createdAt": "2025-02-21T12:00:00.000000Z",
+    "updatedAt": "2025-02-21T12:00:00.000000Z"
+  },
+  "token": "2|abc..."
+}
+```
+
+- **user:** Current user (camelCase). Use `token` as `Authorization: Bearer {token}` for protected app endpoints.
+
+**Error (422)** – Invalid credentials or validation:
+
+```json
+{
+  "message": "The provided credentials are incorrect.",
+  "errors": {
+    "phone": ["The provided credentials are incorrect."]
+  }
+}
+```
+
+---
+
+### 4.2 User logout
+
+| Method | Path          | Auth required | Description          |
+| ------ | ------------- | ------------- | -------------------- |
+| POST   | `/api/logout` | Yes (Bearer)  | Revoke current token |
+
+**Headers:** `Authorization: Bearer {token}` (token from user login).
 
 **Response (200 OK):**
+
+```json
+{
+  "message": "Logged out successfully."
+}
+```
+
+**Error (401):** Missing or invalid token.
+
+---
+
+## 5. Dashboard authentication (admin)
+
+For dashboard/admin: login with **email + password**, forgot password, logout, me. Responses include **permissions**.
+
+**Base path:** `/api/dashboard/`
+
+### 5.1 Dashboard login
+
+| Method | Path                      | Auth required | Description                                    |
+| ------ | ------------------------- | ------------- | ---------------------------------------------- |
+| POST   | `/api/dashboard/login`    | No            | Authenticate with email/password; returns user, permissions, token |
+
+**Request body (example — seeded admin):**
+
+```json
+{
+  "email": "admin@admin.com",
+  "password": "password"
+}
+```
+
+| Field    | Type   | Required | Description        |
+| -------- | ------ | -------- | ------------------ |
+| email    | string | Yes      | Valid email        |
+| password | string | Yes      | User password      |
+
+**Response (200 OK) — example (seeded admin; permissions are all dashboard groups):**
 
 ```json
 {
@@ -53,6 +149,7 @@
     "id": 1,
     "name": "Admin",
     "email": "admin@admin.com",
+    "phone": null,
     "emailVerifiedAt": "2025-02-21T12:00:00.000000Z",
     "primaryImage": null,
     "images": [],
@@ -67,47 +164,82 @@
     "products.view",
     "products.create",
     "products.update",
-    "products.delete"
+    "products.delete",
+    "inventory.view",
+    "inventory.create",
+    "inventory.update",
+    "inventory.delete",
+    "offers.view",
+    "offers.create",
+    "offers.update",
+    "offers.delete",
+    "stores.view",
+    "stores.create",
+    "stores.update",
+    "stores.delete",
+    "staff.view",
+    "staff.create",
+    "staff.update",
+    "staff.delete",
+    "reports.view",
+    "reports.create",
+    "reports.update",
+    "reports.delete",
+    "settings.view",
+    "settings.create",
+    "settings.update",
+    "settings.delete",
+    "bookings.view",
+    "bookings.create",
+    "bookings.update",
+    "bookings.delete",
+    "workers.view",
+    "workers.create",
+    "workers.update",
+    "workers.delete",
+    "disputes.view",
+    "disputes.create",
+    "disputes.update",
+    "disputes.delete",
+    "system_alerts.view",
+    "system_alerts.create",
+    "system_alerts.update",
+    "system_alerts.delete",
+    "pricing.view",
+    "pricing.create",
+    "pricing.update",
+    "pricing.delete",
+    "catalog.view",
+    "catalog.create",
+    "catalog.update",
+    "catalog.delete"
   ],
-  "token": "1|abc123..."
+  "token": "1|abc..."
 }
 ```
 
-- **user:** Current user object (camelCase). `primaryImage` and `images` are present when media are loaded; for login they are typically null/empty.
-- **permissions:** Array of permission names (strings) the user has (via roles). Format: `{group}.{action}` (e.g. `orders.view`, `settings.update`).
-- **token:** Sanctum API token; use as `Authorization: Bearer {token}` for protected endpoints.
+- **permissions:** Array of permission names for dashboard UI (e.g. menus, actions). Format: `{group}.{action}`.
 
-**Error (422 Unprocessable Entity)** – Invalid credentials:
-
-```json
-{
-  "message": "The provided credentials are incorrect.",
-  "errors": {
-    "email": ["The provided credentials are incorrect."]
-  }
-}
-```
-
-**Error (422)** – Validation (e.g. missing email/password): `errors` keyed by field.
+**Error (422)** – Invalid credentials: `errors.email` with message.
 
 ---
 
-### 3.2 Forgot password
+### 5.2 Dashboard forgot password
 
-| Method | Path                   | Auth required | Description                |
-| ------ | ---------------------- | ------------- | -------------------------- |
-| POST   | `/api/forgot-password` | No            | Send password reset link to the given email |
+| Method | Path                              | Auth required | Description              |
+| ------ | --------------------------------- | ------------- | ------------------------ |
+| POST   | `/api/dashboard/forgot-password`  | No            | Send reset link to email |
 
 **Request body:**
 
 ```json
 {
-  "email": "admin@dllni.com"
+  "email": "admin@admin.com"
 }
 ```
 
-| Field | Type   | Required | Description |
-| ----- | ------ | -------- | ----------- |
+| Field | Type   | Required | Description                |
+| ----- | ------ | -------- | -------------------------- |
 | email | string | Yes      | Must exist in `users` table |
 
 **Response (200 OK):**
@@ -118,113 +250,76 @@
 }
 ```
 
-**Error (422)** – Email not found or validation:
-
-```json
-{
-  "message": "The given data was invalid.",
-  "errors": {
-    "email": ["We could not find a user with that email address."]
-  }
-}
-```
-
-The reset link in the email points to the app’s password-reset URL (e.g. frontend or web route). Configure `app.frontend_url` for redirect target.
+**Error (422)** – Email not found: `errors.email` (e.g. "We could not find a user with that email address.").
 
 ---
 
-### 3.3 Logout
+### 5.3 Dashboard logout
 
-| Method | Path          | Auth required | Description           |
-| ------ | ------------- | ------------- | --------------------- |
-| POST   | `/api/logout` | Yes (Bearer)  | Revoke current token  |
+| Method | Path                      | Auth required | Description         |
+| ------ | ------------------------- | ------------- | ------------------- |
+| POST   | `/api/dashboard/logout`   | Yes (Bearer)  | Revoke current token |
 
-**Headers:** `Authorization: Bearer {token}`
-
-**Request body:** None.
-
-**Response (200 OK):**
-
-```json
-{
-  "message": "Logged out successfully."
-}
-```
-
-**Error (401 Unauthorized):** Missing or invalid token.
+**Response (200 OK):** `{ "message": "Logged out successfully." }`  
+**Error (401):** Missing or invalid token.
 
 ---
 
-### 3.4 Me (current user)
+### 5.4 Dashboard me (current user)
 
-| Method | Path      | Auth required | Description                          |
-| ------ | --------- | ------------- | ------------------------------------ |
-| GET    | `/api/me` | Yes (Bearer)  | Return current user and permissions |
+| Method | Path                   | Auth required | Description                    |
+| ------ | ---------------------- | ------------- | ------------------------------ |
+| GET    | `/api/dashboard/me`    | Yes (Bearer)  | Return current user and permissions |
 
-**Headers:** `Authorization: Bearer {token}`
-
-**Response (200 OK):**
+**Response (200 OK) — same shape as dashboard login (seeded admin has all dashboard permissions listed in 5.1).**
 
 ```json
 {
   "user": {
     "id": 1,
     "name": "Admin",
-    "email": "admin@dllni.com",
+    "email": "admin@admin.com",
+    "phone": null,
     "emailVerifiedAt": "2025-02-21T12:00:00.000000Z",
     "primaryImage": null,
     "images": [],
     "createdAt": "2025-02-21T12:00:00.000000Z",
     "updatedAt": "2025-02-21T12:00:00.000000Z"
   },
-  "permissions": [
-    "orders.view",
-    "orders.create",
-    "orders.update",
-    "orders.delete",
-    "products.view",
-    "products.create",
-    "products.update",
-    "products.delete"
-  ]
+  "permissions": ["orders.view", "orders.create", "orders.update", "orders.delete", "products.view", "products.create", "products.update", "products.delete", "inventory.view", "inventory.create", "inventory.update", "inventory.delete", "offers.view", "offers.create", "offers.update", "offers.delete", "stores.view", "stores.create", "stores.update", "stores.delete", "staff.view", "staff.create", "staff.update", "staff.delete", "reports.view", "reports.create", "reports.update", "reports.delete", "settings.view", "settings.create", "settings.update", "settings.delete", "bookings.view", "bookings.create", "bookings.update", "bookings.delete", "workers.view", "workers.create", "workers.update", "workers.delete", "disputes.view", "disputes.create", "disputes.update", "disputes.delete", "system_alerts.view", "system_alerts.create", "system_alerts.update", "system_alerts.delete", "pricing.view", "pricing.create", "pricing.update", "pricing.delete", "catalog.view", "catalog.create", "catalog.update", "catalog.delete"]
 }
 ```
 
-Same `user` shape as login; **permissions** is the list of permission names for the authenticated user. No `token` in response (use existing token).
+No `token` in response; use existing Bearer token.
 
-**Error (401 Unauthorized):** Missing or invalid token.
-
----
-
-## 4. Permission names (dashboard)
-
-Permissions follow the pattern `{group}.{action}`. Actions: `view`, `create`, `update`, `delete`. Groups align with dashboard areas, e.g.:
-
-| Group         | Example permissions        |
-| ------------- | -------------------------- |
-| orders        | `orders.view`, `orders.create`, … |
-| products      | `products.view`, `products.create`, … |
-| inventory     | `inventory.view`, …         |
-| offers        | `offers.view`, …            |
-| staff         | `staff.view`, …             |
-| reports       | `reports.view`, …           |
-| settings      | `settings.view`, …          |
-| bookings      | `bookings.view`, …          |
-| workers       | `workers.view`, …           |
-| disputes      | `disputes.view`, …          |
-| system_alerts | `system_alerts.view`, …     |
-| pricing       | `pricing.view`, …           |
-| catalog       | `catalog.view`, …           |
-
-Use the `permissions` array from **login** or **me** to drive UI (e.g. show/hide menu items or actions).
+**Error (401):** Missing or invalid token.
 
 ---
 
-## 5. Quick reference
+## 6. Permission names
 
-| Method | Path                   | Auth  | Description           |
-| ------ | ---------------------- | ----- | --------------------- |
-| POST   | `/api/login`           | No    | Login (email + password) |
-| POST   | `/api/forgot-password` | No    | Send reset link       |
-| POST   | `/api/logout`          | Bearer| Revoke token          |
-| GET    | `/api/me`              | Bearer| Current user + permissions |
+**Dashboard (admin role)**  
+Permissions follow `{group}.{action}`. Actions: `view`, `create`, `update`, `delete`. Groups (from seeders): `orders`, `products`, `inventory`, `offers`, `stores`, `staff`, `reports`, `settings`, `bookings`, `workers`, `disputes`, `system_alerts`, `pricing`, `catalog`. Use the `permissions` array from dashboard login/me for UI (menus, actions).
+
+**App roles (user login)**  
+- **cleaning_worker:** permissions for cleaning API (e.g. `cleaning_bookings.view`, `cleaning_bookings.create`, `event_bookings.view`, `cleaning_services.view`, `worker_homepage.view`, `geographic_coverage.view`, etc.).  
+- **restaurant_seller:** permissions for seller API (e.g. `seller_restaurants.view`, `seller_orders.view`, `seller_products.view`, etc.).  
+User login/me responses do not include a `permissions` array; role/permission checks are applied on the server when calling module APIs.
+
+---
+
+## 7. Quick reference
+
+**User (app)**  
+| Method | Path           | Auth  | Description              |
+| ------ | -------------- | ----- | ------------------------ |
+| POST   | `/api/login`   | No    | Login (phone + password) |
+| POST   | `/api/logout`  | Bearer| Revoke token             |
+
+**Dashboard (admin)**  
+| Method | Path                             | Auth  | Description                |
+| ------ | -------------------------------- | ----- | -------------------------- |
+| POST   | `/api/dashboard/login`          | No    | Login (email + password)   |
+| POST   | `/api/dashboard/forgot-password`| No    | Send reset link            |
+| POST   | `/api/dashboard/logout`         | Bearer| Revoke token               |
+| GET    | `/api/dashboard/me`             | Bearer| Current user + permissions |

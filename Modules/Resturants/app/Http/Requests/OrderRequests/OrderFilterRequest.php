@@ -23,6 +23,7 @@ final class OrderFilterRequest extends FormRequest
             'filter.pickupMode' => 'sometimes|string|in:immediate_pickup,scheduled_pickup',
             'filter.dateFrom' => 'sometimes|date',
             'filter.dateTo' => 'sometimes|date|after_or_equal:filter.dateFrom',
+            'filter.createdToday' => 'sometimes|boolean',
             'filter.hasDispute' => 'sometimes|boolean',
             'sort' => 'sometimes|string|in:order_number,-order_number,status,-status,total_amount,-total_amount,created_at,-created_at',
         ];
