@@ -6,9 +6,12 @@ namespace Modules\Supermarket\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Modules\Supermarket\Traits\FilterQueries\SmOfferProductFilterQuery;
 
 final class SmOfferProduct extends Model
 {
+    use SmOfferProductFilterQuery;
+
     protected $table = 'sm_offer_products';
 
     protected $fillable = [

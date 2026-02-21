@@ -9,9 +9,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Supermarket\Enums\SmRecurringOrderStatus;
+use Modules\Supermarket\Traits\FilterQueries\SmRecurringOrderFilterQuery;
 
 final class SmRecurringOrder extends Model
 {
+    use SmRecurringOrderFilterQuery;
+
     protected $table = 'sm_recurring_orders';
 
     protected $fillable = [

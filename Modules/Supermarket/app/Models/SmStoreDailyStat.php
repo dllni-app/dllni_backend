@@ -6,9 +6,12 @@ namespace Modules\Supermarket\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Modules\Supermarket\Traits\FilterQueries\SmStoreDailyStatFilterQuery;
 
 final class SmStoreDailyStat extends Model
 {
+    use SmStoreDailyStatFilterQuery;
+
     protected $table = 'sm_store_daily_stats';
 
     protected $fillable = [

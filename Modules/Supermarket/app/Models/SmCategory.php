@@ -7,9 +7,12 @@ namespace Modules\Supermarket\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Modules\Supermarket\Traits\FilterQueries\SmCategoryFilterQuery;
 
 final class SmCategory extends Model
 {
+    use SmCategoryFilterQuery;
+
     protected $table = 'sm_categories';
 
     protected $fillable = [

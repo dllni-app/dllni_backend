@@ -7,9 +7,12 @@ namespace Modules\Supermarket\Models;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Modules\Supermarket\Traits\FilterQueries\SmOrderDisputeMessageFilterQuery;
 
 final class SmOrderDisputeMessage extends Model
 {
+    use SmOrderDisputeMessageFilterQuery;
+
     protected $table = 'sm_order_dispute_messages';
 
     protected $fillable = [

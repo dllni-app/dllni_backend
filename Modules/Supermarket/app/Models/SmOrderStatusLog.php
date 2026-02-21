@@ -7,9 +7,12 @@ namespace Modules\Supermarket\Models;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Modules\Supermarket\Traits\FilterQueries\SmOrderStatusLogFilterQuery;
 
 final class SmOrderStatusLog extends Model
 {
+    use SmOrderStatusLogFilterQuery;
+
     protected $table = 'sm_order_status_logs';
 
     protected $fillable = [

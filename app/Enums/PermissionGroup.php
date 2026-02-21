@@ -10,7 +10,10 @@ enum PermissionGroup: string
     case Products = 'products';
     case Inventory = 'inventory';
     case Offers = 'offers';
+    case Coupons = 'coupons';
     case Stores = 'stores';
+    case Categories = 'categories';
+    case CommissionRules = 'commission_rules';
     case Staff = 'staff';
     case Reports = 'reports';
     case Settings = 'settings';

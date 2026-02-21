@@ -7,9 +7,12 @@ namespace Modules\Supermarket\Models;
 use App\Models\MasterProduct;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Modules\Supermarket\Traits\FilterQueries\SmSmartListItemFilterQuery;
 
 final class SmSmartListItem extends Model
 {
+    use SmSmartListItemFilterQuery;
+
     protected $table = 'sm_smart_list_items';
 
     protected $fillable = [

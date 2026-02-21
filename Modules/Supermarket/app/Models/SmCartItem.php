@@ -6,9 +6,12 @@ namespace Modules\Supermarket\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Modules\Supermarket\Traits\FilterQueries\SmCartItemFilterQuery;
 
 final class SmCartItem extends Model
 {
+    use SmCartItemFilterQuery;
+
     protected $table = 'sm_cart_items';
 
     protected $fillable = [

@@ -11,9 +11,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Supermarket\Enums\SmOrderStatus;
 use Modules\Supermarket\Enums\SmPickupMode;
+use Modules\Supermarket\Traits\FilterQueries\SmOrderFilterQuery;
 
 final class SmOrder extends Model
 {
+    use SmOrderFilterQuery;
+
     protected $table = 'sm_orders';
 
     protected $fillable = [

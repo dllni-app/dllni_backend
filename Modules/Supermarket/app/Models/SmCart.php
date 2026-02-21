@@ -8,9 +8,12 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Modules\Supermarket\Traits\FilterQueries\SmCartFilterQuery;
 
 final class SmCart extends Model
 {
+    use SmCartFilterQuery;
+
     protected $table = 'sm_carts';
 
     protected $fillable = [
