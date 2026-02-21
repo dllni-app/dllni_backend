@@ -7,9 +7,12 @@ namespace Modules\Supermarket\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Modules\Supermarket\Enums\SmCommissionType;
+use Modules\Supermarket\Traits\FilterQueries\SmCommissionRuleFilterQuery;
 
 final class SmCommissionRule extends Model
 {
+    use SmCommissionRuleFilterQuery;
+
     protected $table = 'sm_commission_rules';
 
     protected $fillable = [

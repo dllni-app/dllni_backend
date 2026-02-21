@@ -9,9 +9,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Supermarket\Enums\SmProductSource;
+use Modules\Supermarket\Traits\FilterQueries\SmProductFilterQuery;
 
 final class SmProduct extends Model
 {
+    use SmProductFilterQuery;
+
     protected $table = 'sm_products';
 
     protected $fillable = [

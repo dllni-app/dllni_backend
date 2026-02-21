@@ -8,9 +8,12 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Modules\Supermarket\Enums\SmDocumentType;
+use Modules\Supermarket\Traits\FilterQueries\SmStoreDocumentFilterQuery;
 
 final class SmStoreDocument extends Model
 {
+    use SmStoreDocumentFilterQuery;
+
     protected $table = 'sm_store_documents';
 
     protected $fillable = [

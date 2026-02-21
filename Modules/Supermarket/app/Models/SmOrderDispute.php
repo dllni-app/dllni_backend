@@ -9,9 +9,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Supermarket\Enums\SmDisputeStatus;
+use Modules\Supermarket\Traits\FilterQueries\SmOrderDisputeFilterQuery;
 
 final class SmOrderDispute extends Model
 {
+    use SmOrderDisputeFilterQuery;
+
     protected $table = 'sm_order_disputes';
 
     protected $fillable = [

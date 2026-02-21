@@ -9,9 +9,12 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Modules\Supermarket\Enums\SmAssistantInputMode;
+use Modules\Supermarket\Traits\FilterQueries\SmAssistantQueryFilterQuery;
 
 final class SmAssistantQuery extends Model
 {
+    use SmAssistantQueryFilterQuery;
+
     protected $table = 'sm_assistant_queries';
 
     protected $fillable = [

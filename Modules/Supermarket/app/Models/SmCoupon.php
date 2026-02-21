@@ -7,9 +7,12 @@ namespace Modules\Supermarket\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Modules\Supermarket\Traits\FilterQueries\SmCouponFilterQuery;
 
 final class SmCoupon extends Model
 {
+    use SmCouponFilterQuery;
+
     protected $table = 'sm_coupons';
 
     protected $fillable = [

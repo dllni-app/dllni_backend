@@ -8,9 +8,12 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Modules\Supermarket\Traits\FilterQueries\SmStoreTrustLogFilterQuery;
 
 final class SmStoreTrustLog extends Model
 {
+    use SmStoreTrustLogFilterQuery;
+
     protected $table = 'sm_store_trust_logs';
 
     protected $fillable = [

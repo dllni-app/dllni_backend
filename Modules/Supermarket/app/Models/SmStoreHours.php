@@ -6,9 +6,12 @@ namespace Modules\Supermarket\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Modules\Supermarket\Traits\FilterQueries\SmStoreHoursFilterQuery;
 
 final class SmStoreHours extends Model
 {
+    use SmStoreHoursFilterQuery;
+
     protected $table = 'sm_store_hours';
 
     protected $fillable = [

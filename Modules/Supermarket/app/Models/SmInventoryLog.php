@@ -8,9 +8,12 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Modules\Supermarket\Traits\FilterQueries\SmInventoryLogFilterQuery;
 
 final class SmInventoryLog extends Model
 {
+    use SmInventoryLogFilterQuery;
+
     protected $table = 'sm_inventory_logs';
 
     protected $fillable = [

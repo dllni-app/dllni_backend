@@ -7,9 +7,12 @@ namespace Modules\Supermarket\Models;
 use App\Models\MasterProduct;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Modules\Supermarket\Traits\FilterQueries\SmRecurringOrderItemFilterQuery;
 
 final class SmRecurringOrderItem extends Model
 {
+    use SmRecurringOrderItemFilterQuery;
+
     protected $table = 'sm_recurring_order_items';
 
     protected $fillable = [
