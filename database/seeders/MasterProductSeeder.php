@@ -14,109 +14,37 @@ final class MasterProductSeeder extends Seeder
     public function run(): void
     {
         $products = [
-            [
-                'name' => 'طماطم',
-                'barcode' => '5901234123457',
-                'unit' => MasterProductUnit::Kilogram,
-                'brand' => 'مزرعة طازجة',
-                'description' => 'طماطم عنقودية طازجة',
-                'aliases' => ['طماطم كرزية', 'طماطم روما'],
-            ],
-            [
-                'name' => 'زيت زيتون',
-                'barcode' => '5901234123458',
-                'unit' => MasterProductUnit::Liter,
-                'brand' => 'ذهب المتوسط',
-                'description' => 'زيت زيتون بكر ممتاز',
-                'aliases' => ['زيت بكر', 'زيت زيتون بكر ممتاز'],
-            ],
-            [
-                'name' => 'صدر دجاج',
-                'barcode' => '5901234123459',
-                'unit' => MasterProductUnit::Kilogram,
-                'brand' => 'مزرعة طازجة',
-                'description' => 'صدر دجاج بدون جلد',
-                'aliases' => ['دجاج', 'لحم أبيض'],
-            ],
-            [
-                'name' => 'أرز',
-                'barcode' => '5901234123460',
-                'unit' => MasterProductUnit::Kilogram,
-                'brand' => 'حبة الذهب',
-                'description' => 'أرز بسمتي حبة طويلة',
-                'aliases' => ['بسمتي', 'أرز أبيض'],
-            ],
-            [
-                'name' => 'دقيق متعدد الاستخدام',
-                'barcode' => '5901234123461',
-                'unit' => MasterProductUnit::Kilogram,
-                'brand' => 'اختيار الخباز',
-                'description' => 'دقيق قمح للخبز',
-                'aliases' => ['دقيق', 'دقيق عادي'],
-            ],
-            [
-                'name' => 'حليب',
-                'barcode' => '5901234123462',
-                'unit' => MasterProductUnit::Liter,
-                'brand' => 'ألبان طازجة',
-                'description' => 'حليب كامل الدسم',
-                'aliases' => ['حليب كامل', 'حليب طازج'],
-            ],
-            [
-                'name' => 'بيض',
-                'barcode' => '5901234123463',
-                'unit' => MasterProductUnit::Pack,
-                'brand' => 'بيض المزرعة',
-                'description' => 'بيض حر المدى، علبة 12',
-                'aliases' => ['بيض', 'دزينة بيض'],
-            ],
-            [
-                'name' => 'بصل',
-                'barcode' => '5901234123464',
-                'unit' => MasterProductUnit::Kilogram,
-                'brand' => null,
-                'description' => 'بصل أصفر',
-                'aliases' => ['بصل أصفر', 'بصل للطبخ'],
-            ],
-            [
-                'name' => 'ثوم',
-                'barcode' => '5901234123465',
-                'unit' => MasterProductUnit::Piece,
-                'brand' => null,
-                'description' => 'رأس ثوم طازج',
-                'aliases' => ['رأس ثوم', 'ثوم طازج'],
-            ],
-            [
-                'name' => 'ليمون',
-                'barcode' => '5901234123466',
-                'unit' => MasterProductUnit::Piece,
-                'brand' => null,
-                'description' => 'ليمون طازج',
-                'aliases' => ['ليمون', 'حمضيات'],
-            ],
+            ['id' => 1, 'name' => 'حليب كامل الدسم', 'barcode' => '6281001000011', 'unit' => MasterProductUnit::Liter, 'brand' => 'المراعي', 'description' => 'حليب بقري كامل الدسم 1 لتر', 'is_active' => true, 'aliases' => ['حليب', 'لبن حليب']],
+            ['id' => 2, 'name' => 'حليب قليل الدسم', 'barcode' => '6281001000012', 'unit' => MasterProductUnit::Liter, 'brand' => 'المراعي', 'description' => 'حليب قليل الدسم 1 لتر', 'is_active' => true, 'aliases' => []],
+            ['id' => 3, 'name' => 'سكر أبيض', 'barcode' => '6282002000001', 'unit' => MasterProductUnit::Kilogram, 'brand' => 'الأسرة', 'description' => 'سكر أبيض ناعم 1 كغ', 'is_active' => true, 'aliases' => ['سكر']],
+            ['id' => 4, 'name' => 'رز بسمتي', 'barcode' => '6283003000001', 'unit' => MasterProductUnit::Kilogram, 'brand' => 'أبو كاس', 'description' => 'رز بسمتي فاخر', 'is_active' => true, 'aliases' => ['رز']],
+            ['id' => 5, 'name' => 'دجاج طازج', 'barcode' => '6284004000001', 'unit' => MasterProductUnit::Kilogram, 'brand' => 'الوطنية', 'description' => 'دجاج طازج كامل', 'is_active' => true, 'aliases' => ['فروج', 'دجاجة']],
+            ['id' => 6, 'name' => 'طماطم', 'barcode' => '0000000001001', 'unit' => MasterProductUnit::Kilogram, 'brand' => 'محلي', 'description' => 'طماطم طازجة', 'is_active' => true, 'aliases' => ['بندورة']],
+            ['id' => 7, 'name' => 'خيار', 'barcode' => '0000000001002', 'unit' => MasterProductUnit::Kilogram, 'brand' => 'محلي', 'description' => 'خيار طازج', 'is_active' => true, 'aliases' => []],
+            ['id' => 8, 'name' => 'جبنة موزاريلا', 'barcode' => '6285005000001', 'unit' => MasterProductUnit::Gram, 'brand' => 'برايد', 'description' => 'جبنة موزاريلا مبشورة', 'is_active' => true, 'aliases' => ['موزريلا']],
+            ['id' => 9, 'name' => 'زيت زيتون', 'barcode' => '6286006000001', 'unit' => MasterProductUnit::Liter, 'brand' => 'الجوف', 'description' => 'زيت زيتون بكر ممتاز', 'is_active' => true, 'aliases' => ['زيت']],
+            ['id' => 10, 'name' => 'معكرونة سباغيتي', 'barcode' => '6287007000001', 'unit' => MasterProductUnit::Kilogram, 'brand' => 'العلالي', 'description' => 'معكرونة سباغيتي 500غ', 'is_active' => true, 'aliases' => ['باستا']],
         ];
 
         foreach ($products as $data) {
-            $aliases = $data['aliases'] ?? [];
+            $aliases = $data['aliases'];
             unset($data['aliases']);
 
-            $product = MasterProduct::firstOrCreate(
-                ['barcode' => $data['barcode']],
+            $product = MasterProduct::updateOrCreate(
+                ['id' => $data['id']],
                 [
                     'name' => $data['name'],
+                    'barcode' => $data['barcode'],
                     'unit' => $data['unit']->value,
                     'brand' => $data['brand'],
                     'description' => $data['description'],
-                    'is_active' => true,
+                    'is_active' => $data['is_active'],
                 ]
             );
 
             foreach ($aliases as $alias) {
                 MasterProductAlias::firstOrCreate(
-                    [
-                        'master_product_id' => $product->id,
-                        'alias' => $alias,
-                    ]
+                    ['master_product_id' => $product->id, 'alias' => $alias]
                 );
             }
         }

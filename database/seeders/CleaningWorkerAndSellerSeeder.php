@@ -197,7 +197,7 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
         Restaurant::create([
             'user_id' => $user->id,
             'name' => 'Seller Restaurant',
-            'slug' => 'seller-restaurant-'.mb_substr(md5((string) $user->id), 0, 8),
+            'slug' => 'seller-restaurant-'.mb_substr(hash('sha256', (string) $user->id), 0, 8),
             'description' => 'Restaurant owned by seller user for API testing.',
             'address' => '456 Seller Ave',
             'latitude' => 31.965,

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Modules\Resturants\Models;
 
 use App\Models\MasterProduct;
+use Database\Factories\ProductFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -13,6 +15,7 @@ use Modules\Resturants\Traits\FilterQueries\ProductFilterQuery;
 
 final class Product extends Model
 {
+    use HasFactory;
     use ProductFilterQuery;
 
     protected $fillable = [
@@ -69,6 +72,11 @@ final class Product extends Model
         }
 
         return $query->whereColumn('stock_quantity', '<=', 'low_stock_threshold');
+    }
+
+    protected static function newFactory(): ProductFactory
+    {
+        return ProductFactory::new();
     }
 
     protected function casts(): array

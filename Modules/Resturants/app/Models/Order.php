@@ -6,6 +6,8 @@ namespace Modules\Resturants\Models;
 
 use App\Models\CancellationPolicy;
 use App\Models\User;
+use Database\Factories\OrderFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -16,6 +18,7 @@ use Modules\Resturants\Traits\FilterQueries\OrderFilterQuery;
 
 final class Order extends Model
 {
+    use HasFactory;
     use OrderFilterQuery;
 
     protected $fillable = [
@@ -90,6 +93,11 @@ final class Order extends Model
     public function reviews(): HasMany
     {
         return $this->hasMany(Review::class);
+    }
+
+    protected static function newFactory(): OrderFactory
+    {
+        return OrderFactory::new();
     }
 
     protected function casts(): array

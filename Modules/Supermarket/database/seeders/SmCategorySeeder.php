@@ -5,38 +5,35 @@ declare(strict_types=1);
 namespace Modules\Supermarket\Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use Modules\Supermarket\Models\SmCategory;
-use Modules\Supermarket\Models\SmStore;
+use Illuminate\Support\Facades\DB;
 
 final class SmCategorySeeder extends Seeder
 {
     public function run(): void
     {
-        $categoriesData = [
-            ['name' => 'خضروات وفواكه', 'slug' => 'vegetables-fruits', 'description' => 'خضروات وفواكه طازجة يومياً', 'sort_order' => 1],
-            ['name' => 'ألبان وأجبان', 'slug' => 'dairy-cheese', 'description' => 'حليب، لبن، أجبان، وزبادي', 'sort_order' => 2],
-            ['name' => 'لحوم ودواجن', 'slug' => 'meat-poultry', 'description' => 'لحوم حمراء، دجاج، وسمك طازج', 'sort_order' => 3],
-            ['name' => 'مخبوزات وحلويات', 'slug' => 'bakery-sweets', 'description' => 'خبز، معجنات، وحلويات', 'sort_order' => 4],
-            ['name' => 'معلبات ومجمدات', 'slug' => 'canned-frozen', 'description' => 'معلبات، مجمدات، وأطعمة جاهزة', 'sort_order' => 5],
-            ['name' => 'مشروبات', 'slug' => 'beverages', 'description' => 'عصائر، مشروبات غازية، ومياه', 'sort_order' => 6],
-            ['name' => 'تنظيف ومنزل', 'slug' => 'cleaning-household', 'description' => 'منظفات ومستلزمات منزلية', 'sort_order' => 7],
+        $categories = [
+            ['id' => 1, 'store_id' => 1, 'name' => 'الألبان', 'slug' => 'dairy', 'sort_order' => 1],
+            ['id' => 2, 'store_id' => 1, 'name' => 'الحبوب والأرز', 'slug' => 'grains', 'sort_order' => 2],
+            ['id' => 3, 'store_id' => 1, 'name' => 'اللحوم والدواجن', 'slug' => 'meat', 'sort_order' => 3],
+            ['id' => 4, 'store_id' => 1, 'name' => 'الخضار والفواكه', 'slug' => 'vegetables', 'sort_order' => 4],
+            ['id' => 5, 'store_id' => 1, 'name' => 'المعكرونة', 'slug' => 'pasta', 'sort_order' => 5],
         ];
 
-        SmStore::each(function (SmStore $store) use ($categoriesData): void {
-            foreach ($categoriesData as $data) {
-                SmCategory::firstOrCreate(
-                    [
-                        'store_id' => $store->id,
-                        'slug' => $data['slug'],
-                    ],
-                    [
-                        'name' => $data['name'],
-                        'description' => $data['description'],
-                        'sort_order' => $data['sort_order'],
-                        'is_active' => true,
-                    ]
-                );
-            }
-        });
+        foreach ($categories as $category) {
+            DB::table('sm_categories')->updateOrInsert(
+                ['id' => $category['id']],
+                [
+                    'store_id' => $category['store_id'],
+                    'name' => $category['name'],
+                    'slug' => $category['slug'],
+                    'description' => null,
+                    'sort_order' => $category['sort_order'],
+                    'image_path' => null,
+                    'is_active' => true,
+                    'updated_at' => now(),
+                    'created_at' => now(),
+                ]
+            );
+        }
     }
 }
