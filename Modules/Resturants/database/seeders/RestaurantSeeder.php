@@ -159,6 +159,7 @@ final class RestaurantSeeder extends Seeder
             ]);
 
             $this->seedSampleOrders($restaurant, $owner, $cancellationPolicy);
+            $this->seedRequestedRestaurantData($restaurant);
         }
     }
 
@@ -283,6 +284,86 @@ final class RestaurantSeeder extends Seeder
                 'accepted_at' => now()->subDays($i),
                 'completed_at' => now()->subDays($i)->addMinutes(25),
             ]);
+        }
+    }
+
+    private function seedRequestedRestaurantData(Restaurant $restaurant): void
+    {
+        if ($restaurant->id !== 1) {
+            return;
+        }
+
+        $categories = [
+            ['id' => 1, 'name' => 'المقبلات', 'slug' => 'appetizers', 'sort_order' => 1],
+            ['id' => 2, 'name' => 'الأطباق الرئيسية', 'slug' => 'main-dishes', 'sort_order' => 2],
+            ['id' => 3, 'name' => 'المشروبات', 'slug' => 'drinks', 'sort_order' => 3],
+            ['id' => 4, 'name' => 'البيتزا', 'slug' => 'pizza', 'sort_order' => 4],
+        ];
+
+        foreach ($categories as $category) {
+            DB::table('categories')->updateOrInsert(
+                ['id' => $category['id']],
+                [
+                    'restaurant_id' => $restaurant->id,
+                    'name' => $category['name'],
+                    'slug' => $category['slug'],
+                    'sort_order' => $category['sort_order'],
+                    'updated_at' => now(),
+                    'created_at' => now(),
+                ]
+            );
+        }
+
+        $products = [
+            ['id' => 1, 'category_id' => 4, 'master_product_id' => 8, 'name' => 'بيتزا مارجريتا', 'slug' => 'pizza-margherita', 'description' => 'بيتزا بجبنة موزاريلا', 'price' => 35, 'discounted_price' => 30, 'is_available' => true, 'stock_quantity' => 50],
+            ['id' => 2, 'category_id' => 2, 'master_product_id' => 5, 'name' => 'دجاج مشوي', 'slug' => 'grilled-chicken', 'description' => 'دجاج متبل ومشوي على الفحم', 'price' => 40, 'discounted_price' => null, 'is_available' => true, 'stock_quantity' => 20],
+            ['id' => 3, 'category_id' => 1, 'master_product_id' => 6, 'name' => 'سلطة خضار', 'slug' => 'vegetable-salad', 'description' => 'سلطة طازجة يومياً', 'price' => 15, 'discounted_price' => null, 'is_available' => true, 'stock_quantity' => 30],
+            ['id' => 4, 'category_id' => 3, 'master_product_id' => 1, 'name' => 'حليب بارد', 'slug' => 'cold-milk', 'description' => 'حليب كامل الدسم مبرد', 'price' => 5, 'discounted_price' => null, 'is_available' => true, 'stock_quantity' => 100],
+        ];
+
+        foreach ($products as $product) {
+            DB::table('products')->updateOrInsert(
+                ['id' => $product['id']],
+                [
+                    'restaurant_id' => $restaurant->id,
+                    'category_id' => $product['category_id'],
+                    'master_product_id' => $product['master_product_id'],
+                    'name' => $product['name'],
+                    'slug' => $product['slug'],
+                    'description' => $product['description'],
+                    'price' => $product['price'],
+                    'discounted_price' => $product['discounted_price'],
+                    'is_available' => $product['is_available'],
+                    'stock_quantity' => $product['stock_quantity'],
+                    'low_stock_threshold' => 5,
+                    'preparation_time' => 10,
+                    'is_featured' => false,
+                    'updated_at' => now(),
+                    'created_at' => now(),
+                ]
+            );
+        }
+
+        $offers = [
+            ['id' => 1, 'name' => 'عرض البيتزا العائلية', 'is_active' => true],
+            ['id' => 2, 'name' => 'خصم 10% على المشروبات', 'is_active' => true],
+        ];
+
+        foreach ($offers as $offer) {
+            DB::table('offers')->updateOrInsert(
+                ['id' => $offer['id']],
+                [
+                    'restaurant_id' => $restaurant->id,
+                    'name' => $offer['name'],
+                    'discount_type' => 'percentage',
+                    'discount_value' => 10,
+                    'starts_at' => null,
+                    'ends_at' => null,
+                    'is_active' => $offer['is_active'],
+                    'updated_at' => now(),
+                    'created_at' => now(),
+                ]
+            );
         }
     }
 }

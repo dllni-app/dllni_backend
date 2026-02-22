@@ -20,6 +20,7 @@ use Modules\Resturants\Http\Controllers\API\RestaurantPenaltyController;
 use Modules\Resturants\Http\Controllers\API\RestaurantRecurringOrderController;
 use Modules\Resturants\Http\Controllers\API\RestaurantReputationLogController;
 use Modules\Resturants\Http\Controllers\API\RestaurantRoleController;
+use Modules\Resturants\Http\Controllers\API\RestaurantSearchController;
 use Modules\Resturants\Http\Controllers\API\RestaurantStaffController;
 use Modules\Resturants\Http\Controllers\API\ReviewController;
 use Modules\Resturants\Http\Controllers\ResturantsController;
@@ -28,6 +29,7 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     Route::get('restaurant/dashboard/overview', DashboardOverviewController::class);
     Route::get('restaurant/analytics/daily-stats', [RestaurantAnalyticsController::class, 'dailyStats']);
     Route::get('restaurant/analytics/monthly-stats', [RestaurantAnalyticsController::class, 'monthlyStats']);
+    Route::get('restaurant/search/products', RestaurantSearchController::class);
     Route::apiResource('restaurants', RestaurantController::class);
     Route::apiResource('categories', CategoryController::class);
     Route::apiResource('products', ProductController::class);

@@ -221,6 +221,48 @@ Base path: `/api/v1/` (all under `auth:sanctum`).
 | GET    | `/api/v1/reviews`                           | List (filter: restaurantId, ratingMin, ratingMax, dateFrom, dateTo)              |
 | GET    | `/api/v1/reviews/{id}`                      | Show                                                                             |
 
+### 3.14 Restaurant regular product search (non-AI)
+
+| Method | Path                                  | Description                                                                 |
+| ------ | ------------------------------------- | --------------------------------------------------------------------------- |
+| GET    | `/api/v1/restaurant/search/products`  | Search products by text across active restaurants (optional restaurant scope) |
+
+**Query params:**
+- `filter[search]` (required, string, 1..255)
+- `filter[restaurantId]` (optional, exists:restaurants,id)
+- `filter[categoryId]` (optional, exists:categories,id)
+- `filter[isAvailable]` (optional, boolean)
+- `filter[isFeatured]` (optional, boolean)
+- `filter[lowStock]` (optional, boolean)
+- `filter[masterProductId]` (optional, exists:master_products,id)
+- `filter[minPrice]` (optional, numeric >= 0)
+- `filter[maxPrice]` (optional, numeric >= minPrice)
+- `filter[hasDiscount]` (optional, boolean)
+- `perPage` (optional, integer, 1..50, default 20)
+- `page` (optional, integer, min 1, default 1)
+- `sort` (optional, one of `name`, `-name`, `price`, `-price`, `createdAt`, `-createdAt`)
+
+**Behavior:**
+- Matches on `products.name` and `products.slug` via `filter[search]` partial `LIKE`.
+- Enforces `restaurants.is_active = true`.
+- Enforces `products.is_available = true` by default, unless `filter[isAvailable]` is explicitly provided.
+- If `filter[restaurantId]` is provided, narrows to that restaurant only.
+- Default ranking when `sort` is not provided:
+  1. `name` starts with `filter[search]`
+  2. `name` contains `filter[search]`
+  3. `slug` contains `filter[search]`
+  4. Tie-breakers: `is_featured DESC`, then `created_at DESC`
+- Backward compatibility: typo key `serach` is not supported.
+
+**Response (200):** Paginated resource collection with `data`, `links`, `meta`.
+Each `data[]` item includes:
+- `id`, `name`, `slug`, `description`
+- `price`, `discountedPrice`
+- `isAvailable`, `isFeatured`
+- `restaurant` (`id`, `name`, `slug`)
+- `category` (`id`, `name`, `slug`)
+- `createdAt`, `updatedAt`
+
 ---
 
 ## 4. Enums reference (Restaurant)

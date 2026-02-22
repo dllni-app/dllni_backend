@@ -1,22 +1,22 @@
 <?php
 
 declare(strict_types=1);
+
 namespace App\Http\Controllers\API;
 
-use App\Models\User;
 use App\Data\UserData;
-use App\Services\UserService;
+use App\Http\Requests\UserFilterRequest;
 use App\Http\Requests\UserRequest;
 use App\Http\Resources\UserResource;
-use App\Traits\FilterQueries\UserFilterQuery;
-use App\Http\Requests\UserFilterRequest;
-use Illuminate\Http\Response;
+use App\Models\User;
+use App\Services\UserService;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\Response;
 use Throwable;
 
-class UserController
+final class UserController
 {
-    public function __construct(protected UserService $userService){}
+    public function __construct(private UserService $userService) {}
 
     public function index(UserFilterRequest $request): AnonymousResourceCollection
     {
@@ -58,4 +58,3 @@ class UserController
         return response()->noContent();
     }
 }
-

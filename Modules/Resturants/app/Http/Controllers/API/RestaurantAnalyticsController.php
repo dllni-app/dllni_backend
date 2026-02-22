@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Resturants\Http\Controllers\API;
 
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Modules\Resturants\Models\RestaurantDailyStat;
@@ -19,9 +20,12 @@ final class RestaurantAnalyticsController
             'dateTo' => 'required|date|after_or_equal:dateFrom',
         ]);
 
+        $dateFrom = Carbon::parse($request->input('dateFrom'))->startOfDay();
+        $dateTo = Carbon::parse($request->input('dateTo'))->endOfDay();
+
         $stats = RestaurantDailyStat::query()
             ->where('restaurant_id', $request->input('restaurantId'))
-            ->whereBetween('stat_date', [$request->input('dateFrom'), $request->input('dateTo')])
+            ->whereBetween('stat_date', [$dateFrom, $dateTo])
             ->orderBy('stat_date')
             ->get()
             ->map(fn ($stat) => [

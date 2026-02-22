@@ -41,5 +41,11 @@ final class DatabaseSeeder extends Seeder
             EventBookingSeeder::class,
             SupermarketDatabaseSeeder::class,
         ]);
+
+        if (filter_var((string) env('AI_DEV_DATASET', false), FILTER_VALIDATE_BOOL)) {
+            $this->call([
+                AiDevelopmentDataSeeder::class,
+            ]);
+        }
     }
 }
