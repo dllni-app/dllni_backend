@@ -1,0 +1,83 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Modules\Supermarket\Http\Controllers\API\StoreOwner;
+
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Modules\Supermarket\Enums\SmOrderStatus;
+use Modules\Supermarket\Http\Resources\SmOrderResource;
+use Modules\Supermarket\Models\SmOrder;
+
+final class StoreOwnerDashboardController
+{
+    public function __invoke(Request $request): JsonResponse
+    {
+        $request->validate([
+            'storeId' => 'required|exists:sm_stores,id',
+        ]);
+
+        $storeId = (int) $request->input('storeId');
+        $today = Carbon::today();
+
+        // Base query for today's orders
+        $todayOrdersQuery = SmOrder::query()
+            ->where('store_id', $storeId)
+            ->whereDate('created_at', $today);
+
+        // Total orders count
+        $totalOrders = (clone $todayOrdersQuery)->count();
+
+        // Completed orders count
+        $completedOrders = (clone $todayOrdersQuery)
+            ->where('status', SmOrderStatus::Completed)
+            ->count();
+
+        // New orders (Pending status)
+        $newOrdersCount = (clone $todayOrdersQuery)
+            ->where('status', SmOrderStatus::Pending)
+            ->count();
+
+        // Pending orders (not completed and not cancelled)
+        $pendingOrdersCount = (clone $todayOrdersQuery)
+            ->whereNotIn('status', [SmOrderStatus::Completed, SmOrderStatus::Cancelled])
+            ->count();
+
+        // Total sales (completed orders only)
+        $totalSales = (float) (clone $todayOrdersQuery)
+            ->where('status', SmOrderStatus::Completed)
+            ->sum('total_amount');
+
+        // Get new orders data (Pending)
+        $newOrdersData = SmOrder::query()
+            ->where('store_id', $storeId)
+            ->where('status', SmOrderStatus::Pending)
+            ->whereDate('created_at', $today)
+            ->with(['customer', 'items.product'])
+            ->latest()
+            ->get();
+
+        // Get pending orders data (all non-completed, non-cancelled)
+        $pendingOrdersData = SmOrder::query()
+            ->where('store_id', $storeId)
+            ->whereNotIn('status', [SmOrderStatus::Completed, SmOrderStatus::Cancelled])
+            ->with(['customer', 'items.product'])
+            ->latest()
+            ->get();
+
+        return response()->json([
+            'message' => 'Dashboard data retrieved successfully.',
+            'data' => [
+                'totalOrders' => $totalOrders,
+                'completedOrders' => $completedOrders,
+                'newOrders' => $newOrdersCount,
+                'pendingOrders' => $pendingOrdersCount,
+                'totalSales' => $totalSales,
+                'newOrdersData' => SmOrderResource::collection($newOrdersData),
+                'pendingOrdersData' => SmOrderResource::collection($pendingOrdersData),
+            ],
+        ]);
+    }
+}

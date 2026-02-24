@@ -30,6 +30,9 @@ use Modules\Supermarket\Http\Controllers\API\SmStoreDailyStatController;
 use Modules\Supermarket\Http\Controllers\API\SmStoreDocumentController;
 use Modules\Supermarket\Http\Controllers\API\SmStoreHoursController;
 use Modules\Supermarket\Http\Controllers\API\SmStoreTrustLogController;
+use Modules\Supermarket\Http\Controllers\API\StoreOwner\SmOrderActionController;
+use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerDashboardController;
+use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerStoreController;
 
 Route::prefix('v1')->group(function () {
     // Dashboard and Reports
@@ -61,4 +64,13 @@ Route::prefix('v1')->group(function () {
     Route::apiResource('sm-recurring-order-items', SmRecurringOrderItemController::class)->only(['index', 'show'])->names('sm-recurring-order-items');
     Route::apiResource('sm-smart-lists', SmSmartListController::class)->names('sm-smart-lists');
     Route::apiResource('sm-smart-list-items', SmSmartListItemController::class)->only(['index', 'show'])->names('sm-smart-list-items');
+
+    // Store Owner Routes
+    Route::prefix('store-owner')->name('store-owner.')->group(function () {
+        Route::get('dashboard', StoreOwnerDashboardController::class)->name('dashboard');
+        Route::post('orders/{order}/accept', [SmOrderActionController::class, 'accept'])->name('orders.accept');
+        Route::post('orders/{order}/reject', [SmOrderActionController::class, 'reject'])->name('orders.reject');
+        Route::get('stores/{store}', [StoreOwnerStoreController::class, 'show'])->name('stores.show');
+        Route::put('stores/{store}', [StoreOwnerStoreController::class, 'update'])->name('stores.update');
+    });
 });
