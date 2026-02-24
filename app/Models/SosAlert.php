@@ -30,7 +30,7 @@ final class SosAlert extends Model
         return $this->morphTo(__FUNCTION__, 'booking_type', 'booking_id');
     }
 
-    protected function casts(): array
+    public function casts(): array
     {
         return [
             'emergency_type' => EmergencyType::class,

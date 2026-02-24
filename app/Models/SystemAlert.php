@@ -29,7 +29,7 @@ final class SystemAlert extends Model
         return $this->morphTo(__FUNCTION__, 'booking_type', 'booking_id');
     }
 
-    protected function casts(): array
+    public function casts(): array
     {
         return [
             'alert_type' => AlertType::class,

@@ -20,7 +20,7 @@ final class ServiceAddon extends Model
         'is_active',
     ];
 
-    protected function casts(): array
+    public function casts(): array
     {
         return [
             'pricing_type' => AddonPricingType::class,

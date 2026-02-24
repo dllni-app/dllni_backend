@@ -28,7 +28,7 @@ final class RecipeIngredient extends Model
         return $this->belongsTo(MasterProduct::class);
     }
 
-    protected function casts(): array
+    public function casts(): array
     {
         return [
             'quantity' => 'decimal:4',

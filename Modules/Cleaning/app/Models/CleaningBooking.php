@@ -117,7 +117,7 @@ final class CleaningBooking extends Model
         return CleaningBookingFactory::new();
     }
 
-    protected function casts(): array
+    public function casts(): array
     {
         return [
             'status' => CleaningBookingStatus::class,

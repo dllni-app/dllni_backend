@@ -26,7 +26,7 @@ final class CleaningService extends Model
         return $this->hasMany(ServicePricing::class);
     }
 
-    protected function casts(): array
+    public function casts(): array
     {
         return [
             'category' => ServiceCategory::class,

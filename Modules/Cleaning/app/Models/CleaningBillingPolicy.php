@@ -20,7 +20,7 @@ final class CleaningBillingPolicy extends Model
         'is_default',
     ];
 
-    protected function casts(): array
+    public function casts(): array
     {
         return [
             'billing_mode' => CleaningBillingMode::class,

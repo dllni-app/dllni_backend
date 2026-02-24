@@ -45,9 +45,10 @@ final class AiDevelopmentDataSeeder extends Seeder
         DB::table('master_products')->where('barcode', 'like', '880%')->delete();
 
         $rows = [];
+        $packSizesCount = count($packSizes);
         for ($i = 1; $i <= $count; $i++) {
             $template = $templates[($i - 1) % count($templates)];
-            $size = $packSizes[array_rand($packSizes)];
+            $size = $packSizes[($i - 1) % $packSizesCount];
             $rows[] = [
                 'name' => sprintf('%s %s', $template['name'], $size),
                 'barcode' => sprintf('880%010d', $i),
@@ -73,9 +74,10 @@ final class AiDevelopmentDataSeeder extends Seeder
         DB::table('master_product_aliases')->whereIn('master_product_id', $masterIds)->delete();
 
         $aliasRows = [];
+        $packSizesCount = count($packSizes);
         foreach ($products as $index => $product) {
             $template = $templates[$index % count($templates)];
-            $size = $packSizes[array_rand($packSizes)];
+            $size = $packSizes[$index % $packSizesCount];
             foreach ($template['aliases'] as $alias) {
                 $aliasRows[] = [
                     'master_product_id' => $product->id,
@@ -141,7 +143,7 @@ final class AiDevelopmentDataSeeder extends Seeder
                     'recipe_id' => $recipeId,
                     'master_product_id' => $masterProductIds->random(),
                     'quantity' => random_int(1, 1200) / 10,
-                    'unit' => $units[array_rand($units)],
+                    'unit' => $units[($recipeId + $j - 1) % count($units)],
                     'is_optional' => $j >= 4,
                     'created_at' => now(),
                     'updated_at' => now(),

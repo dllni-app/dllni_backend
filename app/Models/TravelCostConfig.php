@@ -19,7 +19,7 @@ final class TravelCostConfig extends Model
         'is_active',
     ];
 
-    protected function casts(): array
+    public function casts(): array
     {
         return [
             'max_km' => 'decimal:2',

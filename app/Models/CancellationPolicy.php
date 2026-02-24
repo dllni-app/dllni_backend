@@ -17,7 +17,7 @@ final class CancellationPolicy extends Model
         'is_default',
     ];
 
-    protected function casts(): array
+    public function casts(): array
     {
         return [
             'rules' => 'array',

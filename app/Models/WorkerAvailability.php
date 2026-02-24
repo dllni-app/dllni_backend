@@ -25,7 +25,7 @@ final class WorkerAvailability extends Model
         return $this->belongsTo(Worker::class);
     }
 
-    protected function casts(): array
+    public function casts(): array
     {
         return [
             'availability_date' => 'date',
