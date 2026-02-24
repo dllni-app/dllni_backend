@@ -25,10 +25,16 @@ final class Restaurant extends Model
         'slug',
         'description',
         'address',
+        'city',
+        'district',
+        'location_details',
         'latitude',
         'longitude',
         'phone',
+        'whatsapp_number',
         'email',
+        'instagram_username',
+        'facebook_page_name',
         'average_rating',
         'total_reviews',
         'estimated_preparation_time',
@@ -40,6 +46,7 @@ final class Restaurant extends Model
         'manual_visibility_override',
         'is_active',
         'is_featured',
+        'is_temporarily_closed',
         'suspension_until',
     ];
 
@@ -114,6 +121,11 @@ final class Restaurant extends Model
         return $this->hasMany(RestaurantRole::class, 'restaurant_id');
     }
 
+    public function inventoryItems(): HasMany
+    {
+        return $this->hasMany(InventoryItem::class, 'restaurant_id');
+    }
+
     public function reviews(): HasMany
     {
         return $this->hasMany(Review::class);
@@ -135,6 +147,7 @@ final class Restaurant extends Model
             'manual_visibility_override' => 'boolean',
             'is_active' => 'boolean',
             'is_featured' => 'boolean',
+            'is_temporarily_closed' => 'boolean',
             'suspension_until' => 'datetime',
         ];
     }

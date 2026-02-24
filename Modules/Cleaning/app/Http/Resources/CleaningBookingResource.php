@@ -44,6 +44,7 @@ final class CleaningBookingResource extends JsonResource
             'workFinishedAt' => $this->work_finished_at?->toDateTimeString(),
             'customerConfirmedAt' => $this->customer_confirmed_at?->toDateTimeString(),
             'cancelledAt' => $this->cancelled_at?->toDateTimeString(),
+            'cancellationReason' => $this->cancellation_reason,
             'customer' => $this->whenLoaded('customer', fn () => [
                 'id' => $this->customer->id,
                 'name' => $this->customer->name,

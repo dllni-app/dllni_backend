@@ -39,10 +39,13 @@ final class OrderResource extends JsonResource
             'cancellationPolicySnapshot' => $this->cancellation_policy_snapshot,
             'specialInstructions' => $this->special_instructions,
             'acceptedAt' => $this->accepted_at?->toDateTimeString(),
+            'estimatedPreparationMinutes' => $this->estimated_preparation_minutes,
+            'kitchenNotes' => $this->kitchen_notes,
             'preparingAt' => $this->preparing_at?->toDateTimeString(),
             'completedAt' => $this->completed_at?->toDateTimeString(),
             'cancelledAt' => $this->cancelled_at?->toDateTimeString(),
             'cancellationReason' => $this->cancellation_reason,
+            'cancellationReasonCode' => $this->cancellation_reason_code,
             'user' => $this->whenLoaded('user', fn () => [
                 'id' => $this->user->id,
                 'name' => $this->user->name,

@@ -52,6 +52,7 @@ final class CleaningBooking extends Model
         'work_finished_at',
         'customer_confirmed_at',
         'cancelled_at',
+        'cancellation_reason',
     ];
 
     public function customer(): BelongsTo

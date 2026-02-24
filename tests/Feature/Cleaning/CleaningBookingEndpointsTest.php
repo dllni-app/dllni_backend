@@ -227,4 +227,56 @@ it('returns zeros for worker homepage when user has no worker', function () {
     expect($response->json('totalBookings'))->toBe(0);
     expect($response->json('todayCount'))->toBe(0);
     expect($response->json('totalEarnings'))->toBe(0);
+    expect($response->json('todayEarnings'))->toBe(0);
+    expect($response->json('newOrdersCount'))->toBe(0);
+    expect($response->json('pendingExtensionRequestsCount'))->toBe(0);
+});
+
+it('returns worker homepage with todayEarnings newOrdersCount and pendingExtensionRequestsCount', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-homepage-extended@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
+        'name' => 'Default',
+        'billing_mode' => 'actual_working_time',
+        'rules' => [],
+        'is_active' => true,
+        'is_default' => true,
+    ]);
+
+    $today = now()->format('Y-m-d');
+    CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $billingPolicy->id,
+        'status' => CleaningBookingStatus::Completed,
+        'total_price' => 200,
+        'scheduled_date' => $today,
+    ]);
+    CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $billingPolicy->id,
+        'status' => CleaningBookingStatus::WorkerAssigned,
+        'scheduled_date' => now()->addDays(1),
+    ]);
+
+    $bookingForWarning = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $billingPolicy->id,
+        'status' => CleaningBookingStatus::InProgress,
+    ]);
+    Modules\Cleaning\Models\CleaningTimeWarning::create([
+        'booking_id' => $bookingForWarning->id,
+        'booking_type' => 'cleaning_booking',
+        'worker_response' => null,
+        'worker_responded_at' => null,
+        'sent_at' => now(),
+    ]);
+
+    $response = $this->getJson('/api/v1/cleaning/worker/homepage');
+
+    $response->assertOk();
+    expect((float) $response->json('todayEarnings'))->toBe(200.0);
+    expect($response->json('newOrdersCount'))->toBeGreaterThanOrEqual(1);
+    expect($response->json('pendingExtensionRequestsCount'))->toBe(1);
 });

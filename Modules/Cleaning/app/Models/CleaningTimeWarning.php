@@ -21,6 +21,7 @@ final class CleaningTimeWarning extends Model
         'sent_at',
         'customer_responded_at',
         'worker_responded_at',
+        'worker_reject_message',
     ];
 
     public function booking(): MorphTo

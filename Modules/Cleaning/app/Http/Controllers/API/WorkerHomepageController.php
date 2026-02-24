@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningTimeWarning;
 
 final class WorkerHomepageController
 {
@@ -25,6 +26,9 @@ final class WorkerHomepageController
                 'inProgressCount' => 0,
                 'cancelledCount' => 0,
                 'totalEarnings' => 0,
+                'todayEarnings' => 0,
+                'newOrdersCount' => 0,
+                'pendingExtensionRequestsCount' => 0,
             ]);
         }
 
@@ -65,6 +69,26 @@ final class WorkerHomepageController
             ->where('status', CleaningBookingStatus::Completed)
             ->sum('total_price');
 
+        $todayEarnings = (float) (clone $baseQuery)
+            ->where('status', CleaningBookingStatus::Completed)
+            ->whereDate('scheduled_date', $today)
+            ->sum('total_price');
+
+        $newOrdersCount = (clone $baseQuery)
+            ->whereIn('status', [
+                CleaningBookingStatus::Pending,
+                CleaningBookingStatus::Confirmed,
+                CleaningBookingStatus::WorkerAssigned,
+            ])
+            ->whereDate('scheduled_date', '>=', $today)
+            ->count();
+
+        $pendingExtensionRequestsCount = CleaningTimeWarning::query()
+            ->where('booking_type', 'cleaning_booking')
+            ->whereNull('worker_responded_at')
+            ->whereHasMorph('booking', [CleaningBooking::class], fn ($q) => $q->where('worker_id', $worker->id))
+            ->count();
+
         return response()->json([
             'totalBookings' => $totalBookings,
             'todayCount' => $todayCount,
@@ -73,6 +97,9 @@ final class WorkerHomepageController
             'inProgressCount' => $inProgressCount,
             'cancelledCount' => $cancelledCount,
             'totalEarnings' => $totalEarnings,
+            'todayEarnings' => $todayEarnings,
+            'newOrdersCount' => $newOrdersCount,
+            'pendingExtensionRequestsCount' => $pendingExtensionRequestsCount,
         ]);
     }
 }

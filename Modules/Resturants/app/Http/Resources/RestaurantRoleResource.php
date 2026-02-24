@@ -25,6 +25,10 @@ final class RestaurantRoleResource extends JsonResource
                 'name' => $this->restaurant->name,
             ]),
             'staff' => $this->whenLoaded('staff'),
+            'permissions' => $this->whenLoaded('permissions', fn () => $this->permissions->map(fn ($p) => [
+                'id' => $p->id,
+                'name' => $p->name,
+            ])->values()->all()),
             'createdAt' => $this->created_at->toDateTimeString(),
             'updatedAt' => $this->updated_at->toDateTimeString(),
         ];

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\API\AuthController;
+use App\Http\Controllers\API\CancellationPolicyController;
 use App\Http\Controllers\API\DisputeController;
 use App\Http\Controllers\API\ServiceAddonController;
 use App\Http\Controllers\API\SosAlertController;
@@ -34,4 +35,5 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     Route::apiResource('sos-alerts', SosAlertController::class)->only(['index', 'show']);
     Route::apiResource('service-addons', ServiceAddonController::class);
     Route::apiResource('travel-cost-configs', TravelCostConfigController::class);
+    Route::get('cancellation-policy', [CancellationPolicyController::class, 'show']);
 });

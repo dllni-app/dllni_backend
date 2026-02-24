@@ -21,6 +21,8 @@ final class CleaningTimeWarningFilterRequest extends FormRequest
             'filter.bookingType' => 'sometimes|string|in:cleaning_booking,event_booking',
             'filter.sentAtFrom' => 'sometimes|date',
             'filter.sentAtTo' => 'sometimes|date|after_or_equal:filter.sentAtFrom',
+            'filter.forCurrentWorker' => 'sometimes|boolean',
+            'filter.pending' => 'sometimes|boolean',
             'sort' => 'sometimes|string|in:sentAt,-sentAt,createdAt,-createdAt',
         ];
     }

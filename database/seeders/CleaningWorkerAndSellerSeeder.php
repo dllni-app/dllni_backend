@@ -60,6 +60,7 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
         'seller_assistant_queries' => ['view'],
         'seller_recurring_orders' => ['view'],
         'seller_reviews' => ['view'],
+        'seller_inventory_items' => ['view', 'create', 'update', 'delete'],
     ];
 
     public function run(): void

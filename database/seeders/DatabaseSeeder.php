@@ -9,6 +9,7 @@ use Illuminate\Database\Seeder;
 use Modules\Cleaning\Database\Seeders\CleaningBillingPolicySeeder;
 use Modules\Cleaning\Database\Seeders\CleaningBookingSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningServiceSeeder;
+use Modules\Cleaning\Database\Seeders\CleaningWorkerArabicDataSeeder;
 use Modules\Cleaning\Database\Seeders\EventBookingSeeder;
 use Modules\Resturants\Database\Seeders\RestaurantSeeder;
 use Modules\Supermarket\Database\Seeders\SupermarketDatabaseSeeder;
@@ -38,6 +39,7 @@ final class DatabaseSeeder extends Seeder
             CleaningServiceSeeder::class,
             RestaurantSeeder::class,
             CleaningBookingSeeder::class,
+            CleaningWorkerArabicDataSeeder::class,
             EventBookingSeeder::class,
             SupermarketDatabaseSeeder::class,
         ]);

@@ -25,6 +25,7 @@ final class OrderFilterRequest extends FormRequest
             'filter.dateTo' => 'sometimes|date|after_or_equal:filter.dateFrom',
             'filter.createdToday' => 'sometimes|boolean',
             'filter.hasDispute' => 'sometimes|boolean',
+            'filter.late' => 'sometimes|boolean',
             'sort' => 'sometimes|string|in:order_number,-order_number,status,-status,total_amount,-total_amount,created_at,-created_at',
         ];
     }

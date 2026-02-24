@@ -65,6 +65,13 @@ final class Product extends Model
         return $this->hasMany(RestaurantProductSubstitution::class, 'product_id');
     }
 
+    public function inventoryItems(): BelongsToMany
+    {
+        return $this->belongsToMany(InventoryItem::class, 'inventory_item_product')
+            ->withPivot('quantity_used')
+            ->withTimestamps();
+    }
+
     public function scopeLowStock($query, mixed $value = true)
     {
         if (! filter_var($value, FILTER_VALIDATE_BOOLEAN)) {

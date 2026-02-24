@@ -20,6 +20,8 @@ trait CleaningTimeWarningFilterQuery
                 AllowedFilter::exact('bookingType', 'booking_type'),
                 AllowedFilter::scope('sentAtFrom'),
                 AllowedFilter::scope('sentAtTo'),
+                AllowedFilter::scope('forCurrentWorker'),
+                AllowedFilter::scope('pending'),
             ])
             ->allowedSorts([
                 AllowedSort::field('sentAt', 'sent_at'),
@@ -36,5 +38,32 @@ trait CleaningTimeWarningFilterQuery
     public function scopeSentAtTo(Builder $query, string $date): Builder
     {
         return $query->where('sent_at', '<=', $date);
+    }
+
+    public function scopeForCurrentWorker(Builder $query, mixed $value): Builder
+    {
+        if (! filter_var($value, FILTER_VALIDATE_BOOLEAN)) {
+            return $query;
+        }
+
+        $worker = auth()->user()?->worker;
+
+        if (! $worker) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->where('booking_type', 'cleaning_booking')
+            ->whereHasMorph('booking', [\Modules\Cleaning\Models\CleaningBooking::class], function (Builder $q) use ($worker) {
+                $q->where('worker_id', $worker->id);
+            });
+    }
+
+    public function scopePending(Builder $query, mixed $value): Builder
+    {
+        if (! filter_var($value, FILTER_VALIDATE_BOOLEAN)) {
+            return $query;
+        }
+
+        return $query->whereNull('worker_responded_at');
     }
 }
