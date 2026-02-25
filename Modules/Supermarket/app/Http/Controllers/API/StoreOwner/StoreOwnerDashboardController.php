@@ -75,8 +75,6 @@ final class StoreOwnerDashboardController
                 'newOrders' => $newOrdersCount,
                 'pendingOrders' => $pendingOrdersCount,
                 'totalSales' => $totalSales,
-                'newOrdersData' => SmOrderResource::collection($newOrdersData),
-                'pendingOrdersData' => SmOrderResource::collection($pendingOrdersData),
             ],
         ]);
     }

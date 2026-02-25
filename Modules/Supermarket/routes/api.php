@@ -70,6 +70,7 @@ Route::prefix('v1')->group(function () {
         Route::get('dashboard', StoreOwnerDashboardController::class)->name('dashboard');
         Route::post('orders/{order}/accept', [SmOrderActionController::class, 'accept'])->name('orders.accept');
         Route::post('orders/{order}/reject', [SmOrderActionController::class, 'reject'])->name('orders.reject');
+        Route::apiResource('products', SmProductController::class)->names('products');
         Route::get('stores/{store}', [StoreOwnerStoreController::class, 'show'])->name('stores.show');
         Route::put('stores/{store}', [StoreOwnerStoreController::class, 'update'])->name('stores.update');
     });

@@ -38,7 +38,6 @@ it('retrieves dashboard data for a store', function (): void {
     expect($response->json('data.totalOrders'))->toBe(8);
     expect($response->json('data.completedOrders'))->toBe(3);
     expect($response->json('data.newOrders'))->toBe(5);
-    expect($response->json('data.newOrdersData'))->toHaveCount(5);
 });
 
 it('requires storeId parameter', function (): void {
