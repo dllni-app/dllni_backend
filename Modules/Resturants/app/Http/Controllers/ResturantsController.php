@@ -1,11 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Modules\Resturants\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 
-class ResturantsController
+final class ResturantsController
 {
     /**
      * Display a listing of the resource.

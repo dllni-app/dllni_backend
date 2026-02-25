@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Modules\Resturants\Providers;
 
 use Illuminate\Support\Facades\Blade;
@@ -8,7 +10,7 @@ use Nwidart\Modules\Traits\PathNamespace;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 
-class ResturantsServiceProvider extends ServiceProvider
+final class ResturantsServiceProvider extends ServiceProvider
 {
     use PathNamespace;
 
@@ -41,7 +43,7 @@ class ResturantsServiceProvider extends ServiceProvider
     /**
      * Register commands in the format of Command::class
      */
-    protected function registerCommands(): void
+    public function registerCommands(): void
     {
         // $this->commands([]);
     }
@@ -49,7 +51,7 @@ class ResturantsServiceProvider extends ServiceProvider
     /**
      * Register command Schedules.
      */
-    protected function registerCommandSchedules(): void
+    public function registerCommandSchedules(): void
     {
         // $this->app->booted(function () {
         //     $schedule = $this->app->make(Schedule::class);
@@ -76,7 +78,7 @@ class ResturantsServiceProvider extends ServiceProvider
     /**
      * Register config.
      */
-    protected function registerConfig(): void
+    public function registerConfig(): void
     {
         $configPath = module_path($this->name, config('modules.paths.generator.config.path'));
 
@@ -109,7 +111,7 @@ class ResturantsServiceProvider extends ServiceProvider
     /**
      * Merge config from the given path recursively.
      */
-    protected function merge_config_from(string $path, string $key): void
+    public function merge_config_from(string $path, string $key): void
     {
         $existing = config($key, []);
         $module_config = require $path;
@@ -129,7 +131,7 @@ class ResturantsServiceProvider extends ServiceProvider
 
         $this->loadViewsFrom(array_merge($this->getPublishableViewPaths(), [$sourcePath]), $this->nameLower);
 
-        Blade::componentNamespace(config('modules.namespace').'\\' . $this->name . '\\View\\Components', $this->nameLower);
+        Blade::componentNamespace(config('modules.namespace').'\\'.$this->name.'\\View\\Components', $this->nameLower);
     }
 
     /**

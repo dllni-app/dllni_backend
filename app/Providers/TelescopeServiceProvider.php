@@ -35,7 +35,7 @@ final class TelescopeServiceProvider extends TelescopeApplicationServiceProvider
     /**
      * Prevent sensitive request details from being logged by Telescope.
      */
-    protected function hideSensitiveRequestDetails(): void
+    public function hideSensitiveRequestDetails(): void
     {
         if ($this->app->environment('local')) {
             return;
@@ -55,7 +55,7 @@ final class TelescopeServiceProvider extends TelescopeApplicationServiceProvider
      *
      * This gate determines who can access Telescope in non-local environments.
      */
-    protected function gate(): void
+    public function gate(): void
     {
         Gate::define('viewTelescope', function ($user) {
             return in_array($user->email, [

@@ -22,12 +22,12 @@ final class RouteServiceProvider extends ServiceProvider
         $this->mapWebRoutes();
     }
 
-    protected function mapWebRoutes(): void
+    public function mapWebRoutes(): void
     {
         Route::middleware('web')->group(module_path($this->name, '/routes/web.php'));
     }
 
-    protected function mapApiRoutes(): void
+    public function mapApiRoutes(): void
     {
         Route::middleware('api')->prefix('api')->name('api.')->group(module_path($this->name, '/routes/api.php'));
     }
