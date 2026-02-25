@@ -304,7 +304,308 @@ Use these when filtering or displaying status:
 
 ---
 
-## 5. Error responses
+## 5. Inventory Management APIs
+
+### 5.1 Low Stock Alerts
+
+Get products with stock levels below their threshold.
+
+| Method | Path                                            |
+| ------ | ----------------------------------------------- |
+| GET    | `/api/v1/store-owner/products/low-stock`        |
+
+**Query params:**
+| Param   | Type    | Required | Description |
+| ------- | ------- | -------- | ----------- |
+| store_id | integer | Yes      | Store ID    |
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "products": [
+      {
+        "product_id": 1,
+        "product_name": "Fresh Milk",
+        "current_stock": 5,
+        "threshold": 10,
+        "category": "Dairy",
+        "barcode": "1234567890123"
+      }
+    ],
+    "total": 1
+  }
+}
+```
+
+---
+
+### 5.2 Manual Stock Update
+
+Update product stock with SET, INCREMENT, or DECREMENT operations.
+
+| Method | Path                                            |
+| ------ | ----------------------------------------------- |
+| PUT    | `/api/v1/store-owner/products/{product}/stock`  |
+
+**Request body:**
+```json
+{
+  "quantity": 50,
+  "operation": "SET"
+}
+```
+
+**Operations:** `SET` | `INCREMENT` | `DECREMENT`
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Stock updated successfully.",
+  "data": {
+    "product_id": 1,
+    "product_name": "Fresh Milk",
+    "stock_quantity": 50,
+    "low_stock_threshold": 10,
+    "is_low_stock": false
+  }
+}
+```
+
+**Error (400):**
+```json
+{
+  "success": false,
+  "message": "Failed to update stock.",
+  "error": "Stock quantity cannot be negative."
+}
+```
+
+---
+
+### 5.3 Inventory Audit
+
+Perform inventory audit by comparing system stock with actual physical count.
+
+| Method | Path                                   |
+| ------ | -------------------------------------- |
+| POST   | `/api/v1/store-owner/inventory/audit`  |
+
+**Request body:**
+```json
+{
+  "store_id": 1,
+  "products": [
+    {
+      "product_id": 1,
+      "actual_stock": 45
+    },
+    {
+      "product_id": 2,
+      "actual_stock": 100
+    }
+  ]
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Inventory audit completed successfully.",
+  "data": {
+    "total_audited": 2,
+    "discrepancies_found": 1,
+    "total_corrected": 1,
+    "discrepancies": [
+      {
+        "product_id": 1,
+        "product_name": "Fresh Milk",
+        "system_stock": 50,
+        "actual_stock": 45,
+        "difference": -5
+      }
+    ]
+  }
+}
+```
+
+---
+
+### 5.4 Update Product Expiration
+
+Set or update product expiration date with automatic discount suggestions.
+
+| Method | Path                                                |
+| ------ | --------------------------------------------------- |
+| PUT    | `/api/v1/store-owner/products/{product}/expiration` |
+
+**Request body:**
+```json
+{
+  "expires_at": "2026-03-10T00:00:00+00:00"
+}
+```
+
+**Response (200) - Expiring soon (within 7 days):**
+```json
+{
+  "success": true,
+  "message": "Product expiration updated successfully.",
+  "data": {
+    "product_id": 1,
+    "product_name": "Fresh Milk",
+    "expires_at": "2026-03-05T00:00:00+00:00",
+    "is_expiring_soon": true,
+    "suggested_discount": {
+      "discount_percentage": 20,
+      "suggested_price": 8.00,
+      "days_until_expiration": 5
+    }
+  }
+}
+```
+
+**Response (200) - Not expiring soon:**
+```json
+{
+  "success": true,
+  "message": "Product expiration updated successfully.",
+  "data": {
+    "product_id": 1,
+    "product_name": "Fresh Milk",
+    "expires_at": "2026-04-01T00:00:00+00:00",
+    "is_expiring_soon": false,
+    "suggested_discount": null
+  }
+}
+```
+
+---
+
+### 5.5 Process Order Return
+
+Handle product returns and restore stock.
+
+| Method | Path                                          |
+| ------ | --------------------------------------------- |
+| POST   | `/api/v1/store-owner/orders/{order}/return`   |
+
+**Request body:**
+```json
+{
+  "items": [
+    {
+      "order_item_id": 1,
+      "quantity": 2
+    }
+  ],
+  "reason": "Customer reported defective product"
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Order return processed successfully.",
+  "data": {
+    "order_id": 1,
+    "order_number": "ORD-001",
+    "returned_items": [
+      {
+        "product_id": 5,
+        "product_name": "Fresh Milk",
+        "returned_quantity": 2,
+        "new_stock": 52
+      }
+    ],
+    "reason": "Customer reported defective product"
+  }
+}
+```
+
+---
+
+### 5.6 Lost Opportunities Report
+
+Track instances when customers attempted to order products with insufficient stock.
+
+| Method | Path                                                    |
+| ------ | ------------------------------------------------------- |
+| GET    | `/api/v1/store-owner/reports/lost-opportunities`        |
+
+**Query params:**
+| Param      | Type    | Required | Description                |
+| ---------- | ------- | -------- | -------------------------- |
+| store_id   | integer | Yes      | Store ID                   |
+| start_date | date    | No       | Filter from date (Y-m-d)   |
+| end_date   | date    | No       | Filter to date (Y-m-d)     |
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "total_lost_opportunities": 15,
+    "by_product": [
+      {
+        "product_id": 5,
+        "product_name": "Fresh Milk",
+        "barcode": "1234567890123",
+        "total_attempts": 8,
+        "total_attempted_quantity": 120,
+        "latest_attempt": "2026-02-25T14:30:00+00:00"
+      }
+    ],
+    "recent_opportunities": [
+      {
+        "product_id": 5,
+        "product_name": "Fresh Milk",
+        "attempted_quantity": 10,
+        "available_stock": 5,
+        "date": "2026-02-25T14:30:00+00:00",
+        "customer_name": "John Doe"
+      },
+      {
+        "product_id": 5,
+        "product_name": "Fresh Milk",
+        "attempted_quantity": 15,
+        "available_stock": 5,
+        "date": "2026-02-24T10:15:00+00:00",
+        "customer_name": "Guest"
+      }
+    ]
+  }
+}
+```
+
+---
+
+### 5.7 Automatic Stock Deduction
+
+**Note:** This happens automatically when accepting orders (no separate endpoint).
+
+When an order is accepted via `POST /api/v1/store-owner/orders/{order}/accept`:
+- Stock is automatically deducted for all items
+- Inventory logs are created
+- `StockUpdated` event is fired
+- Transaction ensures atomicity
+
+If insufficient stock exists:
+```json
+{
+  "success": false,
+  "message": "Failed to accept order.",
+  "error": "Insufficient stock for product: Fresh Milk"
+}
+```
+
+---
+
+## 6. Error responses
 
 - **401 Unauthorized:** Missing or invalid token.
   ```json

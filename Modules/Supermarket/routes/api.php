@@ -30,8 +30,9 @@ use Modules\Supermarket\Http\Controllers\API\SmStoreDailyStatController;
 use Modules\Supermarket\Http\Controllers\API\SmStoreDocumentController;
 use Modules\Supermarket\Http\Controllers\API\SmStoreHoursController;
 use Modules\Supermarket\Http\Controllers\API\SmStoreTrustLogController;
-use Modules\Supermarket\Http\Controllers\API\StoreOwner\SmOrderActionController;
+use Modules\Supermarket\Http\Controllers\API\StoreOwner\SmOrderStatusController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerDashboardController;
+use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerInventoryController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerStoreController;
 
 Route::prefix('v1')->group(function () {
@@ -68,9 +69,23 @@ Route::prefix('v1')->group(function () {
     // Store Owner Routes
     Route::prefix('store-owner')->name('store-owner.')->group(function () {
         Route::get('dashboard', StoreOwnerDashboardController::class)->name('dashboard');
-        Route::post('orders/{order}/accept', [SmOrderActionController::class, 'accept'])->name('orders.accept');
-        Route::post('orders/{order}/reject', [SmOrderActionController::class, 'reject'])->name('orders.reject');
+
+        // Order Management
+        Route::post('orders/{order}/accept', [SmOrderStatusController::class, 'accept'])->name('orders.accept');
+        Route::post('orders/{order}/reject', [SmOrderStatusController::class, 'reject'])->name('orders.reject');
+        Route::post('orders/{order}/return', [StoreOwnerInventoryController::class, 'processReturn'])->name('orders.return');
+
+        // Inventory Management - Specific routes before wildcards
+        Route::get('products/low-stock', [StoreOwnerInventoryController::class, 'lowStock'])->name('products.low-stock');
+        Route::put('products/{product}/stock', [StoreOwnerInventoryController::class, 'updateStock'])->name('products.update-stock');
+        Route::put('products/{product}/expiration', [StoreOwnerInventoryController::class, 'updateExpiration'])->name('products.update-expiration');
+        Route::post('inventory/audit', [StoreOwnerInventoryController::class, 'audit'])->name('inventory.audit');
+        Route::get('reports/lost-opportunities', [StoreOwnerInventoryController::class, 'lostOpportunities'])->name('reports.lost-opportunities');
+
+        // Product CRUD
         Route::apiResource('products', SmProductController::class)->names('products');
+
+        // Store Management
         Route::get('stores/{store}', [StoreOwnerStoreController::class, 'show'])->name('stores.show');
         Route::put('stores/{store}', [StoreOwnerStoreController::class, 'update'])->name('stores.update');
     });
