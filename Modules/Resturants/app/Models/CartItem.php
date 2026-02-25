@@ -19,16 +19,14 @@ final class CartItem extends Model
         'special_instructions',
     ];
 
+    protected $casts = [
+        'quantity' => 'integer',
+        'unit_price' => 'decimal:2',
+        'total_price' => 'decimal:2',
+    ];
+
     public function cart(): BelongsTo
     {
         return $this->belongsTo(Cart::class);
-    }
-
-    protected function casts(): array
-    {
-        return [
-            'unit_price' => 'decimal:2',
-            'total_price' => 'decimal:2',
-        ];
     }
 }

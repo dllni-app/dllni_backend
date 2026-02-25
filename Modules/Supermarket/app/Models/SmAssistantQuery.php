@@ -43,7 +43,7 @@ final class SmAssistantQuery extends Model
         return $this->belongsTo(Recipe::class, 'matched_recipe_id');
     }
 
-    protected function casts(): array
+    public function casts(): array
     {
         return [
             'input_mode' => SmAssistantInputMode::class,
