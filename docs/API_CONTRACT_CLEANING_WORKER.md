@@ -79,12 +79,12 @@ Base path: `/api/v1/` (all under `auth:sanctum`).
 | totalBookings               | number | All-time bookings assigned to this worker                         |
 | todayCount                  | number | Bookings scheduled for today (excluding cancelled)                 |
 | completedCount              | number | Bookings with status `completed`                                  |
-| pendingCount                | number | Upcoming bookings in pending/confirmed/assigned states             |
+| pendingCount                | number | Upcoming bookings in `pending` or `worker_assigned` (not yet in progress) |
 | inProgressCount             | number | Bookings with status `in_progress`                                |
 | cancelledCount              | number | Bookings with status `cancelled`                                  |
 | totalEarnings               | number | Sum of `totalPrice` for completed bookings                        |
 | todayEarnings               | number | Sum of `totalPrice` for completed bookings today                   |
-| newOrdersCount              | number | Orders in pending/confirmed/worker_assigned offered to worker     |
+| newOrdersCount              | number | Bookings with status `pending` (worker_id null or current worker)  |
 | pendingExtensionRequestsCount | number | Extension requests (time warnings) awaiting worker response   |
 
 If the user has no worker, all values are `0`.
@@ -116,10 +116,10 @@ If the user has no worker, all values are `0`.
 GET /api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[scheduledDate]=2025-02-24&perPage=20
 ```
 
-**Example – Orders by status (new):**
+**Example – Orders by status (new requests):**
 
 ```
-GET /api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=worker_assigned&perPage=20
+GET /api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending&perPage=20
 ```
 
 **Response (200):** Standard paginated collection. Each booking includes:
@@ -156,7 +156,7 @@ GET /api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=worker_a
 - `403` – User has no worker, or booking is assigned to another worker
 - `422` – Booking cannot be accepted in current status (e.g. already completed)
 
-**Valid from statuses:** `pending`, `confirmed`, `worker_assigned`
+**Valid from status:** `pending` only.
 
 ---
 
@@ -182,7 +182,7 @@ GET /api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=worker_a
 - `403` – User has no worker, or booking is assigned to another worker
 - `422` – Booking cannot be rejected in current status
 
-**Valid from statuses:** `pending`, `confirmed`, `worker_assigned`
+**Valid from statuses:** `pending`, `worker_assigned`
 
 ---
 
@@ -196,17 +196,37 @@ GET /api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=worker_a
 
 **Request body:** None
 
-**Response (200):** Updated booking resource (status `worker_on_the_way`).
+**Response (200):** Updated booking resource. Status remains `worker_assigned`; `startedTravelAt` is set to current time. Use this to show "I'm on my way" in the UI.
 
 **Errors:**
 - `403` – User has no worker, or booking is not assigned to worker
 - `422` – Booking cannot start travel in current status
 
-**Valid from statuses:** `worker_assigned`, `worker_arrived`
+**Valid from status:** `worker_assigned` only.
 
 ---
 
-### 3.7 Complete order
+### 3.7 Start work
+
+| Method | Path                                             | Description                    |
+| ------ | ------------------------------------------------ | ------------------------------ |
+| POST   | `/api/v1/cleaning-bookings/{id}/start-work`      | Worker starts the job on site  |
+
+**Path params:** `id` – cleaning booking ID
+
+**Request body:** None
+
+**Response (200):** Updated booking resource (status `in_progress`, `workStartedAt` set).
+
+**Errors:**
+- `403` – User has no worker, or booking is not assigned to worker
+- `422` – Booking must be assigned to start work
+
+**Valid from status:** `worker_assigned` only.
+
+---
+
+### 3.8 Complete order
 
 | Method | Path                                       | Description                    |
 | ------ | ------------------------------------------ | ------------------------------ |
@@ -222,11 +242,11 @@ GET /api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=worker_a
 - `403` – User has no worker, or booking is not assigned to worker
 - `422` – Booking must be in progress to complete
 
-**Valid from statuses:** `in_progress`
+**Valid from status:** `in_progress` only.
 
 ---
 
-### 3.8 Cancel order
+### 3.9 Cancel order
 
 | Method | Path                                       | Description                    |
 | ------ | ------------------------------------------ | ------------------------------ |
@@ -248,13 +268,13 @@ GET /api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=worker_a
 - `403` – User has no worker, or booking is not assigned to worker
 - `422` – Booking cannot be cancelled in current status
 
-**Valid from statuses:** `worker_assigned`, `worker_on_the_way`, `worker_arrived`, `in_progress`
+**Valid from statuses:** `worker_assigned`, `in_progress`
 
 **Note:** Cancellation may affect trust points, cancellation rate, and acceptance rate. The app may display a warning before calling this endpoint.
 
 ---
 
-### 3.9 Extension requests (time warnings)
+### 3.10 Extension requests (time warnings)
 
 #### List pending extension requests
 
@@ -324,13 +344,13 @@ GET /api/v1/cleaning-time-warnings?filter[forCurrentWorker]=1&filter[pending]=1
 
 ---
 
-### 3.10 Client contact
+### 3.11 Client contact
 
 Use `customer.phone` from the order details response (`GET /api/v1/cleaning-bookings/{id}`). No separate endpoint required.
 
 ---
 
-### 3.11 Calendar (month/week view)
+### 3.12 Calendar (month/week view)
 
 | Method | Path                        | Description                          |
 | ------ | --------------------------- | ------------------------------------ |
@@ -356,7 +376,7 @@ GET /api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[scheduledDateFro
 
 ---
 
-### 3.12 Worker availability
+### 3.13 Worker availability
 
 Use `PUT /api/v1/workers/{id}` to update worker (including availability). The worker can update their own record if authorized. See shared app endpoints in [API_CONTRACT_CLEANING.md](API_CONTRACT_CLEANING.md) Section 4.1.
 
@@ -366,18 +386,15 @@ Use `PUT /api/v1/workers/{id}` to update worker (including availability). The wo
 
 Use these **string values** when filtering or displaying status/type labels. All values are snake_case.
 
-### CleaningBookingStatus
+### CleaningBookingStatus (one status per section)
 
-| Value               | Description           |
-| ------------------- | --------------------- |
-| `pending`           | Pending               |
-| `confirmed`         | Confirmed             |
-| `worker_assigned`   | Worker assigned       |
-| `worker_on_the_way` | Worker on the way     |
-| `worker_arrived`    | Worker arrived        |
-| `in_progress`       | In progress           |
-| `completed`         | Completed             |
-| `cancelled`         | Cancelled             |
+| Value             | When to use (Flutter) |
+| ----------------- | --------------------- |
+| `pending`         | New request; no worker yet. Show "طلب جديد"; worker can **Accept** or **Reject**. |
+| `worker_assigned` | Worker has accepted; not yet started work. Show "في الاستعداد"; worker can **Start travel**, **Start work**, or **Cancel**. Use `startedTravelAt` to show "في الطريق" if set. |
+| `in_progress`     | Worker started work on site. Show "قيد التنفيذ"; worker can **Complete** or **Cancel**. Show time-extension banner if pending. |
+| `completed`       | Job finished. Show "مكتمل"; read-only. |
+| `cancelled`       | Cancelled or rejected. Show "ملغي"; read-only. |
 
 ### CleaningTimeWarningResponse
 

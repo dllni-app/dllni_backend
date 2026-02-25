@@ -49,10 +49,7 @@ final class WorkerHomepageController
         $pendingCount = (clone $baseQuery)
             ->whereIn('status', [
                 CleaningBookingStatus::Pending,
-                CleaningBookingStatus::Confirmed,
                 CleaningBookingStatus::WorkerAssigned,
-                CleaningBookingStatus::WorkerOnTheWay,
-                CleaningBookingStatus::WorkerArrived,
             ])
             ->whereDate('scheduled_date', '>=', $today)
             ->count();
@@ -74,13 +71,10 @@ final class WorkerHomepageController
             ->whereDate('scheduled_date', $today)
             ->sum('total_price');
 
-        $newOrdersCount = (clone $baseQuery)
-            ->whereIn('status', [
-                CleaningBookingStatus::Pending,
-                CleaningBookingStatus::Confirmed,
-                CleaningBookingStatus::WorkerAssigned,
-            ])
+        $newOrdersCount = CleaningBooking::query()
+            ->where('status', CleaningBookingStatus::Pending)
             ->whereDate('scheduled_date', '>=', $today)
+            ->where(fn ($q) => $q->whereNull('worker_id')->orWhere('worker_id', $worker->id))
             ->count();
 
         $pendingExtensionRequestsCount = CleaningTimeWarning::query()

@@ -124,6 +124,22 @@ final class CleaningBookingController
     }
 
     /** @throws Throwable */
+    public function startWork(CleaningBooking $cleaning_booking): CleaningBookingResource|JsonResponse
+    {
+        $this->ensureWorkerCanActOnBooking($cleaning_booking, requireOwnership: true);
+
+        try {
+            $booking = $this->cleaningBookingService->startWork($cleaning_booking);
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
+        }
+
+        return CleaningBookingResource::make(
+            $booking->load(['customer', 'worker', 'services', 'addons', 'billingPolicy', 'timeWarnings', 'disputes'])
+        );
+    }
+
+    /** @throws Throwable */
     public function complete(CleaningBooking $cleaning_booking): CleaningBookingResource|JsonResponse
     {
         $this->ensureWorkerCanActOnBooking($cleaning_booking, requireOwnership: true);

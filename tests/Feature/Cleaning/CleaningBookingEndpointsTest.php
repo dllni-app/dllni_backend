@@ -106,7 +106,7 @@ it('updates a cleaning booking', function () {
         'customerId' => $booking->customer_id,
         'billingPolicyId' => $billingPolicy->id,
         'bookingNumber' => $booking->booking_number,
-        'status' => CleaningBookingStatus::Confirmed->value,
+        'status' => CleaningBookingStatus::WorkerAssigned->value,
         'propertyType' => $booking->property_type,
         'scheduledDate' => $booking->scheduled_date->format('Y-m-d'),
         'scheduledTime' => $booking->scheduled_time,
@@ -120,7 +120,7 @@ it('updates a cleaning booking', function () {
     $response->assertOk();
     $this->assertDatabaseHas('cleaning_bookings', [
         'id' => $booking->id,
-        'status' => CleaningBookingStatus::Confirmed->value,
+        'status' => CleaningBookingStatus::WorkerAssigned->value,
     ]);
 });
 
@@ -161,13 +161,13 @@ it('filters cleaning bookings by forCurrentWorker and scheduledDate', function (
         'worker_id' => $worker->id,
         'billing_policy_id' => $billingPolicy->id,
         'scheduled_date' => $today,
-        'status' => CleaningBookingStatus::Confirmed,
+        'status' => CleaningBookingStatus::WorkerAssigned,
     ]);
     CleaningBooking::factory()->create([
         'worker_id' => $worker->id,
         'billing_policy_id' => $billingPolicy->id,
         'scheduled_date' => now()->addDays(5),
-        'status' => CleaningBookingStatus::Confirmed,
+        'status' => CleaningBookingStatus::WorkerAssigned,
     ]);
 
     $response = $this->getJson("/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[scheduledDate]={$today}");
@@ -254,9 +254,9 @@ it('returns worker homepage with todayEarnings newOrdersCount and pendingExtensi
         'scheduled_date' => $today,
     ]);
     CleaningBooking::factory()->create([
-        'worker_id' => $worker->id,
+        'worker_id' => null,
         'billing_policy_id' => $billingPolicy->id,
-        'status' => CleaningBookingStatus::WorkerAssigned,
+        'status' => CleaningBookingStatus::Pending,
         'scheduled_date' => now()->addDays(1),
     ]);
 

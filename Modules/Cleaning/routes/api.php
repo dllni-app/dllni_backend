@@ -20,6 +20,7 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     Route::post('cleaning-bookings/{cleaning_booking}/accept', [CleaningBookingController::class, 'accept'])->name('cleaning-bookings.accept');
     Route::post('cleaning-bookings/{cleaning_booking}/reject', [CleaningBookingController::class, 'reject'])->name('cleaning-bookings.reject');
     Route::post('cleaning-bookings/{cleaning_booking}/start-travel', [CleaningBookingController::class, 'startTravel'])->name('cleaning-bookings.start-travel');
+    Route::post('cleaning-bookings/{cleaning_booking}/start-work', [CleaningBookingController::class, 'startWork'])->name('cleaning-bookings.start-work');
     Route::post('cleaning-bookings/{cleaning_booking}/complete', [CleaningBookingController::class, 'complete'])->name('cleaning-bookings.complete');
     Route::post('cleaning-bookings/{cleaning_booking}/cancel', [CleaningBookingController::class, 'cancel'])->name('cleaning-bookings.cancel');
     Route::apiResource('cleaning-bookings', CleaningBookingController::class);

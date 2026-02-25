@@ -33,13 +33,7 @@ final class CleaningBookingService
     public function accept(CleaningBooking $booking): CleaningBooking
     {
         return DB::transaction(static function () use ($booking) {
-            $allowedStatuses = [
-                CleaningBookingStatus::Pending,
-                CleaningBookingStatus::Confirmed,
-                CleaningBookingStatus::WorkerAssigned,
-            ];
-
-            if (! in_array($booking->status, $allowedStatuses, true)) {
+            if ($booking->status !== CleaningBookingStatus::Pending) {
                 throw new InvalidArgumentException('Booking cannot be accepted in current status.');
             }
 
@@ -62,7 +56,6 @@ final class CleaningBookingService
         return DB::transaction(static function () use ($booking, $reason) {
             $allowedStatuses = [
                 CleaningBookingStatus::Pending,
-                CleaningBookingStatus::Confirmed,
                 CleaningBookingStatus::WorkerAssigned,
             ];
 
@@ -83,17 +76,26 @@ final class CleaningBookingService
     public function startTravel(CleaningBooking $booking): CleaningBooking
     {
         return DB::transaction(static function () use ($booking) {
-            $allowedStatuses = [
-                CleaningBookingStatus::WorkerAssigned,
-                CleaningBookingStatus::WorkerArrived,
-            ];
-
-            if (! in_array($booking->status, $allowedStatuses, true)) {
+            if ($booking->status !== CleaningBookingStatus::WorkerAssigned) {
                 throw new InvalidArgumentException('Booking cannot start travel in current status.');
             }
 
+            $booking->update(['started_travel_at' => now()]);
+
+            return $booking->fresh();
+        });
+    }
+
+    public function startWork(CleaningBooking $booking): CleaningBooking
+    {
+        return DB::transaction(static function () use ($booking) {
+            if ($booking->status !== CleaningBookingStatus::WorkerAssigned) {
+                throw new InvalidArgumentException('Booking must be assigned to start work.');
+            }
+
             $booking->update([
-                'status' => CleaningBookingStatus::WorkerOnTheWay,
+                'status' => CleaningBookingStatus::InProgress,
+                'work_started_at' => now(),
             ]);
 
             return $booking->fresh();
@@ -121,8 +123,6 @@ final class CleaningBookingService
         return DB::transaction(static function () use ($booking, $reason) {
             $allowedStatuses = [
                 CleaningBookingStatus::WorkerAssigned,
-                CleaningBookingStatus::WorkerOnTheWay,
-                CleaningBookingStatus::WorkerArrived,
                 CleaningBookingStatus::InProgress,
             ];
 

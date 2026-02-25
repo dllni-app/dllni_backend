@@ -40,7 +40,7 @@ final class CleaningBookingSeeder extends Seeder
             CleaningBookingStatus::Completed->value,
             CleaningBookingStatus::Completed->value,
             CleaningBookingStatus::InProgress->value,
-            CleaningBookingStatus::Confirmed->value,
+            CleaningBookingStatus::WorkerAssigned->value,
             CleaningBookingStatus::Pending->value,
         ];
 

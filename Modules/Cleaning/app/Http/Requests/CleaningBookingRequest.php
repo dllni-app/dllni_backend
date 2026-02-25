@@ -22,7 +22,7 @@ final class CleaningBookingRequest extends FormRequest
             'cancellationPolicyId' => 'nullable|exists:cancellation_policies,id',
             'billingPolicyId' => 'nullable|exists:cleaning_billing_policies,id',
             'bookingNumber' => 'nullable|string|max:255|unique:cleaning_bookings,booking_number,'.$this->route('cleaning_booking')?->id,
-            'status' => 'nullable|string|in:pending,confirmed,worker_assigned,worker_on_the_way,worker_arrived,in_progress,completed,cancelled',
+            'status' => 'nullable|string|in:pending,worker_assigned,in_progress,completed,cancelled',
             'propertyType' => 'nullable|string|max:255',
             'propertyDetails' => 'nullable|array',
             'estimatedSqm' => 'nullable|numeric',
