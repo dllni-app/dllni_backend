@@ -23,6 +23,11 @@ final class Category extends Model
         'sort_order',
     ];
 
+    public static function newFactory(): CategoryFactory
+    {
+        return CategoryFactory::new();
+    }
+
     public function restaurant(): BelongsTo
     {
         return $this->belongsTo(Restaurant::class);
@@ -33,12 +38,7 @@ final class Category extends Model
         return $this->hasMany(Product::class);
     }
 
-    protected static function newFactory(): CategoryFactory
-    {
-        return CategoryFactory::new();
-    }
-
-    protected function casts(): array
+    public function casts(): array
     {
         return [
             'sort_order' => 'integer',
