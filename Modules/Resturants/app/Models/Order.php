@@ -44,10 +44,13 @@ final class Order extends Model
         'cancellation_policy_snapshot',
         'special_instructions',
         'accepted_at',
+        'estimated_preparation_minutes',
+        'kitchen_notes',
         'preparing_at',
         'completed_at',
         'cancelled_at',
         'cancellation_reason',
+        'cancellation_reason_code',
     ];
 
     public function user(): BelongsTo

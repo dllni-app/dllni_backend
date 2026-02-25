@@ -4,9 +4,14 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Http\Controllers\API;
 
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
+use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
 use Modules\Cleaning\Data\CleaningBookingData;
+use Modules\Cleaning\Http\Requests\CleaningBookingCancelRequest;
+use Modules\Cleaning\Http\Requests\CleaningBookingRejectRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingRequests\CleaningBookingFilterRequest;
 use Modules\Cleaning\Http\Resources\CleaningBookingResource;
@@ -68,5 +73,102 @@ final class CleaningBookingController
         $cleaning_booking->delete();
 
         return response()->noContent();
+    }
+
+    /** @throws Throwable */
+    public function accept(CleaningBooking $cleaning_booking): CleaningBookingResource|JsonResponse
+    {
+        $this->ensureWorkerCanActOnBooking($cleaning_booking, requireOwnership: false);
+
+        try {
+            $booking = $this->cleaningBookingService->accept($cleaning_booking);
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
+        }
+
+        return CleaningBookingResource::make(
+            $booking->load(['customer', 'worker', 'services', 'addons', 'billingPolicy', 'timeWarnings', 'disputes'])
+        );
+    }
+
+    /** @throws Throwable */
+    public function reject(CleaningBookingRejectRequest $request, CleaningBooking $cleaning_booking): CleaningBookingResource|JsonResponse
+    {
+        $this->ensureWorkerCanActOnBooking($cleaning_booking, requireOwnership: true);
+
+        try {
+            $booking = $this->cleaningBookingService->reject($cleaning_booking, $request->validated('reason'));
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
+        }
+
+        return CleaningBookingResource::make(
+            $booking->load(['customer', 'worker', 'services', 'addons', 'billingPolicy', 'timeWarnings', 'disputes'])
+        );
+    }
+
+    /** @throws Throwable */
+    public function startTravel(CleaningBooking $cleaning_booking): CleaningBookingResource|JsonResponse
+    {
+        $this->ensureWorkerCanActOnBooking($cleaning_booking, requireOwnership: true);
+
+        try {
+            $booking = $this->cleaningBookingService->startTravel($cleaning_booking);
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
+        }
+
+        return CleaningBookingResource::make(
+            $booking->load(['customer', 'worker', 'services', 'addons', 'billingPolicy', 'timeWarnings', 'disputes'])
+        );
+    }
+
+    /** @throws Throwable */
+    public function complete(CleaningBooking $cleaning_booking): CleaningBookingResource|JsonResponse
+    {
+        $this->ensureWorkerCanActOnBooking($cleaning_booking, requireOwnership: true);
+
+        try {
+            $booking = $this->cleaningBookingService->complete($cleaning_booking);
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
+        }
+
+        return CleaningBookingResource::make(
+            $booking->load(['customer', 'worker', 'services', 'addons', 'billingPolicy', 'timeWarnings', 'disputes'])
+        );
+    }
+
+    /** @throws Throwable */
+    public function cancel(CleaningBookingCancelRequest $request, CleaningBooking $cleaning_booking): CleaningBookingResource|JsonResponse
+    {
+        $this->ensureWorkerCanActOnBooking($cleaning_booking, requireOwnership: true);
+
+        try {
+            $booking = $this->cleaningBookingService->cancel($cleaning_booking, $request->validated('reason'));
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
+        }
+
+        return CleaningBookingResource::make(
+            $booking->load(['customer', 'worker', 'services', 'addons', 'billingPolicy', 'timeWarnings', 'disputes'])
+        );
+    }
+
+    private function ensureWorkerCanActOnBooking(CleaningBooking $booking, bool $requireOwnership = true): void
+    {
+        $worker = auth()->user()?->worker;
+
+        if (! $worker) {
+            abort(403, 'User must have an associated worker.');
+        }
+
+        if ($booking->worker_id !== null && $booking->worker_id !== $worker->id) {
+            abort(403, 'Booking is assigned to another worker.');
+        }
+
+        if ($requireOwnership && $booking->worker_id === null) {
+            abort(403, 'Booking must be assigned to worker for this action.');
+        }
     }
 }

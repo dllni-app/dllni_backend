@@ -25,6 +25,7 @@ trait OrderFilterQuery
                 AllowedFilter::scope('dateTo'),
                 AllowedFilter::scope('createdToday'),
                 AllowedFilter::scope('hasDispute'),
+                AllowedFilter::scope('late'),
             ])
             ->allowedSorts([
                 AllowedSort::field('orderNumber', 'order_number'),
@@ -61,5 +62,16 @@ trait OrderFilterQuery
         }
 
         return $query->whereHas('disputes');
+    }
+
+    public function scopeLate(Builder $query, mixed $value): Builder
+    {
+        if (! filter_var($value, FILTER_VALIDATE_BOOLEAN)) {
+            return $query;
+        }
+
+        return $query->where('status', 'preparing')
+            ->whereNotNull('accepted_at')
+            ->whereRaw('accepted_at + INTERVAL COALESCE(estimated_preparation_minutes, 0) MINUTE < ?', [Carbon::now()]);
     }
 }

@@ -41,7 +41,7 @@ final class UserFilterRequest extends FormRequest
     /**
      * Prepare the data for validation.
      */
-    protected function prepareForValidation(): void
+    public function prepareForValidation(): void
     {
         $this->merge($this->convertKeysToSnakeCase($this->all()));
     }
@@ -49,7 +49,7 @@ final class UserFilterRequest extends FormRequest
     /**
      * Convert request keys from camelCase to snake_case recursively.
      */
-    protected function convertKeysToSnakeCase(array $data): array
+    public function convertKeysToSnakeCase(array $data): array
     {
         $converted = [];
 

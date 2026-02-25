@@ -28,7 +28,7 @@ final class BookingAddon extends Model
         return $this->belongsTo(ServiceAddon::class);
     }
 
-    protected function casts(): array
+    public function casts(): array
     {
         return [
             'quantity' => 'decimal:2',

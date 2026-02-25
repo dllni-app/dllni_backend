@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Resturants\Traits\FilterQueries;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Modules\Resturants\Models\Offer;
 use Spatie\QueryBuilder\AllowedFilter;
 use Spatie\QueryBuilder\AllowedSort;
@@ -20,6 +21,7 @@ trait OfferFilterQuery
                 AllowedFilter::exact('isActive', 'is_active'),
                 AllowedFilter::scope('startsAtFrom'),
                 AllowedFilter::scope('endsAtTo'),
+                AllowedFilter::scope('scheduled'),
             ])
             ->allowedSorts([
                 AllowedSort::field('name'),
@@ -38,5 +40,14 @@ trait OfferFilterQuery
     public function scopeEndsAtTo(Builder $query, string $date): Builder
     {
         return $query->where('ends_at', '<=', $date);
+    }
+
+    public function scopeScheduled(Builder $query, mixed $value): Builder
+    {
+        if (! filter_var($value, FILTER_VALIDATE_BOOLEAN)) {
+            return $query;
+        }
+
+        return $query->where('starts_at', '>', Carbon::now());
     }
 }

@@ -11,5 +11,5 @@ final class EventServiceProvider extends ServiceProvider
     /** @var array<string, array<int, string>> */
     protected $listen = [];
 
-    protected function configureEmailVerification(): void {}
+    public function configureEmailVerification(): void {}
 }

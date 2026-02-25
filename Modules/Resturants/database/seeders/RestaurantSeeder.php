@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Modules\Resturants\Models\InventoryItem;
 use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Enums\OrderType;
 use Modules\Resturants\Enums\PriceRange;
@@ -35,10 +36,16 @@ final class RestaurantSeeder extends Seeder
                 'slug' => 'la-piazza-italian',
                 'description' => 'مطبخ إيطالي أصيل مع بيتزا بالخشب ومعكرونة منزلية. وصفات عائلية تتوارثها الأجيال.',
                 'address' => '15 شارع المطاعم، وسط البلد',
+                'city' => 'عمّان',
+                'district' => 'العبدلي',
+                'location_details' => 'قرب البوليفارد، مقابل مجمع المطاعم الخارجي',
                 'latitude' => 31.963158,
                 'longitude' => 35.930359,
                 'phone' => '+962 6 555 1234',
+                'whatsapp_number' => '+962 79 555 1234',
                 'email' => 'info@lapiazza.example.com',
+                'instagram_username' => 'lapiazza.jo',
+                'facebook_page_name' => 'La Piazza Jo',
                 'price_range' => PriceRange::Medium->value,
                 'minimum_order_amount' => 15.00,
                 'estimated_preparation_time' => 25,
@@ -49,10 +56,16 @@ final class RestaurantSeeder extends Seeder
                 'slug' => 'golden-dragon-asian',
                 'description' => 'مطبخ آسيوي عصري مع سوشي ودمبلنغ وأطباق الووك. مكونات طازجة يومياً.',
                 'address' => '88 شارع الطعام، الحي الغربي',
+                'city' => 'عمّان',
+                'district' => 'دابوق',
+                'location_details' => 'الطابق الثاني فوق مقهى معروف في الشارع الرئيسي',
                 'latitude' => 31.970000,
                 'longitude' => 35.935000,
                 'phone' => '+962 6 555 5678',
+                'whatsapp_number' => '+962 79 555 5678',
                 'email' => 'contact@goldendragon.example.com',
+                'instagram_username' => 'goldendragon.jo',
+                'facebook_page_name' => 'Golden Dragon Jo',
                 'price_range' => PriceRange::High->value,
                 'minimum_order_amount' => 20.00,
                 'estimated_preparation_time' => 30,
@@ -63,10 +76,16 @@ final class RestaurantSeeder extends Seeder
                 'slug' => 'burger-haven',
                 'description' => 'برغر فاخر وبطاطس مقطعة يدوياً. خدمة سريعة للاستلام وتناول الطعام.',
                 'address' => '42 شارع الوجبات السريعة',
+                'city' => 'عمّان',
+                'district' => 'الجبيهة',
+                'location_details' => 'بجانب الجامعة، مقابل محطة الوقود الرئيسية',
                 'latitude' => 31.955000,
                 'longitude' => 35.925000,
                 'phone' => '+962 6 555 9012',
+                'whatsapp_number' => '+962 79 555 9012',
                 'email' => 'hello@burgerhaven.example.com',
+                'instagram_username' => 'burgerhaven.jo',
+                'facebook_page_name' => 'Burger Haven Jo',
                 'price_range' => PriceRange::Low->value,
                 'minimum_order_amount' => 10.00,
                 'estimated_preparation_time' => 15,
@@ -86,10 +105,16 @@ final class RestaurantSeeder extends Seeder
                     'name' => $data['name'],
                     'description' => $data['description'],
                     'address' => $data['address'],
+                    'city' => $data['city'],
+                    'district' => $data['district'],
+                    'location_details' => $data['location_details'],
                     'latitude' => $data['latitude'],
                     'longitude' => $data['longitude'],
                     'phone' => $data['phone'],
+                    'whatsapp_number' => $data['whatsapp_number'],
                     'email' => $data['email'],
+                    'instagram_username' => $data['instagram_username'],
+                    'facebook_page_name' => $data['facebook_page_name'],
                     'price_range' => $data['price_range'],
                     'minimum_order_amount' => $data['minimum_order_amount'],
                     'estimated_preparation_time' => $data['estimated_preparation_time'],
@@ -99,6 +124,7 @@ final class RestaurantSeeder extends Seeder
                     'visibility_score' => 100,
                     'is_active' => true,
                     'is_featured' => $data['is_featured'],
+                    'is_temporarily_closed' => false,
                 ]
             );
 
@@ -157,6 +183,8 @@ final class RestaurantSeeder extends Seeder
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
+
+            $this->seedInventoryItems($restaurant);
 
             $this->seedSampleOrders($restaurant, $owner, $cancellationPolicy);
             $this->seedRequestedRestaurantData($restaurant);
@@ -362,6 +390,98 @@ final class RestaurantSeeder extends Seeder
                     'is_active' => $offer['is_active'],
                     'updated_at' => now(),
                     'created_at' => now(),
+                ]
+            );
+        }
+    }
+
+    private function seedInventoryItems(Restaurant $restaurant): void
+    {
+        $itemsBySlug = [
+            'la-piazza-italian' => [
+                [
+                    'name' => 'طحين بيتزا من نوع كابوتو',
+                    'unit' => 'kg',
+                    'quantity' => 120,
+                    'minimum_limit' => 40,
+                    'unit_cost' => 1.8,
+                ],
+                [
+                    'name' => 'جبنة موزاريلا طازجة',
+                    'unit' => 'kg',
+                    'quantity' => 60,
+                    'minimum_limit' => 20,
+                    'unit_cost' => 4.5,
+                ],
+                [
+                    'name' => 'صلصة طماطم إيطالية معلبة',
+                    'unit' => 'علبة',
+                    'quantity' => 80,
+                    'minimum_limit' => 25,
+                    'unit_cost' => 1.2,
+                ],
+            ],
+            'golden-dragon-asian' => [
+                [
+                    'name' => 'أرز بسمتي طويل الحبة',
+                    'unit' => 'kg',
+                    'quantity' => 90,
+                    'minimum_limit' => 30,
+                    'unit_cost' => 2.3,
+                ],
+                [
+                    'name' => 'صلصة صويا داكنة',
+                    'unit' => 'لتر',
+                    'quantity' => 25,
+                    'minimum_limit' => 8,
+                    'unit_cost' => 3.1,
+                ],
+                [
+                    'name' => 'نودلز قمح للوجبات السريعة',
+                    'unit' => 'كرتونة',
+                    'quantity' => 15,
+                    'minimum_limit' => 5,
+                    'unit_cost' => 12.0,
+                ],
+            ],
+            'burger-haven' => [
+                [
+                    'name' => 'لحم برغر مفروم طازج',
+                    'unit' => 'kg',
+                    'quantity' => 70,
+                    'minimum_limit' => 25,
+                    'unit_cost' => 6.8,
+                ],
+                [
+                    'name' => 'خبز برغر سلايدر',
+                    'unit' => 'علبة',
+                    'quantity' => 40,
+                    'minimum_limit' => 15,
+                    'unit_cost' => 3.0,
+                ],
+                [
+                    'name' => 'بطاطس مقلية مجمدة',
+                    'unit' => 'كيس',
+                    'quantity' => 55,
+                    'minimum_limit' => 18,
+                    'unit_cost' => 2.6,
+                ],
+            ],
+        ];
+
+        $items = $itemsBySlug[$restaurant->slug] ?? [];
+
+        foreach ($items as $item) {
+            InventoryItem::firstOrCreate(
+                [
+                    'restaurant_id' => $restaurant->id,
+                    'name' => $item['name'],
+                ],
+                [
+                    'unit' => $item['unit'],
+                    'quantity' => $item['quantity'],
+                    'minimum_limit' => $item['minimum_limit'],
+                    'unit_cost' => $item['unit_cost'],
                 ]
             );
         }

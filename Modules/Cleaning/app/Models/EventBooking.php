@@ -94,7 +94,7 @@ final class EventBooking extends Model
         return EventBookingFactory::new();
     }
 
-    protected function casts(): array
+    public function casts(): array
     {
         return [
             'status' => EventBookingStatus::class,

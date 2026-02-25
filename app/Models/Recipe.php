@@ -22,7 +22,7 @@ final class Recipe extends Model
         return $this->hasMany(RecipeIngredient::class);
     }
 
-    protected function casts(): array
+    public function casts(): array
     {
         return [
             'is_active' => 'boolean',

@@ -35,7 +35,7 @@ final class Dispute extends Model
         return $this->hasMany(DisputeMessage::class);
     }
 
-    protected function casts(): array
+    public function casts(): array
     {
         return [
             'category' => DisputeCategory::class,

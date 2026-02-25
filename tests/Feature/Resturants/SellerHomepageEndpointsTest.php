@@ -106,7 +106,22 @@ it('lists orders in preparation with filter status preparing', function () {
     expect($response->json('data'))->toHaveCount(2);
 });
 
-it('accepts a pending order', function () {
+it('returns 422 when order accept is called without preparation time', function () {
+    $restaurant = Restaurant::factory()->create();
+    $customer = User::factory()->create(['email' => 'accept-validation@example.com']);
+    $order = Order::factory()->create([
+        'restaurant_id' => $restaurant->id,
+        'user_id' => $customer->id,
+        'status' => OrderStatus::Pending,
+    ]);
+
+    $response = $this->postJson('/api/v1/orders/'.$order->id.'/accept', []);
+
+    $response->assertUnprocessable();
+    $response->assertJsonValidationErrors(['preparationTimeMinutes']);
+});
+
+it('accepts a pending order with preparation time and optional fields', function () {
     $restaurant = Restaurant::factory()->create();
     $customer = User::factory()->create(['email' => 'accept-customer@example.com']);
     $order = Order::factory()->create([
@@ -115,18 +130,25 @@ it('accepts a pending order', function () {
         'status' => OrderStatus::Pending,
     ]);
 
-    $response = $this->postJson('/api/v1/orders/'.$order->id.'/accept');
+    $response = $this->postJson('/api/v1/orders/'.$order->id.'/accept', [
+        'preparationTimeMinutes' => 25,
+        'assignedEmployeeId' => null,
+        'kitchenNotes' => 'Extra sauce',
+    ]);
 
     $response->assertOk();
     $response->assertJsonPath('data.status', OrderStatus::Accepted->value);
+    $response->assertJsonPath('data.estimatedPreparationMinutes', 25);
+    $response->assertJsonPath('data.kitchenNotes', 'Extra sauce');
     $response->assertJsonPath('message', 'Order accepted successfully.');
     $this->assertDatabaseHas('orders', [
         'id' => $order->id,
         'status' => OrderStatus::Accepted->value,
+        'estimated_preparation_minutes' => 25,
     ]);
 });
 
-it('rejects a pending order', function () {
+it('rejects a pending order with reason and optional message', function () {
     $restaurant = Restaurant::factory()->create();
     $customer = User::factory()->create(['email' => 'reject-customer@example.com']);
     $order = Order::factory()->create([
@@ -135,15 +157,19 @@ it('rejects a pending order', function () {
         'status' => OrderStatus::Pending,
     ]);
 
-    $response = $this->postJson('/api/v1/orders/'.$order->id.'/reject');
+    $response = $this->postJson('/api/v1/orders/'.$order->id.'/reject', [
+        'reason' => 'out_of_stock',
+        'customerMessage' => 'Ingredients unavailable',
+    ]);
 
     $response->assertOk();
     $response->assertJsonPath('data.status', OrderStatus::Cancelled->value);
+    $response->assertJsonPath('data.cancellationReasonCode', 'out_of_stock');
     $response->assertJsonPath('message', 'Order rejected successfully.');
     $this->assertDatabaseHas('orders', [
         'id' => $order->id,
         'status' => OrderStatus::Cancelled->value,
-        'cancellation_reason' => 'Rejected by seller',
+        'cancellation_reason_code' => 'out_of_stock',
     ]);
 });
 

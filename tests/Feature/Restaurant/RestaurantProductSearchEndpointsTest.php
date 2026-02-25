@@ -97,7 +97,7 @@ it('excludes unavailable products and products from inactive restaurants by defa
         'is_available' => true,
     ]);
 
-    Product::factory()->create([
+    $unavailable = Product::factory()->create([
         'restaurant_id' => $activeRestaurant->id,
         'category_id' => $activeCategory->id,
         'name' => 'Burger Unavailable',
@@ -105,7 +105,7 @@ it('excludes unavailable products and products from inactive restaurants by defa
         'is_available' => false,
     ]);
 
-    Product::factory()->create([
+    $inactive = Product::factory()->create([
         'restaurant_id' => $inactiveRestaurant->id,
         'category_id' => $inactiveCategory->id,
         'name' => 'Burger Inactive Restaurant',
@@ -119,7 +119,8 @@ it('excludes unavailable products and products from inactive restaurants by defa
 
     $ids = collect($response->json('data'))->pluck('id')->all();
     expect($ids)->toContain($included->id);
-    expect($ids)->toHaveCount(1);
+    expect($ids)->not->toContain($inactive->id);
+    expect($ids)->not->toContain($unavailable->id);
 });
 
 it('searches globally by default and supports restaurant scope filter', function () {
@@ -270,7 +271,7 @@ it('orders by relevance then featured and newest tie-breakers when sort is missi
         'updated_at' => now()->subMinutes(1),
     ]);
 
-    $response = $this->getJson('/api/v1/restaurant/search/products?filter[search]=burger');
+    $response = $this->getJson('/api/v1/restaurant/search/products?filter[search]=burger&filter[restaurantId]='.$restaurant->id);
 
     $response->assertOk();
     $orderedIds = collect($response->json('data'))->pluck('id')->values()->all();

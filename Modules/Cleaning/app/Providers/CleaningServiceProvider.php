@@ -64,11 +64,11 @@ final class CleaningServiceProvider extends ServiceProvider
         return [];
     }
 
-    protected function registerCommands(): void {}
+    public function registerCommands(): void {}
 
-    protected function registerCommandSchedules(): void {}
+    public function registerCommandSchedules(): void {}
 
-    protected function registerConfig(): void
+    public function registerConfig(): void
     {
         $configPath = module_path($this->name, config('modules.paths.generator.config.path'));
 
@@ -97,7 +97,7 @@ final class CleaningServiceProvider extends ServiceProvider
         }
     }
 
-    protected function merge_config_from(string $path, string $key): void
+    public function merge_config_from(string $path, string $key): void
     {
         $existing = config($key, []);
         $module_config = require $path;

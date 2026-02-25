@@ -21,6 +21,7 @@ final class CleaningTimeWarning extends Model
         'sent_at',
         'customer_responded_at',
         'worker_responded_at',
+        'worker_reject_message',
     ];
 
     public function booking(): MorphTo
@@ -28,7 +29,7 @@ final class CleaningTimeWarning extends Model
         return $this->morphTo(__FUNCTION__, 'booking_type', 'booking_id');
     }
 
-    protected function casts(): array
+    public function casts(): array
     {
         return [
             'customer_response' => CleaningTimeWarningResponse::class,

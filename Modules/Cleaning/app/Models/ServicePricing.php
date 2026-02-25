@@ -28,7 +28,7 @@ final class ServicePricing extends Model
         return $this->belongsTo(CleaningService::class);
     }
 
-    protected function casts(): array
+    public function casts(): array
     {
         return [
             'base_price' => 'decimal:2',

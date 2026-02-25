@@ -24,7 +24,7 @@ final class MasterProduct extends Model
         return $this->hasMany(MasterProductAlias::class);
     }
 
-    protected function casts(): array
+    public function casts(): array
     {
         return [
             'unit' => MasterProductUnit::class,

@@ -43,7 +43,7 @@ For end-users: login with **phone + password**, logout. No permissions in respon
 
 ### 4.1 User login
 
-| Method | Path         | Auth required | Description                         |
+| Method | Path         | Auth required | Description             https://dllni.mustafafares.com/api/login            |
 | ------ | ------------ | ------------- | ----------------------------------- |
 | POST   | `/api/login` | No            | Authenticate with phone and password; returns user and token |
 

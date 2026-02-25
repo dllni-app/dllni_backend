@@ -54,7 +54,7 @@ final class Worker extends Model
         return $this->hasMany(WorkerTrustLog::class);
     }
 
-    protected function casts(): array
+    public function casts(): array
     {
         return [
             'average_rating' => 'decimal:2',
