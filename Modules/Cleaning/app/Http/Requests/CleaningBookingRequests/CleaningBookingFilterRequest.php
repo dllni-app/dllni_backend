@@ -17,7 +17,7 @@ final class CleaningBookingFilterRequest extends FormRequest
     {
         return [
             'perPage' => 'sometimes|integer|min:1|max:100',
-            'filter.status' => 'sometimes|string|in:pending,confirmed,worker_assigned,worker_on_the_way,worker_arrived,in_progress,completed,cancelled',
+            'filter.status' => 'sometimes|string|in:pending,worker_assigned,in_progress,completed,cancelled',
             'filter.scheduledDateFrom' => 'sometimes|date',
             'filter.scheduledDateTo' => 'sometimes|date|after_or_equal:filter.scheduledDateFrom',
             'filter.scheduledDate' => 'sometimes|date',

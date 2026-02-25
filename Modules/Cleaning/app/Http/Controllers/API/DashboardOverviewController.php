@@ -38,7 +38,7 @@ final class DashboardOverviewController
 
         $pendingWorkerAssignments = CleaningBooking::query()
             ->whereNull('worker_id')
-            ->whereIn('status', [CleaningBookingStatus::Pending, CleaningBookingStatus::Confirmed])
+            ->where('status', CleaningBookingStatus::Pending)
             ->whereDate('scheduled_date', '>=', $today)
             ->count();
 

@@ -19,29 +19,8 @@ beforeEach(function () {
     ]);
 });
 
-it('accepts a cleaning booking when worker is assigned', function () {
+it('accepts a cleaning booking when status is pending (worker takes order)', function () {
     $workerUser = User::factory()->create(['email' => 'worker-accept@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
-    Sanctum::actingAs($workerUser);
-
-    $booking = CleaningBooking::factory()->create([
-        'worker_id' => $worker->id,
-        'billing_policy_id' => $this->billingPolicy->id,
-        'status' => CleaningBookingStatus::WorkerAssigned,
-    ]);
-
-    $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/accept");
-
-    $response->assertOk();
-    expect($response->json('data.status'))->toBe('worker_assigned');
-    $this->assertDatabaseHas('cleaning_bookings', [
-        'id' => $booking->id,
-        'status' => CleaningBookingStatus::WorkerAssigned->value,
-    ]);
-});
-
-it('accepts a cleaning booking when worker_id is null (worker takes order)', function () {
-    $workerUser = User::factory()->create(['email' => 'worker-take@example.com']);
     $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
@@ -54,11 +33,28 @@ it('accepts a cleaning booking when worker_id is null (worker takes order)', fun
     $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/accept");
 
     $response->assertOk();
+    expect($response->json('data.status'))->toBe('worker_assigned');
     $this->assertDatabaseHas('cleaning_bookings', [
         'id' => $booking->id,
-        'worker_id' => $worker->id,
         'status' => CleaningBookingStatus::WorkerAssigned->value,
+        'worker_id' => $worker->id,
     ]);
+});
+
+it('returns 422 when accept from non-pending status', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-take@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'status' => CleaningBookingStatus::WorkerAssigned,
+    ]);
+
+    $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/accept");
+
+    $response->assertUnprocessable();
 });
 
 it('returns 403 when user has no worker on accept', function () {
@@ -77,14 +73,14 @@ it('returns 403 when user has no worker on accept', function () {
 
 it('returns 403 when booking is assigned to another worker on accept', function () {
     $workerUser = User::factory()->create(['email' => 'worker1@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Worker::factory()->create(['user_id' => $workerUser->id]);
     $otherWorker = Worker::factory()->create(['user_id' => User::factory()->create()->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
         'worker_id' => $otherWorker->id,
         'billing_policy_id' => $this->billingPolicy->id,
-        'status' => CleaningBookingStatus::WorkerAssigned,
+        'status' => CleaningBookingStatus::Pending,
     ]);
 
     $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/accept");
@@ -116,7 +112,7 @@ it('rejects a cleaning booking', function () {
     ]);
 });
 
-it('starts travel for a cleaning booking', function () {
+it('starts travel for a cleaning booking (sets started_travel_at, status stays worker_assigned)', function () {
     $workerUser = User::factory()->create(['email' => 'worker-travel@example.com']);
     $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
@@ -130,11 +126,14 @@ it('starts travel for a cleaning booking', function () {
     $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/start-travel");
 
     $response->assertOk();
-    expect($response->json('data.status'))->toBe('worker_on_the_way');
+    expect($response->json('data.status'))->toBe('worker_assigned');
+    expect($response->json('data.startedTravelAt'))->not->toBeNull();
     $this->assertDatabaseHas('cleaning_bookings', [
         'id' => $booking->id,
-        'status' => CleaningBookingStatus::WorkerOnTheWay->value,
+        'status' => CleaningBookingStatus::WorkerAssigned->value,
     ]);
+    $booking->refresh();
+    expect($booking->started_travel_at)->not->toBeNull();
 });
 
 it('completes a cleaning booking', function () {
@@ -346,4 +345,42 @@ it('returns 403 when worker tries complete on booking not assigned to them', fun
     $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/complete");
 
     $response->assertForbidden();
+});
+
+it('starts work for a cleaning booking (worker_assigned → in_progress)', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-startwork@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'status' => CleaningBookingStatus::WorkerAssigned,
+    ]);
+
+    $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/start-work");
+
+    $response->assertOk();
+    expect($response->json('data.status'))->toBe('in_progress');
+    expect($response->json('data.workStartedAt'))->not->toBeNull();
+    $this->assertDatabaseHas('cleaning_bookings', [
+        'id' => $booking->id,
+        'status' => CleaningBookingStatus::InProgress->value,
+    ]);
+});
+
+it('returns 422 when start-work from non-worker_assigned status', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-startwork-invalid@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'status' => CleaningBookingStatus::InProgress,
+    ]);
+
+    $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/start-work");
+
+    $response->assertUnprocessable();
 });

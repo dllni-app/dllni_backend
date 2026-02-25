@@ -50,6 +50,7 @@ final class CleaningBooking extends Model
         'terms_accepted',
         'work_started_at',
         'work_finished_at',
+        'started_travel_at',
         'customer_confirmed_at',
         'cancelled_at',
         'cancellation_reason',
@@ -112,11 +113,6 @@ final class CleaningBooking extends Model
         return $this->morphMany(\App\Models\SystemAlert::class, 'booking', 'booking_type', 'booking_id');
     }
 
-    protected static function newFactory(): CleaningBookingFactory
-    {
-        return CleaningBookingFactory::new();
-    }
-
     public function casts(): array
     {
         return [
@@ -134,8 +130,14 @@ final class CleaningBooking extends Model
             'terms_accepted' => 'boolean',
             'work_started_at' => 'datetime',
             'work_finished_at' => 'datetime',
+            'started_travel_at' => 'datetime',
             'customer_confirmed_at' => 'datetime',
             'cancelled_at' => 'datetime',
         ];
+    }
+
+    protected static function newFactory(): CleaningBookingFactory
+    {
+        return CleaningBookingFactory::new();
     }
 }
