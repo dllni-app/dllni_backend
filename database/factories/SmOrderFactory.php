@@ -6,6 +6,7 @@ namespace Database\Factories;
 
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Modules\Supermarket\Enums\SmOrderStatus;
 use Modules\Supermarket\Models\SmOrder;
 
 final class SmOrderFactory extends Factory
@@ -24,7 +25,7 @@ final class SmOrderFactory extends Factory
             'coupon_id' => null,
             'cancellation_policy_id' => null,
             'order_number' => mb_strtoupper(fake()->bothify('ORD-####')),
-            'status' => fake()->randomElement(['pending', 'accepted', 'preparing', 'ready_for_pickup', 'completed']),
+            'status' => SmOrderStatus::Pending->value,
             'pickup_mode' => fake()->randomElement(['immediate_pickup', 'scheduled_pickup']),
             'pickup_scheduled_for' => null,
             'ready_for_pickup_at' => null,
@@ -40,5 +41,63 @@ final class SmOrderFactory extends Factory
             'cancelled_at' => null,
             'cancellation_reason' => null,
         ];
+    }
+
+    public function pending(): self
+    {
+        return $this->state([
+            'status' => SmOrderStatus::Pending->value,
+            'cancelled_at' => null,
+            'cancellation_reason' => null,
+        ]);
+    }
+
+    public function accepted(): self
+    {
+        return $this->state([
+            'status' => SmOrderStatus::Accepted->value,
+            'cancelled_at' => null,
+            'cancellation_reason' => null,
+        ]);
+    }
+
+    public function preparing(): self
+    {
+        return $this->state([
+            'status' => SmOrderStatus::Preparing->value,
+            'cancelled_at' => null,
+            'cancellation_reason' => null,
+        ]);
+    }
+
+    public function readyForPickup(): self
+    {
+        return $this->state([
+            'status' => SmOrderStatus::ReadyForPickup->value,
+            'ready_for_pickup_at' => now(),
+            'cancelled_at' => null,
+            'cancellation_reason' => null,
+        ]);
+    }
+
+    public function completed(): self
+    {
+        return $this->state([
+            'status' => SmOrderStatus::Completed->value,
+            'ready_for_pickup_at' => now()->subHours(2),
+            'picked_up_at' => now()->subHour(),
+            'customer_pickup_confirmed_at' => now(),
+            'cancelled_at' => null,
+            'cancellation_reason' => null,
+        ]);
+    }
+
+    public function cancelled(): self
+    {
+        return $this->state([
+            'status' => SmOrderStatus::Cancelled->value,
+            'cancelled_at' => now(),
+            'cancellation_reason' => fake()->sentence(),
+        ]);
     }
 }

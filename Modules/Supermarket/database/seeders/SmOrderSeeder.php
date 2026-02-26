@@ -31,14 +31,25 @@ final class SmOrderSeeder extends Seeder
 
         $stores = SmStore::with(['products' => fn ($q) => $q->where('is_available', true)->limit(5)])->take(2)->get();
 
+        // Define statuses to seed with
+        $statuses = [
+            SmOrderStatus::Pending,
+            SmOrderStatus::Accepted,
+            SmOrderStatus::Preparing,
+            SmOrderStatus::ReadyForPickup,
+            SmOrderStatus::Completed,
+            SmOrderStatus::Cancelled,
+        ];
+
         foreach ($stores as $store) {
             $products = $store->products;
             if ($products->isEmpty()) {
                 continue;
             }
 
-            for ($i = 0; $i < 3; $i++) {
-                $orderNumber = 'SM-'.mb_strtoupper(Str::random(6)).'-'.$store->id.'-'.$i;
+            // Create 6 orders per store (one for each status)
+            foreach ($statuses as $index => $status) {
+                $orderNumber = 'SM-'.mb_strtoupper(Str::random(6)).'-'.$store->id.'-'.$index;
                 if (SmOrder::where('order_number', $orderNumber)->exists()) {
                     continue;
                 }
@@ -64,24 +75,41 @@ final class SmOrderSeeder extends Seeder
                 $serviceFee = round($subtotal * 0.02, 2);
                 $totalAmount = $subtotal + $serviceFee;
 
-                $order = SmOrder::create([
+                // Build order data based on status
+                $orderData = [
                     'customer_id' => $customer->id,
                     'store_id' => $store->id,
                     'coupon_id' => null,
                     'cancellation_policy_id' => $policy?->id,
                     'order_number' => $orderNumber,
-                    'status' => SmOrderStatus::Completed->value,
+                    'status' => $status->value,
                     'pickup_mode' => SmPickupMode::ImmediatePickup->value,
                     'pickup_scheduled_for' => null,
-                    'ready_for_pickup_at' => now()->subDays($i)->addMinutes(20),
-                    'picked_up_at' => now()->subDays($i)->addMinutes(35),
-                    'customer_pickup_confirmed_at' => now()->subDays($i)->addMinutes(36),
+                    'ready_for_pickup_at' => null,
+                    'picked_up_at' => null,
+                    'customer_pickup_confirmed_at' => null,
                     'subtotal' => $subtotal,
                     'discount_amount' => 0,
                     'service_fee' => $serviceFee,
                     'total_amount' => $totalAmount,
-                    'special_instructions' => $i === 0 ? 'بدون أكياس بلاستيك إن أمكن' : null,
-                ]);
+                    'special_instructions' => $index === 0 ? 'بدون أكياس بلاستيك إن أمكن' : null,
+                    'cancelled_at' => null,
+                    'cancellation_reason' => null,
+                ];
+
+                // Set timestamps based on status
+                if ($status === SmOrderStatus::ReadyForPickup) {
+                    $orderData['ready_for_pickup_at'] = now()->subHours(1);
+                } elseif ($status === SmOrderStatus::Completed) {
+                    $orderData['ready_for_pickup_at'] = now()->subDays(2)->addMinutes(20);
+                    $orderData['picked_up_at'] = now()->subDays(2)->addMinutes(35);
+                    $orderData['customer_pickup_confirmed_at'] = now()->subDays(2)->addMinutes(36);
+                } elseif ($status === SmOrderStatus::Cancelled) {
+                    $orderData['cancelled_at'] = now()->subHours(3);
+                    $orderData['cancellation_reason'] = 'Out of stock';
+                }
+
+                $order = SmOrder::create($orderData);
 
                 foreach ($orderItems as $item) {
                     SmOrderItem::create([
