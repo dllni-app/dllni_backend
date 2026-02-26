@@ -20,6 +20,7 @@ trait UserFilterQuery
                 AllowedFilter::partial('name'),
                 AllowedFilter::partial('email'),
                 AllowedFilter::exact('email_verified_at'),
+                AllowedFilter::exact('moduleType', 'module_type'),
                 AllowedFilter::partial('password'),
                 AllowedFilter::partial('rememberToken', 'remember_token'),
                 AllowedFilter::scope('createdAfter'),

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\UserModuleType;
 use App\Traits\FilterQueries\UserFilterQuery;
 use Carbon\CarbonInterface;
 use Database\Factories\UserFactory;
@@ -20,6 +21,7 @@ use Spatie\Permission\Traits\HasRoles;
  * @property-read string $name
  * @property-read string $email
  * @property-read string|null $phone
+ * @property-read UserModuleType|null $module_type
  * @property-read CarbonInterface|null $email_verified_at
  * @property-read string $password
  * @property-read string|null $remember_token
@@ -35,6 +37,7 @@ final class User extends Authenticatable implements HasMedia
         'name',
         'email',
         'phone',
+        'module_type',
         'email_verified_at',
         'password',
     ];
@@ -58,6 +61,7 @@ final class User extends Authenticatable implements HasMedia
             'name' => 'string',
             'email' => 'string',
             'phone' => 'string',
+            'module_type' => UserModuleType::class,
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'remember_token' => 'string',

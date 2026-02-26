@@ -18,6 +18,8 @@ final class UserRequest extends FormRequest
         return [
             'name' => 'string|max:255',
             'email' => 'string|max:255|unique:users,email',
+            'phone' => 'nullable|string|max:255',
+            'moduleType' => 'nullable|string|in:cleaning_worker,restaurant_seller,supermarket_seller',
             'emailVerifiedAt' => 'date',
             'password' => 'string|max:255',
             'rememberToken' => 'string|max:100',
@@ -26,4 +28,3 @@ final class UserRequest extends FormRequest
         ];
     }
 }
-

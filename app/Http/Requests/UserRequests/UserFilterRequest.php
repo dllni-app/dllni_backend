@@ -24,6 +24,7 @@ final class UserFilterRequest extends FormRequest
             'filter.createdAfter' => 'sometimes|date',
             'filter.createdBefore' => 'sometimes|date|after_or_equal:filter.createdAfter',
             'filter.search' => 'sometimes|string|max:255',
+            'filter.moduleType' => 'sometimes|string|in:cleaning_worker,restaurant_seller,supermarket_seller',
             'sort' => 'sometimes|string|in:name,-name,email,-email,emailVerifiedAt,-emailVerifiedAt',
         ];
     }
