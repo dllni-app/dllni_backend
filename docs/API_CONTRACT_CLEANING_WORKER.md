@@ -61,6 +61,7 @@ Base path: `/api/v1/` (all under `auth:sanctum`).
 
 ```json
 {
+  "date": "2026-02-18",
   "totalBookings": 42,
   "todayCount": 2,
   "completedCount": 35,
@@ -69,6 +70,7 @@ Base path: `/api/v1/` (all under `auth:sanctum`).
   "cancelledCount": 1,
   "totalEarnings": 5250.00,
   "todayEarnings": 450.00,
+  "earningsChangePercent": 15.0,
   "newOrdersCount": 3,
   "pendingExtensionRequestsCount": 1
 }
@@ -76,6 +78,7 @@ Base path: `/api/v1/` (all under `auth:sanctum`).
 
 | Field                       | Type   | Description                                                       |
 | --------------------------- | ------ | ----------------------------------------------------------------- |
+| date                        | string | Current date for the overview (YYYY-MM-DD)                        |
 | totalBookings               | number | All-time bookings assigned to this worker                         |
 | todayCount                  | number | Bookings scheduled for today (excluding cancelled)                 |
 | completedCount              | number | Bookings with status `completed`                                  |
@@ -84,6 +87,7 @@ Base path: `/api/v1/` (all under `auth:sanctum`).
 | cancelledCount              | number | Bookings with status `cancelled`                                  |
 | totalEarnings               | number | Sum of `totalPrice` for completed bookings                        |
 | todayEarnings               | number | Sum of `totalPrice` for completed bookings today                   |
+| earningsChangePercent       | number | Percentage change of today's earnings vs yesterday (+15 = 15% up, -10 = 10% down; 100 when yesterday was 0 and today > 0) |
 | newOrdersCount              | number | Bookings with status `pending` (worker_id null or current worker)  |
 | pendingExtensionRequestsCount | number | Extension requests (time warnings) awaiting worker response   |
 
@@ -421,6 +425,7 @@ Authorization: Bearer {token}
 
 ```json
 {
+  "date": "2026-02-18",
   "totalBookings": 42,
   "todayCount": 2,
   "completedCount": 35,
@@ -429,6 +434,7 @@ Authorization: Bearer {token}
   "cancelledCount": 1,
   "totalEarnings": 5250.00,
   "todayEarnings": 450.00,
+  "earningsChangePercent": 15.0,
   "newOrdersCount": 3,
   "pendingExtensionRequestsCount": 1
 }

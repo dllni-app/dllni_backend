@@ -307,25 +307,35 @@ Authorization: Bearer {token}
 
 ```json
 {
+  "date": "2026-02-18",
   "totalBookings": 42,
   "todayCount": 2,
   "completedCount": 35,
   "pendingCount": 5,
   "inProgressCount": 1,
   "cancelledCount": 1,
-  "totalEarnings": 5250.00
+  "totalEarnings": 5250.00,
+  "todayEarnings": 450.00,
+  "earningsChangePercent": 15.0,
+  "newOrdersCount": 3,
+  "pendingExtensionRequestsCount": 1
 }
 ```
 
-| Field           | Type   | Description                                              |
-| --------------- | ------ | -------------------------------------------------------- |
-| totalBookings   | number | All-time bookings assigned to this worker                |
-| todayCount      | number | Bookings scheduled for today (excluding cancelled)       |
-| completedCount  | number | Bookings with status `completed`                         |
-| pendingCount    | number | Upcoming bookings in pending/confirmed/assigned states    |
-| inProgressCount | number | Bookings with status `in_progress`                       |
-| cancelledCount  | number | Bookings with status `cancelled`                         |
-| totalEarnings   | number | Sum of `totalPrice` for completed bookings               |
+| Field                         | Type   | Description                                                       |
+| ----------------------------- | ------ | ----------------------------------------------------------------- |
+| date                          | string | Current date for the overview (YYYY-MM-DD)                        |
+| totalBookings                 | number | All-time bookings assigned to this worker                         |
+| todayCount                    | number | Bookings scheduled for today (excluding cancelled)                 |
+| completedCount                | number | Bookings with status `completed`                                  |
+| pendingCount                  | number | Upcoming bookings in pending/confirmed/assigned states             |
+| inProgressCount               | number | Bookings with status `in_progress`                                |
+| cancelledCount                | number | Bookings with status `cancelled`                                  |
+| totalEarnings                 | number | Sum of `totalPrice` for completed bookings                        |
+| todayEarnings                 | number | Sum of `totalPrice` for completed bookings today                   |
+| earningsChangePercent        | number | Percentage change of today's earnings vs yesterday                 |
+| newOrdersCount               | number | Bookings with status `pending` (worker_id null or current worker)  |
+| pendingExtensionRequestsCount | number | Extension requests awaiting worker response                       |
 
 If the user has no worker, all values are `0`.
 

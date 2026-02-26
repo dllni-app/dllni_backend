@@ -224,10 +224,12 @@ it('returns zeros for worker homepage when user has no worker', function () {
     $response = $this->getJson('/api/v1/cleaning/worker/homepage');
 
     $response->assertOk();
+    expect($response->json('date'))->toBe(now()->format('Y-m-d'));
     expect($response->json('totalBookings'))->toBe(0);
     expect($response->json('todayCount'))->toBe(0);
     expect($response->json('totalEarnings'))->toBe(0);
     expect($response->json('todayEarnings'))->toBe(0);
+    expect($response->json('earningsChangePercent'))->toBe(0);
     expect($response->json('newOrdersCount'))->toBe(0);
     expect($response->json('pendingExtensionRequestsCount'))->toBe(0);
 });
@@ -276,7 +278,9 @@ it('returns worker homepage with todayEarnings newOrdersCount and pendingExtensi
     $response = $this->getJson('/api/v1/cleaning/worker/homepage');
 
     $response->assertOk();
+    expect($response->json('date'))->toBe(now()->format('Y-m-d'));
     expect((float) $response->json('todayEarnings'))->toBe(200.0);
+    expect((float) $response->json('earningsChangePercent'))->toBe(100.0);
     expect($response->json('newOrdersCount'))->toBeGreaterThanOrEqual(1);
     expect($response->json('pendingExtensionRequestsCount'))->toBe(1);
 });

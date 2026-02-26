@@ -17,8 +17,11 @@ final class WorkerHomepageController
     {
         $worker = auth()->user()?->worker;
 
+        $today = Carbon::today();
+
         if (! $worker) {
             return response()->json([
+                'date' => $today->format('Y-m-d'),
                 'totalBookings' => 0,
                 'todayCount' => 0,
                 'completedCount' => 0,
@@ -27,13 +30,13 @@ final class WorkerHomepageController
                 'cancelledCount' => 0,
                 'totalEarnings' => 0,
                 'todayEarnings' => 0,
+                'earningsChangePercent' => 0,
                 'newOrdersCount' => 0,
                 'pendingExtensionRequestsCount' => 0,
             ]);
         }
 
         $baseQuery = CleaningBooking::query()->where('worker_id', $worker->id);
-        $today = Carbon::today();
 
         $totalBookings = (clone $baseQuery)->count();
 
@@ -71,6 +74,18 @@ final class WorkerHomepageController
             ->whereDate('scheduled_date', $today)
             ->sum('total_price');
 
+        $yesterday = $today->copy()->subDay();
+        $yesterdayEarnings = (float) (clone $baseQuery)
+            ->where('status', CleaningBookingStatus::Completed)
+            ->whereDate('scheduled_date', $yesterday)
+            ->sum('total_price');
+
+        $earningsChangePercent = match (true) {
+            $yesterdayEarnings > 0 => round((($todayEarnings - $yesterdayEarnings) / $yesterdayEarnings) * 100, 1),
+            $todayEarnings > 0 => 100.0,
+            default => 0.0,
+        };
+
         $newOrdersCount = CleaningBooking::query()
             ->where('status', CleaningBookingStatus::Pending)
             ->whereDate('scheduled_date', '>=', $today)
@@ -84,6 +99,7 @@ final class WorkerHomepageController
             ->count();
 
         return response()->json([
+            'date' => $today->format('Y-m-d'),
             'totalBookings' => $totalBookings,
             'todayCount' => $todayCount,
             'completedCount' => $completedCount,
@@ -92,6 +108,7 @@ final class WorkerHomepageController
             'cancelledCount' => $cancelledCount,
             'totalEarnings' => $totalEarnings,
             'todayEarnings' => $todayEarnings,
+            'earningsChangePercent' => $earningsChangePercent,
             'newOrdersCount' => $newOrdersCount,
             'pendingExtensionRequestsCount' => $pendingExtensionRequestsCount,
         ]);
