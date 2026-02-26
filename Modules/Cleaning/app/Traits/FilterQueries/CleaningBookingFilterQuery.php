@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Traits\FilterQueries;
 
 use Illuminate\Database\Eloquent\Builder;
+use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Spatie\QueryBuilder\AllowedFilter;
 use Spatie\QueryBuilder\AllowedSort;
@@ -61,7 +62,13 @@ trait CleaningBookingFilterQuery
             return $query->whereRaw('1 = 0');
         }
 
-        return $query->where('worker_id', $worker->id);
+        return $query->where(function (Builder $q) use ($worker): void {
+            $q->where('worker_id', $worker->id)
+                ->orWhere(function (Builder $pending): void {
+                    $pending->where('status', CleaningBookingStatus::Pending)
+                        ->whereNull('worker_id');
+                });
+        });
     }
 
     public function scopeHasDispute(Builder $query, mixed $value): Builder

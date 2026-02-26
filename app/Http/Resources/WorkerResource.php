@@ -37,6 +37,7 @@ final class WorkerResource extends JsonResource
                 'id' => $this->user->id,
                 'name' => $this->user->name,
                 'email' => $this->user->email,
+                'phone' => $this->user->phone,
             ]),
             'zones' => $this->whenLoaded('zones'),
             'availability' => $this->whenLoaded('availability'),

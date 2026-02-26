@@ -384,3 +384,74 @@ it('returns 422 when start-work from non-worker_assigned status', function () {
 
     $response->assertUnprocessable();
 });
+
+it('returns security code for assigned booking', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-security@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'status' => CleaningBookingStatus::WorkerAssigned,
+    ]);
+
+    $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/security-code");
+
+    $response->assertOk();
+    expect($response->json('data.securityCode'))->toBeString()->toHaveLength(5);
+    expect($response->json('data.securityCode'))->toMatch('/^\d{5}$/');
+    $booking->refresh();
+    expect($booking->security_code)->toBe($response->json('data.securityCode'));
+});
+
+it('returns same security code on second request', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-security2@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'status' => CleaningBookingStatus::WorkerAssigned,
+        'security_code' => '12345',
+    ]);
+
+    $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/security-code");
+
+    $response->assertOk();
+    expect($response->json('data.securityCode'))->toBe('12345');
+});
+
+it('returns 422 for security code when booking is pending', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-security-pending@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'status' => CleaningBookingStatus::Pending,
+    ]);
+
+    $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/security-code");
+
+    $response->assertUnprocessable();
+});
+
+it('returns 403 for security code when booking belongs to another worker', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-security-other@example.com']);
+    Worker::factory()->create(['user_id' => $workerUser->id]);
+    $otherWorker = Worker::factory()->create(['user_id' => User::factory()->create()->id]);
+    Sanctum::actingAs($workerUser);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $otherWorker->id,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'status' => CleaningBookingStatus::WorkerAssigned,
+    ]);
+
+    $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/security-code");
+
+    $response->assertForbidden();
+});

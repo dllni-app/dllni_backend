@@ -10,6 +10,7 @@ use Illuminate\Http\Response;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 use Modules\Cleaning\Data\CleaningBookingData;
+use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Http\Requests\CleaningBookingCancelRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingRejectRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingRequest;
@@ -53,6 +54,33 @@ final class CleaningBookingController
         ]);
 
         return CleaningBookingResource::make($cleaning_booking);
+    }
+
+    public function securityCode(CleaningBooking $cleaning_booking): JsonResponse
+    {
+        $this->ensureWorkerCanActOnBooking($cleaning_booking, requireOwnership: true);
+
+        if (! in_array($cleaning_booking->status, [
+            CleaningBookingStatus::WorkerAssigned,
+            CleaningBookingStatus::InProgress,
+        ], true)) {
+            throw ValidationException::withMessages([
+                'status' => ['Security code is only available for assigned or in-progress bookings.'],
+            ]);
+        }
+
+        if (empty($cleaning_booking->security_code)) {
+            $cleaning_booking->update([
+                'security_code' => mb_str_pad((string) random_int(0, 99_999), 5, '0', STR_PAD_LEFT),
+            ]);
+            $cleaning_booking->refresh();
+        }
+
+        return response()->json([
+            'data' => [
+                'securityCode' => $cleaning_booking->security_code,
+            ],
+        ]);
     }
 
     /** @throws Throwable */

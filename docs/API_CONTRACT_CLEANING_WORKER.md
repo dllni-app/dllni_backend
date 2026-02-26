@@ -105,7 +105,7 @@ If the user has no worker, all values are `0`.
 
 | Param                      | Type    | Description                                              |
 | -------------------------- | ------- | -------------------------------------------------------- |
-| filter[forCurrentWorker]   | boolean | `true` or `1` – scope to authenticated worker (required for worker app) |
+| filter[forCurrentWorker]   | boolean | `true` or `1` – scope to authenticated worker: shows bookings assigned to worker **or** pending unassigned (for "new requests" list) |
 | filter[status]             | string  | Filter by status (see Section 6)                          |
 | filter[scheduledDate]      | string  | Date (YYYY-MM-DD), e.g. today for "Tasks for today"      |
 | filter[scheduledDateFrom]  | string  | Start of range (YYYY-MM-DD)                              |
@@ -383,6 +383,49 @@ GET /api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[scheduledDateFro
 ### 3.13 Worker availability
 
 Use `PUT /api/v1/workers/{id}` to update worker (including availability). The worker can update their own record if authorized. See shared app endpoints in [API_CONTRACT_CLEANING.md](API_CONTRACT_CLEANING.md) Section 4.1.
+
+---
+
+### 3.14 Worker profile (current worker)
+
+| Method | Path                                  | Description                                      |
+| ------ | ------------------------------------- | ------------------------------------------------ |
+| GET    | `/api/v1/cleaning/worker/profile`    | Current worker profile with user, zones, availability |
+
+**Query params:** None. Worker is derived from `Authorization: Bearer {token}`.
+
+**Response (200):** Same structure as `GET /api/v1/workers/{id}` (Worker resource with `user`, `zones`, `availability` loaded). Use for "My profile" / "حسابك" in the worker app.
+
+**Errors:**
+- `403` – User has no associated worker.
+
+---
+
+### 3.15 Security code for service start
+
+| Method | Path                                             | Description                    |
+| ------ | ------------------------------------------------ | ------------------------------ |
+| GET    | `/api/v1/cleaning-bookings/{id}/security-code`  | Get 5-digit code to show customer to confirm service start |
+
+**Path params:** `id` – cleaning booking ID
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "securityCode": "35910"
+  }
+}
+```
+
+The code is generated on first request and stored; subsequent calls return the same code. Worker shows this code to the customer; customer enters it in their app to confirm service start.
+
+**Errors:**
+- `403` – User has no worker, or booking is not assigned to worker
+- `422` – Booking must be in status `worker_assigned` or `in_progress`
+
+**Valid statuses:** `worker_assigned`, `in_progress` only.
 
 ---
 

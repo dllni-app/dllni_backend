@@ -6,6 +6,7 @@ namespace Modules\Resturants\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Models\Order;
 
 /**
@@ -13,8 +14,20 @@ use Modules\Resturants\Models\Order;
  */
 final class OrderResource extends JsonResource
 {
+    private const STATUS_ARABIC = [
+        OrderStatus::Pending->value => 'قيد الانتظار',
+        OrderStatus::Accepted->value => 'مقبول',
+        OrderStatus::Preparing->value => 'قيد التحضير',
+        OrderStatus::ReadyForPickup->value => 'جاهز للاستلام',
+        OrderStatus::PickedUp->value => 'تم الاستلام',
+        OrderStatus::Completed->value => 'مكتمل',
+        OrderStatus::Cancelled->value => 'ملغي',
+    ];
+
     public function toArray(Request $request): array
     {
+        $statusValue = $this->status?->value ?? $this->status;
+
         return [
             'id' => $this->id,
             'userId' => $this->user_id,
@@ -23,7 +36,8 @@ final class OrderResource extends JsonResource
             'assignedStaffId' => $this->assigned_staff_id,
             'cancellationPolicyId' => $this->cancellation_policy_id,
             'orderNumber' => $this->order_number,
-            'status' => $this->status?->value ?? $this->status,
+            'status' => $statusValue,
+            'statusLabelAr' => $statusValue ? (self::STATUS_ARABIC[$statusValue] ?? $statusValue) : null,
             'orderType' => $this->order_type?->value ?? $this->order_type,
             'pickupMode' => $this->pickup_mode?->value ?? $this->pickup_mode,
             'pickupScheduledFor' => $this->pickup_scheduled_for?->toDateTimeString(),

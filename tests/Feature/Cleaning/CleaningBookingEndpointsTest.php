@@ -177,6 +177,59 @@ it('filters cleaning bookings by forCurrentWorker and scheduledDate', function (
     expect($response->json('data.0.scheduledDate'))->toBe($today);
 });
 
+it('returns pending unassigned bookings for worker when forCurrentWorker and status pending', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-new-requests@example.com']);
+    Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
+        'name' => 'Default',
+        'billing_mode' => 'actual_working_time',
+        'rules' => [],
+        'is_active' => true,
+        'is_default' => true,
+    ]);
+
+    CleaningBooking::factory()->create([
+        'worker_id' => null,
+        'billing_policy_id' => $billingPolicy->id,
+        'status' => CleaningBookingStatus::Pending,
+    ]);
+    CleaningBooking::factory()->create([
+        'worker_id' => null,
+        'billing_policy_id' => $billingPolicy->id,
+        'status' => CleaningBookingStatus::Pending,
+    ]);
+
+    $response = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
+
+    $response->assertOk();
+    expect($response->json('data'))->toBeArray()->toHaveCount(2);
+});
+
+it('returns worker profile when user has worker', function () {
+    $workerUser = User::factory()->create(['email' => 'profile-worker@example.com', 'phone' => '+963991234567']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id, 'first_name' => 'Ahmed']);
+    Sanctum::actingAs($workerUser);
+
+    $response = $this->getJson('/api/v1/cleaning/worker/profile');
+
+    $response->assertOk();
+    expect($response->json('data.id'))->toBe($worker->id);
+    expect($response->json('data.firstName'))->toBe('Ahmed');
+    expect($response->json('data.user.id'))->toBe($workerUser->id);
+    expect($response->json('data.user.phone'))->toBe('+963991234567');
+});
+
+it('returns 403 for worker profile when user has no worker', function () {
+    $regularUser = User::factory()->create(['email' => 'no-worker-profile@example.com']);
+    Sanctum::actingAs($regularUser);
+
+    $response = $this->getJson('/api/v1/cleaning/worker/profile');
+
+    $response->assertForbidden();
+});
+
 it('returns worker homepage stats for authenticated worker', function () {
     $workerUser = User::factory()->create(['email' => 'worker-homepage@example.com']);
     $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
