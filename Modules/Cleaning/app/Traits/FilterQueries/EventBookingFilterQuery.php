@@ -27,7 +27,7 @@ trait EventBookingFilterQuery
                 AllowedSort::field('status'),
                 AllowedSort::field('totalPrice', 'total_price'),
             ])
-            ->defaultSort('-created_at');
+            ->defaultSort('-createdAt');
     }
 
     public function scopeScheduledDateFrom(Builder $query, string $date): Builder

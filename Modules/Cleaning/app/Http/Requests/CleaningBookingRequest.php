@@ -38,8 +38,10 @@ final class CleaningBookingRequest extends FormRequest
             'termsAccepted' => 'nullable|boolean',
             'workStartedAt' => 'nullable|date',
             'workFinishedAt' => 'nullable|date',
+            'startedTravelAt' => 'nullable|date',
             'customerConfirmedAt' => 'nullable|date',
             'cancelledAt' => 'nullable|date',
+            'cancellationReason' => 'nullable|string|max:500',
         ];
     }
 }

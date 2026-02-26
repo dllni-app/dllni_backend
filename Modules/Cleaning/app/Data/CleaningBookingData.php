@@ -38,7 +38,9 @@ final class CleaningBookingData extends Data
         public ?bool $termsAccepted,
         public ?string $workStartedAt,
         public ?string $workFinishedAt,
+        public ?string $startedTravelAt,
         public ?string $customerConfirmedAt,
         public ?string $cancelledAt,
+        public ?string $cancellationReason,
     ) {}
 }
