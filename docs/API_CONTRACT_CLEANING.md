@@ -15,6 +15,10 @@
   - Login/token issuance is out of scope of this contract (use existing auth endpoints).
 - **Content-Type:** `application/json` for request bodies; responses are JSON.
 
+### 1.1 Client behavior (UI/API usage)
+
+All GET (with id/enum), POST, and PUT usage must follow the client behavior rules in [API_CONTRACT_CLIENT_BEHAVIOR.md](API_CONTRACT_CLIENT_BEHAVIOR.md): select menu for id/enum in GET (user sees label only); backend-known data stored in page state and not shown/editable in POST; one dedicated input per user-supplied field in POST; optimistic local update for PUT, then persist on success or revert on failure.
+
 ---
 
 ## 2. Global conventions
