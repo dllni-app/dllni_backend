@@ -13,7 +13,7 @@ final class CleaningTimeWarningService
 {
     public function accept(CleaningTimeWarning $warning, ?int $additionalMinutes = null): CleaningTimeWarning
     {
-        return DB::transaction(static function () use ($warning) {
+        return DB::transaction(static function () use ($warning, $additionalMinutes): CleaningTimeWarning {
             if ($warning->worker_responded_at !== null) {
                 throw new InvalidArgumentException('Extension request has already been responded to.');
             }
@@ -21,6 +21,7 @@ final class CleaningTimeWarningService
             $warning->update([
                 'worker_response' => CleaningTimeWarningResponse::ExtendTime,
                 'worker_responded_at' => now(),
+                'additional_minutes' => $additionalMinutes,
             ]);
 
             return $warning->fresh();

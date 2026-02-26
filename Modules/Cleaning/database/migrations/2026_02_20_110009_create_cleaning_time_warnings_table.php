@@ -19,6 +19,8 @@ return new class extends Migration
             $table->timestamp('sent_at');
             $table->timestamp('customer_responded_at')->nullable();
             $table->timestamp('worker_responded_at')->nullable();
+            $table->unsignedSmallInteger('additional_minutes')->nullable();
+            $table->string('worker_reject_message', 500)->nullable();
             $table->timestamps();
 
             $table->index(['booking_id', 'booking_type', 'sent_at'], 'ctw_booking_sent_idx');

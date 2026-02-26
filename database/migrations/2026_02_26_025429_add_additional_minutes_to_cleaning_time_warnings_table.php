@@ -8,23 +8,20 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::table('cleaning_time_warnings', function (Blueprint $table): void {
-            if (Schema::hasColumn('cleaning_time_warnings', 'worker_reject_message')) {
+            if (Schema::hasColumn('cleaning_time_warnings', 'additional_minutes')) {
                 return;
             }
-            $table->string('worker_reject_message', 500)->nullable()->after('worker_responded_at');
+            $table->unsignedSmallInteger('additional_minutes')->nullable()->after('worker_responded_at');
         });
     }
 
     public function down(): void
     {
         Schema::table('cleaning_time_warnings', function (Blueprint $table): void {
-            $table->dropColumn('worker_reject_message');
+            $table->dropColumn('additional_minutes');
         });
     }
 };
