@@ -28,6 +28,7 @@ final class DatabaseSeeder extends Seeder
             DashboardPermissionsSeeder::class,
             AdminUserSeeder::class,
             CleaningWorkerAndSellerSeeder::class,
+            WorkerUserSeeder::class,
             CancellationPolicySeeder::class,
             MasterProductSeeder::class,
             RecipeSeeder::class,
