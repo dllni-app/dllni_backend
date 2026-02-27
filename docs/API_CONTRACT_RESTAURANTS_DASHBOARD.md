@@ -179,6 +179,91 @@ Base path: `/api/v1/` (all under `auth:sanctum`).
 
 **Index query params:** `filter[restaurantId]`, `filter[categoryId]`, `filter[isAvailable]`, `filter[lowStock]`, `filter[isFeatured]`, `filter[search]`.
 
+### 3.4a Products – AI-assisted (Gemini)
+
+AI-powered product helpers for the restaurant module. Use these in the “Add product” flow: extract title/description from a single product image, extract multiple items from a menu image, or generate a product image from text. All require `Authorization: Bearer {token}`.
+
+| Method | Path                                      | Description                                                                 |
+| ------ | ----------------------------------------- | --------------------------------------------------------------------------- |
+| POST   | `/api/v1/products/ai/extract-from-image`  | Analyze a single product image → title + description (e.g. “توليد الاسم من الصورة”) |
+| POST   | `/api/v1/products/ai/extract-from-menu`   | Analyze a menu image → list of items with title + description (e.g. “رفع صورة المنيو”) |
+| POST   | `/api/v1/products/ai/generate-image`      | Generate a product image from title + optional description (e.g. “توليد الصورة من الاسم”) |
+
+**Extract from image (single product)**
+
+- **Request:** `multipart/form-data`. Body fields:
+
+| Field   | Type   | Required | Description                                                                 |
+| ------- | ------ | -------- | --------------------------------------------------------------------------- |
+| `image` | file   | yes      | Product image (JPEG, PNG, GIF, etc.). Max size 8 MB (`max:8192` KB).        |
+| `locale`| string | no       | `ar` or `en`. Hints output language (e.g. Arabic vs English).              |
+
+- **Response (200):**
+
+```json
+{
+  "data": {
+    "title": "برجر دجاج كلاسيك",
+    "description": "شريحة دجاج طازجة متبلة بخلطتنا الخاصة..."
+  }
+}
+```
+
+- `title` and `description` may be `null` if the AI could not extract them (e.g. API error). Client should show a fallback or retry.
+
+**Extract from menu (multiple items)**
+
+- **Request:** `multipart/form-data`. Body fields:
+
+| Field   | Type   | Required | Description                                                                 |
+| ------- | ------ | -------- | --------------------------------------------------------------------------- |
+| `image` | file   | yes      | Menu / price-list image. Max size 12 MB (`max:12288` KB).                   |
+| `locale`| string | no       | `ar` or `en`. Hints output language.                                        |
+
+- **Response (200):**
+
+```json
+{
+  "data": {
+    "items": [
+      { "title": "برجر دجاج كلاسيك", "description": "شريحة دجاج طازجة..." },
+      { "title": "بيتزا مارغريتا", "description": "طماطم وجبن موتزاريلا..." }
+    ]
+  }
+}
+```
+
+- `items` is an array of `{ title, description }`. `description` may be `null` for some items. Empty or invalid extractions return `items: []`.
+
+**Generate product image**
+
+- **Request:** `application/json`. Body:
+
+| Field         | Type   | Required | Description                                  |
+| ------------- | ------ | -------- | -------------------------------------------- |
+| `title`       | string | yes      | Product name (max 255).                      |
+| `description` | string | no       | Product description (max 2000).              |
+
+- **Response (200):**
+
+```json
+{
+  "data": {
+    "imageBase64": "iVBORw0KGgoAAAANSUhEUgAA..."
+  }
+}
+```
+
+- `imageBase64` is a base64-encoded PNG (e.g. for `<img src="data:image/png;base64,...">` or save to file). It may be `null` if generation failed; client should show an error or retry.
+
+**Validation errors (422):**
+
+- Extract from image: `image` missing, not an image, or > 8 MB; `locale` not in `ar,en`.
+- Extract from menu: `image` missing, not an image, or > 12 MB; `locale` not in `ar,en`.
+- Generate image: `title` missing or > 255 chars; `description` > 2000 chars.
+
+**Typical flow:** Call AI endpoints to get suggestions → user edits in UI → create/update product via `POST /api/v1/products` or `PUT /api/v1/products/{id}` (and attach the generated image if applicable).
+
 ### 3.5 Orders (full CRUD)
 
 | Method    | Path                  | Description                                                                              |
