@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 use App\Models\User;
 use App\Models\Worker;
+use Illuminate\Support\Facades\Event;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Events\WorkerArrived;
+use Modules\Cleaning\Events\WorkerLocationUpdated;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
 
@@ -454,4 +457,100 @@ it('returns 403 for security code when booking belongs to another worker', funct
     $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/security-code");
 
     $response->assertForbidden();
+});
+
+it('updates worker location and broadcasts when worker has started travel', function () {
+    Event::fake([WorkerLocationUpdated::class]);
+
+    $workerUser = User::factory()->create(['email' => 'worker-location@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'status' => CleaningBookingStatus::WorkerAssigned,
+        'started_travel_at' => now(),
+    ]);
+
+    $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/location", [
+        'latitude' => 33.5138,
+        'longitude' => 36.2765,
+    ]);
+
+    $response->assertOk();
+    expect($response->json('data.ok'))->toBeTrue();
+    Event::assertDispatched(WorkerLocationUpdated::class, function (WorkerLocationUpdated $e) use ($booking, $worker) {
+        return $e->cleaningBookingId === $booking->id
+            && $e->latitude === 33.5138
+            && $e->longitude === 36.2765
+            && $e->workerId === $worker->id;
+    });
+});
+
+it('returns 422 when update location before start travel', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-location-notravel@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'status' => CleaningBookingStatus::WorkerAssigned,
+        'started_travel_at' => null,
+    ]);
+
+    $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/location", [
+        'latitude' => 33.5138,
+        'longitude' => 36.2765,
+    ]);
+
+    $response->assertUnprocessable();
+});
+
+it('marks worker arrived and broadcasts', function () {
+    Event::fake([WorkerArrived::class]);
+
+    $workerUser = User::factory()->create(['email' => 'worker-arrive@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'status' => CleaningBookingStatus::WorkerAssigned,
+        'started_travel_at' => now(),
+    ]);
+
+    $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/arrive");
+
+    $response->assertOk();
+    expect($response->json('data.status'))->toBe('worker_assigned');
+    expect($response->json('data.arrivedAt'))->not->toBeNull();
+    $this->assertDatabaseHas('cleaning_bookings', [
+        'id' => $booking->id,
+        'status' => CleaningBookingStatus::WorkerAssigned->value,
+    ]);
+    $booking->refresh();
+    expect($booking->arrived_at)->not->toBeNull();
+    Event::assertDispatched(WorkerArrived::class, function (WorkerArrived $e) use ($booking) {
+        return $e->cleaningBookingId === $booking->id;
+    });
+});
+
+it('returns 422 when arrive before start travel', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-arrive-notravel@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'status' => CleaningBookingStatus::WorkerAssigned,
+        'started_travel_at' => null,
+    ]);
+
+    $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/arrive");
+
+    $response->assertUnprocessable();
 });

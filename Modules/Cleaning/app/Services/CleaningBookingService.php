@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use Modules\Cleaning\Data\CleaningBookingData;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Events\WorkerArrived;
+use Modules\Cleaning\Events\WorkerLocationUpdated;
 use Modules\Cleaning\Models\CleaningBooking;
 
 final class CleaningBookingService
@@ -81,6 +83,39 @@ final class CleaningBookingService
             }
 
             $booking->update(['started_travel_at' => now()]);
+
+            return $booking->fresh();
+        });
+    }
+
+    public function updateLocation(CleaningBooking $booking, float $latitude, float $longitude): void
+    {
+        if ($booking->status !== CleaningBookingStatus::WorkerAssigned || $booking->started_travel_at === null) {
+            throw new InvalidArgumentException('Worker must have started travel to send location updates.');
+        }
+
+        $worker = auth()->user()?->worker;
+        if (! $worker || $booking->worker_id !== $worker->id) {
+            throw new InvalidArgumentException('Only the assigned worker can update location.');
+        }
+
+        WorkerLocationUpdated::dispatch($booking->id, $latitude, $longitude, $worker->id);
+    }
+
+    public function arrive(CleaningBooking $booking): CleaningBooking
+    {
+        return DB::transaction(function () use ($booking) {
+            if ($booking->status !== CleaningBookingStatus::WorkerAssigned) {
+                throw new InvalidArgumentException('Booking must be in worker_assigned status to mark arrival.');
+            }
+            if ($booking->started_travel_at === null) {
+                throw new InvalidArgumentException('Worker must have started travel before marking arrival.');
+            }
+
+            $booking->update(['arrived_at' => now()]);
+            $booking->refresh();
+
+            WorkerArrived::dispatch($booking->id, $booking->arrived_at->toIso8601String());
 
             return $booking->fresh();
         });

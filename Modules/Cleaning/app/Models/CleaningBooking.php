@@ -37,6 +37,8 @@ final class CleaningBooking extends Model
         'status',
         'property_type',
         'property_details',
+        'address_latitude',
+        'address_longitude',
         'estimated_sqm',
         'estimated_hours',
         'scheduled_date',
@@ -51,6 +53,7 @@ final class CleaningBooking extends Model
         'work_started_at',
         'work_finished_at',
         'started_travel_at',
+        'arrived_at',
         'customer_confirmed_at',
         'cancelled_at',
         'cancellation_reason',
@@ -132,7 +135,10 @@ final class CleaningBooking extends Model
             'work_started_at' => 'datetime',
             'work_finished_at' => 'datetime',
             'started_travel_at' => 'datetime',
+            'arrived_at' => 'datetime',
             'customer_confirmed_at' => 'datetime',
+            'address_latitude' => 'decimal:8',
+            'address_longitude' => 'decimal:8',
             'cancelled_at' => 'datetime',
         ];
     }

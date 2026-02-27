@@ -337,3 +337,63 @@ it('returns worker homepage with todayEarnings newOrdersCount and pendingExtensi
     expect($response->json('newOrdersCount'))->toBeGreaterThanOrEqual(1);
     expect($response->json('pendingExtensionRequestsCount'))->toBe(1);
 });
+
+it('returns working hours for authenticated worker', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-hours@example.com']);
+    $worker = Worker::factory()->create([
+        'user_id' => $workerUser->id,
+        'default_working_hours' => [
+            'sunday' => [['from' => '09:00', 'to' => '17:00']],
+            'monday' => false,
+            'tuesday' => [['from' => '10:00', 'to' => '18:00']],
+            'wednesday' => [],
+            'thursday' => null,
+            'friday' => null,
+            'saturday' => null,
+        ],
+    ]);
+    Sanctum::actingAs($workerUser);
+
+    $response = $this->getJson('/api/v1/cleaning/worker/working-hours');
+
+    $response->assertOk();
+    $hours = $response->json('data.defaultWorkingHours');
+    expect($hours)->toHaveKeys(['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']);
+    expect($hours['sunday'])->toBe([['from' => '09:00', 'to' => '17:00']]);
+    expect($hours['monday'])->toBeFalse();
+    expect($hours['tuesday'])->toBe([['from' => '10:00', 'to' => '18:00']]);
+});
+
+it('returns 403 for working hours when user has no worker', function () {
+    $regularUser = User::factory()->create(['email' => 'no-worker-hours@example.com']);
+    Sanctum::actingAs($regularUser);
+
+    $response = $this->getJson('/api/v1/cleaning/worker/working-hours');
+
+    $response->assertForbidden();
+});
+
+it('updates working hours for authenticated worker', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-update-hours@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $payload = [
+        'defaultWorkingHours' => [
+            'sunday' => [['from' => '09:00', 'to' => '23:00']],
+            'monday' => [['from' => '09:00', 'to' => '13:00'], ['from' => '15:00', 'to' => '23:00']],
+            'tuesday' => [['from' => '09:00', 'to' => '23:00']],
+            'wednesday' => [['from' => '09:00', 'to' => '23:00']],
+            'thursday' => [['from' => '09:00', 'to' => '23:00']],
+            'friday' => [['from' => '09:00', 'to' => '23:00']],
+            'saturday' => false,
+        ],
+    ];
+
+    $response = $this->putJson('/api/v1/cleaning/worker/working-hours', $payload);
+
+    $response->assertOk();
+    expect($response->json('data.defaultWorkingHours'))->toEqual($payload['defaultWorkingHours']);
+    $worker->refresh();
+    expect($worker->default_working_hours)->toEqual($payload['defaultWorkingHours']);
+});
