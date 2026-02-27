@@ -4,9 +4,10 @@
 **Domain:** `dllni.mustafafares.com`
 **Scope:** Endpoints required for supermarket store owner dashboard and operations:
 - **Dashboard Overview:** Today metrics for the owner's store
-- **Order Actions:** Accept or reject orders
+- **Order Actions:** Accept, reject, and return orders
 - **Store Management:** View and update store profile
-- **Product CRUD:** Use existing Supermarket product endpoints
+- **Product Management:** CRUD, stock updates, expiration
+- **Inventory Management:** Low stock, audit, lost opportunities
 
 For admin reports, see [API_CONTRACT_SUPERMARKET_ADMIN.md](API_CONTRACT_SUPERMARKET_ADMIN.md).
 For Auth or other modules, see [API_CONTRACT_AUTH.md](API_CONTRACT_AUTH.md).
@@ -21,19 +22,17 @@ For Auth or other modules, see [API_CONTRACT_AUTH.md](API_CONTRACT_AUTH.md).
   - Header: `Authorization: Bearer {token}`
 - **Content-Type:** `application/json` for request bodies; responses are JSON.
 
-### 1.1 Client behavior (UI/API usage)
-
-All GET (with id/enum), POST, and PUT usage must follow the client behavior rules in [API_CONTRACT_CLIENT_BEHAVIOR.md](API_CONTRACT_CLIENT_BEHAVIOR.md): select menu for id/enum in GET (user sees label only); backend-known data stored in page state and not shown/editable in POST; one dedicated input per user-supplied field in POST; optimistic local update for PUT, then persist on success or revert on failure.
-
 ---
 
-## 2. Store Owner Dashboard Overview
+## 2. Store Owner Overview
 
 The store owner dashboard displays:
 
 1. **Order Metrics** - total orders, completed orders, new orders, pending orders
 2. **Sales Summary** - total sales for completed orders (today)
 3. **Order Lists** - detailed data for new orders and pending orders
+
+All data is scoped by `storeId` (or `store_id` on inventory endpoints). The owner must know which store they manage (from user profile or app state).
 
 ---
 
@@ -68,60 +67,18 @@ Authorization: Bearer {token}
     "completedOrders": 7,
     "newOrders": 5,
     "pendingOrders": 8,
-    "totalSales": 4523.75,
-    "newOrdersData": [
-      {
-        "id": 201,
-        "orderNumber": "ORD-201",
-        "status": "pending",
-        "totalAmount": 150.50,
-        "customer": {
-          "id": 3,
-          "name": "John Doe"
-        },
-        "items": [
-          {
-            "id": 1,
-            "productId": 45,
-            "quantity": 2
-          }
-        ],
-        "createdAt": "2025-02-21T14:30:00.000000Z"
-      }
-    ],
-    "pendingOrdersData": [
-      {
-        "id": 202,
-        "orderNumber": "ORD-202",
-        "status": "accepted",
-        "totalAmount": 225.00,
-        "customer": {
-          "id": 4,
-          "name": "Jane Smith"
-        },
-        "items": [
-          {
-            "id": 2,
-            "productId": 19,
-            "quantity": 1
-          }
-        ],
-        "createdAt": "2025-02-21T14:15:00.000000Z"
-      }
-    ]
+    "totalSales": 4523.75
   }
 }
 ```
 
-| Field                  | Type   | Description                                                         |
-| ---------------------- | ------ | ------------------------------------------------------------------- |
-| totalOrders            | number | Total orders created today                                          |
-| completedOrders        | number | Orders completed today                                              |
-| newOrders              | number | Orders with status `pending` created today                          |
-| pendingOrders          | number | Orders not `completed` and not `cancelled` created today            |
-| totalSales             | number | Sum of `total_amount` for completed orders today                    |
-| newOrdersData          | array  | Detailed list of new orders (pending)                               |
-| pendingOrdersData      | array  | Detailed list of all pending orders (non-completed, non-cancelled)  |
+| Field           | Type   | Description                                                |
+| --------------- | ------ | ---------------------------------------------------------- |
+| totalOrders     | number | Total orders created today                                 |
+| completedOrders | number | Orders completed today                                     |
+| newOrders       | number | Orders with status `pending` created today                 |
+| pendingOrders   | number | Orders not `completed` and not `cancelled` created today   |
+| totalSales      | number | Sum of `total_amount` for completed orders today           |
 
 ---
 
@@ -145,18 +102,47 @@ Authorization: Bearer {token}
   "message": "Order accepted successfully.",
   "data": {
     "id": 123,
+    "customerId": 10,
+    "customer": {
+      "id": 10,
+      "name": "John Doe",
+      "email": "john@example.com"
+    },
+    "storeId": 1,
+    "store": {
+      "id": 1,
+      "name": "My Store",
+      "slug": "my-store",
+      "phone": "+1234567890"
+    },
+    "couponId": null,
+    "coupon": null,
     "orderNumber": "ORD-123",
     "status": "accepted",
-    "storeId": 1,
-    "customerId": 10,
+    "pickupMode": "pickup",
+    "subtotal": 150.00,
+    "discountAmount": 0.00,
+    "serviceFee": 0.00,
+    "totalAmount": 150.00,
+    "specialInstructions": null,
+    "cancelledAt": null,
+    "cancellationReason": null,
     "items": [
       {
         "id": 1,
+        "orderId": 123,
         "productId": 45,
-        "quantity": 2
+        "quantity": 2,
+        "unitPrice": 75.00,
+        "totalPrice": 150.00,
+        "productName": "Fresh Milk",
+        "createdAt": "2025-02-21T14:30:00.000000Z"
       }
     ],
-    "createdAt": "2025-02-21T14:30:00.000000Z"
+    "statusLogs": [],
+    "disputes": [],
+    "createdAt": "2025-02-21T14:30:00.000000Z",
+    "updatedAt": "2025-02-21T14:35:00.000000Z"
   }
 }
 ```
@@ -171,9 +157,10 @@ Authorization: Bearer {token}
 
 **Body params:**
 
-| Param               | Type   | Required | Description                         |
-| ------------------- | ------ | -------- | ----------------------------------- |
-| cancellationReason  | string | Yes      | Reason for rejecting the order      |
+| Param          | Type   | Required | Description                         |
+| -------------- | ------ | -------- | ----------------------------------- |
+| reason         | string | Yes      | Reason for rejecting the order      |
+| rejectionType  | string | Yes      | `out_of_stock`, `fake_order`, `other` |
 
 **Example request:**
 
@@ -183,7 +170,8 @@ Authorization: Bearer {token}
 Content-Type: application/json
 
 {
-  "cancellationReason": "Out of stock for requested items"
+  "reason": "Out of stock for requested items",
+  "rejectionType": "out_of_stock"
 }
 ```
 
@@ -194,10 +182,47 @@ Content-Type: application/json
   "message": "Order rejected successfully.",
   "data": {
     "id": 123,
+    "customerId": 10,
+    "customer": {
+      "id": 10,
+      "name": "John Doe",
+      "email": "john@example.com"
+    },
+    "storeId": 1,
+    "store": {
+      "id": 1,
+      "name": "My Store",
+      "slug": "my-store",
+      "phone": "+1234567890"
+    },
+    "couponId": null,
+    "coupon": null,
     "orderNumber": "ORD-123",
     "status": "cancelled",
+    "pickupMode": "pickup",
+    "subtotal": 150.00,
+    "discountAmount": 0.00,
+    "serviceFee": 0.00,
+    "totalAmount": 150.00,
+    "specialInstructions": null,
+    "cancelledAt": "2025-02-21T15:00:00.000000Z",
     "cancellationReason": "Out of stock for requested items",
-    "cancelledAt": "2025-02-21T15:00:00.000000Z"
+    "items": [
+      {
+        "id": 1,
+        "orderId": 123,
+        "productId": 45,
+        "quantity": 2,
+        "unitPrice": 75.00,
+        "totalPrice": 150.00,
+        "productName": "Fresh Milk",
+        "createdAt": "2025-02-21T14:30:00.000000Z"
+      }
+    ],
+    "statusLogs": [],
+    "disputes": [],
+    "createdAt": "2025-02-21T14:30:00.000000Z",
+    "updatedAt": "2025-02-21T15:00:00.000000Z"
   }
 }
 ```
@@ -223,17 +248,29 @@ Authorization: Bearer {token}
 {
   "data": {
     "id": 1,
+    "ownerUserId": 5,
+    "owner": {
+      "id": 5,
+      "name": "Store Owner",
+      "email": "owner@example.com"
+    },
     "name": "My Store",
     "slug": "my-store",
     "description": "Fresh groceries",
+    "address": "123 Main Street, City, Country",
+    "latitude": null,
+    "longitude": null,
     "phone": "+1234567890",
+    "email": "store@example.com",
+    "averageRating": 4.5,
+    "totalReviews": 120,
+    "trustScore": 95,
+    "warningCount": 0,
     "isActive": true,
+    "isFeatured": false,
+    "suspensionUntil": null,
     "createdAt": "2025-02-01T09:00:00.000000Z",
-    "updatedAt": "2025-02-20T10:30:00.000000Z",
-    "owner": {
-      "id": 5,
-      "name": "Store Owner"
-    }
+    "updatedAt": "2025-02-20T10:30:00.000000Z"
   }
 }
 ```
@@ -266,10 +303,28 @@ Content-Type: application/json
 {
   "data": {
     "id": 1,
+    "ownerUserId": 5,
+    "owner": {
+      "id": 5,
+      "name": "Store Owner",
+      "email": "owner@example.com"
+    },
     "name": "Updated Store Name",
     "slug": "updated-store-name",
     "description": "Updated description",
+    "address": "123 Main Street, City, Country",
+    "latitude": null,
+    "longitude": null,
     "phone": "+1234567890",
+    "email": "store@example.com",
+    "averageRating": 4.5,
+    "totalReviews": 120,
+    "trustScore": 95,
+    "warningCount": 0,
+    "isActive": true,
+    "isFeatured": false,
+    "suspensionUntil": null,
+    "createdAt": "2025-02-01T09:00:00.000000Z",
     "updatedAt": "2025-02-21T16:00:00.000000Z"
   }
 }
@@ -277,17 +332,17 @@ Content-Type: application/json
 
 ---
 
-### 3.6 Product CRUD (existing Supermarket endpoints)
+### 3.6 Product CRUD (store owner)
 
-Store owners can use the existing Supermarket product endpoints. These are already defined in the project:
+Store owners manage products using the store-owner routes (same payload/response as Supermarket products):
 
-| Method | Path                       | Description                 |
-| ------ | -------------------------- | --------------------------- |
-| GET    | `/api/v1/sm-products`      | List products               |
-| POST   | `/api/v1/sm-products`      | Create product              |
-| GET    | `/api/v1/sm-products/{id}` | Get product                 |
-| PUT    | `/api/v1/sm-products/{id}` | Update product              |
-| DELETE | `/api/v1/sm-products/{id}` | Delete product              |
+| Method | Path                                   | Description                 |
+| ------ | -------------------------------------- | --------------------------- |
+| GET    | `/api/v1/store-owner/products`         | List products               |
+| POST   | `/api/v1/store-owner/products`         | Create product              |
+| GET    | `/api/v1/store-owner/products/{id}`    | Get product                 |
+| PUT    | `/api/v1/store-owner/products/{id}`    | Update product              |
+| DELETE | `/api/v1/store-owner/products/{id}`    | Delete product              |
 
 Use the same payload/response structure as defined in the Supermarket product API.
 
@@ -618,7 +673,7 @@ If insufficient stock exists:
   }
   ```
 
-- **422 Unprocessable Entity:** Validation errors (e.g. missing storeId, invalid cancellationReason).
+- **422 Unprocessable Entity:** Validation errors (e.g. missing storeId, invalid reason/rejectionType).
   ```json
   {
     "message": "The given data was invalid.",
