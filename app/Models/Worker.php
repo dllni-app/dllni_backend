@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\DayOfWeek;
 use App\Traits\FilterQueries\WorkerFilterQuery;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -70,5 +71,53 @@ final class Worker extends Model implements HasMedia
             'suspended_until' => 'datetime',
             'default_working_hours' => 'array',
         ];
+    }
+
+    /**
+     * @return array<string, array{available: bool, data: array<int, array<string, string>>}>
+     */
+    public function getNormalizedDefaultWorkingHours(): array
+    {
+        $raw = $this->default_working_hours ?? [];
+        $normalized = [];
+        foreach (DayOfWeek::values() as $day) {
+            $normalized[$day] = $this->normalizeDayWorkingHours($raw[$day] ?? null);
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param  array<string, mixed>|array<int, array{from: string, to: string}>|bool|null  $value
+     * @return array{available: bool, data: array<int, array<string, string>>}
+     */
+    private function normalizeDayWorkingHours(mixed $value): array
+    {
+        if ($value === null || $value === false) {
+            return ['available' => false, 'data' => []];
+        }
+
+        if (isset($value['available'], $value['data']) && is_array($value['data'])) {
+            return [
+                'available' => (bool) $value['available'],
+                'data' => $value['data'],
+            ];
+        }
+
+        if (is_array($value)) {
+            $data = [];
+            foreach ($value as $period) {
+                if (is_array($period) && isset($period['from'], $period['to'])) {
+                    $data[] = [$period['from'] => $period['to']];
+                }
+            }
+
+            return [
+                'available' => count($data) > 0,
+                'data' => $data,
+            ];
+        }
+
+        return ['available' => false, 'data' => []];
     }
 }

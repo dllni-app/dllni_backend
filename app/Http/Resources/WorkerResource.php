@@ -36,7 +36,7 @@ final class WorkerResource extends JsonResource
             'homeAddress' => $this->home_address,
             'homeLatitude' => (float) $this->home_latitude,
             'homeLongitude' => (float) $this->home_longitude,
-            'defaultWorkingHours' => $this->default_working_hours,
+            'defaultWorkingHours' => $this->resource->getNormalizedDefaultWorkingHours(),
             'user' => $this->whenLoaded('user', fn () => [
                 'id' => $this->user->id,
                 'name' => $this->user->name,
