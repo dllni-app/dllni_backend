@@ -510,34 +510,35 @@ Single resource for the **current worker’s working hours**. No `{id}` in the U
 {
   "data": {
     "defaultWorkingHours": {
-      "sunday": [{ "from": "09:00", "to": "23:00" }],
-      "monday": [{ "from": "09:00", "to": "13:00" }, { "from": "15:00", "to": "23:00" }],
-      "tuesday": [{ "from": "09:00", "to": "23:00" }],
-      "wednesday": [{ "from": "09:00", "to": "23:00" }],
-      "thursday": [{ "from": "09:00", "to": "23:00" }],
-      "friday": [{ "from": "09:00", "to": "23:00" }],
-      "saturday": false
+      "sunday": { "available": true, "data": [{ "09:00": "23:00" }] },
+      "monday": { "available": true, "data": [{ "09:00": "13:00" }, { "15:00": "23:00" }] },
+      "tuesday": { "available": true, "data": [{ "09:00": "23:00" }] },
+      "wednesday": { "available": true, "data": [{ "09:00": "23:00" }] },
+      "thursday": { "available": true, "data": [{ "09:00": "23:00" }] },
+      "friday": { "available": true, "data": [{ "09:00": "23:00" }] },
+      "saturday": { "available": false, "data": [] }
     }
   }
 }
 ```
 
 - All seven day keys are always present (day enum: `sunday` … `saturday`).
-- Day off: value is `false`.
-- Working day: value is an array of `{ "from", "to" }` (time strings, e.g. `"09:00"`, `"23:00"`).
+- Each day is an object: `available` (boolean) and `data` (array).
+- Day off: `available: false`, `data: []`.
+- Working day: `available: true`, `data: [{ "startTime": "endTime" }, ...]` (e.g. `{ "10:00": "16:00" }`). Times in HH:MM format.
 
-**PUT – Request body:** Same shape as `data` above. Send only `defaultWorkingHours` (object keyed by day enum).
+**PUT – Request body:** Same shape. Send only `defaultWorkingHours` (object keyed by day enum).
 
 ```json
 {
   "defaultWorkingHours": {
-    "sunday": [{ "from": "09:00", "to": "23:00" }],
-    "monday": [{ "from": "09:00", "to": "13:00" }, { "from": "15:00", "to": "23:00" }],
-    "tuesday": [{ "from": "09:00", "to": "23:00" }],
-    "wednesday": [{ "from": "09:00", "to": "23:00" }],
-    "thursday": [{ "from": "09:00", "to": "23:00" }],
-    "friday": [{ "from": "09:00", "to": "23:00" }],
-    "saturday": false
+    "sunday": { "available": true, "data": [{ "09:00": "23:00" }] },
+    "monday": { "available": true, "data": [{ "09:00": "13:00" }, { "15:00": "23:00" }] },
+    "tuesday": { "available": true, "data": [{ "09:00": "23:00" }] },
+    "wednesday": { "available": true, "data": [{ "09:00": "23:00" }] },
+    "thursday": { "available": true, "data": [{ "09:00": "23:00" }] },
+    "friday": { "available": true, "data": [{ "09:00": "23:00" }] },
+    "saturday": { "available": false, "data": [] }
   }
 }
 ```
@@ -553,13 +554,13 @@ Content-Type: application/json
 
 {
   "defaultWorkingHours": {
-    "sunday": [{ "from": "09:00", "to": "23:00" }],
-    "monday": [{ "from": "09:00", "to": "13:00" }, { "from": "15:00", "to": "23:00" }],
-    "tuesday": [{ "from": "09:00", "to": "23:00" }],
-    "wednesday": [{ "from": "09:00", "to": "23:00" }],
-    "thursday": [{ "from": "09:00", "to": "23:00" }],
-    "friday": [{ "from": "09:00", "to": "23:00" }],
-    "saturday": false
+    "sunday": { "available": true, "data": [{ "09:00": "23:00" }] },
+    "monday": { "available": true, "data": [{ "09:00": "13:00" }, { "15:00": "23:00" }] },
+    "tuesday": { "available": true, "data": [{ "09:00": "23:00" }] },
+    "wednesday": { "available": true, "data": [{ "09:00": "23:00" }] },
+    "thursday": { "available": true, "data": [{ "09:00": "23:00" }] },
+    "friday": { "available": true, "data": [{ "09:00": "23:00" }] },
+    "saturday": { "available": false, "data": [] }
   }
 }
 ```
@@ -570,13 +571,13 @@ Content-Type: application/json
 {
   "data": {
     "defaultWorkingHours": {
-      "sunday": [{ "from": "09:00", "to": "23:00" }],
-      "monday": [{ "from": "09:00", "to": "13:00" }, { "from": "15:00", "to": "23:00" }],
-      "tuesday": [{ "from": "09:00", "to": "23:00" }],
-      "wednesday": [{ "from": "09:00", "to": "23:00" }],
-      "thursday": [{ "from": "09:00", "to": "23:00" }],
-      "friday": [{ "from": "09:00", "to": "23:00" }],
-      "saturday": false
+      "sunday": { "available": true, "data": [{ "09:00": "23:00" }] },
+      "monday": { "available": true, "data": [{ "09:00": "13:00" }, { "15:00": "23:00" }] },
+      "tuesday": { "available": true, "data": [{ "09:00": "23:00" }] },
+      "wednesday": { "available": true, "data": [{ "09:00": "23:00" }] },
+      "thursday": { "available": true, "data": [{ "09:00": "23:00" }] },
+      "friday": { "available": true, "data": [{ "09:00": "23:00" }] },
+      "saturday": { "available": false, "data": [] }
     }
   }
 }
@@ -584,7 +585,7 @@ Content-Type: application/json
 
 **Errors:**
 - `403` – User has no associated worker.
-- `422` – Validation: keys of `defaultWorkingHours` must be day enum only; each day value must be `false` or an array of `{ "from", "to" }` periods.
+- `422` – Validation: keys of `defaultWorkingHours` must be day enum only; each day must be `{ "available": boolean, "data": array }`; each `data` item must be a single key-value object (e.g. `{ "10:00": "16:00" }`). Times in HH:MM format.
 
 **Alternative:** Full worker update (e.g. admin or profile edit) remains `PUT /api/v1/workers/{id}` with body that can include `defaultWorkingHours` among other worker fields. For the worker app “ساعات العمل” screen, prefer the dedicated GET/PUT above.
 
@@ -706,7 +707,126 @@ Used for the "نزاعات" tab in the transaction log and the "Dispute details"
 
 ---
 
-## 4. Enums reference
+## 4. FCM push notifications (worker)
+
+The backend uses **devkandil/notifire** (Laravel FCM) to send push notifications to the worker app. Only **necessary** notifications are sent (new order, extension request, dispute). The worker app must register the device FCM token and handle notification payloads for deep linking.
+
+### 4.1 FCM token registration
+
+| Method | Path                | Description                          |
+| ------ | ------------------- | ------------------------------------ |
+| POST   | `/fcm/token`        | Register or update the worker's FCM device token |
+
+**Base URL:** Same as API: `https://dllni.mustafafares.com` (no `/api/v1` prefix for this route).
+
+**Headers:** `Authorization: Bearer {token}`, `Content-Type: application/json`.
+
+**Request body:**
+
+```json
+{
+  "fcm_token": "device-fcm-token-from-firebase"
+}
+```
+
+**Response (200):** `{ "success": true, "message": "FCM token updated successfully" }`
+
+**Client:** Call this after login and whenever the FCM token is refreshed (e.g. `onTokenRefresh`). The backend stores the token on the authenticated user; workers are notified via their associated user.
+
+### 4.2 When the backend sends FCM
+
+| Trigger | When | Purpose |
+| ------- | ---- | ------- |
+| **New order request** | A cleaning booking enters `pending` and is eligible for the worker (e.g. in worker's zone / pool). | Worker must accept or reject within the time window (e.g. ~5 min). |
+| **Extension request** | Customer requests more time (time warning created) for a booking assigned to this worker. | Worker should accept or reject the extension. |
+| **Dispute opened** | A dispute is opened on a booking assigned to this worker. | Worker should reply (إرسال الرد). |
+
+No FCM is sent for: booking cancelled by customer, booking completed, support reply in dispute (optional in a later phase), or generic marketing.
+
+### 4.3 FCM payload convention (Flutter handling)
+
+Backend sends notifications with **title**, **body**, and **data**. Use `data` for deep linking; do not rely on title/body for routing.
+
+**Common `data` shape (camelCase):**
+
+| Key           | Type    | Description |
+| ------------- | ------- | ----------- |
+| `type`        | string  | Notification type: `new_order`, `extension_request`, `dispute_opened` |
+| `bookingId`   | integer | Cleaning booking ID (present for `new_order`, `extension_request`; optional for `dispute_opened`) |
+| `timeWarningId` | integer | Time warning ID (present for `extension_request`) |
+| `disputeId`   | integer | Dispute ID (present for `dispute_opened`) |
+
+**Flutter:** On message received (foreground/background), read `data.type` and open the appropriate screen:
+
+- `new_order` → Order detail or "New requests" list (booking id in `data.bookingId`).
+- `extension_request` → Extension request detail or order detail (booking id, `data.timeWarningId`).
+- `dispute_opened` → Dispute detail (data.disputeId) or "نزاعات" tab.
+
+If `bookingId` or `disputeId` is missing, open the list screen (orders or disputes).
+
+### 4.4 Backend implementation note (Laravel)
+
+- Notifications are sent to the **User** model (worker's user). Ensure the user has `fcm_token` stored (via `POST /fcm/token`).
+- Use Laravel notifications with channel `fcm` and `toFcm()` returning an `FcmMessage` (notifire). Include `data` with `type`, `bookingId`, `timeWarningId`, and/or `disputeId` as above.
+- Trigger: **New order** when booking is created/eligible for worker; **Extension request** when time warning is created for the worker's booking; **Dispute opened** when dispute is created and linked to the worker's booking.
+- **Queue:** All notification sends run via the queue (notification classes implement `ShouldQueue`). Observers dispatch jobs (`NotifyEligibleWorkersNewOrderJob`, `NotifyWorkerExtensionRequestJob`, `NotifyWorkerDisputeOpenedJob`) so heavy work (fetching eligible workers, FCM + database) does not block the request. Run `php artisan queue:work` (or a queue worker) for notifications to be sent.
+
+### 4.5 User notifications (global list)
+
+The authenticated user can list and manage their in-app notifications (same as FCM payload; stored in the database for the notification centre).
+
+| Method | Path                                | Description                          |
+| ------ | ----------------------------------- | ------------------------------------ |
+| GET    | `/api/v1/notifications`             | List current user's notifications (paginated) |
+| PATCH  | `/api/v1/notifications/{id}/read`   | Mark one notification as read        |
+
+**GET – Query params:**
+
+| Param             | Type    | Description                                  |
+| ----------------- | ------- | -------------------------------------------- |
+| perPage           | integer | 1–100, default 20                            |
+| page              | integer | Page number, default 1                       |
+| filter[unread]    | boolean | `true` or `1` – only unread notifications    |
+
+**GET – Response (200):** Paginated collection. Each item has the **user notification format** below.
+
+**PATCH – Path params:** `id` – notification UUID.
+
+**PATCH – Response:** 204 No Content. Errors: 404 if notification not found or not owned by the user.
+
+#### User notification format (each item in `data[]`)
+
+| Field     | Type    | Description |
+| --------- | ------- | ----------- |
+| id        | string  | UUID of the notification (use for mark-as-read and deep link id) |
+| type      | string  | `new_order`, `extension_request`, or `dispute_opened` |
+| title     | string  | Localized title (e.g. "طلب جديد") |
+| body      | string  | Localized body text |
+| data      | object  | Payload for deep linking; only present keys are set (camelCase): `bookingId` (integer, optional), `timeWarningId` (integer, optional), `disputeId` (integer, optional) |
+| readAt    | string  | ISO 8601 datetime when marked read, or `null` if unread |
+| createdAt | string  | ISO 8601 datetime when the notification was created |
+
+**Example – one item in `data[]`:**
+
+```json
+{
+  "id": "9d4e8f2a-1b3c-4d5e-6f7a-8b9c0d1e2f3a",
+  "type": "new_order",
+  "title": "طلب جديد",
+  "body": "طلب تنظيف جديد: CB-042. قم بقبوله أو رفضه خلال الوقت المحدد.",
+  "data": {
+    "bookingId": 42
+  },
+  "readAt": null,
+  "createdAt": "2026-02-27T10:00:00.000000Z"
+}
+```
+
+**Flutter:** Use the list for the in-app notification centre; use `type` and `data` for navigation when the user taps a notification (same as FCM §4.3).
+
+---
+
+## 5. Enums reference
 
 Use these **string values** when filtering or displaying status/type labels. All values are snake_case.
 
@@ -763,17 +883,17 @@ Use as **keys** of `defaultWorkingHours` when saving working hours (§3.16). Ord
 
 ---
 
-## 5. Example requests and responses
+## 6. Example requests and responses
 
 ### 5.0 Request and resource examples (quick reference)
 
 | Endpoint / resource        | Request example | Resource (response `data`) example |
 | ------------------------- | ----------------- | ----------------------------------- |
-| **Working hours – GET**   | `GET /api/v1/cleaning/worker/working-hours` + `Authorization: Bearer {token}` | §5.0.1 below |
-| **Working hours – PUT**   | `PUT /api/v1/cleaning/worker/working-hours` + body §5.0.1 | Same as GET response |
-| **Cleaning booking (list item)** | `GET /api/v1/cleaning-bookings?filter[forCurrentWorker]=1&perPage=20` | §5.0.2 below |
-| **Cleaning booking (detail)**   | `GET /api/v1/cleaning-bookings/{id}` | §5.0.3 below |
-| **Worker profile**        | `GET /api/v1/cleaning/worker/profile` | §5.0.4 below |
+| **Working hours – GET**   | `GET /api/v1/cleaning/worker/working-hours` + `Authorization: Bearer {token}` | §6.0.1 below |
+| **Working hours – PUT**   | `PUT /api/v1/cleaning/worker/working-hours` + body §6.0.1 | Same as GET response |
+| **Cleaning booking (list item)** | `GET /api/v1/cleaning-bookings?filter[forCurrentWorker]=1&perPage=20` | §6.0.2 below |
+| **Cleaning booking (detail)**   | `GET /api/v1/cleaning-bookings/{id}` | §6.0.3 below |
+| **Worker profile**        | `GET /api/v1/cleaning/worker/profile` | §6.0.4 below |
 | **Reject order**          | `POST /api/v1/cleaning-bookings/{id}/reject` + optional `{ "reason": "..." }` | Updated booking (status `cancelled`) |
 | **Update location**       | `POST /api/v1/cleaning-bookings/{id}/location` + `{ "latitude": 33.51, "longitude": 36.27 }` | `{ "data": { "ok": true } }` |
 | **Dispute – send message**| `POST /api/v1/disputes/{id}/messages` + `{ "message": "..." }` | 201 message resource or 200 dispute with `messages` |
@@ -785,13 +905,13 @@ Use as **keys** of `defaultWorkingHours` when saving working hours (§3.16). Ord
 ```json
 {
   "defaultWorkingHours": {
-    "sunday": [{ "from": "09:00", "to": "23:00" }],
-    "monday": [{ "from": "09:00", "to": "13:00" }, { "from": "15:00", "to": "23:00" }],
-    "tuesday": [{ "from": "09:00", "to": "23:00" }],
-    "wednesday": [{ "from": "09:00", "to": "23:00" }],
-    "thursday": [{ "from": "09:00", "to": "23:00" }],
-    "friday": [{ "from": "09:00", "to": "23:00" }],
-    "saturday": false
+    "sunday": { "available": true, "data": [{ "09:00": "23:00" }] },
+    "monday": { "available": true, "data": [{ "09:00": "13:00" }, { "15:00": "23:00" }] },
+    "tuesday": { "available": true, "data": [{ "09:00": "23:00" }] },
+    "wednesday": { "available": true, "data": [{ "09:00": "23:00" }] },
+    "thursday": { "available": true, "data": [{ "09:00": "23:00" }] },
+    "friday": { "available": true, "data": [{ "09:00": "23:00" }] },
+    "saturday": { "available": false, "data": [] }
   }
 }
 ```
@@ -802,13 +922,13 @@ Use as **keys** of `defaultWorkingHours` when saving working hours (§3.16). Ord
 {
   "data": {
     "defaultWorkingHours": {
-      "sunday": [{ "from": "09:00", "to": "23:00" }],
-      "monday": [{ "from": "09:00", "to": "13:00" }, { "from": "15:00", "to": "23:00" }],
-      "tuesday": [{ "from": "09:00", "to": "23:00" }],
-      "wednesday": [{ "from": "09:00", "to": "23:00" }],
-      "thursday": [{ "from": "09:00", "to": "23:00" }],
-      "friday": [{ "from": "09:00", "to": "23:00" }],
-      "saturday": false
+      "sunday": { "available": true, "data": [{ "09:00": "23:00" }] },
+      "monday": { "available": true, "data": [{ "09:00": "13:00" }, { "15:00": "23:00" }] },
+      "tuesday": { "available": true, "data": [{ "09:00": "23:00" }] },
+      "wednesday": { "available": true, "data": [{ "09:00": "23:00" }] },
+      "thursday": { "available": true, "data": [{ "09:00": "23:00" }] },
+      "friday": { "available": true, "data": [{ "09:00": "23:00" }] },
+      "saturday": { "available": false, "data": [] }
     }
   }
 }
@@ -893,13 +1013,13 @@ Use as **keys** of `defaultWorkingHours` when saving working hours (§3.16). Ord
     "homeLatitude": 33.5138,
     "homeLongitude": 36.2765,
     "defaultWorkingHours": {
-      "sunday": [{ "from": "09:00", "to": "17:00" }],
-      "monday": [{ "from": "09:00", "to": "17:00" }],
-      "tuesday": [{ "from": "09:00", "to": "17:00" }],
-      "wednesday": [{ "from": "09:00", "to": "17:00" }],
-      "thursday": [{ "from": "09:00", "to": "17:00" }],
-      "friday": false,
-      "saturday": false
+      "sunday": { "available": true, "data": [{ "09:00": "17:00" }] },
+      "monday": { "available": true, "data": [{ "09:00": "17:00" }] },
+      "tuesday": { "available": true, "data": [{ "09:00": "17:00" }] },
+      "wednesday": { "available": true, "data": [{ "09:00": "17:00" }] },
+      "thursday": { "available": true, "data": [{ "09:00": "17:00" }] },
+      "friday": { "available": false, "data": [] },
+      "saturday": { "available": false, "data": [] }
     },
     "user": { "id": 8, "name": "Omar", "email": "omar@example.com", "phone": "+963998765432" },
     "zones": [{ "id": 1, "zoneId": 10, "name": "Central" }],
@@ -1074,7 +1194,7 @@ Content-Type: application/json
 
 ---
 
-## 6. Error responses
+## 7. Error responses
 
 - **401 Unauthorized:** Missing or invalid token. Redirect to login.
 - **403 Forbidden:** User has no worker, or resource is not assigned to worker.

@@ -8,6 +8,7 @@ use App\Enums\UserModuleType;
 use App\Traits\FilterQueries\UserFilterQuery;
 use Carbon\CarbonInterface;
 use Database\Factories\UserFactory;
+use DevKandil\NotiFire\Traits\HasFcm;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -31,7 +32,7 @@ use Spatie\Permission\Traits\HasRoles;
 final class User extends Authenticatable implements HasMedia
 {
     /** @use HasFactory<UserFactory> */
-    use HasApiTokens, HasFactory, HasRoles, InteractsWithMedia, Notifiable, UserFilterQuery;
+    use HasApiTokens, HasFactory, HasFcm, HasRoles, InteractsWithMedia, Notifiable, UserFilterQuery;
 
     protected $fillable = [
         'name',
@@ -40,6 +41,7 @@ final class User extends Authenticatable implements HasMedia
         'module_type',
         'email_verified_at',
         'password',
+        'fcm_token',
     ];
 
     /**

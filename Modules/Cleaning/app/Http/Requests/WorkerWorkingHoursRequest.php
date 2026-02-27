@@ -22,23 +22,28 @@ final class WorkerWorkingHoursRequest extends FormRequest
             'defaultWorkingHours' => ['required', 'array'],
         ];
         foreach ($dayValues as $day) {
-            $rules["defaultWorkingHours.{$day}"] = [
-                'nullable',
+            $rules["defaultWorkingHours.{$day}"] = ['required', 'array'];
+            $rules["defaultWorkingHours.{$day}.available"] = ['required', 'boolean'];
+            $rules["defaultWorkingHours.{$day}.data"] = ['nullable', 'array'];
+            $rules["defaultWorkingHours.{$day}.data.*"] = [
+                'required',
+                'array',
                 function (string $attribute, mixed $value, Closure $fail): void {
-                    if ($value === null || $value === false) {
-                        return;
-                    }
-                    if (! is_array($value)) {
-                        $fail(__('validation.array', ['attribute' => $attribute]));
+                    if (! is_array($value) || count($value) !== 1) {
+                        $fail(__('Each period must be a single object with one time range, e.g. {"10:00": "16:00"}.'));
 
                         return;
                     }
-                    foreach ($value as $period) {
-                        if (! is_array($period) || ! isset($period['from'], $period['to'])) {
-                            $fail(__('Each period must have "from" and "to" time strings.'));
+                    $keys = array_keys($value);
+                    $start = $keys[0];
+                    $end = $value[$start];
+                    if (! is_string($start) || ! is_string($end)) {
+                        $fail(__('Each period must have start and end time strings, e.g. {"10:00": "16:00"}.'));
 
-                            return;
-                        }
+                        return;
+                    }
+                    if (! $this->isTimeString($start) || ! $this->isTimeString($end)) {
+                        $fail(__('Times must be in HH:MM format (e.g. 09:00, 23:00).'));
                     }
                 },
             ];
@@ -65,5 +70,10 @@ final class WorkerWorkingHoursRequest extends FormRequest
                 }
             }
         });
+    }
+
+    private function isTimeString(string $value): bool
+    {
+        return (bool) preg_match('/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/', $value);
     }
 }

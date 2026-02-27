@@ -36,6 +36,7 @@ final class WorkerRequest extends FormRequest
             'homeLatitude' => 'nullable|numeric',
             'homeLongitude' => 'nullable|numeric',
             'defaultWorkingHours' => ['nullable', 'array'],
+            'avatar' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:2048',
         ];
 
         foreach ($dayValues as $day) {

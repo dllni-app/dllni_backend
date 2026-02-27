@@ -7,11 +7,14 @@ namespace App\Models;
 use App\Enums\DisputeCategory;
 use App\Enums\DisputeResolution;
 use App\Enums\DisputeStatus;
+use App\Observers\DisputeObserver;
 use App\Traits\FilterQueries\DisputeFilterQuery;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 
+#[ObservedBy([DisputeObserver::class])]
 final class Dispute extends Model
 {
     use DisputeFilterQuery;

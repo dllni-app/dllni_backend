@@ -343,13 +343,13 @@ it('returns working hours for authenticated worker', function () {
     $worker = Worker::factory()->create([
         'user_id' => $workerUser->id,
         'default_working_hours' => [
-            'sunday' => [['from' => '09:00', 'to' => '17:00']],
-            'monday' => false,
-            'tuesday' => [['from' => '10:00', 'to' => '18:00']],
-            'wednesday' => [],
-            'thursday' => null,
-            'friday' => null,
-            'saturday' => null,
+            'sunday' => ['available' => true, 'data' => [['09:00' => '17:00']]],
+            'monday' => ['available' => false, 'data' => []],
+            'tuesday' => ['available' => true, 'data' => [['10:00' => '18:00']]],
+            'wednesday' => ['available' => false, 'data' => []],
+            'thursday' => ['available' => false, 'data' => []],
+            'friday' => ['available' => false, 'data' => []],
+            'saturday' => ['available' => false, 'data' => []],
         ],
     ]);
     Sanctum::actingAs($workerUser);
@@ -359,9 +359,9 @@ it('returns working hours for authenticated worker', function () {
     $response->assertOk();
     $hours = $response->json('data.defaultWorkingHours');
     expect($hours)->toHaveKeys(['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']);
-    expect($hours['sunday'])->toBe([['from' => '09:00', 'to' => '17:00']]);
-    expect($hours['monday'])->toBeFalse();
-    expect($hours['tuesday'])->toBe([['from' => '10:00', 'to' => '18:00']]);
+    expect($hours['sunday'])->toEqual(['available' => true, 'data' => [['09:00' => '17:00']]]);
+    expect($hours['monday'])->toEqual(['available' => false, 'data' => []]);
+    expect($hours['tuesday'])->toEqual(['available' => true, 'data' => [['10:00' => '18:00']]]);
 });
 
 it('returns 403 for working hours when user has no worker', function () {
@@ -380,13 +380,13 @@ it('updates working hours for authenticated worker', function () {
 
     $payload = [
         'defaultWorkingHours' => [
-            'sunday' => [['from' => '09:00', 'to' => '23:00']],
-            'monday' => [['from' => '09:00', 'to' => '13:00'], ['from' => '15:00', 'to' => '23:00']],
-            'tuesday' => [['from' => '09:00', 'to' => '23:00']],
-            'wednesday' => [['from' => '09:00', 'to' => '23:00']],
-            'thursday' => [['from' => '09:00', 'to' => '23:00']],
-            'friday' => [['from' => '09:00', 'to' => '23:00']],
-            'saturday' => false,
+            'sunday' => ['available' => true, 'data' => [['09:00' => '23:00']]],
+            'monday' => ['available' => true, 'data' => [['09:00' => '13:00'], ['15:00' => '23:00']]],
+            'tuesday' => ['available' => true, 'data' => [['09:00' => '23:00']]],
+            'wednesday' => ['available' => true, 'data' => [['09:00' => '23:00']]],
+            'thursday' => ['available' => true, 'data' => [['09:00' => '23:00']]],
+            'friday' => ['available' => true, 'data' => [['09:00' => '23:00']]],
+            'saturday' => ['available' => false, 'data' => []],
         ],
     ];
 

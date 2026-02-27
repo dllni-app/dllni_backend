@@ -8,6 +8,7 @@ use App\Models\CancellationPolicy;
 use App\Models\User;
 use App\Models\Worker;
 use Database\Factories\CleaningBookingFactory;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Observers\CleaningBookingObserver;
 use Modules\Cleaning\Traits\FilterQueries\CleaningBookingFilterQuery;
 
 /**
@@ -22,6 +24,7 @@ use Modules\Cleaning\Traits\FilterQueries\CleaningBookingFilterQuery;
  * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\SosAlert> $sosAlerts
  * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\SystemAlert> $systemAlerts
  */
+#[ObservedBy([CleaningBookingObserver::class])]
 final class CleaningBooking extends Model
 {
     use CleaningBookingFilterQuery;

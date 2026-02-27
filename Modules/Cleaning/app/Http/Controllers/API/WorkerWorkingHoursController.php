@@ -31,9 +31,16 @@ final class WorkerWorkingHoursController
             return response()->json(['message' => 'User must have an associated worker.'], Response::HTTP_FORBIDDEN);
         }
 
-        $worker->update([
-            'default_working_hours' => $request->validated()['defaultWorkingHours'],
-        ]);
+        $hours = $request->validated()['defaultWorkingHours'];
+        $normalized = [];
+        foreach (array_keys($hours) as $day) {
+            $v = $hours[$day];
+            $normalized[$day] = [
+                'available' => (bool) ($v['available'] ?? false),
+                'data' => isset($v['data']) && is_array($v['data']) ? $v['data'] : [],
+            ];
+        }
+        $worker->update(['default_working_hours' => $normalized]);
 
         return WorkerWorkingHoursResource::make($worker->fresh());
     }
