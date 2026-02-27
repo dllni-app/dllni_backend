@@ -204,6 +204,7 @@ final class CleaningWorkerArabicDataSeeder extends Seeder
                     'customer_responded_at' => now()->subMinutes(25),
                     'worker_responded_at' => $pending ? null : now()->subMinutes(20),
                     'worker_reject_message' => ($idx === 2 && ! $pending) ? self::ARABIC_REJECT_MESSAGES[$idx % count(self::ARABIC_REJECT_MESSAGES)] : null,
+                    'additional_minutes' => $idx === 1 && ! $pending ? 30 : null,
                 ]
             );
         }
@@ -288,6 +289,87 @@ final class CleaningWorkerArabicDataSeeder extends Seeder
                 'address_longitude' => $travelLocation['longitude'],
                 'started_travel_at' => $travelDate->copy()->setTime(10, 30),
                 'arrived_at' => null,
+            ]);
+        }
+
+        $assignedPendingBookingNumber = 'CLN-AR-PEND-WORKER-0001';
+        if (! CleaningBooking::where('booking_number', $assignedPendingBookingNumber)->exists()) {
+            $assignedPendingDate = $today->copy()->addDays(count(self::ARABIC_LOCATIONS) + 2);
+            $assignedPendingLocation = self::ARABIC_LOCATIONS[2 % count(self::ARABIC_LOCATIONS)];
+            $assignedPendingBasePrice = 95;
+            $assignedPendingTravelFee = 10;
+
+            $bookings[] = CleaningBooking::create([
+                'customer_id' => $customers[2]->id,
+                'worker_id' => $worker->id,
+                'preferred_worker_id' => $worker->id,
+                'cancellation_policy_id' => $cancellationPolicy?->id,
+                'billing_policy_id' => $billingPolicy->id,
+                'booking_number' => $assignedPendingBookingNumber,
+                'status' => CleaningBookingStatus::Pending,
+                'property_type' => 'apartment',
+                'property_details' => [
+                    'location_name' => $assignedPendingLocation['location_name'],
+                    'address' => $assignedPendingLocation['address'],
+                    'bedrooms' => 2,
+                    'rooms' => 3,
+                    'bathrooms' => 1,
+                    'kitchen_included' => true,
+                ],
+                'estimated_sqm' => 85,
+                'estimated_hours' => 2.5,
+                'scheduled_date' => $assignedPendingDate,
+                'scheduled_time' => '14:00',
+                'total_hours' => 2.5,
+                'base_price' => $assignedPendingBasePrice,
+                'addons_total' => 0,
+                'travel_fee' => $assignedPendingTravelFee,
+                'cancellation_fee' => 0,
+                'total_price' => $assignedPendingBasePrice + $assignedPendingTravelFee,
+                'terms_accepted' => true,
+                'address_latitude' => $assignedPendingLocation['latitude'],
+                'address_longitude' => $assignedPendingLocation['longitude'],
+            ]);
+        }
+
+        $arrivedBookingNumber = 'CLN-AR-ARRIVED-0001';
+        if (! CleaningBooking::where('booking_number', $arrivedBookingNumber)->exists()) {
+            $arrivedDate = $today->copy()->addDays(count(self::ARABIC_LOCATIONS) + 3);
+            $arrivedLocation = self::ARABIC_LOCATIONS[3 % count(self::ARABIC_LOCATIONS)];
+            $arrivedBasePrice = 130;
+            $arrivedTravelFee = 20;
+
+            $bookings[] = CleaningBooking::create([
+                'customer_id' => $customers[3]->id,
+                'worker_id' => $worker->id,
+                'cancellation_policy_id' => $cancellationPolicy?->id,
+                'billing_policy_id' => $billingPolicy->id,
+                'booking_number' => $arrivedBookingNumber,
+                'status' => CleaningBookingStatus::WorkerAssigned,
+                'property_type' => 'villa',
+                'property_details' => [
+                    'location_name' => $arrivedLocation['location_name'],
+                    'address' => $arrivedLocation['address'],
+                    'bedrooms' => 4,
+                    'rooms' => 5,
+                    'bathrooms' => 3,
+                    'kitchen_included' => true,
+                ],
+                'estimated_sqm' => 150,
+                'estimated_hours' => 4,
+                'scheduled_date' => $arrivedDate,
+                'scheduled_time' => '18:00',
+                'total_hours' => 4,
+                'base_price' => $arrivedBasePrice,
+                'addons_total' => 0,
+                'travel_fee' => $arrivedTravelFee,
+                'cancellation_fee' => 0,
+                'total_price' => $arrivedBasePrice + $arrivedTravelFee,
+                'terms_accepted' => true,
+                'address_latitude' => $arrivedLocation['latitude'],
+                'address_longitude' => $arrivedLocation['longitude'],
+                'started_travel_at' => $arrivedDate->copy()->setTime(17, 15),
+                'arrived_at' => $arrivedDate->copy()->setTime(17, 45),
             ]);
         }
 

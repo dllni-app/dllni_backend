@@ -97,6 +97,52 @@ Base path: `/api/v1/` (all under `auth:sanctum`).
 
 If the user has no worker, all values are `0`.
 
+#### 3.1.1 Worker statistics (weekly chart)
+
+This endpoint powers the **\"إحصائياتي\"** card and the 3-line chart (Confirmed / Cancelled / Disputes) for the **current week**.
+
+| Method | Path                                   | Description                                      |
+| ------ | -------------------------------------- | ------------------------------------------------ |
+| GET    | `/api/v1/cleaning/worker/statistics`  | Weekly statistics and chart data for the worker  |
+
+**Query params:** None. Worker is derived from `Authorization: Bearer {token}`.
+
+**Response (200):**
+
+```json
+{
+  "range": "this_week",
+  "summary": {
+    "totalBookings": 50,
+    "totalEarnings": 5000.0,
+    "confirmedCount": 30,
+    "cancelledCount": 10,
+    "disputedCount": 2
+  },
+  "chart": [
+    { "date": "2026-02-22", "confirmed": 3, "cancelled": 1, "disputed": 0 },
+    { "date": "2026-02-23", "confirmed": 5, "cancelled": 0, "disputed": 1 },
+    { "date": "2026-02-24", "confirmed": 4, "cancelled": 2, "disputed": 0 }
+  ]
+}
+```
+
+| Field                 | Type    | Description                                                                 |
+| --------------------- | ------- | --------------------------------------------------------------------------- |
+| range                 | string  | Currently always `"this_week"` (Sunday–Saturday based on server locale)    |
+| summary.totalBookings | number  | Total bookings for this worker in the current week                         |
+| summary.totalEarnings | number  | Sum of `totalPrice` for `completed` bookings in the current week           |
+| summary.confirmedCount| number  | Count of bookings with status `completed` in the current week              |
+| summary.cancelledCount| number  | Count of bookings with status `cancelled` in the current week              |
+| summary.disputedCount | number  | Count of disputes tied to the worker’s bookings in the current week        |
+| chart                 | array   | One entry per day between start and end of the current week (inclusive)    |
+| chart[].date          | string  | Day label for the chart (YYYY-MM-DD)                                       |
+| chart[].confirmed     | number  | Completed bookings on that date                                            |
+| chart[].cancelled     | number  | Cancelled bookings on that date                                            |
+| chart[].disputed      | number  | Disputes whose booking `scheduledDate` falls on that date                  |
+
+If the user has no worker, `summary` values are `0` and `chart` is an empty array.
+
 ---
 
 ### 3.2 Orders list (cleaning bookings)
@@ -894,6 +940,7 @@ Use as **keys** of `defaultWorkingHours` when saving working hours (§3.16). Ord
 | **Cleaning booking (list item)** | `GET /api/v1/cleaning-bookings?filter[forCurrentWorker]=1&perPage=20` | §6.0.2 below |
 | **Cleaning booking (detail)**   | `GET /api/v1/cleaning-bookings/{id}` | §6.0.3 below |
 | **Worker profile**        | `GET /api/v1/cleaning/worker/profile` | §6.0.4 below |
+| **Worker statistics (weekly)** | `GET /api/v1/cleaning/worker/statistics` | §6.0.6 below |
 | **Reject order**          | `POST /api/v1/cleaning-bookings/{id}/reject` + optional `{ "reason": "..." }` | Updated booking (status `cancelled`) |
 | **Update location**       | `POST /api/v1/cleaning-bookings/{id}/location` + `{ "latitude": 33.51, "longitude": 36.27 }` | `{ "data": { "ok": true } }` |
 | **Dispute – send message**| `POST /api/v1/disputes/{id}/messages` + `{ "message": "..." }` | 201 message resource or 200 dispute with `messages` |
@@ -1040,6 +1087,26 @@ Use as **keys** of `defaultWorkingHours` when saving working hours (§3.16). Ord
   "errors": {
     "defaultWorkingHours": ["Day must be one of: sunday, monday, tuesday, wednesday, thursday, friday, saturday."]
   }
+}
+```
+
+#### 5.0.6 Worker statistics – weekly chart
+
+```json
+{
+  "range": "this_week",
+  "summary": {
+    "totalBookings": 50,
+    "totalEarnings": 5000.0,
+    "confirmedCount": 30,
+    "cancelledCount": 10,
+    "disputedCount": 2
+  },
+  "chart": [
+    { "date": "2026-02-22", "confirmed": 3, "cancelled": 1, "disputed": 0 },
+    { "date": "2026-02-23", "confirmed": 5, "cancelled": 0, "disputed": 1 },
+    { "date": "2026-02-24", "confirmed": 4, "cancelled": 2, "disputed": 0 }
+  ]
 }
 ```
 

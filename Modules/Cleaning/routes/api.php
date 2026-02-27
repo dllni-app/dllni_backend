@@ -12,11 +12,13 @@ use Modules\Cleaning\Http\Controllers\API\EventBookingController;
 use Modules\Cleaning\Http\Controllers\API\GeographicCoverageController;
 use Modules\Cleaning\Http\Controllers\API\ServicePricingController;
 use Modules\Cleaning\Http\Controllers\API\WorkerHomepageController;
+use Modules\Cleaning\Http\Controllers\API\WorkerStatisticsController;
 use Modules\Cleaning\Http\Controllers\API\WorkerWorkingHoursController;
 
 Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     Route::get('cleaning/dashboard/overview', DashboardOverviewController::class);
     Route::get('cleaning/worker/homepage', WorkerHomepageController::class);
+    Route::get('cleaning/worker/statistics', WorkerStatisticsController::class);
     Route::get('cleaning/worker/profile', Modules\Cleaning\Http\Controllers\API\WorkerProfileController::class);
     Route::get('cleaning/worker/working-hours', [WorkerWorkingHoursController::class, 'show']);
     Route::put('cleaning/worker/working-hours', [WorkerWorkingHoursController::class, 'update']);
