@@ -18,7 +18,6 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use UnitEnum;
 
 final class UserResource extends Resource
 {
@@ -26,15 +25,21 @@ final class UserResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUserCircle;
 
-    protected static ?string $navigationLabel = 'مدراء النظام';
-
-    protected static string|UnitEnum|null $navigationGroup = 'قسم التنظيف';
-
     protected static ?int $navigationSort = 16;
+
+    public static function getNavigationGroup(): ?string
+    {
+        return __('restaurant_admin.general_sections');
+    }
+
+    public static function getNavigationLabel(): string
+    {
+        return __('restaurant_admin.team.admin_users');
+    }
 
     public static function getNavigationTooltip(): ?string
     {
-        return 'إدارة مستخدمي لوحة التحكم: دعوة مدراء النظام وتعيين الدور لكل مستخدم.';
+        return __('restaurant_admin.team.description');
     }
 
     public static function form(Schema $schema): Schema
@@ -59,7 +64,15 @@ final class UserResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->role('admin');
+        return parent::getEloquentQuery()
+            ->whereHas('roles', fn (Builder $query) => $query->whereIn('name', [
+                'admin',
+                'Super Admin',
+                'Cleaning Ops Manager',
+                'Customer Support',
+                'Onboarding Specialist',
+                'Accountant',
+            ]));
     }
 
     public static function getPages(): array

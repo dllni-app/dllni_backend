@@ -26,6 +26,7 @@ final class DatabaseSeeder extends Seeder
 
         $this->call([
             DashboardPermissionsSeeder::class,
+            TeamRoleTemplatesSeeder::class,
             AdminUserSeeder::class,
             CleaningWorkerAndSellerSeeder::class,
             WorkerUserSeeder::class,

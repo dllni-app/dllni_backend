@@ -11,7 +11,6 @@ use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Panel;
 use Filament\PanelProvider;
-use Filament\Support\Colors\Color;
 use Filament\Widgets\AccountWidget;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
@@ -29,9 +28,10 @@ final class CleaningAdminPanelProvider extends PanelProvider
             ->id('cleaning-admin')
             ->path('admin')
             ->login()
-            ->brandName('لوحة تحكم خدمة التنظيف')
+            ->brandName('لوحة تحكم دللني')
             ->colors([
-                'primary' => Color::Amber,
+                'primary' => '#1E2A78',
+                'secondary' => '#6C63FF',
             ])
             ->font('Cairo', 'https://fonts.bunny.net/css?family=cairo:400,500,600,700')
             ->viteTheme('resources/css/filament/cleaning-admin/theme.css')

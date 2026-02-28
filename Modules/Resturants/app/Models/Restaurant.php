@@ -131,6 +131,11 @@ final class Restaurant extends Model
         return $this->hasMany(Review::class);
     }
 
+    public function customerReviews(): HasMany
+    {
+        return $this->hasMany(RestaurantCustomerReview::class, 'restaurant_id');
+    }
+
     protected static function newFactory(): RestaurantFactory
     {
         return RestaurantFactory::new();

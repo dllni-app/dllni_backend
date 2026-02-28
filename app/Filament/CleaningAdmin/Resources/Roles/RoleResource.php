@@ -17,7 +17,6 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Spatie\Permission\Models\Role;
-use UnitEnum;
 
 final class RoleResource extends Resource
 {
@@ -25,11 +24,17 @@ final class RoleResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedShieldCheck;
 
-    protected static ?string $navigationLabel = 'الأدوار والصلاحيات';
-
-    protected static string|UnitEnum|null $navigationGroup = 'قسم التنظيف';
-
     protected static ?int $navigationSort = 15;
+
+    public static function getNavigationGroup(): ?string
+    {
+        return __('restaurant_admin.general_sections');
+    }
+
+    public static function getNavigationLabel(): string
+    {
+        return __('restaurant_admin.team.roles');
+    }
 
     public static function getNavigationTooltip(): ?string
     {

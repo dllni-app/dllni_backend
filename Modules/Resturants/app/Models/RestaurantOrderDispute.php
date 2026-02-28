@@ -21,7 +21,14 @@ final class RestaurantOrderDispute extends Model
         'user_id',
         'ticket_number',
         'status',
+        'resolution_type',
+        'refund_amount',
+        'deduction_amount',
+        'payout_hold_status',
         'description',
+        'resolved_by_user_id',
+        'resolved_at',
+        'admin_note',
     ];
 
     public function order(): BelongsTo
@@ -32,6 +39,11 @@ final class RestaurantOrderDispute extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function resolvedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'resolved_by_user_id');
     }
 
     public function messages(): HasMany
@@ -52,6 +64,9 @@ final class RestaurantOrderDispute extends Model
     {
         return [
             'status' => RestaurantDisputeStatus::class,
+            'refund_amount' => 'decimal:2',
+            'deduction_amount' => 'decimal:2',
+            'resolved_at' => 'datetime',
         ];
     }
 }

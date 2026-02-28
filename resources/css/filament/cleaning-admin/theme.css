@@ -7,3 +7,12 @@
 html[dir='rtl'] body {
     font-family: 'Cairo', sans-serif;
 }
+
+[dir='rtl'] table th,
+[dir='rtl'] table td {
+    text-align: right;
+}
+
+[dir='rtl'] .fi-section-content-ctn {
+    text-align: right;
+}
