@@ -34,11 +34,6 @@ final class CleaningOverview extends Page
         return __('cleaning_admin.overview.title');
     }
 
-    public static function getTitle(): string
-    {
-        return __('cleaning_admin.overview.title');
-    }
-
     public static function getNavigationTooltip(): ?string
     {
         return __('cleaning_admin.overview.tooltip');
@@ -54,6 +49,11 @@ final class CleaningOverview extends Page
             AlertType::OverdueCompletion->value => __('cleaning_admin.alert_types.overdue_completion'),
             AlertType::AnomalyDetected->value => __('cleaning_admin.alert_types.anomaly'),
         ];
+    }
+
+    public function getTitle(): string
+    {
+        return __('cleaning_admin.overview.title');
     }
 
     public function getSubheading(): ?string
