@@ -1,32 +1,38 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\CleaningAdmin\Resources\EventBookings;
 
-use App\Filament\CleaningAdmin\Resources\EventBookings\Pages\CreateEventBooking;
-use App\Filament\CleaningAdmin\Resources\EventBookings\Pages\EditEventBooking;
 use App\Filament\CleaningAdmin\Resources\EventBookings\Pages\ListEventBookings;
 use App\Filament\CleaningAdmin\Resources\EventBookings\Pages\ViewEventBooking;
 use App\Filament\CleaningAdmin\Resources\EventBookings\Schemas\EventBookingForm;
 use App\Filament\CleaningAdmin\Resources\EventBookings\Schemas\EventBookingInfolist;
 use App\Filament\CleaningAdmin\Resources\EventBookings\Tables\EventBookingsTable;
-use Modules\Cleaning\Models\EventBooking;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Modules\Cleaning\Models\EventBooking;
+use UnitEnum;
 
-class EventBookingResource extends Resource
+final class EventBookingResource extends Resource
 {
     protected static ?string $model = EventBooking::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCalendar;
 
-    protected static ?string $navigationLabel = 'Event Bookings';
+    protected static ?string $navigationLabel = 'حجوزات المناسبات';
 
-    protected static ?string $navigationGroup = 'Bookings';
+    protected static string|UnitEnum|null $navigationGroup = 'قسم التنظيف';
 
     protected static ?int $navigationSort = 3;
+
+    public static function getNavigationTooltip(): ?string
+    {
+        return 'عرض وإدارة حجوزات المناسبات: عشاء عائلي، عيد ميلاد، تجمع كبير، جنازة؛ نطاق الضيوف، حجم الفريق، الحالة والسعر.';
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -52,9 +58,7 @@ class EventBookingResource extends Resource
     {
         return [
             'index' => ListEventBookings::route('/'),
-            'create' => CreateEventBooking::route('/create'),
             'view' => ViewEventBooking::route('/{record}'),
-            'edit' => EditEventBooking::route('/{record}/edit'),
         ];
     }
 }

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\CleaningAdmin\Resources\Workers\Tables;
 
 use Filament\Actions\EditAction;
@@ -9,31 +11,28 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 
-class WorkersTable
+final class WorkersTable
 {
     public static function configure(Table $table): Table
     {
         return $table
             ->columns([
-                TextColumn::make('id')->sortable(),
-                TextColumn::make('first_name')->searchable(),
-                TextColumn::make('user.phone')->label('Phone'),
-                TextColumn::make('trust_score')->sortable(),
-                TextColumn::make('average_rating')->sortable(),
-                TextColumn::make('total_completed_jobs')->sortable(),
-                IconColumn::make('is_active')->boolean(),
-                IconColumn::make('is_suspended')->boolean(),
-                IconColumn::make('is_verified')->boolean(),
-                IconColumn::make('is_featured')->boolean(),
+                TextColumn::make('id')->label('الرقم')->sortable(),
+                TextColumn::make('first_name')->label('الاسم')->searchable(),
+                TextColumn::make('user.phone')->label('الهاتف'),
+                TextColumn::make('trust_score')->label('نقاط الثقة')->sortable(),
+                TextColumn::make('average_rating')->label('متوسط التقييم')->sortable(),
+                TextColumn::make('total_completed_jobs')->label('إجمالي المهام المنجزة')->sortable(),
+                IconColumn::make('is_active')->label('نشط')->boolean(),
+                IconColumn::make('is_suspended')->label('معلق')->boolean(),
             ])
             ->filters([
-                TernaryFilter::make('is_active'),
-                TernaryFilter::make('is_suspended'),
-                TernaryFilter::make('is_verified'),
+                TernaryFilter::make('is_active')->label('نشط'),
+                TernaryFilter::make('is_suspended')->label('معلق'),
             ])
             ->recordActions([
-                ViewAction::make(),
-                EditAction::make(),
+                ViewAction::make()->label('عرض'),
+                EditAction::make()->label('تعديل'),
             ]);
     }
 }

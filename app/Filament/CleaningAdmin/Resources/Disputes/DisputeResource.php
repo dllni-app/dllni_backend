@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\CleaningAdmin\Resources\Disputes;
 
 use App\Filament\CleaningAdmin\Resources\Disputes\Pages\CreateDispute;
@@ -15,18 +17,24 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use UnitEnum;
 
-class DisputeResource extends Resource
+final class DisputeResource extends Resource
 {
     protected static ?string $model = Dispute::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedExclamationTriangle;
 
-    protected static ?string $navigationLabel = 'Disputes';
+    protected static ?string $navigationLabel = 'النزاعات والشكاوى';
 
-    protected static ?string $navigationGroup = 'Operations';
+    protected static string|UnitEnum|null $navigationGroup = 'قسم التنظيف';
 
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 5;
+
+    public static function getNavigationTooltip(): ?string
+    {
+        return 'حل النزاعات والشكاوى: رقم النزاع، رقم الحجز، العميل، العامل، السبب، الحالة؛ رد، استرداد جزئي، خصم من العامل، إغلاق.';
+    }
 
     public static function form(Schema $schema): Schema
     {

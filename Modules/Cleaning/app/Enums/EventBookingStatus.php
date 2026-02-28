@@ -12,4 +12,16 @@ enum EventBookingStatus: string
     case InProgress = 'in_progress';
     case Completed = 'completed';
     case Cancelled = 'cancelled';
+
+    public function label(): string
+    {
+        return match ($this) {
+            self::Pending => 'قيد الانتظار',
+            self::Confirmed => 'مؤكد',
+            self::TeamAssigned => 'تم تعيين الفريق',
+            self::InProgress => 'قيد التنفيذ',
+            self::Completed => 'مكتمل',
+            self::Cancelled => 'ملغي',
+        };
+    }
 }

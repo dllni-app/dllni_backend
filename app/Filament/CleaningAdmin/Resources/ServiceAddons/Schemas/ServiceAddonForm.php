@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\CleaningAdmin\Resources\ServiceAddons\Schemas;
 
 use Filament\Forms\Components\Select;
@@ -7,7 +9,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Schema;
 
-class ServiceAddonForm
+final class ServiceAddonForm
 {
     public static function configure(Schema $schema): Schema
     {

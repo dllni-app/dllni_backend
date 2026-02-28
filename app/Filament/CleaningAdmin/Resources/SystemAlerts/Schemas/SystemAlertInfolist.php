@@ -1,10 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\CleaningAdmin\Resources\SystemAlerts\Schemas;
 
 use Filament\Schemas\Schema;
 
-class SystemAlertInfolist
+final class SystemAlertInfolist
 {
     public static function configure(Schema $schema): Schema
     {

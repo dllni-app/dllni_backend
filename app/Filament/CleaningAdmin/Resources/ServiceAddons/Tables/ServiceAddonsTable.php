@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\CleaningAdmin\Resources\ServiceAddons\Tables;
 
 use Filament\Actions\EditAction;
@@ -8,17 +10,17 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
-class ServiceAddonsTable
+final class ServiceAddonsTable
 {
     public static function configure(Table $table): Table
     {
         return $table
             ->columns([
-                TextColumn::make('name')->searchable(),
-                TextColumn::make('slug')->searchable(),
-                TextColumn::make('pricing_type')->badge(),
-                TextColumn::make('price_value')->money('SAR'),
-                IconColumn::make('is_active')->boolean(),
+                TextColumn::make('name')->label('الاسم')->searchable(),
+                TextColumn::make('slug')->label('المعرّف')->searchable(),
+                TextColumn::make('pricing_type')->label('نوع التسعير')->badge()->formatStateUsing(fn ($state) => $state?->label()),
+                TextColumn::make('price_value')->label('السعر')->money('SAR'),
+                IconColumn::make('is_active')->label('نشط')->boolean(),
             ])
             ->recordActions([
                 ViewAction::make(),

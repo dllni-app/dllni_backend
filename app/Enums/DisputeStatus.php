@@ -10,4 +10,14 @@ enum DisputeStatus: string
     case UnderReview = 'under_review';
     case Resolved = 'resolved';
     case Closed = 'closed';
+
+    public function label(): string
+    {
+        return match ($this) {
+            self::Open => 'مفتوح',
+            self::UnderReview => 'قيد المراجعة',
+            self::Resolved => 'تم الحل',
+            self::Closed => 'مغلق',
+        };
+    }
 }

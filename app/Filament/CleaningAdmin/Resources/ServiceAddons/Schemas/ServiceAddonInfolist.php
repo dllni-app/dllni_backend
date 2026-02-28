@@ -1,10 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\CleaningAdmin\Resources\ServiceAddons\Schemas;
 
 use Filament\Schemas\Schema;
 
-class ServiceAddonInfolist
+final class ServiceAddonInfolist
 {
     public static function configure(Schema $schema): Schema
     {

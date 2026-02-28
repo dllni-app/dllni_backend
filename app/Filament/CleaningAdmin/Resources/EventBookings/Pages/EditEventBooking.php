@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\CleaningAdmin\Resources\EventBookings\Pages;
 
 use App\Filament\CleaningAdmin\Resources\EventBookings\EventBookingResource;
@@ -7,7 +9,7 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\ViewAction;
 use Filament\Resources\Pages\EditRecord;
 
-class EditEventBooking extends EditRecord
+final class EditEventBooking extends EditRecord
 {
     protected static string $resource = EventBookingResource::class;
 

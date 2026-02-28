@@ -11,4 +11,15 @@ enum DisputeCategory: string
     case Unprofessional = 'unprofessional';
     case BillingIssue = 'billing_issue';
     case Other = 'other';
+
+    public function label(): string
+    {
+        return match ($this) {
+            self::PoorQuality => 'جودة الخدمة',
+            self::PropertyDamage => 'تلف بالممتلكات',
+            self::Unprofessional => 'سلوك غير مهني',
+            self::BillingIssue => 'مشكلة في الدفع',
+            self::Other => 'أخرى',
+        };
+    }
 }

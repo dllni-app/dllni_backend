@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\CleaningAdmin\Resources\ServiceAddons;
 
 use App\Filament\CleaningAdmin\Resources\ServiceAddons\Pages\CreateServiceAddon;
@@ -15,18 +17,24 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use UnitEnum;
 
-class ServiceAddonResource extends Resource
+final class ServiceAddonResource extends Resource
 {
     protected static ?string $model = ServiceAddon::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSquaresPlus;
 
-    protected static ?string $navigationLabel = 'Service Add-ons';
+    protected static ?string $navigationLabel = 'إضافات الخدمة';
 
-    protected static ?string $navigationGroup = 'Settings';
+    protected static string|UnitEnum|null $navigationGroup = 'قسم التنظيف';
 
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 11;
+
+    public static function getNavigationTooltip(): ?string
+    {
+        return 'إدارة الإضافات الاختيارية: الاسم، الوصف، نوع التسعير (ثابت أو نسبة مئوية من تكلفة الخدمة).';
+    }
 
     public static function form(Schema $schema): Schema
     {

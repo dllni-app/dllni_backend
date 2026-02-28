@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\CleaningAdmin\Resources\CleaningServices\Schemas;
 
 use Filament\Forms\Components\Select;
@@ -8,7 +10,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Schema;
 
-class CleaningServiceForm
+final class CleaningServiceForm
 {
     public static function configure(Schema $schema): Schema
     {

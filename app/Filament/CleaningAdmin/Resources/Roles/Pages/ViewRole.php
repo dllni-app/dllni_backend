@@ -1,12 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\CleaningAdmin\Resources\Roles\Pages;
 
 use App\Filament\CleaningAdmin\Resources\Roles\RoleResource;
 use Filament\Actions\EditAction;
 use Filament\Resources\Pages\ViewRecord;
 
-class ViewRole extends ViewRecord
+final class ViewRole extends ViewRecord
 {
     protected static string $resource = RoleResource::class;
 

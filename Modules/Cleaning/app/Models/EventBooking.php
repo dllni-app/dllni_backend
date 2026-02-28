@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Models;
 
-use App\Models\CancellationPolicy;
 use App\Models\BookingReview;
 use App\Models\BookingStatusLog;
+use App\Models\CancellationPolicy;
 use App\Models\User;
 use App\Models\WorkerCustomerRating;
-use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Database\Factories\EventBookingFactory;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -110,11 +110,6 @@ final class EventBooking extends Model
         return $this->morphMany(WorkerCustomerRating::class, 'booking', 'booking_type', 'booking_id');
     }
 
-    protected static function newFactory(): EventBookingFactory
-    {
-        return EventBookingFactory::new();
-    }
-
     public function casts(): array
     {
         return [
@@ -128,5 +123,10 @@ final class EventBooking extends Model
             'terms_accepted' => 'boolean',
             'cancelled_at' => 'datetime',
         ];
+    }
+
+    protected static function newFactory(): EventBookingFactory
+    {
+        return EventBookingFactory::new();
     }
 }

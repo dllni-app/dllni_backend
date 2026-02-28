@@ -1,9 +1,9 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\CleaningAdmin\Resources\CleaningBookings;
 
-use App\Filament\CleaningAdmin\Resources\CleaningBookings\Pages\CreateCleaningBooking;
-use App\Filament\CleaningAdmin\Resources\CleaningBookings\Pages\EditCleaningBooking;
 use App\Filament\CleaningAdmin\Resources\CleaningBookings\Pages\ListCleaningBookings;
 use App\Filament\CleaningAdmin\Resources\CleaningBookings\Pages\ViewCleaningBooking;
 use App\Filament\CleaningAdmin\Resources\CleaningBookings\Schemas\CleaningBookingForm;
@@ -15,18 +15,24 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Modules\Cleaning\Models\CleaningBooking;
+use UnitEnum;
 
-class CleaningBookingResource extends Resource
+final class CleaningBookingResource extends Resource
 {
     protected static ?string $model = CleaningBooking::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCalendarDays;
 
-    protected static ?string $navigationLabel = 'Cleaning Bookings';
+    protected static ?string $navigationLabel = 'حجوزات التنظيف';
 
-    protected static ?string $navigationGroup = 'Bookings';
+    protected static string|UnitEnum|null $navigationGroup = 'قسم التنظيف';
 
     protected static ?int $navigationSort = 2;
+
+    public static function getNavigationTooltip(): ?string
+    {
+        return 'عرض وإدارة جميع حجوزات التنظيف: رقم الحجز، العميل، العامل، التاريخ والوقت، الحالة، السعر الإجمالي، وتعيين عامل أو إلغاء.';
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -52,9 +58,7 @@ class CleaningBookingResource extends Resource
     {
         return [
             'index' => ListCleaningBookings::route('/'),
-            'create' => CreateCleaningBooking::route('/create'),
             'view' => ViewCleaningBooking::route('/{record}'),
-            'edit' => EditCleaningBooking::route('/{record}/edit'),
         ];
     }
 }

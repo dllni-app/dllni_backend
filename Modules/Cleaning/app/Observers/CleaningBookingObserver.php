@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Observers;
 
-use App\Models\BookingStatusLog;
 use App\Jobs\NotifyEligibleWorkersNewOrderJob;
+use App\Models\BookingStatusLog;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 

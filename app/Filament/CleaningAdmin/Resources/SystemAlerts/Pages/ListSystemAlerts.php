@@ -1,14 +1,21 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\CleaningAdmin\Resources\SystemAlerts\Pages;
 
 use App\Filament\CleaningAdmin\Resources\SystemAlerts\SystemAlertResource;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
-class ListSystemAlerts extends ListRecords
+final class ListSystemAlerts extends ListRecords
 {
     protected static string $resource = SystemAlertResource::class;
+
+    public function getSubheading(): ?string
+    {
+        return 'تنبيهات تأخر التقييم المتبادل، تجمد الموقع، استغاثة، تجاوز الوقت دون انتهاء؛ إجراءات الاتصال بالعميل أو العامل أو الحل.';
+    }
 
     protected function getHeaderActions(): array
     {

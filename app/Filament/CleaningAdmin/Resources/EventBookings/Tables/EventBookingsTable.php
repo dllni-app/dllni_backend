@@ -1,42 +1,42 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\CleaningAdmin\Resources\EventBookings\Tables;
 
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Modules\Cleaning\Enums\EventBookingStatus;
+use Modules\Cleaning\Enums\EventType;
 
-class EventBookingsTable
+final class EventBookingsTable
 {
     public static function configure(Table $table): Table
     {
         return $table
             ->columns([
-                TextColumn::make('booking_number')->searchable()->sortable(),
-                TextColumn::make('status')->badge(),
-                TextColumn::make('event_type')->badge(),
-                TextColumn::make('customer.name')->label('Customer')->searchable(),
-                TextColumn::make('scheduled_date')->date()->sortable(),
-                TextColumn::make('scheduled_time'),
-                TextColumn::make('total_price')->money('SAR')->sortable(),
+                TextColumn::make('booking_number')->label('رقم الحجز')->searchable()->sortable(),
+                TextColumn::make('status')->label('الحالة')->badge()->formatStateUsing(fn ($state) => $state?->label()),
+                TextColumn::make('event_type')->label('نوع المناسبة')->badge()->formatStateUsing(fn ($state) => $state?->label()),
+                TextColumn::make('customer.name')->label('العميل')->searchable(),
+                TextColumn::make('scheduled_date')->label('التاريخ')->date()->sortable(),
+                TextColumn::make('scheduled_time')->label('الوقت'),
+                TextColumn::make('total_price')->label('المجموع')->money('SAR')->sortable(),
             ])
             ->filters([
+                Filter::make('has_dispute')
+                    ->label('يحتوي على نزاع')
+                    ->query(fn (Builder $query): Builder => $query->whereHas('disputes')),
                 SelectFilter::make('status')
-                    ->options([
-                        'pending' => 'Pending',
-                        'confirmed' => 'Confirmed',
-                        'team_assigned' => 'Team Assigned',
-                        'in_progress' => 'In Progress',
-                        'completed' => 'Completed',
-                        'cancelled' => 'Cancelled',
-                    ]),
-                SelectFilter::make('event_type')->options([
-                    'wedding' => 'Wedding',
-                    'party' => 'Party',
-                    'conference' => 'Conference',
-                    'other' => 'Other',
-                ]),
+                    ->label('الحالة')
+                    ->options(collect(EventBookingStatus::cases())->mapWithKeys(fn ($c) => [$c->value => $c->label()])->all()),
+                SelectFilter::make('event_type')
+                    ->label('نوع المناسبة')
+                    ->options(collect(EventType::cases())->mapWithKeys(fn ($c) => [$c->value => $c->label()])->all()),
             ])
             ->recordActions([
                 ViewAction::make(),

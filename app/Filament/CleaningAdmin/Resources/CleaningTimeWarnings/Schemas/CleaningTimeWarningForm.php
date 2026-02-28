@@ -1,10 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\CleaningAdmin\Resources\CleaningTimeWarnings\Schemas;
 
 use Filament\Schemas\Schema;
 
-class CleaningTimeWarningForm
+final class CleaningTimeWarningForm
 {
     public static function configure(Schema $schema): Schema
     {

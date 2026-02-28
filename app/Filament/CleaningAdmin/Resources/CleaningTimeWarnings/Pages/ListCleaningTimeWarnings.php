@@ -1,14 +1,21 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\CleaningAdmin\Resources\CleaningTimeWarnings\Pages;
 
 use App\Filament\CleaningAdmin\Resources\CleaningTimeWarnings\CleaningTimeWarningResource;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
-class ListCleaningTimeWarnings extends ListRecords
+final class ListCleaningTimeWarnings extends ListRecords
 {
     protected static string $resource = CleaningTimeWarningResource::class;
+
+    public function getSubheading(): ?string
+    {
+        return 'سجل تنبيهات انتهاء الوقت: رقم الحجز، نوع الحجز (تنظيف/مناسبة)، وقت الإرسال، رد العميل (تمديد/التزام/إنهاء مبكر)، رد العامل.';
+    }
 
     protected function getHeaderActions(): array
     {

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\CleaningAdmin\Resources\SystemAlerts;
 
 use App\Filament\CleaningAdmin\Resources\SystemAlerts\Pages\CreateSystemAlert;
@@ -15,18 +17,24 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use UnitEnum;
 
-class SystemAlertResource extends Resource
+final class SystemAlertResource extends Resource
 {
     protected static ?string $model = SystemAlert::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBellAlert;
 
-    protected static ?string $navigationLabel = 'System Alerts';
+    protected static ?string $navigationLabel = 'تنبيهات النظام';
 
-    protected static ?string $navigationGroup = 'Operations';
+    protected static string|UnitEnum|null $navigationGroup = 'قسم التنظيف';
 
-    protected static ?int $navigationSort = 5;
+    protected static ?int $navigationSort = 7;
+
+    public static function getNavigationTooltip(): ?string
+    {
+        return 'تنبيهات تأخر التقييم المتبادل، تجمد الموقع، استغاثة، تجاوز الوقت دون انتهاء؛ إجراءات الاتصال أو الحل.';
+    }
 
     public static function form(Schema $schema): Schema
     {

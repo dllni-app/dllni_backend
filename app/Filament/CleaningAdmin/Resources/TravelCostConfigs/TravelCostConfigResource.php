@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\CleaningAdmin\Resources\TravelCostConfigs;
 
 use App\Filament\CleaningAdmin\Resources\TravelCostConfigs\Pages\CreateTravelCostConfig;
@@ -15,18 +17,24 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use UnitEnum;
 
-class TravelCostConfigResource extends Resource
+final class TravelCostConfigResource extends Resource
 {
     protected static ?string $model = TravelCostConfig::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTruck;
 
-    protected static ?string $navigationLabel = 'Travel Cost Rules';
+    protected static ?string $navigationLabel = 'قواعد تكاليف التنقّل';
 
-    protected static ?string $navigationGroup = 'Settings';
+    protected static string|UnitEnum|null $navigationGroup = 'قسم التنظيف';
 
-    protected static ?int $navigationSort = 4;
+    protected static ?int $navigationSort = 12;
+
+    public static function getNavigationTooltip(): ?string
+    {
+        return 'قواعد حساب تكاليف التنقل: سعر الكيلومتر، الحد الأدنى لرسوم التنقل، نقطة بدء احتساب المسافة (موقع العامل / عنوان المنزل / النظام تلقائياً).';
+    }
 
     public static function form(Schema $schema): Schema
     {

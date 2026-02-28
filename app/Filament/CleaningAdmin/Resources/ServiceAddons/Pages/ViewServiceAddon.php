@@ -1,12 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\CleaningAdmin\Resources\ServiceAddons\Pages;
 
 use App\Filament\CleaningAdmin\Resources\ServiceAddons\ServiceAddonResource;
 use Filament\Actions\EditAction;
 use Filament\Resources\Pages\ViewRecord;
 
-class ViewServiceAddon extends ViewRecord
+final class ViewServiceAddon extends ViewRecord
 {
     protected static string $resource = ServiceAddonResource::class;
 

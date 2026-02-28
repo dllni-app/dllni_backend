@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\CleaningAdmin\Resources\Users;
 
 use App\Filament\CleaningAdmin\Resources\Users\Pages\CreateUser;
@@ -16,18 +18,24 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use UnitEnum;
 
-class UserResource extends Resource
+final class UserResource extends Resource
 {
     protected static ?string $model = User::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUserCircle;
 
-    protected static ?string $navigationLabel = 'Admin Users';
+    protected static ?string $navigationLabel = 'مدراء النظام';
 
-    protected static ?string $navigationGroup = 'Permissions';
+    protected static string|UnitEnum|null $navigationGroup = 'قسم التنظيف';
 
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 16;
+
+    public static function getNavigationTooltip(): ?string
+    {
+        return 'إدارة مستخدمي لوحة التحكم: دعوة مدراء النظام وتعيين الدور لكل مستخدم.';
+    }
 
     public static function form(Schema $schema): Schema
     {

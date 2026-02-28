@@ -1,32 +1,41 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\CleaningAdmin\Resources\CleaningServices;
 
 use App\Filament\CleaningAdmin\Resources\CleaningServices\Pages\CreateCleaningService;
 use App\Filament\CleaningAdmin\Resources\CleaningServices\Pages\EditCleaningService;
 use App\Filament\CleaningAdmin\Resources\CleaningServices\Pages\ListCleaningServices;
 use App\Filament\CleaningAdmin\Resources\CleaningServices\Pages\ViewCleaningService;
+use App\Filament\CleaningAdmin\Resources\CleaningServices\RelationManagers\PricingRelationManager;
 use App\Filament\CleaningAdmin\Resources\CleaningServices\Schemas\CleaningServiceForm;
 use App\Filament\CleaningAdmin\Resources\CleaningServices\Schemas\CleaningServiceInfolist;
 use App\Filament\CleaningAdmin\Resources\CleaningServices\Tables\CleaningServicesTable;
-use Modules\Cleaning\Models\CleaningService;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Modules\Cleaning\Models\CleaningService;
+use UnitEnum;
 
-class CleaningServiceResource extends Resource
+final class CleaningServiceResource extends Resource
 {
     protected static ?string $model = CleaningService::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedWrenchScrewdriver;
 
-    protected static ?string $navigationLabel = 'Cleaning Services';
+    protected static ?string $navigationLabel = 'خدمات التنظيف';
 
-    protected static ?string $navigationGroup = 'Settings';
+    protected static string|UnitEnum|null $navigationGroup = 'قسم التنظيف';
 
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 10;
+
+    public static function getNavigationTooltip(): ?string
+    {
+        return 'تعريف أنواع خدمات التنظيف: الاسم، الوصف، ربط التسعير الأساسي والإضافات المتاحة.';
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -45,7 +54,9 @@ class CleaningServiceResource extends Resource
 
     public static function getRelations(): array
     {
-        return [];
+        return [
+            PricingRelationManager::class,
+        ];
     }
 
     public static function getPages(): array

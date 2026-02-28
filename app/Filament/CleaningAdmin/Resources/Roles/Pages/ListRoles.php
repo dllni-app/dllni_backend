@@ -1,14 +1,21 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\CleaningAdmin\Resources\Roles\Pages;
 
 use App\Filament\CleaningAdmin\Resources\Roles\RoleResource;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
-class ListRoles extends ListRecords
+final class ListRoles extends ListRecords
 {
     protected static string $resource = RoleResource::class;
+
+    public function getSubheading(): ?string
+    {
+        return 'إدارة الأدوار والصلاحيات: تعريف من يمكنه ماذا في لوحة التحكم (مشرف، دعم، محاسب، إلخ).';
+    }
 
     protected function getHeaderActions(): array
     {

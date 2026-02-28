@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\CleaningAdmin\Resources\Roles\Pages;
 
 use App\Filament\CleaningAdmin\Resources\Roles\RoleResource;
@@ -7,9 +9,22 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\ViewAction;
 use Filament\Resources\Pages\EditRecord;
 
-class EditRole extends EditRecord
+final class EditRole extends EditRecord
 {
     protected static string $resource = RoleResource::class;
+
+    public function mutateFormDataBeforeFill(array $data): array
+    {
+        $data['permissions'] = $this->record->permissions->pluck('name')->toArray();
+
+        return $data;
+    }
+
+    public function afterSave(): void
+    {
+        $permissions = $this->form->getState()['permissions'] ?? [];
+        $this->record->syncPermissions($permissions);
+    }
 
     protected function getHeaderActions(): array
     {

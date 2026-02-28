@@ -6,11 +6,13 @@ namespace App\Filament\CleaningAdmin\Pages;
 
 use App\Models\CleaningFinancialSetting;
 use App\Models\WorkerZone;
+use BackedEnum;
 use Filament\Pages\Page;
+use UnitEnum;
 
 final class GeographicCoverage extends Page
 {
-    protected static string|\BackedEnum|null $navigationIcon = \Filament\Support\Icons\Heroicon::OutlinedMap;
+    protected static string|BackedEnum|null $navigationIcon = \Filament\Support\Icons\Heroicon::OutlinedMap;
 
     protected string $view = 'filament.cleaning-admin.pages.geographic-coverage';
 
@@ -18,9 +20,19 @@ final class GeographicCoverage extends Page
 
     protected static ?string $title = 'التغطية حسب المنطقة';
 
-    protected static ?string $navigationGroup = 'العمليات';
+    protected static string|UnitEnum|null $navigationGroup = 'قسم التنظيف';
 
-    protected static ?int $navigationSort = 4;
+    protected static ?int $navigationSort = 6;
+
+    public static function getNavigationTooltip(): ?string
+    {
+        return 'تحليلات الطلب مقابل تغطية العمال حسب المناطق الجغرافية لتحديد فجوات الخدمة (منخفض / جيد / مرتفع).';
+    }
+
+    public function getSubheading(): ?string
+    {
+        return 'عرض الطلب مقابل تغطية العمال حسب المناطق الجغرافية لتحديد فجوات الخدمة (منخفض / جيد / مرتفع) وعدد العمال لكل منطقة.';
+    }
 
     public function getViewData(): array
     {

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\CleaningAdmin\Resources\Roles;
 
 use App\Filament\CleaningAdmin\Resources\Roles\Pages\CreateRole;
@@ -15,18 +17,24 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Spatie\Permission\Models\Role;
+use UnitEnum;
 
-class RoleResource extends Resource
+final class RoleResource extends Resource
 {
     protected static ?string $model = Role::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedShieldCheck;
 
-    protected static ?string $navigationLabel = 'Roles';
+    protected static ?string $navigationLabel = 'الأدوار والصلاحيات';
 
-    protected static ?string $navigationGroup = 'Permissions';
+    protected static string|UnitEnum|null $navigationGroup = 'قسم التنظيف';
 
-    protected static ?int $navigationSort = 1;
+    protected static ?int $navigationSort = 15;
+
+    public static function getNavigationTooltip(): ?string
+    {
+        return 'إدارة الأدوار والصلاحيات: قائمة الأدوار (مدير أعلى، مدير عمليات التنظيف، دعم العملاء، محاسب) وتعيين الصلاحيات.';
+    }
 
     public static function form(Schema $schema): Schema
     {

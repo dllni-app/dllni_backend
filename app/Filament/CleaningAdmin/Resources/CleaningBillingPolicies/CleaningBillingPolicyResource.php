@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\CleaningAdmin\Resources\CleaningBillingPolicies;
 
 use App\Filament\CleaningAdmin\Resources\CleaningBillingPolicies\Pages\CreateCleaningBillingPolicy;
@@ -9,24 +11,30 @@ use App\Filament\CleaningAdmin\Resources\CleaningBillingPolicies\Pages\ViewClean
 use App\Filament\CleaningAdmin\Resources\CleaningBillingPolicies\Schemas\CleaningBillingPolicyForm;
 use App\Filament\CleaningAdmin\Resources\CleaningBillingPolicies\Schemas\CleaningBillingPolicyInfolist;
 use App\Filament\CleaningAdmin\Resources\CleaningBillingPolicies\Tables\CleaningBillingPoliciesTable;
-use Modules\Cleaning\Models\CleaningBillingPolicy;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Modules\Cleaning\Models\CleaningBillingPolicy;
+use UnitEnum;
 
-class CleaningBillingPolicyResource extends Resource
+final class CleaningBillingPolicyResource extends Resource
 {
     protected static ?string $model = CleaningBillingPolicy::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentList;
 
-    protected static ?string $navigationLabel = 'Billing Policies';
+    protected static ?string $navigationLabel = 'سياسات الفوترة';
 
-    protected static ?string $navigationGroup = 'Settings';
+    protected static string|UnitEnum|null $navigationGroup = 'قسم التنظيف';
 
-    protected static ?int $navigationSort = 5;
+    protected static ?int $navigationSort = 13;
+
+    public static function getNavigationTooltip(): ?string
+    {
+        return 'إدارة سياسات الفوترة: الاسم، الوصف، طريقة الفوترة (وقت محجوز كامل / وقت عمل فعلي)، الحد الأدنى للدقائق، افتراضي.';
+    }
 
     public static function form(Schema $schema): Schema
     {
