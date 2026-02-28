@@ -39,7 +39,7 @@ final class SupermarketSectionHub extends Page
         return __('supermarket_admin.hub.title');
     }
 
-    public static function getTitle(): string
+    public function getTitle(): string
     {
         return __('supermarket_admin.hub.title');
     }

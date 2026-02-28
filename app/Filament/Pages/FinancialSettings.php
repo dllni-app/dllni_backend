@@ -51,14 +51,14 @@ final class FinancialSettings extends Page
         return __('cleaning_admin.financial.nav_label');
     }
 
-    public static function getTitle(): string
-    {
-        return __('cleaning_admin.financial.title');
-    }
-
     public static function getNavigationTooltip(): ?string
     {
         return __('cleaning_admin.financial.tooltip');
+    }
+
+    public function getTitle(): string
+    {
+        return __('cleaning_admin.financial.title');
     }
 
     public function getSubheading(): ?string
