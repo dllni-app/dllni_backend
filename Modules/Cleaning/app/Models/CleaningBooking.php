@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Models;
 
 use App\Models\CancellationPolicy;
+use App\Models\BookingReview;
+use App\Models\BookingStatusLog;
 use App\Models\User;
 use App\Models\Worker;
+use App\Models\WorkerCustomerRating;
 use Database\Factories\CleaningBookingFactory;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -118,6 +121,21 @@ final class CleaningBooking extends Model
     public function systemAlerts(): MorphMany
     {
         return $this->morphMany(\App\Models\SystemAlert::class, 'booking', 'booking_type', 'booking_id');
+    }
+
+    public function statusLogs(): MorphMany
+    {
+        return $this->morphMany(BookingStatusLog::class, 'booking', 'booking_type', 'booking_id');
+    }
+
+    public function reviews(): MorphMany
+    {
+        return $this->morphMany(BookingReview::class, 'booking', 'booking_type', 'booking_id');
+    }
+
+    public function ratings(): MorphMany
+    {
+        return $this->morphMany(WorkerCustomerRating::class, 'booking', 'booking_type', 'booking_id');
     }
 
     public function casts(): array

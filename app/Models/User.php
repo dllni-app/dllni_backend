@@ -9,6 +9,8 @@ use App\Traits\FilterQueries\UserFilterQuery;
 use Carbon\CarbonInterface;
 use Database\Factories\UserFactory;
 use DevKandil\NotiFire\Traits\HasFcm;
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -29,7 +31,7 @@ use Spatie\Permission\Traits\HasRoles;
  * @property-read CarbonInterface $created_at
  * @property-read CarbonInterface $updated_at
  */
-final class User extends Authenticatable implements HasMedia
+final class User extends Authenticatable implements FilamentUser, HasMedia
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, HasFcm, HasRoles, InteractsWithMedia, Notifiable, UserFilterQuery;
@@ -145,5 +147,14 @@ final class User extends Authenticatable implements HasMedia
     public function smOrderDisputes(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(\Modules\Supermarket\Models\SmOrderDispute::class, 'opened_by_user_id');
+    }
+
+    public function canAccessPanel(Panel $panel): bool
+    {
+        if ($panel->getId() !== 'cleaning-admin') {
+            return false;
+        }
+
+        return $this->hasRole('admin');
     }
 }

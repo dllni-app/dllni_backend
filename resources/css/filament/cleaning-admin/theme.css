@@ -1,0 +1,9 @@
+@import '/vendor/filament/filament/resources/css/theme.css';
+
+:root {
+    --fi-font-family: 'Cairo', sans-serif;
+}
+
+html[dir='rtl'] body {
+    font-family: 'Cairo', sans-serif;
+}

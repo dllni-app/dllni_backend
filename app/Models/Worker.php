@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Modules\Cleaning\Models\CleaningBooking;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 
@@ -31,6 +32,9 @@ final class Worker extends Model implements HasMedia
         'open_disputes_count',
         'is_active',
         'is_suspended',
+        'is_verified',
+        'is_featured',
+        'featured_until',
         'suspended_until',
         'home_address',
         'home_latitude',
@@ -58,6 +62,16 @@ final class Worker extends Model implements HasMedia
         return $this->hasMany(WorkerTrustLog::class);
     }
 
+    public function cleaningBookings(): HasMany
+    {
+        return $this->hasMany(CleaningBooking::class);
+    }
+
+    public function customerRatings(): HasMany
+    {
+        return $this->hasMany(WorkerCustomerRating::class);
+    }
+
     public function casts(): array
     {
         return [
@@ -68,6 +82,9 @@ final class Worker extends Model implements HasMedia
             'home_longitude' => 'decimal:8',
             'is_active' => 'boolean',
             'is_suspended' => 'boolean',
+            'is_verified' => 'boolean',
+            'is_featured' => 'boolean',
+            'featured_until' => 'datetime',
             'suspended_until' => 'datetime',
             'default_working_hours' => 'array',
         ];
