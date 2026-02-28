@@ -1,0 +1,13 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Filament\Resources\SmProducts\Pages;
+
+use App\Filament\Resources\SmProducts\SmProductResource;
+use Filament\Resources\Pages\ListRecords;
+
+final class ListSmProducts extends ListRecords
+{
+    protected static string $resource = SmProductResource::class;
+}
