@@ -21,7 +21,9 @@ final class SmCategoryController
 
     public function index(SmCategoryFilterRequest $request): AnonymousResourceCollection
     {
-        $categories = SmCategory::getQuery()->paginate($request->get('perPage', 20));
+        $categories = SmCategory::getQuery()
+            ->withCount('products')
+            ->paginate($request->get('perPage', 20));
 
         return SmCategoryResource::collection($categories);
     }

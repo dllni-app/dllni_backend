@@ -25,6 +25,7 @@ final class SmCategoryResource extends JsonResource
             'sortOrder' => $this->sort_order,
             'imagePath' => $this->image_path,
             'isActive' => $this->is_active,
+            'productsCount' => $this->products_count ?? 0,
             'createdAt' => $this->created_at?->toDateTimeString(),
             'updatedAt' => $this->updated_at?->toDateTimeString(),
         ];
