@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Filament\Resources\Orders\Tables;
+namespace App\Filament\Resources\Orders;
 
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
@@ -14,7 +14,7 @@ final class OrdersTable
 {
     public static function configure(Table $table): Table
     {
-        $statusOptions = collect(OrderStatus::cases())->mapWithKeys(fn ($c) => [$c->value => __('restaurant_admin.enums.order_status.'.$c->value)])->all();
+        $statusOptions = collect(OrderStatus::cases())->mapWithKeys(fn($c) => [$c->value => __('restaurant_admin.enums.order_status.' . $c->value)])->all();
 
         return $table
             ->columns([
@@ -27,9 +27,9 @@ final class OrdersTable
                     ->formatStateUsing(function ($state): string {
                         $value = $state?->value ?? $state;
 
-                        return $value ? __('restaurant_admin.enums.order_status.'.$value) : '—';
+                        return $value ? __('restaurant_admin.enums.order_status.' . $value) : '—';
                     }),
-                TextColumn::make('order_type')->label('نوع الطلب')->formatStateUsing(fn (?string $state): string => $state ?? '—'),
+                TextColumn::make('order_type')->label('نوع الطلب')->formatStateUsing(fn(?string $state): string => $state ?? '—'),
                 TextColumn::make('accepted_at')->label('قبول')->dateTime('Y-m-d H:i')->placeholder('—'),
                 TextColumn::make('preparing_at')->label('تحضير')->dateTime('Y-m-d H:i')->placeholder('—'),
                 TextColumn::make('completed_at')->label('إكمال')->dateTime('Y-m-d H:i')->placeholder('—'),
