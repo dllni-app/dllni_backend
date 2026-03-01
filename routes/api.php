@@ -11,6 +11,7 @@ use App\Http\Controllers\API\SystemAlertController;
 use App\Http\Controllers\API\TravelCostConfigController;
 use App\Http\Controllers\API\UserAuthController;
 use App\Http\Controllers\API\UserController;
+use App\Http\Controllers\API\UserNotificationController;
 use App\Http\Controllers\API\WorkerController;
 use Illuminate\Support\Facades\Route;
 
@@ -29,6 +30,8 @@ Route::prefix('dashboard')->group(function (): void {
 Route::apiResource('users', UserController::class);
 
 Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
+    Route::get('notifications', [UserNotificationController::class, 'index'])->name('notifications.index');
+    Route::patch('notifications/{id}/read', [UserNotificationController::class, 'markAsRead'])->name('notifications.markAsRead');
     Route::apiResource('workers', WorkerController::class);
     Route::apiResource('disputes', DisputeController::class);
     Route::apiResource('system-alerts', SystemAlertController::class)->only(['index', 'show', 'update']);

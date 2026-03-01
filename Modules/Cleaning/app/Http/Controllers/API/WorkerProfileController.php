@@ -18,7 +18,7 @@ final class WorkerProfileController
             abort(Response::HTTP_FORBIDDEN, 'User must have an associated worker.');
         }
 
-        $worker->load(['user', 'zones', 'availability']);
+        $worker->load(['user', 'zones', 'availability' , 'media']);
 
         return WorkerResource::make($worker);
     }

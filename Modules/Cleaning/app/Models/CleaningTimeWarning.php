@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Models;
 
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Modules\Cleaning\Enums\CleaningTimeWarningResponse;
+use Modules\Cleaning\Observers\CleaningTimeWarningObserver;
 use Modules\Cleaning\Traits\FilterQueries\CleaningTimeWarningFilterQuery;
 
+#[ObservedBy([CleaningTimeWarningObserver::class])]
 final class CleaningTimeWarning extends Model
 {
     use CleaningTimeWarningFilterQuery;

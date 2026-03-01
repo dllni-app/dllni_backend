@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\API\ProductAiController as AppProductAiController;
 use Illuminate\Support\Facades\Route;
 use Modules\Supermarket\Http\Controllers\API\SmAssistantQueryController;
 use Modules\Supermarket\Http\Controllers\API\SmCartController;
@@ -51,6 +52,11 @@ Route::prefix('v1')->group(function () {
     Route::apiResource('sm-store-trust-logs', SmStoreTrustLogController::class)->only(['index', 'show'])->names('sm-store-trust-logs');
     Route::apiResource('sm-categories', SmCategoryController::class)->names('sm-categories');
     Route::apiResource('sm-products', SmProductController::class)->names('sm-products');
+    Route::prefix('sm-products/ai')->group(function () {
+        Route::post('extract-from-image', [AppProductAiController::class, 'extractFromImage'])->name('sm-products.ai.extract-from-image');
+        Route::post('extract-from-menu', [AppProductAiController::class, 'extractFromMenu'])->name('sm-products.ai.extract-from-menu');
+        Route::post('generate-image', [AppProductAiController::class, 'generateImage'])->name('sm-products.ai.generate-image');
+    });
     Route::apiResource('sm-inventory-logs', SmInventoryLogController::class)->only(['index', 'show'])->names('sm-inventory-logs');
     Route::apiResource('sm-offers', SmOfferController::class)->names('sm-offers');
     Route::apiResource('sm-offer-products', SmOfferProductController::class)->only(['index', 'show'])->names('sm-offer-products');

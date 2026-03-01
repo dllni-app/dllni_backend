@@ -7,22 +7,30 @@ namespace App\Models;
 use App\Enums\DisputeCategory;
 use App\Enums\DisputeResolution;
 use App\Enums\DisputeStatus;
+use App\Observers\DisputeObserver;
 use App\Traits\FilterQueries\DisputeFilterQuery;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
 
-final class Dispute extends Model
+#[ObservedBy([DisputeObserver::class])]
+final class Dispute extends Model implements HasMedia
 {
     use DisputeFilterQuery;
+    use InteractsWithMedia;
 
     protected $fillable = [
         'booking_id',
         'booking_type',
         'ticket_number',
+        'description',
         'category',
         'status',
         'resolution',
+        'worker_earnings_frozen',
     ];
 
     public function booking(): MorphTo
@@ -41,6 +49,7 @@ final class Dispute extends Model
             'category' => DisputeCategory::class,
             'status' => DisputeStatus::class,
             'resolution' => DisputeResolution::class,
+            'worker_earnings_frozen' => 'boolean',
         ];
     }
 }

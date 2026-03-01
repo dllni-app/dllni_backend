@@ -19,6 +19,10 @@ final class WorkerResource extends JsonResource
             'id' => $this->id,
             'userId' => $this->user_id,
             'firstName' => $this->first_name,
+            'avatar' => $this->when(
+                $this->relationLoaded('media') && $this->getFirstMedia('avatar'),
+                fn () => MediaResource::make($this->getFirstMedia('avatar'))
+            ),
             'bio' => $this->bio,
             'averageRating' => (float) $this->average_rating,
             'totalCompletedJobs' => $this->total_completed_jobs,
@@ -32,7 +36,7 @@ final class WorkerResource extends JsonResource
             'homeAddress' => $this->home_address,
             'homeLatitude' => (float) $this->home_latitude,
             'homeLongitude' => (float) $this->home_longitude,
-            'defaultWorkingHours' => $this->default_working_hours,
+            'defaultWorkingHours' => $this->resource->getNormalizedDefaultWorkingHours(),
             'user' => $this->whenLoaded('user', fn () => [
                 'id' => $this->user->id,
                 'name' => $this->user->name,

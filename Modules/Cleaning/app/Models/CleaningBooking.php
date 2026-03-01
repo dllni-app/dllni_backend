@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Models;
 
+use App\Models\BookingReview;
+use App\Models\BookingStatusLog;
 use App\Models\CancellationPolicy;
 use App\Models\User;
 use App\Models\Worker;
+use App\Models\WorkerCustomerRating;
 use Database\Factories\CleaningBookingFactory;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,6 +19,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Observers\CleaningBookingObserver;
 use Modules\Cleaning\Traits\FilterQueries\CleaningBookingFilterQuery;
 
 /**
@@ -22,6 +27,7 @@ use Modules\Cleaning\Traits\FilterQueries\CleaningBookingFilterQuery;
  * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\SosAlert> $sosAlerts
  * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\SystemAlert> $systemAlerts
  */
+#[ObservedBy([CleaningBookingObserver::class])]
 final class CleaningBooking extends Model
 {
     use CleaningBookingFilterQuery;
@@ -37,6 +43,8 @@ final class CleaningBooking extends Model
         'status',
         'property_type',
         'property_details',
+        'address_latitude',
+        'address_longitude',
         'estimated_sqm',
         'estimated_hours',
         'scheduled_date',
@@ -51,6 +59,7 @@ final class CleaningBooking extends Model
         'work_started_at',
         'work_finished_at',
         'started_travel_at',
+        'arrived_at',
         'customer_confirmed_at',
         'cancelled_at',
         'cancellation_reason',
@@ -114,6 +123,21 @@ final class CleaningBooking extends Model
         return $this->morphMany(\App\Models\SystemAlert::class, 'booking', 'booking_type', 'booking_id');
     }
 
+    public function statusLogs(): MorphMany
+    {
+        return $this->morphMany(BookingStatusLog::class, 'booking', 'booking_type', 'booking_id');
+    }
+
+    public function reviews(): MorphMany
+    {
+        return $this->morphMany(BookingReview::class, 'booking', 'booking_type', 'booking_id');
+    }
+
+    public function ratings(): MorphMany
+    {
+        return $this->morphMany(WorkerCustomerRating::class, 'booking', 'booking_type', 'booking_id');
+    }
+
     public function casts(): array
     {
         return [
@@ -132,7 +156,10 @@ final class CleaningBooking extends Model
             'work_started_at' => 'datetime',
             'work_finished_at' => 'datetime',
             'started_travel_at' => 'datetime',
+            'arrived_at' => 'datetime',
             'customer_confirmed_at' => 'datetime',
+            'address_latitude' => 'decimal:8',
+            'address_longitude' => 'decimal:8',
             'cancelled_at' => 'datetime',
         ];
     }

@@ -12,6 +12,7 @@ use App\Models\Worker;
 use App\Services\WorkerService;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
+use Mrmarchone\LaravelAutoCrud\Helpers\MediaHelper;
 use Throwable;
 
 final class WorkerController
@@ -23,7 +24,7 @@ final class WorkerController
     public function index(WorkerFilterRequest $request): AnonymousResourceCollection
     {
         $workers = Worker::getQuery()
-            ->with(['user'])
+            ->with(['user', 'media'])
             ->paginate($request->get('perPage', 20));
 
         return WorkerResource::collection($workers);
@@ -32,17 +33,23 @@ final class WorkerController
     /** @throws Throwable */
     public function store(WorkerRequest $request): WorkerResource
     {
-        $worker = $this->workerService->store(WorkerData::from($request->validated()));
+        $validated = $request->validated();
+        unset($validated['avatar']);
+        $worker = $this->workerService->store(WorkerData::from($validated));
+
+        if ($request->hasFile('avatar')) {
+            MediaHelper::updateMedia($request->file('avatar'), $worker, 'avatar');
+        }
 
         return WorkerResource::make(
-            $worker->load(['user', 'zones', 'availability', 'trustLogs'])
+            $worker->load(['user', 'zones', 'availability', 'trustLogs', 'media'])
         );
     }
 
     public function show(Worker $worker): WorkerResource
     {
         $worker->load([
-            'user', 'zones', 'availability', 'trustLogs',
+            'user', 'zones', 'availability', 'trustLogs', 'media',
         ]);
 
         return WorkerResource::make($worker);
@@ -51,10 +58,16 @@ final class WorkerController
     /** @throws Throwable */
     public function update(WorkerRequest $request, Worker $worker): WorkerResource
     {
-        $updated = $this->workerService->update(WorkerData::from($request->validated()), $worker);
+        $validated = $request->validated();
+        unset($validated['avatar']);
+        $updated = $this->workerService->update(WorkerData::from($validated), $worker);
+
+        if ($request->hasFile('avatar')) {
+            MediaHelper::updateMedia($request->file('avatar'), $updated, 'avatar');
+        }
 
         return WorkerResource::make(
-            $updated->load(['user', 'zones', 'availability', 'trustLogs'])
+            $updated->load(['user', 'zones', 'availability', 'trustLogs', 'media'])
         );
     }
 

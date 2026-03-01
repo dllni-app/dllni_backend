@@ -337,3 +337,63 @@ it('returns worker homepage with todayEarnings newOrdersCount and pendingExtensi
     expect($response->json('newOrdersCount'))->toBeGreaterThanOrEqual(1);
     expect($response->json('pendingExtensionRequestsCount'))->toBe(1);
 });
+
+it('returns working hours for authenticated worker', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-hours@example.com']);
+    $worker = Worker::factory()->create([
+        'user_id' => $workerUser->id,
+        'default_working_hours' => [
+            'sunday' => ['available' => true, 'data' => [['09:00' => '17:00']]],
+            'monday' => ['available' => false, 'data' => []],
+            'tuesday' => ['available' => true, 'data' => [['10:00' => '18:00']]],
+            'wednesday' => ['available' => false, 'data' => []],
+            'thursday' => ['available' => false, 'data' => []],
+            'friday' => ['available' => false, 'data' => []],
+            'saturday' => ['available' => false, 'data' => []],
+        ],
+    ]);
+    Sanctum::actingAs($workerUser);
+
+    $response = $this->getJson('/api/v1/cleaning/worker/working-hours');
+
+    $response->assertOk();
+    $hours = $response->json('data.defaultWorkingHours');
+    expect($hours)->toHaveKeys(['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']);
+    expect($hours['sunday'])->toEqual(['available' => true, 'data' => [['09:00' => '17:00']]]);
+    expect($hours['monday'])->toEqual(['available' => false, 'data' => []]);
+    expect($hours['tuesday'])->toEqual(['available' => true, 'data' => [['10:00' => '18:00']]]);
+});
+
+it('returns 403 for working hours when user has no worker', function () {
+    $regularUser = User::factory()->create(['email' => 'no-worker-hours@example.com']);
+    Sanctum::actingAs($regularUser);
+
+    $response = $this->getJson('/api/v1/cleaning/worker/working-hours');
+
+    $response->assertForbidden();
+});
+
+it('updates working hours for authenticated worker', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-update-hours@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $payload = [
+        'defaultWorkingHours' => [
+            'sunday' => ['available' => true, 'data' => [['09:00' => '23:00']]],
+            'monday' => ['available' => true, 'data' => [['09:00' => '13:00'], ['15:00' => '23:00']]],
+            'tuesday' => ['available' => true, 'data' => [['09:00' => '23:00']]],
+            'wednesday' => ['available' => true, 'data' => [['09:00' => '23:00']]],
+            'thursday' => ['available' => true, 'data' => [['09:00' => '23:00']]],
+            'friday' => ['available' => true, 'data' => [['09:00' => '23:00']]],
+            'saturday' => ['available' => false, 'data' => []],
+        ],
+    ];
+
+    $response = $this->putJson('/api/v1/cleaning/worker/working-hours', $payload);
+
+    $response->assertOk();
+    expect($response->json('data.defaultWorkingHours'))->toEqual($payload['defaultWorkingHours']);
+    $worker->refresh();
+    expect($worker->default_working_hours)->toEqual($payload['defaultWorkingHours']);
+});

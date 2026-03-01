@@ -12,11 +12,9 @@ The following users are created by the database seeders (`DashboardPermissionsSe
 
 | Type            | Login (email or phone)   | Password  | Role / Notes |
 | --------------- | ------------------------ | --------- | ------------ |
-| **Dashboard admin** | `admin@admin.com`        | `password` | Role: `admin`. All dashboard permissions (orders, products, inventory, offers, stores, staff, reports, settings, bookings, workers, disputes, system_alerts, pricing, catalog). |
 | **User (cleaning worker)** | `+962790000001` (phone)  | `password` | Role: `cleaning_worker`. Cleaning API permissions (bookings, services, etc.). Has linked Worker record. |
 | **User (restaurant seller)** | `+962790000002` (phone)  | `password` | Role: `restaurant_seller`. Seller API permissions (restaurants, orders, products, etc.). Has linked Restaurant. |
 
-- **Dashboard:** use **email** + password with `POST /api/dashboard/login`.
 - **User (app):** use **phone** + password with `POST /api/login`.
 
 ---

@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Models;
 
+use App\Models\BookingReview;
+use App\Models\BookingStatusLog;
 use App\Models\CancellationPolicy;
 use App\Models\User;
+use App\Models\WorkerCustomerRating;
 use Database\Factories\EventBookingFactory;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Modules\Cleaning\Enums\EventBookingStatus;
 use Modules\Cleaning\Enums\EventType;
+use Modules\Cleaning\Observers\EventBookingObserver;
 use Modules\Cleaning\Traits\FilterQueries\EventBookingFilterQuery;
 
 /**
@@ -21,6 +26,7 @@ use Modules\Cleaning\Traits\FilterQueries\EventBookingFilterQuery;
  * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\SosAlert> $sosAlerts
  * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\SystemAlert> $systemAlerts
  */
+#[ObservedBy([EventBookingObserver::class])]
 final class EventBooking extends Model
 {
     use EventBookingFilterQuery;
@@ -89,9 +95,19 @@ final class EventBooking extends Model
         return $this->morphMany(\App\Models\SystemAlert::class, 'booking', 'booking_type', 'booking_id');
     }
 
-    protected static function newFactory(): EventBookingFactory
+    public function statusLogs(): MorphMany
     {
-        return EventBookingFactory::new();
+        return $this->morphMany(BookingStatusLog::class, 'booking', 'booking_type', 'booking_id');
+    }
+
+    public function reviews(): MorphMany
+    {
+        return $this->morphMany(BookingReview::class, 'booking', 'booking_type', 'booking_id');
+    }
+
+    public function ratings(): MorphMany
+    {
+        return $this->morphMany(WorkerCustomerRating::class, 'booking', 'booking_type', 'booking_id');
     }
 
     public function casts(): array
@@ -107,5 +123,10 @@ final class EventBooking extends Model
             'terms_accepted' => 'boolean',
             'cancelled_at' => 'datetime',
         ];
+    }
+
+    protected static function newFactory(): EventBookingFactory
+    {
+        return EventBookingFactory::new();
     }
 }

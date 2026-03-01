@@ -29,4 +29,25 @@ final class CleaningBillingPolicy extends Model
             'is_default' => 'boolean',
         ];
     }
+
+    public function getMinBillableMinutesAttribute(): ?int
+    {
+        $rules = $this->rules ?? [];
+
+        return isset($rules['min_billable_minutes']) ? (int) $rules['min_billable_minutes'] : null;
+    }
+
+    /**
+     * @param  int|string|null  $value
+     */
+    public function setMinBillableMinutesAttribute(mixed $value): void
+    {
+        $rules = $this->rules ?? [];
+        if ($value !== null && $value !== '') {
+            $rules['min_billable_minutes'] = (int) $value;
+        } else {
+            unset($rules['min_billable_minutes']);
+        }
+        $this->rules = $rules;
+    }
 }

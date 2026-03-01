@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\API\ProductAiController as AppProductAiController;
 use Illuminate\Support\Facades\Route;
 use Modules\Resturants\Http\Controllers\API\CategoryController;
 use Modules\Resturants\Http\Controllers\API\DashboardOverviewController;
@@ -43,6 +44,11 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     Route::apiResource('inventory-items', InventoryItemController::class);
     Route::apiResource('categories', CategoryController::class);
     Route::apiResource('products', ProductController::class);
+    Route::prefix('products/ai')->group(function () {
+        Route::post('extract-from-image', [AppProductAiController::class, 'extractFromImage'])->name('products.ai.extract-from-image');
+        Route::post('extract-from-menu', [AppProductAiController::class, 'extractFromMenu'])->name('products.ai.extract-from-menu');
+        Route::post('generate-image', [AppProductAiController::class, 'generateImage'])->name('products.ai.generate-image');
+    });
     Route::post('orders/{order}/accept', OrderAcceptController::class)->name('orders.accept');
     Route::post('orders/{order}/reject', OrderRejectController::class)->name('orders.reject');
     Route::get('orders/{order}/invoice', OrderInvoiceController::class)->name('orders.invoice');

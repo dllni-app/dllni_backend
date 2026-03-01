@@ -12,4 +12,16 @@ enum AlertType: string
     case TimeExpired = 'time_expired';
     case OverdueCompletion = 'overdue_completion';
     case AnomalyDetected = 'anomaly_detected';
+
+    public function label(): string
+    {
+        return match ($this) {
+            self::DelayedRating => 'تأخر التقييم المتبادل',
+            self::FrozenGPS => 'موقع مجمد',
+            self::SOSTriggered => 'استغاثة',
+            self::TimeExpired => 'تجاوز الوقت',
+            self::OverdueCompletion => 'تجاوز الوقت دون انتهاء',
+            self::AnomalyDetected => 'شذوذ',
+        };
+    }
 }

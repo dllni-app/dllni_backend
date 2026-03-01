@@ -12,6 +12,7 @@ use InvalidArgumentException;
 use Modules\Cleaning\Data\CleaningBookingData;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Http\Requests\CleaningBookingCancelRequest;
+use Modules\Cleaning\Http\Requests\CleaningBookingLocationRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingRejectRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingRequests\CleaningBookingFilterRequest;
@@ -142,6 +143,39 @@ final class CleaningBookingController
 
         try {
             $booking = $this->cleaningBookingService->startTravel($cleaning_booking);
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
+        }
+
+        return CleaningBookingResource::make(
+            $booking->load(['customer', 'worker', 'services', 'addons', 'billingPolicy', 'timeWarnings', 'disputes'])
+        );
+    }
+
+    public function updateLocation(CleaningBookingLocationRequest $request, CleaningBooking $cleaning_booking): JsonResponse
+    {
+        $this->ensureWorkerCanActOnBooking($cleaning_booking, requireOwnership: true);
+
+        try {
+            $this->cleaningBookingService->updateLocation(
+                $cleaning_booking,
+                (float) $request->validated('latitude'),
+                (float) $request->validated('longitude'),
+            );
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
+        }
+
+        return response()->json(['data' => ['ok' => true]]);
+    }
+
+    /** @throws Throwable */
+    public function arrive(CleaningBooking $cleaning_booking): CleaningBookingResource|JsonResponse
+    {
+        $this->ensureWorkerCanActOnBooking($cleaning_booking, requireOwnership: true);
+
+        try {
+            $booking = $this->cleaningBookingService->arrive($cleaning_booking);
         } catch (InvalidArgumentException $e) {
             throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
         }
