@@ -86,3 +86,13 @@ it('filters by low stock', function (): void {
     $response->assertOk();
     expect($response->json('data'))->toHaveCount(1);
 });
+
+it('returns available products count', function (): void {
+    SmProductFactory::new()->count(3)->create(['is_available' => true]);
+    SmProductFactory::new()->count(2)->create(['is_available' => false]);
+
+    $response = $this->getJson('/api/v1/sm-products/available-count');
+
+    $response->assertOk();
+    expect($response->json('count'))->toBe(3);
+});
