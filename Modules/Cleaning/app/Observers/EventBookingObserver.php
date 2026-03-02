@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Observers;
 
 use App\Models\BookingStatusLog;
+use BackedEnum;
 use Modules\Cleaning\Models\EventBooking;
 
 final class EventBookingObserver
@@ -25,10 +26,12 @@ final class EventBookingObserver
             return;
         }
 
+        $fromStatus = $booking->getOriginal('status');
+
         BookingStatusLog::create([
             'booking_id' => $booking->id,
             'booking_type' => EventBooking::class,
-            'from_status' => (string) $booking->getOriginal('status'),
+            'from_status' => $fromStatus instanceof BackedEnum ? $fromStatus->value : (string) $fromStatus,
             'to_status' => $booking->status->value,
         ]);
     }

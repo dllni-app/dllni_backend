@@ -6,6 +6,7 @@ namespace Modules\Cleaning\Observers;
 
 use App\Jobs\NotifyEligibleWorkersNewOrderJob;
 use App\Models\BookingStatusLog;
+use BackedEnum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 
@@ -33,10 +34,12 @@ final class CleaningBookingObserver
             return;
         }
 
+        $fromStatus = $booking->getOriginal('status');
+
         BookingStatusLog::create([
             'booking_id' => $booking->id,
             'booking_type' => CleaningBooking::class,
-            'from_status' => (string) $booking->getOriginal('status'),
+            'from_status' => $fromStatus instanceof BackedEnum ? $fromStatus->value : (string) $fromStatus,
             'to_status' => $booking->status->value,
         ]);
     }
