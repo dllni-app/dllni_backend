@@ -6,7 +6,7 @@ todos:
     content: Scaffold Modules/Supermarket module using nwidart/laravel-modules
     status: pending
   - id: create-supermarket-enums
-    content: "Create Supermarket enums in Modules/Supermarket/app/Enums (SmOrderStatus, SmPickupMode, SmAssistantInputMode, SmDisputeStatus, SmCommissionType, SmProductSource, SmRecurringOrderStatus, SmDocumentType)"
+    content: Create Supermarket enums in Modules/Supermarket/app/Enums (SmOrderStatus, SmPickupMode, SmAssistantInputMode, SmDisputeStatus, SmCommissionType, SmProductSource, SmRecurringOrderStatus, SmDocumentType)
     status: pending
   - id: create-supermarket-migrations
     content: "Create migrations for 24 Supermarket module tables: sm_stores, sm_store_hours, sm_categories, sm_products, sm_inventory_logs, sm_offers, sm_offer_products, sm_coupons, sm_carts, sm_cart_items, sm_orders, sm_order_items, sm_order_status_logs, sm_order_disputes, sm_order_dispute_messages, sm_store_documents, sm_store_trust_logs, sm_store_daily_stats, sm_assistant_queries, sm_smart_lists, sm_smart_list_items, sm_recurring_orders, sm_recurring_order_items, sm_commission_rules"
@@ -77,9 +77,11 @@ erDiagram
     sm_stores ||--o{ sm_store_trust_logs : "tracked by"
     sm_stores ||--o{ sm_store_daily_stats : "has"
     sm_stores ||--o{ sm_commission_rules : "uses"
+    sm_stores ||--o{ sm_lost_opportunities : "lost sales"
 
     sm_categories ||--o{ sm_products : "contains"
     sm_products }o--o{ sm_offers : "included in"
+    sm_products ||--o{ sm_lost_opportunities : "stock shortfall"
 
     sm_carts ||--o{ sm_cart_items : "contains"
     sm_orders ||--o{ sm_order_items : "contains"
@@ -151,6 +153,16 @@ erDiagram
         text special_instructions "nullable"
         datetime cancelled_at "nullable"
         text cancellation_reason "nullable"
+        timestamps created_at
+    }
+
+    sm_lost_opportunities {
+        bigint id PK
+        bigint store_id FK
+        bigint product_id FK
+        bigint customer_id FK "nullable"
+        int attempted_quantity
+        int available_stock
         timestamps created_at
     }
 
@@ -231,6 +243,8 @@ erDiagram
     }
 ```
 
+
+
 ## Entities Summary (module tables)
 
 ### Merchant and catalog entities
@@ -243,6 +257,7 @@ erDiagram
 - `sm_store_trust_logs`
 - `sm_store_daily_stats`
 - `sm_commission_rules`
+- `sm_lost_opportunities`
 
 ### Promotion and inventory entities
 
@@ -345,3 +360,4 @@ The following legacy tables are explicitly removed from this module plan:
 
 - Recommendation ranking logic is service-layer logic; ERD stores query and durable operational state.
 - Notifications use shared Laravel `notifications` table.
+

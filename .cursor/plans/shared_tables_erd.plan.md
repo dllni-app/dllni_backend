@@ -47,7 +47,7 @@ The following are intentionally excluded from active ERD coverage:
 
 | Table                    | Notes                                                            |
 | ------------------------ | ---------------------------------------------------------------- |
-| `users`                  | Existing Laravel user table                                      |
+| `users`                  | Existing Laravel user table (with `phone`, `module_type`, `fcm_token`) |
 | `media`                  | Spatie MediaLibrary polymorphic table                            |
 | `notifications`          | Laravel notifications table                                      |
 | `personal_access_tokens` | Sanctum tokens                                                   |
@@ -62,7 +62,7 @@ The following are intentionally excluded from active ERD coverage:
 
 | Table                   | Notes                                        |
 | ----------------------- | -------------------------------------------- |
-| `workers`               | Worker profile and KPIs                      |
+| `workers`               | Worker profile, KPIs, verification, and featuring |
 | `worker_zones`          | Preferred work areas (polygon support)       |
 | `worker_availability`   | Availability calendar                        |
 | `worker_trust_logs`     | Trust score audit log                        |
@@ -105,6 +105,17 @@ The following are intentionally excluded from active ERD coverage:
 | `worker_customer_ratings` | Worker rates customer and customer rates worker; tied to booking context |
 
 
+## Tier 6 - Shared financial settings and automation rules
+
+
+| Table                         | Notes                                                          |
+| ----------------------------- | -------------------------------------------------------------- |
+| `cleaning_financial_settings` | Global financial and time-billing defaults for Cleaning        |
+| `cleaning_automation_rules`   | Rule engine for Cleaning worker suspension / rewards           |
+| `restaurant_financial_settings` | Global financial and time-billing defaults for Restaurant    |
+| `restaurant_automation_rules`   | Rule engine for Restaurant operational automation workflows  |
+
+
 ## ERD Diagram (shared entities)
 
 ```mermaid
@@ -140,6 +151,9 @@ erDiagram
         int open_disputes_count
         boolean is_active
         boolean is_suspended
+        boolean is_verified
+        boolean is_featured
+        datetime featured_until "nullable"
         datetime suspended_until
         string home_address
         decimal home_latitude

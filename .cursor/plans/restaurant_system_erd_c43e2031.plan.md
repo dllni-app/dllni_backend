@@ -3,13 +3,13 @@ name: Restaurant System ERD
 overview: ERD for the Restaurant module (Modules/Resturants). Covers browsing, menu/catalog, smart assistant persistence, cart/checkout (pickup and dine-in only), order operations, disputes, analytics, and merchant governance. Shared tables are defined in shared_tables_erd.plan.md.
 todos:
   - id: create-enums
-    content: "Create Restaurant enums in Modules/Resturants/app/Enums (PriceRange, DayOfWeek, DiscountType, OrderStatus, OrderType, RestaurantPickupMode, RestaurantAssistantInputMode, RestaurantDisputeStatus, InventoryLogType, PermissionGroup, PenaltyType, RestaurantDocumentType, RecurringOrderStatus)"
+    content: Create Restaurant enums in Modules/Resturants/app/Enums (PriceRange, DayOfWeek, DiscountType, OrderStatus, OrderType, RestaurantPickupMode, RestaurantAssistantInputMode, RestaurantDisputeStatus, InventoryLogType, PermissionGroup, PenaltyType, RestaurantDocumentType, RecurringOrderStatus)
     status: pending
   - id: create-migrations
     content: "Create migrations for restaurant module tables: restaurants, restaurant_documents, cuisine_types, cuisine_type_restaurant, operating_hours, categories, products, restaurant_product_substitutions, modifier_groups, modifiers, modifier_group_product, offers, offer_product, promo_codes, carts, cart_items, cart_item_modifier, orders, order_items, order_item_modifier, order_status_logs, reviews, favorites, inventory_logs, restaurant_reputation_logs, restaurant_penalties, restaurant_daily_stats, restaurant_monthly_stats, restaurant_roles, restaurant_role_permission, restaurant_staff, restaurant_assistant_queries, restaurant_smart_lists, restaurant_smart_list_items, restaurant_recurring_orders, restaurant_recurring_order_items, restaurant_order_disputes, restaurant_order_dispute_messages"
     status: pending
   - id: create-models
-    content: "Create Eloquent models for all restaurant module entities and pivots"
+    content: Create Eloquent models for all restaurant module entities and pivots
     status: pending
   - id: create-factories
     content: Create factories and seeders for all core restaurant entities
@@ -28,6 +28,7 @@ This module uses shared tables from `shared_tables_erd.plan.md`:
 
 - global: `users`, `roles`, `permissions`, `permission_role`, `cancellation_policies`
 - catalog/recipe: `master_products`, `recipes`, `recipe_ingredients`, `master_product_aliases`
+- financial & automation: `restaurant_financial_settings`, `restaurant_automation_rules`
 
 ## Excluded Scope
 
@@ -84,6 +85,7 @@ erDiagram
     restaurants ||--o{ restaurant_daily_stats : "has"
     restaurants ||--o{ restaurant_monthly_stats : "has"
     restaurants ||--o{ restaurant_assistant_queries : "context for"
+    restaurants ||--o{ restaurant_customer_reviews : "is reviewed in"
 
     cuisine_types }o--o{ restaurants : "classifies"
 
@@ -92,6 +94,7 @@ erDiagram
     products }o--o{ offers : "included in"
     products ||--o{ restaurant_product_substitutions : "maps substitutions"
     products ||--o{ inventory_logs : "tracked by"
+    products }o--o{ inventory_items : "consumes via"
 
     carts ||--o{ cart_items : "contains"
     cart_items ||--o{ cart_item_modifier : "has"
@@ -116,10 +119,16 @@ erDiagram
         string slug UK
         text description
         string address
+        string city "nullable"
+        string district "nullable"
+        text location_details "nullable"
         decimal latitude
         decimal longitude
         string phone
+        string whatsapp_number "nullable"
         string email
+        string instagram_username "nullable"
+        string facebook_page_name "nullable"
         decimal average_rating
         int total_reviews
         int estimated_preparation_time
@@ -131,6 +140,7 @@ erDiagram
         boolean manual_visibility_override
         boolean is_active
         boolean is_featured
+        boolean is_temporarily_closed
         datetime suspension_until "nullable"
         timestamps created_at
     }
@@ -177,10 +187,60 @@ erDiagram
         json cancellation_policy_snapshot "nullable"
         text special_instructions "nullable"
         datetime accepted_at "nullable"
+        integer estimated_preparation_minutes "nullable"
+        text kitchen_notes "nullable"
         datetime preparing_at "nullable"
         datetime completed_at "nullable"
         datetime cancelled_at "nullable"
         text cancellation_reason "nullable"
+        string cancellation_reason_code "nullable"
+        timestamps created_at
+    }
+
+    restaurant_order_disputes {
+        bigint id PK
+        bigint order_id FK
+        bigint user_id FK
+        string ticket_number UK
+        string status "enum RestaurantDisputeStatus"
+        text description "nullable"
+        string resolution_type "nullable"
+        decimal refund_amount "nullable"
+        decimal deduction_amount "nullable"
+        string payout_hold_status
+        bigint resolved_by_user_id FK "nullable"
+        datetime resolved_at "nullable"
+        text admin_note "nullable"
+        timestamps created_at
+    }
+
+    restaurant_customer_reviews {
+        bigint id PK
+        bigint restaurant_id FK
+        bigint order_id FK
+        bigint customer_id FK
+        bigint created_by_user_id FK
+        tinyint rating
+        text comment "nullable"
+        timestamps created_at
+    }
+
+    inventory_items {
+        bigint id PK
+        bigint restaurant_id FK
+        string name
+        string unit
+        decimal quantity
+        decimal minimum_limit
+        decimal unit_cost
+        timestamps created_at
+    }
+
+    inventory_item_product {
+        bigint id PK
+        bigint inventory_item_id FK
+        bigint product_id FK
+        decimal quantity_used
         timestamps created_at
     }
 
@@ -261,6 +321,8 @@ erDiagram
     }
 ```
 
+
+
 ## Entities Summary
 
 ### Core merchant and menu entities
@@ -286,8 +348,10 @@ erDiagram
 ### Reviews, inventory, governance, and analytics
 
 - `reviews`
+- `restaurant_customer_reviews` (explicit per-restaurant customer reviews tied to orders)
 - `favorites`
 - `inventory_logs`
+- `inventory_items`, `inventory_item_product`
 - `restaurant_reputation_logs`
 - `restaurant_penalties`
 - `restaurant_daily_stats`
@@ -323,7 +387,8 @@ erDiagram
 
 ## Key Indexes
 
-- `restaurants`: index on `is_active`, `is_featured`, `average_rating`, `reputation_score`, `visibility_score`
+-- `restaurants`: index on `is_active`, `is_featured`, `is_temporarily_closed`, `average_rating`, `reputation_score`, `visibility_score`
+
 - `restaurant_documents`: index on `restaurant_id`, `document_type`, `verification_status`
 - `products`: index on `restaurant_id` + `is_available`, `category_id`, `master_product_id`
 - `restaurant_product_substitutions`: unique on `restaurant_id` + `product_id` + `substitute_product_id`
@@ -339,7 +404,10 @@ erDiagram
 - `restaurant_smart_lists`: index on `user_id`, `is_active`
 - `restaurant_smart_list_items`: index on `smart_list_id`, `master_product_id`
 - `restaurant_recurring_orders`: index on `user_id`, `status`, `next_run_at`
-- `restaurant_order_disputes`: unique on `ticket_number`, index on `order_id`, `status`
+-- `restaurant_order_disputes`: unique on `ticket_number`, index on `order_id`, `status`, `resolved_by_user_id`
+-- `restaurant_customer_reviews`: unique on `restaurant_id` + `order_id` + `customer_id`
+-- `inventory_items`: index on `restaurant_id`
+-- `inventory_item_product`: unique on `inventory_item_id` + `product_id`
 
 ## Requirement-to-Table Coverage (non-excluded)
 
@@ -361,3 +429,4 @@ erDiagram
 
 - Recommendation ranking/scoring logic remains in application services; ERD stores only durable state and audit data.
 - Notifications use Laravel `notifications` table from shared infrastructure.
+

@@ -6,7 +6,7 @@ todos:
     content: Scaffold Modules/Cleaning module using nwidart/laravel-modules
     status: pending
   - id: create-cleaning-enums
-    content: "Create enums in Modules/Cleaning/app/Enums (CleaningBookingStatus, EventBookingStatus, ServiceCategory, AddonPricingType, EventType, CleaningBillingMode, CleaningTimeWarningResponse)"
+    content: Create enums in Modules/Cleaning/app/Enums (CleaningBookingStatus, EventBookingStatus, ServiceCategory, AddonPricingType, EventType, CleaningBillingMode, CleaningTimeWarningResponse)
     status: pending
   - id: create-cleaning-migrations
     content: "Create migrations for 9 Cleaning module tables: cleaning_services, service_pricing, cleaning_billing_policies, cleaning_bookings, cleaning_booking_service, booking_addons, event_bookings, event_booking_service, cleaning_time_warnings"
@@ -31,9 +31,10 @@ This module uses shared tables from `shared_tables_erd.plan.md`:
 
 - global: `users`, `cancellation_policies`
 - worker infrastructure: `workers`, `worker_zones`, `worker_availability`, `worker_trust_logs`
-- guided/pricing helpers: `property_type_configs`, `service_addons`, `travel_cost_configs`
+- guided/pricing helpers: `property_type_configs`, `service_addons`, `travel_cost_configs`, `cleaning_financial_settings`
 - booking protocol: `booking_reviews`, `booking_status_logs`, `booking_security_codes`, `booking_extensions`, `disputes`, `dispute_messages`, `sos_alerts`, `system_alerts`
 - bidirectional ratings: `worker_customer_ratings`
+- automation: `cleaning_automation_rules`
 
 ## Excluded Scope
 
@@ -104,9 +105,11 @@ erDiagram
         string booking_number UK
         string status "enum CleaningBookingStatus"
         string property_type
-        json property_details
-        decimal estimated_sqm
-        decimal estimated_hours
+        json property_details "nullable"
+        decimal estimated_sqm "nullable"
+        decimal estimated_hours "nullable"
+        decimal address_latitude "nullable"
+        decimal address_longitude "nullable"
         date scheduled_date
         time scheduled_time
         decimal total_hours
@@ -118,8 +121,12 @@ erDiagram
         boolean terms_accepted
         datetime work_started_at "nullable"
         datetime work_finished_at "nullable"
+        datetime started_travel_at "nullable"
+        datetime arrived_at "nullable"
         datetime customer_confirmed_at "nullable"
         datetime cancelled_at "nullable"
+        string cancellation_reason "nullable"
+        string security_code "nullable"
         timestamps created_at
     }
 
@@ -155,6 +162,8 @@ erDiagram
         datetime sent_at
         datetime customer_responded_at "nullable"
         datetime worker_responded_at "nullable"
+        string worker_reject_message "nullable"
+        smallint additional_minutes "nullable"
         timestamps created_at
     }
 
