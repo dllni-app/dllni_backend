@@ -14,7 +14,7 @@ final class ListCleaningServices extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'إدارة خدمات التنظيف: الاسم، الوصف، التسعير (سعر أساسي، حد أدنى للساعات)، والربط مع الإضافات.';
+        return __('cleaning_admin.pages.cleaning_services.list');
     }
 
     protected function getHeaderActions(): array

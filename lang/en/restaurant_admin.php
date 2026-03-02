@@ -78,22 +78,6 @@ return [
         'restaurant' => 'Restaurant',
         'date' => 'Date',
         'year_month' => 'Year-Month',
-        'orders_count' => 'Orders',
-        'revenue' => 'Revenue',
-        'average_order_value' => 'Avg. order value',
-    ],
-    'stats' => [
-        'title' => 'Daily & Monthly Statistics',
-        'description' => 'View restaurant performance by day and month.',
-        'daily_heading' => 'Daily statistics',
-        'daily_description' => 'Orders count, revenue and average order value per day.',
-        'monthly_heading' => 'Monthly statistics',
-        'monthly_description' => 'Orders count, revenue and average order value per month.',
-        'empty_daily' => 'No daily statistics yet.',
-        'empty_monthly' => 'No monthly statistics yet.',
-        'restaurant' => 'Restaurant',
-        'date' => 'Date',
-        'year_month' => 'Year-Month',
         'orders_count' => 'Orders count',
         'revenue' => 'Revenue',
         'average_order_value' => 'Average order value',
@@ -184,5 +168,61 @@ return [
             'health_certificate' => 'Health certificate',
             'other' => 'Other',
         ],
+    ],
+
+    'pages' => [
+        'hub' => [
+            'description' => 'Open any restaurant management area from this section.',
+        ],
+        'restaurants' => [
+            'list' => 'Restaurant governance: enable/disable, suspend, feature, rating and reputation.',
+            'view' => 'Restaurant details, documents, warnings and permissions.',
+            'edit' => 'Edit restaurant status, suspension or featuring.',
+        ],
+        'orders' => [
+            'list' => 'Monitor orders: order #, restaurant, customer, status, pickup and cancellation.',
+            'view' => 'Order details, status timeline and amount.',
+        ],
+        'disputes' => [
+            'list' => 'View order disputes, messages and take decisions (refund, deduct, close).',
+            'view' => 'Dispute details, message thread and resolution.',
+            'edit' => 'Record resolution or reply to dispute.',
+        ],
+        'users' => [
+            'list' => 'Manage admin users and role templates for the restaurant section.',
+            'view' => 'User details and roles.',
+            'create' => 'Add a new admin user and assign roles.',
+            'edit' => 'Edit user or roles.',
+        ],
+        'roles' => [
+            'list' => 'Manage roles and permissions for the restaurant section.',
+            'view' => 'Role details and permissions.',
+            'create' => 'Create a new role.',
+            'edit' => 'Edit role permissions.',
+        ],
+        'stats' => [
+            'description' => 'View restaurant performance by day and month.',
+        ],
+        'inventory' => [
+            'description' => 'Monitor low-stock products and inventory change logs.',
+        ],
+        'coverage' => [
+            'description' => 'Geographic coverage analytics and service gap identification.',
+        ],
+        'time_monitoring' => [
+            'description' => 'Monitor orders nearing end time and warnings.',
+        ],
+    ],
+
+    'column_descriptions' => [
+        'name' => 'Restaurant, product or document name.',
+        'status' => 'Current status (active, suspended, completed, cancelled).',
+        'is_active' => 'Whether the record is active.',
+        'trust_score' => 'Trust or reputation score.',
+        'warning_count' => 'Number of warnings recorded.',
+        'orders_count' => 'Number of orders.',
+        'revenue' => 'Revenue.',
+        'date' => 'Date.',
+        'created_at' => 'Creation date.',
     ],
 ];

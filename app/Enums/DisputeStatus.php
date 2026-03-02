@@ -13,11 +13,6 @@ enum DisputeStatus: string
 
     public function label(): string
     {
-        return match ($this) {
-            self::Open => 'مفتوح',
-            self::UnderReview => 'قيد المراجعة',
-            self::Resolved => 'تم الحل',
-            self::Closed => 'مغلق',
-        };
+        return __('cleaning_admin.enums.dispute_status.'.$this->value);
     }
 }

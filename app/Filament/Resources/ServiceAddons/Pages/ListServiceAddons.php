@@ -14,7 +14,7 @@ final class ListServiceAddons extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'إدارة إضافات الخدمة: الاسم، النوع (ثابت أو نسبة)، السعر، وربطها بخدمات التنظيف.';
+        return __('cleaning_admin.pages.service_addons.list');
     }
 
     protected function getHeaderActions(): array

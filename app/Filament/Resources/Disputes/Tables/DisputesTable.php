@@ -19,25 +19,47 @@ final class DisputesTable
     {
         return $table
             ->columns([
-                TextColumn::make('ticket_number')->label('رقم التذكرة')->searchable()->sortable(),
+                TextColumn::make('ticket_number')
+                    ->label(__('cleaning_admin.disputes.fields.ticket_number'))
+                    ->description(__('cleaning_admin.column_descriptions.ticket_number'))
+                    ->searchable()
+                    ->sortable(),
                 TextColumn::make('booking_number')
-                    ->label('رقم الحجز')
+                    ->label(__('cleaning_admin.disputes.fields.booking_number'))
+                    ->description(__('cleaning_admin.column_descriptions.booking_number'))
                     ->getStateUsing(fn ($record) => $record->booking?->booking_number ?? '-')
                     ->placeholder('-'),
-                TextColumn::make('category')->label('التصنيف')->badge()->formatStateUsing(fn ($state) => $state?->label()),
-                TextColumn::make('status')->label('الحالة')->badge()->formatStateUsing(fn ($state) => $state?->label()),
-                TextColumn::make('resolution')->label('القرار')->placeholder('-')->badge()->formatStateUsing(fn ($state) => $state?->label()),
-                TextColumn::make('created_at')->label('تاريخ الفتح')->since()->sortable(),
+                TextColumn::make('category')
+                    ->label(__('cleaning_admin.disputes.fields.category'))
+                    ->description(__('cleaning_admin.column_descriptions.category'))
+                    ->badge()
+                    ->formatStateUsing(fn ($state) => $state?->label()),
+                TextColumn::make('status')
+                    ->label(__('cleaning_admin.disputes.fields.status'))
+                    ->description(__('cleaning_admin.column_descriptions.status'))
+                    ->badge()
+                    ->formatStateUsing(fn ($state) => $state?->label()),
+                TextColumn::make('resolution')
+                    ->label(__('cleaning_admin.disputes.fields.resolution'))
+                    ->description(__('cleaning_admin.column_descriptions.resolution'))
+                    ->placeholder('-')
+                    ->badge()
+                    ->formatStateUsing(fn ($state) => $state?->label()),
+                TextColumn::make('created_at')
+                    ->label(__('cleaning_admin.disputes.fields.created_at'))
+                    ->description(__('cleaning_admin.column_descriptions.created_at'))
+                    ->since()
+                    ->sortable(),
             ])
             ->modifyQueryUsing(fn ($query) => $query->with('booking'))
             ->filters([
-                SelectFilter::make('status')->label('الحالة')->options(collect(DisputeStatus::cases())->mapWithKeys(fn ($c) => [$c->value => $c->label()])->all()),
-                SelectFilter::make('category')->label('التصنيف')->options(collect(DisputeCategory::cases())->mapWithKeys(fn ($c) => [$c->value => $c->label()])->all()),
-                SelectFilter::make('resolution')->label('القرار')->options(collect(DisputeResolution::cases())->mapWithKeys(fn ($c) => [$c->value => $c->label()])->all()),
+                SelectFilter::make('status')->label(__('cleaning_admin.disputes.fields.status'))->options(collect(DisputeStatus::cases())->mapWithKeys(fn ($c) => [$c->value => $c->label()])->all()),
+                SelectFilter::make('category')->label(__('cleaning_admin.disputes.fields.category'))->options(collect(DisputeCategory::cases())->mapWithKeys(fn ($c) => [$c->value => $c->label()])->all()),
+                SelectFilter::make('resolution')->label(__('cleaning_admin.disputes.fields.resolution'))->options(collect(DisputeResolution::cases())->mapWithKeys(fn ($c) => [$c->value => $c->label()])->all()),
             ])
             ->recordActions([
-                ViewAction::make(),
-                EditAction::make(),
+                ViewAction::make()->label(__('cleaning_admin.workers.view')),
+                EditAction::make()->label(__('cleaning_admin.workers.edit')),
             ]);
     }
 }

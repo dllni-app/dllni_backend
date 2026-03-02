@@ -82,6 +82,7 @@ return [
             'worker' => 'Worker',
             'sender' => 'Sender',
             'body' => 'Message',
+            'created_at' => 'Opened at',
         ],
         'actions' => [
             'reply' => 'Reply',
@@ -205,5 +206,155 @@ return [
     'boolean' => [
         'yes' => 'Yes',
         'no' => 'No',
+    ],
+
+    'pages' => [
+        'overview' => [
+            'description' => 'Live overview of KPIs, today\'s bookings, open disputes, SOS and system alerts with quick actions for contact or resolution.',
+        ],
+        'financial' => [
+            'description' => 'Manage base pricing, add-ons, commission, travel costs, distance start point, time billing policy and minimum billable minutes.',
+        ],
+        'geographic_coverage' => [
+            'description' => 'View demand vs worker coverage by geographic area to identify service gaps (low/good/high) and worker count per zone.',
+        ],
+        'cleaning_bookings' => [
+            'list' => 'View and manage all cleaning bookings: booking #, customer, worker, date and time, status, total price, assign worker or cancel.',
+            'view' => 'Full booking details: parties, pricing, execution times and related disputes.',
+            'create' => 'Create a new cleaning booking and set customer, service, date and time.',
+            'edit' => 'Edit booking data, status or assigned worker.',
+        ],
+        'event_bookings' => [
+            'list' => 'View and manage event bookings: family dinner, birthday, large gathering, funeral; guest range, team size, status and price.',
+            'view' => 'Event booking details: event type, guests, team and pricing.',
+            'create' => 'Create a new event booking and set type, date and team size.',
+            'edit' => 'Edit event booking data or status.',
+        ],
+        'workers' => [
+            'list' => 'List of service providers: name, photo, trust score, completed tasks, average rating, status; view profile and suspend account.',
+            'view' => 'Full worker profile: performance, preferred zones, availability and reviews.',
+            'create' => 'Add a new worker and link to a user account.',
+            'edit' => 'Edit worker data, trust score or status.',
+        ],
+        'disputes' => [
+            'list' => 'View disputes and complaints: ticket #, booking #, customer, worker, reason, status, opened at; reply, partial refund, deduct from worker, close.',
+            'view' => 'Dispute details, message thread and option to reply or resolve.',
+            'edit' => 'Record resolution: partial refund, deduct from worker or close dispute.',
+        ],
+        'system_alerts' => [
+            'list' => 'Delayed mutual rating, frozen location, SOS, time exceeded without end; contact or resolve actions.',
+        ],
+        'time_warnings' => [
+            'list' => 'Log of time-end warnings: booking #, type (cleaning/event), sent at, customer response (extend/commit/finish early), worker response.',
+            'view' => 'Time-end warning details and customer/worker responses.',
+        ],
+        'cleaning_services' => [
+            'list' => 'Manage cleaning services: name, description, pricing (base rate, minimum hours), and link to add-ons.',
+            'view' => 'Service details, pricing and linked add-ons.',
+            'create' => 'Define a new cleaning service and base pricing.',
+            'edit' => 'Edit service, pricing or add-ons.',
+        ],
+        'service_addons' => [
+            'list' => 'Manage optional add-ons: name, type (fixed or percentage), price, and link to cleaning services.',
+            'view' => 'Add-on details, pricing type and linked services.',
+            'create' => 'Add a new optional add-on (fixed or percentage of service cost).',
+            'edit' => 'Edit add-on, price or links.',
+        ],
+        'billing_policies' => [
+            'list' => 'Manage billing policies: name, description, billing mode (full booked time / actual work time), minimum minutes, default.',
+            'view' => 'Billing policy details and accounting mode.',
+            'create' => 'Create a new billing policy.',
+            'edit' => 'Edit billing policy or set as default.',
+        ],
+        'travel_cost_configs' => [
+            'list' => 'Travel cost rules: per km rate, minimum travel fee, distance start point (worker location / home address / system auto).',
+            'view' => 'Travel cost rule details and distance start point.',
+            'edit' => 'Edit per km rate, minimum or start point.',
+        ],
+        'automation_rules' => [
+            'list' => 'Automation rules: e.g. suspend worker when trust drops, or grant featured badge when rating exceeds threshold.',
+            'view' => 'Rule details: conditions and actions (suspend, reward, commission reduction).',
+            'create' => 'Create a new automation rule (auto suspend, featured badge, commission reduction).',
+            'edit' => 'Edit rule conditions or actions.',
+        ],
+        'users' => [
+            'list' => 'Manage admin users who can access the cleaning dashboard and their assigned roles.',
+            'view' => 'User details, roles and permissions.',
+            'create' => 'Add a new admin user and assign roles.',
+            'edit' => 'Edit user data or roles.',
+        ],
+        'roles' => [
+            'list' => 'Manage roles and permissions: define who can do what in the dashboard (admin, support, accountant, etc.).',
+            'view' => 'Role details and associated permissions.',
+            'create' => 'Create a new role and assign permissions.',
+            'edit' => 'Edit role permissions.',
+        ],
+    ],
+
+    'column_descriptions' => [
+        'booking_number' => 'Unique identifier for the cleaning or event booking.',
+        'status' => 'Current status of the booking, dispute or alert.',
+        'customer' => 'Customer who requested the service.',
+        'worker' => 'Worker assigned to perform the service (if any).',
+        'scheduled_date' => 'Scheduled date for the service.',
+        'scheduled_time' => 'Scheduled start time for the service.',
+        'total_price' => 'Total amount (base + add-ons + travel) in SAR.',
+        'disputes_count' => 'Number of open or closed disputes linked to this booking.',
+        'ticket_number' => 'Dispute or complaint ticket number.',
+        'category' => 'Dispute category (quality, damage, conduct, billing, other).',
+        'resolution' => 'Resolution decision (partial refund, deduct from worker, close).',
+        'created_at' => 'Record creation date and time.',
+        'first_name' => 'Worker first name.',
+        'trust_score' => 'Worker current trust score.',
+        'average_rating' => 'Average customer rating for the worker.',
+        'total_completed_jobs' => 'Total completed tasks successfully.',
+        'is_active' => 'Whether the account is active and can receive requests.',
+        'is_suspended' => 'Whether the account is temporarily suspended.',
+        'id' => 'Record identifier.',
+        'phone' => 'Phone number for contact.',
+    ],
+
+    'enums' => [
+        'cleaning_booking_status' => [
+            'pending' => 'Pending',
+            'worker_assigned' => 'Worker assigned',
+            'in_progress' => 'In progress',
+            'completed' => 'Completed',
+            'cancelled' => 'Cancelled',
+        ],
+        'dispute_status' => [
+            'open' => 'Open',
+            'under_review' => 'Under review',
+            'resolved' => 'Resolved',
+            'closed' => 'Closed',
+        ],
+        'dispute_category' => [
+            'poor_quality' => 'Service quality',
+            'property_damage' => 'Property damage',
+            'unprofessional' => 'Unprofessional conduct',
+            'billing_issue' => 'Billing issue',
+            'other' => 'Other',
+        ],
+        'dispute_resolution' => [
+            'full_refund' => 'Full refund',
+            'partial_refund' => 'Partial refund',
+            'worker_penalty' => 'Deduct from worker',
+            'dismissed' => 'Dismissed',
+        ],
+        'alert_type' => [
+            'delayed_rating' => 'Delayed mutual rating',
+            'frozen_gps' => 'Frozen location',
+            'sos_triggered' => 'SOS',
+            'time_expired' => 'Time exceeded',
+            'overdue_completion' => 'Time exceeded without end',
+            'anomaly_detected' => 'Anomaly',
+        ],
+        'event_booking_status' => [
+            'pending' => 'Pending',
+            'worker_assigned' => 'Worker assigned',
+            'in_progress' => 'In progress',
+            'completed' => 'Completed',
+            'cancelled' => 'Cancelled',
+        ],
     ],
 ];

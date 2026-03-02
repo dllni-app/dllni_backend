@@ -10,4 +10,9 @@ use Filament\Resources\Pages\ListRecords;
 final class ListSmStoreTrustLogs extends ListRecords
 {
     protected static string $resource = SmStoreTrustLogResource::class;
+
+    public function getSubheading(): ?string
+    {
+        return __('supermarket_admin.pages.trust_logs.list');
+    }
 }

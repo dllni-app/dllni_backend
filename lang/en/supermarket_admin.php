@@ -133,4 +133,69 @@ return [
             'no' => 'No',
         ],
     ],
+
+    'pages' => [
+        'hub' => [
+            'description' => 'Open any supermarket management area from this section.',
+        ],
+        'stores' => [
+            'list' => 'Store governance: enable/disable, suspend, feature, rating and trust.',
+            'view' => 'Store details, documents and trust log.',
+            'edit' => 'Edit store status, suspension or featuring.',
+        ],
+        'store_documents' => [
+            'list' => 'Review store documents and approve/reject verification.',
+            'view' => 'Document details and verification status.',
+            'edit' => 'Approve or reject document with rejection reason.',
+        ],
+        'trust_logs' => [
+            'list' => 'Trust and warning event log per store.',
+            'view' => 'Trust event details: change, reason and user.',
+        ],
+        'products' => [
+            'list' => 'Supervise store products, availability and quantities.',
+            'view' => 'Product details, price and stock.',
+            'create' => 'Add a new product to the store.',
+            'edit' => 'Edit price, quantity or low-stock threshold.',
+        ],
+        'offers' => [
+            'list' => 'View offers, enable/disable and validity period.',
+            'view' => 'Offer details, price and products.',
+            'edit' => 'Edit offer or validity period.',
+        ],
+        'coupons' => [
+            'list' => 'View coupons, enable/disable.',
+            'view' => 'Coupon details, discount and usage.',
+            'edit' => 'Edit coupon or status.',
+        ],
+        'orders' => [
+            'list' => 'Monitor orders, pickup status and cancellation.',
+            'view' => 'Order details, customer and pickup time.',
+        ],
+        'disputes' => [
+            'list' => 'View disputes, messages and take decisions.',
+            'view' => 'Dispute details and message thread.',
+            'edit' => 'Record resolution or reply.',
+        ],
+        'daily_stats' => [
+            'list' => 'View daily statistics per store.',
+            'view' => 'Daily stats details: orders, revenue and customers.',
+        ],
+    ],
+
+    'column_descriptions' => [
+        'name' => 'Store, product or offer name.',
+        'trust_score' => 'Current store trust score.',
+        'warning_count' => 'Warning count.',
+        'average_rating' => 'Average rating.',
+        'status' => 'Status (active, accepted, preparing, completed, cancelled).',
+        'verification_status' => 'Verification status (pending, approved, rejected).',
+        'price' => 'Price in SAR.',
+        'stock_quantity' => 'Available quantity.',
+        'low_stock_threshold' => 'Low stock alert threshold.',
+        'expires_at' => 'Expiry date.',
+        'orders_count' => 'Orders count.',
+        'orders_revenue' => 'Orders revenue.',
+        'date' => 'Date.',
+    ],
 ];

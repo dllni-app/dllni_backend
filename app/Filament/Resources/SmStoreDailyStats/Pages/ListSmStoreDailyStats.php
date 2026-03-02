@@ -10,4 +10,9 @@ use Filament\Resources\Pages\ListRecords;
 final class ListSmStoreDailyStats extends ListRecords
 {
     protected static string $resource = SmStoreDailyStatResource::class;
+
+    public function getSubheading(): ?string
+    {
+        return __('supermarket_admin.pages.daily_stats.list');
+    }
 }

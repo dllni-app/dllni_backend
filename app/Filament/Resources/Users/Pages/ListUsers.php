@@ -14,7 +14,7 @@ final class ListUsers extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'إدارة مدراء النظام: المستخدمون الذين يمكنهم الدخول إلى لوحة تحكم خدمة التنظيف وربطهم بالأدوار.';
+        return __('cleaning_admin.pages.users.list');
     }
 
     protected function getHeaderActions(): array

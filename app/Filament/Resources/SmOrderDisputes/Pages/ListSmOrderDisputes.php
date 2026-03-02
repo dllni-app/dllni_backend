@@ -10,4 +10,9 @@ use Filament\Resources\Pages\ListRecords;
 final class ListSmOrderDisputes extends ListRecords
 {
     protected static string $resource = SmOrderDisputeResource::class;
+
+    public function getSubheading(): ?string
+    {
+        return __('supermarket_admin.pages.disputes.list');
+    }
 }

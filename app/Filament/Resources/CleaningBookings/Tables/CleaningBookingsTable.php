@@ -23,14 +23,41 @@ final class CleaningBookingsTable
     {
         return $table
             ->columns([
-                TextColumn::make('booking_number')->label('رقم الحجز')->searchable()->sortable(),
-                TextColumn::make('status')->label('الحالة')->badge()->formatStateUsing(fn ($state) => $state?->label()),
-                TextColumn::make('customer.name')->label('العميل')->searchable(),
-                TextColumn::make('worker.first_name')->label('العامل')->placeholder('غير معيّن'),
-                TextColumn::make('scheduled_date')->label('التاريخ')->date()->sortable(),
-                TextColumn::make('scheduled_time')->label('الوقت'),
-                TextColumn::make('total_price')->label('المجموع')->money('SAR')->sortable(),
-                TextColumn::make('disputes_count')->counts('disputes')->label('النزاعات'),
+                TextColumn::make('booking_number')
+                    ->label(__('cleaning_admin.booking.fields.booking_number'))
+                    ->description(__('cleaning_admin.column_descriptions.booking_number'))
+                    ->searchable()
+                    ->sortable(),
+                TextColumn::make('status')
+                    ->label(__('cleaning_admin.booking.fields.status'))
+                    ->description(__('cleaning_admin.column_descriptions.status'))
+                    ->badge()
+                    ->formatStateUsing(fn ($state) => $state?->label()),
+                TextColumn::make('customer.name')
+                    ->label(__('cleaning_admin.booking.fields.customer'))
+                    ->description(__('cleaning_admin.column_descriptions.customer'))
+                    ->searchable(),
+                TextColumn::make('worker.first_name')
+                    ->label(__('cleaning_admin.booking.fields.worker'))
+                    ->description(__('cleaning_admin.column_descriptions.worker'))
+                    ->placeholder('—'),
+                TextColumn::make('scheduled_date')
+                    ->label(__('cleaning_admin.booking.fields.scheduled_date'))
+                    ->description(__('cleaning_admin.column_descriptions.scheduled_date'))
+                    ->date()
+                    ->sortable(),
+                TextColumn::make('scheduled_time')
+                    ->label(__('cleaning_admin.booking.fields.scheduled_time'))
+                    ->description(__('cleaning_admin.column_descriptions.scheduled_time')),
+                TextColumn::make('total_price')
+                    ->label(__('cleaning_admin.booking.fields.total_price'))
+                    ->description(__('cleaning_admin.column_descriptions.total_price'))
+                    ->money('SAR')
+                    ->sortable(),
+                TextColumn::make('disputes_count')
+                    ->counts('disputes')
+                    ->label(__('cleaning_admin.booking.fields.disputes_count'))
+                    ->description(__('cleaning_admin.column_descriptions.disputes_count')),
             ])
             ->filters([
                 SelectFilter::make('status')

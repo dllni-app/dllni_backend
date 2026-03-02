@@ -10,4 +10,9 @@ use Filament\Resources\Pages\ListRecords;
 final class ListRestaurantOrderDisputes extends ListRecords
 {
     protected static string $resource = RestaurantOrderDisputeResource::class;
+
+    public function getSubheading(): ?string
+    {
+        return __('restaurant_admin.pages.disputes.list');
+    }
 }

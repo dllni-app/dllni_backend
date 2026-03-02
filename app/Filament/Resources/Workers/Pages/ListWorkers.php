@@ -14,7 +14,7 @@ final class ListWorkers extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return __('cleaning_admin.workers.tooltip');
+        return __('cleaning_admin.pages.workers.list');
     }
 
     protected function getHeaderActions(): array

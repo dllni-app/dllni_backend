@@ -14,7 +14,7 @@ final class ListEventBookings extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'عرض وإدارة حجوزات المناسبات: عشاء عائلي، عيد ميلاد، تجمع كبير، جنازة؛ نطاق الضيوف، حجم الفريق، الحالة والسعر.';
+        return __('cleaning_admin.pages.event_bookings.list');
     }
 
     protected function getHeaderActions(): array

@@ -14,7 +14,7 @@ final class ListSystemAlerts extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'تنبيهات تأخر التقييم المتبادل، تجمد الموقع، استغاثة، تجاوز الوقت دون انتهاء؛ إجراءات الاتصال بالعميل أو العامل أو الحل.';
+        return __('cleaning_admin.pages.system_alerts.list');
     }
 
     protected function getHeaderActions(): array

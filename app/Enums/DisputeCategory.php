@@ -14,12 +14,6 @@ enum DisputeCategory: string
 
     public function label(): string
     {
-        return match ($this) {
-            self::PoorQuality => 'جودة الخدمة',
-            self::PropertyDamage => 'تلف بالممتلكات',
-            self::Unprofessional => 'سلوك غير مهني',
-            self::BillingIssue => 'مشكلة في الدفع',
-            self::Other => 'أخرى',
-        };
+        return __('cleaning_admin.enums.dispute_category.'.$this->value);
     }
 }

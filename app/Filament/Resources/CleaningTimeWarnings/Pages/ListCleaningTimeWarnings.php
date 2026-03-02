@@ -14,7 +14,7 @@ final class ListCleaningTimeWarnings extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'سجل تنبيهات انتهاء الوقت: رقم الحجز، نوع الحجز (تنظيف/مناسبة)، وقت الإرسال، رد العميل (تمديد/التزام/إنهاء مبكر)، رد العامل.';
+        return __('cleaning_admin.pages.time_warnings.list');
     }
 
     protected function getHeaderActions(): array

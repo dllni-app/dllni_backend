@@ -14,7 +14,7 @@ final class ListCleaningBookings extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'عرض وإدارة جميع حجوزات التنظيف: رقم الحجز، العميل، العامل، التاريخ والوقت، الحالة، السعر الإجمالي، وتعيين عامل أو إلغاء.';
+        return __('cleaning_admin.pages.cleaning_bookings.list');
     }
 
     protected function getHeaderActions(): array

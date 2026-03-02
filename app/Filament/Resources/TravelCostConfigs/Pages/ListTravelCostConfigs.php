@@ -14,7 +14,7 @@ final class ListTravelCostConfigs extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'قواعد حساب تكاليف التنقل: سعر الكيلومتر، الحد الأدنى لرسوم التنقل، نقطة بدء احتساب المسافة (موقع العامل / عنوان المنزل / النظام تلقائياً).';
+        return __('cleaning_admin.pages.travel_cost_configs.list');
     }
 
     protected function getHeaderActions(): array

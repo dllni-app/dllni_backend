@@ -14,7 +14,7 @@ final class ListRoles extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'إدارة الأدوار والصلاحيات: تعريف من يمكنه ماذا في لوحة التحكم (مشرف، دعم، محاسب، إلخ).';
+        return __('cleaning_admin.pages.roles.list');
     }
 
     protected function getHeaderActions(): array

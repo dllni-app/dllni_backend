@@ -14,12 +14,6 @@ enum CleaningBookingStatus: string
 
     public function label(): string
     {
-        return match ($this) {
-            self::Pending => 'قيد الانتظار',
-            self::WorkerAssigned => 'تم تعيين عامل',
-            self::InProgress => 'قيد التنفيذ',
-            self::Completed => 'مكتمل',
-            self::Cancelled => 'ملغي',
-        };
+        return __('cleaning_admin.enums.cleaning_booking_status.'.$this->value);
     }
 }

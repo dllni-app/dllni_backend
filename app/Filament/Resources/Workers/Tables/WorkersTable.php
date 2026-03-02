@@ -17,22 +17,45 @@ final class WorkersTable
     {
         return $table
             ->columns([
-                TextColumn::make('id')->label('الرقم')->sortable(),
-                TextColumn::make('first_name')->label('الاسم')->searchable(),
-                TextColumn::make('user.phone')->label('الهاتف'),
-                TextColumn::make('trust_score')->label('نقاط الثقة')->sortable(),
-                TextColumn::make('average_rating')->label('متوسط التقييم')->sortable(),
-                TextColumn::make('total_completed_jobs')->label('إجمالي المهام المنجزة')->sortable(),
-                IconColumn::make('is_active')->label('نشط')->boolean(),
-                IconColumn::make('is_suspended')->label('معلق')->boolean(),
+                TextColumn::make('id')
+                    ->label(__('cleaning_admin.workers.fields.id'))
+                    ->description(__('cleaning_admin.column_descriptions.id'))
+                    ->sortable(),
+                TextColumn::make('first_name')
+                    ->label(__('cleaning_admin.workers.fields.name'))
+                    ->description(__('cleaning_admin.column_descriptions.first_name'))
+                    ->searchable(),
+                TextColumn::make('user.phone')
+                    ->label(__('cleaning_admin.workers.fields.phone'))
+                    ->description(__('cleaning_admin.column_descriptions.phone')),
+                TextColumn::make('trust_score')
+                    ->label(__('cleaning_admin.workers.fields.trust_score'))
+                    ->description(__('cleaning_admin.column_descriptions.trust_score'))
+                    ->sortable(),
+                TextColumn::make('average_rating')
+                    ->label(__('cleaning_admin.workers.fields.average_rating'))
+                    ->description(__('cleaning_admin.column_descriptions.average_rating'))
+                    ->sortable(),
+                TextColumn::make('total_completed_jobs')
+                    ->label(__('cleaning_admin.workers.fields.total_completed_jobs'))
+                    ->description(__('cleaning_admin.column_descriptions.total_completed_jobs'))
+                    ->sortable(),
+                IconColumn::make('is_active')
+                    ->label(__('cleaning_admin.workers.fields.is_active'))
+                    ->description(__('cleaning_admin.column_descriptions.is_active'))
+                    ->boolean(),
+                IconColumn::make('is_suspended')
+                    ->label(__('cleaning_admin.workers.fields.suspended'))
+                    ->description(__('cleaning_admin.column_descriptions.is_suspended'))
+                    ->boolean(),
             ])
             ->filters([
-                TernaryFilter::make('is_active')->label('نشط'),
-                TernaryFilter::make('is_suspended')->label('معلق'),
+                TernaryFilter::make('is_active')->label(__('cleaning_admin.workers.fields.is_active')),
+                TernaryFilter::make('is_suspended')->label(__('cleaning_admin.workers.fields.suspended')),
             ])
             ->recordActions([
-                ViewAction::make()->label('عرض'),
-                EditAction::make()->label('تعديل'),
+                ViewAction::make()->label(__('cleaning_admin.workers.view')),
+                EditAction::make()->label(__('cleaning_admin.workers.edit')),
             ]);
     }
 }

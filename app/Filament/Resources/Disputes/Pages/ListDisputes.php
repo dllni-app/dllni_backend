@@ -14,7 +14,7 @@ final class ListDisputes extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'عرض النزاعات والشكاوى: رقم النزاع، رقم الحجز، العميل، العامل، السبب، الحالة، وقت الفتح؛ عرض الرد والحل (استرداد جزئي، خصم من العامل، إغلاق).';
+        return __('cleaning_admin.pages.disputes.list');
     }
 
     protected function getHeaderActions(): array

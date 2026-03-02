@@ -15,13 +15,6 @@ enum AlertType: string
 
     public function label(): string
     {
-        return match ($this) {
-            self::DelayedRating => 'تأخر التقييم المتبادل',
-            self::FrozenGPS => 'موقع مجمد',
-            self::SOSTriggered => 'استغاثة',
-            self::TimeExpired => 'تجاوز الوقت',
-            self::OverdueCompletion => 'تجاوز الوقت دون انتهاء',
-            self::AnomalyDetected => 'شذوذ',
-        };
+        return __('cleaning_admin.enums.alert_type.'.$this->value);
     }
 }

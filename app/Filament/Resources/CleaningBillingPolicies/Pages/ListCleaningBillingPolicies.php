@@ -14,7 +14,7 @@ final class ListCleaningBillingPolicies extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'إدارة سياسات الفوترة: الاسم، الوصف، طريقة الفوترة (وقت محجوز كامل / وقت عمل فعلي)، الحد الأدنى للدقائق، افتراضي.';
+        return __('cleaning_admin.pages.billing_policies.list');
     }
 
     protected function getHeaderActions(): array

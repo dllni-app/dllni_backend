@@ -14,7 +14,7 @@ final class ListCleaningAutomationRules extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'قواعد الأتمتة: مثلاً تعليق العامل عند انخفاض الثقة، أو منح شارة مميز عند تجاوز تقييم معين.';
+        return __('cleaning_admin.pages.automation_rules.list');
     }
 
     protected function getHeaderActions(): array

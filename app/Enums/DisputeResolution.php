@@ -13,11 +13,6 @@ enum DisputeResolution: string
 
     public function label(): string
     {
-        return match ($this) {
-            self::FullRefund => 'استرداد كامل',
-            self::PartialRefund => 'إعادة جزء من المبلغ',
-            self::WorkerPenalty => 'خصم من العامل',
-            self::Dismissed => 'مرفوض',
-        };
+        return __('cleaning_admin.enums.dispute_resolution.'.$this->value);
     }
 }

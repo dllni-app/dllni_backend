@@ -10,4 +10,9 @@ use Filament\Resources\Pages\ListRecords;
 final class ListSmCoupons extends ListRecords
 {
     protected static string $resource = SmCouponResource::class;
+
+    public function getSubheading(): ?string
+    {
+        return __('supermarket_admin.pages.coupons.list');
+    }
 }

@@ -28,12 +28,12 @@ final class GeographicCoverage extends Page
 
     public static function getNavigationTooltip(): ?string
     {
-        return 'تحليلات الطلب مقابل تغطية العمال حسب المناطق الجغرافية لتحديد فجوات الخدمة (منخفض / جيد / مرتفع).';
+        return __('cleaning_admin.pages.geographic_coverage.description');
     }
 
     public function getSubheading(): ?string
     {
-        return 'عرض الطلب مقابل تغطية العمال حسب المناطق الجغرافية لتحديد فجوات الخدمة (منخفض / جيد / مرتفع) وعدد العمال لكل منطقة.';
+        return __('cleaning_admin.pages.geographic_coverage.description');
     }
 
     public function getViewData(): array
