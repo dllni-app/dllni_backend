@@ -51,6 +51,7 @@ Route::prefix('v1')->group(function () {
     Route::apiResource('sm-store-daily-stats', SmStoreDailyStatController::class)->only(['index', 'show'])->names('sm-store-daily-stats');
     Route::apiResource('sm-store-trust-logs', SmStoreTrustLogController::class)->only(['index', 'show'])->names('sm-store-trust-logs');
     Route::apiResource('sm-categories', SmCategoryController::class)->names('sm-categories');
+    Route::get('sm-products/available-count', [SmProductController::class, 'availableCount'])->name('sm-products.available-count');
     Route::apiResource('sm-products', SmProductController::class)->names('sm-products');
     Route::prefix('sm-products/ai')->group(function () {
         Route::post('extract-from-image', [AppProductAiController::class, 'extractFromImage'])->name('sm-products.ai.extract-from-image');

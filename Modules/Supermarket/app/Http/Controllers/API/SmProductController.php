@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Supermarket\Http\Controllers\API;
 
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Modules\Supermarket\Data\SmProductData;
@@ -24,6 +25,17 @@ final class SmProductController
         $products = SmProduct::getQuery()->paginate($request->get('perPage', 20));
 
         return SmProductResource::collection($products);
+    }
+
+    public function availableCount(): JsonResponse
+    {
+        $availableProductsCount = SmProduct::query()
+            ->where('is_available', true)
+            ->count();
+
+        return response()->json([
+            'count' => $availableProductsCount,
+        ]);
     }
 
     public function store(SmProductRequest $request): SmProductResource
