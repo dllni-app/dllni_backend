@@ -21,7 +21,7 @@ final class UserController
     public function index(UserFilterRequest $request): AnonymousResourceCollection
     {
         $users = User::getQuery()
-            ->paginate($request->get('per_page', 20));
+            ->paginate($request->get('per_page', 10));
 
         return UserResource::collection($users);
     }

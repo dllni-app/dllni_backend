@@ -15,7 +15,7 @@ final class RestaurantRecurringOrderController
     {
         $orders = RestaurantRecurringOrder::getQuery()
             ->with(['user', 'restaurant', 'items'])
-            ->paginate($request->get('perPage', 20));
+            ->paginate($request->get('perPage', 10));
 
         return RestaurantRecurringOrderResource::collection($orders);
     }

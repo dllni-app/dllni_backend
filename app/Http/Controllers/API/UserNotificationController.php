@@ -20,7 +20,7 @@ final class UserNotificationController
         }
 
         $notifications = $query->orderByDesc('created_at')
-            ->paginate($request->get('perPage', 20));
+            ->paginate($request->get('perPage', 10));
 
         return UserNotificationResource::collection($notifications);
     }

@@ -23,7 +23,7 @@ final class ServiceAddonController
     public function index(ServiceAddonFilterRequest $request): AnonymousResourceCollection
     {
         $addons = ServiceAddon::getQuery()
-            ->paginate($request->get('perPage', 20));
+            ->paginate($request->get('perPage', 10));
 
         return ServiceAddonResource::collection($addons);
     }

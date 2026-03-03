@@ -24,7 +24,7 @@ final class DisputeController
     {
         $disputes = Dispute::getQuery()
             ->with(['booking'])
-            ->paginate($request->get('perPage', 20));
+            ->paginate($request->get('perPage', 10));
 
         return DisputeResource::collection($disputes);
     }

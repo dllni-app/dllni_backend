@@ -9,12 +9,13 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Modules\Resturants\Enums\OrderStatus;
+use Modules\Resturants\Enums\OrderType;
 
 final class OrdersTable
 {
     public static function configure(Table $table): Table
     {
-        $statusOptions = collect(OrderStatus::cases())->mapWithKeys(fn($c) => [$c->value => __('restaurant_admin.enums.order_status.' . $c->value)])->all();
+        $statusOptions = collect(OrderStatus::cases())->mapWithKeys(fn ($c) => [$c->value => __('restaurant_admin.enums.order_status.'.$c->value)])->all();
 
         return $table
             ->columns([
@@ -27,9 +28,15 @@ final class OrdersTable
                     ->formatStateUsing(function ($state): string {
                         $value = $state?->value ?? $state;
 
-                        return $value ? __('restaurant_admin.enums.order_status.' . $value) : '—';
+                        return $value ? __('restaurant_admin.enums.order_status.'.$value) : '—';
                     }),
-                TextColumn::make('order_type')->label('نوع الطلب')->formatStateUsing(fn(?string $state): string => $state ?? '—'),
+                TextColumn::make('order_type')
+                    ->label('نوع الطلب')
+                    ->formatStateUsing(function ($state): string {
+                        $value = $state instanceof OrderType ? $state->value : $state;
+
+                        return $value ?? '—';
+                    }),
                 TextColumn::make('accepted_at')->label('قبول')->dateTime('Y-m-d H:i')->placeholder('—'),
                 TextColumn::make('preparing_at')->label('تحضير')->dateTime('Y-m-d H:i')->placeholder('—'),
                 TextColumn::make('completed_at')->label('إكمال')->dateTime('Y-m-d H:i')->placeholder('—'),

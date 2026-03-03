@@ -48,7 +48,7 @@ final class RestaurantSearchController
         }
 
         return RestaurantSearchProductResource::collection(
-            $productQuery->paginate($request->get('perPage', 20))
+            $productQuery->paginate($request->get('perPage', 10))
         );
     }
 }

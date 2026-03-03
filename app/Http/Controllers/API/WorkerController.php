@@ -25,7 +25,7 @@ final class WorkerController
     {
         $workers = Worker::getQuery()
             ->with(['user', 'media'])
-            ->paginate($request->get('perPage', 20));
+            ->paginate($request->get('perPage', 10));
 
         return WorkerResource::collection($workers);
     }

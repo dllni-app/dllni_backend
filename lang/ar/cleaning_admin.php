@@ -309,6 +309,12 @@ return [
         'is_suspended' => 'هل تم تعليق الحساب مؤقتاً.',
         'id' => 'الرقم التعريفي للسجل.',
         'phone' => 'رقم الهاتف للمراسلة أو الاتصال.',
+        'billing_mode' => 'طريقة فوترة (الوقت المحجوز الكامل مقابل وقت العمل الفعلي).',
+        'availability_type' => 'حالة توفر العامل (متاح، محظور، إجازة).',
+        'event_type' => 'نوع الحدث (عشاء عائلي، عيد ميلاد، إلخ).',
+        'alert_severity' => 'مستوى خطورة التنبيه (منخفض، متوسط، عالي، حرج).',
+        'system_alert_status' => 'حالة التنبيه النظامي (جديد، تمت المشاهدة، تم الحل).',
+        'time_warning_response' => 'رد على تنبيه الوقت (تمديد، الالتزام، إنهاء مبكر).',
     ],
 
     'enums' => [
@@ -352,6 +358,42 @@ return [
             'in_progress' => 'قيد التنفيذ',
             'completed' => 'مكتمل',
             'cancelled' => 'ملغي',
+        ],
+        'availability_type' => [
+            'available' => 'متاح',
+            'blocked' => 'محظور',
+            'vacation' => 'إجازة',
+        ],
+        'alert_severity' => [
+            'low' => 'منخفض',
+            'medium' => 'متوسط',
+            'high' => 'عالي',
+            'critical' => 'حرج',
+        ],
+        'system_alert_status' => [
+            'new' => 'جديد',
+            'acknowledged' => 'تمت المشاهدة',
+            'resolved' => 'تم الحل',
+        ],
+        'cleaning_billing_mode' => [
+            'full_booked_time' => 'فوترة الوقت المحجوز بالكامل',
+            'actual_working_time' => 'فوترة وقت العمل الفعلي',
+        ],
+        'addon_pricing_type' => [
+            'fixed' => 'ثابت',
+            'percentage' => 'نسبة مئوية',
+        ],
+        'time_warning_response' => [
+            'extend_time' => 'تمديد',
+            'commit_current_time' => 'التزام بالوقت',
+            'finish_early' => 'إنهاء مبكر',
+        ],
+        'event_type' => [
+            'family_dinner' => 'عشاء عائلي',
+            'birthday' => 'عيد ميلاد',
+            'large_gathering' => 'تجمع كبير',
+            'funeral' => 'جنازة',
+            'other' => 'أخرى',
         ],
     ],
 ];

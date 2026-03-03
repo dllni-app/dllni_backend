@@ -312,6 +312,12 @@ return [
         'is_suspended' => 'Whether the account is temporarily suspended.',
         'id' => 'Record identifier.',
         'phone' => 'Phone number for contact.',
+        'billing_mode' => 'Mode used for billing (full booked vs actual time).',
+        'availability_type' => 'Worker availability status (available, blocked, vacation).',
+        'event_type' => 'Type of event (family dinner, birthday, etc.).',
+        'alert_severity' => 'Alert severity level (low, medium, high, critical).',
+        'system_alert_status' => 'Status of the system alert (new, acknowledged, resolved).',
+        'time_warning_response' => 'Response to a time warning (extend, commit, finish early).',
     ],
 
     'enums' => [
@@ -355,6 +361,42 @@ return [
             'in_progress' => 'In progress',
             'completed' => 'Completed',
             'cancelled' => 'Cancelled',
+        ],
+        'availability_type' => [
+            'available' => 'Available',
+            'blocked' => 'Blocked',
+            'vacation' => 'Vacation',
+        ],
+        'alert_severity' => [
+            'low' => 'Low',
+            'medium' => 'Medium',
+            'high' => 'High',
+            'critical' => 'Critical',
+        ],
+        'system_alert_status' => [
+            'new' => 'New',
+            'acknowledged' => 'Acknowledged',
+            'resolved' => 'Resolved',
+        ],
+        'cleaning_billing_mode' => [
+            'full_booked_time' => 'Full booked time',
+            'actual_working_time' => 'Actual working time',
+        ],
+        'addon_pricing_type' => [
+            'fixed' => 'Fixed',
+            'percentage' => 'Percentage',
+        ],
+        'time_warning_response' => [
+            'extend_time' => 'Extend time',
+            'commit_current_time' => 'Commit current time',
+            'finish_early' => 'Finish early',
+        ],
+        'event_type' => [
+            'family_dinner' => 'Family dinner',
+            'birthday' => 'Birthday',
+            'large_gathering' => 'Large gathering',
+            'funeral' => 'Funeral',
+            'other' => 'Other',
         ],
     ],
 ];

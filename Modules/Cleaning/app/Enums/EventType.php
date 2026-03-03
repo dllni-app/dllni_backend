@@ -14,12 +14,6 @@ enum EventType: string
 
     public function label(): string
     {
-        return match ($this) {
-            self::FamilyDinner => 'عشاء عائلي',
-            self::Birthday => 'عيد ميلاد',
-            self::LargeGathering => 'تجمع كبير',
-            self::Funeral => 'جنازة',
-            self::Other => 'أخرى',
-        };
+        return __('cleaning_admin.enums.event_type.' . $this->value);
     }
 }

@@ -12,10 +12,6 @@ enum AvailabilityType: string
 
     public function label(): string
     {
-        return match ($this) {
-            self::Available => 'متاح',
-            self::Blocked => 'محظور',
-            self::Vacation => 'إجازة',
-        };
+        return __('cleaning_admin.enums.availability_type.' . $this->value);
     }
 }

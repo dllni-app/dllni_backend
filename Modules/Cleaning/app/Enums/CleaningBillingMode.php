@@ -11,9 +11,6 @@ enum CleaningBillingMode: string
 
     public function label(): string
     {
-        return match ($this) {
-            self::FullBookedTime => 'فوترة الوقت المحجوز بالكامل',
-            self::ActualWorkingTime => 'فوترة وقت العمل الفعلي',
-        };
+        return __('cleaning_admin.enums.cleaning_billing_mode.' . $this->value);
     }
 }

@@ -24,7 +24,7 @@ final class CategoryController
     {
         $categories = Category::getQuery()
             ->with(['restaurant', 'products'])
-            ->paginate($request->get('perPage', 20));
+            ->paginate($request->get('perPage', 10));
 
         return CategoryResource::collection($categories);
     }

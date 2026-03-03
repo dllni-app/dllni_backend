@@ -12,10 +12,6 @@ enum CleaningTimeWarningResponse: string
 
     public function label(): string
     {
-        return match ($this) {
-            self::ExtendTime => 'تمديد',
-            self::CommitCurrentTime => 'التزام بالوقت',
-            self::FinishEarly => 'إنهاء مبكر',
-        };
+        return __('cleaning_admin.enums.time_warning_response.' . $this->value);
     }
 }

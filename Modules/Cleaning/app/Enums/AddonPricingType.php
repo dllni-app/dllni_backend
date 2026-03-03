@@ -11,9 +11,6 @@ enum AddonPricingType: string
 
     public function label(): string
     {
-        return match ($this) {
-            self::Fixed => 'ثابت',
-            self::Percentage => 'نسبة مئوية',
-        };
+        return __('cleaning_admin.enums.addon_pricing_type.' . $this->value);
     }
 }

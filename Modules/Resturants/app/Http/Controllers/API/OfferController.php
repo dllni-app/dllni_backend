@@ -24,7 +24,7 @@ final class OfferController
     {
         $offers = Offer::getQuery()
             ->with(['restaurant', 'products'])
-            ->paginate($request->get('perPage', 20));
+            ->paginate($request->get('perPage', 10));
 
         return OfferResource::collection($offers);
     }

@@ -37,17 +37,26 @@ final class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        // override default language path so our root lang/ directory is used
+        // (instead of resources/lang).  This must happen before the translator
+        // loads any files, so register() is the right spot.
+        $this->app->useLangPath(base_path('lang'));
+
         if ($this->app->environment('local') && class_exists(\Laravel\Telescope\TelescopeServiceProvider::class)) {
 
             $this->app->register(\Laravel\Telescope\TelescopeServiceProvider::class);
 
             $this->app->register(TelescopeServiceProvider::class);
-
         }
     }
 
     public function boot(): void
     {
+        // our language files live at the repository root instead of the default
+        // resources/lang directory.  Tell Laravel to use that path so keys like
+        // "cleaning_admin.overview.title" resolve properly.
+        $this->app->useLangPath(base_path('lang'));
+
         $this->bootModelsDefaults();
         $this->bootMorphMap();
         $this->bootBroadcastChannels();

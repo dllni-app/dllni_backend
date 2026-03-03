@@ -15,7 +15,7 @@ final class ReviewController
     {
         $reviews = Review::getQuery()
             ->with(['user', 'order', 'restaurant'])
-            ->paginate($request->get('perPage', 20));
+            ->paginate($request->get('perPage', 10));
 
         return ReviewResource::collection($reviews);
     }

@@ -12,10 +12,6 @@ enum SystemAlertStatus: string
 
     public function label(): string
     {
-        return match ($this) {
-            self::New => 'جديد',
-            self::Acknowledged => 'تمت المشاهدة',
-            self::Resolved => 'تم الحل',
-        };
+        return __('cleaning_admin.enums.system_alert_status.' . $this->value);
     }
 }

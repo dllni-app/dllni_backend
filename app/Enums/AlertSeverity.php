@@ -13,11 +13,6 @@ enum AlertSeverity: string
 
     public function label(): string
     {
-        return match ($this) {
-            self::Low => 'منخفضة',
-            self::Medium => 'متوسطة',
-            self::High => 'عالية',
-            self::Critical => 'حرجة',
-        };
+        return __('cleaning_admin.enums.alert_severity.' . $this->value);
     }
 }

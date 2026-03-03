@@ -24,7 +24,7 @@ final class RestaurantDocumentController
     {
         $documents = RestaurantDocument::getQuery()
             ->with(['restaurant'])
-            ->paginate($request->get('perPage', 20));
+            ->paginate($request->get('perPage', 10));
 
         return RestaurantDocumentResource::collection($documents);
     }

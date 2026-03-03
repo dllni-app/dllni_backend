@@ -15,7 +15,7 @@ final class RestaurantReputationLogController
     {
         $logs = RestaurantReputationLog::getQuery()
             ->with(['restaurant'])
-            ->paginate($request->get('perPage', 20));
+            ->paginate($request->get('perPage', 10));
 
         return RestaurantReputationLogResource::collection($logs);
     }
