@@ -30,7 +30,7 @@ final class SmOrderController
     public function hourlyCount(): JsonResponse
     {
         return response()->json([
-            'data' => $this->service->getHourlyOrderCounts(),
+            'data' => $this->service->getWeeklyOrderCountsByStatus(),
         ]);
     }
 
