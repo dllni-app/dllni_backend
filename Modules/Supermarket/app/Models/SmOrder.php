@@ -6,6 +6,9 @@ namespace Modules\Supermarket\Models;
 
 use App\Models\CancellationPolicy;
 use App\Models\User;
+use Database\Factories\SmOrderFactory;
+use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -15,6 +18,7 @@ use Modules\Supermarket\Traits\FilterQueries\SmOrderFilterQuery;
 
 final class SmOrder extends Model
 {
+    use HasFactory;
     use SmOrderFilterQuery;
 
     protected $table = 'sm_orders';
@@ -75,6 +79,11 @@ final class SmOrder extends Model
     public function disputes(): HasMany
     {
         return $this->hasMany(SmOrderDispute::class, 'order_id');
+    }
+
+    protected static function newFactory(): Factory
+    {
+        return SmOrderFactory::new();
     }
 
     protected function casts(): array

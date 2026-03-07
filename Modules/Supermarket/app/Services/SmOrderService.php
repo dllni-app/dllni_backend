@@ -54,6 +54,42 @@ final class SmOrderService
     }
 
     /**
+     * Return hourly order counts for the latest window in hours.
+     *
+     * @return array<int, array{hour:int,ordersCount:int}>
+     */
+    public function getHourlyOrderCounts(int $hours = 5): array
+    {
+        $currentHour = now()->startOfHour();
+        $startHour = $currentHour->copy()->subHours($hours);
+
+        $orders = SmOrder::query()
+            ->whereBetween('created_at', [$startHour, $currentHour->copy()->endOfHour()])
+            ->get(['created_at']);
+
+        $orderCountsByHour = [];
+        foreach ($orders as $order) {
+            $hour = (int) $order->created_at->format('G');
+            $orderCountsByHour[$hour] = ($orderCountsByHour[$hour] ?? 0) + 1;
+        }
+
+        $hourlyCounts = [];
+        $cursorHour = $startHour->copy();
+        while ($cursorHour->lte($currentHour)) {
+            $hour = (int) $cursorHour->format('G');
+
+            $hourlyCounts[] = [
+                'hour' => $hour,
+                'ordersCount' => (int) ($orderCountsByHour[$hour] ?? 0),
+            ];
+
+            $cursorHour = $cursorHour->addHour();
+        }
+
+        return $hourlyCounts;
+    }
+
+    /**
      * Accept an order.
      *
      * Business Logic:
