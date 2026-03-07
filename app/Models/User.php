@@ -6,10 +6,9 @@ namespace App\Models;
 
 use App\Enums\UserModuleType;
 use App\Traits\FilterQueries\UserFilterQuery;
+use App\Traits\HasFcm;
 use Carbon\CarbonInterface;
 use Database\Factories\UserFactory;
-use DevKandil\NotiFire\Traits\HasFcm;
-use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -31,7 +30,7 @@ use Spatie\Permission\Traits\HasRoles;
  * @property-read CarbonInterface $created_at
  * @property-read CarbonInterface $updated_at
  */
-final class User extends Authenticatable implements FilamentUser, HasMedia
+final class User extends Authenticatable implements HasMedia
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, HasFcm, HasRoles, InteractsWithMedia, Notifiable, UserFilterQuery;

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Modules\Supermarket\Database\Seeders;
 
 use App\Models\CancellationPolicy;
-use App\Models\User;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Modules\Supermarket\Enums\SmOrderStatus;
 use Modules\Supermarket\Enums\SmPickupMode;
@@ -18,14 +18,20 @@ final class SmOrderSeeder extends Seeder
 {
     public function run(): void
     {
-        $customer = User::firstOrCreate(
-            ['email' => 'supermarket.customer@example.com'],
-            [
+        $customerId = DB::table('users')
+            ->where('email', 'supermarket.customer@example.com')
+            ->value('id');
+
+        if ($customerId === null) {
+            $customerId = DB::table('users')->insertGetId([
                 'name' => 'عميل السوبرماركت',
+                'email' => 'supermarket.customer@example.com',
                 'password' => bcrypt('password'),
                 'email_verified_at' => now(),
-            ]
-        );
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
 
         $policy = CancellationPolicy::where('module', 'supermarket')->where('is_default', true)->first();
 
@@ -41,14 +47,19 @@ final class SmOrderSeeder extends Seeder
             SmOrderStatus::Cancelled,
         ];
 
+        $orderCount = 0;
+        $maxOrders = 20;
+
         foreach ($stores as $store) {
             $products = $store->products;
             if ($products->isEmpty()) {
                 continue;
             }
 
-            // Create 6 orders per store (one for each status)
-            foreach ($statuses as $index => $status) {
+            // Create 10 orders per store to reach 20 total
+            for ($i = 0; $i < 10 && $orderCount < $maxOrders; $i++) {
+                $status = $statuses[$i % count($statuses)];
+                $index = $orderCount;
                 $orderNumber = 'SM-'.mb_strtoupper(Str::random(6)).'-'.$store->id.'-'.$index;
                 if (SmOrder::where('order_number', $orderNumber)->exists()) {
                     continue;
@@ -77,7 +88,7 @@ final class SmOrderSeeder extends Seeder
 
                 // Build order data based on status
                 $orderData = [
-                    'customer_id' => $customer->id,
+                    'customer_id' => $customerId,
                     'store_id' => $store->id,
                     'coupon_id' => null,
                     'cancellation_policy_id' => $policy?->id,
@@ -121,6 +132,8 @@ final class SmOrderSeeder extends Seeder
                         'total_price' => $item['total_price'],
                     ]);
                 }
+
+                $orderCount++;
             }
         }
     }
