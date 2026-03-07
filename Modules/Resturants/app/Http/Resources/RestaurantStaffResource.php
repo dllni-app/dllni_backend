@@ -20,6 +20,7 @@ final class RestaurantStaffResource extends JsonResource
             'restaurantId' => $this->restaurant_id,
             'userId' => $this->user_id,
             'restaurantRoleId' => $this->restaurant_role_id,
+            'isActive' => (bool) $this->is_active,
             'restaurant' => $this->whenLoaded('restaurant', fn () => [
                 'id' => $this->restaurant->id,
                 'name' => $this->restaurant->name,

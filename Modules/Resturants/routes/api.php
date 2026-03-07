@@ -28,6 +28,23 @@ use Modules\Resturants\Http\Controllers\API\RestaurantReputationLogController;
 use Modules\Resturants\Http\Controllers\API\RestaurantRoleController;
 use Modules\Resturants\Http\Controllers\API\RestaurantSearchController;
 use Modules\Resturants\Http\Controllers\API\RestaurantStaffController;
+use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerCouponSummaryController;
+use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerCouponsIndexController;
+use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerDashboardPerformanceController;
+use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerEmployeeIndexController;
+use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerEmployeeStatusController;
+use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerEmployeeStoreController;
+use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerEmployeeUpdateController;
+use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerNotificationMarkReadController;
+use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerNotificationMarkReadAllController;
+use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerNotificationsController;
+use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerOfferSummaryController;
+use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerOffersIndexController;
+use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerOrderItemDestroyController;
+use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerOrderItemStoreController;
+use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerOrderItemUpdateController;
+use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerOrderShowController;
+use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerProductAvailabilityController;
 use Modules\Resturants\Http\Controllers\API\ReviewController;
 use Modules\Resturants\Http\Controllers\ResturantsController;
 
@@ -66,4 +83,29 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     Route::apiResource('restaurant-recurring-orders', RestaurantRecurringOrderController::class)->only(['index', 'show']);
     Route::apiResource('reviews', ReviewController::class)->only(['index', 'show']);
     Route::apiResource('resturants', ResturantsController::class)->names('resturants');
+
+    Route::prefix('restaurant-owner')->group(function () {
+        Route::get('dashboard/performance', RestaurantOwnerDashboardPerformanceController::class);
+
+        Route::get('orders/{order}', RestaurantOwnerOrderShowController::class);
+        Route::post('orders/{order}/items', RestaurantOwnerOrderItemStoreController::class);
+        Route::patch('orders/{order}/items/{item}', RestaurantOwnerOrderItemUpdateController::class);
+        Route::delete('orders/{order}/items/{item}', RestaurantOwnerOrderItemDestroyController::class);
+
+        Route::patch('products/{product}/availability', RestaurantOwnerProductAvailabilityController::class);
+
+        Route::get('offers', RestaurantOwnerOffersIndexController::class);
+        Route::get('offers/summary', RestaurantOwnerOfferSummaryController::class);
+        Route::get('coupons', RestaurantOwnerCouponsIndexController::class);
+        Route::get('coupons/summary', RestaurantOwnerCouponSummaryController::class);
+
+        Route::get('employees', RestaurantOwnerEmployeeIndexController::class);
+        Route::post('employees', RestaurantOwnerEmployeeStoreController::class);
+        Route::patch('employees/{restaurant_staff}', RestaurantOwnerEmployeeUpdateController::class);
+        Route::patch('employees/{restaurant_staff}/status', RestaurantOwnerEmployeeStatusController::class);
+
+        Route::get('notifications', RestaurantOwnerNotificationsController::class);
+        Route::patch('notifications/read-all', RestaurantOwnerNotificationMarkReadAllController::class);
+        Route::patch('notifications/{notification}/read', RestaurantOwnerNotificationMarkReadController::class);
+    });
 });

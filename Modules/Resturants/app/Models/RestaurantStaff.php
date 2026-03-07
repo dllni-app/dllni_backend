@@ -19,6 +19,7 @@ final class RestaurantStaff extends Model
         'restaurant_id',
         'user_id',
         'restaurant_role_id',
+        'is_active',
     ];
 
     public function restaurant(): BelongsTo
@@ -34,5 +35,12 @@ final class RestaurantStaff extends Model
     public function role(): BelongsTo
     {
         return $this->belongsTo(RestaurantRole::class, 'restaurant_role_id');
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'is_active' => 'boolean',
+        ];
     }
 }

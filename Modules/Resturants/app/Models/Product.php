@@ -28,6 +28,8 @@ final class Product extends Model
         'price',
         'discounted_price',
         'is_available',
+        'unavailable_until',
+        'availability_note',
         'stock_quantity',
         'low_stock_threshold',
         'preparation_time',
@@ -81,6 +83,28 @@ final class Product extends Model
         return $query->whereColumn('stock_quantity', '<=', 'low_stock_threshold');
     }
 
+    public function isAvailableNow(): bool
+    {
+        if ($this->is_available) {
+            return true;
+        }
+
+        return $this->unavailable_until !== null && now()->greaterThan($this->unavailable_until);
+    }
+
+    public function availabilityMode(): string
+    {
+        if ($this->isAvailableNow()) {
+            return 'available';
+        }
+
+        if ($this->unavailable_until !== null && now()->lessThanOrEqualTo($this->unavailable_until)) {
+            return 'sold_out_today';
+        }
+
+        return 'manual_unavailable';
+    }
+
     protected static function newFactory(): ProductFactory
     {
         return ProductFactory::new();
@@ -92,6 +116,8 @@ final class Product extends Model
             'price' => 'decimal:2',
             'discounted_price' => 'decimal:2',
             'is_available' => 'boolean',
+            'unavailable_until' => 'datetime',
+            'availability_note' => 'string',
             'stock_quantity' => 'integer',
             'low_stock_threshold' => 'integer',
             'preparation_time' => 'integer',
