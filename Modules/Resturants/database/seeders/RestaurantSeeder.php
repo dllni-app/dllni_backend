@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Modules\Resturants\Database\Seeders;
 
+use App\Enums\AlertSeverity;
+use App\Enums\AlertType;
+use App\Enums\SystemAlertStatus;
+use App\Enums\UserModuleType;
 use App\Models\CancellationPolicy;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -188,6 +192,7 @@ final class RestaurantSeeder extends Seeder
 
             $this->seedSampleOrders($restaurant, $owner, $cancellationPolicy);
             $this->seedRequestedRestaurantData($restaurant);
+            $this->seedOwnerAppData($restaurant, $owner);
         }
     }
 
@@ -484,6 +489,252 @@ final class RestaurantSeeder extends Seeder
                     'unit_cost' => $item['unit_cost'],
                 ]
             );
+        }
+    }
+
+    private function seedOwnerAppData(Restaurant $restaurant, User $owner): void
+    {
+        $managerRoleId = DB::table('restaurant_roles')->where([
+            'restaurant_id' => $restaurant->id,
+            'slug' => 'manager',
+        ])->value('id');
+
+        if (! $managerRoleId) {
+            $managerRoleId = DB::table('restaurant_roles')->insertGetId([
+                'restaurant_id' => $restaurant->id,
+                'name' => 'مدير',
+                'slug' => 'manager',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $cashierRoleId = DB::table('restaurant_roles')->where([
+            'restaurant_id' => $restaurant->id,
+            'slug' => 'cashier',
+        ])->value('id');
+
+        if (! $cashierRoleId) {
+            $cashierRoleId = DB::table('restaurant_roles')->insertGetId([
+                'restaurant_id' => $restaurant->id,
+                'name' => 'كاشير',
+                'slug' => 'cashier',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $employeeOne = User::firstOrCreate(
+            ['email' => "employee.one+{$restaurant->id}@example.com"],
+            [
+                'name' => 'موظف أول',
+                'phone' => '+962790000001'.$restaurant->id,
+                'password' => bcrypt('password'),
+                'module_type' => UserModuleType::RestaurantSeller->value,
+                'email_verified_at' => now(),
+            ]
+        );
+
+        $employeeTwo = User::firstOrCreate(
+            ['email' => "employee.two+{$restaurant->id}@example.com"],
+            [
+                'name' => 'موظف ثاني',
+                'phone' => '+962790000002'.$restaurant->id,
+                'password' => bcrypt('password'),
+                'module_type' => UserModuleType::RestaurantSeller->value,
+                'email_verified_at' => now(),
+            ]
+        );
+
+        DB::table('restaurant_staff')->updateOrInsert(
+            [
+                'restaurant_id' => $restaurant->id,
+                'user_id' => $employeeOne->id,
+            ],
+            [
+                'restaurant_role_id' => $managerRoleId,
+                'is_active' => true,
+                'updated_at' => now(),
+                'created_at' => now(),
+            ]
+        );
+
+        DB::table('restaurant_staff')->updateOrInsert(
+            [
+                'restaurant_id' => $restaurant->id,
+                'user_id' => $employeeTwo->id,
+            ],
+            [
+                'restaurant_role_id' => $cashierRoleId,
+                'is_active' => false,
+                'updated_at' => now(),
+                'created_at' => now(),
+            ]
+        );
+
+        $activeCouponId = DB::table('promo_codes')->where([
+            'restaurant_id' => $restaurant->id,
+            'code' => 'SAVE25-'.$restaurant->id,
+        ])->value('id');
+
+        if (! $activeCouponId) {
+            $activeCouponId = DB::table('promo_codes')->insertGetId([
+                'restaurant_id' => $restaurant->id,
+                'code' => 'SAVE25-'.$restaurant->id,
+                'discount_type' => 'percentage',
+                'discount_value' => 25,
+                'min_order_amount' => 20,
+                'usage_limit' => 200,
+                'usage_count' => 35,
+                'starts_at' => now()->subDays(3),
+                'ends_at' => now()->addDays(7),
+                'is_active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        DB::table('promo_codes')->updateOrInsert(
+            [
+                'restaurant_id' => $restaurant->id,
+                'code' => 'OLD10-'.$restaurant->id,
+            ],
+            [
+                'discount_type' => 'percentage',
+                'discount_value' => 10,
+                'min_order_amount' => 10,
+                'usage_limit' => 100,
+                'usage_count' => 52,
+                'starts_at' => now()->subDays(12),
+                'ends_at' => now()->subDays(2),
+                'is_active' => false,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]
+        );
+
+        $activeOfferId = DB::table('offers')->where([
+            'restaurant_id' => $restaurant->id,
+            'name' => 'عرض الوجبات العائلية',
+        ])->value('id');
+
+        if (! $activeOfferId) {
+            $activeOfferId = DB::table('offers')->insertGetId([
+                'restaurant_id' => $restaurant->id,
+                'name' => 'عرض الوجبات العائلية',
+                'discount_type' => 'percentage',
+                'discount_value' => 15,
+                'starts_at' => now()->subDay(),
+                'ends_at' => now()->addDays(4),
+                'is_active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        DB::table('offers')->updateOrInsert(
+            [
+                'restaurant_id' => $restaurant->id,
+                'name' => 'عرض نهاية الأسبوع',
+            ],
+            [
+                'discount_type' => 'percentage',
+                'discount_value' => 20,
+                'starts_at' => now()->addDays(2),
+                'ends_at' => now()->addDays(5),
+                'is_active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]
+        );
+
+        $productIds = DB::table('products')->where('restaurant_id', $restaurant->id)->limit(3)->pluck('id')->all();
+        foreach ($productIds as $productId) {
+            DB::table('offer_product')->updateOrInsert(
+                [
+                    'offer_id' => $activeOfferId,
+                    'product_id' => $productId,
+                ],
+                [
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]
+            );
+        }
+
+        DB::table('products')
+            ->where('restaurant_id', $restaurant->id)
+            ->inRandomOrder()
+            ->limit(1)
+            ->update([
+                'is_available' => false,
+                'unavailable_until' => now()->endOfDay(),
+                'availability_note' => 'نفدت الكمية اليوم',
+                'updated_at' => now(),
+            ]);
+
+        $sampleOrderId = DB::table('orders')
+            ->where('restaurant_id', $restaurant->id)
+            ->orderByDesc('id')
+            ->value('id');
+
+        if ($sampleOrderId) {
+            $sampleProductId = DB::table('products')->where('restaurant_id', $restaurant->id)->value('id');
+            if ($sampleProductId) {
+                DB::table('order_items')->updateOrInsert(
+                    [
+                        'order_id' => $sampleOrderId,
+                        'product_id' => $sampleProductId,
+                    ],
+                    [
+                        'quantity' => 2,
+                        'unit_price' => 12,
+                        'total_price' => 24,
+                        'special_instructions' => 'بدون بصل',
+                        'updated_at' => now(),
+                        'created_at' => now(),
+                    ]
+                );
+            }
+
+            DB::table('system_alerts')->updateOrInsert(
+                [
+                    'booking_id' => $sampleOrderId,
+                    'booking_type' => Order::class,
+                    'alert_type' => AlertType::OverdueCompletion->value,
+                ],
+                [
+                    'severity' => AlertSeverity::Medium->value,
+                    'status' => SystemAlertStatus::New->value,
+                    'payload' => json_encode(['order_id' => $sampleOrderId], JSON_THROW_ON_ERROR),
+                    'updated_at' => now(),
+                    'created_at' => now(),
+                ]
+            );
+        }
+
+        $seedNotificationType = 'App\\Notifications\\RestaurantOwnerSeedNotification';
+        $exists = DB::table('notifications')
+            ->where('type', $seedNotificationType)
+            ->where('notifiable_type', $owner->getMorphClass())
+            ->where('notifiable_id', $owner->id)
+            ->exists();
+
+        if (! $exists) {
+            DB::table('notifications')->insert([
+                'id' => (string) Str::uuid(),
+                'type' => $seedNotificationType,
+                'notifiable_type' => $owner->getMorphClass(),
+                'notifiable_id' => $owner->id,
+                'data' => json_encode([
+                    'type' => 'new_offer',
+                    'title' => 'عرض جديد نشط',
+                    'body' => 'تم تفعيل عرض جديد لهذا المطعم.',
+                ], JSON_THROW_ON_ERROR),
+                'read_at' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
         }
     }
 }
