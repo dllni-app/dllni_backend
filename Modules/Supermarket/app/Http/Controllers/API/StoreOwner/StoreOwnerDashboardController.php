@@ -87,7 +87,7 @@ final class StoreOwnerDashboardController
                 'newOrders' => $newOrdersCount,
                 'pendingOrders' => $pendingOrdersCount,
                 'totalSales' => $totalSales,
-                'salesPercentageChange' => round($salesPercentageChange, 2),
+                'salesPercentageChange' => (float) round($salesPercentageChange, 2),
             ],
         ]);
     }
