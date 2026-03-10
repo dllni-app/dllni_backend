@@ -6,7 +6,10 @@ use App\Models\User;
 use Database\Factories\SmCategoryFactory;
 use Database\Factories\SmProductFactory;
 use Database\Factories\SmStoreFactory;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
+use Modules\Supermarket\Models\SmProduct;
 
 beforeEach(function (): void {
     $user = User::factory()->create();
@@ -95,4 +98,51 @@ it('returns available products count', function (): void {
 
     $response->assertOk();
     expect($response->json('count'))->toBe(3);
+});
+
+it('creates a product with one image', function (): void {
+    Storage::fake('public');
+
+    $store = SmStoreFactory::new()->create();
+    $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+
+    $response = $this->post('/api/v1/sm-products', [
+        'storeId' => $store->id,
+        'categoryId' => $category->id,
+        'name' => 'Product With Image',
+        'sourceType' => 'manual',
+        'price' => 7.25,
+        'stockQuantity' => 10,
+        'lowStockThreshold' => 2,
+        'image' => UploadedFile::fake()->image('product.jpg'),
+    ]);
+
+    $response->assertSuccessful();
+
+    $productId = $response->json('data.id');
+    $product = SmProduct::query()->findOrFail($productId);
+
+    expect($product->getMedia(SmProduct::IMAGE_COLLECTION))->toHaveCount(1)
+        ->and($response->json('data.imageUrl'))->not->toBeNull();
+});
+
+it('replaces product image on update', function (): void {
+    Storage::fake('public');
+
+    $product = SmProductFactory::new()->create();
+
+    $this->post("/api/v1/sm-products/{$product->id}?_method=PUT", [
+        'image' => UploadedFile::fake()->image('first.jpg'),
+    ])->assertSuccessful();
+
+    $updateResponse = $this->post("/api/v1/sm-products/{$product->id}?_method=PUT", [
+        'image' => UploadedFile::fake()->image('second.jpg'),
+    ]);
+
+    $updateResponse->assertSuccessful();
+
+    $product->refresh();
+
+    expect($product->getMedia(SmProduct::IMAGE_COLLECTION))->toHaveCount(1)
+        ->and($product->getFirstMedia(SmProduct::IMAGE_COLLECTION)?->file_name)->toContain('second');
 });

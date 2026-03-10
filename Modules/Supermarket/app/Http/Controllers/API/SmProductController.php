@@ -22,7 +22,9 @@ final class SmProductController
 
     public function index(SmProductFilterRequest $request): AnonymousResourceCollection
     {
-        $products = SmProduct::getQuery()->paginate($request->get('perPage', 20));
+        $products = SmProduct::getQuery()
+            ->with('store', 'category', 'media')
+            ->paginate($request->get('perPage', 20));
 
         return SmProductResource::collection($products);
     }
@@ -40,21 +42,28 @@ final class SmProductController
 
     public function store(SmProductRequest $request): SmProductResource
     {
-        $product = $this->service->store(SmProductData::from($request->validated()));
+        $product = $this->service->store(
+            SmProductData::from($request->validated()),
+            $request->file('image')
+        );
 
-        return SmProductResource::make($product->load('store', 'category'));
+        return SmProductResource::make($product->load('store', 'category', 'media'));
     }
 
     public function show(SmProduct $smProduct): SmProductResource
     {
-        return SmProductResource::make($smProduct->load('store', 'category'));
+        return SmProductResource::make($smProduct->load('store', 'category', 'media'));
     }
 
     public function update(SmProductRequest $request, SmProduct $smProduct): SmProductResource
     {
-        $product = $this->service->update(SmProductData::from($request->validated()), $smProduct);
+        $product = $this->service->update(
+            SmProductData::from($request->validated()),
+            $smProduct,
+            $request->file('image')
+        );
 
-        return SmProductResource::make($product->load('store', 'category'));
+        return SmProductResource::make($product->load('store', 'category', 'media'));
     }
 
     public function destroy(SmProduct $smProduct): Response

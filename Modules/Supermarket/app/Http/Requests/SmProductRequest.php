@@ -29,6 +29,7 @@ final class SmProductRequest extends FormRequest
             'lowStockThreshold' => 'sometimes|integer|min:0',
             'expiresAt' => 'nullable|date',
             'isAvailable' => 'sometimes|boolean',
+            'image' => 'sometimes|nullable|image|max:5120',
         ];
     }
 }

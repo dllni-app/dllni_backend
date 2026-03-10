@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Models\Dispute;
 use App\Models\User;
 use App\Models\Worker;
 use Illuminate\Database\Eloquent\Model;
@@ -105,6 +106,8 @@ final class AppServiceProvider extends ServiceProvider
         Relation::enforceMorphMap([
             'user' => User::class,
             'worker' => Worker::class,
+            'dispute' => Dispute::class,
+            'sm_product' => SmProduct::class,
             'cleaning_booking' => CleaningBooking::class,
             'event_booking' => \Modules\Cleaning\Models\EventBooking::class,
         ]);

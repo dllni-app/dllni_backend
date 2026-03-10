@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Supermarket\Http\Resources;
 
+use App\Http\Resources\MediaResource;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Modules\Supermarket\Models\SmProduct;
@@ -28,6 +29,8 @@ final class SmProductResource extends JsonResource
             'description' => $this->description,
             'price' => $this->price,
             'discountedPrice' => $this->discounted_price,
+            'image' => MediaResource::make($this->whenLoaded('media', fn () => $this->getFirstMedia(SmProduct::IMAGE_COLLECTION))),
+            'imageUrl' => $this->whenLoaded('media', fn () => $this->getFirstMediaUrl(SmProduct::IMAGE_COLLECTION) ?: null),
             'stockQuantity' => $this->stock_quantity,
             'lowStockThreshold' => $this->low_stock_threshold,
             'expiresAt' => $this->expires_at?->toDateTimeString(),

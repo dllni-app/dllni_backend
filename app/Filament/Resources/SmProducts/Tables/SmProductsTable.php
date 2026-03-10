@@ -7,10 +7,12 @@ namespace App\Filament\Resources\SmProducts\Tables;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Modules\Supermarket\Enums\SmProductSource;
+use Modules\Supermarket\Models\SmProduct;
 
 final class SmProductsTable
 {
@@ -22,6 +24,11 @@ final class SmProductsTable
 
         return $table
             ->columns([
+                ImageColumn::make('image')
+                    ->label('')
+                    ->circular()
+                    ->defaultImageUrl('https://ui-avatars.com/api/?name=P&background=random')
+                    ->getStateUsing(fn (SmProduct $record): ?string => $record->getFirstMediaUrl(SmProduct::IMAGE_COLLECTION) ?: null),
                 TextColumn::make('store.name')->label(__('supermarket_admin.stores'))->searchable()->sortable()->placeholder('—'),
                 TextColumn::make('name')->label(__('supermarket_admin.infolist.product_name'))->searchable()->sortable(),
                 TextColumn::make('source_type')
@@ -35,7 +42,7 @@ final class SmProductsTable
                 TextColumn::make('expires_at')->label(__('supermarket_admin.form.expires_at'))->dateTime('Y-m-d')->placeholder('—')->sortable(),
                 IconColumn::make('is_available')->label(__('supermarket_admin.form.is_active'))->boolean(),
             ])
-            ->modifyQueryUsing(fn ($query) => $query->with('store'))
+            ->modifyQueryUsing(fn ($query) => $query->with('store', 'media'))
             ->filters([
                 SelectFilter::make('store_id')
                     ->relationship('store', 'name')

@@ -10,10 +10,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Supermarket\Enums\SmProductSource;
 use Modules\Supermarket\Traits\FilterQueries\SmProductFilterQuery;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
-final class SmProduct extends Model
+final class SmProduct extends Model implements HasMedia
 {
+    use InteractsWithMedia;
     use SmProductFilterQuery;
+
+    public const IMAGE_COLLECTION = 'product-image';
 
     protected $table = 'sm_products';
 
@@ -66,6 +72,21 @@ final class SmProduct extends Model
     public function orderItems(): HasMany
     {
         return $this->hasMany(SmOrderItem::class, 'product_id');
+    }
+
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection(self::IMAGE_COLLECTION)
+            ->singleFile()
+            ->acceptsMimeTypes(['image/jpeg', 'image/png', 'image/webp']);
+    }
+
+    public function registerMediaConversions(?Media $media = null): void
+    {
+        $this->addMediaConversion('thumb')
+            ->width(300)
+            ->height(300)
+            ->sharpen(10);
     }
 
     protected function casts(): array
