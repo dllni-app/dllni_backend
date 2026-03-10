@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Supermarket\Http\Controllers\API;
 
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Modules\Supermarket\Data\SmOrderData;
@@ -24,6 +25,13 @@ final class SmOrderController
         $orders = SmOrder::getQuery()->paginate($request->get('perPage', 20));
 
         return SmOrderResource::collection($orders);
+    }
+
+    public function hourlyCount(): JsonResponse
+    {
+        return response()->json([
+            'data' => $this->service->getWeeklyOrderCountsByStatus(),
+        ]);
     }
 
     public function store(SmOrderRequest $request): SmOrderResource

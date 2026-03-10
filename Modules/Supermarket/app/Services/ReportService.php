@@ -194,10 +194,25 @@ final class ReportService
         $thisWeek = Carbon::today()->startOfWeek();
         $thisMonth = Carbon::today()->startOfMonth();
 
-        // Sales summary
+        // Sales summary - current periods
         $todayOrders = SmOrder::whereDate('created_at', $today)->get();
         $weekOrders = SmOrder::whereBetween('created_at', [$thisWeek, Carbon::today()])->get();
         $monthOrders = SmOrder::whereBetween('created_at', [$thisMonth, Carbon::today()])->get();
+
+        // Sales summary - yesterday comparison
+        $yesterday = Carbon::yesterday();
+        $yesterdayOrders = SmOrder::whereDate('created_at', $yesterday)->get();
+
+        // Calculate sales totals
+        $todaySales = (float) $todayOrders->sum('total_amount');
+        $thisWeekSales = (float) $weekOrders->sum('total_amount');
+        $thisMonthSales = (float) $monthOrders->sum('total_amount');
+        $yesterdaySales = (float) $yesterdayOrders->sum('total_amount');
+
+        // Calculate percentage change (today vs yesterday only)
+        $todayPercentageChange = $yesterdaySales > 0
+            ? round((($todaySales - $yesterdaySales) / $yesterdaySales) * 100, 2)
+            : ($todaySales > 0 ? 100.0 : 0.0);
 
         // Activity metrics
         $totalStores = SmStore::count();
@@ -233,9 +248,10 @@ final class ReportService
 
         return [
             'sales_summary' => [
-                'today' => (float) $todayOrders->sum('total_amount'),
-                'this_week' => (float) $weekOrders->sum('total_amount'),
-                'this_month' => (float) $monthOrders->sum('total_amount'),
+                'today' => $todaySales,
+                'today_percentage_change' => $todayPercentageChange,
+                'this_week' => $thisWeekSales,
+                'this_month' => $thisMonthSales,
                 'total_commission_revenue' => (float) $monthOrders->sum('commission_amount'),
                 'total_service_fees' => (float) $monthOrders->sum('service_fee'),
             ],

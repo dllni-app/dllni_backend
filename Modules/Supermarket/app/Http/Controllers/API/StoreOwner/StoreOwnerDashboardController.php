@@ -8,7 +8,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Modules\Supermarket\Enums\SmOrderStatus;
-use Modules\Supermarket\Http\Resources\SmOrderResource;
 use Modules\Supermarket\Models\SmOrder;
 
 final class StoreOwnerDashboardController
@@ -50,6 +49,19 @@ final class StoreOwnerDashboardController
             ->where('status', SmOrderStatus::Completed)
             ->sum('total_amount');
 
+        // Get yesterday's total sales for comparison
+        $yesterday = Carbon::yesterday();
+        $yesterdaySales = (float) SmOrder::query()
+            ->where('store_id', $storeId)
+            ->where('status', SmOrderStatus::Completed)
+            ->whereDate('created_at', $yesterday)
+            ->sum('total_amount');
+
+        // Calculate sales percentage change (positive for increase, negative for decrease)
+        $salesPercentageChange = $yesterdaySales > 0
+            ? (($totalSales - $yesterdaySales) / $yesterdaySales) * 100
+            : 0;
+
         // Get new orders data (Pending)
         $newOrdersData = SmOrder::query()
             ->where('store_id', $storeId)
@@ -75,6 +87,7 @@ final class StoreOwnerDashboardController
                 'newOrders' => $newOrdersCount,
                 'pendingOrders' => $pendingOrdersCount,
                 'totalSales' => $totalSales,
+                'salesPercentageChange' => (float) round($salesPercentageChange, 2),
             ],
         ]);
     }

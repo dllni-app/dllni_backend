@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Supermarket\Services;
 
+use Carbon\Carbon;
 use Exception;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
@@ -51,6 +52,94 @@ final class SmOrderService
 
             return $order;
         });
+    }
+
+    /**
+     * Return hourly order counts for the latest window in hours.
+     *
+     * @return array<int, array{hour:int,ordersCount:int}>
+     */
+    public function getHourlyOrderCounts(int $hours = 5): array
+    {
+        $currentHour = now()->startOfHour();
+        $startHour = $currentHour->copy()->subHours($hours);
+
+        $orders = SmOrder::query()
+            ->whereBetween('created_at', [$startHour, $currentHour->copy()->endOfHour()])
+            ->get(['created_at']);
+
+        $orderCountsByHour = [];
+        foreach ($orders as $order) {
+            $hour = (int) $order->created_at->format('G');
+            $orderCountsByHour[$hour] = ($orderCountsByHour[$hour] ?? 0) + 1;
+        }
+
+        $hourlyCounts = [];
+        $cursorHour = $startHour->copy();
+        while ($cursorHour->lte($currentHour)) {
+            $hour = (int) $cursorHour->format('G');
+
+            $hourlyCounts[] = [
+                'hour' => $hour,
+                'ordersCount' => (int) ($orderCountsByHour[$hour] ?? 0),
+            ];
+
+            $cursorHour = $cursorHour->addHour();
+        }
+
+        return $hourlyCounts;
+    }
+
+    /**
+     * Return weekly order counts grouped by day and status.
+     * Week starts on Saturday.
+     *
+     * @return array<string, array<string, int>>
+     */
+    public function getWeeklyOrderCountsByStatus(): array
+    {
+        // Week starts on Saturday
+        $startOfWeek = now()->startOfWeek(Carbon::SATURDAY);
+        $endOfWeek = $startOfWeek->copy()->addDays(6)->endOfDay();
+
+        $orders = SmOrder::query()
+            ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
+            ->whereIn('status', [SmOrderStatus::Pending, SmOrderStatus::Preparing, SmOrderStatus::Completed])
+            ->get(['created_at', 'status']);
+
+        $daysOfWeek = [
+            0 => 'saturday',
+            1 => 'sunday',
+            2 => 'monday',
+            3 => 'tuesday',
+            4 => 'wednesday',
+            5 => 'thursday',
+            6 => 'friday',
+        ];
+
+        $statuses = ['pending', 'preparing', 'completed'];
+
+        // Initialize counts for all days and statuses
+        $weeklyCounts = [];
+        foreach ($daysOfWeek as $day) {
+            $weeklyCounts[$day] = [];
+            foreach ($statuses as $status) {
+                $weeklyCounts[$day][$status] = 0;
+            }
+        }
+
+        // Count orders by day and status
+        foreach ($orders as $order) {
+            $dayOfWeek = $order->created_at->copy()->startOfWeek(Carbon::SATURDAY)->diffInDays($order->created_at->startOfDay());
+            $dayName = $daysOfWeek[$dayOfWeek];
+            $status = $order->status->value;
+
+            if (in_array($status, $statuses)) {
+                $weeklyCounts[$dayName][$status]++;
+            }
+        }
+
+        return $weeklyCounts;
     }
 
     /**

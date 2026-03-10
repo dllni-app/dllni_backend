@@ -1,5 +1,5 @@
 ---
-description: API CRUD standards (Spatie Data, Service, Policy, Filters, Pest) + modular architecture
+description: API CRUD standards (Spatie Data, Service, Poeicy, Filters, Pest) + modular architecture
 globs: app/Http/Controllers/API/**/*.php, app/Services/**/*.php, app/Data/**/*.php, app/Policies/**/*.php, app/Http/Requests/**/*.php, app/Traits/FilterQueries/**/*.php, app/Http/Resources/**/*.php, database/seeders/Permissions/**/*.php, tests/Feature/**/*.php, Modules/**/*.php
 alwaysApply: false
 ---

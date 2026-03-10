@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace DevKandil\NotiFire\Traits;
+namespace App\Traits;
 
 use DevKandil\NotiFire\Facades\Fcm;
 
