@@ -1,61 +1,136 @@
-# API Contract - Supermarket Store Owner
+# API Contract for Flutter – Supermarket Owner App
 
-**Audience:** Frontend / Flutter developer
-**Domain:** `dllni.mustafafares.com`
-**Scope:** Endpoints required for supermarket store owner dashboard and operations:
-- **Dashboard Overview:** Today metrics for the owner's store
-- **Order Actions:** Accept, reject, and return orders
-- **Store Management:** View and update store profile
-- **Product Management:** CRUD, stock updates, expiration
-- **Inventory Management:** Low stock, audit, lost opportunities
+**Audience:** Flutter developer  
+**Domain:** `dllni.mustafafares.com`  
+**Scope:** Supermarket owner mobile app (store owner view for one or more managed stores).
 
-For admin reports, see [API_CONTRACT_SUPERMARKET_ADMIN.md](API_CONTRACT_SUPERMARKET_ADMIN.md).
-For Auth or other modules, see [API_CONTRACT_AUTH.md](API_CONTRACT_AUTH.md).
+For supermarket admin/reporting scope, see [API_CONTRACT_SUPERMARKET_ADMIN.md](API_CONTRACT_SUPERMARKET_ADMIN.md).  
+For authentication details, see [API_CONTRACT_AUTH.md](API_CONTRACT_AUTH.md).
 
 ---
 
-## 1. Base URL and authentication
+## 1. Base URL, authentication, and client behavior
 
 - **Base URL:** `https://dllni.mustafafares.com`
-- **API prefix:** `https://dllni.mustafafares.com/api/v1/`
+- **API prefix:** All endpoints below are relative to the base URL:  
+  `https://dllni.mustafafares.com/api/v1/...`
 - **Auth:** Laravel Sanctum. Send token on every request:
   - Header: `Authorization: Bearer {token}`
+  - Login / token issuance is out of scope of this contract (use existing auth endpoints).
 - **Content-Type:** `application/json` for request bodies; responses are JSON.
 
+### 1.1 Client behavior (UI/API usage)
+
+- **GET (with ids/enums):**
+  - If the API returns ids/enums (status, operation, rejectionType), show human labels in UI and send canonical ids/enums back.
+- **POST (create):**
+  - Backend-known values (store ids, product ids, order item ids) must come from prior GET responses and local state, not manual text entry.
+- **PUT/PATCH (update):**
+  - Prefer optimistic UI where it improves UX, then rollback on API failure.
+- **Error handling:**
+  - Do not silently swallow errors; show a visible message/toast/snackbar on 4xx / 5xx responses.
+
 ---
 
-## 2. Store Owner Overview
+## 2. Global conventions
 
-The store owner dashboard displays:
+### 2.1 Pagination
 
-1. **Order Metrics** - total orders, completed orders, new orders, pending orders
-2. **Sales Summary** - total sales for completed orders (today)
-3. **Order Lists** - detailed data for new orders and pending orders
+- If an endpoint is paginated, use:
+  - `perPage` (integer, 1–100, default endpoint-specific)
+  - `page` (integer, default 1)
 
-All data is scoped by `storeId` (or `store_id` on inventory endpoints). The owner must know which store they manage (from user profile or app state).
+### 2.2 Filtering and sorting
+
+- Filters are endpoint-specific and usually passed as query params.
+- Sort is endpoint-specific and may be unavailable on some owner endpoints.
+
+### 2.3 Request / response casing
+
+- Use the exact casing returned by each endpoint.
+- In this module, both `camelCase` and `snake_case` appear depending on endpoint family.
+  - Example: `storeId` in dashboard, `store_id` in inventory reports.
+
+### 2.4 Single-resource responses
+
+- **Success:** usually HTTP 200 with `{ "data": { ... } }` or `{ "success": true, ... }` depending on endpoint.
+- **Create:** usually HTTP 201 with created resource.
+- **Delete:** typically HTTP 200/204 depending on route implementation.
+- **Errors:** 4xx/5xx with JSON; validation errors under `errors` for Laravel validation failures.
 
 ---
 
-## 3. Store Owner endpoints
+## 3. Store scoping and ownership
 
-### 3.1 Dashboard overview (today only)
+All `/store-owner/*` endpoints are owner-scoped by authenticated user permissions.
 
-| Method | Path                               | Description                          |
-| ------ | ---------------------------------- | ------------------------------------ |
-| GET    | `/api/v1/store-owner/dashboard`    | Today metrics for a single store     |
+- Some endpoints require explicit store identifier in query/body:
+  - `storeId` (dashboard)
+  - `store_id` (inventory/report endpoints)
+- Owner app should use only stores the authenticated owner is allowed to manage.
+- Backend must reject unauthorized cross-store access with `403`.
+
+**Base path for this contract:** `/api/v1/store-owner`
+
+---
+
+## 4. Screen → endpoint mapping (Flutter widgets)
+
+This maps common supermarket owner app screens to backend endpoints.
+
+### 4.1 Home dashboard (today KPIs + order queues)
+
+- **Top KPI cards (today):**
+  - `GET /api/v1/store-owner/dashboard?storeId={id}`
+  - Use `totalOrders`, `completedOrders`, `newOrders`, `pendingOrders`, `totalSales`.
+- **New orders list + quick actions:**
+  - Use existing order list endpoint in app state (if available in broader module).
+  - Action endpoints:
+    - `POST /api/v1/store-owner/orders/{order}/accept`
+    - `POST /api/v1/store-owner/orders/{order}/reject`
+
+### 4.2 Orders management (accept / reject / return)
+
+- **Accept order:** `POST /api/v1/store-owner/orders/{order}/accept`
+- **Reject order:** `POST /api/v1/store-owner/orders/{order}/reject`
+- **Return processing:** `POST /api/v1/store-owner/orders/{order}/return`
+
+### 4.3 Store profile screens
+
+- **Store details:** `GET /api/v1/store-owner/stores/{store}`
+- **Edit store profile:** `PUT /api/v1/store-owner/stores/{store}`
+
+### 4.4 Products screens
+
+- **List products:** `GET /api/v1/store-owner/products`
+- **Create product:** `POST /api/v1/store-owner/products`
+- **View one product:** `GET /api/v1/store-owner/products/{id}`
+- **Update product:** `PUT /api/v1/store-owner/products/{id}`
+- **Delete product:** `DELETE /api/v1/store-owner/products/{id}`
+- **Stock quick update:** `PUT /api/v1/store-owner/products/{product}/stock`
+- **Expiration update:** `PUT /api/v1/store-owner/products/{product}/expiration`
+
+### 4.5 Inventory screens
+
+- **Low stock alerts:** `GET /api/v1/store-owner/products/low-stock?store_id={id}`
+- **Inventory audit:** `POST /api/v1/store-owner/inventory/audit`
+- **Lost opportunities report:** `GET /api/v1/store-owner/reports/lost-opportunities?store_id={id}`
+
+---
+
+## 5. Dashboard – owner overview (today)
+
+### 5.1 Get dashboard overview
+
+| Method | Path                            | Description                      |
+| ------ | ------------------------------- | -------------------------------- |
+| GET    | `/api/v1/store-owner/dashboard` | Today metrics for one store      |
 
 **Query params:**
 
-| Param  | Type    | Required | Description                       |
-| ------ | ------- | -------- | --------------------------------- |
-| storeId | integer | Yes      | Store id (exists:sm_stores,id)    |
-
-**Example request:**
-
-```
-GET https://dllni.mustafafares.com/api/v1/store-owner/dashboard?storeId=1
-Authorization: Bearer {token}
-```
+| Param   | Type    | Required | Description                    |
+| ------- | ------- | -------- | ------------------------------ |
+| storeId | integer | yes      | Store id (`sm_stores.id`).     |
 
 **Response (200):**
 
@@ -72,487 +147,65 @@ Authorization: Bearer {token}
 }
 ```
 
-| Field           | Type   | Description                                                |
-| --------------- | ------ | ---------------------------------------------------------- |
-| totalOrders     | number | Total orders created today                                 |
-| completedOrders | number | Orders completed today                                     |
-| newOrders       | number | Orders with status `pending` created today                 |
-| pendingOrders   | number | Orders not `completed` and not `cancelled` created today   |
-| totalSales      | number | Sum of `total_amount` for completed orders today           |
+| Field           | Type   | Description                                              |
+| --------------- | ------ | -------------------------------------------------------- |
+| totalOrders     | number | Total orders created today.                              |
+| completedOrders | number | Orders completed today.                                  |
+| newOrders       | number | Orders with status `pending` created today.              |
+| pendingOrders   | number | Non-completed and non-cancelled orders created today.    |
+| totalSales      | number | Sum of completed orders total amount for today.          |
 
 ---
 
-### 3.2 Accept order
+## 6. Orders (owner actions)
 
-| Method | Path                                         | Description                    |
-| ------ | -------------------------------------------- | ------------------------------ |
-| POST   | `/api/v1/store-owner/orders/{order}/accept`  | Accept an order                |
+### 6.1 Accept order
 
-**Example request:**
+| Method | Path                                      | Description      |
+| ------ | ----------------------------------------- | ---------------- |
+| POST   | `/api/v1/store-owner/orders/{order}/accept` | Accept an order |
 
-```
-POST https://dllni.mustafafares.com/api/v1/store-owner/orders/123/accept
-Authorization: Bearer {token}
-```
+**Path params:**
+
+- `order` – order id.
 
 **Response (200):**
 
+- Returns updated order resource with status set to `accepted`.
+- Includes related `customer`, `store`, `items`, and monetary fields.
+
+### 6.2 Reject order
+
+| Method | Path                                      | Description      |
+| ------ | ----------------------------------------- | ---------------- |
+| POST   | `/api/v1/store-owner/orders/{order}/reject` | Reject an order |
+
+**Request body:**
+
 ```json
-{
-  "message": "Order accepted successfully.",
-  "data": {
-    "id": 123,
-    "customerId": 10,
-    "customer": {
-      "id": 10,
-      "name": "John Doe",
-      "email": "john@example.com"
-    },
-    "storeId": 1,
-    "store": {
-      "id": 1,
-      "name": "My Store",
-      "slug": "my-store",
-      "phone": "+1234567890"
-    },
-    "couponId": null,
-    "coupon": null,
-    "orderNumber": "ORD-123",
-    "status": "accepted",
-    "pickupMode": "pickup",
-    "subtotal": 150.00,
-    "discountAmount": 0.00,
-    "serviceFee": 0.00,
-    "totalAmount": 150.00,
-    "specialInstructions": null,
-    "cancelledAt": null,
-    "cancellationReason": null,
-    "items": [
-      {
-        "id": 1,
-        "orderId": 123,
-        "productId": 45,
-        "quantity": 2,
-        "unitPrice": 75.00,
-        "totalPrice": 150.00,
-        "productName": "Fresh Milk",
-        "createdAt": "2025-02-21T14:30:00.000000Z"
-      }
-    ],
-    "statusLogs": [],
-    "disputes": [],
-    "createdAt": "2025-02-21T14:30:00.000000Z",
-    "updatedAt": "2025-02-21T14:35:00.000000Z"
-  }
-}
-```
-
----
-
-### 3.3 Reject order
-
-| Method | Path                                        | Description                      |
-| ------ | ------------------------------------------- | -------------------------------- |
-| POST   | `/api/v1/store-owner/orders/{order}/reject` | Reject an order                  |
-
-**Body params:**
-
-| Param          | Type   | Required | Description                         |
-| -------------- | ------ | -------- | ----------------------------------- |
-| reason         | string | Yes      | Reason for rejecting the order      |
-| rejectionType  | string | Yes      | `out_of_stock`, `fake_order`, `other` |
-
-**Example request:**
-
-```
-POST https://dllni.mustafafares.com/api/v1/store-owner/orders/123/reject
-Authorization: Bearer {token}
-Content-Type: application/json
-
 {
   "reason": "Out of stock for requested items",
   "rejectionType": "out_of_stock"
 }
 ```
 
-**Response (200):**
-
-```json
-{
-  "message": "Order rejected successfully.",
-  "data": {
-    "id": 123,
-    "customerId": 10,
-    "customer": {
-      "id": 10,
-      "name": "John Doe",
-      "email": "john@example.com"
-    },
-    "storeId": 1,
-    "store": {
-      "id": 1,
-      "name": "My Store",
-      "slug": "my-store",
-      "phone": "+1234567890"
-    },
-    "couponId": null,
-    "coupon": null,
-    "orderNumber": "ORD-123",
-    "status": "cancelled",
-    "pickupMode": "pickup",
-    "subtotal": 150.00,
-    "discountAmount": 0.00,
-    "serviceFee": 0.00,
-    "totalAmount": 150.00,
-    "specialInstructions": null,
-    "cancelledAt": "2025-02-21T15:00:00.000000Z",
-    "cancellationReason": "Out of stock for requested items",
-    "items": [
-      {
-        "id": 1,
-        "orderId": 123,
-        "productId": 45,
-        "quantity": 2,
-        "unitPrice": 75.00,
-        "totalPrice": 150.00,
-        "productName": "Fresh Milk",
-        "createdAt": "2025-02-21T14:30:00.000000Z"
-      }
-    ],
-    "statusLogs": [],
-    "disputes": [],
-    "createdAt": "2025-02-21T14:30:00.000000Z",
-    "updatedAt": "2025-02-21T15:00:00.000000Z"
-  }
-}
-```
-
----
-
-### 3.4 Store details
-
-| Method | Path                                    | Description               |
-| ------ | --------------------------------------- | ------------------------- |
-| GET    | `/api/v1/store-owner/stores/{store}`    | Retrieve store details    |
-
-**Example request:**
-
-```
-GET https://dllni.mustafafares.com/api/v1/store-owner/stores/1
-Authorization: Bearer {token}
-```
+| Field         | Type   | Required | Description                                |
+| ------------- | ------ | -------- | ------------------------------------------ |
+| reason        | string | yes      | Human-readable rejection reason.           |
+| rejectionType | string | yes      | One of `out_of_stock`, `fake_order`, `other`. |
 
 **Response (200):**
 
-```json
-{
-  "data": {
-    "id": 1,
-    "ownerUserId": 5,
-    "owner": {
-      "id": 5,
-      "name": "Store Owner",
-      "email": "owner@example.com"
-    },
-    "name": "My Store",
-    "slug": "my-store",
-    "description": "Fresh groceries",
-    "address": "123 Main Street, City, Country",
-    "latitude": null,
-    "longitude": null,
-    "phone": "+1234567890",
-    "email": "store@example.com",
-    "averageRating": 4.5,
-    "totalReviews": 120,
-    "trustScore": 95,
-    "warningCount": 0,
-    "isActive": true,
-    "isFeatured": false,
-    "suspensionUntil": null,
-    "createdAt": "2025-02-01T09:00:00.000000Z",
-    "updatedAt": "2025-02-20T10:30:00.000000Z"
-  }
-}
-```
+- Returns updated order resource with status set to `cancelled` and cancellation fields.
 
----
+### 6.3 Process order return
 
-### 3.5 Update store
-
-| Method | Path                                    | Description            |
-| ------ | --------------------------------------- | ---------------------- |
-| PUT    | `/api/v1/store-owner/stores/{store}`    | Update store data      |
-
-**Example request:**
-
-```
-PUT https://dllni.mustafafares.com/api/v1/store-owner/stores/1
-Authorization: Bearer {token}
-Content-Type: application/json
-
-{
-  "name": "Updated Store Name",
-  "description": "Updated description",
-  "phone": "+1234567890"
-}
-```
-
-**Response (200):**
-
-```json
-{
-  "data": {
-    "id": 1,
-    "ownerUserId": 5,
-    "owner": {
-      "id": 5,
-      "name": "Store Owner",
-      "email": "owner@example.com"
-    },
-    "name": "Updated Store Name",
-    "slug": "updated-store-name",
-    "description": "Updated description",
-    "address": "123 Main Street, City, Country",
-    "latitude": null,
-    "longitude": null,
-    "phone": "+1234567890",
-    "email": "store@example.com",
-    "averageRating": 4.5,
-    "totalReviews": 120,
-    "trustScore": 95,
-    "warningCount": 0,
-    "isActive": true,
-    "isFeatured": false,
-    "suspensionUntil": null,
-    "createdAt": "2025-02-01T09:00:00.000000Z",
-    "updatedAt": "2025-02-21T16:00:00.000000Z"
-  }
-}
-```
-
----
-
-### 3.6 Product CRUD (store owner)
-
-Store owners manage products using the store-owner routes (same payload/response as Supermarket products):
-
-| Method | Path                                   | Description                 |
-| ------ | -------------------------------------- | --------------------------- |
-| GET    | `/api/v1/store-owner/products`         | List products               |
-| POST   | `/api/v1/store-owner/products`         | Create product              |
-| GET    | `/api/v1/store-owner/products/{id}`    | Get product                 |
-| PUT    | `/api/v1/store-owner/products/{id}`    | Update product              |
-| DELETE | `/api/v1/store-owner/products/{id}`    | Delete product              |
-
-Use the same payload/response structure as defined in the Supermarket product API.
-
----
-
-## 4. Order status values
-
-Use these when filtering or displaying status:
-
-| Value              | Description                   |
-| ------------------ | ---------------------------- |
-| `pending`          | New, awaiting acceptance     |
-| `accepted`         | Accepted by store            |
-| `preparing`        | Store is preparing order     |
-| `ready_for_pickup` | Ready for customer pickup    |
-| `completed`        | Completed / picked up        |
-| `cancelled`        | Cancelled                    |
-
----
-
-## 5. Inventory Management APIs
-
-### 5.1 Low Stock Alerts
-
-Get products with stock levels below their threshold.
-
-| Method | Path                                            |
-| ------ | ----------------------------------------------- |
-| GET    | `/api/v1/store-owner/products/low-stock`        |
-
-**Query params:**
-| Param   | Type    | Required | Description |
-| ------- | ------- | -------- | ----------- |
-| store_id | integer | Yes      | Store ID    |
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "data": {
-    "products": [
-      {
-        "product_id": 1,
-        "product_name": "Fresh Milk",
-        "current_stock": 5,
-        "threshold": 10,
-        "category": "Dairy",
-        "barcode": "1234567890123"
-      }
-    ],
-    "total": 1
-  }
-}
-```
-
----
-
-### 5.2 Manual Stock Update
-
-Update product stock with SET, INCREMENT, or DECREMENT operations.
-
-| Method | Path                                            |
-| ------ | ----------------------------------------------- |
-| PUT    | `/api/v1/store-owner/products/{product}/stock`  |
+| Method | Path                                      | Description                    |
+| ------ | ----------------------------------------- | ------------------------------ |
+| POST   | `/api/v1/store-owner/orders/{order}/return` | Process returned items and restock |
 
 **Request body:**
-```json
-{
-  "quantity": 50,
-  "operation": "SET"
-}
-```
 
-**Operations:** `SET` | `INCREMENT` | `DECREMENT`
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Stock updated successfully.",
-  "data": {
-    "product_id": 1,
-    "product_name": "Fresh Milk",
-    "stock_quantity": 50,
-    "low_stock_threshold": 10,
-    "is_low_stock": false
-  }
-}
-```
-
-**Error (400):**
-```json
-{
-  "success": false,
-  "message": "Failed to update stock.",
-  "error": "Stock quantity cannot be negative."
-}
-```
-
----
-
-### 5.3 Inventory Audit
-
-Perform inventory audit by comparing system stock with actual physical count.
-
-| Method | Path                                   |
-| ------ | -------------------------------------- |
-| POST   | `/api/v1/store-owner/inventory/audit`  |
-
-**Request body:**
-```json
-{
-  "store_id": 1,
-  "products": [
-    {
-      "product_id": 1,
-      "actual_stock": 45
-    },
-    {
-      "product_id": 2,
-      "actual_stock": 100
-    }
-  ]
-}
-```
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Inventory audit completed successfully.",
-  "data": {
-    "total_audited": 2,
-    "discrepancies_found": 1,
-    "total_corrected": 1,
-    "discrepancies": [
-      {
-        "product_id": 1,
-        "product_name": "Fresh Milk",
-        "system_stock": 50,
-        "actual_stock": 45,
-        "difference": -5
-      }
-    ]
-  }
-}
-```
-
----
-
-### 5.4 Update Product Expiration
-
-Set or update product expiration date with automatic discount suggestions.
-
-| Method | Path                                                |
-| ------ | --------------------------------------------------- |
-| PUT    | `/api/v1/store-owner/products/{product}/expiration` |
-
-**Request body:**
-```json
-{
-  "expires_at": "2026-03-10T00:00:00+00:00"
-}
-```
-
-**Response (200) - Expiring soon (within 7 days):**
-```json
-{
-  "success": true,
-  "message": "Product expiration updated successfully.",
-  "data": {
-    "product_id": 1,
-    "product_name": "Fresh Milk",
-    "expires_at": "2026-03-05T00:00:00+00:00",
-    "is_expiring_soon": true,
-    "suggested_discount": {
-      "discount_percentage": 20,
-      "suggested_price": 8.00,
-      "days_until_expiration": 5
-    }
-  }
-}
-```
-
-**Response (200) - Not expiring soon:**
-```json
-{
-  "success": true,
-  "message": "Product expiration updated successfully.",
-  "data": {
-    "product_id": 1,
-    "product_name": "Fresh Milk",
-    "expires_at": "2026-04-01T00:00:00+00:00",
-    "is_expiring_soon": false,
-    "suggested_discount": null
-  }
-}
-```
-
----
-
-### 5.5 Process Order Return
-
-Handle product returns and restore stock.
-
-| Method | Path                                          |
-| ------ | --------------------------------------------- |
-| POST   | `/api/v1/store-owner/orders/{order}/return`   |
-
-**Request body:**
 ```json
 {
   "items": [
@@ -566,6 +219,7 @@ Handle product returns and restore stock.
 ```
 
 **Response (200):**
+
 ```json
 {
   "success": true,
@@ -586,113 +240,311 @@ Handle product returns and restore stock.
 }
 ```
 
+### 6.4 Automatic stock deduction on accept
+
+No separate endpoint is required.
+
+- When order is accepted via `POST /store-owner/orders/{order}/accept`:
+  - Stock is deducted for all order items.
+  - Inventory logs are created.
+  - `StockUpdated` event is fired.
+  - Operation is transactional.
+
+If stock is insufficient, API returns failure (business error message).
+
 ---
 
-### 5.6 Lost Opportunities Report
+## 7. Store profile management
 
-Track instances when customers attempted to order products with insufficient stock.
+### 7.1 Get store details
 
-| Method | Path                                                    |
-| ------ | ------------------------------------------------------- |
-| GET    | `/api/v1/store-owner/reports/lost-opportunities`        |
-
-**Query params:**
-| Param      | Type    | Required | Description                |
-| ---------- | ------- | -------- | -------------------------- |
-| store_id   | integer | Yes      | Store ID                   |
-| start_date | date    | No       | Filter from date (Y-m-d)   |
-| end_date   | date    | No       | Filter to date (Y-m-d)     |
+| Method | Path                                 | Description               |
+| ------ | ------------------------------------ | ------------------------- |
+| GET    | `/api/v1/store-owner/stores/{store}` | Retrieve store details    |
 
 **Response (200):**
+
+```json
+{
+  "data": {
+    "id": 1,
+    "ownerUserId": 5,
+    "name": "My Store",
+    "slug": "my-store",
+    "description": "Fresh groceries",
+    "address": "123 Main Street, City, Country",
+    "phone": "+1234567890",
+    "email": "store@example.com",
+    "isActive": true,
+    "isFeatured": false,
+    "createdAt": "2025-02-01T09:00:00.000000Z",
+    "updatedAt": "2025-02-20T10:30:00.000000Z"
+  }
+}
+```
+
+### 7.2 Update store
+
+| Method | Path                                 | Description         |
+| ------ | ------------------------------------ | ------------------- |
+| PUT    | `/api/v1/store-owner/stores/{store}` | Update store data   |
+
+**Request body example:**
+
+```json
+{
+  "name": "Updated Store Name",
+  "description": "Updated description",
+  "phone": "+1234567890"
+}
+```
+
+**Response (200):** Updated store resource.
+
+---
+
+## 8. Products and inventory management
+
+### 8.1 Product CRUD
+
+| Method | Path                                | Description     |
+| ------ | ----------------------------------- | --------------- |
+| GET    | `/api/v1/store-owner/products`      | List products   |
+| POST   | `/api/v1/store-owner/products`      | Create product  |
+| GET    | `/api/v1/store-owner/products/{id}` | Get product     |
+| PUT    | `/api/v1/store-owner/products/{id}` | Update product  |
+| DELETE | `/api/v1/store-owner/products/{id}` | Delete product  |
+
+Payloads/responses follow the supermarket product API conventions in the module.
+
+### 8.2 Low stock alerts
+
+| Method | Path                                     | Description                     |
+| ------ | ---------------------------------------- | ------------------------------- |
+| GET    | `/api/v1/store-owner/products/low-stock` | Products below stock threshold  |
+
+**Query params:**
+
+| Param    | Type    | Required | Description |
+| -------- | ------- | -------- | ----------- |
+| store_id | integer | yes      | Store id.   |
+
+**Response (200):**
+
 ```json
 {
   "success": true,
   "data": {
-    "total_lost_opportunities": 15,
-    "by_product": [
+    "products": [
       {
-        "product_id": 5,
+        "product_id": 1,
         "product_name": "Fresh Milk",
-        "barcode": "1234567890123",
-        "total_attempts": 8,
-        "total_attempted_quantity": 120,
-        "latest_attempt": "2026-02-25T14:30:00+00:00"
+        "current_stock": 5,
+        "threshold": 10,
+        "category": "Dairy",
+        "barcode": "1234567890123"
       }
     ],
-    "recent_opportunities": [
-      {
-        "product_id": 5,
-        "product_name": "Fresh Milk",
-        "attempted_quantity": 10,
-        "available_stock": 5,
-        "date": "2026-02-25T14:30:00+00:00",
-        "customer_name": "John Doe"
-      },
-      {
-        "product_id": 5,
-        "product_name": "Fresh Milk",
-        "attempted_quantity": 15,
-        "available_stock": 5,
-        "date": "2026-02-24T10:15:00+00:00",
-        "customer_name": "Guest"
-      }
+    "total": 1
+  }
+}
+```
+
+### 8.3 Manual stock update
+
+| Method | Path                                        | Description                        |
+| ------ | ------------------------------------------- | ---------------------------------- |
+| PUT    | `/api/v1/store-owner/products/{product}/stock` | Set/increment/decrement stock   |
+
+**Request body:**
+
+```json
+{
+  "quantity": 50,
+  "operation": "SET"
+}
+```
+
+| Field     | Type   | Required | Description                              |
+| --------- | ------ | -------- | ---------------------------------------- |
+| quantity  | number | yes      | Quantity value used by selected operation. |
+| operation | string | yes      | `SET`, `INCREMENT`, or `DECREMENT`.      |
+
+### 8.4 Inventory audit
+
+| Method | Path                                  | Description                         |
+| ------ | ------------------------------------- | ----------------------------------- |
+| POST   | `/api/v1/store-owner/inventory/audit` | Reconcile system stock vs physical  |
+
+**Request body:**
+
+```json
+{
+  "store_id": 1,
+  "products": [
+    {
+      "product_id": 1,
+      "actual_stock": 45
+    }
+  ]
+}
+```
+
+### 8.5 Update product expiration
+
+| Method | Path                                             | Description                          |
+| ------ | ------------------------------------------------ | ------------------------------------ |
+| PUT    | `/api/v1/store-owner/products/{product}/expiration` | Set expiration and receive discount suggestion |
+
+**Request body:**
+
+```json
+{
+  "expires_at": "2026-03-10T00:00:00+00:00"
+}
+```
+
+If product expires soon (within 7 days), response includes `suggested_discount` object.
+
+### 8.6 Lost opportunities report
+
+| Method | Path                                           | Description                                   |
+| ------ | ---------------------------------------------- | --------------------------------------------- |
+| GET    | `/api/v1/store-owner/reports/lost-opportunities` | Out-of-stock demand / missed sales insights |
+
+**Query params:**
+
+| Param      | Type    | Required | Description                  |
+| ---------- | ------- | -------- | ---------------------------- |
+| store_id   | integer | yes      | Store id.                    |
+| start_date | date    | no       | Start date (`Y-m-d`).        |
+| end_date   | date    | no       | End date (`Y-m-d`).          |
+
+---
+
+## 9. Enums and common values
+
+### 9.1 OrderStatus (supermarket owner)
+
+| Value              | Description                |
+| ------------------ | -------------------------- |
+| `pending`          | New, awaiting acceptance.  |
+| `accepted`         | Accepted by store.         |
+| `preparing`        | Store is preparing order.  |
+| `ready_for_pickup` | Ready for customer pickup. |
+| `completed`        | Completed / picked up.     |
+| `cancelled`        | Cancelled order.           |
+
+### 9.2 RejectionType
+
+| Value          | Description                      |
+| -------------- | -------------------------------- |
+| `out_of_stock` | Requested products unavailable.  |
+| `fake_order`   | Suspected invalid/fake order.    |
+| `other`        | Other reason supplied in `reason`. |
+
+### 9.3 StockOperation
+
+| Value       | Description                                  |
+| ----------- | -------------------------------------------- |
+| `SET`       | Replace stock with exact quantity.           |
+| `INCREMENT` | Add quantity to current stock.               |
+| `DECREMENT` | Subtract quantity from current stock.        |
+
+---
+
+## 10. Example requests
+
+### 10.1 Get owner dashboard (today)
+
+```http
+GET https://dllni.mustafafares.com/api/v1/store-owner/dashboard?storeId=1
+Authorization: Bearer {token}
+```
+
+### 10.2 Reject order
+
+```http
+POST https://dllni.mustafafares.com/api/v1/store-owner/orders/123/reject
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "reason": "Out of stock for requested items",
+  "rejectionType": "out_of_stock"
+}
+```
+
+### 10.3 Update stock
+
+```http
+PUT https://dllni.mustafafares.com/api/v1/store-owner/products/1/stock
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "quantity": 50,
+  "operation": "SET"
+}
+```
+
+### 10.4 Process return
+
+```http
+POST https://dllni.mustafafares.com/api/v1/store-owner/orders/123/return
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "items": [
+    {
+      "order_item_id": 1,
+      "quantity": 2
+    }
+  ],
+  "reason": "Customer reported defective product"
+}
+```
+
+---
+
+## 11. Error responses
+
+- **401 Unauthorized:** Missing or invalid token.
+
+```json
+{
+  "message": "Unauthenticated."
+}
+```
+
+- **403 Forbidden:** User not allowed to access store/resource.
+
+```json
+{
+  "message": "This action is unauthorized."
+}
+```
+
+- **404 Not Found:** Resource does not exist or not visible to owner.
+
+```json
+{
+  "message": "Not found."
+}
+```
+
+- **422 Unprocessable Entity:** Validation/state errors.
+
+```json
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "storeId": [
+      "The store id field is required."
     ]
   }
 }
 ```
 
----
-
-### 5.7 Automatic Stock Deduction
-
-**Note:** This happens automatically when accepting orders (no separate endpoint).
-
-When an order is accepted via `POST /api/v1/store-owner/orders/{order}/accept`:
-- Stock is automatically deducted for all items
-- Inventory logs are created
-- `StockUpdated` event is fired
-- Transaction ensures atomicity
-
-If insufficient stock exists:
-```json
-{
-  "success": false,
-  "message": "Failed to accept order.",
-  "error": "Insufficient stock for product: Fresh Milk"
-}
-```
-
----
-
-## 6. Error responses
-
-- **401 Unauthorized:** Missing or invalid token.
-  ```json
-  {
-    "message": "Unauthenticated."
-  }
-  ```
-
-- **422 Unprocessable Entity:** Validation errors (e.g. missing storeId, invalid reason/rejectionType).
-  ```json
-  {
-    "message": "The given data was invalid.",
-    "errors": {
-      "storeId": ["The store id field is required."]
-    }
-  }
-  ```
-
-- **404 Not Found:** Resource not found.
-  ```json
-  {
-    "message": "Not found."
-  }
-  ```
-
-- **403 Forbidden:** User not allowed to access protected resources.
-  ```json
-  {
-    "message": "This action is unauthorized."
-  }
-  ```
+- **400 Bad Request:** Business rule failures in some inventory/order operations (e.g., negative stock outcome).

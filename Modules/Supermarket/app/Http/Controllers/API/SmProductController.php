@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Modules\Supermarket\Data\SmProductData;
+use Modules\Supermarket\Http\Requests\SmProductImportRequest;
 use Modules\Supermarket\Http\Requests\SmProductRequest;
 use Modules\Supermarket\Http\Requests\SmProductRequests\SmProductFilterRequest;
 use Modules\Supermarket\Http\Resources\SmProductResource;
@@ -48,6 +49,17 @@ final class SmProductController
         );
 
         return SmProductResource::make($product->load('store', 'category', 'media'));
+    }
+
+    public function import(SmProductImportRequest $request): JsonResponse
+    {
+        $result = $this->service->importFromSpreadsheet(
+            $request->file('file'),
+            (int) $request->integer('storeId'),
+            (int) $request->integer('categoryId')
+        );
+
+        return response()->json($result, Response::HTTP_CREATED);
     }
 
     public function show(SmProduct $smProduct): SmProductResource

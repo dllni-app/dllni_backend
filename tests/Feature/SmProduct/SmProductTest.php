@@ -146,3 +146,55 @@ it('replaces product image on update', function (): void {
     expect($product->getMedia(SmProduct::IMAGE_COLLECTION))->toHaveCount(1)
         ->and($product->getFirstMedia(SmProduct::IMAGE_COLLECTION)?->file_name)->toContain('second');
 });
+
+it('imports products from csv with required columns', function (): void {
+    $store = SmStoreFactory::new()->create();
+    $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+
+    $csv = <<<'CSV'
+name,description,image
+Apple,Fresh and crispy,
+Bread,Daily baked,
+CSV;
+
+    $response = $this->post('/api/v1/sm-products/import', [
+        'storeId' => $store->id,
+        'categoryId' => $category->id,
+        'file' => UploadedFile::fake()->createWithContent('products.csv', $csv),
+    ], [
+        'Accept' => 'application/json',
+    ]);
+
+    $response->assertCreated()
+        ->assertJsonPath('totalRows', 2)
+        ->assertJsonPath('importedCount', 2)
+        ->assertJsonPath('failedRows', []);
+
+    $this->assertDatabaseHas('sm_products', [
+        'store_id' => $store->id,
+        'category_id' => $category->id,
+        'name' => 'Apple',
+        'source_type' => 'bulk_import',
+    ]);
+});
+
+it('validates required import columns for csv upload', function (): void {
+    $store = SmStoreFactory::new()->create();
+    $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+
+    $csv = <<<'CSV'
+name,description
+Apple,Missing image column
+CSV;
+
+    $response = $this->post('/api/v1/sm-products/import', [
+        'storeId' => $store->id,
+        'categoryId' => $category->id,
+        'file' => UploadedFile::fake()->createWithContent('products.csv', $csv),
+    ], [
+        'Accept' => 'application/json',
+    ]);
+
+    $response->assertUnprocessable()
+        ->assertJsonPath('errors.file.0', 'Missing required column(s): image.');
+});
