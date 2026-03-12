@@ -17,7 +17,6 @@ final class InventoryItemFilterRequest extends FormRequest
     {
         return [
             'perPage' => 'sometimes|integer|min:1|max:100',
-            'filter.restaurantId' => 'sometimes|exists:restaurants,id',
             'filter.search' => 'sometimes|string|max:255',
             'filter.status' => 'sometimes|string|in:normal,low',
             'filter.lowStock' => 'sometimes|boolean',

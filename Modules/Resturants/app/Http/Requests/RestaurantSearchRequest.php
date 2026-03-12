@@ -17,7 +17,6 @@ final class RestaurantSearchRequest extends FormRequest
     {
         return [
             'filter.search' => ['required', 'string', 'min:1', 'max:255', 'regex:/.*\S.*/'],
-            'filter.restaurantId' => 'sometimes|integer|exists:restaurants,id',
             'filter.categoryId' => 'sometimes|integer|exists:categories,id',
             'filter.isFeatured' => 'sometimes|boolean',
             'filter.lowStock' => 'sometimes|boolean',

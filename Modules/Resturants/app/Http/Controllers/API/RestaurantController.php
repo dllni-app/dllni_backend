@@ -12,12 +12,14 @@ use Modules\Resturants\Http\Requests\RestaurantRequests\RestaurantFilterRequest;
 use Modules\Resturants\Http\Resources\RestaurantResource;
 use Modules\Resturants\Models\Restaurant;
 use Modules\Resturants\Services\RestaurantService;
+use Modules\Resturants\Support\RestaurantOwnerContext;
 use Throwable;
 
 final class RestaurantController
 {
     public function __construct(
-        private RestaurantService $restaurantService
+        private RestaurantService $restaurantService,
+        private RestaurantOwnerContext $ownerContext
     ) {}
 
     public function index(RestaurantFilterRequest $request): AnonymousResourceCollection
@@ -41,8 +43,10 @@ final class RestaurantController
         );
     }
 
-    public function show(Restaurant $restaurant): RestaurantResource
+    public function show(): RestaurantResource
     {
+        $restaurant = $this->ownerContext->restaurant();
+
         $restaurant->load([
             'user', 'operatingHours', 'documents', 'cuisineTypes', 'reputationLogs', 'penalties',
         ]);
@@ -51,8 +55,10 @@ final class RestaurantController
     }
 
     /** @throws Throwable */
-    public function update(RestaurantRequest $request, Restaurant $restaurant): RestaurantResource
+    public function update(RestaurantRequest $request): RestaurantResource
     {
+        $restaurant = $this->ownerContext->restaurant();
+
         $updated = $this->restaurantService->update(
             RestaurantData::from($request->validated()),
             $restaurant

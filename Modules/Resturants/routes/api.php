@@ -56,8 +56,10 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     Route::get('restaurant/inventory-summary', InventorySummaryController::class);
     Route::get('restaurant/inventory-alerts', InventoryAlertsController::class);
     Route::apiResource('restaurants', RestaurantController::class);
-    Route::get('restaurants/{restaurant}/operating-hours', [RestaurantOperatingHoursController::class, 'show']);
-    Route::put('restaurants/{restaurant}/operating-hours', [RestaurantOperatingHoursController::class, 'update']);
+    Route::get('restaurant-owner/restaurant', [RestaurantController::class, 'show']);
+    Route::put('restaurant-owner/restaurant', [RestaurantController::class, 'update']);
+    Route::get('restaurant-owner/restaurant/operating-hours', [RestaurantOperatingHoursController::class, 'show']);
+    Route::put('restaurant-owner/restaurant/operating-hours', [RestaurantOperatingHoursController::class, 'update']);
     Route::apiResource('inventory-items', InventoryItemController::class);
     Route::apiResource('categories', CategoryController::class);
     Route::apiResource('products', ProductController::class);

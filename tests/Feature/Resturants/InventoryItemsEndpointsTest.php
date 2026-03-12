@@ -22,7 +22,11 @@ it('returns inventory summary for restaurant', function () {
         'unit_cost' => 5.5,
     ]);
 
-    $response = $this->getJson('/api/v1/restaurant/inventory-summary?restaurantId='.$restaurant->id);
+    Sanctum::actingAs(User::factory()->create([
+        'id' => $restaurant->user_id,
+    ]));
+
+    $response = $this->getJson('/api/v1/restaurant/inventory-summary');
 
     $response->assertOk();
     $response->assertJsonStructure([
@@ -47,7 +51,11 @@ it('returns inventory alerts for restaurant', function () {
         'unit_cost' => 10,
     ]);
 
-    $response = $this->getJson('/api/v1/restaurant/inventory-alerts?restaurantId='.$restaurant->id);
+    Sanctum::actingAs(User::factory()->create([
+        'id' => $restaurant->user_id,
+    ]));
+
+    $response = $this->getJson('/api/v1/restaurant/inventory-alerts');
 
     $response->assertOk();
     expect($response->json('data'))->toHaveCount(1);
@@ -55,9 +63,11 @@ it('returns inventory alerts for restaurant', function () {
 
 it('creates inventory item', function () {
     $restaurant = Restaurant::factory()->create();
+    Sanctum::actingAs(User::factory()->create([
+        'id' => $restaurant->user_id,
+    ]));
 
     $response = $this->postJson('/api/v1/inventory-items', [
-        'restaurantId' => $restaurant->id,
         'name' => 'Basmati Rice',
         'unit' => 'kg',
         'quantity' => 25,
@@ -85,7 +95,11 @@ it('lists inventory items with filter', function () {
         'unit_cost' => 1,
     ]);
 
-    $response = $this->getJson('/api/v1/inventory-items?filter[restaurantId]='.$restaurant->id);
+    Sanctum::actingAs(User::factory()->create([
+        'id' => $restaurant->user_id,
+    ]));
+
+    $response = $this->getJson('/api/v1/inventory-items');
 
     $response->assertOk();
     expect($response->json('data'))->toHaveCount(1);
