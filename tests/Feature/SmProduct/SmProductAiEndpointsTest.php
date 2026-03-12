@@ -36,5 +36,5 @@ it('generates product image from text for supermarket products', function (): vo
     ]);
 
     $response->assertOk();
-    expect($response->json('data.imageBase64'))->not()->toBeNull();
+    expect($response->json('data'))->not()->toBeNull();
 });

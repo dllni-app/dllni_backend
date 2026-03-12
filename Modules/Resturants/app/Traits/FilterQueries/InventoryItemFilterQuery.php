@@ -19,6 +19,7 @@ trait InventoryItemFilterQuery
             ->allowedFilters([
                 AllowedFilter::exact('restaurantId', 'restaurant_id'),
                 AllowedFilter::scope('search'),
+                AllowedFilter::scope('status'),
                 AllowedFilter::scope('lowStock'),
             ])
             ->allowedSorts([
@@ -39,5 +40,17 @@ trait InventoryItemFilterQuery
         $likeTerm = SearchTermEscaper::escape($search);
 
         return $query->whereRaw('name LIKE ? ESCAPE \'!\'', [$likeTerm]);
+    }
+
+    public function scopeStatus(Builder $query, string $status): Builder
+    {
+        return match ($status) {
+            'low' => $query->lowStock(true),
+            'normal' => $query->where(function (Builder $inner): void {
+                $inner->whereColumn('quantity', '>', 'minimum_limit')
+                    ->orWhereNull('minimum_limit');
+            }),
+            default => $query,
+        };
     }
 }

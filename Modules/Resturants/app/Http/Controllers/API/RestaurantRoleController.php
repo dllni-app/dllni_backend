@@ -25,7 +25,7 @@ final class RestaurantRoleController
     {
         $roles = RestaurantRole::getQuery()
             ->with(['restaurant', 'staff'])
-            ->paginate($request->get('perPage', 20));
+            ->paginate($request->input('perPage', 20));
 
         return RestaurantRoleResource::collection($roles);
     }
@@ -34,7 +34,8 @@ final class RestaurantRoleController
     public function store(RestaurantRoleRequest $request): RestaurantRoleResource
     {
         $role = $this->restaurantRoleService->store(
-            RestaurantRoleData::from($request->validated())
+            RestaurantRoleData::from($request->validated()),
+            $request->validated('permissionIds') ?? null
         );
 
         return RestaurantRoleResource::make(
@@ -54,7 +55,8 @@ final class RestaurantRoleController
     {
         $updated = $this->restaurantRoleService->update(
             RestaurantRoleData::from($request->validated()),
-            $restaurant_role
+            $restaurant_role,
+            $request->validated('permissionIds') ?? null
         );
 
         return RestaurantRoleResource::make(
@@ -67,14 +69,5 @@ final class RestaurantRoleController
         $restaurant_role->delete();
 
         return response()->noContent();
-    }
-
-    public function updatePermissions(RestaurantRolePermissionsRequest $request, RestaurantRole $restaurant_role): RestaurantRoleResource
-    {
-        $restaurant_role->permissions()->sync($request->validated('permissionIds'));
-
-        return RestaurantRoleResource::make(
-            $restaurant_role->load(['restaurant', 'staff', 'permissions'])
-        );
     }
 }

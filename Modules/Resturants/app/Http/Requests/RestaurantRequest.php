@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Resturants\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Modules\Resturants\Models\Restaurant;
 
 final class RestaurantRequest extends FormRequest
 {
@@ -15,7 +16,21 @@ final class RestaurantRequest extends FormRequest
 
     public function rules(): array
     {
-        $restaurantId = $this->route('restaurant')?->id;
+        $restaurantRoute = $this->route('restaurant');
+        $restaurantId = null;
+
+        if ($restaurantRoute instanceof Restaurant) {
+            $restaurantId = $restaurantRoute->id;
+        } elseif (is_numeric($restaurantRoute)) {
+            $restaurantId = (int) $restaurantRoute;
+        } else {
+            $owner = auth()->user();
+            if ($owner) {
+                /** @var Restaurant|null $ownedRestaurant */
+                $ownedRestaurant = $owner->restaurants()->first();
+                $restaurantId = $ownedRestaurant?->id;
+            }
+        }
 
         return [
             'userId' => 'required|exists:users,id',

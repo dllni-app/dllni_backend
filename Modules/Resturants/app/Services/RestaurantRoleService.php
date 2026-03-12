@@ -11,23 +11,33 @@ use Modules\Resturants\Models\RestaurantRole;
 
 final class RestaurantRoleService
 {
-    public function store(RestaurantRoleData $data): RestaurantRole
+    public function store(RestaurantRoleData $data, ?array $permissionIds = null): RestaurantRole
     {
-        return DB::transaction(static function () use ($data) {
+        return DB::transaction(static function () use ($data, $permissionIds) {
             $slug = $data->slug ?? Str::slug($data->name ?? 'role');
 
-            return RestaurantRole::create([
+            $role = RestaurantRole::create([
                 'restaurant_id' => $data->restaurantId,
                 'name' => $data->name,
                 'slug' => $slug,
             ]);
+
+            if ($permissionIds !== null) {
+                $role->permissions()->sync($permissionIds);
+            }
+
+            return $role;
         });
     }
 
-    public function update(RestaurantRoleData $data, RestaurantRole $role): RestaurantRole
+    public function update(RestaurantRoleData $data, RestaurantRole $role, ?array $permissionIds = null): RestaurantRole
     {
-        return DB::transaction(static function () use ($data, $role) {
+        return DB::transaction(static function () use ($data, $role, $permissionIds) {
             tap($role)->update($data->onlyModelAttributes());
+
+            if ($permissionIds !== null) {
+                $role->permissions()->sync($permissionIds);
+            }
 
             return $role;
         });

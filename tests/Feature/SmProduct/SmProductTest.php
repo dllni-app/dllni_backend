@@ -148,6 +148,10 @@ it('replaces product image on update', function (): void {
 });
 
 it('imports products from csv with required columns', function (): void {
+    if (! class_exists(\Rap2hpoutre\FastExcel\FastExcel::class)) {
+        $this->markTestSkipped('FastExcel is not installed.');
+    }
+
     $store = SmStoreFactory::new()->create();
     $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
 
@@ -179,6 +183,10 @@ CSV;
 });
 
 it('validates required import columns for csv upload', function (): void {
+    if (! class_exists(\Rap2hpoutre\FastExcel\FastExcel::class)) {
+        $this->markTestSkipped('FastExcel is not installed.');
+    }
+
     $store = SmStoreFactory::new()->create();
     $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
 

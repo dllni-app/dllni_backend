@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\UserModuleType;
 use App\Models\User;
 use Laravel\Sanctum\Sanctum;
 use Modules\Resturants\Models\Restaurant;
@@ -11,9 +12,16 @@ beforeEach(function () {
 });
 
 it('returns operating hours for restaurant', function () {
-    $restaurant = Restaurant::factory()->create();
+    $owner = User::factory()->create([
+        'module_type' => UserModuleType::RestaurantSeller->value,
+    ]);
+    $restaurant = Restaurant::factory()->create([
+        'user_id' => $owner->id,
+    ]);
 
-    $response = $this->getJson('/api/v1/restaurants/'.$restaurant->id.'/operating-hours');
+    Sanctum::actingAs($owner);
+
+    $response = $this->getJson('/api/v1/restaurant-owner/restaurant/operating-hours');
 
     $response->assertOk();
     $response->assertJsonStructure([
@@ -25,9 +33,16 @@ it('returns operating hours for restaurant', function () {
 });
 
 it('updates operating hours for restaurant', function () {
-    $restaurant = Restaurant::factory()->create();
+    $owner = User::factory()->create([
+        'module_type' => UserModuleType::RestaurantSeller->value,
+    ]);
+    $restaurant = Restaurant::factory()->create([
+        'user_id' => $owner->id,
+    ]);
 
-    $response = $this->putJson('/api/v1/restaurants/'.$restaurant->id.'/operating-hours', [
+    Sanctum::actingAs($owner);
+
+    $response = $this->putJson('/api/v1/restaurant-owner/restaurant/operating-hours', [
         'isTemporarilyClosed' => false,
         'dailyHours' => [
             [

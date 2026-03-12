@@ -28,6 +28,7 @@ use Modules\Resturants\Http\Controllers\API\RestaurantReputationLogController;
 use Modules\Resturants\Http\Controllers\API\RestaurantRoleController;
 use Modules\Resturants\Http\Controllers\API\RestaurantSearchController;
 use Modules\Resturants\Http\Controllers\API\RestaurantStaffController;
+use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerPermissionsController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerCouponSummaryController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerCouponsIndexController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerDashboardPerformanceController;
@@ -79,7 +80,7 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     Route::apiResource('restaurant-reputation-logs', RestaurantReputationLogController::class)->only(['index', 'show']);
     Route::apiResource('restaurant-penalties', RestaurantPenaltyController::class)->only(['index', 'show']);
     Route::apiResource('restaurant-staff', RestaurantStaffController::class);
-    Route::apiResource('restaurant-roles', RestaurantRoleController::class);
+
     Route::put('restaurant-roles/{restaurant_role}/permissions', [RestaurantRoleController::class, 'updatePermissions'])->name('restaurant-roles.permissions');
     Route::apiResource('restaurant-assistant-queries', RestaurantAssistantQueryController::class)->only(['index', 'show']);
     Route::apiResource('restaurant-recurring-orders', RestaurantRecurringOrderController::class)->only(['index', 'show']);
@@ -87,6 +88,7 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     Route::apiResource('resturants', ResturantsController::class)->names('resturants');
 
     Route::prefix('restaurant-owner')->group(function () {
+        Route::apiResource('restaurant-roles', RestaurantRoleController::class);
         Route::get('dashboard/performance', RestaurantOwnerDashboardPerformanceController::class);
 
         Route::get('orders/{order}', RestaurantOwnerOrderShowController::class);
@@ -105,6 +107,8 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
         Route::post('employees', RestaurantOwnerEmployeeStoreController::class);
         Route::patch('employees/{restaurant_staff}', RestaurantOwnerEmployeeUpdateController::class);
         Route::patch('employees/{restaurant_staff}/status', RestaurantOwnerEmployeeStatusController::class);
+
+        Route::get('permissions', RestaurantOwnerPermissionsController::class);
 
         Route::get('notifications', RestaurantOwnerNotificationsController::class);
         Route::patch('notifications/read-all', RestaurantOwnerNotificationMarkReadAllController::class);
