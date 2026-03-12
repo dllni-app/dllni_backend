@@ -30,6 +30,8 @@ final class SmProductRequest extends FormRequest
             'expiresAt' => 'nullable|date',
             'isAvailable' => 'sometimes|boolean',
             'image' => 'sometimes|nullable|image|max:5120',
+            'images' => 'sometimes|array',
+            'images.*' => 'image|max:5120',
         ];
     }
 }

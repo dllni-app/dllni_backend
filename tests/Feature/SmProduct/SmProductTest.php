@@ -100,7 +100,7 @@ it('returns available products count', function (): void {
     expect($response->json('count'))->toBe(3);
 });
 
-it('creates a product with one image', function (): void {
+it('creates a product with multiple images', function (): void {
     Storage::fake('public');
 
     $store = SmStoreFactory::new()->create();
@@ -114,7 +114,11 @@ it('creates a product with one image', function (): void {
         'price' => 7.25,
         'stockQuantity' => 10,
         'lowStockThreshold' => 2,
-        'image' => UploadedFile::fake()->image('product.jpg'),
+        'image' => UploadedFile::fake()->image('cover.jpg'),
+        'images' => [
+            UploadedFile::fake()->image('gallery-1.jpg'),
+            UploadedFile::fake()->image('gallery-2.jpg'),
+        ],
     ]);
 
     $response->assertSuccessful();
@@ -122,29 +126,39 @@ it('creates a product with one image', function (): void {
     $productId = $response->json('data.id');
     $product = SmProduct::query()->findOrFail($productId);
 
-    expect($product->getMedia(SmProduct::IMAGE_COLLECTION))->toHaveCount(1)
-        ->and($response->json('data.imageUrl'))->not->toBeNull();
+    expect($product->getMedia(SmProduct::IMAGE_COLLECTION))->toHaveCount(3)
+        ->and($response->json('data.imageUrl'))->not->toBeNull()
+        ->and($response->json('data.images'))->toHaveCount(3)
+        ->and($response->json('data.imageUrls'))->toHaveCount(3);
 });
 
-it('replaces product image on update', function (): void {
+it('replaces product images on update', function (): void {
     Storage::fake('public');
 
     $product = SmProductFactory::new()->create();
 
     $this->post("/api/v1/sm-products/{$product->id}?_method=PUT", [
-        'image' => UploadedFile::fake()->image('first.jpg'),
+        'images' => [
+            UploadedFile::fake()->image('first.jpg'),
+            UploadedFile::fake()->image('second.jpg'),
+        ],
     ])->assertSuccessful();
 
     $updateResponse = $this->post("/api/v1/sm-products/{$product->id}?_method=PUT", [
-        'image' => UploadedFile::fake()->image('second.jpg'),
+        'images' => [
+            UploadedFile::fake()->image('third.jpg'),
+            UploadedFile::fake()->image('fourth.jpg'),
+        ],
     ]);
 
     $updateResponse->assertSuccessful();
 
     $product->refresh();
 
-    expect($product->getMedia(SmProduct::IMAGE_COLLECTION))->toHaveCount(1)
-        ->and($product->getFirstMedia(SmProduct::IMAGE_COLLECTION)?->file_name)->toContain('second');
+    expect($product->getMedia(SmProduct::IMAGE_COLLECTION))->toHaveCount(2)
+        ->and($product->getFirstMedia(SmProduct::IMAGE_COLLECTION)?->file_name)->toContain('third')
+        ->and($updateResponse->json('data.images'))->toHaveCount(2)
+        ->and($updateResponse->json('data.imageUrls'))->toHaveCount(2);
 });
 
 it('imports products from csv with required columns', function (): void {

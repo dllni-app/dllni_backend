@@ -31,6 +31,11 @@ final class SmProductResource extends JsonResource
             'discountedPrice' => $this->discounted_price,
             'image' => MediaResource::make($this->whenLoaded('media', fn () => $this->getFirstMedia(SmProduct::IMAGE_COLLECTION))),
             'imageUrl' => $this->whenLoaded('media', fn () => $this->getFirstMediaUrl(SmProduct::IMAGE_COLLECTION) ?: null),
+            'images' => $this->whenLoaded('media', fn () => MediaResource::collection($this->getMedia(SmProduct::IMAGE_COLLECTION))),
+            'imageUrls' => $this->whenLoaded('media', fn () => $this->getMedia(SmProduct::IMAGE_COLLECTION)
+                ->map(fn ($media): string => $media->getFullUrl())
+                ->values()
+                ->all()),
             'stockQuantity' => $this->stock_quantity,
             'lowStockThreshold' => $this->low_stock_threshold,
             'expiresAt' => $this->expires_at?->toDateTimeString(),

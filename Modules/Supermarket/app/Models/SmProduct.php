@@ -77,7 +77,6 @@ final class SmProduct extends Model implements HasMedia
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection(self::IMAGE_COLLECTION)
-            ->singleFile()
             ->acceptsMimeTypes(['image/jpeg', 'image/png', 'image/webp']);
     }
 
