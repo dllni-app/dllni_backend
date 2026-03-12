@@ -16,7 +16,7 @@ final class InventoryAlertsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'restaurantId' => 'required|exists:restaurants,id',
+            // Restaurant is inferred from authenticated restaurant seller; no restaurantId is accepted here.
         ];
     }
 }

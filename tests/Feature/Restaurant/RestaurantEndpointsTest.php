@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\UserModuleType;
 use App\Models\User;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
@@ -42,9 +43,18 @@ it('creates a restaurant', function () {
 });
 
 it('shows a restaurant', function () {
-    $restaurant = Restaurant::factory()->create(['name' => 'Show Me Restaurant']);
+    $owner = User::factory()->create([
+        'email' => 'owner-show@restaurant.com',
+        'module_type' => UserModuleType::RestaurantSeller->value,
+    ]);
+    $restaurant = Restaurant::factory()->create([
+        'user_id' => $owner->id,
+        'name' => 'Show Me Restaurant',
+    ]);
 
-    $response = $this->getJson("/api/v1/restaurants/{$restaurant->id}");
+    Sanctum::actingAs($owner);
+
+    $response = $this->getJson('/api/v1/restaurant-owner/restaurant');
 
     $response->assertOk();
     expect($response->json('data.id'))->toBe($restaurant->id);
@@ -52,10 +62,19 @@ it('shows a restaurant', function () {
 });
 
 it('updates a restaurant', function () {
-    $restaurant = Restaurant::factory()->create(['name' => 'Old Name']);
+    $owner = User::factory()->create([
+        'email' => 'owner-update@restaurant.com',
+        'module_type' => UserModuleType::RestaurantSeller->value,
+    ]);
+    $restaurant = Restaurant::factory()->create([
+        'user_id' => $owner->id,
+        'name' => 'Old Name',
+    ]);
 
-    $response = $this->putJson("/api/v1/restaurants/{$restaurant->id}", [
-        'userId' => $restaurant->user_id,
+    Sanctum::actingAs($owner);
+
+    $response = $this->putJson('/api/v1/restaurant-owner/restaurant', [
+        'userId' => $owner->id,
         'name' => 'Updated Name',
         'slug' => $restaurant->slug,
         'description' => $restaurant->description,

@@ -1,3 +1,135 @@
+## 12. AI endpoints for supermarket products (Gemini)
+
+These endpoints live under the main supermarket API namespace (not `/store-owner`) but are used by the supermarket owner app for faster product setup and content generation.
+
+All three require standard Sanctum authentication and a configured Gemini API key on the backend (`config('gemini.api_key')`). If Gemini is disabled or misconfigured, the API may return a 5xx error.
+
+### 12.1 توليد نص من صورة – Extract product data from image
+
+- **Method:** `POST`  
+- **Path:** `/api/v1/sm-products/ai/extract-from-image`
+
+**Purpose:**  
+Upload a single product image and let AI extract structured product data (name, description, maybe barcode/category) in the requested locale.
+
+**Request (multipart/form-data):**
+
+| Field  | Type   | Required | Description                                      |
+| ------ | ------ | -------- | ------------------------------------------------ |
+| image  | file   | yes      | Product image (`jpeg`, `png`, etc.), max ~8 MB. |
+| locale | string | no       | One of `ar`, `en`. Default decided by backend.  |
+
+Example:
+
+```http
+POST https://dllni.mustafafares.com/api/v1/sm-products/ai/extract-from-image
+Authorization: Bearer {token}
+Content-Type: multipart/form-data
+
+image: (file)
+locale: ar
+```
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "title": "كوكاكولا 330مل",
+    "description": "مشروب غازي منعش...",
+    "barcode": "1234567890123",
+    "categoryName": "مشروبات"
+  }
+}
+```
+
+> **Note:** The exact keys in `data` may evolve; the Flutter app should treat this as dynamic product draft data and map only the fields it actually uses.
+
+### 12.2 توليد صورة من نص – Generate product image from text
+
+- **Method:** `POST`  
+- **Path:** `/api/v1/sm-products/ai/generate-image`
+
+**Purpose:**  
+Given a product title and optional description, generate a product image (base64) that can be previewed/used in the app.
+
+**Request (JSON):**
+
+```json
+{
+  "title": "Classic Burger",
+  "description": "Tasty burger description."
+}
+```
+
+| Field       | Type   | Required | Description                          |
+| ----------- | ------ | -------- | ------------------------------------ |
+| title       | string | yes      | Short product title (max 255 chars). |
+| description | string | no       | Longer description (max 2000 chars). |
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "imageBase64": "iVBORw0KGgoAAAANSUhEUgAA..."
+  }
+}
+```
+
+The client should:
+
+- Treat `imageBase64` as a standard image (e.g. `data:image/png;base64,...`) and preview it.
+- Optionally allow the user to accept/reject the generated image before saving to the product.
+
+### 12.3 استخراج من منيو – Extract products from menu image
+
+- **Method:** `POST`  
+- **Path:** `/api/v1/sm-products/ai/extract-from-menu`
+
+**Purpose:**  
+Upload a restaurant/supermarket menu image and let AI extract multiple products/items (name, price, category, etc.) as a list for bulk creation.
+
+**Request (multipart/form-data):**
+
+| Field  | Type   | Required | Description                                        |
+| ------ | ------ | -------- | -------------------------------------------------- |
+| image  | file   | yes      | Menu image (`jpeg`, `png`, etc.), max ~12 MB.     |
+| locale | string | no       | One of `ar`, `en`. Default decided by backend.    |
+
+Example:
+
+```http
+POST https://dllni.mustafafares.com/api/v1/sm-products/ai/extract-from-menu
+Authorization: Bearer {token}
+Content-Type: multipart/form-data
+
+image: (file)
+locale: en
+```
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "items": [
+      {
+        "title": "Margherita Pizza",
+        "description": "Classic pizza with tomato and mozzarella.",
+        "price": 8.5,
+        "categoryName": "Pizza"
+      }
+    ]
+  }
+}
+```
+
+On the Flutter side, treat `data.items[]` as **draft items**:
+
+- Show them in a review screen (user can edit, delete, or confirm).
+- Only send final, user-approved products to the existing product creation endpoints.
+
 # API Contract for Flutter – Supermarket Owner App
 
 **Audience:** Flutter developer  
@@ -109,6 +241,10 @@ This maps common supermarket owner app screens to backend endpoints.
 - **Delete product:** `DELETE /api/v1/store-owner/products/{id}`
 - **Stock quick update:** `PUT /api/v1/store-owner/products/{product}/stock`
 - **Expiration update:** `PUT /api/v1/store-owner/products/{product}/expiration`
+- **AI add product options (image/menu/text):**
+  - Single-product from image: `POST /api/v1/sm-products/ai/extract-from-image` – suggests draft `title` / `description` / optional metadata (see §12.1).
+  - Multiple items from menu image: `POST /api/v1/sm-products/ai/extract-from-menu` – returns `items[]` drafts for bulk creation (see §12.3).
+  - Generate image from text: `POST /api/v1/sm-products/ai/generate-image` – returns `imageBase64` for preview / upload (see §12.2).
 
 ### 4.5 Inventory screens
 

@@ -2,12 +2,29 @@
 
 declare(strict_types=1);
 
+use App\Enums\UserModuleType;
 use App\Models\MasterProduct;
 use App\Models\User;
 use Laravel\Sanctum\Sanctum;
 use Modules\Resturants\Models\Category;
 use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
+
+function actingAsRestaurantSellerWithRestaurant(): array
+{
+    $owner = User::factory()->create([
+        'module_type' => UserModuleType::RestaurantSeller->value,
+    ]);
+
+    $restaurant = Restaurant::factory()->create([
+        'user_id' => $owner->id,
+        'is_active' => true,
+    ]);
+
+    Sanctum::actingAs($owner);
+
+    return [$owner, $restaurant];
+}
 
 it('requires authentication for restaurant regular product search endpoint', function () {
     $response = $this->getJson('/api/v1/restaurant/search/products?filter[search]=burger');
@@ -16,15 +33,11 @@ it('requires authentication for restaurant regular product search endpoint', fun
 });
 
 it('validates required and bounded search filter parameters', function () {
-    Sanctum::actingAs(User::factory()->create());
+    actingAsRestaurantSellerWithRestaurant();
 
     $missingSearch = $this->getJson('/api/v1/restaurant/search/products');
     $missingSearch->assertUnprocessable();
     $missingSearch->assertJsonValidationErrors(['filter.search']);
-
-    $invalidRestaurant = $this->getJson('/api/v1/restaurant/search/products?filter[search]=burger&filter[restaurantId]=999999');
-    $invalidRestaurant->assertUnprocessable();
-    $invalidRestaurant->assertJsonValidationErrors(['filter.restaurantId']);
 
     $invalidPerPage = $this->getJson('/api/v1/restaurant/search/products?filter[search]=burger&perPage=99');
     $invalidPerPage->assertUnprocessable();
@@ -36,7 +49,7 @@ it('validates required and bounded search filter parameters', function () {
 });
 
 it('rejects legacy serach key and requires filter.search', function () {
-    Sanctum::actingAs(User::factory()->create());
+    actingAsRestaurantSellerWithRestaurant();
 
     $response = $this->getJson('/api/v1/restaurant/search/products?serach=burger');
 
@@ -45,9 +58,7 @@ it('rejects legacy serach key and requires filter.search', function () {
 });
 
 it('returns matches from product name and slug', function () {
-    Sanctum::actingAs(User::factory()->create());
-
-    $restaurant = Restaurant::factory()->create();
+    [, $restaurant] = actingAsRestaurantSellerWithRestaurant();
     $category = Category::factory()->create(['restaurant_id' => $restaurant->id]);
 
     $nameMatch = Product::factory()->create([
@@ -81,9 +92,7 @@ it('returns matches from product name and slug', function () {
 });
 
 it('excludes unavailable products and products from inactive restaurants by default', function () {
-    Sanctum::actingAs(User::factory()->create());
-
-    $activeRestaurant = Restaurant::factory()->create(['is_active' => true]);
+    [, $activeRestaurant] = actingAsRestaurantSellerWithRestaurant();
     $inactiveRestaurant = Restaurant::factory()->create(['is_active' => false]);
 
     $activeCategory = Category::factory()->create(['restaurant_id' => $activeRestaurant->id]);
@@ -123,45 +132,37 @@ it('excludes unavailable products and products from inactive restaurants by defa
     expect($ids)->not->toContain($unavailable->id);
 });
 
-it('searches globally by default and supports restaurant scope filter', function () {
-    Sanctum::actingAs(User::factory()->create());
+it('searches within current restaurant only', function () {
+    [, $restaurant] = actingAsRestaurantSellerWithRestaurant();
 
-    $restaurantA = Restaurant::factory()->create(['is_active' => true]);
-    $restaurantB = Restaurant::factory()->create(['is_active' => true]);
+    $otherRestaurant = Restaurant::factory()->create(['is_active' => true]);
 
-    $categoryA = Category::factory()->create(['restaurant_id' => $restaurantA->id]);
-    $categoryB = Category::factory()->create(['restaurant_id' => $restaurantB->id]);
+    $categoryA = Category::factory()->create(['restaurant_id' => $restaurant->id]);
+    $categoryB = Category::factory()->create(['restaurant_id' => $otherRestaurant->id]);
 
-    $inA = Product::factory()->create([
-        'restaurant_id' => $restaurantA->id,
+    $inCurrent = Product::factory()->create([
+        'restaurant_id' => $restaurant->id,
         'category_id' => $categoryA->id,
-        'name' => 'Burger A',
-        'slug' => 'burger-a',
+        'name' => 'Burger In Current',
+        'slug' => 'burger-in-current',
     ]);
 
-    $inB = Product::factory()->create([
-        'restaurant_id' => $restaurantB->id,
+    $inOther = Product::factory()->create([
+        'restaurant_id' => $otherRestaurant->id,
         'category_id' => $categoryB->id,
-        'name' => 'Burger B',
-        'slug' => 'burger-b',
+        'name' => 'Burger In Other',
+        'slug' => 'burger-in-other',
     ]);
 
     $global = $this->getJson('/api/v1/restaurant/search/products?filter[search]=burger');
     $global->assertOk();
     $globalIds = collect($global->json('data'))->pluck('id')->all();
-    expect($globalIds)->toContain($inA->id, $inB->id);
-
-    $scoped = $this->getJson('/api/v1/restaurant/search/products?filter[search]=burger&filter[restaurantId]='.$restaurantA->id);
-    $scoped->assertOk();
-    $scopedIds = collect($scoped->json('data'))->pluck('id')->all();
-    expect($scopedIds)->toContain($inA->id);
-    expect($scopedIds)->not->toContain($inB->id);
+    expect($globalIds)->toContain($inCurrent->id);
+    expect($globalIds)->not->toContain($inOther->id);
 });
 
 it('supports category, masterProduct, price, discount, and low-stock filters', function () {
-    Sanctum::actingAs(User::factory()->create());
-
-    $restaurant = Restaurant::factory()->create(['is_active' => true]);
+    [, $restaurant] = actingAsRestaurantSellerWithRestaurant();
     $categoryA = Category::factory()->create(['restaurant_id' => $restaurant->id]);
     $categoryB = Category::factory()->create(['restaurant_id' => $restaurant->id]);
 
@@ -226,9 +227,7 @@ it('supports category, masterProduct, price, discount, and low-stock filters', f
 });
 
 it('orders by relevance then featured and newest tie-breakers when sort is missing', function () {
-    Sanctum::actingAs(User::factory()->create());
-
-    $restaurant = Restaurant::factory()->create(['is_active' => true]);
+    [, $restaurant] = actingAsRestaurantSellerWithRestaurant();
     $category = Category::factory()->create(['restaurant_id' => $restaurant->id]);
 
     $contains = Product::factory()->create([
@@ -283,9 +282,7 @@ it('orders by relevance then featured and newest tie-breakers when sort is missi
 });
 
 it('supports explicit sort values', function () {
-    Sanctum::actingAs(User::factory()->create());
-
-    $restaurant = Restaurant::factory()->create(['is_active' => true]);
+    [, $restaurant] = actingAsRestaurantSellerWithRestaurant();
     $category = Category::factory()->create(['restaurant_id' => $restaurant->id]);
 
     $alpha = Product::factory()->create([
@@ -317,9 +314,7 @@ it('supports explicit sort values', function () {
 });
 
 it('returns paginated response with requested page and perPage', function () {
-    Sanctum::actingAs(User::factory()->create());
-
-    $restaurant = Restaurant::factory()->create();
+    [, $restaurant] = actingAsRestaurantSellerWithRestaurant();
     $category = Category::factory()->create(['restaurant_id' => $restaurant->id]);
 
     Product::factory()->count(3)->create([

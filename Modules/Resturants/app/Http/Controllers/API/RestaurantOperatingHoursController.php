@@ -8,11 +8,14 @@ use Illuminate\Http\JsonResponse;
 use Modules\Resturants\Http\Requests\OperatingHoursRequest;
 use Modules\Resturants\Models\OperatingHour;
 use Modules\Resturants\Models\Restaurant;
+use Modules\Resturants\Support\RestaurantOwnerContext;
 
 final class RestaurantOperatingHoursController
 {
-    public function show(Restaurant $restaurant): JsonResponse
+    public function show(RestaurantOwnerContext $context): JsonResponse
     {
+        $restaurant = $context->restaurant();
+
         $restaurant->load('operatingHours');
 
         $dailyHours = [];
@@ -44,8 +47,10 @@ final class RestaurantOperatingHoursController
         ]);
     }
 
-    public function update(OperatingHoursRequest $request, Restaurant $restaurant): JsonResponse
+    public function update(OperatingHoursRequest $request, RestaurantOwnerContext $context): JsonResponse
     {
+        $restaurant = $context->restaurant();
+
         $validated = $request->validated();
 
         $restaurant->update([
@@ -91,6 +96,6 @@ final class RestaurantOperatingHoursController
             }
         }
 
-        return $this->show($restaurant);
+        return $this->show($context);
     }
 }

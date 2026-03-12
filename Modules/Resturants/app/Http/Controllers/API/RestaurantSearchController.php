@@ -8,11 +8,14 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Modules\Resturants\Http\Requests\RestaurantSearchRequest;
 use Modules\Resturants\Http\Resources\RestaurantSearchProductResource;
 use Modules\Resturants\Models\Product;
+use Modules\Resturants\Support\RestaurantOwnerContext;
 
 final class RestaurantSearchController
 {
-    public function __invoke(RestaurantSearchRequest $request): AnonymousResourceCollection
+    public function __invoke(RestaurantSearchRequest $request, RestaurantOwnerContext $context): AnonymousResourceCollection
     {
+        $restaurant = $context->restaurant();
+
         $productQuery = Product::getQuery()
             ->with(['restaurant', 'category']);
 
@@ -20,8 +23,9 @@ final class RestaurantSearchController
             $productQuery->where('is_available', true);
         }
 
-        $productQuery->whereHas('restaurant', static function ($query): void {
-            $query->where('is_active', true);
+        $productQuery->whereHas('restaurant', static function ($query) use ($restaurant): void {
+            $query->where('id', $restaurant->id)
+                ->where('is_active', true);
         });
 
         if (! $request->filled('sort')) {

@@ -25,11 +25,13 @@ final class RestaurantSeeder extends Seeder
 {
     public function run(): void
     {
-        $owner = User::firstOrCreate(
+        $owner = User::updateOrCreate(
             ['email' => 'restaurant.owner@example.com'],
             [
                 'name' => 'مالك المطعم',
+                'phone' => '+963933000001',
                 'password' => bcrypt('password'),
+                'module_type' => UserModuleType::RestaurantSeller->value,
                 'email_verified_at' => now(),
             ]
         );

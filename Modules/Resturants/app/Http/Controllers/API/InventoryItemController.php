@@ -12,17 +12,22 @@ use Modules\Resturants\Http\Requests\InventoryItemRequests\InventoryItemFilterRe
 use Modules\Resturants\Http\Resources\InventoryItemResource;
 use Modules\Resturants\Models\InventoryItem;
 use Modules\Resturants\Services\InventoryItemService;
+use Modules\Resturants\Support\RestaurantOwnerContext;
 use Throwable;
 
 final class InventoryItemController
 {
     public function __construct(
-        private InventoryItemService $inventoryItemService
+        private InventoryItemService $inventoryItemService,
+        private RestaurantOwnerContext $ownerContext
     ) {}
 
     public function index(InventoryItemFilterRequest $request): AnonymousResourceCollection
     {
+        $restaurant = $this->ownerContext->restaurant();
+
         $items = InventoryItem::getQuery()
+            ->where('restaurant_id', $restaurant->id)
             ->with(['restaurant'])
             ->paginate($request->get('perPage', 20));
 
@@ -32,8 +37,13 @@ final class InventoryItemController
     /** @throws Throwable */
     public function store(InventoryItemRequest $request): InventoryItemResource
     {
+        $restaurant = $this->ownerContext->restaurant();
+
         $item = $this->inventoryItemService->store(
-            InventoryItemData::from($request->validated())
+            InventoryItemData::from(array_merge(
+                $request->validated(),
+                ['restaurantId' => $restaurant->id],
+            ))
         );
 
         return InventoryItemResource::make(
@@ -51,8 +61,13 @@ final class InventoryItemController
     /** @throws Throwable */
     public function update(InventoryItemRequest $request, InventoryItem $inventoryItem): InventoryItemResource
     {
+        $restaurant = $this->ownerContext->restaurant();
+
         $updated = $this->inventoryItemService->update(
-            InventoryItemData::from($request->validated()),
+            InventoryItemData::from(array_merge(
+                $request->validated(),
+                ['restaurantId' => $restaurant->id],
+            )),
             $inventoryItem
         );
 

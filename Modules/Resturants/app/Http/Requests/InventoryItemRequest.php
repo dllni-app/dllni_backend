@@ -16,7 +16,6 @@ final class InventoryItemRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'restaurantId' => 'required|exists:restaurants,id',
             'name' => 'required|string|max:255',
             'unit' => 'required|string|max:50',
             'quantity' => 'required|numeric|min:0',
