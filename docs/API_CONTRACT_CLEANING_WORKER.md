@@ -183,6 +183,12 @@ GET /api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending&
 - `addressLatitude`, `addressLongitude` (number, optional) – destination coordinates for map; use for route and pin
 - `startedTravelAt`, `arrivedAt` (string, optional) – ISO datetime; `arrivedAt` set when worker taps "I have arrived"
 - `customer`: `id`, `name`, `email`, `phone` (for call button)
+- `worker`: `id`, `firstName`, `user` (subset: `id`, `name`, `email`, `phone`)
+- `services`: array of selected services with quantities (same shape as detail endpoint)
+- `addons`: array of selected addons (same shape as detail endpoint)
+- `billingPolicy`: object with billing policy summary (same shape as detail endpoint)
+- `timeWarnings`: array of time warnings for this booking (same shape as detail endpoint)
+- `disputes`: array of disputes linked to this booking (same shape as detail endpoint)
 - `propertyType`, `propertyDetails`, `totalPrice`, `createdAt`, `updatedAt`
 - `workerEarnings` (number, optional) – present when `status` is `completed`; worker’s share after commission (for "سجل المعاملات" / transaction log and wallet)
 - `hasDispute` (boolean, optional) – `true` if the booking has at least one open dispute
@@ -999,6 +1005,12 @@ Use as **keys** of `defaultWorkingHours` when saving working hours (§3.16). Ord
   "startedTravelAt": "2026-03-15T09:30:00.000000Z",
   "arrivedAt": null,
   "customer": { "id": 10, "name": "Ahmed", "email": "ahmed@example.com", "phone": "+963991234567" },
+  "worker": { "id": 5, "firstName": "Omar", "user": { "id": 8, "name": "Omar", "email": "omar@example.com", "phone": "+963998765432" } },
+  "services": [{ "id": 1, "name": "Standard cleaning", "quantity": 1 }],
+  "addons": [],
+  "billingPolicy": { "id": 1, "name": "Default" },
+  "timeWarnings": [],
+  "disputes": [],
   "propertyType": "apartment",
   "propertyDetails": {},
   "totalPrice": 150.00,

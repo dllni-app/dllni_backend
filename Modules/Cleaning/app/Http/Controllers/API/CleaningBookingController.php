@@ -30,7 +30,15 @@ final class CleaningBookingController
     public function index(CleaningBookingFilterRequest $request): AnonymousResourceCollection
     {
         $bookings = CleaningBooking::getQuery()
-            ->with(['customer', 'worker'])
+            ->with([
+                'customer',
+                'worker.user',
+                'services',
+                'addons',
+                'billingPolicy',
+                'timeWarnings',
+                'disputes',
+            ])
             ->paginate($request->get('perPage', 20));
 
         return CleaningBookingResource::collection($bookings);
