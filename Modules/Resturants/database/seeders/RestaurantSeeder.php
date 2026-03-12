@@ -29,7 +29,9 @@ final class RestaurantSeeder extends Seeder
             ['email' => 'restaurant.owner@example.com'],
             [
                 'name' => 'مالك المطعم',
+                'phone' => '+963933000001',
                 'password' => bcrypt('password'),
+                'module_type' => UserModuleType::RestaurantSeller->value,
                 'email_verified_at' => now(),
             ]
         );
