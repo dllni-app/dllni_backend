@@ -25,7 +25,7 @@ final class RestaurantSeeder extends Seeder
 {
     public function run(): void
     {
-        $owner = User::firstOrCreate(
+        $owner = User::updateOrCreate(
             ['email' => 'restaurant.owner@example.com'],
             [
                 'name' => 'مالك المطعم',
