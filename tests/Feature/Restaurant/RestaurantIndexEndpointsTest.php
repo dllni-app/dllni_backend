@@ -129,7 +129,7 @@ it('lists restaurant roles', function () {
         'slug' => 'chef',
     ]);
 
-    $response = $this->getJson('/api/v1/restaurant-roles');
+    $response = $this->getJson('/api/v1/restaurant-owner/restaurant-roles');
 
     $response->assertOk();
     expect($response->json('data'))->toBeArray();

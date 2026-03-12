@@ -80,8 +80,6 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     Route::apiResource('restaurant-reputation-logs', RestaurantReputationLogController::class)->only(['index', 'show']);
     Route::apiResource('restaurant-penalties', RestaurantPenaltyController::class)->only(['index', 'show']);
     Route::apiResource('restaurant-staff', RestaurantStaffController::class);
-
-    Route::put('restaurant-roles/{restaurant_role}/permissions', [RestaurantRoleController::class, 'updatePermissions'])->name('restaurant-roles.permissions');
     Route::apiResource('restaurant-assistant-queries', RestaurantAssistantQueryController::class)->only(['index', 'show']);
     Route::apiResource('restaurant-recurring-orders', RestaurantRecurringOrderController::class)->only(['index', 'show']);
     Route::apiResource('reviews', ReviewController::class)->only(['index', 'show']);
@@ -110,6 +108,7 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
 
         Route::get('permissions', RestaurantOwnerPermissionsController::class);
 
+        Route::apiResource('restaurant-roles', RestaurantRoleController::class);
         Route::get('notifications', RestaurantOwnerNotificationsController::class);
         Route::patch('notifications/read-all', RestaurantOwnerNotificationMarkReadAllController::class);
         Route::patch('notifications/{notification}/read', RestaurantOwnerNotificationMarkReadController::class);
