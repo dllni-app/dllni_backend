@@ -7,6 +7,7 @@ namespace Modules\Supermarket\Http\Controllers\API;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
+use Illuminate\Http\UploadedFile;
 use Modules\Supermarket\Data\SmProductData;
 use Modules\Supermarket\Http\Requests\SmProductImportRequest;
 use Modules\Supermarket\Http\Requests\SmProductRequest;
@@ -45,7 +46,7 @@ final class SmProductController
     {
         $product = $this->service->store(
             SmProductData::from($request->validated()),
-            $request->file('image')
+            $this->extractImages($request)
         );
 
         return SmProductResource::make($product->load('store', 'category', 'media'));
@@ -72,7 +73,7 @@ final class SmProductController
         $product = $this->service->update(
             SmProductData::from($request->validated()),
             $smProduct,
-            $request->file('image')
+            $this->extractImages($request)
         );
 
         return SmProductResource::make($product->load('store', 'category', 'media'));
@@ -83,5 +84,27 @@ final class SmProductController
         $smProduct->delete();
 
         return response()->noContent();
+    }
+
+    /**
+     * @return array<int, UploadedFile>
+     */
+    private function extractImages(SmProductRequest $request): array
+    {
+        $primaryImage = $request->file('image');
+        $galleryImages = $request->file('images', []);
+
+        if ($galleryImages instanceof UploadedFile) {
+            $galleryImages = [$galleryImages];
+        }
+
+        if ($primaryImage instanceof UploadedFile) {
+            array_unshift($galleryImages, $primaryImage);
+        }
+
+        return array_values(array_filter(
+            $galleryImages,
+            static fn (mixed $file): bool => $file instanceof UploadedFile
+        ));
     }
 }

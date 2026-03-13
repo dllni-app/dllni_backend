@@ -12,17 +12,17 @@ use Gemini\Enums\DataType;
 use Gemini\Enums\MimeType;
 use Gemini\Enums\ResponseMimeType;
 use Gemini\Laravel\Facades\Gemini;
+use Gemini\Responses\GenerativeModel\GenerateContentResponse;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Arr;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
+use RuntimeException;
 use Throwable;
 
 final class GeminiProductService
 {
-    private const VISION_MODEL = 'gemini-2.0-flash';
+    private const VISION_MODEL = 'gemini-2.5-flash';
 
-    private const IMAGE_MODEL = 'gemini-2.5-flash-image';
+    private const IMAGE_MODEL = 'gemini-2.5-flash';
 
     /**
      * Analyze an uploaded product image and return a structured title and description.
@@ -31,59 +31,14 @@ final class GeminiProductService
      */
     public function extractProductFromImageFile(UploadedFile $file, ?string $locale = null): array
     {
-        $base64 = base64_encode((string) file_get_contents($file->getRealPath()));
-
-        return $this->extractProductFromImage($base64, $locale);
-    }
-
-    /**
-     * Analyze a single product image (base64) and return a structured title and description.
-     *
-     * @return array{title: string|null, description: string|null}
-     */
-    public function extractProductFromImage(string $base64Image, ?string $locale = null): array
-    {
-        $prompt = 'You are a product catalog assistant. Analyze this product image and return a JSON object '
-            .'with exactly two fields: "title" and "description". '
-            .'The title should be short and suitable for use in a product list. '
-            .'The description should be a concise marketing description in '
-            .($locale === 'ar' ? 'Arabic' : 'the main language of the packaging')
-            .'. Do not include prices, sizes, or ingredients unless they are essential.';
-
         try {
-            $generationConfig = new GenerationConfig(
-                responseMimeType: ResponseMimeType::APPLICATION_JSON,
-                responseSchema: new Schema(
-                    type: DataType::OBJECT,
-                    properties: [
-                        'title' => new Schema(type: DataType::STRING),
-                        'description' => new Schema(type: DataType::STRING),
-                    ],
-                    required: ['title', 'description'],
-                ),
+            return $this->extractProductFromImage(
+                base64Image: $this->encodeUploadedFile($file),
+                locale: $locale,
+                mimeType: $this->resolveMimeType($file->getMimeType()),
             );
-
-            $result = Gemini::generativeModel(model: self::VISION_MODEL)
-                ->withGenerationConfig($generationConfig)
-                ->generateContent([
-                    $prompt,
-                    new Blob(
-                        mimeType: MimeType::IMAGE_JPEG,
-                        data: $base64Image
-                    ),
-                ]);
-
-            /** @var array<string, mixed>|null $json */
-            $json = $result->json();
-
-            return [
-                'title' => isset($json['title']) ? (string) $json['title'] : null,
-                'description' => isset($json['description']) ? (string) $json['description'] : null,
-            ];
         } catch (Throwable $exception) {
-            Log::error('Gemini extractProductFromImage failed', [
-                'exception' => $exception,
-            ]);
+            $this->logFailure(__FUNCTION__, $exception);
 
             return [
                 'title' => null,
@@ -93,15 +48,54 @@ final class GeminiProductService
     }
 
     /**
+     * Analyze a single product image (base64) and return a structured title and description.
+     *
+     * @return array{title: string|null, description: string|null}
+     */
+    public function extractProductFromImage(
+        string $base64Image,
+        ?string $locale = null,
+        MimeType $mimeType = MimeType::IMAGE_JPEG,
+    ): array {
+        $payload = $this->generateStructuredVisionResponse(
+            prompt: $this->buildProductPrompt($locale),
+            schema: $this->productSchema(),
+            base64Image: $base64Image,
+            mimeType: $mimeType,
+            operation: __FUNCTION__,
+        );
+
+        if (! is_array($payload)) {
+            return [
+                'title' => null,
+                'description' => null,
+            ];
+        }
+
+        return [
+            'title' => $this->normalizeString($payload['title'] ?? null),
+            'description' => $this->normalizeString($payload['description'] ?? null),
+        ];
+    }
+
+    /**
      * Analyze an uploaded menu image and return an array of items with titles and descriptions.
      *
      * @return array<int, array{title: string, description: string|null}>
      */
     public function extractMenuFromImageFile(UploadedFile $file, ?string $locale = null): array
     {
-        $base64 = base64_encode((string) file_get_contents($file->getRealPath()));
+        try {
+            return $this->extractMenuFromImage(
+                base64Image: $this->encodeUploadedFile($file),
+                locale: $locale,
+                mimeType: $this->resolveMimeType($file->getMimeType()),
+            );
+        } catch (Throwable $exception) {
+            $this->logFailure(__FUNCTION__, $exception);
 
-        return $this->extractMenuFromImage($base64, $locale);
+            return [];
+        }
     }
 
     /**
@@ -109,75 +103,43 @@ final class GeminiProductService
      *
      * @return array<int, array{title: string, description: string|null}>
      */
-    public function extractMenuFromImage(string $base64Image, ?string $locale = null): array
-    {
-        $prompt = 'You are digitizing a restaurant or supermarket menu from a photo. '
-            .'Identify individual products or dishes and return them as structured JSON. '
-            .'Return an object with a single field "items", which is an array of objects with '
-            .'"title" and "description" fields. '
-            .'Do not include prices, allergens, or categories. '
-            .'Write titles and descriptions in '
-            .($locale === 'ar' ? 'Arabic' : 'the main language of the menu')
-            .'.';
+    public function extractMenuFromImage(
+        string $base64Image,
+        ?string $locale = null,
+        MimeType $mimeType = MimeType::IMAGE_JPEG,
+    ): array {
+        $payload = $this->generateStructuredVisionResponse(
+            prompt: $this->buildMenuPrompt($locale),
+            schema: $this->menuSchema(),
+            base64Image: $base64Image,
+            mimeType: $mimeType,
+            operation: __FUNCTION__,
+        );
 
-        try {
-            $generationConfig = new GenerationConfig(
-                responseMimeType: ResponseMimeType::APPLICATION_JSON,
-                responseSchema: new Schema(
-                    type: DataType::OBJECT,
-                    properties: [
-                        'items' => new Schema(
-                            type: DataType::ARRAY,
-                            items: new Schema(
-                                type: DataType::OBJECT,
-                                properties: [
-                                    'title' => new Schema(type: DataType::STRING),
-                                    'description' => new Schema(type: DataType::STRING),
-                                ],
-                                required: ['title'],
-                            )
-                        ),
-                    ],
-                    required: ['items'],
-                ),
-            );
-
-            $result = Gemini::generativeModel(model: self::VISION_MODEL)
-                ->withGenerationConfig($generationConfig)
-                ->generateContent([
-                    $prompt,
-                    new Blob(
-                        mimeType: MimeType::IMAGE_JPEG,
-                        data: $base64Image
-                    ),
-                ]);
-
-            /** @var array<string, mixed>|null $json */
-            $json = $result->json();
-
-            /** @var array<int, array<string, mixed>> $items */
-            $items = Arr::get($json, 'items', []);
-
-            return Collection::make($items)
-                ->map(static function (array $item): array {
-                    $title = mb_trim((string) ($item['title'] ?? ''));
-                    $description = $item['description'] ?? null;
-
-                    return [
-                        'title' => $title,
-                        'description' => $description !== null ? (string) $description : null,
-                    ];
-                })
-                ->filter(static fn (array $item): bool => $item['title'] !== '')
-                ->values()
-                ->all();
-        } catch (Throwable $exception) {
-            Log::error('Gemini extractMenuFromImage failed', [
-                'exception' => $exception,
-            ]);
-
+        if (! is_array($payload) || ! is_array($payload['items'] ?? null)) {
             return [];
         }
+
+        $items = [];
+
+        foreach ($payload['items'] as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $title = $this->normalizeString($item['title'] ?? null);
+
+            if ($title === null) {
+                continue;
+            }
+
+            $items[] = [
+                'title' => $title,
+                'description' => $this->normalizeString($item['description'] ?? null),
+            ];
+        }
+
+        return $items;
     }
 
     /**
@@ -185,41 +147,183 @@ final class GeminiProductService
      */
     public function generateProductImage(string $title, ?string $description = null): ?string
     {
+        try {
+            $response = Gemini::generativeModel(model: self::IMAGE_MODEL)
+                ->withGenerationConfig($this->imageGenerationConfig())
+                ->generateContent($this->buildImagePrompt($title, $description));
+
+            return $this->extractInlineImageData($response);
+        } catch (Throwable $exception) {
+            $this->logFailure(__FUNCTION__, $exception);
+
+            return null;
+        }
+    }
+
+    private function buildProductPrompt(?string $locale): string
+    {
+        return 'You are a product catalog assistant. Analyze this product image and return a JSON object '
+            . 'with exactly two fields: "title" and "description". '
+            . 'The title should be short and suitable for use in a product list. '
+            . 'The description should be a concise marketing description in '
+            . ($locale === 'ar' ? 'Arabic' : 'the main language of the packaging')
+            . '. Do not include prices, sizes, or ingredients unless they are essential.';
+    }
+
+    private function buildMenuPrompt(?string $locale): string
+    {
+        return 'You are digitizing a restaurant or supermarket menu from a photo. '
+            . 'Identify individual products or dishes and return them as structured JSON. '
+            . 'Return an object with a single field "items", which is an array of objects with '
+            . '"title" and "description" fields. '
+            . 'Do not include prices, allergens, or categories. '
+            . 'Write titles and descriptions in '
+            . ($locale === 'ar' ? 'Arabic' : 'the main language of the menu')
+            . '.';
+    }
+
+    private function buildImagePrompt(string $title, ?string $description): string
+    {
         $promptLines = [
             'Generate a high-quality catalog product photo.',
             "Product name: {$title}.",
         ];
 
-        if ($description !== null && $description !== '') {
-            $promptLines[] = "Product description: {$description}.";
+        $normalizedDescription = $this->normalizeString($description);
+
+        if ($normalizedDescription !== null) {
+            $promptLines[] = "Product description: {$normalizedDescription}.";
         }
 
         $promptLines[] = 'Use a clean studio background with soft lighting. '
-            .'Realistic style, no text, no watermarks, centered composition, square aspect ratio.';
+            . 'Realistic style, no text, no watermarks, centered composition, square aspect ratio.';
 
-        $prompt = implode(' ', $promptLines);
+        return implode(' ', $promptLines);
+    }
 
+    private function productSchema(): Schema
+    {
+        return new Schema(
+            type: DataType::OBJECT,
+            properties: [
+                'title' => new Schema(type: DataType::STRING),
+                'description' => new Schema(type: DataType::STRING),
+            ],
+            required: ['title', 'description'],
+        );
+    }
+
+    private function menuSchema(): Schema
+    {
+        return new Schema(
+            type: DataType::OBJECT,
+            properties: [
+                'items' => new Schema(
+                    type: DataType::ARRAY,
+                    items: new Schema(
+                        type: DataType::OBJECT,
+                        properties: [
+                            'title' => new Schema(type: DataType::STRING),
+                            'description' => new Schema(type: DataType::STRING),
+                        ],
+                        required: ['title'],
+                    ),
+                ),
+            ],
+            required: ['items'],
+        );
+    }
+
+    private function jsonGenerationConfig(Schema $schema): GenerationConfig
+    {
+        return new GenerationConfig(
+            responseMimeType: ResponseMimeType::APPLICATION_JSON,
+            responseSchema: $schema,
+        );
+    }
+
+    private function imageGenerationConfig(): GenerationConfig
+    {
+        return new GenerationConfig(imageConfig: new ImageConfig(aspectRatio: '1:1'));
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function generateStructuredVisionResponse(
+        string $prompt,
+        Schema $schema,
+        string $base64Image,
+        MimeType $mimeType,
+        string $operation,
+    ): ?array {
         try {
-            $imageConfig = new ImageConfig(aspectRatio: '1:1');
-            $generationConfig = new GenerationConfig(imageConfig: $imageConfig);
+            $response = Gemini::generativeModel(model: self::VISION_MODEL)
+                ->withGenerationConfig($this->jsonGenerationConfig($schema))
+                ->generateContent([
+                    $prompt,
+                    new Blob(mimeType: $mimeType, data: $base64Image),
+                ]);
 
-            $response = Gemini::generativeModel(model: self::IMAGE_MODEL)
-                ->withGenerationConfig($generationConfig)
-                ->generateContent($prompt);
+            $payload = $response->json(true, JSON_THROW_ON_ERROR);
 
-            $parts = $response->parts();
-
-            if ($parts === [] || $parts[0]->inlineData === null) {
-                return null;
-            }
-
-            return $parts[0]->inlineData->data;
+            return is_array($payload) ? $payload : null;
         } catch (Throwable $exception) {
-            Log::error('Gemini generateProductImage failed', [
-                'exception' => $exception,
-            ]);
+            $this->logFailure($operation, $exception);
 
             return null;
         }
+    }
+
+    private function extractInlineImageData(GenerateContentResponse $response): ?string
+    {
+        foreach ($response->parts() as $part) {
+            if ($part->inlineData !== null) {
+                return $part->inlineData->data;
+            }
+        }
+
+        return null;
+    }
+
+    private function encodeUploadedFile(UploadedFile $file): string
+    {
+        $path = $file->getRealPath();
+
+        if ($path === false) {
+            throw new RuntimeException('Unable to access uploaded file path.');
+        }
+
+        $contents = file_get_contents($path);
+
+        if ($contents === false) {
+            throw new RuntimeException('Unable to read uploaded file contents.');
+        }
+
+        return base64_encode($contents);
+    }
+
+    private function resolveMimeType(?string $mimeType): MimeType
+    {
+        return MimeType::tryFrom((string) $mimeType) ?? MimeType::IMAGE_JPEG;
+    }
+
+    private function normalizeString(mixed $value): ?string
+    {
+        if (! is_string($value) && ! is_numeric($value)) {
+            return null;
+        }
+
+        $normalized = mb_trim((string) $value);
+
+        return $normalized === '' ? null : $normalized;
+    }
+
+    private function logFailure(string $operation, Throwable $exception): void
+    {
+        Log::error("Gemini {$operation} failed", [
+            'model' => $operation === 'generateProductImage' ? self::IMAGE_MODEL : self::VISION_MODEL,
+            'exception' => $exception,
+        ]);
     }
 }

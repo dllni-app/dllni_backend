@@ -24,7 +24,7 @@ final class SmOrderController
     {
         $orders = SmOrder::getQuery()->paginate($request->get('perPage', 20));
 
-        return SmOrderResource::collection($orders);
+        return SmOrderResource::collection($orders->load(['items']));
     }
 
     public function hourlyCount(): JsonResponse

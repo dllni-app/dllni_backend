@@ -15,12 +15,15 @@ use Throwable;
 
 final class SmProductService
 {
-    public function store(SmProductData $data, ?UploadedFile $image = null): SmProduct
+    /**
+     * @param  array<int, UploadedFile>  $images
+     */
+    public function store(SmProductData $data, array $images = []): SmProduct
     {
-        return DB::transaction(static function () use ($data, $image) {
+        return DB::transaction(static function () use ($data, $images) {
             $product = SmProduct::create($data->onlyModelAttributes());
 
-            if ($image !== null) {
+            foreach ($images as $image) {
                 $product->addMedia($image)->toMediaCollection(SmProduct::IMAGE_COLLECTION);
             }
 
@@ -28,13 +31,20 @@ final class SmProductService
         });
     }
 
-    public function update(SmProductData $data, SmProduct $product, ?UploadedFile $image = null): SmProduct
+    /**
+     * @param  array<int, UploadedFile>  $images
+     */
+    public function update(SmProductData $data, SmProduct $product, array $images = []): SmProduct
     {
-        return DB::transaction(static function () use ($data, $product, $image) {
+        return DB::transaction(static function () use ($data, $product, $images) {
             tap($product)->update($data->onlyModelAttributes());
 
-            if ($image !== null) {
-                $product->addMedia($image)->toMediaCollection(SmProduct::IMAGE_COLLECTION);
+            if ($images !== []) {
+                $product->clearMediaCollection(SmProduct::IMAGE_COLLECTION);
+
+                foreach ($images as $image) {
+                    $product->addMedia($image)->toMediaCollection(SmProduct::IMAGE_COLLECTION);
+                }
             }
 
             return $product;
