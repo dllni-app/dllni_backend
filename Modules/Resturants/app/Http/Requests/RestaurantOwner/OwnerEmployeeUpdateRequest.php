@@ -19,7 +19,6 @@ final class OwnerEmployeeUpdateRequest extends FormRequest
             'name' => 'sometimes|string|max:255',
             'email' => 'sometimes|nullable|email|max:255',
             'phone' => 'sometimes|nullable|string|max:30',
-            'restaurantRoleId' => 'sometimes|exists:restaurant_roles,id',
             'permissionIds' => 'sometimes|array',
             'permissionIds.*' => 'integer|exists:permissions,id',
             'isActive' => 'sometimes|boolean',

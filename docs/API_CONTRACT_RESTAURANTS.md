@@ -76,7 +76,7 @@ Query:
 
 Response:
 - `range`: `{ key, from, to }`
-- `summary`: `{ totalOrders, totalRevenue, averageOrderValue, cancellationRatePercent }`
+- `summary`: `{ totalOrders, newOrdersCount, confirmedOrdersCount, completedOrdersCount, totalRevenue, averageOrderValue, cancellationRatePercent }`
 - `topProducts`: `[{ productId, name, quantity, revenue }]`
 - `fulfillment`: `{ averagePrepTimeMinutes, averageReadyToPickupMinutes, delayedOrdersPercent, onTimePercent }`
 - `offersImpact`: `{ discountedOrdersCount, conversionRatePercent, discountedRevenue, totalSavings }`
@@ -147,23 +147,24 @@ Response:
 
 #### `GET /employees`
 Response:
-- list of `{ id, restaurantId, userId, restaurantRoleId, isActive, user, role, effectivePermissions, createdAt, updatedAt }`
+- list of `{ id, restaurantId, userId, isActive, user, permissionIds, effectivePermissions, createdAt, updatedAt }`
 
 #### `POST /employees`
 Body:
 - `name` (required)
 - `email` (nullable)
 - `phone` (nullable)
-- `restaurantRoleId` (required)
+- `permissionIds` (optional array of permission ids)
 - `isActive` (optional, default true)
 
 Behavior:
 - Create-or-link user by `email`/`phone`
 - If user is created: `module_type=restaurant_seller`
+- Sync selected permissions directly to the linked user
 
 #### `PATCH /employees/{restaurant_staff}`
 Body:
-- `name|email|phone|restaurantRoleId|permissionIds|isActive` (all optional)
+- `name|email|phone|permissionIds|isActive` (all optional)
 
 #### `PATCH /employees/{restaurant_staff}/status`
 Body:

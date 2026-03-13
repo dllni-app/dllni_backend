@@ -22,6 +22,8 @@ final class RestaurantOwnerDashboardService
             ->whereBetween('created_at', [$start, $end]);
 
         $totalOrders = (clone $ordersQuery)->count();
+        $newOrdersCount = (clone $ordersQuery)->where('status', OrderStatus::Pending)->count();
+        $confirmedOrdersCount = (clone $ordersQuery)->where('status', OrderStatus::Accepted)->count();
         $completedOrdersCount = (clone $ordersQuery)->where('status', OrderStatus::Completed)->count();
         $cancelledOrders = (clone $ordersQuery)->where('status', OrderStatus::Cancelled)->count();
         $totalRevenue = (float) (clone $ordersQuery)->where('status', OrderStatus::Completed)->sum('total_amount');
@@ -103,6 +105,9 @@ final class RestaurantOwnerDashboardService
             ],
             'summary' => [
                 'totalOrders' => $totalOrders,
+                'newOrdersCount' => $newOrdersCount,
+                'confirmedOrdersCount' => $confirmedOrdersCount,
+                'completedOrdersCount' => $completedOrdersCount,
                 'totalRevenue' => $totalRevenue,
                 'averageOrderValue' => $averageOrderValue,
                 'cancellationRatePercent' => $cancellationRate,

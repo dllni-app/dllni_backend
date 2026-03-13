@@ -86,7 +86,6 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     Route::apiResource('resturants', ResturantsController::class)->names('resturants');
 
     Route::prefix('restaurant-owner')->group(function () {
-        Route::apiResource('restaurant-roles', RestaurantRoleController::class);
         Route::get('dashboard/performance', RestaurantOwnerDashboardPerformanceController::class);
 
         Route::get('orders/{order}', RestaurantOwnerOrderShowController::class);
@@ -108,7 +107,6 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
 
         Route::get('permissions', RestaurantOwnerPermissionsController::class);
 
-        Route::apiResource('restaurant-roles', RestaurantRoleController::class);
         Route::get('notifications', RestaurantOwnerNotificationsController::class);
         Route::patch('notifications/read-all', RestaurantOwnerNotificationMarkReadAllController::class);
         Route::patch('notifications/{notification}/read', RestaurantOwnerNotificationMarkReadController::class);

@@ -16,17 +16,29 @@ final class RestaurantOwnerEmployeeService
 {
     public function createOrLink(
         Restaurant $restaurant,
-        int $roleId,
         string $name,
         ?string $email,
         ?string $phone,
-        bool $isActive
+        bool $isActive,
+        array $permissionIds = []
     ): RestaurantStaff {
-        return DB::transaction(function () use ($restaurant, $roleId, $name, $email, $phone, $isActive) {
-            $user = User::query()
-                ->when($email, fn ($query) => $query->orWhere('email', $email))
-                ->when($phone, fn ($query) => $query->orWhere('phone', $phone))
-                ->first();
+        return DB::transaction(function () use ($restaurant, $name, $email, $phone, $isActive, $permissionIds) {
+            $user = null;
+
+            if ($email || $phone) {
+                $user = User::query()
+                    ->where(function ($query) use ($email, $phone): void {
+                        if ($email) {
+                            $query->where('email', $email);
+                        }
+
+                        if ($phone) {
+                            $method = $email ? 'orWhere' : 'where';
+                            $query->{$method}('phone', $phone);
+                        }
+                    })
+                    ->first();
+            }
 
             if (! $user) {
                 $user = User::query()->create([
@@ -41,8 +53,11 @@ final class RestaurantOwnerEmployeeService
                     'name' => $name,
                     'email' => $email ?? $user->email,
                     'phone' => $phone ?? $user->phone,
+                    'module_type' => UserModuleType::RestaurantSeller->value,
                 ]);
             }
+
+            $user->syncPermissions($permissionIds);
 
             /** @var RestaurantStaff $staff */
             $staff = RestaurantStaff::query()->updateOrCreate(
@@ -51,12 +66,12 @@ final class RestaurantOwnerEmployeeService
                     'user_id' => $user->id,
                 ],
                 [
-                    'restaurant_role_id' => $roleId,
+                    'restaurant_role_id' => null,
                     'is_active' => $isActive,
                 ]
             );
 
-            return $staff->load(['restaurant', 'user', 'role.permissions']);
+            return $staff->load(['restaurant', 'user.permissions']);
         });
     }
 }
