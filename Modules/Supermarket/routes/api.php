@@ -53,6 +53,7 @@ Route::prefix('v1')->group(function () {
     Route::apiResource('sm-categories', SmCategoryController::class)->names('sm-categories');
     Route::get('sm-products/available-count', [SmProductController::class, 'availableCount'])->name('sm-products.available-count');
     Route::post('sm-products/import', [SmProductController::class, 'import'])->name('sm-products.import');
+    Route::get('sm-products/search', [SmProductController::class, 'index'])->name('sm-products.search');
     Route::apiResource('sm-products', SmProductController::class)->names('sm-products');
     Route::prefix('sm-products/ai')->group(function () {
         Route::post('extract-from-image', [AppProductAiController::class, 'extractFromImage'])->name('sm-products.ai.extract-from-image');

@@ -6,11 +6,11 @@ namespace App\Services;
 
 use Gemini\Data\Blob;
 use Gemini\Data\GenerationConfig;
-use Gemini\Data\ImageConfig;
 use Gemini\Data\Schema;
 use Gemini\Enums\DataType;
 use Gemini\Enums\MimeType;
 use Gemini\Enums\ResponseMimeType;
+use Gemini\Enums\ResponseModality;
 use Gemini\Laravel\Facades\Gemini;
 use Gemini\Responses\GenerativeModel\GenerateContentResponse;
 use Illuminate\Http\UploadedFile;
@@ -152,7 +152,19 @@ final class GeminiProductService
                 ->withGenerationConfig($this->imageGenerationConfig())
                 ->generateContent($this->buildImagePrompt($title, $description));
 
-            return $this->extractInlineImageData($response);
+            $imageData = $this->extractInlineImageData($response);
+
+            if ($imageData === null) {
+                $firstCandidate = $response->candidates[0] ?? null;
+
+                Log::warning('Gemini generateProductImage returned no inline image data', [
+                    'model' => self::IMAGE_MODEL,
+                    'finish_reason' => $firstCandidate?->finishReason?->value,
+                    'response_text' => $this->extractResponseText($response),
+                ]);
+            }
+
+            return $imageData;
         } catch (Throwable $exception) {
             $this->logFailure(__FUNCTION__, $exception);
 
@@ -163,23 +175,23 @@ final class GeminiProductService
     private function buildProductPrompt(?string $locale): string
     {
         return 'You are a product catalog assistant. Analyze this product image and return a JSON object '
-            . 'with exactly two fields: "title" and "description". '
-            . 'The title should be short and suitable for use in a product list. '
-            . 'The description should be a concise marketing description in '
-            . ($locale === 'ar' ? 'Arabic' : 'the main language of the packaging')
-            . '. Do not include prices, sizes, or ingredients unless they are essential.';
+            .'with exactly two fields: "title" and "description". '
+            .'The title should be short and suitable for use in a product list. '
+            .'The description should be a concise marketing description in '
+            .($locale === 'ar' ? 'Arabic' : 'the main language of the packaging')
+            .'. Do not include prices, sizes, or ingredients unless they are essential.';
     }
 
     private function buildMenuPrompt(?string $locale): string
     {
         return 'You are digitizing a restaurant or supermarket menu from a photo. '
-            . 'Identify individual products or dishes and return them as structured JSON. '
-            . 'Return an object with a single field "items", which is an array of objects with '
-            . '"title" and "description" fields. '
-            . 'Do not include prices, allergens, or categories. '
-            . 'Write titles and descriptions in '
-            . ($locale === 'ar' ? 'Arabic' : 'the main language of the menu')
-            . '.';
+            .'Identify individual products or dishes and return them as structured JSON. '
+            .'Return an object with a single field "items", which is an array of objects with '
+            .'"title" and "description" fields. '
+            .'Do not include prices, allergens, or categories. '
+            .'Write titles and descriptions in '
+            .($locale === 'ar' ? 'Arabic' : 'the main language of the menu')
+            .'.';
     }
 
     private function buildImagePrompt(string $title, ?string $description): string
@@ -196,7 +208,7 @@ final class GeminiProductService
         }
 
         $promptLines[] = 'Use a clean studio background with soft lighting. '
-            . 'Realistic style, no text, no watermarks, centered composition, square aspect ratio.';
+            .'Realistic style, no text, no watermarks, centered composition, and exact 1:1 aspect ratio.';
 
         return implode(' ', $promptLines);
     }
@@ -244,7 +256,7 @@ final class GeminiProductService
 
     private function imageGenerationConfig(): GenerationConfig
     {
-        return new GenerationConfig(imageConfig: new ImageConfig(aspectRatio: '1:1'));
+        return new GenerationConfig(responseModalities: [ResponseModality::IMAGE]);
     }
 
     /**
@@ -284,6 +296,15 @@ final class GeminiProductService
         }
 
         return null;
+    }
+
+    private function extractResponseText(GenerateContentResponse $response): ?string
+    {
+        try {
+            return $response->text();
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     private function encodeUploadedFile(UploadedFile $file): string
