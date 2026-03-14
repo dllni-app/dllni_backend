@@ -93,7 +93,7 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
         Route::get('search/products', RestaurantSearchController::class);
         Route::get('inventory-summary', InventorySummaryController::class);
         Route::get('inventory-alerts', InventoryAlertsController::class);
-        Route::apiResource('products', ProductController::class);
+        Route::apiResource('products', ProductController::class)->names('restaurant-owner.products');
 
         Route::get('restaurant', [RestaurantController::class, 'show']);
         Route::put('restaurant', [RestaurantController::class, 'update']);
