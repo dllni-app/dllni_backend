@@ -15,7 +15,7 @@ beforeEach(function (): void {
 it('lists store hours', function (): void {
     SmStoreHoursFactory::new()->count(3)->create();
 
-    $response = $this->getJson('/api/v1/sm-store-hours?perPage=10');
+    $response = $this->getJson('/api/v1/sm-store-hours');
 
     $response->assertOk();
     expect($response->json('data'))->toHaveCount(3);
