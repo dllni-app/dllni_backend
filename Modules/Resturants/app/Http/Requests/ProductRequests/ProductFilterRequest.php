@@ -17,7 +17,7 @@ final class ProductFilterRequest extends FormRequest
     {
         return [
             'perPage' => 'sometimes|integer|min:1|max:100',
-            'filter.restaurantId' => 'prohibited',
+            'filter.restaurantId' => 'sometimes|exists:restaurants,id',
             'filter.categoryId' => 'sometimes|exists:categories,id',
             'filter.isAvailable' => 'sometimes|boolean',
             'filter.lowStock' => 'sometimes|boolean',

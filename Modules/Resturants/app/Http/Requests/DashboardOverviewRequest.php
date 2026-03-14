@@ -15,8 +15,12 @@ final class DashboardOverviewRequest extends FormRequest
 
     public function rules(): array
     {
+        $isRestaurantPrefix = str_contains($this->path(), 'api/v1/restaurant/') && ! str_contains($this->path(), 'restaurant-owner');
+
         return [
-            'restaurantId' => ['prohibited'],
+            'restaurantId' => $isRestaurantPrefix
+                ? ['required', 'exists:restaurants,id']
+                : ['prohibited'],
         ];
     }
 }

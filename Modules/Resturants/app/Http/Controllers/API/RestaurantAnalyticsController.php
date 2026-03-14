@@ -15,13 +15,16 @@ final class RestaurantAnalyticsController
 {
     public function dailyStats(Request $request, RestaurantOwnerContext $context): JsonResponse
     {
+        $isRestaurantPrefix = str_contains($request->path(), 'api/v1/restaurant/') && ! str_contains($request->path(), 'restaurant-owner');
         $request->validate([
-            'restaurantId' => 'prohibited',
+            'restaurantId' => $isRestaurantPrefix ? ['required', 'exists:restaurants,id'] : ['prohibited'],
             'dateFrom' => 'required|date',
             'dateTo' => 'required|date|after_or_equal:dateFrom',
         ]);
 
-        $restaurantId = $context->restaurantId();
+        $restaurantId = $request->has('restaurantId')
+            ? (int) $request->input('restaurantId')
+            : $context->restaurantId();
         $dateFrom = Carbon::parse($request->input('dateFrom'))->startOfDay();
         $dateTo = Carbon::parse($request->input('dateTo'))->endOfDay();
 
@@ -42,13 +45,16 @@ final class RestaurantAnalyticsController
 
     public function monthlyStats(Request $request, RestaurantOwnerContext $context): JsonResponse
     {
+        $isRestaurantPrefix = str_contains($request->path(), 'api/v1/restaurant/') && ! str_contains($request->path(), 'restaurant-owner');
         $request->validate([
-            'restaurantId' => 'prohibited',
+            'restaurantId' => $isRestaurantPrefix ? ['required', 'exists:restaurants,id'] : ['prohibited'],
             'dateFrom' => 'required|date',
             'dateTo' => 'required|date|after_or_equal:dateFrom',
         ]);
 
-        $restaurantId = $context->restaurantId();
+        $restaurantId = $request->has('restaurantId')
+            ? (int) $request->input('restaurantId')
+            : $context->restaurantId();
         $from = $request->date('dateFrom');
         $to = $request->date('dateTo');
 

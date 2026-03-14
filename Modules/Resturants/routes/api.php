@@ -75,6 +75,17 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     Route::apiResource('reviews', ReviewController::class)->only(['index', 'show']);
     Route::apiResource('resturants', ResturantsController::class)->names('resturants');
 
+    Route::apiResource('products', ProductController::class);
+
+    Route::prefix('restaurant')->group(function () {
+        Route::get('dashboard/overview', DashboardOverviewController::class);
+        Route::get('analytics/daily-stats', [RestaurantAnalyticsController::class, 'dailyStats']);
+        Route::get('analytics/monthly-stats', [RestaurantAnalyticsController::class, 'monthlyStats']);
+        Route::get('search/products', RestaurantSearchController::class);
+        Route::get('inventory-summary', InventorySummaryController::class);
+        Route::get('inventory-alerts', InventoryAlertsController::class);
+    });
+
     Route::prefix('restaurant-owner')->group(function () {
         Route::get('dashboard/overview', DashboardOverviewController::class);
         Route::get('analytics/daily-stats', [RestaurantAnalyticsController::class, 'dailyStats']);

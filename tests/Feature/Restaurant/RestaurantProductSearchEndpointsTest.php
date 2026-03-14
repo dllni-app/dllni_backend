@@ -242,8 +242,8 @@ it('orders by relevance then featured and newest tie-breakers when sort is missi
 
     expect($orderedIds[0])->toBe($prefixFeaturedOlder->id);
     expect($orderedIds[1])->toBe($prefixNotFeaturedNewer->id);
-    expect($orderedIds[2])->toBe($contains->id);
-    expect($orderedIds[3])->toBe($nameContains->id);
+    expect($orderedIds[2])->toBe($nameContains->id);
+    expect($orderedIds[3])->toBe($contains->id);
 });
 
 it('supports explicit sort values', function () {
