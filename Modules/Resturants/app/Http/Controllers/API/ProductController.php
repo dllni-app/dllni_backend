@@ -45,6 +45,8 @@ final class ProductController
             ProductData::from([
                 ...$request->validated(),
                 'restaurantId' => $restaurantId,
+                'primaryImage' => $request->file('primaryImage'),
+                'images' => $request->file('images'),
             ])
         );
 
@@ -71,6 +73,8 @@ final class ProductController
             ProductData::from([
                 ...$request->validated(),
                 'restaurantId' => $restaurantId,
+                'primaryImage' => $request->file('primaryImage'),
+                'images' => $request->file('images'),
             ]),
             $product
         );

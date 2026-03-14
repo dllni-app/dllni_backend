@@ -11,10 +11,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Resturants\Traits\FilterQueries\ProductFilterQuery;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
 
-final class Product extends Model
+final class Product extends Model implements HasMedia
 {
     use HasFactory;
+    use InteractsWithMedia;
     use ProductFilterQuery;
 
     protected $fillable = [
@@ -64,6 +67,12 @@ final class Product extends Model
         return $this->belongsToMany(InventoryItem::class, 'inventory_item_product')
             ->withPivot('quantity_used')
             ->withTimestamps();
+    }
+
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection('primary-image')->singleFile();
+        $this->addMediaCollection('images');
     }
 
     public function scopeLowStock($query, mixed $value = true)

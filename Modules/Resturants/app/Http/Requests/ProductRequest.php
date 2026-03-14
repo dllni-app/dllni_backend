@@ -27,6 +27,9 @@ final class ProductRequest extends FormRequest
             'lowStockThreshold' => 'nullable|integer|min:0',
             'preparationTime' => 'nullable|integer|min:0',
             'isFeatured' => 'nullable|boolean',
+            'primaryImage' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:2048',
+            'images' => 'nullable|array',
+            'images.*' => 'file|mimes:jpeg,png,jpg,gif,svg,webp|max:2048',
         ];
     }
 }
