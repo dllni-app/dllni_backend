@@ -50,20 +50,10 @@ use Modules\Resturants\Http\Controllers\API\ReviewController;
 use Modules\Resturants\Http\Controllers\ResturantsController;
 
 Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
-    Route::get('restaurant/dashboard/overview', DashboardOverviewController::class);
-    Route::get('restaurant/analytics/daily-stats', [RestaurantAnalyticsController::class, 'dailyStats']);
-    Route::get('restaurant/analytics/monthly-stats', [RestaurantAnalyticsController::class, 'monthlyStats']);
-    Route::get('restaurant/search/products', RestaurantSearchController::class);
-    Route::get('restaurant/inventory-summary', InventorySummaryController::class);
-    Route::get('restaurant/inventory-alerts', InventoryAlertsController::class);
     Route::apiResource('restaurants', RestaurantController::class);
-    Route::get('restaurant-owner/restaurant', [RestaurantController::class, 'show']);
-    Route::put('restaurant-owner/restaurant', [RestaurantController::class, 'update']);
-    Route::get('restaurant-owner/restaurant/operating-hours', [RestaurantOperatingHoursController::class, 'show']);
-    Route::put('restaurant-owner/restaurant/operating-hours', [RestaurantOperatingHoursController::class, 'update']);
+
     Route::apiResource('inventory-items', InventoryItemController::class);
     Route::apiResource('categories', CategoryController::class);
-    Route::apiResource('products', ProductController::class);
     Route::prefix('products/ai')->group(function () {
         Route::post('extract-from-image', [AppProductAiController::class, 'extractFromImage'])->name('products.ai.extract-from-image');
         Route::post('extract-from-menu', [AppProductAiController::class, 'extractFromMenu'])->name('products.ai.extract-from-menu');
@@ -85,7 +75,31 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     Route::apiResource('reviews', ReviewController::class)->only(['index', 'show']);
     Route::apiResource('resturants', ResturantsController::class)->names('resturants');
 
+    Route::apiResource('products', ProductController::class);
+
+    Route::prefix('restaurant')->group(function () {
+        Route::get('dashboard/overview', DashboardOverviewController::class);
+        Route::get('analytics/daily-stats', [RestaurantAnalyticsController::class, 'dailyStats']);
+        Route::get('analytics/monthly-stats', [RestaurantAnalyticsController::class, 'monthlyStats']);
+        Route::get('search/products', RestaurantSearchController::class);
+        Route::get('inventory-summary', InventorySummaryController::class);
+        Route::get('inventory-alerts', InventoryAlertsController::class);
+    });
+
     Route::prefix('restaurant-owner')->group(function () {
+        Route::get('dashboard/overview', DashboardOverviewController::class);
+        Route::get('analytics/daily-stats', [RestaurantAnalyticsController::class, 'dailyStats']);
+        Route::get('analytics/monthly-stats', [RestaurantAnalyticsController::class, 'monthlyStats']);
+        Route::get('search/products', RestaurantSearchController::class);
+        Route::get('inventory-summary', InventorySummaryController::class);
+        Route::get('inventory-alerts', InventoryAlertsController::class);
+        Route::apiResource('products', ProductController::class);
+
+        Route::get('restaurant', [RestaurantController::class, 'show']);
+        Route::put('restaurant', [RestaurantController::class, 'update']);
+        Route::get('restaurant/operating-hours', [RestaurantOperatingHoursController::class, 'show']);
+        Route::put('restaurant/operating-hours', [RestaurantOperatingHoursController::class, 'update']);
+
         Route::get('dashboard/performance', RestaurantOwnerDashboardPerformanceController::class);
         Route::apiResource('restaurant-roles', RestaurantRoleController::class);
 

@@ -12,17 +12,24 @@ use Modules\Resturants\Http\Requests\ProductRequests\ProductFilterRequest;
 use Modules\Resturants\Http\Resources\ProductResource;
 use Modules\Resturants\Models\Product;
 use Modules\Resturants\Services\ProductService;
+use Modules\Resturants\Support\RestaurantOwnerContext;
 use Throwable;
 
 final class ProductController
 {
     public function __construct(
-        private ProductService $productService
+        private ProductService $productService,
+        private RestaurantOwnerContext $ownerContext
     ) {}
 
     public function index(ProductFilterRequest $request): AnonymousResourceCollection
     {
+        $restaurantId = $request->filled('filter.restaurantId')
+            ? (int) $request->input('filter.restaurantId')
+            : $this->ownerContext->restaurantId();
+
         $products = Product::getQuery()
+            ->where('restaurant_id', $restaurantId)
             ->with(['restaurant', 'category'])
             ->paginate($request->get('perPage', 20));
 
@@ -32,8 +39,15 @@ final class ProductController
     /** @throws Throwable */
     public function store(ProductRequest $request): ProductResource
     {
+        $restaurantId = $this->ownerContext->restaurantId();
+
         $product = $this->productService->store(
-            ProductData::from($request->validated())
+            ProductData::from([
+                ...$request->validated(),
+                'restaurantId' => $restaurantId,
+                'primaryImage' => $request->file('primaryImage'),
+                'images' => $request->file('images'),
+            ])
         );
 
         return ProductResource::make(
@@ -43,6 +57,7 @@ final class ProductController
 
     public function show(Product $product): ProductResource
     {
+        $this->ownerContext->ensureOwnedProduct($product);
         $product->load(['restaurant', 'category', 'modifierGroups', 'substitutions']);
 
         return ProductResource::make($product);
@@ -51,8 +66,16 @@ final class ProductController
     /** @throws Throwable */
     public function update(ProductRequest $request, Product $product): ProductResource
     {
+        $restaurantId = $this->ownerContext->restaurantId();
+        $this->ownerContext->ensureOwnedProduct($product);
+
         $updated = $this->productService->update(
-            ProductData::from($request->validated()),
+            ProductData::from([
+                ...$request->validated(),
+                'restaurantId' => $restaurantId,
+                'primaryImage' => $request->file('primaryImage'),
+                'images' => $request->file('images'),
+            ]),
             $product
         );
 
@@ -63,6 +86,7 @@ final class ProductController
 
     public function destroy(Product $product): Response
     {
+        $this->ownerContext->ensureOwnedProduct($product);
         $product->delete();
 
         return response()->noContent();

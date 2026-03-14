@@ -24,7 +24,6 @@ trait ProductFilterQuery
                 AllowedFilter::scope('lowStock'),
                 AllowedFilter::exact('isFeatured', 'is_featured'),
                 AllowedFilter::scope('search'),
-                AllowedFilter::exact('masterProductId', 'master_product_id'),
                 AllowedFilter::scope('minPrice'),
                 AllowedFilter::scope('maxPrice'),
                 AllowedFilter::scope('hasDiscount'),
@@ -61,10 +60,7 @@ trait ProductFilterQuery
 
         $likeTerm = SearchTermEscaper::escape($search);
 
-        return $query->where(function (Builder $q) use ($likeTerm) {
-            $q->whereRaw("name LIKE ? ESCAPE '!'", [$likeTerm])
-                ->orWhereRaw("slug LIKE ? ESCAPE '!'", [$likeTerm]);
-        });
+        return $query->whereRaw("name LIKE ? ESCAPE '!'", [$likeTerm]);
     }
 
     public function scopeMinPrice(Builder $query, mixed $value): Builder

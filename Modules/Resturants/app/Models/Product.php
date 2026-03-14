@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Modules\Resturants\Models;
 
-use App\Models\MasterProduct;
 use Database\Factories\ProductFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -12,18 +11,19 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Resturants\Traits\FilterQueries\ProductFilterQuery;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
 
-final class Product extends Model
+final class Product extends Model implements HasMedia
 {
     use HasFactory;
+    use InteractsWithMedia;
     use ProductFilterQuery;
 
     protected $fillable = [
         'restaurant_id',
         'category_id',
-        'master_product_id',
         'name',
-        'slug',
         'description',
         'price',
         'discounted_price',
@@ -44,11 +44,6 @@ final class Product extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
-    }
-
-    public function masterProduct(): BelongsTo
-    {
-        return $this->belongsTo(MasterProduct::class, 'master_product_id');
     }
 
     public function modifierGroups(): BelongsToMany
@@ -72,6 +67,12 @@ final class Product extends Model
         return $this->belongsToMany(InventoryItem::class, 'inventory_item_product')
             ->withPivot('quantity_used')
             ->withTimestamps();
+    }
+
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection('primary-image')->singleFile();
+        $this->addMediaCollection('images');
     }
 
     public function scopeLowStock($query, mixed $value = true)

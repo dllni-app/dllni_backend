@@ -2,19 +2,18 @@
 
 declare(strict_types=1);
 
-use App\Models\User;
-use Illuminate\Support\Str;
+use App\Enums\UserModuleType;
 use Laravel\Sanctum\Sanctum;
 use Modules\Resturants\Models\Category;
 use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
 
-beforeEach(function () {
-    Sanctum::actingAs(User::factory()->create());
-});
-
 it('lists products', function () {
-    Product::factory()->count(3)->create();
+    $restaurant = Restaurant::factory()->create();
+    $restaurant->user->update(['module_type' => UserModuleType::RestaurantSeller->value]);
+    Sanctum::actingAs($restaurant->user);
+
+    Product::factory()->count(3)->create(['restaurant_id' => $restaurant->id]);
 
     $response = $this->getJson('/api/v1/products');
 
@@ -24,13 +23,14 @@ it('lists products', function () {
 
 it('creates a product', function () {
     $restaurant = Restaurant::factory()->create();
+    $restaurant->user->update(['module_type' => UserModuleType::RestaurantSeller->value]);
+    Sanctum::actingAs($restaurant->user);
+
     $category = Category::factory()->create(['restaurant_id' => $restaurant->id]);
 
     $payload = [
-        'restaurantId' => $restaurant->id,
         'categoryId' => $category->id,
         'name' => 'Margherita Pizza',
-        'slug' => 'margherita-pizza-'.Str::random(4),
         'price' => 12.99,
         'isAvailable' => true,
     ];
@@ -45,7 +45,14 @@ it('creates a product', function () {
 });
 
 it('shows a product', function () {
-    $product = Product::factory()->create(['name' => 'Special Burger']);
+    $restaurant = Restaurant::factory()->create();
+    $restaurant->user->update(['module_type' => UserModuleType::RestaurantSeller->value]);
+    Sanctum::actingAs($restaurant->user);
+
+    $product = Product::factory()->create([
+        'restaurant_id' => $restaurant->id,
+        'name' => 'Special Burger',
+    ]);
 
     $response = $this->getJson("/api/v1/products/{$product->id}");
 
@@ -55,13 +62,19 @@ it('shows a product', function () {
 });
 
 it('updates a product', function () {
-    $product = Product::factory()->create(['name' => 'Old Product', 'price' => 10]);
+    $restaurant = Restaurant::factory()->create();
+    $restaurant->user->update(['module_type' => UserModuleType::RestaurantSeller->value]);
+    Sanctum::actingAs($restaurant->user);
+
+    $product = Product::factory()->create([
+        'restaurant_id' => $restaurant->id,
+        'name' => 'Old Product',
+        'price' => 10,
+    ]);
 
     $response = $this->putJson("/api/v1/products/{$product->id}", [
-        'restaurantId' => $product->restaurant_id,
         'categoryId' => $product->category_id,
         'name' => 'Updated Product',
-        'slug' => $product->slug,
         'price' => 15.99,
         'isAvailable' => true,
     ]);
@@ -74,7 +87,11 @@ it('updates a product', function () {
 });
 
 it('deletes a product', function () {
-    $product = Product::factory()->create();
+    $restaurant = Restaurant::factory()->create();
+    $restaurant->user->update(['module_type' => UserModuleType::RestaurantSeller->value]);
+    Sanctum::actingAs($restaurant->user);
+
+    $product = Product::factory()->create(['restaurant_id' => $restaurant->id]);
 
     $response = $this->deleteJson("/api/v1/products/{$product->id}");
 

@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Resturants\Models\Product;
 use Modules\Supermarket\Models\SmCoupon;
 use Modules\Supermarket\Models\SmOffer;
 use Modules\Supermarket\Models\SmOrder;
@@ -107,6 +108,7 @@ final class AppServiceProvider extends ServiceProvider
             'user' => User::class,
             'worker' => Worker::class,
             'dispute' => Dispute::class,
+            'product' => Product::class,
             'sm_product' => SmProduct::class,
             'cleaning_booking' => CleaningBooking::class,
             'event_booking' => \Modules\Cleaning\Models\EventBooking::class,

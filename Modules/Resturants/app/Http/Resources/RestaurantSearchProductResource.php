@@ -18,7 +18,6 @@ final class RestaurantSearchProductResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->name,
-            'slug' => $this->slug,
             'description' => $this->description,
             'price' => $this->price ? (float) $this->price : null,
             'discountedPrice' => $this->discounted_price ? (float) $this->discounted_price : null,

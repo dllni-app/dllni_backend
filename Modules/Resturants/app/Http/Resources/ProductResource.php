@@ -19,9 +19,7 @@ final class ProductResource extends JsonResource
             'id' => $this->id,
             'restaurantId' => $this->restaurant_id,
             'categoryId' => $this->category_id,
-            'masterProductId' => $this->master_product_id,
             'name' => $this->name,
-            'slug' => $this->slug,
             'description' => $this->description,
             'price' => $this->price ? (float) $this->price : null,
             'discountedPrice' => $this->discounted_price ? (float) $this->discounted_price : null,
@@ -44,6 +42,8 @@ final class ProductResource extends JsonResource
             ]),
             'modifierGroups' => $this->whenLoaded('modifierGroups'),
             'substitutions' => $this->whenLoaded('substitutions'),
+            'primaryImage' => $this->getFirstMediaUrl('primary-image'),
+            'images' => $this->getMedia('images')->map(fn ($media) => $media->getUrl())->values()->all(),
             'createdAt' => $this->created_at->toDateTimeString(),
             'updatedAt' => $this->updated_at->toDateTimeString(),
         ];

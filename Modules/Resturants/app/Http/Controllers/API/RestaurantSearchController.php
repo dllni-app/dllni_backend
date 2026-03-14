@@ -35,16 +35,14 @@ final class RestaurantSearchController
                 $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search);
                 $namePrefix = $escaped.'%';
                 $nameContains = '%'.$escaped.'%';
-                $slugContains = '%'.$escaped.'%';
 
                 $productQuery->reorder()
                     ->orderByRaw(
                         'CASE '.
                         'WHEN name LIKE ? THEN 0 '.
                         'WHEN name LIKE ? THEN 1 '.
-                        'WHEN slug LIKE ? THEN 2 '.
-                        'ELSE 3 END',
-                        [$namePrefix, $nameContains, $slugContains]
+                        'ELSE 2 END',
+                        [$namePrefix, $nameContains]
                     )
                     ->orderByDesc('is_featured')
                     ->orderByDesc('created_at');

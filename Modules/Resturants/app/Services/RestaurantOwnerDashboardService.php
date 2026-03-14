@@ -10,6 +10,7 @@ use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Models\Order;
 use Modules\Resturants\Models\OrderItem;
 use Modules\Resturants\Models\Restaurant;
+use Modules\Resturants\Models\RestaurantOrderDispute;
 
 final class RestaurantOwnerDashboardService
 {
@@ -96,6 +97,12 @@ final class RestaurantOwnerDashboardService
         $discountedRevenue = (float) (clone $discountedOrdersQuery)->sum('total_amount');
         $totalSavings = (float) (clone $discountedOrdersQuery)->sum('discount_amount');
         $conversionRate = $totalOrders > 0 ? round(($discountedOrdersCount / $totalOrders) * 100, 2) : 0.0;
+        $disputesCount = RestaurantOrderDispute::query()
+            ->whereHas('order', function ($query) use ($restaurant): void {
+                $query->where('restaurant_id', $restaurant->id);
+            })
+            ->whereBetween('created_at', [$start, $end])
+            ->count();
 
         return [
             'range' => [
@@ -108,6 +115,8 @@ final class RestaurantOwnerDashboardService
                 'newOrdersCount' => $newOrdersCount,
                 'confirmedOrdersCount' => $confirmedOrdersCount,
                 'completedOrdersCount' => $completedOrdersCount,
+                'cancelledOrdersCount' => $cancelledOrders,
+                'disputesCount' => $disputesCount,
                 'totalRevenue' => $totalRevenue,
                 'averageOrderValue' => $averageOrderValue,
                 'cancellationRatePercent' => $cancellationRate,
