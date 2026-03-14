@@ -43,7 +43,7 @@ final class SmOrderController
 
     public function show(SmOrder $smOrder): SmOrderResource
     {
-        return SmOrderResource::make($smOrder->load(['customer', 'store', 'coupon', 'items', 'statusLogs', 'disputes']));
+        return SmOrderResource::make($smOrder->load(['customer', 'store', 'coupon', 'items.product.media', 'statusLogs', 'disputes']));
     }
 
     public function update(SmOrderRequest $request, SmOrder $smOrder): SmOrderResource
