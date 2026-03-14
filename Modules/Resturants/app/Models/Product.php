@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Modules\Resturants\Models;
 
-use App\Models\MasterProduct;
 use Database\Factories\ProductFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -21,9 +20,7 @@ final class Product extends Model
     protected $fillable = [
         'restaurant_id',
         'category_id',
-        'master_product_id',
         'name',
-        'slug',
         'description',
         'price',
         'discounted_price',
@@ -44,11 +41,6 @@ final class Product extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
-    }
-
-    public function masterProduct(): BelongsTo
-    {
-        return $this->belongsTo(MasterProduct::class, 'master_product_id');
     }
 
     public function modifierGroups(): BelongsToMany

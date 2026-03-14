@@ -9,22 +9,24 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Modules\Resturants\Models\RestaurantDailyStat;
 use Modules\Resturants\Models\RestaurantMonthlyStat;
+use Modules\Resturants\Support\RestaurantOwnerContext;
 
 final class RestaurantAnalyticsController
 {
-    public function dailyStats(Request $request): JsonResponse
+    public function dailyStats(Request $request, RestaurantOwnerContext $context): JsonResponse
     {
         $request->validate([
-            'restaurantId' => 'required|exists:restaurants,id',
+            'restaurantId' => 'prohibited',
             'dateFrom' => 'required|date',
             'dateTo' => 'required|date|after_or_equal:dateFrom',
         ]);
 
+        $restaurantId = $context->restaurantId();
         $dateFrom = Carbon::parse($request->input('dateFrom'))->startOfDay();
         $dateTo = Carbon::parse($request->input('dateTo'))->endOfDay();
 
         $stats = RestaurantDailyStat::query()
-            ->where('restaurant_id', $request->input('restaurantId'))
+            ->where('restaurant_id', $restaurantId)
             ->whereBetween('stat_date', [$dateFrom, $dateTo])
             ->orderBy('stat_date')
             ->get()
@@ -38,19 +40,20 @@ final class RestaurantAnalyticsController
         return response()->json(['data' => $stats]);
     }
 
-    public function monthlyStats(Request $request): JsonResponse
+    public function monthlyStats(Request $request, RestaurantOwnerContext $context): JsonResponse
     {
         $request->validate([
-            'restaurantId' => 'required|exists:restaurants,id',
+            'restaurantId' => 'prohibited',
             'dateFrom' => 'required|date',
             'dateTo' => 'required|date|after_or_equal:dateFrom',
         ]);
 
+        $restaurantId = $context->restaurantId();
         $from = $request->date('dateFrom');
         $to = $request->date('dateTo');
 
         $stats = RestaurantMonthlyStat::query()
-            ->where('restaurant_id', $request->input('restaurantId'))
+            ->where('restaurant_id', $restaurantId)
             ->where(function ($q) use ($from) {
                 $q->where('stat_year', '>', $from->year)
                     ->orWhere(function ($q2) use ($from) {

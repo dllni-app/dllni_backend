@@ -16,7 +16,7 @@ final class DashboardOverviewRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'restaurantId' => ['required', 'integer', 'exists:restaurants,id'],
+            'restaurantId' => ['prohibited'],
         ];
     }
 }

@@ -14,9 +14,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('restaurant_id')->constrained()->cascadeOnDelete();
             $table->foreignId('category_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('master_product_id')->nullable()->constrained()->nullOnDelete();
             $table->string('name');
-            $table->string('slug');
             $table->text('description')->nullable();
             $table->decimal('price', 10, 2);
             $table->decimal('discounted_price', 10, 2)->nullable();
@@ -28,7 +26,6 @@ return new class extends Migration
             $table->timestamps();
 
             $table->index(['restaurant_id', 'is_available']);
-            $table->index(['category_id', 'master_product_id']);
         });
     }
 

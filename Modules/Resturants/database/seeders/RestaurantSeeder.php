@@ -13,11 +13,11 @@ use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Modules\Resturants\Models\InventoryItem;
 use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Enums\OrderType;
 use Modules\Resturants\Enums\PriceRange;
 use Modules\Resturants\Enums\RestaurantPickupMode;
+use Modules\Resturants\Models\InventoryItem;
 use Modules\Resturants\Models\Order;
 use Modules\Resturants\Models\Restaurant;
 
@@ -235,9 +235,7 @@ final class RestaurantSeeder extends Seeder
             $products[] = [
                 'restaurant_id' => $restaurantId,
                 'category_id' => $categoryId,
-                'master_product_id' => null,
                 'name' => $p['name'],
-                'slug' => Str::slug($p['name']).'-'.fake()->unique()->numberBetween(1000, 9999),
                 'description' => null,
                 'price' => $p['price'],
                 'discounted_price' => null,
@@ -350,10 +348,10 @@ final class RestaurantSeeder extends Seeder
         }
 
         $products = [
-            ['id' => 1, 'category_id' => 4, 'master_product_id' => 8, 'name' => 'بيتزا مارجريتا', 'slug' => 'pizza-margherita', 'description' => 'بيتزا بجبنة موزاريلا', 'price' => 35, 'discounted_price' => 30, 'is_available' => true, 'stock_quantity' => 50],
-            ['id' => 2, 'category_id' => 2, 'master_product_id' => 5, 'name' => 'دجاج مشوي', 'slug' => 'grilled-chicken', 'description' => 'دجاج متبل ومشوي على الفحم', 'price' => 40, 'discounted_price' => null, 'is_available' => true, 'stock_quantity' => 20],
-            ['id' => 3, 'category_id' => 1, 'master_product_id' => 6, 'name' => 'سلطة خضار', 'slug' => 'vegetable-salad', 'description' => 'سلطة طازجة يومياً', 'price' => 15, 'discounted_price' => null, 'is_available' => true, 'stock_quantity' => 30],
-            ['id' => 4, 'category_id' => 3, 'master_product_id' => 1, 'name' => 'حليب بارد', 'slug' => 'cold-milk', 'description' => 'حليب كامل الدسم مبرد', 'price' => 5, 'discounted_price' => null, 'is_available' => true, 'stock_quantity' => 100],
+            ['id' => 1, 'category_id' => 4, 'name' => 'بيتزا مارجريتا', 'description' => 'بيتزا بجبنة موزاريلا', 'price' => 35, 'discounted_price' => 30, 'is_available' => true, 'stock_quantity' => 50],
+            ['id' => 2, 'category_id' => 2, 'name' => 'دجاج مشوي', 'description' => 'دجاج متبل ومشوي على الفحم', 'price' => 40, 'discounted_price' => null, 'is_available' => true, 'stock_quantity' => 20],
+            ['id' => 3, 'category_id' => 1, 'name' => 'سلطة خضار', 'description' => 'سلطة طازجة يومياً', 'price' => 15, 'discounted_price' => null, 'is_available' => true, 'stock_quantity' => 30],
+            ['id' => 4, 'category_id' => 3, 'name' => 'حليب بارد', 'description' => 'حليب كامل الدسم مبرد', 'price' => 5, 'discounted_price' => null, 'is_available' => true, 'stock_quantity' => 100],
         ];
 
         foreach ($products as $product) {
@@ -362,9 +360,7 @@ final class RestaurantSeeder extends Seeder
                 [
                     'restaurant_id' => $restaurant->id,
                     'category_id' => $product['category_id'],
-                    'master_product_id' => $product['master_product_id'],
                     'name' => $product['name'],
-                    'slug' => $product['slug'],
                     'description' => $product['description'],
                     'price' => $product['price'],
                     'discounted_price' => $product['discounted_price'],

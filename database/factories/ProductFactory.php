@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Database\Factories;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
-use Illuminate\Support\Str;
 use Modules\Resturants\Models\Category;
 use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
@@ -20,7 +19,6 @@ final class ProductFactory extends Factory
     public function definition(): array
     {
         $name = fake()->words(3, true);
-        $slug = Str::slug($name).'-'.fake()->unique()->randomNumber(4);
         $price = fake()->randomFloat(2, 5, 50);
 
         $restaurant = Restaurant::factory();
@@ -28,9 +26,7 @@ final class ProductFactory extends Factory
         return [
             'restaurant_id' => $restaurant,
             'category_id' => Category::factory()->for($restaurant, 'restaurant'),
-            'master_product_id' => null,
             'name' => $name,
-            'slug' => $slug,
             'description' => fake()->sentence(),
             'price' => $price,
             'discounted_price' => null,

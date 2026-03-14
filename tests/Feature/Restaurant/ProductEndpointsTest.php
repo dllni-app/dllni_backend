@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use App\Models\User;
-use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Modules\Resturants\Models\Category;
 use Modules\Resturants\Models\Product;
@@ -30,7 +29,6 @@ it('creates a product', function () {
         'restaurantId' => $restaurant->id,
         'categoryId' => $category->id,
         'name' => 'Margherita Pizza',
-        'slug' => 'margherita-pizza-'.Str::random(4),
         'price' => 12.99,
         'isAvailable' => true,
     ];
@@ -61,7 +59,6 @@ it('updates a product', function () {
         'restaurantId' => $product->restaurant_id,
         'categoryId' => $product->category_id,
         'name' => 'Updated Product',
-        'slug' => $product->slug,
         'price' => 15.99,
         'isAvailable' => true,
     ]);

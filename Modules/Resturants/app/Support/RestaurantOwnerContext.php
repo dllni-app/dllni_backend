@@ -15,9 +15,17 @@ use Modules\Resturants\Models\RestaurantStaff;
 
 final class RestaurantOwnerContext
 {
+    private ?User $resolvedOwner = null;
+
+    private ?Restaurant $resolvedRestaurant = null;
+
     /** @throws AuthorizationException */
     public function owner(): User
     {
+        if ($this->resolvedOwner !== null) {
+            return $this->resolvedOwner;
+        }
+
         /** @var User|null $user */
         $user = auth()->user();
 
@@ -29,12 +37,16 @@ final class RestaurantOwnerContext
             throw new AuthorizationException('This endpoint is for restaurant sellers only.');
         }
 
-        return $user;
+        return $this->resolvedOwner = $user;
     }
 
     /** @throws AuthorizationException */
     public function restaurant(): Restaurant
     {
+        if ($this->resolvedRestaurant !== null) {
+            return $this->resolvedRestaurant;
+        }
+
         $owner = $this->owner();
         $restaurant = $owner->restaurants()->first();
 
@@ -42,7 +54,13 @@ final class RestaurantOwnerContext
             throw new AuthorizationException('No restaurant found for this owner.');
         }
 
-        return $restaurant;
+        return $this->resolvedRestaurant = $restaurant;
+    }
+
+    /** @throws AuthorizationException */
+    public function restaurantId(): int
+    {
+        return (int) $this->restaurant()->id;
     }
 
     /** @throws AuthorizationException */

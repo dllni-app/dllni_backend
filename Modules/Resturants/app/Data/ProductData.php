@@ -18,9 +18,7 @@ final class ProductData extends Data
     public function __construct(
         public ?int $restaurantId,
         public ?int $categoryId,
-        public ?int $masterProductId,
         public ?string $name,
-        public ?string $slug,
         public ?string $description,
         public ?float $price,
         public ?float $discountedPrice,

@@ -15,20 +15,10 @@ final class ProductRequest extends FormRequest
 
     public function rules(): array
     {
-        $productId = $this->route('product')?->id;
-        $restaurantId = $this->input('restaurantId') ?? $this->route('product')?->restaurant_id;
-
         return [
-            'restaurantId' => 'required|exists:restaurants,id',
+            'restaurantId' => 'prohibited',
             'categoryId' => 'required|exists:categories,id',
-            'masterProductId' => 'nullable|exists:master_products,id',
             'name' => 'required|string|max:255',
-            'slug' => [
-                'required',
-                'string',
-                'max:255',
-                \Illuminate\Validation\Rule::unique('products', 'slug')->where('restaurant_id', $restaurantId)->ignore($productId),
-            ],
             'description' => 'nullable|string',
             'price' => 'required|numeric|min:0',
             'discountedPrice' => 'nullable|numeric|min:0',
