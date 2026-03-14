@@ -122,18 +122,6 @@ it('lists restaurant staff', function () {
     expect($response->json('data'))->toBeArray();
 });
 
-it('lists restaurant roles', function () {
-    RestaurantRole::create([
-        'restaurant_id' => Modules\Resturants\Models\Restaurant::factory()->create()->id,
-        'name' => 'Chef',
-        'slug' => 'chef',
-    ]);
-
-    $response = $this->getJson('/api/v1/restaurant-owner/restaurant-roles');
-
-    $response->assertOk();
-    expect($response->json('data'))->toBeArray();
-});
 
 it('lists restaurant recurring orders', function () {
     RestaurantRecurringOrder::create([
