@@ -19,6 +19,8 @@ trait SmStoreFilterQuery
             ->allowedFilters([
                 AllowedFilter::partial('name'),
                 AllowedFilter::partial('slug'),
+                AllowedFilter::partial('city'),
+                AllowedFilter::partial('neighborhood'),
                 AllowedFilter::exact('isActive', 'is_active'),
                 AllowedFilter::exact('isFeatured', 'is_featured'),
                 AllowedFilter::scope('suspended'),
@@ -29,6 +31,8 @@ trait SmStoreFilterQuery
             ->allowedSorts([
                 AllowedSort::field('name'),
                 AllowedSort::field('slug'),
+                AllowedSort::field('city'),
+                AllowedSort::field('neighborhood'),
                 AllowedSort::field('averageRating', 'average_rating'),
                 AllowedSort::field('totalReviews', 'total_reviews'),
                 AllowedSort::field('trustScore', 'trust_score'),
@@ -91,7 +95,9 @@ trait SmStoreFilterQuery
         return $query->where(function (Builder $builder) use ($likeTerm): void {
             $builder->whereRaw("name LIKE ? ESCAPE '!'", [$likeTerm])
                 ->orWhereRaw("slug LIKE ? ESCAPE '!'", [$likeTerm])
-                ->orWhereRaw("address LIKE ? ESCAPE '!'", [$likeTerm]);
+                ->orWhereRaw("address LIKE ? ESCAPE '!'", [$likeTerm])
+                ->orWhereRaw("city LIKE ? ESCAPE '!'", [$likeTerm])
+                ->orWhereRaw("neighborhood LIKE ? ESCAPE '!'", [$likeTerm]);
         });
     }
 }

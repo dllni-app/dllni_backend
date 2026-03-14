@@ -31,6 +31,10 @@ it('updates store successfully', function (): void {
     $payload = [
         'name' => 'Updated Store Name',
         'description' => 'Updated description',
+        'city' => 'Amman',
+        'neighborhood' => 'Abdoun',
+        'cover' => 'https://cdn.example.com/stores/cover.jpg',
+        'logo' => 'https://cdn.example.com/stores/logo.jpg',
         'phone' => '+1234567890',
     ];
 
@@ -39,11 +43,19 @@ it('updates store successfully', function (): void {
     $response->assertOk();
     expect($response->json('data.name'))->toBe('Updated Store Name');
     expect($response->json('data.description'))->toBe('Updated description');
+    expect($response->json('data.city'))->toBe('Amman');
+    expect($response->json('data.neighborhood'))->toBe('Abdoun');
+    expect($response->json('data.cover'))->toBe('https://cdn.example.com/stores/cover.jpg');
+    expect($response->json('data.logo'))->toBe('https://cdn.example.com/stores/logo.jpg');
 
     $this->assertDatabaseHas('sm_stores', [
         'id' => $this->store->id,
         'name' => 'Updated Store Name',
         'description' => 'Updated description',
+        'city' => 'Amman',
+        'neighborhood' => 'Abdoun',
+        'cover' => 'https://cdn.example.com/stores/cover.jpg',
+        'logo' => 'https://cdn.example.com/stores/logo.jpg',
     ]);
 });
 
@@ -70,6 +82,10 @@ it('returns updated store with loaded relationships', function (): void {
         'id',
         'name',
         'slug',
+        'city',
+        'neighborhood',
+        'cover',
+        'logo',
         'owner',
         'createdAt',
         'updatedAt',

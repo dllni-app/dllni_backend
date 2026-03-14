@@ -409,8 +409,12 @@ If stock is insufficient, API returns failure (business error message).
     "slug": "my-store",
     "description": "Fresh groceries",
     "address": "123 Main Street, City, Country",
+    "city": "Amman",
+    "neighborhood": "Abdoun",
     "phone": "+1234567890",
     "email": "store@example.com",
+    "cover": "https://cdn.example.com/stores/cover.jpg",
+    "logo": "https://cdn.example.com/stores/logo.jpg",
     "isActive": true,
     "isFeatured": false,
     "createdAt": "2025-02-01T09:00:00.000000Z",
@@ -431,6 +435,10 @@ If stock is insufficient, API returns failure (business error message).
 {
   "name": "Updated Store Name",
   "description": "Updated description",
+  "city": "Amman",
+  "neighborhood": "Abdoun",
+  "cover": "https://cdn.example.com/stores/cover.jpg",
+  "logo": "https://cdn.example.com/stores/logo.jpg",
   "phone": "+1234567890"
 }
 ```

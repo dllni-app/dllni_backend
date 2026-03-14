@@ -6,7 +6,6 @@ use App\Models\User;
 use Carbon\Carbon;
 use Database\Factories\SmStoreFactory;
 use Laravel\Sanctum\Sanctum;
-use Modules\Supermarket\Models\SmStore;
 
 beforeEach(function (): void {
     $user = User::factory()->create();
@@ -53,6 +52,24 @@ it('filters by search term', function (): void {
     SmStoreFactory::new()->create(['name' => 'Other Store']);
 
     $response = $this->getJson('/api/v1/sm-stores?filter[search]=Central');
+
+    $response->assertOk();
+    expect($response->json('data'))->toHaveCount(1);
+    expect($response->json('data.0.id'))->toBe($matchedStore->id);
+});
+
+it('filters by city and neighborhood', function (): void {
+    $matchedStore = SmStoreFactory::new()->create([
+        'city' => 'Amman',
+        'neighborhood' => 'Abdoun',
+    ]);
+
+    SmStoreFactory::new()->create([
+        'city' => 'Zarqa',
+        'neighborhood' => 'Downtown',
+    ]);
+
+    $response = $this->getJson('/api/v1/sm-stores?filter[city]=Amman&filter[neighborhood]=Abdoun');
 
     $response->assertOk();
     expect($response->json('data'))->toHaveCount(1);

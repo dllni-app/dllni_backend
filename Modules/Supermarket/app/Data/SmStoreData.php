@@ -31,6 +31,10 @@ final class SmStoreData extends Data
         public ?string $description,
         #[Max(255)]
         public ?string $address,
+        #[Max(255)]
+        public ?string $city,
+        #[Max(255)]
+        public ?string $neighborhood,
         #[MapOutputName('latitude'), Numeric]
         public ?float $latitude,
         #[MapOutputName('longitude'), Numeric]
@@ -39,6 +43,10 @@ final class SmStoreData extends Data
         public ?string $phone,
         #[Email, Max(255)]
         public ?string $email,
+        #[Max(255)]
+        public ?string $cover,
+        #[Max(255)]
+        public ?string $logo,
         #[MapOutputName('average_rating'), Numeric, Min(0)]
         public ?float $averageRating,
         #[MapOutputName('total_reviews'), Min(0)]
@@ -62,7 +70,7 @@ final class SmStoreData extends Data
     {
         return array_filter(
             $this->toArray(),
-            static fn(mixed $value): bool => $value !== null
+            static fn (mixed $value): bool => $value !== null
         );
     }
 }
