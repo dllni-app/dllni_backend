@@ -21,7 +21,7 @@ final class SmStoreHoursController
 
     public function index(SmStoreHoursFilterRequest $request): AnonymousResourceCollection
     {
-        $hours = SmStoreHours::getQuery()->paginate($request->all());
+        $hours = SmStoreHours::getQuery()->get();
 
         return SmStoreHoursResource::collection($hours);
     }
