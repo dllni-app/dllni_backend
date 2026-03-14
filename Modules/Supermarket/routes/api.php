@@ -34,6 +34,7 @@ use Modules\Supermarket\Http\Controllers\API\SmStoreTrustLogController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\SmOrderStatusController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerDashboardController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerInventoryController;
+use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerOfferWeeklySummaryController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerStoreController;
 
 Route::prefix('v1')->group(function () {
@@ -79,6 +80,7 @@ Route::prefix('v1')->group(function () {
     // Store Owner Routes
     Route::prefix('store-owner')->name('store-owner.')->group(function () {
         Route::get('dashboard', StoreOwnerDashboardController::class)->name('dashboard');
+        Route::get('offers/weekly-summary', StoreOwnerOfferWeeklySummaryController::class)->name('offers.weekly-summary');
 
         // Order Management
         Route::post('orders/{order}/accept', [SmOrderStatusController::class, 'accept'])->name('orders.accept');
