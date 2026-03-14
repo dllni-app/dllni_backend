@@ -33,6 +33,10 @@ final class StoreOwnerOfferWeeklySummaryController
             'friday',
         ];
 
+        $offers = SmOffer::query()
+            ->where('store_id', $storeId)
+            ->get(['is_active', 'starts_at', 'ends_at']);
+
         $ordersUsedByDay = DB::table('sm_orders as sm_order')
             ->join('sm_order_items as sm_order_item', 'sm_order_item.order_id', '=', 'sm_order.id')
             ->join('sm_offer_products as sm_offer_product', 'sm_offer_product.product_id', '=', 'sm_order_item.product_id')
@@ -66,25 +70,17 @@ final class StoreOwnerOfferWeeklySummaryController
             $dayStart = $weekStart->copy()->addDays($index)->startOfDay();
             $dayEnd = $dayStart->copy()->endOfDay();
 
-            $activeOffers = SmOffer::query()
-                ->where('store_id', $storeId)
-                ->where('is_active', true)
-                ->where(function ($query) use ($dayEnd): void {
-                    $query->whereNull('starts_at')
-                        ->orWhere('starts_at', '<=', $dayEnd);
-                })
-                ->where(function ($query) use ($dayStart): void {
-                    $query->whereNull('ends_at')
-                        ->orWhere('ends_at', '>=', $dayStart);
-                })
-                ->count();
+            $activeOffers = $offers->filter(function (SmOffer $offer) use ($dayEnd, $dayStart): bool {
+                return $offer->is_active
+                    && (! $offer->starts_at || $offer->starts_at->lte($dayEnd))
+                    && (! $offer->ends_at || $offer->ends_at->gte($dayStart));
+            })->count();
 
-            $scheduledOffers = SmOffer::query()
-                ->where('store_id', $storeId)
-                ->where('is_active', true)
-                ->whereNotNull('starts_at')
-                ->where('starts_at', '>', $dayEnd)
-                ->count();
+            $scheduledOffers = $offers->filter(function (SmOffer $offer) use ($dayEnd): bool {
+                return $offer->is_active
+                    && $offer->starts_at
+                    && $offer->starts_at->gt($dayEnd);
+            })->count();
 
             $ordersUsedOffers = (int) ($ordersUsedByDay[$dayStart->toDateString()] ?? 0);
 
@@ -100,12 +96,11 @@ final class StoreOwnerOfferWeeklySummaryController
             $totals['ordersUsedOffers'] += $ordersUsedOffers;
         }
 
-        $totals['endedOffers'] = SmOffer::query()
-            ->where('store_id', $storeId)
-            ->whereNotNull('ends_at')
-            ->whereBetween('ends_at', [$weekStart, $weekEnd])
-            ->where('ends_at', '<', $now)
-            ->count();
+        $totals['endedOffers'] = $offers->filter(function (SmOffer $offer) use ($weekStart, $weekEnd, $now): bool {
+            return $offer->ends_at
+                && $offer->ends_at->between($weekStart, $weekEnd)
+                && $offer->ends_at->lt($now);
+        })->count();
 
         return response()->json([
             'message' => 'Weekly offers analytics retrieved successfully.',
