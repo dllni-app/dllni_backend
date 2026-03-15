@@ -33,8 +33,13 @@ use Modules\Supermarket\Http\Controllers\API\SmStoreHoursController;
 use Modules\Supermarket\Http\Controllers\API\SmStoreTrustLogController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\SmOrderStatusController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerDashboardController;
+use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerEmployeeIndexController;
+use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerEmployeeStatusController;
+use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerEmployeeStoreController;
+use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerEmployeeUpdateController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerInventoryController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerOfferWeeklySummaryController;
+use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerPermissionsController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerStoreController;
 
 Route::prefix('v1')->group(function () {
@@ -81,6 +86,12 @@ Route::prefix('v1')->group(function () {
     Route::prefix('store-owner')->name('store-owner.')->group(function () {
         Route::get('dashboard', StoreOwnerDashboardController::class)->name('dashboard');
         Route::get('offers/weekly-summary', StoreOwnerOfferWeeklySummaryController::class)->name('offers.weekly-summary');
+        Route::get('permissions', StoreOwnerPermissionsController::class)->name('permissions');
+
+        Route::get('employees', StoreOwnerEmployeeIndexController::class)->name('employees.index');
+        Route::post('employees', StoreOwnerEmployeeStoreController::class)->name('employees.store');
+        Route::patch('employees/{staff}', StoreOwnerEmployeeUpdateController::class)->name('employees.update');
+        Route::patch('employees/{staff}/status', StoreOwnerEmployeeStatusController::class)->name('employees.status');
 
         // Order Management
         Route::post('orders/{order}/accept', [SmOrderStatusController::class, 'accept'])->name('orders.accept');

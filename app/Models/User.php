@@ -118,6 +118,11 @@ final class User extends Authenticatable implements HasMedia
         return $this->hasMany(\Modules\Supermarket\Models\SmStore::class, 'owner_user_id');
     }
 
+    public function smStoreStaff(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(\Modules\Supermarket\Models\SmStoreStaff::class, 'user_id');
+    }
+
     public function smCarts(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(\Modules\Supermarket\Models\SmCart::class);

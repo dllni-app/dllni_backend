@@ -198,6 +198,7 @@ All `/store-owner/*` endpoints are owner-scoped by authenticated user permission
 
 - Some endpoints require explicit store identifier in query/body:
   - `storeId` (dashboard)
+  - `storeId` (employees list/create)
   - `store_id` (inventory/report endpoints)
 - Owner app should use only stores the authenticated owner is allowed to manage.
 - Backend must reject unauthorized cross-store access with `403`.
@@ -251,6 +252,17 @@ This maps common supermarket owner app screens to backend endpoints.
 - **Low stock alerts:** `GET /api/v1/store-owner/products/low-stock?store_id={id}`
 - **Inventory audit:** `POST /api/v1/store-owner/inventory/audit`
 - **Lost opportunities report:** `GET /api/v1/store-owner/reports/lost-opportunities?store_id={id}`
+
+### 4.6 Employees and permissions screens
+
+- **List employees for one store:** `GET /api/v1/store-owner/employees?storeId={id}`
+- **Add new employee:** `POST /api/v1/store-owner/employees`
+- **Update employee profile and permissions:** `PATCH /api/v1/store-owner/employees/{staff}`
+- **Toggle employee active status:** `PATCH /api/v1/store-owner/employees/{staff}/status`
+- **Load permission catalog for checkbox screen:** `GET /api/v1/store-owner/permissions`
+
+The employee permission picker should use the permission ids returned by the permissions endpoint.
+Send those ids back in `permissionIds[]` during create/update.
 
 ---
 
@@ -447,7 +459,7 @@ If stock is insufficient, API returns failure (business error message).
 
 ---
 
-## 8. Products and inventory management
+## 8. Products, inventory, and employee management
 
 ### 8.1 Product CRUD
 
@@ -564,6 +576,205 @@ If product expires soon (within 7 days), response includes `suggested_discount` 
 | start_date | date    | no       | Start date (`Y-m-d`).        |
 | end_date   | date    | no       | End date (`Y-m-d`).          |
 
+### 8.7 Permission catalog for employee management
+
+| Method | Path                               | Description                                 |
+| ------ | ---------------------------------- | ------------------------------------------- |
+| GET    | `/api/v1/store-owner/permissions`  | List assignable employee permissions        |
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "permissions": [
+      {
+        "id": 1,
+        "name": "products.view",
+        "slug": null,
+        "group": null
+      },
+      {
+        "id": 2,
+        "name": "orders.view",
+        "slug": null,
+        "group": null
+      }
+    ]
+  }
+}
+```
+
+The current catalog is intended for employee-facing store operations and includes permissions from these families:
+
+- `products.*`
+- `orders.*`
+- `inventory.*`
+- `staff.*`
+- `stores.*`
+- `offers.*`
+- `coupons.*`
+- `reports.view`
+
+### 8.8 Employee management
+
+Employees are store-linked users managed by the store owner. Each employee item returns:
+
+- `id`: staff record id
+- `storeId`: owning store id
+- `userId`: linked user id
+- `isActive`: whether the employee account is active for that store
+- `user`: employee basic profile (`id`, `name`, `email`, `phone`)
+- `permissionIds`: numeric permission ids currently assigned to that employee
+- `effectivePermissions`: permission names currently assigned to that employee
+
+### 8.8.1 List employees
+
+| Method | Path                            | Description                 |
+| ------ | ------------------------------- | --------------------------- |
+| GET    | `/api/v1/store-owner/employees` | List employees for a store  |
+
+**Query params:**
+
+| Param   | Type    | Required | Description                |
+| ------- | ------- | -------- | -------------------------- |
+| storeId | integer | yes      | Store id (`sm_stores.id`). |
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "employees": [
+      {
+        "id": 7,
+        "storeId": 1,
+        "userId": 22,
+        "isActive": true,
+        "user": {
+          "id": 22,
+          "name": "Store Employee",
+          "email": "store.employee@example.com",
+          "phone": "+963955000111"
+        },
+        "permissionIds": [1, 5],
+        "effectivePermissions": ["products.view", "orders.view"],
+        "createdAt": "2026-03-15 12:00:00",
+        "updatedAt": "2026-03-15 12:00:00"
+      }
+    ]
+  }
+}
+```
+
+### 8.8.2 Create or link employee
+
+| Method | Path                            | Description                            |
+| ------ | ------------------------------- | -------------------------------------- |
+| POST   | `/api/v1/store-owner/employees` | Create a new employee or link a user   |
+
+**Request body example:**
+
+```json
+{
+  "storeId": 1,
+  "name": "Store Employee",
+  "email": "store.employee@example.com",
+  "phone": "+963955000111",
+  "permissionIds": [1, 5, 9],
+  "isActive": true
+}
+```
+
+| Field         | Type          | Required | Description |
+| ------------- | ------------- | -------- | ----------- |
+| storeId       | integer       | yes      | Store id owned by the authenticated owner. |
+| name          | string        | yes      | Employee display name. |
+| email         | string/null   | no       | Employee email. |
+| phone         | string/null   | no       | Employee phone. |
+| permissionIds | integer[]     | no       | Permission ids selected from `/store-owner/permissions`. |
+| isActive      | boolean       | no       | Defaults to `true` when omitted. |
+
+At least one of `email` or `phone` is recommended so the owner can identify/link the employee account later.
+
+**Response (201):**
+
+```json
+{
+  "data": {
+    "id": 7,
+    "storeId": 1,
+    "userId": 22,
+    "isActive": true,
+    "user": {
+      "id": 22,
+      "name": "Store Employee",
+      "email": "store.employee@example.com",
+      "phone": "+963955000111"
+    },
+    "permissionIds": [1, 5, 9],
+    "effectivePermissions": ["products.view", "orders.view", "offers.view"],
+    "createdAt": "2026-03-15 12:00:00",
+    "updatedAt": "2026-03-15 12:00:00"
+  },
+  "message": "Employee created successfully."
+}
+```
+
+### 8.8.3 Update employee profile and permissions
+
+| Method | Path                                    | Description                           |
+| ------ | --------------------------------------- | ------------------------------------- |
+| PATCH  | `/api/v1/store-owner/employees/{staff}` | Update employee profile/permissions   |
+
+**Request body example:**
+
+```json
+{
+  "name": "Updated Employee",
+  "email": "updated.employee@example.com",
+  "phone": "+963955000222",
+  "permissionIds": [2, 10],
+  "isActive": true
+}
+```
+
+All fields are optional. If `permissionIds` is present, the backend replaces the employee's direct permission set with the submitted ids.
+
+**Response (200):**
+
+Returns the same employee object shape as create/list plus:
+
+```json
+{
+  "message": "Employee updated successfully."
+}
+```
+
+### 8.8.4 Toggle employee status
+
+| Method | Path                                           | Description                    |
+| ------ | ---------------------------------------------- | ------------------------------ |
+| PATCH  | `/api/v1/store-owner/employees/{staff}/status` | Activate/deactivate employee   |
+
+**Request body:**
+
+```json
+{
+  "isActive": false
+}
+```
+
+**Response (200):**
+
+Returns the same employee object shape plus:
+
+```json
+{
+  "message": "Employee status updated successfully."
+}
+```
+
 ---
 
 ## 9. Enums and common values
@@ -647,6 +858,35 @@ Content-Type: application/json
     }
   ],
   "reason": "Customer reported defective product"
+}
+```
+
+### 10.5 Create employee
+
+```http
+POST https://dllni.mustafafares.com/api/v1/store-owner/employees
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "storeId": 1,
+  "name": "Store Employee",
+  "email": "store.employee@example.com",
+  "phone": "+963955000111",
+  "permissionIds": [1, 5],
+  "isActive": true
+}
+```
+
+### 10.6 Update employee status
+
+```http
+PATCH https://dllni.mustafafares.com/api/v1/store-owner/employees/7/status
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "isActive": false
 }
 ```
 

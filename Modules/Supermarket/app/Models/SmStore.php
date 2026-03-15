@@ -109,6 +109,11 @@ final class SmStore extends Model
         return $this->hasMany(SmRecurringOrder::class, 'store_id');
     }
 
+    public function staff(): HasMany
+    {
+        return $this->hasMany(SmStoreStaff::class, 'store_id');
+    }
+
     protected function casts(): array
     {
         return [
