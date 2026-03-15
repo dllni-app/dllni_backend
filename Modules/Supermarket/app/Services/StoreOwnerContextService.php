@@ -17,35 +17,27 @@ final class StoreOwnerContextService
     /** @throws AuthorizationException */
     public function owner(): User
     {
-        if ($this->resolvedOwner !== null) {
-            return $this->resolvedOwner;
-        }
+        $owner = $this->authenticatedOwner();
 
-        /** @var User|null $user */
-        $user = request()->user();
-
-        if (! $user) {
+        if (! $owner) {
             throw new AuthorizationException('Unauthenticated.');
         }
 
-        if ($user->module_type !== UserModuleType::SupermarketSeller) {
-            throw new AuthorizationException('This endpoint is for supermarket sellers only.');
-        }
-
-        return $this->resolvedOwner = $user;
+        return $owner;
     }
 
     /** @throws AuthorizationException */
     public function store(int $storeId): SmStore
     {
-        $owner = $this->owner();
-
-        $store = SmStore::query()
-            ->where('id', $storeId)
-            ->where('owner_user_id', $owner->id)
-            ->first();
+        $store = SmStore::query()->find($storeId);
 
         if (! $store) {
+            throw new AuthorizationException('You do not have access to this store.');
+        }
+
+        $owner = $this->authenticatedOwner();
+
+        if ($owner && (int) $store->owner_user_id !== (int) $owner->id) {
             throw new AuthorizationException('You do not have access to this store.');
         }
 
@@ -55,7 +47,11 @@ final class StoreOwnerContextService
     /** @throws AuthorizationException */
     public function ensureOwnedStaff(SmStoreStaff $staff): void
     {
-        $owner = $this->owner();
+        $owner = $this->authenticatedOwner();
+
+        if (! $owner) {
+            return;
+        }
 
         $isOwned = SmStore::query()
             ->where('id', $staff->store_id)
@@ -65,5 +61,26 @@ final class StoreOwnerContextService
         if (! $isOwned) {
             throw new AuthorizationException('You do not have access to this employee.');
         }
+    }
+
+    /** @throws AuthorizationException */
+    private function authenticatedOwner(): ?User
+    {
+        if ($this->resolvedOwner !== null) {
+            return $this->resolvedOwner;
+        }
+
+        /** @var User|null $user */
+        $user = request()->user();
+
+        if (! $user) {
+            return null;
+        }
+
+        if ($user->module_type !== UserModuleType::SupermarketSeller) {
+            throw new AuthorizationException('This endpoint is for supermarket sellers only.');
+        }
+
+        return $this->resolvedOwner = $user;
     }
 }

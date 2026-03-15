@@ -53,6 +53,11 @@ final class StoreOwnerEmployeeUpdateController
             }
         });
 
+        if ($request->hasFile('profileImage') && $staff->user) {
+            $staff->user->clearMediaCollection('primary-image');
+            $staff->user->addMediaFromRequest('profileImage')->toMediaCollection('primary-image');
+        }
+
         $staff->refresh()->load(['user.permissions']);
 
         return response()->json([

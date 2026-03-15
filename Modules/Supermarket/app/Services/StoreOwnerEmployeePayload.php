@@ -22,6 +22,7 @@ final class StoreOwnerEmployeePayload
                 'name' => $staff->user?->name,
                 'email' => $staff->user?->email,
                 'phone' => $staff->user?->phone,
+                'profileImageUrl' => $staff->user?->getFirstMediaUrl('primary-image') ?: null,
             ],
             'permissionIds' => $permissions->pluck('id')->values()->all(),
             'effectivePermissions' => $permissions->pluck('name')->values()->all(),

@@ -30,6 +30,13 @@ final class StoreOwnerEmployeeStoreController
             $validated['permissionIds'] ?? []
         );
 
+        if ($request->hasFile('profileImage') && $staff->user) {
+            $staff->user->clearMediaCollection('primary-image');
+            $staff->user->addMediaFromRequest('profileImage')->toMediaCollection('primary-image');
+        }
+
+        $staff->refresh()->load(['user.permissions']);
+
         return response()->json([
             'data' => StoreOwnerEmployeePayload::make($staff),
             'message' => 'Employee created successfully.',

@@ -6,6 +6,7 @@ use App\Enums\UserModuleType;
 use App\Models\User;
 use Database\Factories\SmStoreFactory;
 use Database\Seeders\DashboardPermissionsSeeder;
+use Illuminate\Http\UploadedFile;
 use Laravel\Sanctum\Sanctum;
 use Modules\Supermarket\Models\SmStoreStaff;
 use Spatie\Permission\Models\Permission;
@@ -50,14 +51,17 @@ it('creates employee and syncs selected permissions', function (): void {
         ->pluck('id')
         ->all();
 
-    $response = $this->postJson('/api/v1/store-owner/employees', [
+    $profileImage = UploadedFile::fake()->image('employee.jpg');
+
+    $response = $this->post('/api/v1/store-owner/employees', [
         'storeId' => $this->store->id,
         'name' => 'Store Employee',
         'email' => 'store.employee@example.com',
         'phone' => '+963955000111',
         'permissionIds' => $permissionIds,
         'isActive' => true,
-    ]);
+        'profileImage' => $profileImage,
+    ], ['Accept' => 'application/json']);
 
     $response->assertCreated();
     $response->assertJsonPath('data.user.email', 'store.employee@example.com');
@@ -68,6 +72,8 @@ it('creates employee and syncs selected permissions', function (): void {
     expect($employeeUser->module_type)->toBe(UserModuleType::SupermarketSeller);
     expect($employeeUser->getPermissionNames()->all())->toContain('products.view');
     expect($employeeUser->getPermissionNames()->all())->toContain('orders.view');
+    expect($employeeUser->getFirstMediaUrl('primary-image'))->not->toBe('');
+    expect($response->json('data.user.profileImageUrl'))->not->toBeNull();
 
     $this->assertDatabaseHas('sm_store_staff', [
         'store_id' => $this->store->id,
@@ -103,10 +109,13 @@ it('updates employee profile and permissions', function (): void {
         ->pluck('id')
         ->all();
 
-    $response = $this->patchJson("/api/v1/store-owner/employees/{$staff->id}", [
+    $updatedProfileImage = UploadedFile::fake()->image('employee-updated.jpg');
+
+    $response = $this->patch("/api/v1/store-owner/employees/{$staff->id}", [
         'name' => 'Updated Employee',
         'permissionIds' => $updatedPermissionIds,
-    ]);
+        'profileImage' => $updatedProfileImage,
+    ], ['Accept' => 'application/json']);
 
     $response->assertOk();
     $response->assertJsonPath('data.user.name', 'Updated Employee');
@@ -116,6 +125,8 @@ it('updates employee profile and permissions', function (): void {
     expect($employee->getPermissionNames()->all())->toContain('orders.view');
     expect($employee->getPermissionNames()->all())->toContain('offers.view');
     expect($employee->getPermissionNames()->all())->not->toContain('products.view');
+    expect($employee->getFirstMediaUrl('primary-image'))->not->toBe('');
+    expect($response->json('data.user.profileImageUrl'))->not->toBeNull();
 
     $statusResponse = $this->patchJson("/api/v1/store-owner/employees/{$staff->id}/status", [
         'isActive' => false,
