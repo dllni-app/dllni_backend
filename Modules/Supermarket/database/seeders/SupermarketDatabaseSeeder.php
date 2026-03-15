@@ -12,6 +12,7 @@ final class SupermarketDatabaseSeeder extends Seeder
     {
         $this->call([
             SmStoreSeeder::class,
+            SmStoreStaffSeeder::class,
             SmStoreHoursSeeder::class,
             SmCategorySeeder::class,
             SmProductSeeder::class,
