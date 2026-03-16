@@ -6,6 +6,7 @@ namespace Modules\Resturants\Services;
 
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Models\Order;
 use Modules\Resturants\Models\OrderItem;
@@ -97,6 +98,28 @@ final class RestaurantOwnerDashboardService
         $discountedRevenue = (float) (clone $discountedOrdersQuery)->sum('total_amount');
         $totalSavings = (float) (clone $discountedOrdersQuery)->sum('discount_amount');
         $conversionRate = $totalOrders > 0 ? round(($discountedOrdersCount / $totalOrders) * 100, 2) : 0.0;
+
+        $bestOffer = DB::table('orders')
+            ->join('promo_codes', 'promo_codes.id', '=', 'orders.promo_code_id')
+            ->where('orders.restaurant_id', $restaurant->id)
+            ->whereBetween('orders.created_at', [$start, $end])
+            ->groupBy(
+                'promo_codes.id',
+                'promo_codes.code',
+                'promo_codes.discount_type',
+                'promo_codes.discount_value'
+            )
+            ->selectRaw(
+                'promo_codes.id as promo_code_id,
+                promo_codes.code,
+                promo_codes.discount_type,
+                promo_codes.discount_value,
+                COUNT(*) as uses_count,
+                COALESCE(SUM(orders.total_amount), 0) as revenue,
+                COALESCE(SUM(orders.discount_amount), 0) as total_savings'
+            )
+            ->orderByDesc('revenue')
+            ->first();
         $disputesCount = RestaurantOrderDispute::query()
             ->whereHas('order', function ($query) use ($restaurant): void {
                 $query->where('restaurant_id', $restaurant->id);
@@ -134,10 +157,15 @@ final class RestaurantOwnerDashboardService
                 'discountedRevenue' => $discountedRevenue,
                 'totalSavings' => $totalSavings,
             ],
-            'bestOfferPerformance' => [
-                'usesCount' => $discountedOrdersCount,
-                'revenue' => $discountedRevenue,
-            ],
+            'bestOfferPerformance' => $bestOffer ? [
+                'promoCodeId' => (int) $bestOffer->promo_code_id,
+                'code' => $bestOffer->code,
+                'discountType' => $bestOffer->discount_type,
+                'discountValue' => (float) $bestOffer->discount_value,
+                'usesCount' => (int) $bestOffer->uses_count,
+                'revenue' => (float) $bestOffer->revenue,
+                'totalSavings' => (float) $bestOffer->total_savings,
+            ] : null,
         ];
     }
 
