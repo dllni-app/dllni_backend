@@ -134,6 +134,10 @@ final class RestaurantOwnerDashboardService
                 'discountedRevenue' => $discountedRevenue,
                 'totalSavings' => $totalSavings,
             ],
+            'bestOfferPerformance' => [
+                'usesCount' => $discountedOrdersCount,
+                'revenue' => $discountedRevenue,
+            ],
         ];
     }
 
