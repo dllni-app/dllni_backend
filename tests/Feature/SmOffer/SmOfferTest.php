@@ -27,6 +27,8 @@ it('lists offers', function (): void {
 
 it('creates an offer', function (): void {
     $store = SmStoreFactory::new()->create();
+    $productOne = SmProductFactory::new()->create(['store_id' => $store->id]);
+    $productTwo = SmProductFactory::new()->create(['store_id' => $store->id]);
 
     $payload = [
         'storeId' => $store->id,
@@ -34,23 +36,75 @@ it('creates an offer', function (): void {
         'offerType' => 'Discount',
         'discountPercent' => 20,
         'isActive' => true,
+        'offerProducts' => [
+            [
+                'productId' => $productOne->id,
+                'offerPrice' => 10.5,
+                'maxQuantity' => 3,
+            ],
+            [
+                'productId' => $productTwo->id,
+            ],
+        ],
     ];
 
     $response = $this->postJson('/api/v1/sm-offers', $payload);
 
     $response->assertCreated();
     $this->assertDatabaseHas('sm_offers', ['name' => 'Summer Sale']);
+    $offerId = $response->json('data.id');
+
+    $this->assertDatabaseHas('sm_offer_products', [
+        'offer_id' => $offerId,
+        'product_id' => $productOne->id,
+        'offer_price' => '10.50',
+        'max_quantity' => 3,
+    ]);
+    $this->assertDatabaseHas('sm_offer_products', [
+        'offer_id' => $offerId,
+        'product_id' => $productTwo->id,
+    ]);
 });
 
 it('updates an offer', function (): void {
-    $offer = SmOfferFactory::new()->create(['name' => 'Old Offer']);
+    $store = SmStoreFactory::new()->create();
+    $oldProduct = SmProductFactory::new()->create(['store_id' => $store->id]);
+    $newProduct = SmProductFactory::new()->create(['store_id' => $store->id]);
 
-    $payload = ['name' => 'New Offer'];
+    $offer = SmOfferFactory::new()->create([
+        'store_id' => $store->id,
+        'name' => 'Old Offer',
+    ]);
+    SmOfferProductFactory::new()->create([
+        'offer_id' => $offer->id,
+        'product_id' => $oldProduct->id,
+    ]);
+
+    $payload = [
+        'name' => 'New Offer',
+        'offerProducts' => [
+            [
+                'productId' => $newProduct->id,
+                'offerPrice' => 7.75,
+                'maxQuantity' => 2,
+            ],
+        ],
+    ];
 
     $response = $this->putJson("/api/v1/sm-offers/{$offer->id}", $payload);
 
     $response->assertOk();
     $this->assertDatabaseHas('sm_offers', ['id' => $offer->id, 'name' => 'New Offer']);
+    $this->assertDatabaseMissing('sm_offer_products', [
+        'offer_id' => $offer->id,
+        'product_id' => $oldProduct->id,
+    ]);
+    $this->assertDatabaseHas('sm_offer_products', [
+        'offer_id' => $offer->id,
+        'product_id' => $newProduct->id,
+        'offer_price' => '7.75',
+        'max_quantity' => 2,
+    ]);
 });
 
 it('deletes an offer', function (): void {
