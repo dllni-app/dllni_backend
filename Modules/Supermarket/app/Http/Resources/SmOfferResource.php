@@ -27,6 +27,8 @@ final class SmOfferResource extends JsonResource
             'startsAt' => $this->starts_at?->toDateTimeString(),
             'endsAt' => $this->ends_at?->toDateTimeString(),
             'isActive' => $this->is_active,
+            'offerProductsCount' => (int) ($this->offer_products_count ?? 0),
+            'affectedOrdersCount' => (int) ($this->affected_orders_count ?? 0),
             'createdAt' => $this->created_at?->toDateTimeString(),
             'updatedAt' => $this->updated_at?->toDateTimeString(),
         ];

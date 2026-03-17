@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 use App\Models\User;
 use Database\Factories\SmOfferFactory;
+use Database\Factories\SmOfferProductFactory;
+use Database\Factories\SmOrderFactory;
+use Database\Factories\SmOrderItemFactory;
+use Database\Factories\SmProductFactory;
 use Database\Factories\SmStoreFactory;
 use Laravel\Sanctum\Sanctum;
 
@@ -56,4 +60,89 @@ it('deletes an offer', function (): void {
 
     $response->assertNoContent();
     $this->assertDatabaseMissing('sm_offers', ['id' => $offer->id]);
+});
+
+it('returns offer products and affected orders counts', function (): void {
+    $store = SmStoreFactory::new()->create();
+    $otherStore = SmStoreFactory::new()->create();
+    $offer = SmOfferFactory::new()->create([
+        'store_id' => $store->id,
+        'starts_at' => now()->subDay(),
+        'ends_at' => now()->addDay(),
+    ]);
+
+    $productA = SmProductFactory::new()->create(['store_id' => $store->id]);
+    $productB = SmProductFactory::new()->create(['store_id' => $store->id]);
+    $otherProduct = SmProductFactory::new()->create(['store_id' => $store->id]);
+
+    SmOfferProductFactory::new()->create([
+        'offer_id' => $offer->id,
+        'product_id' => $productA->id,
+    ]);
+
+    SmOfferProductFactory::new()->create([
+        'offer_id' => $offer->id,
+        'product_id' => $productB->id,
+    ]);
+
+    $affectedOrderOne = SmOrderFactory::new()->create([
+        'store_id' => $store->id,
+        'created_at' => now(),
+    ]);
+
+    SmOrderItemFactory::new()->create([
+        'order_id' => $affectedOrderOne->id,
+        'product_id' => $productA->id,
+    ]);
+
+    $affectedOrderTwo = SmOrderFactory::new()->create([
+        'store_id' => $store->id,
+        'created_at' => now(),
+    ]);
+
+    SmOrderItemFactory::new()->create([
+        'order_id' => $affectedOrderTwo->id,
+        'product_id' => $productB->id,
+    ]);
+
+    SmOrderItemFactory::new()->create([
+        'order_id' => $affectedOrderTwo->id,
+        'product_id' => $productA->id,
+    ]);
+
+    $outsideWindowOrder = SmOrderFactory::new()->create([
+        'store_id' => $store->id,
+        'created_at' => now()->subDays(10),
+    ]);
+
+    SmOrderItemFactory::new()->create([
+        'order_id' => $outsideWindowOrder->id,
+        'product_id' => $productA->id,
+    ]);
+
+    $otherStoreOrder = SmOrderFactory::new()->create([
+        'store_id' => $otherStore->id,
+        'created_at' => now(),
+    ]);
+
+    SmOrderItemFactory::new()->create([
+        'order_id' => $otherStoreOrder->id,
+        'product_id' => $productA->id,
+    ]);
+
+    $nonOfferProductOrder = SmOrderFactory::new()->create([
+        'store_id' => $store->id,
+        'created_at' => now(),
+    ]);
+
+    SmOrderItemFactory::new()->create([
+        'order_id' => $nonOfferProductOrder->id,
+        'product_id' => $otherProduct->id,
+    ]);
+
+    $response = $this->getJson("/api/v1/sm-offers/{$offer->id}");
+
+    $response->assertOk()
+        ->assertJsonPath('data.offerProductsCount', 2)
+        ->assertJsonPath('data.affectedOrdersCount', 2);
 });
