@@ -62,8 +62,6 @@ final class RestaurantRequest extends FormRequest
             'isTemporarilyClosed' => 'nullable|boolean',
             'suspensionUntil' => 'nullable|date',
             'primaryImage' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:2048',
-            'images' => 'nullable|array',
-            'images.*' => 'file|mimes:jpeg,png,jpg,gif,svg,webp|max:2048',
         ];
     }
 }
