@@ -12,6 +12,7 @@ use Modules\Resturants\Http\Requests\PromoCodeRequests\PromoCodeFilterRequest;
 use Modules\Resturants\Http\Resources\PromoCodeResource;
 use Modules\Resturants\Models\PromoCode;
 use Modules\Resturants\Services\PromoCodeService;
+use Modules\Resturants\Support\RestaurantOwnerContext;
 use Throwable;
 
 final class PromoCodeController
@@ -30,10 +31,15 @@ final class PromoCodeController
     }
 
     /** @throws Throwable */
-    public function store(PromoCodeRequest $request): PromoCodeResource
+    public function store(PromoCodeRequest $request, RestaurantOwnerContext $ownerContext): PromoCodeResource
     {
+        $restaurant = $ownerContext->restaurant();
+
         $promoCode = $this->promoCodeService->store(
-            PromoCodeData::from($request->validated())
+            PromoCodeData::from([
+                ...$request->validated(),
+                'restaurantId' => $restaurant->id,
+            ])
         );
 
         return PromoCodeResource::make($promoCode->load(['restaurant']));
@@ -47,10 +53,15 @@ final class PromoCodeController
     }
 
     /** @throws Throwable */
-    public function update(PromoCodeRequest $request, PromoCode $promoCode): PromoCodeResource
+    public function update(PromoCodeRequest $request, PromoCode $promoCode, RestaurantOwnerContext $ownerContext): PromoCodeResource
     {
+        $restaurant = $ownerContext->restaurant();
+
         $updated = $this->promoCodeService->update(
-            PromoCodeData::from($request->validated()),
+            PromoCodeData::from([
+                ...$request->validated(),
+                'restaurantId' => $restaurant->id,
+            ]),
             $promoCode
         );
 

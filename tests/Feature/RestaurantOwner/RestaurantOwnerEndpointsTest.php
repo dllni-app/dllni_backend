@@ -8,6 +8,7 @@ use App\Enums\SystemAlertStatus;
 use App\Enums\UserModuleType;
 use App\Models\SystemAlert;
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
 use Laravel\Sanctum\Sanctum;
 use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Models\Category;
@@ -146,7 +147,7 @@ it('returns unified notifications and marks them as read', function () {
     ]);
 
     $this->owner->notifications()->create([
-        'id' => (string) \Illuminate\Support\Str::uuid(),
+        'id' => (string) Illuminate\Support\Str::uuid(),
         'type' => 'App\\Notifications\\ExampleNotification',
         'data' => [
             'type' => 'new_order',
@@ -322,7 +323,7 @@ it('filters unified notifications by tab and unread only', function () {
     ]);
 
     $this->owner->notifications()->create([
-        'id' => (string) \Illuminate\Support\Str::uuid(),
+        'id' => (string) Illuminate\Support\Str::uuid(),
         'type' => 'App\\Notifications\\ExampleNotification',
         'data' => [
             'type' => 'new_order',
@@ -333,7 +334,7 @@ it('filters unified notifications by tab and unread only', function () {
     ]);
 
     $this->owner->notifications()->create([
-        'id' => (string) \Illuminate\Support\Str::uuid(),
+        'id' => (string) Illuminate\Support\Str::uuid(),
         'type' => 'App\\Notifications\\ExampleNotification',
         'data' => [
             'type' => 'new_offer',
@@ -357,4 +358,36 @@ it('filters unified notifications by tab and unread only', function () {
     $offersUnread->assertJsonCount(1, 'data');
     $offersUnread->assertJsonPath('data.0.category', 'offers');
     $offersUnread->assertJsonPath('data.0.isRead', false);
+});
+
+it('gets and updates current restaurant context with image', function () {
+    // Arrange
+    $restaurant = $this->restaurant;
+
+    // Act + Assert (GET)
+    $this->getJson('/api/v1/restaurant-owner/restaurant')
+        ->assertOk()
+        ->assertJsonPath('data.id', $restaurant->id)
+        ->assertJsonStructure([
+            'data' => [
+                'id',
+                'name',
+                'slug',
+                'primaryImage',
+                'images',
+            ],
+        ]);
+
+    // Act + Assert (PUT with image)
+    $payload = [
+        'userId' => $restaurant->user_id,
+        'name' => 'Updated Restaurant Name',
+        'slug' => $restaurant->slug,
+        'primaryImage' => UploadedFile::fake()->image('logo.jpg', 256, 256),
+    ];
+
+    $updateResponse = $this->put('/api/v1/restaurant-owner/restaurant', $payload);
+    $updateResponse->assertOk();
+
+    expect((string) $updateResponse->json('data.primaryImage'))->not->toBeEmpty();
 });

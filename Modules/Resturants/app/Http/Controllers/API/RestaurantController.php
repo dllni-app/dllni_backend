@@ -25,7 +25,7 @@ final class RestaurantController
     public function index(RestaurantFilterRequest $request): AnonymousResourceCollection
     {
         $restaurants = Restaurant::getQuery()
-            ->with(['user', 'cuisineTypes'])
+            ->with(['media', 'user', 'cuisineTypes'])
             ->paginate($request->get('perPage', 20));
 
         return RestaurantResource::collection($restaurants);
@@ -34,12 +34,17 @@ final class RestaurantController
     /** @throws Throwable */
     public function store(RestaurantRequest $request): RestaurantResource
     {
+        $primaryImage = $request->file('primaryImage');
+
         $restaurant = $this->restaurantService->store(
-            RestaurantData::from($request->validated())
+            RestaurantData::from([
+                ...$request->validated(),
+                'primaryImage' => $primaryImage,
+            ])
         );
 
         return RestaurantResource::make(
-            $restaurant->load(['user', 'operatingHours', 'documents', 'cuisineTypes', 'reputationLogs', 'penalties'])
+            $restaurant->load(['media', 'user', 'operatingHours', 'documents', 'cuisineTypes', 'reputationLogs', 'penalties'])
         );
     }
 
@@ -48,7 +53,7 @@ final class RestaurantController
         $restaurant = $this->ownerContext->restaurant();
 
         $restaurant->load([
-            'user', 'operatingHours', 'documents', 'cuisineTypes', 'reputationLogs', 'penalties',
+            'media', 'user', 'operatingHours', 'documents', 'cuisineTypes', 'reputationLogs', 'penalties',
         ]);
 
         return RestaurantResource::make($restaurant);
@@ -60,12 +65,17 @@ final class RestaurantController
         $restaurant = $this->ownerContext->restaurant();
 
         $updated = $this->restaurantService->update(
-            RestaurantData::from($request->validated()),
+            RestaurantData::from([
+                ...$request->validated(),
+                'userId' => $restaurant->user_id,
+                'primaryImage' => $request->file('primaryImage'),
+                'images' => $request->file('images'),
+            ]),
             $restaurant
         );
 
         return RestaurantResource::make(
-            $updated->load(['user', 'operatingHours', 'documents', 'cuisineTypes', 'reputationLogs', 'penalties'])
+            $updated->load(['media', 'user', 'operatingHours', 'documents', 'cuisineTypes', 'reputationLogs', 'penalties'])
         );
     }
 

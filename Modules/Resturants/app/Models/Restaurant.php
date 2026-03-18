@@ -13,10 +13,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Resturants\Enums\PriceRange;
 use Modules\Resturants\Traits\FilterQueries\RestaurantFilterQuery;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
 
-final class Restaurant extends Model
+final class Restaurant extends Model implements HasMedia
 {
     use HasFactory;
+    use InteractsWithMedia;
     use RestaurantFilterQuery;
 
     protected $fillable = [
@@ -134,6 +137,12 @@ final class Restaurant extends Model
     public function customerReviews(): HasMany
     {
         return $this->hasMany(RestaurantCustomerReview::class, 'restaurant_id');
+    }
+
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection('primary-image')->singleFile();
+        $this->addMediaCollection('images');
     }
 
     protected static function newFactory(): RestaurantFactory

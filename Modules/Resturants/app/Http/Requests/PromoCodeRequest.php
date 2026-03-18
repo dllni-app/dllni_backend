@@ -18,13 +18,11 @@ final class PromoCodeRequest extends FormRequest
         $promoCodeId = $this->route('promo_code')?->id;
 
         return [
-            'restaurantId' => 'required|exists:restaurants,id',
             'code' => 'required|string|max:255|unique:promo_codes,code,'.$promoCodeId,
             'discountType' => 'required|string|in:percentage,fixed_amount',
             'discountValue' => 'required|numeric|min:0',
             'minOrderAmount' => 'nullable|numeric|min:0',
             'usageLimit' => 'nullable|integer|min:0',
-            'usageCount' => 'nullable|integer|min:0',
             'startsAt' => 'nullable|date',
             'endsAt' => 'nullable|date|after_or_equal:startsAt',
             'isActive' => 'nullable|boolean',

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Resturants\Data;
 
+use Illuminate\Http\UploadedFile;
 use Modules\Resturants\Models\Restaurant;
 use Mrmarchone\LaravelAutoCrud\Traits\HasModelAttributes;
 use Spatie\LaravelData\Data;
@@ -15,6 +16,9 @@ final class RestaurantData extends Data
 
     protected static string $model = Restaurant::class;
 
+    /**
+     * @param  array<int, UploadedFile>|null  $images
+     */
     public function __construct(
         public ?int $userId,
         public ?string $name,
@@ -44,5 +48,6 @@ final class RestaurantData extends Data
         public ?bool $isFeatured,
         public ?bool $isTemporarilyClosed,
         public ?string $suspensionUntil,
+        public ?UploadedFile $primaryImage = null,
     ) {}
 }

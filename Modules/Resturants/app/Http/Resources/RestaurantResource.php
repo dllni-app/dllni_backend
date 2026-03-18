@@ -45,6 +45,8 @@ final class RestaurantResource extends JsonResource
             'isFeatured' => $this->is_featured,
             'isTemporarilyClosed' => $this->is_temporarily_closed,
             'suspensionUntil' => $this->suspension_until?->toDateTimeString(),
+            'primaryImage' => $this->getFirstMediaUrl('primary-image'),
+            'images' => $this->getMedia('images')->map(fn ($media) => $media->getUrl())->values()->all(),
             'user' => $this->whenLoaded('user', fn () => [
                 'id' => $this->user->id,
                 'name' => $this->user->name,
