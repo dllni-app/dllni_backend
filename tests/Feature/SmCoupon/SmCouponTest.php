@@ -63,3 +63,53 @@ it('deletes a coupon', function (): void {
     $response->assertNoContent();
     $this->assertDatabaseMissing('sm_coupons', ['id' => $coupon->id]);
 });
+
+it('returns weekly analysis for active and inactive coupons per day', function (): void {
+    $store = SmStoreFactory::new()->create();
+    $anotherStore = SmStoreFactory::new()->create();
+    $baseDate = now()->startOfDay();
+
+    SmCouponFactory::new()->create([
+        'store_id' => $store->id,
+        'is_active' => true,
+        'created_at' => $baseDate->copy()->subDays(6)->addHour(),
+    ]);
+
+    SmCouponFactory::new()->create([
+        'store_id' => $store->id,
+        'is_active' => false,
+        'created_at' => $baseDate->copy()->subDays(3)->addHours(2),
+    ]);
+
+    SmCouponFactory::new()->create([
+        'store_id' => $store->id,
+        'is_active' => true,
+        'created_at' => $baseDate->copy()->addHours(3),
+    ]);
+
+    SmCouponFactory::new()->create([
+        'store_id' => $anotherStore->id,
+        'is_active' => true,
+        'created_at' => $baseDate->copy()->subDays(3)->addHours(4),
+    ]);
+
+    SmCouponFactory::new()->create([
+        'store_id' => $store->id,
+        'is_active' => false,
+        'created_at' => $baseDate->copy()->subDays(7),
+    ]);
+
+    $response = $this->getJson("/api/v1/sm-coupons/weekly-analysis?storeId={$store->id}");
+
+    $response->assertOk();
+
+    $days = collect($response->json('data.days'))->keyBy('date');
+
+    expect($days)->toHaveCount(7)
+        ->and($days[$baseDate->copy()->subDays(6)->toDateString()]['activeCoupons'])->toBe(1)
+        ->and($days[$baseDate->copy()->subDays(6)->toDateString()]['inactiveCoupons'])->toBe(0)
+        ->and($days[$baseDate->copy()->subDays(3)->toDateString()]['activeCoupons'])->toBe(0)
+        ->and($days[$baseDate->copy()->subDays(3)->toDateString()]['inactiveCoupons'])->toBe(1)
+        ->and($days[$baseDate->toDateString()]['activeCoupons'])->toBe(1)
+        ->and($days[$baseDate->toDateString()]['inactiveCoupons'])->toBe(0);
+});

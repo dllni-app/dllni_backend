@@ -69,6 +69,7 @@ Route::prefix('v1')->group(function () {
     Route::apiResource('sm-inventory-logs', SmInventoryLogController::class)->only(['index', 'show'])->names('sm-inventory-logs');
     Route::apiResource('sm-offers', SmOfferController::class)->names('sm-offers');
     Route::apiResource('sm-offer-products', SmOfferProductController::class)->only(['index', 'show'])->names('sm-offer-products');
+    Route::get('sm-coupons/weekly-analysis', [SmCouponController::class, 'weeklyAnalysis'])->name('sm-coupons.weekly-analysis');
     Route::apiResource('sm-coupons', SmCouponController::class)->names('sm-coupons');
     Route::apiResource('sm-commission-rules', SmCommissionRuleController::class)->names('sm-commission-rules');
     Route::get('sm-orders/hourly-count', [SmOrderController::class, 'hourlyCount'])->name('sm-orders.hourly-count');

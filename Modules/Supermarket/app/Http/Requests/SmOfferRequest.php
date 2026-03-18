@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Modules\Supermarket\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+use Modules\Supermarket\Models\SmOffer;
 
 final class SmOfferRequest extends FormRequest
 {
@@ -15,6 +17,10 @@ final class SmOfferRequest extends FormRequest
 
     public function rules(): array
     {
+        /** @var SmOffer|null $offer */
+        $offer = $this->route('sm_offer');
+        $storeId = $this->integer('storeId') ?: $offer?->store_id;
+
         return [
             'storeId' => 'sometimes|required|integer|exists:sm_stores,id',
             'name' => 'sometimes|required|string|max:255',
@@ -25,6 +31,19 @@ final class SmOfferRequest extends FormRequest
             'startsAt' => 'nullable|date',
             'endsAt' => 'nullable|date|after_or_equal:startsAt',
             'isActive' => 'sometimes|boolean',
+            'offerProducts' => 'sometimes|array',
+            'offerProducts.*.productId' => [
+                'required',
+                'integer',
+                'distinct',
+                Rule::exists('sm_products', 'id')->where(static function ($query) use ($storeId): void {
+                    if ($storeId !== null) {
+                        $query->where('store_id', $storeId);
+                    }
+                }),
+            ],
+            'offerProducts.*.offerPrice' => 'nullable|numeric|min:0',
+            'offerProducts.*.maxQuantity' => 'nullable|integer|min:1',
         ];
     }
 }
