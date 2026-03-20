@@ -7,7 +7,6 @@ namespace Modules\Resturants\Services;
 use App\Enums\UserModuleType;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Modules\Resturants\Models\Restaurant;
 use Modules\Resturants\Models\RestaurantStaff;
@@ -19,10 +18,11 @@ final class RestaurantOwnerEmployeeService
         string $name,
         ?string $email,
         ?string $phone,
+        string $password,
         bool $isActive,
         array $permissionIds = []
     ): RestaurantStaff {
-        return DB::transaction(function () use ($restaurant, $name, $email, $phone, $isActive, $permissionIds) {
+        return DB::transaction(function () use ($restaurant, $name, $email, $phone, $password, $isActive, $permissionIds) {
             $user = null;
 
             if ($email || $phone) {
@@ -41,11 +41,11 @@ final class RestaurantOwnerEmployeeService
             }
 
             if (! $user) {
-                $user = User::query()->create([
+                $user = User::create([
                     'name' => $name,
                     'email' => $email ?? Str::uuid().'@placeholder.local',
                     'phone' => $phone,
-                    'password' => Hash::make(Str::random(24)),
+                    'password' => $password,
                     'module_type' => UserModuleType::RestaurantSeller->value,
                 ]);
             } else {
@@ -53,6 +53,7 @@ final class RestaurantOwnerEmployeeService
                     'name' => $name,
                     'email' => $email ?? $user->email,
                     'phone' => $phone ?? $user->phone,
+                    'password' => $password,
                     'module_type' => UserModuleType::RestaurantSeller->value,
                 ]);
             }
@@ -60,7 +61,7 @@ final class RestaurantOwnerEmployeeService
             $user->syncPermissions($permissionIds);
 
             /** @var RestaurantStaff $staff */
-            $staff = RestaurantStaff::query()->updateOrCreate(
+            $staff = RestaurantStaff::updateOrCreate(
                 [
                     'restaurant_id' => $restaurant->id,
                     'user_id' => $user->id,
@@ -71,7 +72,7 @@ final class RestaurantOwnerEmployeeService
                 ]
             );
 
-            return $staff->load(['restaurant', 'user.permissions']);
+            return $staff->load(['restaurant', 'user.permissions', 'user.media']);
         });
     }
 }

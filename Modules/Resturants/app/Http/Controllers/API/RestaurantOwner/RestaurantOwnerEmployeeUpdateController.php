@@ -9,8 +9,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Modules\Resturants\Http\Requests\RestaurantOwner\OwnerEmployeeUpdateRequest;
 use Modules\Resturants\Models\RestaurantStaff;
-use Modules\Resturants\Support\RestaurantOwnerEmployeePayload;
 use Modules\Resturants\Support\RestaurantOwnerContext;
+use Modules\Resturants\Support\RestaurantOwnerEmployeePayload;
 
 final class RestaurantOwnerEmployeeUpdateController
 {
@@ -42,6 +42,9 @@ final class RestaurantOwnerEmployeeUpdateController
             if (array_key_exists('phone', $validated)) {
                 $userUpdates['phone'] = $validated['phone'];
             }
+            if (array_key_exists('password', $validated) && is_string($validated['password'])) {
+                $userUpdates['password'] = $validated['password'];
+            }
 
             if ($userUpdates !== [] && $restaurant_staff->user) {
                 $userUpdates['module_type'] = UserModuleType::RestaurantSeller->value;
@@ -57,7 +60,12 @@ final class RestaurantOwnerEmployeeUpdateController
             }
         });
 
-        $restaurant_staff->refresh()->load(['user.permissions']);
+        if ($request->hasFile('profileImage') && $restaurant_staff->user) {
+            $restaurant_staff->user->clearMediaCollection('primary-image');
+            $restaurant_staff->user->addMediaFromRequest('profileImage')->toMediaCollection('primary-image');
+        }
+
+        $restaurant_staff->refresh()->load(['user.permissions', 'user.media']);
 
         return response()->json([
             'data' => RestaurantOwnerEmployeePayload::make($restaurant_staff),

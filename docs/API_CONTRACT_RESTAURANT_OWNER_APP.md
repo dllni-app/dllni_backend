@@ -1,4 +1,4 @@
-# API Contract for Flutter – Restaurant Owner App
+﻿# API Contract for Flutter – Restaurant Owner App
 
 **Audience:** Flutter developer  
 **Domain:** `dllni.mustafafares.com`  
@@ -168,6 +168,39 @@ Tabs for time ranges (اليوم، هذا الأسبوع، هذا الشهر، �
 - **Store information (معلومات المتجر):**
   - `GET /api/v1/restaurant-owner/restaurant` – load all store fields (logo URLs, cover, description, address, contact numbers, social links) for the current restaurant inferred from auth (no `id` path param).
   - `PUT /api/v1/restaurant-owner/restaurant` – update basic info, address/location, and contact data for the current restaurant (admin contract §3.2).
+
+**Restaurant context payload (GET + PUT)**
+
+- **Auth**: `auth:sanctum`
+- **Content-Type**:
+  - `GET`: `application/json`
+  - `PUT`: `multipart/form-data` when uploading images (otherwise JSON is fine)
+
+**Upload fields (PUT)**
+
+| Field          | Type                 | Required | Notes |
+| -------------- | -------------------- | -------- | ----- |
+| name           | string               | yes      | Store name |
+| slug           | string               | yes      | Must be unique across `restaurants.slug` |
+| description    | string \| null       | no       | Max 200 |
+| address        | string \| null       | no       |  |
+| city           | string \| null       | no       |  |
+| district       | string \| null       | no       |  |
+| locationDetails| string \| null       | no       |  |
+| latitude       | number \| null       | no       |  |
+| longitude      | number \| null       | no       |  |
+| phone          | string \| null       | no       |  |
+| whatsappNumber | string \| null       | no       |  |
+| email          | string \| null       | no       | email format |
+| instagramUsername | string \| null   | no       |  |
+| facebookPageName  | string \| null   | no       |  |
+| primaryImage   | file \| null         | no       | `jpeg,png,jpg,gif,svg,webp` max 2MB (replaces existing) |
+| images[]       | file[] \| null       | no       | array of images, same rules as above |
+
+**Response includes**
+
+- `data.primaryImage`: URL string (empty string when no primary image yet)
+- `data.images`: array of URL strings
 - **Working hours (ساعات العمل):**
   - `GET /api/v1/restaurant-owner/restaurant/operating-hours` – load daily schedule for the current restaurant (admin contract §3.2a).
   - `PUT /api/v1/restaurant-owner/restaurant/operating-hours` – save weekly schedule for the current restaurant.
@@ -184,8 +217,8 @@ Tabs for time ranges (اليوم، هذا الأسبوع، هذا الشهر، �
     - `POST /api/v1/promo-codes` and `PUT/PATCH /api/v1/promo-codes/{id}` (admin contract §3.7).
 - **Employees & employee activity log:**
   - Employees list tile: `GET /api/v1/restaurant-owner/employees` (§8.1).
-  - Create / edit employee: `POST /restaurant-owner/employees`, `PATCH /restaurant-owner/employees/{id}`, `PATCH /restaurant-owner/employees/{id}/status` (§8.2–§8.4).
-  - Permission picker for staff UI: `GET /api/v1/restaurant-owner/permissions` � returns the direct permission catalog used when creating/updating employees (see �8.5).
+  - Create / edit / delete employee: `POST /restaurant-owner/employees`, `PATCH /restaurant-owner/employees/{id}`, `DELETE /restaurant-owner/employees/{id}`, `PATCH /restaurant-owner/employees/{id}/status` (§8.2–§8.5).
+  - Permission picker for staff UI: `GET /api/v1/restaurant-owner/permissions` returns the direct permission catalog used when creating/updating employees (see Â§8.6).
   - **Employee activity log screen:** **no dedicated endpoint is specified yet** in the current backend contracts. A future endpoint such as `GET /restaurant-staff-activity` (filter by staff & date) would be needed.
 - **Support / contact (الدعم الفني):**
   - Currently **no backend endpoints are defined** for support chat/tickets in `API_CONTRACT_RESTAURANTS*.md`. Flutter app may initially deep-link to an external support channel (e.g. phone/WhatsApp) until an API is added.
@@ -647,7 +680,8 @@ These endpoints manage staff linked to the current restaurant.
         "id": 20,
         "name": "Omar",
         "email": "omar@example.com",
-        "phone": "+963998765432"
+        "phone": "+963998765432",
+        "profileImageUrl": "https://example.com/media/1/avatar.jpg"
       },
       "permissionIds": [1, 2, 3, 4],
       "effectivePermissions": [
@@ -673,13 +707,16 @@ These endpoints manage staff linked to the current restaurant.
 | ------ | -------------------------------------- | ---------------------------- |
 | POST   | `/api/v1/restaurant-owner/employees`   | Create a new restaurant staff |
 
-**Request body:**
+**Content-Type:** `multipart/form-data` when sending `profileImage`; otherwise `application/json` is enough.
+
+**Request body (JSON or form fields):**
 
 ```json
 {
   "name": "Omar",
   "email": "omar@example.com",
   "phone": "+963998765432",
+  "password": "minimum-8-chars",
   "permissionIds": [1, 2, 3, 4],
   "isActive": true
 }
@@ -690,6 +727,8 @@ These endpoints manage staff linked to the current restaurant.
 | name          | string    | yes      | Staff display name. |
 | email         | string    | no       | Email (for login / notifications). |
 | phone         | string    | no       | Phone number. |
+| password      | string    | yes      | Login password for the employee user (min 8 characters). Applied when creating a new user or when linking an existing user (password is reset). |
+| profileImage  | file      | no       | Avatar image: `jpeg,jpg,png,webp`, max 5MB; stored on the user as `primary-image`. |
 | permissionIds | integer[] | no       | Direct permission ids to sync onto the employee user. |
 | isActive      | boolean   | no       | Defaults to `true`. |
 
@@ -714,6 +753,8 @@ These endpoints manage staff linked to the current restaurant.
 | ------ | ---------------------------------------------- | ------------------------- |
 | PATCH  | `/api/v1/restaurant-owner/employees/{id}`      | Update staff details      |
 
+**Content-Type:** `multipart/form-data` when sending `profileImage`; otherwise JSON is fine.
+
 **Path params:**
 
 - `id` � restaurant staff id.
@@ -725,12 +766,13 @@ These endpoints manage staff linked to the current restaurant.
   "name": "Omar Updated",
   "email": "new-email@example.com",
   "phone": null,
+  "password": "new-password-min-8",
   "permissionIds": [1, 2, 3],
   "isActive": false
 }
 ```
 
-All fields are optional; send only changed values.
+All fields are optional; send only changed values. **`password`:** when present, updates the employee user�s login password (min 8 characters). **`profileImage`:** optional file field (same rules as create) replaces the current avatar.
 
 **Response (200):** Updated employee resource.
 
@@ -742,7 +784,24 @@ All fields are optional; send only changed values.
 
 ---
 
-### 8.4 Toggle employee status (quick action)
+### 8.4 Delete employee
+
+Removes the staff assignment for the current restaurant (deletes the `restaurant_staff` row only). The underlying `users` row is **not** deleted; permissions and `module_type` on that user are left unchanged.
+
+| Method | Path                                              | Description                    |
+| ------ | ------------------------------------------------- | ------------------------------ |
+| DELETE | `/api/v1/restaurant-owner/employees/{id}`         | Remove employee from restaurant |
+
+**Response:** `204 No Content` (empty body).
+
+**Errors:**
+
+- `403` � Staff not in current restaurant.
+- `404` � Staff not found.
+
+---
+
+### 8.5 Toggle employee status (quick action)
 
 | Method | Path                                                   | Description                |
 | ------ | ------------------------------------------------------ | -------------------------- |
@@ -766,7 +825,7 @@ All fields are optional; send only changed values.
 
 ---
 
-### 8.5 Get employee permission catalog
+### 8.6 Get employee permission catalog
 
 This powers the direct permission picker in the staff management UI.
 
@@ -795,7 +854,7 @@ Use `permissions[].id` values when sending `permissionIds` in employee create/up
 
 ---
 
-### 8.6 Legacy roles note
+### 8.7 Legacy roles note
 
 Legacy restaurant-role management is no longer part of the restaurant-owner app flow.
 

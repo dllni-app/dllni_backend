@@ -9,6 +9,7 @@ use App\Enums\UserModuleType;
 use App\Models\SystemAlert;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\Sanctum;
 use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Models\Category;
@@ -19,6 +20,7 @@ use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\PromoCode;
 use Modules\Resturants\Models\Restaurant;
 use Modules\Resturants\Models\RestaurantRole;
+use Modules\Resturants\Models\RestaurantStaff;
 
 beforeEach(function () {
     $this->owner = User::factory()->create([
@@ -115,7 +117,7 @@ it('updates product availability using sold out today mode', function () {
 });
 
 it('creates or links employee and toggles status', function () {
-    $role = RestaurantRole::query()->create([
+    RestaurantRole::query()->create([
         'restaurant_id' => $this->restaurant->id,
         'name' => 'Cashier',
         'slug' => 'cashier',
@@ -125,12 +127,15 @@ it('creates or links employee and toggles status', function () {
         'name' => 'Employee One',
         'email' => 'employee.one@example.com',
         'phone' => '+963944000111',
-        'restaurantRoleId' => $role->id,
+        'password' => 'password123',
         'isActive' => true,
     ]);
 
     $createResponse->assertCreated();
     $staffId = $createResponse->json('data.id');
+
+    $employeeUser = User::query()->where('email', 'employee.one@example.com')->firstOrFail();
+    expect(Hash::check('password123', $employeeUser->password))->toBeTrue();
 
     $toggleResponse = $this->patchJson("/api/v1/restaurant-owner/employees/{$staffId}/status", [
         'isActive' => false,
@@ -138,6 +143,83 @@ it('creates or links employee and toggles status', function () {
 
     $toggleResponse->assertOk();
     $toggleResponse->assertJsonPath('data.isActive', false);
+});
+
+it('deletes restaurant owner employee assignment', function () {
+    $createResponse = $this->postJson('/api/v1/restaurant-owner/employees', [
+        'name' => 'To Remove',
+        'email' => 'remove.me@example.com',
+        'password' => 'password123',
+        'isActive' => true,
+    ]);
+    $createResponse->assertCreated();
+    $staffId = $createResponse->json('data.id');
+
+    $this->deleteJson("/api/v1/restaurant-owner/employees/{$staffId}")->assertNoContent();
+
+    $this->assertDatabaseMissing('restaurant_staff', [
+        'id' => $staffId,
+        'restaurant_id' => $this->restaurant->id,
+    ]);
+});
+
+it('forbids deleting employee from another restaurant', function () {
+    $otherRestaurant = Restaurant::factory()->create();
+    $otherUser = User::factory()->create([
+        'module_type' => UserModuleType::RestaurantSeller->value,
+    ]);
+    $otherStaff = RestaurantStaff::query()->create([
+        'restaurant_id' => $otherRestaurant->id,
+        'user_id' => $otherUser->id,
+        'is_active' => true,
+    ]);
+
+    $this->deleteJson("/api/v1/restaurant-owner/employees/{$otherStaff->id}")
+        ->assertForbidden();
+});
+
+it('stores profile image for employee', function () {
+    $profileImage = UploadedFile::fake()->image('employee.jpg');
+
+    $response = $this->post('/api/v1/restaurant-owner/employees', [
+        'name' => 'Photo Employee',
+        'email' => 'photo.emp@example.com',
+        'password' => 'password123',
+        'profileImage' => $profileImage,
+    ], ['Accept' => 'application/json']);
+
+    $response->assertCreated();
+    expect($response->json('data.user.profileImageUrl'))->not->toBeNull();
+
+    $employeeUser = User::query()->where('email', 'photo.emp@example.com')->firstOrFail();
+    expect($employeeUser->getFirstMediaUrl('primary-image'))->not->toBe('');
+});
+
+it('updates employee password and profile image', function () {
+    $employeeUser = User::factory()->create([
+        'module_type' => UserModuleType::RestaurantSeller->value,
+        'email' => 'employee.patch@example.com',
+    ]);
+
+    $staff = RestaurantStaff::create([
+        'restaurant_id' => $this->restaurant->id,
+        'user_id' => $employeeUser->id,
+        'restaurant_role_id' => null,
+        'is_active' => true,
+    ]);
+
+    $newImage = UploadedFile::fake()->image('updated.jpg');
+
+    $patchResponse = $this->patch("/api/v1/restaurant-owner/employees/{$staff->id}", [
+        'password' => 'newsecret99',
+        'profileImage' => $newImage,
+    ], ['Accept' => 'application/json']);
+
+    $patchResponse->assertOk();
+    $employeeUser->refresh();
+    expect(Hash::check('newsecret99', $employeeUser->password))->toBeTrue();
+    expect($employeeUser->getFirstMediaUrl('primary-image'))->not->toBe('');
+    expect($patchResponse->json('data.user.profileImageUrl'))->not->toBeNull();
 });
 
 it('returns unified notifications and marks them as read', function () {

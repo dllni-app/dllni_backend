@@ -157,4 +157,9 @@ final class User extends Authenticatable implements HasMedia
     {
         return $this->roles()->exists();
     }
+
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection('primary-image')->singleFile();
+    }
 }

@@ -6,8 +6,8 @@ namespace Modules\Resturants\Http\Controllers\API\RestaurantOwner;
 
 use Illuminate\Http\JsonResponse;
 use Modules\Resturants\Models\RestaurantStaff;
-use Modules\Resturants\Support\RestaurantOwnerEmployeePayload;
 use Modules\Resturants\Support\RestaurantOwnerContext;
+use Modules\Resturants\Support\RestaurantOwnerEmployeePayload;
 
 final class RestaurantOwnerEmployeeIndexController
 {
@@ -16,7 +16,7 @@ final class RestaurantOwnerEmployeeIndexController
         $restaurant = $context->restaurant();
 
         $employees = RestaurantStaff::query()
-            ->with(['user.permissions'])
+            ->with(['user.permissions', 'user.media'])
             ->where('restaurant_id', $restaurant->id)
             ->orderByDesc('created_at')
             ->get()
