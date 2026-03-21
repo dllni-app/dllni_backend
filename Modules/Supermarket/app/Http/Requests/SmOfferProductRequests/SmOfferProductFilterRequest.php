@@ -19,7 +19,7 @@ final class SmOfferProductFilterRequest extends FormRequest
             'perPage' => 'sometimes|integer|min:1|max:100',
             'filter.offerId' => 'sometimes|integer|exists:sm_offers,id',
             'filter.productId' => 'sometimes|integer|exists:sm_products,id',
-            'sort' => 'sometimes|string|in:offerPrice,-offerPrice,maxQuantity,-maxQuantity,createdAt,-createdAt',
+            'sort' => 'sometimes|string|in:createdAt,-createdAt',
         ];
     }
 }

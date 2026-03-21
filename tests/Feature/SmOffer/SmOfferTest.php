@@ -39,8 +39,6 @@ it('creates an offer', function (): void {
         'offerProducts' => [
             [
                 'productId' => $productOne->id,
-                'offerPrice' => 10.5,
-                'maxQuantity' => 3,
             ],
             [
                 'productId' => $productTwo->id,
@@ -57,8 +55,6 @@ it('creates an offer', function (): void {
     $this->assertDatabaseHas('sm_offer_products', [
         'offer_id' => $offerId,
         'product_id' => $productOne->id,
-        'offer_price' => '10.50',
-        'max_quantity' => 3,
     ]);
     $this->assertDatabaseHas('sm_offer_products', [
         'offer_id' => $offerId,
@@ -102,8 +98,6 @@ it('updates an offer', function (): void {
     $this->assertDatabaseHas('sm_offer_products', [
         'offer_id' => $offer->id,
         'product_id' => $newProduct->id,
-        'offer_price' => '7.75',
-        'max_quantity' => 2,
     ]);
 });
 
