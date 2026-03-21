@@ -166,7 +166,7 @@ it('user: restaurant seller owner login returns role and restaurant_owner permis
 
     $permissions = $response->json('permissions');
     expect($permissions)->toBeArray()->not->toBeEmpty();
-    expect($permissions[0])->toHaveKeys(['id', 'name', 'slug', 'group']);
+    expect($permissions[0])->toHaveKeys(['id', 'name', 'slug', 'description', 'group']);
     expect(collect($permissions)->pluck('group')->unique()->values()->all())->toBe(['restaurant_owner']);
 });
 
@@ -211,8 +211,10 @@ it('user: restaurant seller staff login returns restaurant role and assigned per
     ]);
 
     $response->assertOk()
-        ->assertJsonPath('role.slug', 'cashier')
+        ->assertJsonPath('role.id', $restaurantRole->id)
         ->assertJsonPath('role.name', 'كاشير');
+
+    expect($response->json('role'))->not->toHaveKey('slug');
 
     expect($response->json('permissions'))->toHaveCount(2);
 });

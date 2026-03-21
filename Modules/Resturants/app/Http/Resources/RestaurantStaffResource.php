@@ -33,7 +33,6 @@ final class RestaurantStaffResource extends JsonResource
             'role' => $this->whenLoaded('role', fn () => [
                 'id' => $this->role->id,
                 'name' => $this->role->name,
-                'slug' => $this->role->slug,
             ]),
             'createdAt' => $this->created_at->toDateTimeString(),
             'updatedAt' => $this->updated_at->toDateTimeString(),

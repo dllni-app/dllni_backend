@@ -14,12 +14,36 @@ final class RestaurantOwnerEmployeePermissionsSeeder extends Seeder
         $guardName = config('auth.defaults.guard');
 
         $definitions = [
-            ['name' => 'ro.offers_coupons', 'slug' => 'عروض كوبونات'],
-            ['name' => 'ro.staff_register', 'slug' => 'موظفين سجل'],
-            ['name' => 'ro.store_hours', 'slug' => 'متجر ساعات'],
-            ['name' => 'ro.warehouse', 'slug' => 'مخزن إشراف'],
-            ['name' => 'ro.menu', 'slug' => 'وجبات تعديل'],
-            ['name' => 'ro.orders', 'slug' => 'طلبات إدارة'],
+            [
+                'name' => 'ro.offers_coupons',
+                'slug' => 'ادارة العروض والكوبونات',
+                'description' => 'يمكنه التحكم باقسام العروض والكوبونات',
+            ],
+            [
+                'name' => 'ro.staff_register',
+                'slug' => 'ادارة الموظفين',
+                'description' => 'اضافة موظفين وتعديل بياناتهم ومراقبة السجل التجاري الخاص بهم',
+            ],
+            [
+                'name' => 'ro.store_hours',
+                'slug' => 'ادارة بيانات المتجر',
+                'description' => 'تعديل بيانات المتجر وساعات العمل',
+            ],
+            [
+                'name' => 'ro.warehouse',
+                'slug' => 'ادارة المخزن',
+                'description' => 'الاشراف على المخزن وتنظيم عمله',
+            ],
+            [
+                'name' => 'ro.menu',
+                'slug' => 'تعديل الوجبات',
+                'description' => 'اضافة الوجبات وتعديل بياناتها',
+            ],
+            [
+                'name' => 'ro.orders',
+                'slug' => 'ادارة الطلبات',
+                'description' => 'ادارة الطلبات',
+            ],
         ];
 
         foreach ($definitions as $definition) {
@@ -30,6 +54,7 @@ final class RestaurantOwnerEmployeePermissionsSeeder extends Seeder
                 ],
                 [
                     'slug' => $definition['slug'],
+                    'description' => $definition['description'],
                     'group' => 'restaurant_owner',
                 ]
             );

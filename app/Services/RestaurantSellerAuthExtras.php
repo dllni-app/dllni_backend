@@ -44,14 +44,12 @@ final class RestaurantSellerAuthExtras
             return [
                 'id' => $role->id,
                 'name' => $role->name,
-                'slug' => $role->slug,
             ];
         }
 
         return [
             'id' => null,
             'name' => 'موظف',
-            'slug' => 'staff',
         ];
     }
 
@@ -90,6 +88,7 @@ final class RestaurantSellerAuthExtras
                     'id' => (int) $permission->id,
                     'name' => (string) $permission->name,
                     'slug' => $permission->slug,
+                    'description' => $permission->description,
                     'group' => $permission->group,
                 ];
             })

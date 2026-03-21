@@ -20,6 +20,7 @@ final class RestaurantOwnerPermissionsController
                     'id' => $permission->id,
                     'name' => $permission->name,
                     'slug' => $permission->slug,
+                    'description' => $permission->description,
                     'group' => $permission->group,
                 ];
             })
