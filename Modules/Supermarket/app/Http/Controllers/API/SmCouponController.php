@@ -14,6 +14,7 @@ use Modules\Supermarket\Http\Requests\SmCouponRequests\SmCouponFilterRequest;
 use Modules\Supermarket\Http\Requests\SmCouponRequests\SmCouponWeeklyAnalysisRequest;
 use Modules\Supermarket\Http\Resources\SmCouponResource;
 use Modules\Supermarket\Models\SmCoupon;
+use Modules\Supermarket\Models\SmOrder;
 use Modules\Supermarket\Services\SmCouponService;
 
 final class SmCouponController
@@ -71,6 +72,14 @@ final class SmCouponController
             ->groupBy('date', 'is_active')
             ->get();
 
+        $totalUsedDiscountAmount = (float) SmOrder::query()
+            ->when($storeId > 0, static function ($query) use ($storeId) {
+                $query->where('store_id', $storeId);
+            })
+            ->whereNotNull('coupon_id')
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->sum('discount_amount');
+
         $indexedCounts = $couponsPerDay
             ->mapWithKeys(static function ($row): array {
                 return [
@@ -97,6 +106,7 @@ final class SmCouponController
                 'startDate' => $startDate->toDateString(),
                 'endDate' => $endDate->toDateString(),
                 'days' => $days,
+                'totalUsedDiscountAmount' => round($totalUsedDiscountAmount, 2),
             ],
         ]);
     }
