@@ -45,8 +45,6 @@ final class SmOfferService
         $offer->offerProducts()->createMany(array_map(static function (array $offerProduct): array {
             return [
                 'product_id' => $offerProduct['productId'],
-                'offer_price' => $offerProduct['offerPrice'] ?? null,
-                'max_quantity' => $offerProduct['maxQuantity'] ?? null,
             ];
         }, $offerProducts));
     }

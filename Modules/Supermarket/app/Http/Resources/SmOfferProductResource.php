@@ -21,8 +21,6 @@ final class SmOfferProductResource extends JsonResource
             'offer' => SmOfferResource::make($this->whenLoaded('offer')),
             'productId' => $this->product_id,
             'product' => SmProductResource::make($this->whenLoaded('product')),
-            'offerPrice' => $this->offer_price,
-            'maxQuantity' => $this->max_quantity,
             'createdAt' => $this->created_at?->toDateTimeString(),
             'updatedAt' => $this->updated_at?->toDateTimeString(),
         ];

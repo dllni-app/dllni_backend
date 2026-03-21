@@ -19,8 +19,6 @@ trait SmOfferProductFilterQuery
                 AllowedFilter::exact('productId', 'product_id'),
             ])
             ->allowedSorts([
-                AllowedSort::field('offerPrice', 'offer_price'),
-                AllowedSort::field('maxQuantity', 'max_quantity'),
                 AllowedSort::field('createdAt', 'created_at'),
             ])
             ->defaultSort('-created_at');

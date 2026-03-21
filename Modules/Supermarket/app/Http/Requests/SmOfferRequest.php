@@ -42,8 +42,6 @@ final class SmOfferRequest extends FormRequest
                     }
                 }),
             ],
-            'offerProducts.*.offerPrice' => 'nullable|numeric|min:0',
-            'offerProducts.*.maxQuantity' => 'nullable|integer|min:1',
         ];
     }
 }
