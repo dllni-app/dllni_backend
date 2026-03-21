@@ -2,10 +2,16 @@
 
 declare(strict_types=1);
 
+use App\Enums\UserModuleType;
 use App\Models\User;
 use Database\Seeders\AdminUserSeeder;
 use Database\Seeders\DashboardPermissionsSeeder;
+use Database\Seeders\Permissions\RestaurantOwnerEmployeePermissionsSeeder;
 use Laravel\Sanctum\Sanctum;
+use Modules\Resturants\Models\Restaurant;
+use Modules\Resturants\Models\RestaurantRole;
+use Modules\Resturants\Models\RestaurantStaff;
+use Spatie\Permission\Models\Permission;
 
 beforeEach(function (): void {
     $this->seed(DashboardPermissionsSeeder::class);
@@ -136,4 +142,77 @@ it('user: rejects logout when unauthenticated', function (): void {
     $response = $this->postJson('/api/logout');
 
     $response->assertUnauthorized();
+});
+
+it('user: restaurant seller owner login returns role and restaurant_owner permissions', function (): void {
+    $this->seed(RestaurantOwnerEmployeePermissionsSeeder::class);
+
+    $owner = User::factory()->create([
+        'phone' => '+962791111111',
+        'password' => bcrypt('secret'),
+        'module_type' => UserModuleType::RestaurantSeller->value,
+    ]);
+
+    Restaurant::factory()->create(['user_id' => $owner->id]);
+
+    $response = $this->postJson('/api/login', [
+        'phone' => '+962791111111',
+        'password' => 'secret',
+    ]);
+
+    $response->assertOk()
+        ->assertJsonPath('role.slug', 'owner')
+        ->assertJsonPath('role.name', 'مالك');
+
+    $permissions = $response->json('permissions');
+    expect($permissions)->toBeArray()->not->toBeEmpty();
+    expect($permissions[0])->toHaveKeys(['id', 'name', 'slug', 'group']);
+    expect(collect($permissions)->pluck('group')->unique()->values()->all())->toBe(['restaurant_owner']);
+});
+
+it('user: restaurant seller staff login returns restaurant role and assigned permissions only', function (): void {
+    $this->seed(RestaurantOwnerEmployeePermissionsSeeder::class);
+
+    $owner = User::factory()->create([
+        'module_type' => UserModuleType::RestaurantSeller->value,
+    ]);
+    $restaurant = Restaurant::factory()->create(['user_id' => $owner->id]);
+
+    $restaurantRole = RestaurantRole::query()->create([
+        'restaurant_id' => $restaurant->id,
+        'name' => 'كاشير',
+        'slug' => 'cashier',
+    ]);
+
+    $employee = User::factory()->create([
+        'phone' => '+962792222222',
+        'password' => bcrypt('secret'),
+        'module_type' => UserModuleType::RestaurantSeller->value,
+    ]);
+
+    RestaurantStaff::query()->create([
+        'restaurant_id' => $restaurant->id,
+        'user_id' => $employee->id,
+        'restaurant_role_id' => $restaurantRole->id,
+        'is_active' => true,
+    ]);
+
+    $permissionIds = Permission::query()
+        ->where('group', 'restaurant_owner')
+        ->limit(2)
+        ->pluck('id')
+        ->all();
+
+    $employee->syncPermissions($permissionIds);
+
+    $response = $this->postJson('/api/login', [
+        'phone' => '+962792222222',
+        'password' => 'secret',
+    ]);
+
+    $response->assertOk()
+        ->assertJsonPath('role.slug', 'cashier')
+        ->assertJsonPath('role.name', 'كاشير');
+
+    expect($response->json('permissions'))->toHaveCount(2);
 });

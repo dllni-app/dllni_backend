@@ -137,7 +137,7 @@ it('creates or links employee and toggles status', function () {
     $employeeUser = User::query()->where('email', 'employee.one@example.com')->firstOrFail();
     expect(Hash::check('password123', $employeeUser->password))->toBeTrue();
 
-    $toggleResponse = $this->patchJson("/api/v1/restaurant-owner/employees/{$staffId}/status", [
+    $toggleResponse = $this->patchJson("/api/v1/restaurant-owner/employees/{$staffId}", [
         'isActive' => false,
     ]);
 
@@ -145,37 +145,21 @@ it('creates or links employee and toggles status', function () {
     $toggleResponse->assertJsonPath('data.isActive', false);
 });
 
-it('deletes restaurant owner employee assignment', function () {
-    $createResponse = $this->postJson('/api/v1/restaurant-owner/employees', [
-        'name' => 'To Remove',
-        'email' => 'remove.me@example.com',
-        'password' => 'password123',
-        'isActive' => true,
-    ]);
-    $createResponse->assertCreated();
-    $staffId = $createResponse->json('data.id');
-
-    $this->deleteJson("/api/v1/restaurant-owner/employees/{$staffId}")->assertNoContent();
-
-    $this->assertDatabaseMissing('restaurant_staff', [
-        'id' => $staffId,
-        'restaurant_id' => $this->restaurant->id,
-    ]);
-});
-
-it('forbids deleting employee from another restaurant', function () {
+it('forbids updating employee from another restaurant', function () {
     $otherRestaurant = Restaurant::factory()->create();
     $otherUser = User::factory()->create([
         'module_type' => UserModuleType::RestaurantSeller->value,
     ]);
-    $otherStaff = RestaurantStaff::query()->create([
+    $otherStaff = RestaurantStaff::create([
         'restaurant_id' => $otherRestaurant->id,
         'user_id' => $otherUser->id,
+        'restaurant_role_id' => null,
         'is_active' => true,
     ]);
 
-    $this->deleteJson("/api/v1/restaurant-owner/employees/{$otherStaff->id}")
-        ->assertForbidden();
+    $this->patchJson("/api/v1/restaurant-owner/employees/{$otherStaff->id}", [
+        'isActive' => false,
+    ])->assertForbidden();
 });
 
 it('stores profile image for employee', function () {
@@ -210,7 +194,9 @@ it('updates employee password and profile image', function () {
 
     $newImage = UploadedFile::fake()->image('updated.jpg');
 
-    $patchResponse = $this->patch("/api/v1/restaurant-owner/employees/{$staff->id}", [
+    $employeeId = $staff->id;
+
+    $patchResponse = $this->patch("/api/v1/restaurant-owner/employees/{$employeeId}", [
         'password' => 'newsecret99',
         'profileImage' => $newImage,
     ], ['Accept' => 'application/json']);

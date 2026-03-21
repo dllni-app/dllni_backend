@@ -25,9 +25,7 @@ use Modules\Resturants\Http\Controllers\API\RestaurantOrderDisputeController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerCouponsIndexController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerCouponSummaryController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerDashboardPerformanceController;
-use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerEmployeeDestroyController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerEmployeeIndexController;
-use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerEmployeeStatusController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerEmployeeStoreController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerEmployeeUpdateController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerNotificationMarkReadAllController;
@@ -118,9 +116,7 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
 
         Route::get('employees', RestaurantOwnerEmployeeIndexController::class);
         Route::post('employees', RestaurantOwnerEmployeeStoreController::class);
-        Route::patch('employees/{restaurant_staff}', RestaurantOwnerEmployeeUpdateController::class);
-        Route::delete('employees/{restaurant_staff}', RestaurantOwnerEmployeeDestroyController::class);
-        Route::patch('employees/{restaurant_staff}/status', RestaurantOwnerEmployeeStatusController::class);
+        Route::patch('employees/{employee}', RestaurantOwnerEmployeeUpdateController::class);
 
         Route::get('permissions', RestaurantOwnerPermissionsController::class);
 

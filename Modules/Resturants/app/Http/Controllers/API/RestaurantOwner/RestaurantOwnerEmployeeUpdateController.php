@@ -16,21 +16,21 @@ final class RestaurantOwnerEmployeeUpdateController
 {
     public function __invoke(
         OwnerEmployeeUpdateRequest $request,
-        RestaurantStaff $restaurant_staff,
+        RestaurantStaff $employee,
         RestaurantOwnerContext $context
     ): JsonResponse {
-        $context->ensureOwnedStaff($restaurant_staff);
+        $context->ensureOwnedStaff($employee);
 
         $validated = $request->validated();
 
-        DB::transaction(function () use ($validated, $restaurant_staff): void {
+        DB::transaction(function () use ($validated, $employee): void {
             $staffUpdates = ['restaurant_role_id' => null];
 
             if (isset($validated['isActive'])) {
                 $staffUpdates['is_active'] = (bool) $validated['isActive'];
             }
 
-            $restaurant_staff->update($staffUpdates);
+            $employee->update($staffUpdates);
 
             $userUpdates = [];
             if (array_key_exists('name', $validated)) {
@@ -46,29 +46,29 @@ final class RestaurantOwnerEmployeeUpdateController
                 $userUpdates['password'] = $validated['password'];
             }
 
-            if ($userUpdates !== [] && $restaurant_staff->user) {
+            if ($userUpdates !== [] && $employee->user) {
                 $userUpdates['module_type'] = UserModuleType::RestaurantSeller->value;
-                $restaurant_staff->user->update($userUpdates);
+                $employee->user->update($userUpdates);
             }
 
-            if ($userUpdates === [] && $restaurant_staff->user && $restaurant_staff->user->module_type !== UserModuleType::RestaurantSeller) {
-                $restaurant_staff->user->update(['module_type' => UserModuleType::RestaurantSeller->value]);
+            if ($userUpdates === [] && $employee->user && $employee->user->module_type !== UserModuleType::RestaurantSeller) {
+                $employee->user->update(['module_type' => UserModuleType::RestaurantSeller->value]);
             }
 
-            if (isset($validated['permissionIds']) && $restaurant_staff->user) {
-                $restaurant_staff->user->syncPermissions($validated['permissionIds']);
+            if (isset($validated['permissionIds']) && $employee->user) {
+                $employee->user->syncPermissions($validated['permissionIds']);
             }
         });
 
-        if ($request->hasFile('profileImage') && $restaurant_staff->user) {
-            $restaurant_staff->user->clearMediaCollection('primary-image');
-            $restaurant_staff->user->addMediaFromRequest('profileImage')->toMediaCollection('primary-image');
+        if ($request->hasFile('profileImage') && $employee->user) {
+            $employee->user->clearMediaCollection('primary-image');
+            $employee->user->addMediaFromRequest('profileImage')->toMediaCollection('primary-image');
         }
 
-        $restaurant_staff->refresh()->load(['user.permissions', 'user.media']);
+        $employee->refresh()->load(['user.permissions', 'user.media']);
 
         return response()->json([
-            'data' => RestaurantOwnerEmployeePayload::make($restaurant_staff),
+            'data' => RestaurantOwnerEmployeePayload::make($employee),
             'message' => 'Employee updated successfully.',
         ]);
     }

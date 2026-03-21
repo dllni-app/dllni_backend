@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Database\Seeders;
 
 use App\Models\User;
+use Database\Seeders\Permissions\RestaurantOwnerEmployeePermissionsSeeder;
 use Illuminate\Database\Seeder;
 use Modules\Cleaning\Database\Seeders\CleaningBillingPolicySeeder;
 use Modules\Cleaning\Database\Seeders\CleaningBookingSeeder;
@@ -26,6 +27,7 @@ final class DatabaseSeeder extends Seeder
 
         $this->call([
             DashboardPermissionsSeeder::class,
+            RestaurantOwnerEmployeePermissionsSeeder::class,
             TeamRoleTemplatesSeeder::class,
             AdminUserSeeder::class,
             CleaningWorkerAndSellerSeeder::class,

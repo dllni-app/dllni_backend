@@ -12,7 +12,7 @@ final class RestaurantOwnerPermissionsController
     public function __invoke(): JsonResponse
     {
         $permissions = Permission::query()
-            ->orderBy('group')
+            ->where('group', 'restaurant_owner')
             ->orderBy('name')
             ->get()
             ->map(static function (Permission $permission): array {
