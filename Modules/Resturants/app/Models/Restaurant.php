@@ -142,6 +142,7 @@ final class Restaurant extends Model implements HasMedia
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection('primary-image')->singleFile();
+        $this->addMediaCollection('banner-image')->singleFile();
         $this->addMediaCollection('images');
     }
 

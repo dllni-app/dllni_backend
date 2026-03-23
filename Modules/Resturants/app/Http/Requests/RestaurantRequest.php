@@ -62,6 +62,28 @@ final class RestaurantRequest extends FormRequest
             'isTemporarilyClosed' => 'nullable|boolean',
             'suspensionUntil' => 'nullable|date',
             'primaryImage' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:2048',
+            'image' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:2048',
+            'bannerImage' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:2048',
+            'banner' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:2048',
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'whatsappNumber' => $this->input('whatsappNumber', $this->input('whatsapp')),
+            'facebookPageName' => $this->input('facebookPageName', $this->input('face')),
+            'instagramUsername' => $this->input('instagramUsername', $this->input('instagram')),
+            'latitude' => $this->input('latitude', $this->input('lat')),
+            'longitude' => $this->input('longitude', $this->input('long')),
+        ]);
+
+        if ($this->hasFile('image') && ! $this->hasFile('primaryImage')) {
+            $this->files->set('primaryImage', $this->file('image'));
+        }
+
+        if ($this->hasFile('banner') && ! $this->hasFile('bannerImage')) {
+            $this->files->set('bannerImage', $this->file('banner'));
+        }
     }
 }

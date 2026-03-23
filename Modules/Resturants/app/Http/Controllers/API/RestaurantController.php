@@ -35,11 +35,13 @@ final class RestaurantController
     public function store(RestaurantRequest $request): RestaurantResource
     {
         $primaryImage = $request->file('primaryImage');
+        $bannerImage = $request->file('bannerImage');
 
         $restaurant = $this->restaurantService->store(
             RestaurantData::from([
                 ...$request->validated(),
                 'primaryImage' => $primaryImage,
+                'bannerImage' => $bannerImage,
             ])
         );
 
@@ -69,6 +71,7 @@ final class RestaurantController
                 ...$request->validated(),
                 'userId' => $restaurant->user_id,
                 'primaryImage' => $request->file('primaryImage'),
+                'bannerImage' => $request->file('bannerImage'),
                 'images' => $request->file('images'),
             ]),
             $restaurant

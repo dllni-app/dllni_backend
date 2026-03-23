@@ -49,5 +49,6 @@ final class RestaurantData extends Data
         public ?bool $isTemporarilyClosed,
         public ?string $suspensionUntil,
         public ?UploadedFile $primaryImage = null,
+        public ?UploadedFile $bannerImage = null,
     ) {}
 }

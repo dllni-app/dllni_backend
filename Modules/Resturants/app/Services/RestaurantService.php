@@ -40,5 +40,13 @@ final class RestaurantService
                 MediaHelper::uploadMedia($data->primaryImage, $restaurant, 'primary-image');
             }
         }
+
+        if ($data->bannerImage !== null) {
+            if ($isUpdate) {
+                MediaHelper::updateMedia($data->bannerImage, $restaurant, 'banner-image');
+            } else {
+                MediaHelper::uploadMedia($data->bannerImage, $restaurant, 'banner-image');
+            }
+        }
     }
 }
