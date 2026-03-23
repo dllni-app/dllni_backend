@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Resturants\Http\Controllers\API\RestaurantOwner;
 
 use App\Enums\UserModuleType;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Modules\Resturants\Http\Requests\RestaurantOwner\OwnerEmployeeUpdateRequest;
@@ -16,9 +17,11 @@ final class RestaurantOwnerEmployeeUpdateController
 {
     public function __invoke(
         OwnerEmployeeUpdateRequest $request,
-        RestaurantStaff $employee,
+        User $user,
         RestaurantOwnerContext $context
     ): JsonResponse {
+        /** @var RestaurantStaff $employee */
+        $employee = $user->restaurantStaff()->firstOrFail();
         $context->ensureOwnedStaff($employee);
 
         $validated = $request->validated();

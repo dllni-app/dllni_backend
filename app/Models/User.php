@@ -11,9 +11,13 @@ use Carbon\CarbonInterface;
 use Database\Factories\UserFactory;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Modules\Resturants\Models\Restaurant;
+use Modules\Resturants\Models\RestaurantStaff;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\Permission\Traits\HasRoles;
@@ -73,82 +77,87 @@ final class User extends Authenticatable implements HasMedia
         ];
     }
 
-    public function worker(): \Illuminate\Database\Eloquent\Relations\HasOne
+    public function worker(): HasOne
     {
         return $this->hasOne(Worker::class);
     }
 
-    public function restaurants(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function restaurants(): HasMany
     {
-        return $this->hasMany(\Modules\Resturants\Models\Restaurant::class);
+        return $this->hasMany(Restaurant::class);
     }
 
-    public function carts(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function restaurantStaff(): HasOne
+    {
+        return $this->hasOne(RestaurantStaff::class, 'user_id');
+    }
+
+    public function carts(): HasMany
     {
         return $this->hasMany(\Modules\Resturants\Models\Cart::class);
     }
 
-    public function orders(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function orders(): HasMany
     {
         return $this->hasMany(\Modules\Resturants\Models\Order::class);
     }
 
-    public function reviews(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function reviews(): HasMany
     {
         return $this->hasMany(\Modules\Resturants\Models\Review::class);
     }
 
-    public function favorites(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function favorites(): HasMany
     {
         return $this->hasMany(\Modules\Resturants\Models\Favorite::class);
     }
 
-    public function cleaningBookings(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function cleaningBookings(): HasMany
     {
         return $this->hasMany(\Modules\Cleaning\Models\CleaningBooking::class, 'customer_id');
     }
 
-    public function eventBookings(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function eventBookings(): HasMany
     {
         return $this->hasMany(\Modules\Cleaning\Models\EventBooking::class, 'customer_id');
     }
 
-    public function smStores(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function smStores(): HasMany
     {
         return $this->hasMany(\Modules\Supermarket\Models\SmStore::class, 'owner_user_id');
     }
 
-    public function smStoreStaff(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function smStoreStaff(): HasMany
     {
         return $this->hasMany(\Modules\Supermarket\Models\SmStoreStaff::class, 'user_id');
     }
 
-    public function smCarts(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function smCarts(): HasMany
     {
         return $this->hasMany(\Modules\Supermarket\Models\SmCart::class);
     }
 
-    public function smOrders(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function smOrders(): HasMany
     {
         return $this->hasMany(\Modules\Supermarket\Models\SmOrder::class, 'customer_id');
     }
 
-    public function smSmartLists(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function smSmartLists(): HasMany
     {
         return $this->hasMany(\Modules\Supermarket\Models\SmSmartList::class);
     }
 
-    public function smRecurringOrders(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function smRecurringOrders(): HasMany
     {
         return $this->hasMany(\Modules\Supermarket\Models\SmRecurringOrder::class);
     }
 
-    public function smAssistantQueries(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function smAssistantQueries(): HasMany
     {
         return $this->hasMany(\Modules\Supermarket\Models\SmAssistantQuery::class);
     }
 
-    public function smOrderDisputes(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function smOrderDisputes(): HasMany
     {
         return $this->hasMany(\Modules\Supermarket\Models\SmOrderDispute::class, 'opened_by_user_id');
     }

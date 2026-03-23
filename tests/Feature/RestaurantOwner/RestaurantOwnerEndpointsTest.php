@@ -132,12 +132,10 @@ it('creates or links employee and toggles status', function () {
     ]);
 
     $createResponse->assertCreated();
-    $staffId = $createResponse->json('data.id');
-
     $employeeUser = User::query()->where('email', 'employee.one@example.com')->firstOrFail();
     expect(Hash::check('password123', $employeeUser->password))->toBeTrue();
 
-    $toggleResponse = $this->patchJson("/api/v1/restaurant-owner/employees/{$staffId}", [
+    $toggleResponse = $this->patchJson("/api/v1/restaurant-owner/employees/{$employeeUser->id}", [
         'isActive' => false,
     ]);
 
@@ -157,7 +155,7 @@ it('forbids updating employee from another restaurant', function () {
         'is_active' => true,
     ]);
 
-    $this->patchJson("/api/v1/restaurant-owner/employees/{$otherStaff->id}", [
+    $this->patchJson("/api/v1/restaurant-owner/employees/{$otherUser->id}", [
         'isActive' => false,
     ])->assertForbidden();
 });
@@ -194,7 +192,7 @@ it('updates employee password and profile image', function () {
 
     $newImage = UploadedFile::fake()->image('updated.jpg');
 
-    $employeeId = $staff->id;
+    $employeeId = $employeeUser->id;
 
     $patchResponse = $this->patch("/api/v1/restaurant-owner/employees/{$employeeId}", [
         'password' => 'newsecret99',
@@ -206,6 +204,25 @@ it('updates employee password and profile image', function () {
     expect(Hash::check('newsecret99', $employeeUser->password))->toBeTrue();
     expect($employeeUser->getFirstMediaUrl('primary-image'))->not->toBe('');
     expect($patchResponse->json('data.user.profileImageUrl'))->not->toBeNull();
+});
+
+it('deletes employee using user id', function () {
+    $employeeUser = User::factory()->create([
+        'module_type' => UserModuleType::RestaurantSeller->value,
+        'email' => 'employee.delete@example.com',
+    ]);
+
+    $staff = RestaurantStaff::create([
+        'restaurant_id' => $this->restaurant->id,
+        'user_id' => $employeeUser->id,
+        'restaurant_role_id' => null,
+        'is_active' => true,
+    ]);
+
+    $response = $this->deleteJson("/api/v1/restaurant-owner/employees/{$employeeUser->id}");
+
+    $response->assertNoContent();
+    $this->assertDatabaseMissing('restaurant_staff', ['id' => $staff->id]);
 });
 
 it('returns unified notifications and marks them as read', function () {
