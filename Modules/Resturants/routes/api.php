@@ -32,6 +32,7 @@ use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerEmplo
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerNotificationMarkReadAllController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerNotificationMarkReadController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerNotificationsController;
+use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerOffersController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerOffersIndexController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerOfferSummaryController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerOrderItemDestroyController;
@@ -40,6 +41,7 @@ use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerOrder
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerOrderShowController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerPermissionsController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerProductAvailabilityController;
+use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerPromoCodesController;
 use Modules\Resturants\Http\Controllers\API\RestaurantPenaltyController;
 use Modules\Resturants\Http\Controllers\API\RestaurantRecurringOrderController;
 use Modules\Resturants\Http\Controllers\API\RestaurantReputationLogController;
@@ -113,6 +115,8 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
         Route::get('offers', RestaurantOwnerOffersIndexController::class);
         Route::get('offers/summary', RestaurantOwnerOfferSummaryController::class);
         Route::get('coupons', RestaurantOwnerCouponsIndexController::class);
+        Route::apiResource('offers', RestaurantOwnerOffersController::class);
+        Route::apiResource('promo-codes', RestaurantOwnerPromoCodesController::class);
         Route::get('coupons/summary', RestaurantOwnerCouponSummaryController::class);
 
         Route::get('employees', RestaurantOwnerEmployeeIndexController::class);

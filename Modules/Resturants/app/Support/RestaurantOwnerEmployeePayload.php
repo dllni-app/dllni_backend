@@ -24,6 +24,14 @@ final class RestaurantOwnerEmployeePayload
                 'phone' => $staff->user?->phone,
                 'profileImageUrl' => $staff->user?->getFirstMediaUrl('primary-image') ?: null,
             ],
+            'permissions' => $permissions
+                ->map(static fn ($permission): array => [
+                    'id' => $permission->id,
+                    'name' => $permission->name,
+                    'guardName' => $permission->guard_name,
+                ])
+                ->values()
+                ->all(),
             'permissionIds' => $permissions->pluck('id')->values()->all(),
             'effectivePermissions' => $permissions->pluck('name')->values()->all(),
             'createdAt' => $staff->created_at?->toDateTimeString(),

@@ -21,6 +21,7 @@ use Modules\Resturants\Models\PromoCode;
 use Modules\Resturants\Models\Restaurant;
 use Modules\Resturants\Models\RestaurantRole;
 use Modules\Resturants\Models\RestaurantStaff;
+use Spatie\Permission\Models\Permission;
 
 beforeEach(function () {
     $this->owner = User::factory()->create([
@@ -122,6 +123,10 @@ it('creates or links employee and toggles status', function () {
         'name' => 'Cashier',
         'slug' => 'cashier',
     ]);
+    $permission = Permission::query()->firstOrCreate([
+        'name' => 'ro.menu',
+        'guard_name' => 'sanctum',
+    ]);
 
     $createResponse = $this->postJson('/api/v1/restaurant-owner/employees', [
         'name' => 'Employee One',
@@ -129,9 +134,12 @@ it('creates or links employee and toggles status', function () {
         'phone' => '+963944000111',
         'password' => 'password123',
         'isActive' => true,
+        'permissionIds' => [$permission->id],
     ]);
 
     $createResponse->assertCreated();
+    $createResponse->assertJsonPath('data.permissions.0.id', $permission->id);
+    $createResponse->assertJsonPath('data.permissions.0.name', 'ro.menu');
     $employeeUser = User::query()->where('email', 'employee.one@example.com')->firstOrFail();
     expect(Hash::check('password123', $employeeUser->password))->toBeTrue();
 
