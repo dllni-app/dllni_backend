@@ -186,7 +186,7 @@ final class GeminiProductService
     {
         return 'You are digitizing a restaurant or supermarket menu from a photo. '
             .'Identify individual products or dishes and return them as structured JSON. '
-            .'Return an object with a single field "items", which is an array of objects with '
+            .'Return an object with a single field "items", wh ich is an array of objects with '
             .'"title" and "description" fields. '
             .'Do not include prices, allergens, or categories. '
             .'Write titles and descriptions in '

@@ -397,3 +397,87 @@ it('updates working hours for authenticated worker', function () {
     $worker->refresh();
     expect($worker->default_working_hours)->toEqual($payload['defaultWorkingHours']);
 });
+
+it('returns worker account work areas and updates them', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-areas@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $worker->zones()->createMany([
+        ['name' => 'دمشق', 'is_active' => true],
+        ['name' => 'ريف دمشق', 'is_active' => true],
+    ]);
+
+    $showResponse = $this->getJson('/api/v1/cleaning/worker/account/work-areas');
+    $showResponse->assertOk();
+    expect($showResponse->json('zones'))->toHaveCount(2);
+
+    $payload = [
+        'zones' => [
+            ['name' => 'دمشق', 'isActive' => true],
+            ['name' => 'حمص', 'isActive' => true],
+        ],
+    ];
+
+    $updateResponse = $this->putJson('/api/v1/cleaning/worker/account/work-areas', $payload);
+    $updateResponse->assertOk();
+    expect($updateResponse->json('zones'))->toHaveCount(2);
+
+    $this->assertDatabaseHas('worker_zones', [
+        'worker_id' => $worker->id,
+        'name' => 'حمص',
+        'is_active' => 1,
+    ]);
+    $this->assertDatabaseMissing('worker_zones', [
+        'worker_id' => $worker->id,
+        'name' => 'ريف دمشق',
+    ]);
+});
+
+it('returns worker account transactions for authenticated worker', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-transactions@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $customer = User::factory()->create(['email' => 'customer-transactions@example.com']);
+    $billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
+        'name' => 'Default',
+        'billing_mode' => 'actual_working_time',
+        'rules' => [],
+        'is_active' => true,
+        'is_default' => true,
+    ]);
+
+    CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'customer_id' => $customer->id,
+        'billing_policy_id' => $billingPolicy->id,
+        'status' => CleaningBookingStatus::Completed,
+        'total_price' => 145,
+    ]);
+
+    $response = $this->getJson('/api/v1/cleaning/worker/account/transactions');
+    $response->assertOk();
+    expect($response->json('summary.totalTransactions'))->toBe(1);
+    expect((float) $response->json('summary.totalEarnings'))->toBe(145.0);
+    expect($response->json('data.0.customer.id'))->toBe($customer->id);
+});
+
+it('returns worker account status and updates active flag', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-status@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id, 'is_active' => true]);
+    Sanctum::actingAs($workerUser);
+
+    $showResponse = $this->getJson('/api/v1/cleaning/worker/account/status');
+    $showResponse->assertOk();
+    expect($showResponse->json('isActive'))->toBeTrue();
+
+    $updateResponse = $this->patchJson('/api/v1/cleaning/worker/account/status', [
+        'isActive' => false,
+    ]);
+    $updateResponse->assertOk();
+    expect($updateResponse->json('isActive'))->toBeFalse();
+
+    $worker->refresh();
+    expect($worker->is_active)->toBeFalse();
+});

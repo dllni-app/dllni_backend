@@ -125,7 +125,7 @@ it('creates or links employee and toggles status', function () {
     ]);
     $permission = Permission::query()->firstOrCreate([
         'name' => 'ro.menu',
-        'guard_name' => 'sanctum',
+        'guard_name' => 'web',
     ]);
 
     $createResponse = $this->postJson('/api/v1/restaurant-owner/employees', [
@@ -407,6 +407,68 @@ it('supports offers and coupons owner list filters', function () {
     $this->getJson('/api/v1/restaurant-owner/coupons?status=expired')
         ->assertOk()
         ->assertJsonCount(1, 'data');
+});
+
+it('creates offer through legacy resturant-owner path alias', function () {
+    $response = $this->postJson('/api/v1/resturant-owner/offers', [
+        'name' => 'Legacy Path Offer',
+        'discountType' => 'percentage',
+        'discountValue' => 15,
+        'isActive' => true,
+    ]);
+
+    $response->assertCreated();
+    $response->assertJsonPath('data.name', 'Legacy Path Offer');
+    $this->assertDatabaseHas('offers', [
+        'restaurant_id' => $this->restaurant->id,
+        'name' => 'Legacy Path Offer',
+    ]);
+});
+
+it('updates offer through legacy resturant-owner path alias', function () {
+    $offer = Offer::query()->create([
+        'restaurant_id' => $this->restaurant->id,
+        'name' => 'Legacy Old Offer',
+        'discount_type' => 'percentage',
+        'discount_value' => 10,
+        'is_active' => true,
+    ]);
+
+    $response = $this->patchJson("/api/v1/resturant-owner/offers/{$offer->id}", [
+        'name' => 'Legacy Updated Offer',
+        'discountType' => 'fixed_amount',
+        'discountValue' => 25,
+        'isActive' => false,
+    ]);
+
+    $response->assertOk();
+    $response->assertJsonPath('data.name', 'Legacy Updated Offer');
+    $response->assertJsonPath('data.discountType', 'fixed_amount');
+    $response->assertJsonPath('data.discountValue', 25);
+    $this->assertDatabaseHas('offers', [
+        'id' => $offer->id,
+        'name' => 'Legacy Updated Offer',
+        'discount_type' => 'fixed_amount',
+        'discount_value' => 25,
+        'is_active' => false,
+    ]);
+});
+
+it('deletes offer through legacy resturant-owner path alias', function () {
+    $offer = Offer::query()->create([
+        'restaurant_id' => $this->restaurant->id,
+        'name' => 'Legacy Delete Offer',
+        'discount_type' => 'percentage',
+        'discount_value' => 10,
+        'is_active' => true,
+    ]);
+
+    $response = $this->deleteJson("/api/v1/resturant-owner/offers/{$offer->id}");
+
+    $response->assertNoContent();
+    $this->assertDatabaseMissing('offers', [
+        'id' => $offer->id,
+    ]);
 });
 
 it('filters unified notifications by tab and unread only', function () {

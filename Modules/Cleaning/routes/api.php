@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\API\UserNotificationController;
 use Illuminate\Support\Facades\Route;
 use Modules\Cleaning\Http\Controllers\API\CleaningBillingPolicyController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingController;
@@ -11,8 +12,11 @@ use Modules\Cleaning\Http\Controllers\API\DashboardOverviewController;
 use Modules\Cleaning\Http\Controllers\API\EventBookingController;
 use Modules\Cleaning\Http\Controllers\API\GeographicCoverageController;
 use Modules\Cleaning\Http\Controllers\API\ServicePricingController;
+use Modules\Cleaning\Http\Controllers\API\WorkerAccountStatusController;
 use Modules\Cleaning\Http\Controllers\API\WorkerHomepageController;
 use Modules\Cleaning\Http\Controllers\API\WorkerStatisticsController;
+use Modules\Cleaning\Http\Controllers\API\WorkerTransactionsController;
+use Modules\Cleaning\Http\Controllers\API\WorkerWorkAreasController;
 use Modules\Cleaning\Http\Controllers\API\WorkerWorkingHoursController;
 
 Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
@@ -22,6 +26,18 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     Route::get('cleaning/worker/profile', Modules\Cleaning\Http\Controllers\API\WorkerProfileController::class);
     Route::get('cleaning/worker/working-hours', [WorkerWorkingHoursController::class, 'show']);
     Route::put('cleaning/worker/working-hours', [WorkerWorkingHoursController::class, 'update']);
+    Route::prefix('cleaning/worker/account')->group(function (): void {
+        Route::get('profile', Modules\Cleaning\Http\Controllers\API\WorkerProfileController::class);
+        Route::get('work-areas', [WorkerWorkAreasController::class, 'show']);
+        Route::put('work-areas', [WorkerWorkAreasController::class, 'update']);
+        Route::get('working-hours', [WorkerWorkingHoursController::class, 'show']);
+        Route::put('working-hours', [WorkerWorkingHoursController::class, 'update']);
+        Route::get('notifications', [UserNotificationController::class, 'index']);
+        Route::patch('notifications/{id}/read', [UserNotificationController::class, 'markAsRead']);
+        Route::get('transactions', WorkerTransactionsController::class);
+        Route::get('status', [WorkerAccountStatusController::class, 'show']);
+        Route::patch('status', [WorkerAccountStatusController::class, 'update']);
+    });
     Route::get('cleaning/analytics/geographic-coverage', GeographicCoverageController::class);
     Route::post('cleaning-bookings/{cleaning_booking}/accept', [CleaningBookingController::class, 'accept'])->name('cleaning-bookings.accept');
     Route::post('cleaning-bookings/{cleaning_booking}/reject', [CleaningBookingController::class, 'reject'])->name('cleaning-bookings.reject');
