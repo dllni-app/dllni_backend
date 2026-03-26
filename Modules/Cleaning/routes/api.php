@@ -12,6 +12,7 @@ use Modules\Cleaning\Http\Controllers\API\DashboardOverviewController;
 use Modules\Cleaning\Http\Controllers\API\EventBookingController;
 use Modules\Cleaning\Http\Controllers\API\GeographicCoverageController;
 use Modules\Cleaning\Http\Controllers\API\ServicePricingController;
+use Modules\Cleaning\Http\Controllers\API\WorkerAccountProfileController;
 use Modules\Cleaning\Http\Controllers\API\WorkerAccountStatusController;
 use Modules\Cleaning\Http\Controllers\API\WorkerHomepageController;
 use Modules\Cleaning\Http\Controllers\API\WorkerStatisticsController;
@@ -28,6 +29,8 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     Route::put('cleaning/worker/working-hours', [WorkerWorkingHoursController::class, 'update']);
     Route::prefix('cleaning/worker/account')->group(function (): void {
         Route::get('profile', Modules\Cleaning\Http\Controllers\API\WorkerProfileController::class);
+        Route::put('profile', [WorkerAccountProfileController::class, 'update']);
+        Route::put('password', [WorkerAccountProfileController::class, 'updatePassword']);
         Route::get('work-areas', [WorkerWorkAreasController::class, 'show']);
         Route::put('work-areas', [WorkerWorkAreasController::class, 'update']);
         Route::get('working-hours', [WorkerWorkingHoursController::class, 'show']);
