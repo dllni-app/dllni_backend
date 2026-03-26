@@ -31,6 +31,9 @@ final class WorkerAccountProfileController
             if (array_key_exists('name', $validated)) {
                 $updates['name'] = $validated['name'];
             }
+            if (array_key_exists('email', $validated)) {
+                $updates['email'] = $validated['email'];
+            }
             if (array_key_exists('phone', $validated)) {
                 $updates['phone'] = $validated['phone'];
             }
@@ -42,6 +45,12 @@ final class WorkerAccountProfileController
 
         if ($request->hasFile('avatar')) {
             MediaHelper::updateMedia($request->file('avatar'), $worker, 'avatar');
+        }
+
+        if (array_key_exists('bio', $validated)) {
+            $worker->update([
+                'bio' => $validated['bio'],
+            ]);
         }
 
         if (array_key_exists('isActive', $validated)) {
