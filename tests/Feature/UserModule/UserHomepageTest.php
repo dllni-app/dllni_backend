@@ -44,17 +44,19 @@ it('returns restaurant details without authentication', function (): void {
     $response = $this->getJson("/api/v1/user/restaurants/{$restaurant->id}");
 
     // Assert
-    $response->assertOk()->assertJsonStructure([
-        'data' => [
-            'id',
-            'name',
-            'address',
-            'city',
-            'district',
-            'averageRating',
-            'isActive',
-        ],
-    ]);
+    $response
+        ->assertOk()
+        ->assertJsonStructure([
+            'restaurant' => ['id', 'name', 'isActive'],
+            'offers',
+            'popularProducts',
+            'categories',
+            'ratingSummary' => ['average', 'total', 'counts'],
+            'reviews',
+        ])
+        ->assertJsonPath('restaurant.id', $restaurant->id)
+        ->assertJsonPath('restaurant.name', 'IndoMart')
+        ->assertJsonPath('restaurant.isActive', true);
 });
 
 it('returns current user when authenticated', function (): void {

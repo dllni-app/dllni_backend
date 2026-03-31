@@ -410,6 +410,43 @@
           }
         }
       ]
+    },
+    {
+      "name": "Restaurants (Details)",
+      "item": [
+        {
+          "name": "Restaurant details page",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/restaurants/{{restaurantId}}?reviewsPerPage=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "restaurants",
+                "{{restaurantId}}"
+              ],
+              "query": [
+                {
+                  "key": "reviewsPerPage",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Restaurant details page payload.\n\n**Query params**:\n- `reviewsPerPage` (optional)\n\n**Response**:\n- `restaurant`\n- `offers`\n- `popularProducts`\n- `categories`\n- `ratingSummary`\n- `reviews` (paginated)"
+          }
+        }
+      ]
     }
   ],
   "variable": [
@@ -420,6 +457,10 @@
     {
       "key": "token",
       "value": ""
+    },
+    {
+      "key": "restaurantId",
+      "value": "1"
     }
   ]
 }
