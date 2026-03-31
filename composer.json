@@ -51,7 +51,9 @@
             "Modules\\Resturants\\": "Modules/Resturants/app/",
             "Modules\\Cleaning\\": "Modules/Cleaning/app/",
             "Modules\\Supermarket\\": "Modules/Supermarket/app/",
-            "Modules\\Supermarket\\Database\\Seeders\\": "Modules/Supermarket/database/seeders/"
+            "Modules\\Supermarket\\Database\\Seeders\\": "Modules/Supermarket/database/seeders/",
+            "Modules\\User\\": "Modules/User/app/",
+            "Modules\\User\\Database\\Seeders\\": "Modules/User/database/seeders/"
         }
     },
     "autoload-dev": {

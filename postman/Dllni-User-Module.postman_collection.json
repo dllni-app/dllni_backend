@@ -1,0 +1,355 @@
+{
+  "info": {
+    "_postman_id": "3d8a6f0b-9f8f-4d42-8d8c-6d4c4c8b3a10",
+    "name": "Dllni - User Module (SMS OTP Auth) - v1",
+    "description": "## Base\n- `{{baseUrl}}` defaults to `http://Dllni.test`\n- All endpoints are prefixed with `/api/v1/user/*`\n\n## Flow overview\n### Register + verify\n1. `POST /register` creates the user then sends OTP to the phone.\n2. `POST /verify-account` verifies OTP and returns a Sanctum token.\n\n### Login (SMS OTP)\n1. `POST /login` checks password then sends OTP.\n2. `POST /login/verify` verifies OTP and returns a Sanctum token.\n\n### Reset password (SMS OTP)\n1. `POST /reset-password` sends OTP if the phone exists.\n2. `POST /reset-password/confirm` verifies OTP, updates password, and returns a token.\n\n## Auth\n- After you get a token, set `{{token}}` and use it as `Authorization: Bearer {{token}}` where needed.\n\n## Notes\n- SMS provider is abstracted behind a provider interface so you can plug in a Syrian SMS provider later.\n",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Register",
+      "item": [
+        {
+          "name": "Register (send OTP)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test User\",\n  \"email\": \"test.user@example.com\",\n  \"phone\": \"+963944000111\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "register"
+              ]
+            },
+            "description": "Creates a new user and sends an SMS OTP for account verification.\n\n**Response**:\n- `message`\n- `expiresAt` (ISO 8601)"
+          }
+        },
+        {
+          "name": "Verify account (OTP) -> token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+963944000111\",\n  \"otp\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/verify-account",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "verify-account"
+              ]
+            },
+            "description": "Verifies the registration OTP, marks the account as verified, and returns a Sanctum token.\n\n**Response**:\n- `user`\n- `token`"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Login",
+      "item": [
+        {
+          "name": "Login (send OTP)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+963944000222\",\n  \"password\": \"secret123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "login"
+              ]
+            },
+            "description": "Checks password, then sends an SMS OTP for login.\n\n**Response**:\n- `message`\n- `expiresAt` (ISO 8601)"
+          }
+        },
+        {
+          "name": "Login verify (OTP) -> token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+963944000222\",\n  \"password\": \"secret123\",\n  \"otp\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/login/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "login",
+                "verify"
+              ]
+            },
+            "description": "Verifies the login OTP and returns a Sanctum token.\n\n**Response**:\n- `user`\n- `token`"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reset password",
+      "item": [
+        {
+          "name": "Reset password (send OTP)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+963944000333\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/reset-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "reset-password"
+              ]
+            },
+            "description": "Sends an OTP if the phone exists (response is intentionally generic).\n\n**Response**:\n- `message`\n- `expiresAt` (may be null)"
+          }
+        },
+        {
+          "name": "Reset password confirm (OTP) -> token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+963944000333\",\n  \"otp\": \"123456\",\n  \"password\": \"new-password123\",\n  \"password_confirmation\": \"new-password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/reset-password/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "reset-password",
+                "confirm"
+              ]
+            },
+            "description": "Verifies OTP, resets password, and returns a token.\n\n**Response**:\n- `message`\n- `token`"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Home (Restaurants)",
+      "item": [
+        {
+          "name": "Featured offers (restaurants)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/home/featured-offers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "home",
+                "featured-offers"
+              ]
+            },
+            "description": "Restaurant section homepage: featured offers.\n\n**Response**:\n- `restaurants` (array of offers)"
+          }
+        },
+        {
+          "name": "Nearby restaurants",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/home/nearby/restaurants",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "home",
+                "nearby",
+                "restaurants"
+              ]
+            },
+            "description": "Restaurant section homepage: nearby restaurants.\n\nOptional query params:\n- `latitude`\n- `longitude`\n\n**Response**:\n- `restaurants` (array of restaurants)"
+          }
+        },
+        {
+          "name": "Nearby stores (supermarket)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/home/nearby/stores",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "home",
+                "nearby",
+                "stores"
+              ]
+            },
+            "description": "Nearby stores (kept for parity with existing endpoint).\n\nOptional query params:\n- `latitude`\n- `longitude`\n\n**Response**:\n- `stores` (array of stores)"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Me",
+      "item": [
+        {
+          "name": "Current user (requires token)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "me"
+              ]
+            },
+            "description": "Returns the authenticated user.\n\n**Headers**:\n- `Authorization: Bearer {{token}}`\n\n**Response**:\n- `user`"
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://Dllni.test"
+    },
+    {
+      "key": "token",
+      "value": ""
+    }
+  ]
+}
+

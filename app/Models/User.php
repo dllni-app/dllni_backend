@@ -29,6 +29,7 @@ use Spatie\Permission\Traits\HasRoles;
  * @property-read string|null $phone
  * @property-read UserModuleType|null $module_type
  * @property-read CarbonInterface|null $email_verified_at
+ * @property-read CarbonInterface|null $phone_verified_at
  * @property-read string $password
  * @property-read string|null $remember_token
  * @property-read CarbonInterface $created_at
@@ -70,6 +71,7 @@ final class User extends Authenticatable implements HasMedia
             'phone' => 'string',
             'module_type' => UserModuleType::class,
             'email_verified_at' => 'datetime',
+            'phone_verified_at' => 'datetime',
             'password' => 'hashed',
             'remember_token' => 'string',
             'created_at' => 'datetime',
