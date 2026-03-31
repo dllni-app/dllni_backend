@@ -133,4 +133,12 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
         Route::patch('notifications/read-all', RestaurantOwnerNotificationMarkReadAllController::class);
         Route::patch('notifications/{notification}/read', RestaurantOwnerNotificationMarkReadController::class);
     });
+
+    Route::prefix('resturant-owner')->group(function () {
+        Route::get('offers', RestaurantOwnerOffersIndexController::class);
+        Route::get('offers/summary', RestaurantOwnerOfferSummaryController::class);
+        Route::apiResource('offers', RestaurantOwnerOffersController::class)
+            ->except('index')
+            ->names('resturant-owner.offers');
+    });
 });
