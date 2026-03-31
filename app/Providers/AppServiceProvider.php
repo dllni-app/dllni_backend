@@ -35,6 +35,7 @@ use Modules\Supermarket\Policies\SmStoreDailyStatPolicy;
 use Modules\Supermarket\Policies\SmStoreDocumentPolicy;
 use Modules\Supermarket\Policies\SmStorePolicy;
 use Modules\Supermarket\Policies\SmStoreTrustLogPolicy;
+use Modules\User\Models\MarketingOffer;
 
 final class AppServiceProvider extends ServiceProvider
 {
@@ -112,6 +113,7 @@ final class AppServiceProvider extends ServiceProvider
             'product' => Product::class,
             'restaurant' => Restaurant::class,
             'sm_product' => SmProduct::class,
+            'marketing_offer' => MarketingOffer::class,
             'cleaning_booking' => CleaningBooking::class,
             'event_booking' => \Modules\Cleaning\Models\EventBooking::class,
         ]);

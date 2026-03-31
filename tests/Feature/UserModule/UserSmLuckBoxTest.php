@@ -67,7 +67,16 @@ it('returns luck box bundle suggestions', function (): void {
                 'itemsDescription',
                 'totalPrice',
                 'estimatedMinutes',
-                'lineItems',
+                'lineItems' => [
+                    [
+                        'productId',
+                        'name',
+                        'quantity',
+                        'unitPrice',
+                        'lineTotal',
+                        'imageUrl',
+                    ],
+                ],
             ],
         ],
     ]);

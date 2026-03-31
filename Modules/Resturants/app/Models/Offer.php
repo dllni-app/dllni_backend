@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Modules\Resturants\Models;
 
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Modules\Resturants\Enums\DiscountType;
+use Modules\Resturants\Enums\OfferListingUrgency;
 use Modules\Resturants\Traits\FilterQueries\OfferFilterQuery;
 
 final class Offer extends Model
@@ -33,6 +35,31 @@ final class Offer extends Model
     {
         return $this->belongsToMany(Product::class, 'offer_product')
             ->withTimestamps();
+    }
+
+    public function listingUrgencyTag(): ?OfferListingUrgency
+    {
+        $endsAt = $this->ends_at;
+
+        if ($endsAt === null) {
+            return null;
+        }
+
+        $now = CarbonImmutable::now();
+
+        if ($endsAt->lessThanOrEqualTo($now)) {
+            return null;
+        }
+
+        if ($endsAt->isToday()) {
+            return OfferListingUrgency::TodaysOffer;
+        }
+
+        if ($endsAt->lessThanOrEqualTo($now->addHours(48))) {
+            return OfferListingUrgency::EndingSoon;
+        }
+
+        return OfferListingUrgency::LimitedTime;
     }
 
     protected function casts(): array

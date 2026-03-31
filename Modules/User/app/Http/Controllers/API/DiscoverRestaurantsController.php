@@ -18,7 +18,7 @@ final class DiscoverRestaurantsController
         $now = CarbonImmutable::now();
         $query = Restaurant::query()
             ->where('is_active', true)
-            ->with(['media', 'cuisineTypes']);
+            ->with(['media', 'cuisineTypes', 'primaryActiveOffer']);
 
         $search = $request->validated('search');
         if (is_string($search) && $search !== '') {

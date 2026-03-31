@@ -26,6 +26,14 @@ use Modules\User\Http\Controllers\API\SmStoresIndexController;
 use Modules\User\Http\Controllers\API\UserAccountPasswordController;
 use Modules\User\Http\Controllers\API\UserAccountShowController;
 use Modules\User\Http\Controllers\API\UserAccountUpdateController;
+use Modules\User\Http\Controllers\API\UserAddressDestroyController;
+use Modules\User\Http\Controllers\API\UserAddressIndexController;
+use Modules\User\Http\Controllers\API\UserAddressSetDefaultController;
+use Modules\User\Http\Controllers\API\UserAddressStoreController;
+use Modules\User\Http\Controllers\API\UserAddressUpdateController;
+use Modules\User\Http\Controllers\API\UserMarketingOfferShowController;
+use Modules\User\Http\Controllers\API\UserMarketingOffersIndexController;
+use Modules\User\Http\Controllers\API\UserNotificationsIndexController;
 use Modules\User\Http\Controllers\API\UserProductDetailsController;
 use Modules\User\Http\Controllers\API\UserRestaurantDetailsController;
 use Modules\User\Http\Controllers\API\UserRestaurantOrdersController;
@@ -58,12 +66,23 @@ Route::prefix('v1/user')->group(function (): void {
     Route::get('restaurants/{restaurant}', UserRestaurantDetailsController::class);
     Route::get('products/{product}', UserProductDetailsController::class);
 
+    Route::get('offers', UserMarketingOffersIndexController::class);
+    Route::get('offers/{marketingOffer}', UserMarketingOfferShowController::class);
+
     Route::middleware(['auth:sanctum'])->group(function (): void {
         Route::get('me', MeController::class);
 
         Route::get('account', UserAccountShowController::class);
         Route::patch('account', UserAccountUpdateController::class);
         Route::put('account/password', UserAccountPasswordController::class);
+
+        Route::get('notifications', UserNotificationsIndexController::class);
+
+        Route::get('addresses', UserAddressIndexController::class);
+        Route::post('addresses', UserAddressStoreController::class);
+        Route::put('addresses/{userAddress}', UserAddressUpdateController::class);
+        Route::patch('addresses/{userAddress}/set-default', UserAddressSetDefaultController::class);
+        Route::delete('addresses/{userAddress}', UserAddressDestroyController::class);
 
         Route::get('supermarket/orders/{order}/status', SmOrderStatusController::class);
 

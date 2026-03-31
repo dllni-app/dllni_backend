@@ -6,6 +6,8 @@ namespace Modules\Resturants\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Modules\Resturants\Enums\DiscountType;
+use Modules\Resturants\Models\Offer;
 use Modules\Resturants\Models\Restaurant;
 
 /**
@@ -50,6 +52,7 @@ final class RestaurantResource extends JsonResource
             'suspensionUntil' => $this->suspension_until?->toDateTimeString(),
             'primaryImage' => $this->getFirstMediaUrl('primary-image'),
             'image' => $this->getFirstMediaUrl('primary-image'),
+            'imageUrl' => $this->getFirstMediaUrl('primary-image') ?: null,
             'banner' => $this->getFirstMediaUrl('banner-image'),
             'images' => $this->getMedia('images')->map(fn ($media) => $media->getUrl())->values()->all(),
             'lat' => $this->latitude ? (float) $this->latitude : null,
@@ -59,6 +62,13 @@ final class RestaurantResource extends JsonResource
                 'name' => $this->user->name,
                 'email' => $this->user->email,
             ]),
+            'distanceKm' => array_key_exists('distanceKm', $this->getAttributes())
+                ? round((float) $this->distanceKm, 2)
+                : null,
+            'listingOffer' => $this->when(
+                $this->relationLoaded('primaryActiveOffer'),
+                fn (): ?array => $this->formatListingOffer($this->primaryActiveOffer),
+            ),
             'cuisineTypes' => $this->whenLoaded('cuisineTypes', fn () => $this->cuisineTypes->map(fn ($ct) => [
                 'id' => $ct->id,
                 'name' => $ct->name,
@@ -70,6 +80,36 @@ final class RestaurantResource extends JsonResource
             'penalties' => $this->whenLoaded('penalties'),
             'createdAt' => $this->created_at->toDateTimeString(),
             'updatedAt' => $this->updated_at->toDateTimeString(),
+        ];
+    }
+
+    private function formatListingOffer(?Offer $offer): ?array
+    {
+        if ($offer === null) {
+            return null;
+        }
+
+        $discountType = $offer->discount_type;
+
+        $badgeText = match ($discountType) {
+            DiscountType::Percentage => $offer->discount_value !== null
+                ? mb_rtrim(mb_rtrim(number_format((float) $offer->discount_value, 2, '.', ''), '0'), '.').'%'
+                : null,
+            DiscountType::FixedAmount => $offer->discount_value !== null
+                ? mb_rtrim(mb_rtrim(number_format((float) $offer->discount_value, 2, '.', ''), '0'), '.')
+                : null,
+            null => null,
+        };
+
+        return [
+            'id' => $offer->id,
+            'title' => $offer->name,
+            'discountType' => $discountType?->value ?? $discountType,
+            'discountValue' => $offer->discount_value !== null ? (float) $offer->discount_value : null,
+            'offerBadgeText' => $badgeText,
+            'startsAt' => $offer->starts_at?->toDateTimeString(),
+            'endsAt' => $offer->ends_at?->toDateTimeString(),
+            'urgencyTag' => $offer->listingUrgencyTag()?->value,
         ];
     }
 }

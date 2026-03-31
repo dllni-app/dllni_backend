@@ -18,6 +18,7 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Modules\Resturants\Models\Restaurant;
 use Modules\Resturants\Models\RestaurantStaff;
+use Modules\User\Models\UserAddress;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\Permission\Traits\HasRoles;
@@ -92,6 +93,11 @@ final class User extends Authenticatable implements HasMedia
     public function restaurantStaff(): HasOne
     {
         return $this->hasOne(RestaurantStaff::class, 'user_id');
+    }
+
+    public function addresses(): HasMany
+    {
+        return $this->hasMany(UserAddress::class);
     }
 
     public function carts(): HasMany

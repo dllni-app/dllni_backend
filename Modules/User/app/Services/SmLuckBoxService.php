@@ -153,7 +153,7 @@ final class SmLuckBoxService
 
         $this->applyRestrictions($query, $restrictions);
 
-        return $query->with('category')->orderBy('name')->get();
+        return $query->with(['category', 'media'])->orderBy('name')->get();
     }
 
     /**
@@ -183,6 +183,23 @@ final class SmLuckBoxService
         }
     }
 
+    /**
+     * @return array{productId: int, name: string, quantity: int, unitPrice: float, lineTotal: float, imageUrl: string|null}
+     */
+    private function lineItemFromProduct(SmProduct $product, float $unitPrice): array
+    {
+        $url = $product->getFirstMediaUrl(SmProduct::IMAGE_COLLECTION);
+
+        return [
+            'productId' => $product->id,
+            'name' => $product->name,
+            'quantity' => 1,
+            'unitPrice' => $unitPrice,
+            'lineTotal' => $unitPrice,
+            'imageUrl' => $url !== '' ? $url : null,
+        ];
+    }
+
     private function effectivePrice(SmProduct $p): float
     {
         $discounted = $p->discounted_price;
@@ -192,7 +209,7 @@ final class SmLuckBoxService
 
     /**
      * @param  Collection<int, SmProduct>  $products
-     * @return array{store: SmStore, lineItems: list<array{productId: int, name: string, quantity: int, unitPrice: float, lineTotal: float}>, totalPrice: float, totalProducts: int, itemsDescription: string, estimatedMinutes: int, score: float}|null
+     * @return array{store: SmStore, lineItems: list<array{productId: int, name: string, quantity: int, unitPrice: float, lineTotal: float, imageUrl: string|null}>, totalPrice: float, totalProducts: int, itemsDescription: string, estimatedMinutes: int, score: float}|null
      */
     private function buildBestValueBundle(SmStore $store, Collection $products, float $budgetTotal): ?array
     {
@@ -208,13 +225,7 @@ final class SmLuckBoxService
             if ($total + $price > $budgetTotal + 0.0001) {
                 continue;
             }
-            $lineItems[] = [
-                'productId' => $product->id,
-                'name' => $product->name,
-                'quantity' => 1,
-                'unitPrice' => $price,
-                'lineTotal' => $price,
-            ];
+            $lineItems[] = $this->lineItemFromProduct($product, $price);
             $total += $price;
         }
 
@@ -229,7 +240,7 @@ final class SmLuckBoxService
 
     /**
      * @param  Collection<int, SmProduct>  $products
-     * @return array{store: SmStore, lineItems: list<array{productId: int, name: string, quantity: int, unitPrice: float, lineTotal: float}>, totalPrice: float, totalProducts: int, itemsDescription: string, estimatedMinutes: int, score: float}|null
+     * @return array{store: SmStore, lineItems: list<array{productId: int, name: string, quantity: int, unitPrice: float, lineTotal: float, imageUrl: string|null}>, totalPrice: float, totalProducts: int, itemsDescription: string, estimatedMinutes: int, score: float}|null
      */
     private function buildFastestBundle(SmStore $store, Collection $products, float $budgetTotal): ?array
     {
@@ -246,13 +257,7 @@ final class SmLuckBoxService
             if ($total + $price > $budgetTotal + 0.0001) {
                 continue;
             }
-            $lineItems[] = [
-                'productId' => $product->id,
-                'name' => $product->name,
-                'quantity' => 1,
-                'unitPrice' => $price,
-                'lineTotal' => $price,
-            ];
+            $lineItems[] = $this->lineItemFromProduct($product, $price);
             $total += $price;
             if ($total >= $targetMin) {
                 break;
@@ -272,7 +277,7 @@ final class SmLuckBoxService
 
     /**
      * @param  Collection<int, SmProduct>  $products
-     * @return array{store: SmStore, lineItems: list<array{productId: int, name: string, quantity: int, unitPrice: float, lineTotal: float}>, totalPrice: float, totalProducts: int, itemsDescription: string, estimatedMinutes: int, score: float}|null
+     * @return array{store: SmStore, lineItems: list<array{productId: int, name: string, quantity: int, unitPrice: float, lineTotal: float, imageUrl: string|null}>, totalPrice: float, totalProducts: int, itemsDescription: string, estimatedMinutes: int, score: float}|null
      */
     private function buildBalancedBundle(SmStore $store, Collection $products, float $budgetTotal): ?array
     {
@@ -304,13 +309,7 @@ final class SmLuckBoxService
             if ($total + $price > $budgetTotal + 0.0001) {
                 break;
             }
-            $lineItems[] = [
-                'productId' => $product->id,
-                'name' => $product->name,
-                'quantity' => 1,
-                'unitPrice' => $price,
-                'lineTotal' => $price,
-            ];
+            $lineItems[] = $this->lineItemFromProduct($product, $price);
             $total += $price;
         }
 
@@ -330,8 +329,8 @@ final class SmLuckBoxService
     }
 
     /**
-     * @param  list<array{productId: int, name: string, quantity: int, unitPrice: float, lineTotal: float}>  $lineItems
-     * @return array{store: SmStore, lineItems: list<array{productId: int, name: string, quantity: int, unitPrice: float, lineTotal: float}>, totalPrice: float, totalProducts: int, itemsDescription: string, estimatedMinutes: int, score: float}
+     * @param  list<array{productId: int, name: string, quantity: int, unitPrice: float, lineTotal: float, imageUrl: string|null}>  $lineItems
+     * @return array{store: SmStore, lineItems: list<array{productId: int, name: string, quantity: int, unitPrice: float, lineTotal: float, imageUrl: string|null}>, totalPrice: float, totalProducts: int, itemsDescription: string, estimatedMinutes: int, score: float}
      */
     private function bundlePayload(SmStore $store, array $lineItems, float $total, float $score): array
     {
@@ -354,7 +353,7 @@ final class SmLuckBoxService
     }
 
     /**
-     * @param  array{store: SmStore, lineItems: list<array{productId: int, name: string, quantity: int, unitPrice: float, lineTotal: float}>, totalPrice: float, totalProducts: int, itemsDescription: string, estimatedMinutes: int, score: float}  $bundle
+     * @param  array{store: SmStore, lineItems: list<array{productId: int, name: string, quantity: int, unitPrice: float, lineTotal: float, imageUrl: string|null}>, totalPrice: float, totalProducts: int, itemsDescription: string, estimatedMinutes: int, score: float}  $bundle
      * @return array<string, mixed>
      */
     private function formatBundle(string $label, string $labelAr, array $bundle): array

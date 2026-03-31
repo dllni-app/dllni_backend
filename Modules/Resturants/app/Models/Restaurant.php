@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Modules\Resturants\Enums\PriceRange;
 use Modules\Resturants\Traits\FilterQueries\RestaurantFilterQuery;
 use Spatie\MediaLibrary\HasMedia;
@@ -107,6 +108,19 @@ final class Restaurant extends Model implements HasMedia
     public function offers(): HasMany
     {
         return $this->hasMany(Offer::class);
+    }
+
+    public function primaryActiveOffer(): HasOne
+    {
+        return $this->hasOne(Offer::class)->ofMany(
+            ['starts_at' => 'max', 'id' => 'max'],
+            function ($query): void {
+                $now = now();
+
+                $query->where('is_active', true)
+                    ->where(fn ($q) => $q->whereNull('ends_at')->orWhere('ends_at', '>=', $now));
+            },
+        );
     }
 
     public function promoCodes(): HasMany
