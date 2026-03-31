@@ -6,7 +6,6 @@ namespace Modules\Resturants\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Modules\Resturants\Enums\DiscountType;
 use Modules\Resturants\Models\Offer;
 use Modules\Resturants\Models\Restaurant;
 
@@ -91,22 +90,12 @@ final class RestaurantResource extends JsonResource
 
         $discountType = $offer->discount_type;
 
-        $badgeText = match ($discountType) {
-            DiscountType::Percentage => $offer->discount_value !== null
-                ? mb_rtrim(mb_rtrim(number_format((float) $offer->discount_value, 2, '.', ''), '0'), '.').'%'
-                : null,
-            DiscountType::FixedAmount => $offer->discount_value !== null
-                ? mb_rtrim(mb_rtrim(number_format((float) $offer->discount_value, 2, '.', ''), '0'), '.')
-                : null,
-            null => null,
-        };
-
         return [
             'id' => $offer->id,
             'title' => $offer->name,
             'discountType' => $discountType?->value ?? $discountType,
             'discountValue' => $offer->discount_value !== null ? (float) $offer->discount_value : null,
-            'offerBadgeText' => $badgeText,
+            'offerBadgeText' => $offer->listingBadgeText(),
             'startsAt' => $offer->starts_at?->toDateTimeString(),
             'endsAt' => $offer->ends_at?->toDateTimeString(),
             'urgencyTag' => $offer->listingUrgencyTag()?->value,

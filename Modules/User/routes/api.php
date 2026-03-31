@@ -36,6 +36,11 @@ use Modules\User\Http\Controllers\API\UserMarketingOffersIndexController;
 use Modules\User\Http\Controllers\API\UserNotificationsIndexController;
 use Modules\User\Http\Controllers\API\UserProductDetailsController;
 use Modules\User\Http\Controllers\API\UserRestaurantDetailsController;
+use Modules\User\Http\Controllers\API\UserRestaurantHomeCategoriesController;
+use Modules\User\Http\Controllers\API\UserRestaurantHomeExclusiveOffersController;
+use Modules\User\Http\Controllers\API\UserRestaurantHomeLatestOrderedProductsController;
+use Modules\User\Http\Controllers\API\UserRestaurantHomeNearestRestaurantsController;
+use Modules\User\Http\Controllers\API\UserRestaurantHomeSuggestedProductsController;
 use Modules\User\Http\Controllers\API\UserRestaurantOrdersController;
 use Modules\User\Http\Controllers\API\UserRestaurantOrderShowController;
 use Modules\User\Http\Controllers\API\VerifyAccountController;
@@ -59,6 +64,13 @@ Route::prefix('v1/user')->group(function (): void {
 
     Route::get('supermarket/luck-box/options', SmLuckBoxOptionsController::class);
     Route::post('supermarket/luck-box/suggest', SmLuckBoxSuggestController::class);
+
+    Route::prefix('restaurants/home')->group(function (): void {
+        Route::get('categories', UserRestaurantHomeCategoriesController::class);
+        Route::get('exclusive-offers', UserRestaurantHomeExclusiveOffersController::class);
+        Route::get('nearest-restaurants', UserRestaurantHomeNearestRestaurantsController::class);
+        Route::get('suggested-products', UserRestaurantHomeSuggestedProductsController::class);
+    });
 
     Route::get('restaurants/discover', DiscoverRestaurantsController::class);
     Route::get('restaurants/votes/suggestions', RestaurantGroupVoteSuggestionsController::class);
@@ -90,6 +102,7 @@ Route::prefix('v1/user')->group(function (): void {
         Route::post('restaurants/checkout', RestaurantCheckoutController::class);
         Route::get('restaurants/orders', UserRestaurantOrdersController::class);
         Route::get('restaurants/orders/{order}', UserRestaurantOrderShowController::class);
+        Route::get('restaurants/home/latest-ordered-products', UserRestaurantHomeLatestOrderedProductsController::class);
 
         Route::post('restaurants/votes', RestaurantGroupVoteStoreController::class);
         Route::post('restaurants/votes/{vote}/ballots', RestaurantGroupVoteCastBallotController::class);

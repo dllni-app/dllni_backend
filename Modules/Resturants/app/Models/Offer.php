@@ -62,6 +62,21 @@ final class Offer extends Model
         return OfferListingUrgency::LimitedTime;
     }
 
+    public function listingBadgeText(): ?string
+    {
+        $discountType = $this->discount_type;
+
+        return match ($discountType) {
+            DiscountType::Percentage => $this->discount_value !== null
+                ? mb_rtrim(mb_rtrim(number_format((float) $this->discount_value, 2, '.', ''), '0'), '.').'%'
+                : null,
+            DiscountType::FixedAmount => $this->discount_value !== null
+                ? mb_rtrim(mb_rtrim(number_format((float) $this->discount_value, 2, '.', ''), '0'), '.')
+                : null,
+            null => null,
+        };
+    }
+
     protected function casts(): array
     {
         return [
