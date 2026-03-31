@@ -222,10 +222,10 @@
       ]
     },
     {
-      "name": "Home (Restaurants)",
+      "name": "Supermarket",
       "item": [
         {
-          "name": "Featured offers (restaurants)",
+          "name": "Home - Featured offers (public)",
           "request": {
             "method": "GET",
             "header": [
@@ -235,7 +235,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/user/home/featured-offers",
+              "raw": "{{baseUrl}}/api/v1/user/supermarket/home/featured-offers",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -243,15 +243,16 @@
                 "api",
                 "v1",
                 "user",
+                "supermarket",
                 "home",
                 "featured-offers"
               ]
             },
-            "description": "Restaurant section homepage: featured offers.\n\n**Response**:\n- `restaurants` (array of offers)"
+            "description": "Supermarket homepage: featured offers.\n\n**Response**:\n- `offers` (array)"
           }
         },
         {
-          "name": "Nearby restaurants",
+          "name": "Home - Nearby stores (public)",
           "request": {
             "method": "GET",
             "header": [
@@ -261,7 +262,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/user/home/nearby/restaurants",
+              "raw": "{{baseUrl}}/api/v1/user/supermarket/home/nearby-stores",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -269,16 +270,16 @@
                 "api",
                 "v1",
                 "user",
+                "supermarket",
                 "home",
-                "nearby",
-                "restaurants"
+                "nearby-stores"
               ]
             },
-            "description": "Restaurant section homepage: nearby restaurants.\n\nOptional query params:\n- `latitude`\n- `longitude`\n\n**Response**:\n- `restaurants` (array of restaurants)"
+            "description": "Supermarket homepage: nearby stores.\n\nOptional query params:\n- `latitude`\n- `longitude`\n\n**Response**:\n- `stores` (array)"
           }
         },
         {
-          "name": "Nearby stores (supermarket)",
+          "name": "Browse stores (public)",
           "request": {
             "method": "GET",
             "header": [
@@ -288,7 +289,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/user/home/nearby/stores",
+              "raw": "{{baseUrl}}/api/v1/user/supermarket/stores?perPage=20&search=",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -296,12 +297,21 @@
                 "api",
                 "v1",
                 "user",
-                "home",
-                "nearby",
+                "supermarket",
                 "stores"
+              ],
+              "query": [
+                {
+                  "key": "perPage",
+                  "value": "20"
+                },
+                {
+                  "key": "search",
+                  "value": ""
+                }
               ]
             },
-            "description": "Nearby stores (kept for parity with existing endpoint).\n\nOptional query params:\n- `latitude`\n- `longitude`\n\n**Response**:\n- `stores` (array of stores)"
+            "description": "Browse stores page (paginated). Supports `perPage`, `search`, `filter.*`, and `sort`.\n\n**Response**:\n- Laravel resource pagination (`data`, `links`, `meta`)"
           }
         }
       ]
@@ -336,6 +346,67 @@
               ]
             },
             "description": "Returns the authenticated user.\n\n**Headers**:\n- `Authorization: Bearer {{token}}`\n\n**Response**:\n- `user`"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Restaurants (Discover)",
+      "item": [
+        {
+          "name": "Discover restaurants (list)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/restaurants/discover?perPage=10&search=&sort=rating&filter[openNow]=0&filter[hasOffers]=0&latitude=&longitude=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "restaurants",
+                "discover"
+              ],
+              "query": [
+                {
+                  "key": "perPage",
+                  "value": "10"
+                },
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "sort",
+                  "value": "rating"
+                },
+                {
+                  "key": "filter[openNow]",
+                  "value": "0"
+                },
+                {
+                  "key": "filter[hasOffers]",
+                  "value": "0"
+                },
+                {
+                  "key": "latitude",
+                  "value": ""
+                },
+                {
+                  "key": "longitude",
+                  "value": ""
+                }
+              ]
+            },
+            "description": "Discover page restaurants list (for the screenshot).\n\n**Query params**:\n- `search` (optional)\n- `sort`: `rating` | `nearest` | `fastest`\n- `filter[openNow]` (0/1)\n- `filter[hasOffers]` (0/1)\n- `latitude` / `longitude` (required for `sort=nearest`)\n\n**Response**: paginated `RestaurantResource` collection."
           }
         }
       ]

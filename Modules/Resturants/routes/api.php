@@ -115,8 +115,11 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
         Route::get('offers', RestaurantOwnerOffersIndexController::class);
         Route::get('offers/summary', RestaurantOwnerOfferSummaryController::class);
         Route::get('coupons', RestaurantOwnerCouponsIndexController::class);
-        Route::apiResource('offers', RestaurantOwnerOffersController::class)->except('index');
-        Route::apiResource('promo-codes', RestaurantOwnerPromoCodesController::class);
+        Route::apiResource('offers', RestaurantOwnerOffersController::class)
+            ->except('index')
+            ->names('restaurant-owner.offers');
+        Route::apiResource('promo-codes', RestaurantOwnerPromoCodesController::class)
+            ->names('restaurant-owner.promo-codes');
         Route::get('coupons/summary', RestaurantOwnerCouponSummaryController::class);
 
         Route::get('employees', RestaurantOwnerEmployeeIndexController::class);
@@ -129,9 +132,5 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
         Route::get('notifications', RestaurantOwnerNotificationsController::class);
         Route::patch('notifications/read-all', RestaurantOwnerNotificationMarkReadAllController::class);
         Route::patch('notifications/{notification}/read', RestaurantOwnerNotificationMarkReadController::class);
-    });
-
-    Route::prefix('resturant-owner')->group(function () {
-        Route::apiResource('offers', RestaurantOwnerOffersController::class);
     });
 });

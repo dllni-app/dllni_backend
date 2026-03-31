@@ -21,6 +21,42 @@ it('returns supermarket nearby stores without authentication', function (): void
     $response->assertOk()->assertJsonStructure(['stores']);
 });
 
+it('returns supermarket browse stores without authentication', function (): void {
+    // Act
+    $response = $this->getJson('/api/v1/user/supermarket/stores');
+
+    // Assert
+    $response->assertOk()->assertJsonStructure([
+        'data',
+        'links',
+        'meta',
+    ]);
+});
+
+it('returns restaurant details without authentication', function (): void {
+    // Arrange
+    $restaurant = Modules\Resturants\Models\Restaurant::factory()->create([
+        'name' => 'IndoMart',
+        'is_active' => true,
+    ]);
+
+    // Act
+    $response = $this->getJson("/api/v1/user/restaurants/{$restaurant->id}");
+
+    // Assert
+    $response->assertOk()->assertJsonStructure([
+        'data' => [
+            'id',
+            'name',
+            'address',
+            'city',
+            'district',
+            'averageRating',
+            'isActive',
+        ],
+    ]);
+});
+
 it('returns current user when authenticated', function (): void {
     // Arrange
     $user = User::factory()->create([
