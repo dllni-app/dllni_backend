@@ -25,7 +25,7 @@ final class OrderRequest extends FormRequest
             'cancellationPolicyId' => 'nullable|exists:cancellation_policies,id',
             'orderNumber' => 'required|string|max:255|unique:orders,order_number,'.$orderId,
             'status' => 'nullable|string|in:pending,accepted,preparing,ready_for_pickup,picked_up,completed,cancelled',
-            'orderType' => 'nullable|string|in:pickup,dine_in',
+            'orderType' => 'nullable|string|in:delivery,pickup,dine_in',
             'pickupMode' => 'nullable|string|in:immediate_pickup,scheduled_pickup',
             'pickupScheduledFor' => 'nullable|date',
             'readyForPickupAt' => 'nullable|date',

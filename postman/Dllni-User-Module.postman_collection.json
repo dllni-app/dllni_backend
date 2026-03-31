@@ -313,6 +313,106 @@
             },
             "description": "Browse stores page (paginated). Supports `perPage`, `search`, `filter.*`, and `sort`.\n\n**Response**:\n- Laravel resource pagination (`data`, `links`, `meta`)"
           }
+        },
+        {
+          "name": "Luck Box - Options (public)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/supermarket/luck-box/options",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "supermarket",
+                "luck-box",
+                "options"
+              ]
+            },
+            "description": "صندوق الحظ: dropdown data.\n\n**Response**:\n- `restrictions` (value + labelAr)\n- `categoryTypes` (id + name)"
+          }
+        },
+        {
+          "name": "Luck Box - Suggest bundles (public)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"groupSize\": 4,\n  \"budgetPerPerson\": 500,\n  \"restrictions\": [],\n  \"latitude\": null,\n  \"longitude\": null,\n  \"searchRadiusKm\": null,\n  \"categoryId\": null,\n  \"storeId\": null\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/supermarket/luck-box/suggest",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "supermarket",
+                "luck-box",
+                "suggest"
+              ]
+            },
+            "description": "صندوق الحظ: suggests up to 3 bundles (`best_value`, `fastest`, `balanced`).\n\n**Body**:\n- `groupSize`, `budgetPerPerson` (required)\n- `restrictions` (optional)\n- `latitude`, `longitude`, `searchRadiusKm` (optional; radius needs lat/lng)\n- `categoryId`, `storeId` (optional filters)"
+          }
+        },
+        {
+          "name": "Order status (requires token)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/supermarket/orders/:orderId/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "supermarket",
+                "orders",
+                ":orderId",
+                "status"
+              ],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "1"
+                }
+              ]
+            },
+            "description": "Returns order tracking/status payload for the authenticated customer.\n\n**Headers**:\n- `Authorization: Bearer {{token}}`\n\n**Response**:\n- `order` (SmOrderResource with `items` + `statusLogs`)"
+          }
         }
       ]
     },
@@ -346,6 +446,164 @@
               ]
             },
             "description": "Returns the authenticated user.\n\n**Headers**:\n- `Authorization: Bearer {{token}}`\n\n**Response**:\n- `user`"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Account",
+      "item": [
+        {
+          "name": "Account summary (requires token)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/account",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "account"
+              ]
+            },
+            "description": "My Account / profile hub: returns `user` (with `primaryImage` and `phoneVerifiedAt`) plus `unreadNotificationsCount` for badge UI.\n\n**Headers**:\n- `Authorization: Bearer {{token}}`"
+          }
+        },
+        {
+          "name": "Update account (JSON)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ahmed Mohamed\",\n  \"phone\": \"+963987654321\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/account",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "account"
+              ]
+            },
+            "description": "Personal details: partial update. Changing `phone` clears `phoneVerifiedAt` until the user verifies again.\n\nOptional multipart field: `primaryImage` (file) for profile photo — use **Update account (multipart)** instead."
+          }
+        },
+        {
+          "name": "Update account (multipart + photo)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "value": "Ahmed Mohamed",
+                  "type": "text"
+                },
+                {
+                  "key": "phone",
+                  "value": "+963987654321",
+                  "type": "text"
+                },
+                {
+                  "key": "primaryImage",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/account",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "account"
+              ]
+            },
+            "description": "Same as JSON update but includes `primaryImage` file upload (Spatie `primary-image` collection)."
+          }
+        },
+        {
+          "name": "Change password (requires token)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"password\",\n  \"newPassword\": \"newpassword12\",\n  \"newPasswordConfirmation\": \"newpassword12\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/account/password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "account",
+                "password"
+              ]
+            },
+            "description": "Matches mobile validation: `newPassword` vs `newPasswordConfirmation` must match; `currentPassword` must be correct."
           }
         }
       ]
@@ -447,6 +705,368 @@
           }
         }
       ]
+    },
+    {
+      "name": "Products (Details)",
+      "item": [
+        {
+          "name": "Product details (bottom sheet)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/products/{{productId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "products",
+                "{{productId}}"
+              ]
+            },
+            "description": "Product details payload for the product bottom sheet.\n\n**Response**:\n- `product` (ProductResource)\n- `modifierGroups` (with `modifiers`)"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Restaurants (Cart)",
+      "item": [
+        {
+          "name": "Add item to cart (requires token)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": {{productId}},\n  \"quantity\": 1,\n  \"modifierIds\": [],\n  \"substituteProductId\": null,\n  \"specialInstructions\": \"\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/restaurants/cart/items",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "restaurants",
+                "cart",
+                "items"
+              ]
+            },
+            "description": "Add a restaurant product into the authenticated user's cart.\n\n**Headers**:\n- `Authorization: Bearer {{token}}`\n\n**Body**:\n- `productId` (required)\n- `quantity` (optional)\n- `modifierIds` (optional)\n- `substituteProductId` (optional)\n- `specialInstructions` (optional)\n\n**Response**:\n- `message`\n- `cartId`\n- `itemId`"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Restaurants (Group votes)",
+      "item": [
+        {
+          "name": "Vote form suggestions (public)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/restaurants/votes/suggestions?search=&cuisineTypeId=&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "restaurants",
+                "votes",
+                "suggestions"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "cuisineTypeId",
+                  "value": ""
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Durations presets, cuisine types, and product suggestions for building a group vote.\n\n**Query**:\n- `search` (optional)\n- `cuisineTypeId` (optional)\n- `limit` (optional, max 50)"
+          }
+        },
+        {
+          "name": "Create group vote (requires token)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"durationMinutes\": 30,\n  \"foodCategoryHint\": \"burger\",\n  \"cuisineTypeId\": null,\n  \"options\": [\n    { \"label\": \"Option A\", \"productId\": {{productId}} },\n    { \"label\": \"Option B\", \"productId\": null }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/restaurants/votes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "restaurants",
+                "votes"
+              ]
+            },
+            "description": "Creates a group vote (poll).\n\n**Body**:\n- `durationMinutes`: 15 | 30 | 45 | 60 | 90 | 120\n- `foodCategoryHint` (optional)\n- `cuisineTypeId` (optional)\n- `options` (2–10): `label` required, `productId` optional"
+          }
+        },
+        {
+          "name": "Show group vote (public)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/restaurants/votes/{{voteId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "restaurants",
+                "votes",
+                "{{voteId}}"
+              ]
+            },
+            "description": "Live vote state: options, tallies, voters, countdown, winner after close."
+          }
+        },
+        {
+          "name": "Cast / change ballot (requires token)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"optionId\": {{groupVoteOptionId}}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/restaurants/votes/{{voteId}}/ballots",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "restaurants",
+                "votes",
+                "{{voteId}}",
+                "ballots"
+              ]
+            },
+            "description": "Records the authenticated user's choice (upsert per user)."
+          }
+        },
+        {
+          "name": "End vote now — creator only (requires token)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/restaurants/votes/{{voteId}}/end",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "restaurants",
+                "votes",
+                "{{voteId}}",
+                "end"
+              ]
+            },
+            "description": "Closes the vote early and applies the winner (creator only)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Restaurants (Orders)",
+      "item": [
+        {
+          "name": "Checkout (create order from cart) (requires token)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restaurantId\": {{restaurantId}},\n  \"orderType\": \"pickup\",\n  \"pickupMode\": \"immediate_pickup\",\n  \"pickupScheduledFor\": null,\n  \"promoCode\": null,\n  \"specialInstructions\": \"\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/restaurants/checkout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "restaurants",
+                "checkout"
+              ]
+            },
+            "description": "Creates an order from the current cart (per restaurant).\n\n**Headers**:\n- `Authorization: Bearer {{token}}`\n\n**Body**:\n- `restaurantId` (required)\n- `orderType`: `delivery` | `pickup`\n- `pickupMode` / `pickupScheduledFor` (optional; used when pickup)\n- `promoCode` (optional)\n- `specialInstructions` (optional)"
+          }
+        },
+        {
+          "name": "List my restaurant orders (requires token)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/restaurants/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "restaurants",
+                "orders"
+              ]
+            },
+            "description": "Lists authenticated user's orders."
+          }
+        },
+        {
+          "name": "Show my restaurant order (requires token)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/restaurants/orders/{{orderId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "restaurants",
+                "orders",
+                "{{orderId}}"
+              ]
+            },
+            "description": "Shows a single order that belongs to the authenticated user."
+          }
+        }
+      ]
     }
   ],
   "variable": [
@@ -460,6 +1080,22 @@
     },
     {
       "key": "restaurantId",
+      "value": "1"
+    },
+    {
+      "key": "productId",
+      "value": "1"
+    },
+    {
+      "key": "orderId",
+      "value": "1"
+    },
+    {
+      "key": "voteId",
+      "value": "1"
+    },
+    {
+      "key": "groupVoteOptionId",
       "value": "1"
     }
   ]

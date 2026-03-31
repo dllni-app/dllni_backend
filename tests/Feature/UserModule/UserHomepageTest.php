@@ -59,6 +59,34 @@ it('returns restaurant details without authentication', function (): void {
         ->assertJsonPath('restaurant.isActive', true);
 });
 
+it('returns supermarket order status for authenticated user', function (): void {
+    // Arrange
+    $user = User::factory()->create(['phone' => '+963944888000']);
+    Sanctum::actingAs($user);
+
+    $order = Modules\Supermarket\Models\SmOrder::factory()->create([
+        'customer_id' => $user->id,
+    ]);
+
+    // Act
+    $response = $this->getJson("/api/v1/user/supermarket/orders/{$order->id}/status");
+
+    // Assert
+    $response
+        ->assertOk()
+        ->assertJsonStructure([
+            'order' => [
+                'id',
+                'orderNumber',
+                'status',
+                'storeId',
+                'items',
+                'statusLogs',
+            ],
+        ])
+        ->assertJsonPath('order.id', $order->id);
+});
+
 it('returns current user when authenticated', function (): void {
     // Arrange
     $user = User::factory()->create([

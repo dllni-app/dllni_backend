@@ -6,6 +6,7 @@ namespace Modules\Resturants\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 final class CartItem extends Model
 {
@@ -28,5 +29,17 @@ final class CartItem extends Model
     public function cart(): BelongsTo
     {
         return $this->belongsTo(Cart::class);
+    }
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class);
+    }
+
+    public function modifiers(): BelongsToMany
+    {
+        return $this->belongsToMany(Modifier::class, 'cart_item_modifier')
+            ->withPivot(['price'])
+            ->withTimestamps();
     }
 }
