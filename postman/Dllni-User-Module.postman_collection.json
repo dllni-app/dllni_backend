@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "3d8a6f0b-9f8f-4d42-8d8c-6d4c4c8b3a10",
     "name": "Dllni - User Module (SMS OTP Auth) - v1",
-    "description": "## Base URL & prefix\n- Collection variable `{{baseUrl}}` defaults to `http://Dllni.test` (Herd/Laragon).\n- User API base path: `/api/v1/user` (routes file: `Modules/User/routes/api.php`).\n\n## Authentication\n- **Public**: register, login OTP steps, reset password, supermarket/restaurant discovery, **restaurant home** (categories, exclusive offers, suggested products, nearest restaurants), products, marketing offers, vote read, luck box, etc.\n- **Sanctum**: set `{{token}}` from verify/login/reset responses; send `Authorization: Bearer {{token}}` for `me`, `account`, `addresses`, `notifications`, cart, checkout, orders, **restaurants/home/latest-ordered-products**, supermarket order status, vote create/ballot/end.\n\n## Restaurant homepage (`GET /api/v1/user/restaurants/home/*`)\n| Route | Auth | Purpose |\n| --- | --- | --- |\n| `.../categories` | No | Cuisine types that have ≥1 **active** restaurant |\n| `.../exclusive-offers` | No | Active offers on active restaurants; optional `latitude`, `longitude`, `limit` |\n| `.../suggested-products` | No | Featured / highly rated menu items; `limit` |\n| `.../nearest-restaurants` | No | Near-user list; optional `latitude`, `longitude`, `limit`; `isFavorited` true only with Bearer token |\n| `.../latest-ordered-products` | **Yes** | Distinct products from user’s non-cancelled orders (reorder / اطلب مجدداً); `limit` |\n\n**Distance**: Haversine runs on MySQL/Postgres, etc. **SQLite** (`phpunit`) does not compute `distanceKm` (values `null`).\n\n## Success status codes (typical)\n- `200` — OK (JSON body).\n- `201` — Created (addresses, cart item, checkout order, group vote).\n- `204` — No content (delete address).\n- `404` — Not found (invalid id, inactive marketing offer, wrong user’s resource).\n- `403` / `401` — Forbidden / Unauthenticated (missing or invalid token).\n- `422` — Validation errors: `{ \"message\": \"...\", \"errors\": { \"field\": [\"...\"] } }`.\n\n## Pagination (Laravel)\n- Paginated resources return `data` (array of items), `links` (`first`, `last`, `prev`, `next`), and `meta` (`current_page`, `from`, `last_page`, `path`, `per_page`, `to`, `total`, …).\n- Query: `page`, `perPage` (camelCase in this API where FormRequest defines it).\n\n## Media in JSON (summary)\n- **Restaurant** `RestaurantResource`: `primaryImage`, `image`, `banner`, `images`.\n- **Restaurant product** `ProductResource`: `primaryImage`, `images`.\n- **User** `UserResource` (with `media` loaded): `primaryImage` / `images` as `MediaResource` objects (`url`, `thumbnailUrl`, …).\n- **Marketing offers**: `imageUrl` (Spatie `card-image`) or `null`.\n- **Supermarket** `SmStoreResource`: `cover`, `logo`; luck-box line items: `imageUrl`.\n- **Supermarket order** items: product media via `SmProductResource` when loaded.\n\n## Flow overview\n### Register + verify\n1. `POST /register` → OTP sent.\n2. `POST /verify-account` → `user` + `token`.\n\n### Login (SMS OTP)\n1. `POST /login` → OTP sent.\n2. `POST /login/verify` → `user` + `token`.\n\n### Reset password\n1. `POST /reset-password` → generic message; `expiresAt` null if phone unknown.\n2. `POST /reset-password/confirm` → `message` + `token`.\n\n## Examples in this collection\nEach request includes a **saved example** (`Examples` in Postman) with a representative **200/201/204** JSON body. Adjust ids and tokens to your environment.\n\n## Notes\n- SMS/OTP is behind a provider interface.\n",
+    "description": "## Base URL & prefix\n- Collection variable `{{baseUrl}}` defaults to `http://Dllni.test` (Herd/Laragon).\n- User API base path: `/api/v1/user` (routes file: `Modules/User/routes/api.php`).\n\n## Authentication\n- **Public**: register, login OTP steps, reset password, supermarket/restaurant discovery, **restaurant home** (categories, exclusive offers, suggested products, nearest restaurants), products, marketing offers, vote read, luck box, etc.\n- **Sanctum**: set `{{token}}` from verify/login/reset responses; send `Authorization: Bearer {{token}}` for `me`, `account`, `addresses`, **favorites** (restaurants + supermarket stores), `notifications`, cart, checkout, orders, **restaurants/home/latest-ordered-products**, supermarket order status, vote create/ballot/end.\n\n## Favorites — المفضلة (authenticated)\nPolymorphic rows in `favorites` (`favorable_type` = `Restaurant` or `SmStore`). List order: **most recently favorited first** (`favorites.created_at` desc).\n\n| Path | Method | Notes |\n| --- | --- | --- |\n| `/api/v1/user/favorites/restaurants` | GET | Paginated `RestaurantResource`; query `perPage` (1–100, default 20), `page` |\n| `/api/v1/user/favorites/restaurants/{id}` | POST | No body. **201** first add, **200** if already favorited. Body: `{ \"restaurant\": … }`. **422** if restaurant not active. |\n| `/api/v1/user/favorites/restaurants/{id}` | DELETE | **204** empty body (safe if not favorited). |\n| `/api/v1/user/favorites/supermarket/stores` | GET | Paginated `SmStoreResource`; `perPage`, `page` |\n| `/api/v1/user/favorites/supermarket/stores/{id}` | POST | **201** / **200**; `{ \"store\": … }`. **422** if store inactive. |\n| `/api/v1/user/favorites/supermarket/stores/{id}` | DELETE | **204** |\n\n## Restaurant homepage (`GET /api/v1/user/restaurants/home/*`)\n| Route | Auth | Purpose |\n| --- | --- | --- |\n| `.../categories` | No | Cuisine types that have ≥1 **active** restaurant |\n| `.../exclusive-offers` | No | Active offers on active restaurants; optional `latitude`, `longitude`, `limit` |\n| `.../suggested-products` | No | Featured / highly rated menu items; `limit` |\n| `.../nearest-restaurants` | No | Near-user list; optional `latitude`, `longitude`, `limit`; `isFavorited` true only with Bearer token |\n| `.../latest-ordered-products` | **Yes** | Distinct products from user’s non-cancelled orders (reorder / اطلب مجدداً); `limit` |\n\n**Distance**: Haversine runs on MySQL/Postgres, etc. **SQLite** (`phpunit`) does not compute `distanceKm` (values `null`).\n\n## Success status codes (typical)\n- `200` — OK (JSON body).\n- `201` — Created (addresses, cart item, checkout order, group vote, first-time favorite add for restaurant/store).\n- `204` — No content (delete address).\n- `404` — Not found (invalid id, inactive marketing offer, wrong user’s resource).\n- `403` / `401` — Forbidden / Unauthenticated (missing or invalid token).\n- `422` — Validation errors: `{ \"message\": \"...\", \"errors\": { \"field\": [\"...\"] } }`.\n\n## Pagination (Laravel)\n- Paginated resources return `data` (array of items), `links` (`first`, `last`, `prev`, `next`), and `meta` (`current_page`, `from`, `last_page`, `path`, `per_page`, `to`, `total`, …).\n- Query: `page`, `perPage` (camelCase in this API where FormRequest defines it).\n\n## Media in JSON (summary)\n- **Restaurant** `RestaurantResource`: `primaryImage`, `image`, `banner`, `images`.\n- **Restaurant product** `ProductResource`: `primaryImage`, `images`.\n- **User** `UserResource` (with `media` loaded): `primaryImage` / `images` as `MediaResource` objects (`url`, `thumbnailUrl`, …).\n- **Marketing offers**: `imageUrl` (Spatie `card-image`) or `null`.\n- **Supermarket** `SmStoreResource`: `cover`, `logo`; luck-box line items: `imageUrl`.\n- **Supermarket order** items: product media via `SmProductResource` when loaded.\n\n## Flow overview\n### Register + verify\n1. `POST /register` → OTP sent.\n2. `POST /verify-account` → `user` + `token`.\n\n### Login (SMS OTP)\n1. `POST /login` → OTP sent.\n2. `POST /login/verify` → `user` + `token`.\n\n### Reset password\n1. `POST /reset-password` → generic message; `expiresAt` null if phone unknown.\n2. `POST /reset-password/confirm` → `message` + `token`.\n\n## Examples in this collection\nEach request includes a **saved example** (`Examples` in Postman) with a representative **200/201/204** JSON body. Adjust ids and tokens to your environment.\n\n## Notes\n- SMS/OTP is behind a provider interface.\n",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -1315,6 +1315,253 @@
       ]
     },
     {
+      "name": "Favorites (المفضلة)",
+      "item": [
+        {
+          "name": "List favorite restaurants",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/favorites/restaurants?perPage=20&page=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "user", "favorites", "restaurants"],
+              "query": [
+                {"key": "perPage", "value": "20", "description": "1–100, default 20"},
+                {"key": "page", "value": "1"}
+              ]
+            },
+            "description": "Paginated favorite **restaurants** for the authenticated user (`RestaurantResource`, same shape as discover).\n\n**Status**: `200 OK`\n\n**Query**: `perPage`, `page`.\n\n**Order**: Newest favorite first (by `favorites.created_at`)."
+          },
+          "response": [
+            {
+              "name": "200 OK — favorites page",
+              "originalRequest": {
+                "method": "GET",
+                "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/user/favorites/restaurants?perPage=20&page=1",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "user", "favorites", "restaurants"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "cookie": [],
+              "body": "{\n  \"data\": [\n    {\n      \"id\": 1,\n      \"name\": \"مطعم الشام\",\n      \"primaryImage\": \"https://example.test/storage/media/r1/primary.jpg\",\n      \"averageRating\": 4.7,\n      \"isFeatured\": true\n    }\n  ],\n  \"links\": {\"first\": null, \"last\": null, \"prev\": null, \"next\": null},\n  \"meta\": {\"current_page\": 1, \"per_page\": 20, \"total\": 1}\n}"
+            }
+          ]
+        },
+        {
+          "name": "Add restaurant to favorites",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/favorites/restaurants/{{restaurantId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "user", "favorites", "restaurants", "{{restaurantId}}"]
+            },
+            "description": "Add an **active** restaurant to favorites (idempotent).\n\n**Status**: `201 Created` on first add | `200 OK` if already favorited\n\n**Response**: `{ \"restaurant\": RestaurantResource }` (media, `cuisineTypes`, `primaryActiveOffer` loaded).\n\n**Errors**: `401`, `404` (invalid id), `422` if `is_active` is false (message: restaurant not available)."
+          },
+          "response": [
+            {
+              "name": "201 Created — favorited",
+              "originalRequest": {
+                "method": "POST",
+                "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/user/favorites/restaurants/1",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "user", "favorites", "restaurants", "1"]
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "cookie": [],
+              "body": "{\n  \"restaurant\": {\n    \"id\": 1,\n    \"name\": \"مطعم الشام\",\n    \"slug\": \"sham-restaurant\",\n    \"isActive\": true,\n    \"primaryImage\": \"https://example.test/storage/media/r1/primary.jpg\"\n  }\n}"
+            },
+            {
+              "name": "200 OK — already favorited",
+              "originalRequest": {
+                "method": "POST",
+                "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/user/favorites/restaurants/1",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "user", "favorites", "restaurants", "1"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "cookie": [],
+              "body": "{\n  \"restaurant\": {\n    \"id\": 1,\n    \"name\": \"مطعم الشام\",\n    \"isActive\": true\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Remove restaurant from favorites",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/favorites/restaurants/{{restaurantId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "user", "favorites", "restaurants", "{{restaurantId}}"]
+            },
+            "description": "Remove a restaurant from favorites.\n\n**Status**: `204 No Content` — empty body (also when it was not favorited)."
+          },
+          "response": [
+            {
+              "name": "204 No Content",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/user/favorites/restaurants/1",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "user", "favorites", "restaurants", "1"]
+                }
+              },
+              "status": "No Content",
+              "code": 204,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": ""
+            }
+          ]
+        },
+        {
+          "name": "List favorite supermarket stores",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/favorites/supermarket/stores?perPage=20&page=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "user", "favorites", "supermarket", "stores"],
+              "query": [
+                {"key": "perPage", "value": "20"},
+                {"key": "page", "value": "1"}
+              ]
+            },
+            "description": "Paginated favorite **supermarket stores** (`SmStoreResource` with `owner` loaded).\n\n**Status**: `200 OK`\n\n**Query**: `perPage`, `page`."
+          },
+          "response": [
+            {
+              "name": "200 OK — store favorites",
+              "originalRequest": {
+                "method": "GET",
+                "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/user/favorites/supermarket/stores?perPage=20&page=1",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "user", "favorites", "supermarket", "stores"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "cookie": [],
+              "body": "{\n  \"data\": [\n    {\n      \"id\": 1,\n      \"name\": \"سوبر ماركت النور\",\n      \"slug\": \"al-noor\",\n      \"isActive\": true,\n      \"cover\": null,\n      \"logo\": null,\n      \"owner\": {\"id\": 5, \"name\": \"Owner\", \"email\": \"owner@example.com\"}\n    }\n  ],\n  \"links\": {\"first\": null, \"last\": null, \"prev\": null, \"next\": null},\n  \"meta\": {\"current_page\": 1, \"per_page\": 20, \"total\": 1}\n}"
+            }
+          ]
+        },
+        {
+          "name": "Add supermarket store to favorites",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/favorites/supermarket/stores/{{smStoreId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "user", "favorites", "supermarket", "stores", "{{smStoreId}}"]
+            },
+            "description": "Add an **active** supermarket store to favorites (idempotent).\n\n**Status**: `201` first add | `200` if already favorited\n\n**Response**: `{ \"store\": SmStoreResource }` (`owner` loaded).\n\n**Errors**: `422` if store inactive (message: store not available)."
+          },
+          "response": [
+            {
+              "name": "201 Created — store favorited",
+              "originalRequest": {
+                "method": "POST",
+                "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/user/favorites/supermarket/stores/1",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "user", "favorites", "supermarket", "stores", "1"]
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "cookie": [],
+              "body": "{\n  \"store\": {\n    \"id\": 1,\n    \"name\": \"سوبر ماركت النور\",\n    \"slug\": \"al-noor\",\n    \"isActive\": true,\n    \"owner\": {\"id\": 5, \"name\": \"Owner\", \"email\": \"owner@example.com\"}\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Remove supermarket store from favorites",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/favorites/supermarket/stores/{{smStoreId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "user", "favorites", "supermarket", "stores", "{{smStoreId}}"]
+            },
+            "description": "Remove a supermarket store from favorites.\n\n**Status**: `204 No Content`."
+          },
+          "response": [
+            {
+              "name": "204 No Content",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/user/favorites/supermarket/stores/1",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "user", "favorites", "supermarket", "stores", "1"]
+                }
+              },
+              "status": "No Content",
+              "code": 204,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "Offers (العروض — platform)",
       "item": [
         {
@@ -2428,6 +2675,10 @@
     },
     {
       "key": "addressId",
+      "value": "1"
+    },
+    {
+      "key": "smStoreId",
       "value": "1"
     }
   ]

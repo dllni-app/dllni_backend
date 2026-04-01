@@ -36,6 +36,9 @@ use Modules\User\Http\Controllers\API\UserMarketingOffersIndexController;
 use Modules\User\Http\Controllers\API\UserNotificationsIndexController;
 use Modules\User\Http\Controllers\API\UserProductDetailsController;
 use Modules\User\Http\Controllers\API\UserRestaurantDetailsController;
+use Modules\User\Http\Controllers\API\UserRestaurantFavoriteDestroyController;
+use Modules\User\Http\Controllers\API\UserRestaurantFavoritesIndexController;
+use Modules\User\Http\Controllers\API\UserRestaurantFavoriteStoreController;
 use Modules\User\Http\Controllers\API\UserRestaurantHomeCategoriesController;
 use Modules\User\Http\Controllers\API\UserRestaurantHomeExclusiveOffersController;
 use Modules\User\Http\Controllers\API\UserRestaurantHomeLatestOrderedProductsController;
@@ -43,6 +46,9 @@ use Modules\User\Http\Controllers\API\UserRestaurantHomeNearestRestaurantsContro
 use Modules\User\Http\Controllers\API\UserRestaurantHomeSuggestedProductsController;
 use Modules\User\Http\Controllers\API\UserRestaurantOrdersController;
 use Modules\User\Http\Controllers\API\UserRestaurantOrderShowController;
+use Modules\User\Http\Controllers\API\UserSupermarketStoreFavoriteDestroyController;
+use Modules\User\Http\Controllers\API\UserSupermarketStoreFavoritesIndexController;
+use Modules\User\Http\Controllers\API\UserSupermarketStoreFavoriteStoreController;
 use Modules\User\Http\Controllers\API\VerifyAccountController;
 
 Route::prefix('v1/user')->group(function (): void {
@@ -95,6 +101,14 @@ Route::prefix('v1/user')->group(function (): void {
         Route::put('addresses/{userAddress}', UserAddressUpdateController::class);
         Route::patch('addresses/{userAddress}/set-default', UserAddressSetDefaultController::class);
         Route::delete('addresses/{userAddress}', UserAddressDestroyController::class);
+
+        Route::get('favorites/restaurants', UserRestaurantFavoritesIndexController::class);
+        Route::post('favorites/restaurants/{restaurant}', UserRestaurantFavoriteStoreController::class);
+        Route::delete('favorites/restaurants/{restaurant}', UserRestaurantFavoriteDestroyController::class);
+
+        Route::get('favorites/supermarket/stores', UserSupermarketStoreFavoritesIndexController::class);
+        Route::post('favorites/supermarket/stores/{store}', UserSupermarketStoreFavoriteStoreController::class);
+        Route::delete('favorites/supermarket/stores/{store}', UserSupermarketStoreFavoriteDestroyController::class);
 
         Route::get('supermarket/orders/{order}/status', SmOrderStatusController::class);
 

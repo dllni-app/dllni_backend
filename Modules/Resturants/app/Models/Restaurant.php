@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Modules\Resturants\Enums\PriceRange;
 use Modules\Resturants\Traits\FilterQueries\RestaurantFilterQuery;
 use Spatie\MediaLibrary\HasMedia;
@@ -151,6 +152,11 @@ final class Restaurant extends Model implements HasMedia
     public function customerReviews(): HasMany
     {
         return $this->hasMany(RestaurantCustomerReview::class, 'restaurant_id');
+    }
+
+    public function userFavorites(): MorphMany
+    {
+        return $this->morphMany(Favorite::class, 'favorable');
     }
 
     public function registerMediaCollections(): void

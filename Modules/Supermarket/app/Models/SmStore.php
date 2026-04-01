@@ -8,6 +8,8 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Modules\Resturants\Models\Favorite;
 use Modules\Supermarket\Traits\FilterQueries\SmStoreFilterQuery;
 
 final class SmStore extends Model
@@ -112,6 +114,11 @@ final class SmStore extends Model
     public function staff(): HasMany
     {
         return $this->hasMany(SmStoreStaff::class, 'store_id');
+    }
+
+    public function userFavorites(): MorphMany
+    {
+        return $this->morphMany(Favorite::class, 'favorable');
     }
 
     protected function casts(): array
