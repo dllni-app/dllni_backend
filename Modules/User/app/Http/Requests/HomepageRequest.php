@@ -21,6 +21,7 @@ final class HomepageRequest extends FormRequest
         return [
             'latitude' => ['sometimes', 'numeric', 'between:-90,90'],
             'longitude' => ['sometimes', 'numeric', 'between:-180,180'],
+            'limit' => ['sometimes', 'integer', 'min:1', 'max:30'],
         ];
     }
 }

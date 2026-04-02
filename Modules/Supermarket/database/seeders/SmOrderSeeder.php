@@ -35,7 +35,7 @@ final class SmOrderSeeder extends Seeder
 
         $policy = CancellationPolicy::where('module', 'supermarket')->where('is_default', true)->first();
 
-        $stores = SmStore::with(['products' => fn ($q) => $q->where('is_available', true)->limit(5)])->take(2)->get();
+        $stores = SmStore::with(['products' => fn ($q) => $q->where('is_available', true)->limit(5)])->take(3)->get();
 
         // Define statuses to seed with
         $statuses = [
@@ -50,7 +50,7 @@ final class SmOrderSeeder extends Seeder
         $orderCount = 0;
         $maxOrders = 20;
 
-        foreach ($stores as $store) {
+        foreach ($stores as $storeIndex => $store) {
             $products = $store->products;
             if ($products->isEmpty()) {
                 continue;
@@ -59,6 +59,9 @@ final class SmOrderSeeder extends Seeder
             // Create 10 orders per store to reach 20 total
             for ($i = 0; $i < 10 && $orderCount < $maxOrders; $i++) {
                 $status = $statuses[$i % count($statuses)];
+                if ($storeIndex === 0 && $i < 6) {
+                    $status = SmOrderStatus::Completed;
+                }
                 $index = $orderCount;
                 $orderNumber = 'SM-'.mb_strtoupper(Str::random(6)).'-'.$store->id.'-'.$index;
                 if (SmOrder::where('order_number', $orderNumber)->exists()) {

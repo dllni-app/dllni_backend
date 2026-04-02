@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 declare(strict_types=1);
 
@@ -15,7 +15,7 @@ final class SmStoreSeeder extends Seeder
         $owner = User::firstOrCreate(
             ['email' => 'supermarket.owner@example.com'],
             [
-                'name' => 'مالك السوبرماركت',
+                'name' => 'Ù…Ø§Ù„Ùƒ Ø§Ù„Ø³ÙˆØ¨Ø±Ù…Ø§Ø±ÙƒØª',
                 'password' => bcrypt('password'),
                 'email_verified_at' => now(),
             ]
@@ -23,52 +23,68 @@ final class SmStoreSeeder extends Seeder
 
         $stores = [
             [
-                'name' => 'سوبرماركت النخبة',
-                'slug' => 'elite-supermarket',
-                'description' => 'سوبرماركت متكامل يقدم خضروات وفواكه طازجة، ألبان، لحوم، ومستلزمات منزلية. جودة عالية وأسعار منافسة.',
-                'address' => 'شارع الملك عبدالله الثاني، عمان',
-                'latitude' => 31.963158,
-                'longitude' => 35.930359,
-                'phone' => '+962 6 555 3001',
-                'email' => 'info@elite-supermarket.example.com',
+                'name' => 'سوبر ماركت الأطرش',
+                'slug' => 'supermarket-al-atrash',
+                'description' => 'مخبوزات • معلبات • منظفات • ألبان و تسالي',
+                'address' => 'المزة، شارع الجلاء، دمشق',
+                'city' => 'دمشق',
+                'neighborhood' => 'المزة',
+                'latitude' => 33.5138,
+                'longitude' => 36.2765,
+                'phone' => '+963 11 555 3001',
+                'email' => 'info@atrash-market.example.com',
+                'cover' => 'https://example.com/sm/atrash/cover.jpg',
+                'logo' => 'https://example.com/sm/atrash/logo.png',
                 'is_featured' => true,
             ],
             [
-                'name' => 'سوق الخير للمواد الغذائية',
-                'slug' => 'khair-food-market',
-                'description' => 'جميع احتياجاتك المنزلية تحت سقف واحد. خضروات وفواكه يومية، أجبان، لحوم طازجة، ومعلبات.',
-                'address' => 'طريق المطار، ماركا',
-                'latitude' => 31.975000,
-                'longitude' => 35.940000,
-                'phone' => '+962 6 555 3002',
-                'email' => 'contact@khair-market.example.com',
+                'name' => 'سوبر ماركت السلطان',
+                'slug' => 'supermarket-al-sultan',
+                'description' => 'خضار • فواكه • ألبان • منظفات • أدوات منزلية',
+                'address' => 'البرامكة، شارع الثورة، دمشق',
+                'city' => 'دمشق',
+                'neighborhood' => 'البرامكة',
+                'latitude' => 33.5105,
+                'longitude' => 36.2798,
+                'phone' => '+963 11 555 3002',
+                'email' => 'hello@alsultan-market.example.com',
+                'cover' => 'https://example.com/sm/sultan/cover.jpg',
+                'logo' => 'https://example.com/sm/sultan/logo.png',
                 'is_featured' => true,
             ],
             [
-                'name' => 'بقالة الحي',
-                'slug' => 'neighborhood-grocery',
-                'description' => 'بقالة صغيرة لخدمة الحي. منتجات أساسية، مشروبات، وجبات خفيفة، وخدمة استلام سريعة.',
-                'address' => '42 شارع الجامعة، جبل عمان',
-                'latitude' => 31.955000,
-                'longitude' => 35.925000,
-                'phone' => '+962 6 555 3003',
-                'email' => 'hello@neighborhood-grocery.example.com',
+                'name' => 'سوبر ماركت النور',
+                'slug' => 'supermarket-al-noor',
+                'description' => 'معلبات • منظفات • ألبان و تسالي',
+                'address' => 'المالكي، شارع بغداد، دمشق',
+                'city' => 'دمشق',
+                'neighborhood' => 'المالكي',
+                'latitude' => 33.5162,
+                'longitude' => 36.2842,
+                'phone' => '+963 11 555 3003',
+                'email' => 'contact@alnoor-market.example.com',
+                'cover' => 'https://example.com/sm/noor/cover.jpg',
+                'logo' => 'https://example.com/sm/noor/logo.png',
                 'is_featured' => false,
             ],
         ];
 
         foreach ($stores as $data) {
-            SmStore::firstOrCreate(
+            SmStore::updateOrCreate(
                 ['slug' => $data['slug']],
                 [
                     'owner_user_id' => $owner->id,
                     'name' => $data['name'],
                     'description' => $data['description'],
                     'address' => $data['address'],
+                    'city' => $data['city'] ?? null,
+                    'neighborhood' => $data['neighborhood'] ?? null,
                     'latitude' => $data['latitude'],
                     'longitude' => $data['longitude'],
                     'phone' => $data['phone'],
                     'email' => $data['email'],
+                    'cover' => $data['cover'] ?? null,
+                    'logo' => $data['logo'] ?? null,
                     'average_rating' => fake()->randomFloat(2, 4.0, 4.9),
                     'total_reviews' => fake()->numberBetween(30, 400),
                     'trust_score' => fake()->numberBetween(80, 100),
@@ -79,3 +95,5 @@ final class SmStoreSeeder extends Seeder
         }
     }
 }
+
+
