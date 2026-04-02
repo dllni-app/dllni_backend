@@ -1,5 +1,6 @@
 <?php
-declare(strict_types = 1);
+
+declare(strict_types=1);
 
 namespace Modules\User\Services;
 
@@ -166,20 +167,18 @@ final class HomepageService
         }
 
         if ($offer->discount_percent !== null) {
-            $percent = rtrim(rtrim((string) $offer->discount_percent, '0'), '.');
+            $percent = mb_rtrim(mb_rtrim((string) $offer->discount_percent, '0'), '.');
 
-            return "??? {$percent}%";
+            return "خصم {$percent}%";
         }
 
         if ($offer->discount_value !== null) {
-            $value = rtrim(rtrim((string) $offer->discount_value, '0'), '.');
+            $value = mb_rtrim(mb_rtrim((string) $offer->discount_value, '0'), '.');
             $currency = config('app.currency', 'IQD');
 
-            return "??? {$value} {$currency}";
+            return "خصم {$value} {$currency}";
         }
 
         return null;
     }
 }
-
-
