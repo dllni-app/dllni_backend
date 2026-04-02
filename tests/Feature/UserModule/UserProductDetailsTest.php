@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+use App\Models\User;
+use Laravel\Sanctum\Sanctum;
+use Modules\Resturants\Models\Favorite;
 use Modules\Resturants\Models\Modifier;
 use Modules\Resturants\Models\ModifierGroup;
 use Modules\Resturants\Models\Product;
@@ -63,4 +66,27 @@ it('returns product details payload with modifier groups', function (): void {
             ],
         ],
     ]);
+
+    $response->assertJsonPath('product.isFavorite', false);
+});
+
+it('sets isFavorite true in product details when the product is in authenticated user favorites', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $restaurant = Restaurant::factory()->create(['is_active' => true]);
+    $product = Product::factory()->create([
+        'restaurant_id' => $restaurant->id,
+        'is_available' => true,
+    ]);
+
+    Favorite::create([
+        'user_id' => $user->id,
+        'favorable_type' => Product::class,
+        'favorable_id' => $product->id,
+    ]);
+
+    $this->getJson("/api/v1/user/products/{$product->id}")
+        ->assertOk()
+        ->assertJsonPath('product.isFavorite', true);
 });

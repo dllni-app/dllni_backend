@@ -26,7 +26,7 @@ The following users are created by the database seeders (`DashboardPermissionsSe
 - **Protected endpoints:** Send the token: `Authorization: Bearer {token}`
 - **Content-Type:** `application/json` for request bodies; responses are JSON.
 
-### 2.1 Client behavior (UI/API usage)
+### 2.1 Client behavior (UI/API usage) 
 
 All GET (with id/enum), POST, and PUT usage must follow the client behavior rules in [API_CONTRACT_CLIENT_BEHAVIOR.md](API_CONTRACT_CLIENT_BEHAVIOR.md): select menu for id/enum in GET (user sees label only); backend-known data stored in page state and not shown/editable in POST; one dedicated input per user-supplied field in POST; optimistic local update for PUT, then persist on success or revert on failure.
 

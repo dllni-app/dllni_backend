@@ -21,6 +21,7 @@ final class UserAddressUpdateRequest extends FormRequest
     {
         return [
             'label' => ['required', 'string', 'max:100'],
+            'mobile' => ['nullable', 'string', 'max:32'],
             'city' => ['nullable', 'string', 'max:255'],
             'neighborhood' => ['nullable', 'string', 'max:255'],
             'street' => ['nullable', 'string', 'max:255'],
@@ -37,6 +38,7 @@ final class UserAddressUpdateRequest extends FormRequest
     {
         $validator->after(function (Validator $validator): void {
             $hasDetail = collect($this->only([
+                'mobile',
                 'city',
                 'neighborhood',
                 'street',

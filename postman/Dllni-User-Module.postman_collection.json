@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "3d8a6f0b-9f8f-4d42-8d8c-6d4c4c8b3a10",
     "name": "Dllni - User Module (SMS OTP Auth) - v1",
-    "description": "## Base URL & prefix\n- Collection variable `{{baseUrl}}` defaults to `http://Dllni.test` (Herd/Laragon).\n- User API base path: `/api/v1/user` (routes file: `Modules/User/routes/api.php`).\n\n## Authentication\n- **Public**: register, login OTP steps, reset password, supermarket/restaurant discovery, **restaurant home** (categories, exclusive offers, suggested products, nearest restaurants), products, marketing offers, vote read, luck box, etc.\n- **Sanctum**: set `{{token}}` from verify/login/reset responses; send `Authorization: Bearer {{token}}` for `me`, `account`, `addresses`, **favorites** (restaurants + supermarket stores), `notifications`, cart, checkout, orders, **restaurants/home/latest-ordered-products**, supermarket order status, vote create/ballot/end.\n\n## Favorites — المفضلة (authenticated)\nPolymorphic rows in `favorites` (`favorable_type` = `Restaurant` or `SmStore`). List order: **most recently favorited first** (`favorites.created_at` desc).\n\n| Path | Method | Notes |\n| --- | --- | --- |\n| `/api/v1/user/favorites/restaurants` | GET | Paginated `RestaurantResource`; query `perPage` (1–100, default 20), `page` |\n| `/api/v1/user/favorites/restaurants/{id}` | POST | No body. **201** first add, **200** if already favorited. Body: `{ \"restaurant\": … }`. **422** if restaurant not active. |\n| `/api/v1/user/favorites/restaurants/{id}` | DELETE | **204** empty body (safe if not favorited). |\n| `/api/v1/user/favorites/supermarket/stores` | GET | Paginated `SmStoreResource`; `perPage`, `page` |\n| `/api/v1/user/favorites/supermarket/stores/{id}` | POST | **201** / **200**; `{ \"store\": … }`. **422** if store inactive. |\n| `/api/v1/user/favorites/supermarket/stores/{id}` | DELETE | **204** |\n\n## Restaurant homepage (`GET /api/v1/user/restaurants/home/*`)\n| Route | Auth | Purpose |\n| --- | --- | --- |\n| `.../categories` | No | Cuisine types that have ≥1 **active** restaurant |\n| `.../exclusive-offers` | No | Active offers on active restaurants; optional `latitude`, `longitude`, `limit` |\n| `.../suggested-products` | No | Featured / highly rated menu items; `limit` |\n| `.../nearest-restaurants` | No | Near-user list; optional `latitude`, `longitude`, `limit`; `isFavorited` true only with Bearer token |\n| `.../latest-ordered-products` | **Yes** | Distinct products from user’s non-cancelled orders (reorder / اطلب مجدداً); `limit` |\n\n**Distance**: Haversine runs on MySQL/Postgres, etc. **SQLite** (`phpunit`) does not compute `distanceKm` (values `null`).\n\n## Success status codes (typical)\n- `200` — OK (JSON body).\n- `201` — Created (addresses, cart item, checkout order, group vote, first-time favorite add for restaurant/store).\n- `204` — No content (delete address).\n- `404` — Not found (invalid id, inactive marketing offer, wrong user’s resource).\n- `403` / `401` — Forbidden / Unauthenticated (missing or invalid token).\n- `422` — Validation errors: `{ \"message\": \"...\", \"errors\": { \"field\": [\"...\"] } }`.\n\n## Pagination (Laravel)\n- Paginated resources return `data` (array of items), `links` (`first`, `last`, `prev`, `next`), and `meta` (`current_page`, `from`, `last_page`, `path`, `per_page`, `to`, `total`, …).\n- Query: `page`, `perPage` (camelCase in this API where FormRequest defines it).\n\n## Media in JSON (summary)\n- **Restaurant** `RestaurantResource`: `primaryImage`, `image`, `banner`, `images`.\n- **Restaurant product** `ProductResource`: `primaryImage`, `images`.\n- **User** `UserResource` (with `media` loaded): `primaryImage` / `images` as `MediaResource` objects (`url`, `thumbnailUrl`, …).\n- **Marketing offers**: `imageUrl` (Spatie `card-image`) or `null`.\n- **Supermarket** `SmStoreResource`: `cover`, `logo`; luck-box line items: `imageUrl`.\n- **Supermarket order** items: product media via `SmProductResource` when loaded.\n\n## Flow overview\n### Register + verify\n1. `POST /register` → OTP sent.\n2. `POST /verify-account` → `user` + `token`.\n\n### Login (SMS OTP)\n1. `POST /login` → OTP sent.\n2. `POST /login/verify` → `user` + `token`.\n\n### Reset password\n1. `POST /reset-password` → generic message; `expiresAt` null if phone unknown.\n2. `POST /reset-password/confirm` → `message` + `token`.\n\n## Examples in this collection\nEach request includes a **saved example** (`Examples` in Postman) with a representative **200/201/204** JSON body. Adjust ids and tokens to your environment.\n\n## Notes\n- SMS/OTP is behind a provider interface.\n",
+    "description": "## Base URL & prefix\n- Collection variable `{{baseUrl}}` defaults to `http://Dllni.test` (Herd/Laragon).\n- User API base path: `/api/v1/user` (routes file: `Modules/User/routes/api.php`).\n\n## Authentication\n- **Public**: register, login OTP steps, reset password, supermarket/restaurant discovery, **restaurant home** (categories, exclusive offers, suggested products, nearest restaurants), products, marketing offers, vote read, luck box, etc.\n- **Sanctum**: set `{{token}}` from verify/login/reset responses; send `Authorization: Bearer {{token}}` for `me`, `account`, `addresses`, **favorites** (restaurants + supermarket stores), `notifications`, cart, checkout, orders, **restaurants/home/latest-ordered-products**, supermarket **items CRUD**, supermarket order status, vote create/ballot/end.\n\n## Favorites — المفضلة (authenticated)\nPolymorphic rows in `favorites` (`favorable_type` = `Restaurant` or `SmStore`). List order: **most recently favorited first** (`favorites.created_at` desc).\n\n| Path | Method | Notes |\n| --- | --- | --- |\n| `/api/v1/user/favorites/restaurants` | GET | Paginated `RestaurantResource`; query `perPage` (1–100, default 20), `page` |\n| `/api/v1/user/favorites/restaurants/{id}` | POST | No body. **201** first add, **200** if already favorited. Body: `{ \"restaurant\": … }`. **422** if restaurant not active. |\n| `/api/v1/user/favorites/restaurants/{id}` | DELETE | **204** empty body (safe if not favorited). |\n| `/api/v1/user/favorites/supermarket/stores` | GET | Paginated `SmStoreResource`; `perPage`, `page` |\n| `/api/v1/user/favorites/supermarket/stores/{id}` | POST | **201** / **200**; `{ \"store\": … }`. **422** if store inactive. |\n| `/api/v1/user/favorites/supermarket/stores/{id}` | DELETE | **204** |\n\n## Restaurant homepage (`GET /api/v1/user/restaurants/home/*`)\n| Route | Auth | Purpose |\n| --- | --- | --- |\n| `.../categories` | No | Cuisine types that have ≥1 **active** restaurant |\n| `.../exclusive-offers` | No | Active offers on active restaurants; optional `latitude`, `longitude`, `limit` |\n| `.../suggested-products` | No | Featured / highly rated menu items; `limit` |\n| `.../nearest-restaurants` | No | Near-user list; optional `latitude`, `longitude`, `limit`; `isFavorited` true only with Bearer token |\n| `.../latest-ordered-products` | **Yes** | Distinct products from user’s non-cancelled orders (reorder / اطلب مجدداً); `limit` |\n\n**Distance**: Haversine runs on MySQL/Postgres, etc. **SQLite** (`phpunit`) does not compute `distanceKm` (values `null`).\n\n## Success status codes (typical)\n- `200` — OK (JSON body).\n- `201` — Created (addresses, cart item, checkout order, group vote, first-time favorite add for restaurant/store).\n- `204` — No content (delete address).\n- `404` — Not found (invalid id, inactive marketing offer, wrong user’s resource).\n- `403` / `401` — Forbidden / Unauthenticated (missing or invalid token).\n- `422` — Validation errors: `{ \"message\": \"...\", \"errors\": { \"field\": [\"...\"] } }`.\n\n## Pagination (Laravel)\n- Paginated resources return `data` (array of items), `links` (`first`, `last`, `prev`, `next`), and `meta` (`current_page`, `from`, `last_page`, `path`, `per_page`, `to`, `total`, …).\n- Query: `page`, `perPage` (camelCase in this API where FormRequest defines it).\n\n## Media in JSON (summary)\n- **Restaurant** `RestaurantResource`: `primaryImage`, `image`, `banner`, `images`.\n- **Restaurant product** `ProductResource`: `primaryImage`, `images`.\n- **User** `UserResource` (with `media` loaded): `primaryImage` / `images` as `MediaResource` objects (`url`, `thumbnailUrl`, …).\n- **Marketing offers**: `imageUrl` (Spatie `card-image`) or `null`.\n- **Supermarket** `SmStoreResource`: `cover`, `logo`; luck-box line items: `imageUrl`.\n- **Supermarket order** items: product media via `SmProductResource` when loaded.\n\n## Flow overview\n### Register + verify\n1. `POST /register` → OTP sent.\n2. `POST /verify-account` → `user` + `token`.\n\n### Login (SMS OTP)\n1. `POST /login` → OTP sent.\n2. `POST /login/verify` → `user` + `token`.\n\n### Reset password\n1. `POST /reset-password` → generic message; `expiresAt` null if phone unknown.\n2. `POST /reset-password/confirm` → `message` + `token`.\n\n## Examples in this collection\nEach request includes a **saved example** (`Examples` in Postman) with a representative **200/201/204** JSON body. Adjust ids and tokens to your environment.\n\n## Notes\n- SMS/OTP is behind a provider interface.\n",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -622,6 +622,160 @@
           ]
         },
         {
+          "name": "Items (requires token)",
+          "item": [
+            {
+              "name": "List items",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/user/supermarket/items?perPage=20&page=1",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "user", "supermarket", "items"],
+                  "query": [
+                    {"key": "perPage", "value": "20"},
+                    {"key": "page", "value": "1"}
+                  ]
+                },
+                "description": "Paginated supermarket customer items (cart items).\n\n**Auth**: `Authorization: Bearer {{token}}`\n\n**Status**: `200 OK`"
+              },
+              "response": [
+                {
+                  "name": "200 OK — items list",
+                  "originalRequest": {
+                    "method": "GET",
+                    "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/v1/user/supermarket/items?perPage=20&page=1",
+                      "host": ["{{baseUrl}}"],
+                      "path": ["api", "v1", "user", "supermarket", "items"],
+                      "query": [{"key": "perPage", "value": "20"}, {"key": "page", "value": "1"}]
+                    }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": "json",
+                  "header": [{"key": "Content-Type", "value": "application/json"}],
+                  "cookie": [],
+                  "body": "{\n  \"data\": [],\n  \"links\": {\n    \"first\": \"http://Dllni.test/api/v1/user/supermarket/items?page=1\",\n    \"last\": \"http://Dllni.test/api/v1/user/supermarket/items?page=1\",\n    \"prev\": null,\n    \"next\": null\n  },\n  \"meta\": {\n    \"current_page\": 1,\n    \"from\": null,\n    \"last_page\": 1,\n    \"path\": \"http://Dllni.test/api/v1/user/supermarket/items\",\n    \"per_page\": 20,\n    \"to\": null,\n    \"total\": 0\n  }\n}"
+                }
+              ]
+            },
+            {
+              "name": "Create item",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {"key": "Accept", "value": "application/json"},
+                  {"key": "Authorization", "value": "Bearer {{token}}"},
+                  {"key": "Content-Type", "value": "application/json"}
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cartId\": 1,\n  \"productId\": 10,\n  \"quantity\": 2,\n  \"unitPrice\": 75\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/user/supermarket/items",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "user", "supermarket", "items"]
+                },
+                "description": "Add an item to a supermarket cart.\n\n**Auth**: `Authorization: Bearer {{token}}`\n\n**Status**: `201 Created`"
+              },
+              "response": [
+                {
+                  "name": "201 Created — item",
+                  "originalRequest": {
+                    "method": "POST",
+                    "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"cartId\": 1,\n  \"productId\": 10,\n  \"quantity\": 2,\n  \"unitPrice\": 75\n}"
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/v1/user/supermarket/items",
+                      "host": ["{{baseUrl}}"],
+                      "path": ["api", "v1", "user", "supermarket", "items"]
+                    }
+                  },
+                  "status": "Created",
+                  "code": 201,
+                  "_postman_previewlanguage": "json",
+                  "header": [{"key": "Content-Type", "value": "application/json"}],
+                  "cookie": [],
+                  "body": "{\n  \"data\": {\n    \"id\": 1,\n    \"cartId\": 1,\n    \"productId\": 10,\n    \"quantity\": 2,\n    \"unitPrice\": 75,\n    \"createdAt\": \"2026-04-01 10:00:00\",\n    \"updatedAt\": \"2026-04-01 10:00:00\"\n  }\n}"
+                }
+              ]
+            },
+            {
+              "name": "Show item",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {"key": "Accept", "value": "application/json"},
+                  {"key": "Authorization", "value": "Bearer {{token}}"}
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/user/supermarket/items/{{smCartItemId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "user", "supermarket", "items", "{{smCartItemId}}"]
+                },
+                "description": "Show a single cart item.\n\n**Auth**: `Authorization: Bearer {{token}}`\n\n**Status**: `200 OK` | `404 Not Found`"
+              },
+              "response": []
+            },
+            {
+              "name": "Update item",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {"key": "Accept", "value": "application/json"},
+                  {"key": "Authorization", "value": "Bearer {{token}}"},
+                  {"key": "Content-Type", "value": "application/json"}
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"quantity\": 3\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/user/supermarket/items/{{smCartItemId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "user", "supermarket", "items", "{{smCartItemId}}"]
+                },
+                "description": "Update a cart item (quantity / unitPrice).\n\n**Auth**: `Authorization: Bearer {{token}}`\n\n**Status**: `200 OK`"
+              },
+              "response": []
+            },
+            {
+              "name": "Delete item",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {"key": "Accept", "value": "application/json"},
+                  {"key": "Authorization", "value": "Bearer {{token}}"}
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/user/supermarket/items/{{smCartItemId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "user", "supermarket", "items", "{{smCartItemId}}"]
+                },
+                "description": "Remove a cart item.\n\n**Auth**: `Authorization: Bearer {{token}}`\n\n**Status**: `204 No Content`"
+              },
+              "response": []
+            }
+          ],
+          "description": "CRUD for supermarket items (cart items) under the user module supermarket prefix."
+        },
+        {
           "name": "Order status (requires token)",
           "request": {
             "method": "GET",
@@ -1072,7 +1226,7 @@
                 "addresses"
               ]
             },
-            "description": "List saved addresses for the user.\n\n**Status**: `200 OK`\n\n**Response**:\n- `addresses` — array of `UserAddressResource` (`id`, `label`, `city`, `neighborhood`, `street`, `building`, `floor`, `directions`, `latitude`, `longitude`, `isDefault`, `createdAt`, `updatedAt`). Default address first."
+            "description": "List saved addresses for the user.\n\n**Status**: `200 OK`\n\n**Response**:\n- `addresses` — array of `UserAddressResource` (`id`, `label`, `mobile`, `city`, `neighborhood`, `street`, `building`, `floor`, `directions`, `latitude`, `longitude`, `isDefault`, `createdAt`, `updatedAt`). Default address first."
           },
           "response": [
             {
@@ -1091,9 +1245,77 @@
               "_postman_previewlanguage": "json",
               "header": [{"key": "Content-Type", "value": "application/json"}],
               "cookie": [],
-              "body": "{\n  \"addresses\": [\n    {\n      \"id\": 1,\n      \"label\": \"المنزل\",\n      \"city\": \"حلب\",\n      \"neighborhood\": \"الفرقان\",\n      \"street\": \"شارع الجامعة\",\n      \"building\": \"بناية ٣\",\n      \"floor\": \"٢\",\n      \"directions\": \"بجانب صيدلية الشفاء\",\n      \"latitude\": 36.2,\n      \"longitude\": 37.15,\n      \"isDefault\": true,\n      \"createdAt\": \"2026-04-01T08:00:00+00:00\",\n      \"updatedAt\": \"2026-04-01T08:00:00+00:00\"\n    }\n  ]\n}"
+              "body": "{\n  \"addresses\": [\n    {\n      \"id\": 1,\n      \"label\": \"المنزل\",\n      \"mobile\": \"0935555788\",\n      \"city\": \"حلب\",\n      \"neighborhood\": \"الفرقان\",\n      \"street\": \"شارع الجامعة\",\n      \"building\": \"بناية ٣\",\n      \"floor\": \"٢\",\n      \"directions\": \"بجانب صيدلية الشفاء\",\n      \"latitude\": 36.2,\n      \"longitude\": 37.15,\n      \"isDefault\": true,\n      \"createdAt\": \"2026-04-01T08:00:00+00:00\",\n      \"updatedAt\": \"2026-04-01T08:00:00+00:00\"\n    }\n  ]\n}"
             }
           ]
+        },
+        {
+          "name": "Show address",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/addresses/{{addressId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "addresses",
+                "{{addressId}}"
+              ]
+            },
+            "description": "Single address payload for the edit screen.\n\n**Status**: `200 OK` | `404`"
+          }
+        },
+        {
+          "name": "Patch address (partial update)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mobile\": \"0935555788\",\n  \"directions\": \"تعديل تفاصيل العنوان\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/addresses/{{addressId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "addresses",
+                "{{addressId}}"
+              ]
+            },
+            "description": "Partial update; at least one field is required. To change default, send `isDefault: true/false`.\n\n**Status**: `200 OK` | `422` | `404`"
+          }
         },
         {
           "name": "Create address",
@@ -1115,7 +1337,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"label\": \"المنزل\",\n  \"city\": \"حلب\",\n  \"neighborhood\": \"الفرقان\",\n  \"street\": \"شارع الجامعة\",\n  \"building\": \"بناية ٣\",\n  \"floor\": \"٢\",\n  \"directions\": \"بجانب صيدلية الشفاء\",\n  \"isDefault\": true,\n  \"latitude\": 36.2,\n  \"longitude\": 37.15\n}"
+              "raw": "{\n  \"label\": \"المنزل\",\n  \"mobile\": \"0935555788\",\n  \"city\": \"حلب\",\n  \"neighborhood\": \"الفرقان\",\n  \"street\": \"شارع الجامعة\",\n  \"building\": \"بناية ٣\",\n  \"floor\": \"٢\",\n  \"directions\": \"بجانب صيدلية الشفاء\",\n  \"isDefault\": true,\n  \"latitude\": 36.2,\n  \"longitude\": 37.15\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/user/addresses",
@@ -1129,7 +1351,7 @@
                 "addresses"
               ]
             },
-            "description": "Create address.\n\n**Status**: `201 Created`\n\n**Body**: `label` + at least one location field; optional `isDefault`, `latitude`, `longitude`.\n\n**Response**: `{ \"address\": UserAddressResource }`"
+            "description": "Create address.\n\n**Status**: `201 Created`\n\n**Body**: `label` + at least one detail field (`mobile`, `city`, `neighborhood`, `street`, `building`, `floor`, `directions`); optional `isDefault`, `latitude`, `longitude`.\n\n**Response**: `{ \"address\": UserAddressResource }`"
           },
           "response": [
             {
@@ -1173,7 +1395,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"label\": \"العمل\",\n  \"city\": \"حلب\",\n  \"neighborhood\": \"المحافظة\",\n  \"street\": \"شارع النيل\",\n  \"building\": \"\",\n  \"floor\": \"\",\n  \"directions\": \"\",\n  \"isDefault\": false\n}"
+              "raw": "{\n  \"label\": \"العمل\",\n  \"mobile\": \"0935555788\",\n  \"city\": \"حلب\",\n  \"neighborhood\": \"المحافظة\",\n  \"street\": \"شارع النيل\",\n  \"building\": \"\",\n  \"floor\": \"\",\n  \"directions\": \"\",\n  \"isDefault\": false\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/user/addresses/{{addressId}}",
@@ -1207,7 +1429,7 @@
               "_postman_previewlanguage": "json",
               "header": [{"key": "Content-Type", "value": "application/json"}],
               "cookie": [],
-              "body": "{\n  \"address\": {\n    \"id\": 1,\n    \"label\": \"العمل\",\n    \"city\": \"حلب\",\n    \"neighborhood\": \"المحافظة\",\n    \"street\": \"شارع النيل\",\n    \"building\": \"\",\n    \"floor\": \"\",\n    \"directions\": \"\",\n    \"latitude\": null,\n    \"longitude\": null,\n    \"isDefault\": false,\n    \"createdAt\": \"2026-04-01T08:00:00+00:00\",\n    \"updatedAt\": \"2026-04-01T13:00:00+00:00\"\n  }\n}"
+              "body": "{\n  \"address\": {\n    \"id\": 1,\n    \"label\": \"العمل\",\n    \"mobile\": \"0935555788\",\n    \"city\": \"حلب\",\n    \"neighborhood\": \"المحافظة\",\n    \"street\": \"شارع النيل\",\n    \"building\": \"\",\n    \"floor\": \"\",\n    \"directions\": \"\",\n    \"latitude\": null,\n    \"longitude\": null,\n    \"isDefault\": false,\n    \"createdAt\": \"2026-04-01T08:00:00+00:00\",\n    \"updatedAt\": \"2026-04-01T13:00:00+00:00\"\n  }\n}"
             }
           ]
         },

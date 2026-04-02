@@ -34,6 +34,7 @@ it('creates an address and marks first one as default', function (): void {
 
     $response = $this->postJson('/api/v1/user/addresses', [
         'label' => 'المنزل',
+        'mobile' => '0935555788',
         'city' => 'حلب',
         'neighborhood' => 'الفرقان',
         'street' => 'شارع الجامعة',
@@ -44,6 +45,7 @@ it('creates an address and marks first one as default', function (): void {
     $this->assertDatabaseHas('user_addresses', [
         'user_id' => $user->id,
         'label' => 'المنزل',
+        'mobile' => '0935555788',
         'is_default' => true,
     ]);
 });
@@ -70,6 +72,7 @@ it('updates an address', function (): void {
 
     $response = $this->putJson("/api/v1/user/addresses/{$address->id}", [
         'label' => 'New',
+        'mobile' => '0930000000',
         'city' => 'Damascus',
         'directions' => 'by the pharmacy',
         'isDefault' => true,
@@ -77,7 +80,44 @@ it('updates an address', function (): void {
 
     $response->assertOk();
     expect($response->json('address.label'))->toBe('New');
+    expect($response->json('address.mobile'))->toBe('0930000000');
     expect($response->json('address.directions'))->toBe('by the pharmacy');
+});
+
+it('shows a single address', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $address = UserAddress::factory()->for($user)->create([
+        'label' => 'المنزل',
+        'mobile' => '0931111111',
+        'city' => 'حلب',
+    ]);
+
+    $response = $this->getJson("/api/v1/user/addresses/{$address->id}");
+
+    $response->assertOk();
+    expect($response->json('data.id'))->toBe($address->id);
+    expect($response->json('data.mobile'))->toBe('0931111111');
+});
+
+it('patches an address partially', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $address = UserAddress::factory()->for($user)->create([
+        'label' => 'A',
+        'city' => 'Damascus',
+        'is_default' => false,
+    ]);
+
+    $response = $this->patchJson("/api/v1/user/addresses/{$address->id}", [
+        'mobile' => '0932222222',
+    ]);
+
+    $response->assertOk();
+    expect($response->json('address.mobile'))->toBe('0932222222');
+    expect($response->json('address.city'))->toBe('Damascus');
 });
 
 it('deletes an address and promotes another default when needed', function (): void {

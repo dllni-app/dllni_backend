@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Modules\User\Http\Controllers\API;
 
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Modules\Resturants\Http\Resources\ProductResource;
+use Modules\Resturants\Models\Favorite;
 use Modules\Resturants\Models\Product;
 
 final class UserProductDetailsController
 {
-    public function __invoke(int $product): JsonResponse
+    public function __invoke(Request $request, int $product): JsonResponse
     {
         $model = Product::query()
             ->where('is_available', true)
@@ -22,6 +24,19 @@ final class UserProductDetailsController
                 'substitutions',
             ])
             ->findOrFail($product);
+
+        $user = $request->user('sanctum');
+        if ($user !== null) {
+            $isFavorited = Favorite::query()
+                ->where('user_id', $user->id)
+                ->where('favorable_type', Product::class)
+                ->where('favorable_id', $model->id)
+                ->exists();
+
+            $model->setAttribute('isFavoritedByUser', $isFavorited);
+        } else {
+            $model->setAttribute('isFavoritedByUser', false);
+        }
 
         return response()->json([
             'product' => ProductResource::make($model),

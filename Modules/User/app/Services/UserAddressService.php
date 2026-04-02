@@ -95,12 +95,56 @@ final class UserAddressService
 
     /**
      * @param  array<string, mixed>  $data
+     */
+    public function patch(UserAddress $address, array $data): UserAddress
+    {
+        return DB::transaction(function () use ($address, $data): UserAddress {
+            $user = $address->user;
+            $wasDefault = $address->is_default;
+
+            $attributes = [];
+            foreach (['label', 'mobile', 'city', 'neighborhood', 'street', 'building', 'floor', 'directions', 'latitude', 'longitude'] as $key) {
+                if (array_key_exists($key, $data)) {
+                    $attributes[$key] = $data[$key];
+                }
+            }
+
+            if ($attributes !== []) {
+                $address->fill($attributes);
+                $address->save();
+            }
+
+            if (! array_key_exists('isDefault', $data)) {
+                return $address->fresh();
+            }
+
+            $wantsDefault = (bool) $data['isDefault'];
+
+            if ($wantsDefault) {
+                $this->markAsOnlyDefault($user, $address);
+
+                return $address->fresh();
+            }
+
+            $address->update(['is_default' => false]);
+
+            if ($wasDefault) {
+                $this->promoteFirstAsDefault($user, excludingId: null);
+            }
+
+            return $address->fresh();
+        });
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
     private function locationAttributesFromPayload(array $data): array
     {
         return [
             'label' => $data['label'],
+            'mobile' => $data['mobile'] ?? null,
             'city' => $data['city'] ?? null,
             'neighborhood' => $data['neighborhood'] ?? null,
             'street' => $data['street'] ?? null,
@@ -126,6 +170,7 @@ final class UserAddressService
             $query->where('id', '!=', $excludingId);
         }
 
+        /** @var UserAddress|null $first */
         $first = $query->first();
 
         if ($first === null) {

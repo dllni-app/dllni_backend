@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $id
  * @property int $user_id
  * @property string $label
+ * @property string|null $mobile
  * @property string|null $city
  * @property string|null $neighborhood
  * @property string|null $street
@@ -35,6 +36,7 @@ final class UserAddress extends Model
     protected $fillable = [
         'user_id',
         'label',
+        'mobile',
         'city',
         'neighborhood',
         'street',
@@ -55,6 +57,7 @@ final class UserAddress extends Model
             'id' => 'integer',
             'user_id' => 'integer',
             'label' => 'string',
+            'mobile' => 'string',
             'city' => 'string',
             'neighborhood' => 'string',
             'street' => 'string',

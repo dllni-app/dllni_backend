@@ -2,7 +2,10 @@
 
 declare(strict_types=1);
 
+use App\Models\User;
+use Laravel\Sanctum\Sanctum;
 use Modules\Resturants\Models\CuisineType;
+use Modules\Resturants\Models\Favorite;
 use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
 
@@ -34,6 +37,7 @@ it('returns suggested products with restaurant, price, rating, and tags', functi
     $response->assertOk();
     $response->assertJsonPath('suggestedProducts.0.productId', $product->id);
     $response->assertJsonPath('suggestedProducts.0.name', 'Signature Burger');
+    $response->assertJsonPath('suggestedProducts.0.isFavorite', false);
     $response->assertJsonPath('suggestedProducts.0.displayPrice', 450);
     $response->assertJsonPath('suggestedProducts.0.originalPrice', null);
     $response->assertJsonPath('suggestedProducts.0.rating', 4.8);
@@ -42,6 +46,28 @@ it('returns suggested products with restaurant, price, rating, and tags', functi
     expect($response->json('suggestedProducts.0.currency'))->toBeString()->not->toBeEmpty();
     $tagSlugs = collect($response->json('suggestedProducts.0.tags'))->pluck('slug')->all();
     expect($tagSlugs)->toContain('burger');
+});
+
+it('sets isFavorite true in suggested products when the product is in authenticated user favorites', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $restaurant = Restaurant::factory()->create(['is_active' => true]);
+    $product = Product::factory()->create([
+        'restaurant_id' => $restaurant->id,
+        'is_available' => true,
+    ]);
+
+    Favorite::create([
+        'user_id' => $user->id,
+        'favorable_type' => Product::class,
+        'favorable_id' => $product->id,
+    ]);
+
+    $this->getJson('/api/v1/user/restaurants/home/suggested-products')
+        ->assertOk()
+        ->assertJsonPath('suggestedProducts.0.productId', $product->id)
+        ->assertJsonPath('suggestedProducts.0.isFavorite', true);
 });
 
 it('exposes original price when a discount applies', function (): void {

@@ -58,6 +58,7 @@ final class UserRestaurantSuggestedProductResource extends JsonResource
         return [
             'productId' => $product->id,
             'name' => $product->name,
+            'isFavorite' => (bool) ($product->getAttribute('isFavoritedByUser') ?? false),
             'rating' => $restaurant->average_rating !== null
                 ? round((float) $restaurant->average_rating, 1)
                 : null,

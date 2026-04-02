@@ -31,6 +31,7 @@ final class UserRestaurantLatestOrderedProductResource extends JsonResource
         return [
             'productId' => $product->id,
             'productName' => $product->name,
+            'isFavorite' => (bool) ($product->getAttribute('isFavoritedByUser') ?? false),
             'restaurantId' => $restaurant->id,
             'restaurantName' => $restaurant->name,
             'displayPrice' => $displayPrice,

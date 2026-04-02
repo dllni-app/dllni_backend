@@ -23,6 +23,7 @@ final class UserAddressFactory extends Factory
         return [
             'user_id' => User::factory(),
             'label' => fake()->randomElement(['المنزل', 'العمل', 'أخرى']),
+            'mobile' => fake()->optional()->numerify('09########'),
             'city' => fake()->city(),
             'neighborhood' => fake()->streetName(),
             'street' => fake()->streetName(),

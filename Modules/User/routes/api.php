@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
+use Modules\Supermarket\Http\Controllers\API\SmCartItemController;
 use Modules\User\Http\Controllers\API\DiscoverRestaurantsController;
 use Modules\User\Http\Controllers\API\LoginController;
 use Modules\User\Http\Controllers\API\LoginVerifyController;
@@ -28,7 +29,9 @@ use Modules\User\Http\Controllers\API\UserAccountShowController;
 use Modules\User\Http\Controllers\API\UserAccountUpdateController;
 use Modules\User\Http\Controllers\API\UserAddressDestroyController;
 use Modules\User\Http\Controllers\API\UserAddressIndexController;
+use Modules\User\Http\Controllers\API\UserAddressPatchController;
 use Modules\User\Http\Controllers\API\UserAddressSetDefaultController;
+use Modules\User\Http\Controllers\API\UserAddressShowController;
 use Modules\User\Http\Controllers\API\UserAddressStoreController;
 use Modules\User\Http\Controllers\API\UserAddressUpdateController;
 use Modules\User\Http\Controllers\API\UserMarketingOfferShowController;
@@ -98,6 +101,8 @@ Route::prefix('v1/user')->group(function (): void {
 
         Route::get('addresses', UserAddressIndexController::class);
         Route::post('addresses', UserAddressStoreController::class);
+        Route::get('addresses/{userAddress}', UserAddressShowController::class);
+        Route::patch('addresses/{userAddress}', UserAddressPatchController::class);
         Route::put('addresses/{userAddress}', UserAddressUpdateController::class);
         Route::patch('addresses/{userAddress}/set-default', UserAddressSetDefaultController::class);
         Route::delete('addresses/{userAddress}', UserAddressDestroyController::class);
@@ -109,6 +114,10 @@ Route::prefix('v1/user')->group(function (): void {
         Route::get('favorites/supermarket/stores', UserSupermarketStoreFavoritesIndexController::class);
         Route::post('favorites/supermarket/stores/{store}', UserSupermarketStoreFavoriteStoreController::class);
         Route::delete('favorites/supermarket/stores/{store}', UserSupermarketStoreFavoriteDestroyController::class);
+
+        Route::prefix('supermarket')->group(function (): void {
+            Route::apiResource('items', SmCartItemController::class)->parameters(['items' => 'sm_cart_item']);
+        });
 
         Route::get('supermarket/orders/{order}/status', SmOrderStatusController::class);
 

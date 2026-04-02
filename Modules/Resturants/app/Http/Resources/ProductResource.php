@@ -23,6 +23,7 @@ final class ProductResource extends JsonResource
             'description' => $this->description,
             'price' => $this->price ? (float) $this->price : null,
             'discountedPrice' => $this->discounted_price ? (float) $this->discounted_price : null,
+            'isFavorite' => (bool) ($this->getAttribute('isFavoritedByUser') ?? false),
             'isAvailable' => $this->is_available,
             'isAvailableNow' => $this->isAvailableNow(),
             'availabilityMode' => $this->availabilityMode(),
