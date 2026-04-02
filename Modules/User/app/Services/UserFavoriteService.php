@@ -7,6 +7,7 @@ namespace Modules\User\Services;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Modules\Resturants\Models\Favorite;
+use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
 use Modules\Supermarket\Models\SmStore;
 
@@ -80,5 +81,54 @@ final class UserFavoriteService
             ->orderByDesc('favorites.created_at')
             ->with('owner')
             ->paginate($perPage);
+    }
+
+    public function addProductFavorite(User $user, Product $product): Favorite
+    {
+        return Favorite::firstOrCreate([
+            'user_id' => $user->id,
+            'favorable_type' => Product::class,
+            'favorable_id' => $product->id,
+        ]);
+    }
+
+    public function removeProductFavorite(User $user, Product $product): void
+    {
+        Favorite::query()
+            ->where('user_id', $user->id)
+            ->where('favorable_type', Product::class)
+            ->where('favorable_id', $product->id)
+            ->delete();
+    }
+
+    /**
+     * @return LengthAwarePaginator<int, Product>
+     */
+    public function paginateFavoriteProducts(User $user, int $perPage): LengthAwarePaginator
+    {
+        $paginator = Product::query()
+            ->select('products.*')
+            ->join('favorites', function ($join) use ($user): void {
+                $join->on('products.id', '=', 'favorites.favorable_id')
+                    ->where('favorites.favorable_type', '=', Product::class)
+                    ->where('favorites.user_id', '=', $user->id);
+            })
+            ->join('restaurants', 'restaurants.id', '=', 'products.restaurant_id')
+            ->where('products.is_available', true)
+            ->where('restaurants.is_active', true)
+            ->orderByDesc('favorites.created_at')
+            ->with([
+                'media',
+                'category',
+                'restaurant.media',
+                'restaurant.cuisineTypes',
+            ])
+            ->paginate($perPage);
+
+        $paginator->getCollection()->each(function (Product $product): void {
+            $product->setAttribute('isFavoritedByUser', true);
+        });
+
+        return $paginator;
     }
 }

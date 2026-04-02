@@ -36,4 +36,11 @@ final class UserFactory extends Factory
             'email_verified_at' => null,
         ]);
     }
+
+    public function phoneVerified(): self
+    {
+        return $this->state(fn (array $attributes): array => [
+            'phone_verified_at' => now(),
+        ]);
+    }
 }

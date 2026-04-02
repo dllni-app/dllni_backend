@@ -42,6 +42,9 @@ final class SmStoreResource extends JsonResource
             'isActive' => $this->is_active,
             'isFeatured' => $this->is_featured,
             'suspensionUntil' => $this->suspension_until?->toDateTimeString(),
+            'distanceKm' => array_key_exists('distanceKm', $this->getAttributes())
+                ? round((float) $this->distanceKm, 2)
+                : null,
             'storeHours' => SmStoreHoursResource::collection($this->whenLoaded('storeHours')),
             'documents' => SmStoreDocumentResource::collection($this->whenLoaded('documents')),
             'trustLogs' => SmStoreTrustLogResource::collection($this->whenLoaded('trustLogs')),

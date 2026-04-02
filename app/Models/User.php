@@ -47,6 +47,7 @@ final class User extends Authenticatable implements HasMedia
         'phone',
         'module_type',
         'email_verified_at',
+        'phone_verified_at',
         'password',
         'fcm_token',
     ];

@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Models\User;
 use Laravel\Sanctum\Sanctum;
 use Modules\Resturants\Models\Favorite;
+use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
 use Modules\Supermarket\Models\SmStore;
 
@@ -28,6 +29,18 @@ it('requires authentication for supermarket store favorites', function (): void 
     $this->getJson('/api/v1/user/favorites/supermarket/stores')->assertUnauthorized();
     $this->postJson("/api/v1/user/favorites/supermarket/stores/{$store->id}")->assertUnauthorized();
     $this->deleteJson("/api/v1/user/favorites/supermarket/stores/{$store->id}")->assertUnauthorized();
+});
+
+it('requires authentication for product favorites', function (): void {
+    $restaurant = Restaurant::factory()->create(['is_active' => true]);
+    $product = Product::factory()->create([
+        'restaurant_id' => $restaurant->id,
+        'is_available' => true,
+    ]);
+
+    $this->getJson('/api/v1/user/favorites/products')->assertUnauthorized();
+    $this->postJson("/api/v1/user/favorites/products/{$product->id}")->assertUnauthorized();
+    $this->deleteJson("/api/v1/user/favorites/products/{$product->id}")->assertUnauthorized();
 });
 
 it('adds and lists restaurant favorites', function (): void {
@@ -142,6 +155,81 @@ it('removes a supermarket store favorite', function (): void {
     ]);
 
     $this->deleteJson("/api/v1/user/favorites/supermarket/stores/{$store->id}")
+        ->assertNoContent();
+
+    expect(Favorite::query()->where('user_id', $user->id)->count())->toBe(0);
+});
+
+it('adds and lists product favorites', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $restaurant = Restaurant::factory()->create(['is_active' => true]);
+    $product = Product::factory()->create([
+        'restaurant_id' => $restaurant->id,
+        'name' => 'Chicken Shawarma',
+        'is_available' => true,
+    ]);
+
+    $create = $this->postJson("/api/v1/user/favorites/products/{$product->id}");
+    $create->assertCreated()->assertJsonPath('product.id', $product->id);
+
+    $again = $this->postJson("/api/v1/user/favorites/products/{$product->id}");
+    $again->assertOk()->assertJsonPath('product.id', $product->id);
+
+    expect(Favorite::query()->where('user_id', $user->id)->count())->toBe(1);
+
+    $list = $this->getJson('/api/v1/user/favorites/products');
+    $list->assertOk();
+    expect($list->json('data'))->toHaveCount(1);
+    expect($list->json('data.0.name'))->toBe('Chicken Shawarma');
+});
+
+it('rejects favoriting an unavailable product', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $restaurant = Restaurant::factory()->create(['is_active' => true]);
+    $product = Product::factory()->create([
+        'restaurant_id' => $restaurant->id,
+        'is_available' => false,
+    ]);
+
+    $this->postJson("/api/v1/user/favorites/products/{$product->id}")
+        ->assertStatus(422);
+});
+
+it('rejects favoriting a product from an inactive restaurant', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $restaurant = Restaurant::factory()->create(['is_active' => false]);
+    $product = Product::factory()->create([
+        'restaurant_id' => $restaurant->id,
+        'is_available' => true,
+    ]);
+
+    $this->postJson("/api/v1/user/favorites/products/{$product->id}")
+        ->assertStatus(422);
+});
+
+it('removes a product favorite', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $restaurant = Restaurant::factory()->create(['is_active' => true]);
+    $product = Product::factory()->create([
+        'restaurant_id' => $restaurant->id,
+        'is_available' => true,
+    ]);
+
+    Favorite::create([
+        'user_id' => $user->id,
+        'favorable_type' => Product::class,
+        'favorable_id' => $product->id,
+    ]);
+
+    $this->deleteJson("/api/v1/user/favorites/products/{$product->id}")
         ->assertNoContent();
 
     expect(Favorite::query()->where('user_id', $user->id)->count())->toBe(0);

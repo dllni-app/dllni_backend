@@ -26,6 +26,7 @@ trait SmStoreFilterQuery
                 AllowedFilter::scope('suspended'),
                 AllowedFilter::scope('trustScoreMin'),
                 AllowedFilter::scope('trustScoreMax'),
+                AllowedFilter::scope('openNow'),
                 AllowedFilter::scope('search'),
             ])
             ->allowedSorts([
@@ -99,5 +100,26 @@ trait SmStoreFilterQuery
                 ->orWhereRaw("city LIKE ? ESCAPE '!'", [$likeTerm])
                 ->orWhereRaw("neighborhood LIKE ? ESCAPE '!'", [$likeTerm]);
         });
+    }
+
+    public function scopeOpenNow(Builder $query, mixed $openNow): Builder
+    {
+        $isOpenNow = filter_var($openNow, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+
+        if ($isOpenNow !== true) {
+            return $query;
+        }
+
+        $now = now();
+        $dayOfWeek = mb_strtolower($now->englishDayOfWeek);
+        $time = $now->format('H:i:s');
+
+        return $query->whereHas('storeHours', fn ($hours) => $hours
+            ->where('day_of_week', $dayOfWeek)
+            ->where('is_closed', false)
+            ->whereNotNull('opens_at')
+            ->whereNotNull('closes_at')
+            ->where('opens_at', '<=', $time)
+            ->where('closes_at', '>=', $time));
     }
 }

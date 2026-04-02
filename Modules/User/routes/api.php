@@ -38,6 +38,9 @@ use Modules\User\Http\Controllers\API\UserMarketingOfferShowController;
 use Modules\User\Http\Controllers\API\UserMarketingOffersIndexController;
 use Modules\User\Http\Controllers\API\UserNotificationsIndexController;
 use Modules\User\Http\Controllers\API\UserProductDetailsController;
+use Modules\User\Http\Controllers\API\UserProductFavoriteDestroyController;
+use Modules\User\Http\Controllers\API\UserProductFavoritesIndexController;
+use Modules\User\Http\Controllers\API\UserProductFavoriteStoreController;
 use Modules\User\Http\Controllers\API\UserRestaurantDetailsController;
 use Modules\User\Http\Controllers\API\UserRestaurantFavoriteDestroyController;
 use Modules\User\Http\Controllers\API\UserRestaurantFavoritesIndexController;
@@ -114,6 +117,10 @@ Route::prefix('v1/user')->group(function (): void {
         Route::get('favorites/supermarket/stores', UserSupermarketStoreFavoritesIndexController::class);
         Route::post('favorites/supermarket/stores/{store}', UserSupermarketStoreFavoriteStoreController::class);
         Route::delete('favorites/supermarket/stores/{store}', UserSupermarketStoreFavoriteDestroyController::class);
+
+        Route::get('favorites/products', UserProductFavoritesIndexController::class);
+        Route::post('favorites/products/{product}', UserProductFavoriteStoreController::class);
+        Route::delete('favorites/products/{product}', UserProductFavoriteDestroyController::class);
 
         Route::prefix('supermarket')->group(function (): void {
             Route::apiResource('items', SmCartItemController::class)->parameters(['items' => 'sm_cart_item']);

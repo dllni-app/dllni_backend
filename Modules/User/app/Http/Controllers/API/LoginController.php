@@ -21,8 +21,8 @@ final class LoginController
     public function __invoke(LoginRequest $request): JsonResponse
     {
         $user = User::query()->where('phone', $request->validated('phone'))->firstOrFail();
-
         if (! Hash::check($request->validated('password'), $user->password)) {
+
             throw ValidationException::withMessages([
                 'phone' => [__('auth.failed')],
             ]);

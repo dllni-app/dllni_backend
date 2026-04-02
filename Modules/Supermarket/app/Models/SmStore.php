@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Modules\Supermarket\Models;
 
 use App\Models\User;
+use Database\Factories\SmStoreFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -14,6 +16,7 @@ use Modules\Supermarket\Traits\FilterQueries\SmStoreFilterQuery;
 
 final class SmStore extends Model
 {
+    use HasFactory;
     use SmStoreFilterQuery;
 
     protected $table = 'sm_stores';
@@ -119,6 +122,11 @@ final class SmStore extends Model
     public function userFavorites(): MorphMany
     {
         return $this->morphMany(Favorite::class, 'favorable');
+    }
+
+    protected static function newFactory(): SmStoreFactory
+    {
+        return SmStoreFactory::new();
     }
 
     protected function casts(): array
