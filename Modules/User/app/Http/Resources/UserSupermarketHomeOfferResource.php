@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 declare(strict_types=1);
 
@@ -21,6 +21,7 @@ final class UserSupermarketHomeOfferResource extends JsonResource
         /** @var SmOffer $offer */
         $offer = $this->resource;
         $store = $offer->relationLoaded('store') ? $offer->store : null;
+        $storeAttrs = $store !== null ? $store->getAttributes() : [];
 
         return [
             'id' => $offer->id,
@@ -28,8 +29,8 @@ final class UserSupermarketHomeOfferResource extends JsonResource
             'store' => $store === null ? null : [
                 'id' => $store->id,
                 'name' => $store->name,
-                'cover' => $store->cover,
-                'logo' => $store->logo,
+                'cover' => $storeAttrs['cover'] ?? null,
+                'logo' => $storeAttrs['logo'] ?? null,
             ],
             'name' => $offer->name,
             'description' => $offer->description,
@@ -37,7 +38,7 @@ final class UserSupermarketHomeOfferResource extends JsonResource
             'discountValue' => $offer->discount_value,
             'discountPercent' => $offer->discount_percent,
             'badgeText' => $this->formatOfferBadge($offer),
-            'imageUrl' => $store?->cover ?? $store?->logo,
+            'imageUrl' => ($storeAttrs['cover'] ?? null) ?? ($storeAttrs['logo'] ?? null),
             'startsAt' => $offer->starts_at?->toDateTimeString(),
             'endsAt' => $offer->ends_at?->toDateTimeString(),
             'isActive' => $offer->is_active,
@@ -47,13 +48,13 @@ final class UserSupermarketHomeOfferResource extends JsonResource
     private function formatOfferBadge(SmOffer $offer): ?string
     {
         if ($offer->discount_percent !== null) {
-            $percent = rtrim(rtrim((string) $offer->discount_percent, '0'), '.');
+            $percent = mb_rtrim(mb_rtrim((string) $offer->discount_percent, '0'), '.');
 
             return "خصم {$percent}%";
         }
 
         if ($offer->discount_value !== null) {
-            $value = rtrim(rtrim((string) $offer->discount_value, '0'), '.');
+            $value = mb_rtrim(mb_rtrim((string) $offer->discount_value, '0'), '.');
             $currency = config('app.currency', 'IQD');
 
             return "خصم {$value} {$currency}";
@@ -62,4 +63,3 @@ final class UserSupermarketHomeOfferResource extends JsonResource
         return null;
     }
 }
-

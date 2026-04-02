@@ -15,6 +15,8 @@ final class ProductResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $attrs = $this->getAttributes();
+
         return [
             'id' => $this->id,
             'restaurantId' => $this->restaurant_id,
@@ -23,7 +25,7 @@ final class ProductResource extends JsonResource
             'description' => $this->description,
             'price' => $this->price ? (float) $this->price : null,
             'discountedPrice' => $this->discounted_price ? (float) $this->discounted_price : null,
-            'isFavorite' => (bool) ($this->getAttribute('isFavoritedByUser') ?? false),
+            'isFavorite' => (bool) ($attrs['isFavoritedByUser'] ?? false),
             'isAvailable' => $this->is_available,
             'isAvailableNow' => $this->isAvailableNow(),
             'availabilityMode' => $this->availabilityMode(),

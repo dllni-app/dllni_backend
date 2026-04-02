@@ -34,12 +34,14 @@ final class UserSupermarketHomeStoreResource extends JsonResource
 
         [$minMinutes, $maxMinutes] = $this->estimateDeliveryWindow($distanceKm);
 
+        $attrs = $store->getAttributes();
+
         return [
             'id' => $store->id,
             'name' => $store->name,
             'slug' => $store->slug,
-            'cover' => $store->cover,
-            'logo' => $store->logo,
+            'cover' => $attrs['cover'] ?? null,
+            'logo' => $attrs['logo'] ?? null,
             'rating' => $store->average_rating !== null
                 ? round((float) $store->average_rating, 1)
                 : null,
