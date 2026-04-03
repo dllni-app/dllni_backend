@@ -122,7 +122,6 @@ it('lists restaurant staff', function () {
     expect($response->json('data'))->toBeArray();
 });
 
-
 it('lists restaurant recurring orders', function () {
     RestaurantRecurringOrder::create([
         'user_id' => User::factory()->create()->id,

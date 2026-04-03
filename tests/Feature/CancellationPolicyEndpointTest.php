@@ -50,4 +50,3 @@ it('returns 404 when policy for module does not exist', function () {
 
     $response->assertNotFound();
 });
-

@@ -12,6 +12,6 @@ enum AvailabilityType: string
 
     public function label(): string
     {
-        return __('cleaning_admin.enums.availability_type.' . $this->value);
+        return __('cleaning_admin.enums.availability_type.'.$this->value);
     }
 }

@@ -14,6 +14,6 @@ enum EventType: string
 
     public function label(): string
     {
-        return __('cleaning_admin.enums.event_type.' . $this->value);
+        return __('cleaning_admin.enums.event_type.'.$this->value);
     }
 }

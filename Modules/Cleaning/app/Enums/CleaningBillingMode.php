@@ -11,6 +11,6 @@ enum CleaningBillingMode: string
 
     public function label(): string
     {
-        return __('cleaning_admin.enums.cleaning_billing_mode.' . $this->value);
+        return __('cleaning_admin.enums.cleaning_billing_mode.'.$this->value);
     }
 }

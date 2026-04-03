@@ -56,7 +56,7 @@ final class RestaurantOwnerCouponsIndexController
             $query->orderBy('usage_count', $sort === 'performance' ? 'asc' : 'desc');
         } else {
             $direction = str_starts_with($sort, '-') ? 'desc' : 'asc';
-            $field = ltrim($sort, '-');
+            $field = mb_ltrim($sort, '-');
             $query->orderBy($field, $direction);
         }
 

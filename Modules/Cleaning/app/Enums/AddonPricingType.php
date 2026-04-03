@@ -11,6 +11,6 @@ enum AddonPricingType: string
 
     public function label(): string
     {
-        return __('cleaning_admin.enums.addon_pricing_type.' . $this->value);
+        return __('cleaning_admin.enums.addon_pricing_type.'.$this->value);
     }
 }

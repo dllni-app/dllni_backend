@@ -13,6 +13,6 @@ enum AlertSeverity: string
 
     public function label(): string
     {
-        return __('cleaning_admin.enums.alert_severity.' . $this->value);
+        return __('cleaning_admin.enums.alert_severity.'.$this->value);
     }
 }

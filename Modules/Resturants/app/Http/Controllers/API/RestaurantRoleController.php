@@ -7,7 +7,6 @@ namespace Modules\Resturants\Http\Controllers\API;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Modules\Resturants\Data\RestaurantRoleData;
-use Modules\Resturants\Http\Requests\RestaurantRolePermissionsRequest;
 use Modules\Resturants\Http\Requests\RestaurantRoleRequest;
 use Modules\Resturants\Http\Requests\RestaurantRoleRequests\RestaurantRoleFilterRequest;
 use Modules\Resturants\Http\Resources\RestaurantRoleResource;

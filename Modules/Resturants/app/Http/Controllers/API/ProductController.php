@@ -30,7 +30,7 @@ final class ProductController
 
         $products = Product::getQuery()
             ->where('restaurant_id', $restaurantId)
-            ->with(['restaurant', 'category' , 'media'])
+            ->with(['restaurant', 'category', 'media'])
             ->paginate($request->get('perPage', 20));
 
         return ProductResource::collection($products);

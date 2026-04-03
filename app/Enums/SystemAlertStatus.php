@@ -12,6 +12,6 @@ enum SystemAlertStatus: string
 
     public function label(): string
     {
-        return __('cleaning_admin.enums.system_alert_status.' . $this->value);
+        return __('cleaning_admin.enums.system_alert_status.'.$this->value);
     }
 }

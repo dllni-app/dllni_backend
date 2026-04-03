@@ -5,7 +5,6 @@ declare(strict_types=1);
 use App\Models\User;
 use Database\Factories\SmStoreFactory;
 use Laravel\Sanctum\Sanctum;
-use Modules\Supermarket\Models\SmStore;
 
 beforeEach(function (): void {
     $user = User::factory()->create();

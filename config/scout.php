@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 return [
 
     /*
@@ -181,7 +183,7 @@ return [
         ],
         // 'max_total_results' => env('TYPESENSE_MAX_TOTAL_RESULTS', 1000),
         'model-settings' => [
-           \App\Models\User::class => [
+            App\Models\User::class => [
                 'collection_schema' => [
                     'name' => 'users',
                     'fields' => [
@@ -191,9 +193,9 @@ return [
                     ],
                     'default_sorting_field' => 'id',
                 ],
-               'search_parameters' => [
-                  'query_by' => 'name,email',
-               ],
+                'search_parameters' => [
+                    'query_by' => 'name,email',
+                ],
             ],
         ],
     ],

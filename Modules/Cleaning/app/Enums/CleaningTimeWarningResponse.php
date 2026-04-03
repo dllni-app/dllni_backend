@@ -12,6 +12,6 @@ enum CleaningTimeWarningResponse: string
 
     public function label(): string
     {
-        return __('cleaning_admin.enums.time_warning_response.' . $this->value);
+        return __('cleaning_admin.enums.time_warning_response.'.$this->value);
     }
 }

@@ -15,6 +15,6 @@ enum EventBookingStatus: string
 
     public function label(): string
     {
-        return __('cleaning_admin.enums.event_booking_status.' . $this->value);
+        return __('cleaning_admin.enums.event_booking_status.'.$this->value);
     }
 }

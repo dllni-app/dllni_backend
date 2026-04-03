@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 namespace App\Http\Controllers\API;
+
 use App\Models\CancellationPolicy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -48,4 +49,3 @@ final class CancellationPolicyController
         ]);
     }
 }
-

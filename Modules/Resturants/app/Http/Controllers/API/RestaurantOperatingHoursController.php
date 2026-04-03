@@ -7,7 +7,6 @@ namespace Modules\Resturants\Http\Controllers\API;
 use Illuminate\Http\JsonResponse;
 use Modules\Resturants\Http\Requests\OperatingHoursRequest;
 use Modules\Resturants\Models\OperatingHour;
-use Modules\Resturants\Models\Restaurant;
 use Modules\Resturants\Support\RestaurantOwnerContext;
 
 final class RestaurantOperatingHoursController

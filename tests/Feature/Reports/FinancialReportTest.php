@@ -24,7 +24,7 @@ it('returns financial report with valid data', function (): void {
             'service_fee' => 100,
         ]);
 
-    $response = $this->getJson('/api/v1/sm-reports/financial?startDate=' . Carbon::today()->toDateString() . '&endDate=' . Carbon::today()->toDateString());
+    $response = $this->getJson('/api/v1/sm-reports/financial?startDate='.Carbon::today()->toDateString().'&endDate='.Carbon::today()->toDateString());
 
     $response->assertOk();
     $response->assertJsonStructure([
@@ -47,7 +47,7 @@ it('filters financial report by store', function (): void {
     SmOrderFactory::new()->create(['store_id' => $store1->id, 'status' => 'completed', 'total_amount' => 1000]);
     SmOrderFactory::new()->create(['store_id' => $store2->id, 'status' => 'completed', 'total_amount' => 500]);
 
-    $response = $this->getJson('/api/v1/sm-reports/financial?startDate=' . Carbon::today()->toDateString() . '&endDate=' . Carbon::today()->toDateString() . '&storeId=' . $store1->id);
+    $response = $this->getJson('/api/v1/sm-reports/financial?startDate='.Carbon::today()->toDateString().'&endDate='.Carbon::today()->toDateString().'&storeId='.$store1->id);
 
     $response->assertOk();
     expect($response->json('by_store'))->toBeArray();
@@ -58,13 +58,13 @@ it('filters financial report by status', function (): void {
     SmOrderFactory::new()->create(['store_id' => $store->id, 'status' => 'completed']);
     SmOrderFactory::new()->create(['store_id' => $store->id, 'status' => 'cancelled']);
 
-    $response = $this->getJson('/api/v1/sm-reports/financial?startDate=' . Carbon::today()->toDateString() . '&endDate=' . Carbon::today()->toDateString() . '&status=completed');
+    $response = $this->getJson('/api/v1/sm-reports/financial?startDate='.Carbon::today()->toDateString().'&endDate='.Carbon::today()->toDateString().'&status=completed');
 
     $response->assertOk();
 });
 
 it('validates financial report dates', function (): void {
-    $response = $this->getJson('/api/v1/sm-reports/financial?startDate=' . Carbon::today()->toDateString() . '&endDate=' . Carbon::yesterday()->toDateString());
+    $response = $this->getJson('/api/v1/sm-reports/financial?startDate='.Carbon::today()->toDateString().'&endDate='.Carbon::yesterday()->toDateString());
 
     $response->assertUnprocessable();
     $response->assertJsonValidationErrors(['endDate']);

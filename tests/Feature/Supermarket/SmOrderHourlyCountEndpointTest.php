@@ -42,7 +42,7 @@ it('returns order counts grouped by day and status for the week starting on satu
             $rows[] = [
                 'customer_id' => $customerId,
                 'store_id' => $storeId,
-                'order_number' => 'ORD-' . mb_str_pad((string) $orderNumber++, 6, '0', STR_PAD_LEFT),
+                'order_number' => 'ORD-'.mb_str_pad((string) $orderNumber++, 6, '0', STR_PAD_LEFT),
                 'status' => $status,
                 'pickup_mode' => 'immediate_pickup',
                 'subtotal' => 100,

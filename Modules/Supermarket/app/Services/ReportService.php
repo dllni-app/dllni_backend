@@ -45,10 +45,10 @@ final class ReportService
         $revenueByStore = SmOrder::selectRaw('sm_stores.id, sm_stores.name, COUNT(sm_orders.id) as total_orders, SUM(sm_orders.total_amount) as gross_sales')
             ->leftJoin('sm_stores', 'sm_orders.store_id', '=', 'sm_stores.id')
             ->whereBetween('sm_orders.created_at', [$startDate, $endDate])
-            ->when($status, fn($q) => $q->where('sm_orders.status', $status))
+            ->when($status, fn ($q) => $q->where('sm_orders.status', $status))
             ->groupBy('sm_stores.id', 'sm_stores.name')
             ->get()
-            ->map(fn($row) => [
+            ->map(fn ($row) => [
                 'store_id' => $row->id,
                 'store_name' => $row->name,
                 'total_orders' => $row->total_orders,
@@ -61,11 +61,11 @@ final class ReportService
         // Revenue by date
         $revenueByDate = SmStoreDailyStat::selectRaw('date, SUM(orders_revenue) as revenue, SUM(orders_count) as orders_count')
             ->whereBetween('date', [$startDate, $endDate])
-            ->when($storeId, fn($q) => $q->where('store_id', $storeId))
+            ->when($storeId, fn ($q) => $q->where('store_id', $storeId))
             ->groupBy('date')
             ->orderBy('date')
             ->get()
-            ->map(fn($row) => [
+            ->map(fn ($row) => [
                 'date' => $row->date,
                 'revenue' => (float) $row->revenue,
                 'orders_count' => (int) $row->orders_count,
@@ -115,12 +115,12 @@ final class ReportService
             ->leftJoin('sm_products', 'sm_order_items.product_id', '=', 'sm_products.id')
             ->leftJoin('sm_orders', 'sm_order_items.order_id', '=', 'sm_orders.id')
             ->whereBetween('sm_orders.created_at', [$startDate, $endDate])
-            ->when($storeId, fn($q) => $q->where('sm_orders.store_id', $storeId))
+            ->when($storeId, fn ($q) => $q->where('sm_orders.store_id', $storeId))
             ->groupBy('sm_products.id', 'sm_products.name')
             ->orderByDesc('total_quantity')
             ->limit(10)
             ->get()
-            ->map(fn($row) => [
+            ->map(fn ($row) => [
                 'product_id' => $row->id,
                 'product_name' => $row->name,
                 'order_count' => (int) $row->order_count,
@@ -139,7 +139,7 @@ final class ReportService
             ->orderByDesc('revenue')
             ->limit(10)
             ->get()
-            ->map(fn($row) => [
+            ->map(fn ($row) => [
                 'store_id' => $row->id,
                 'store_name' => $row->name,
                 'completed_orders' => (int) $row->completed_orders,
@@ -155,11 +155,11 @@ final class ReportService
         // Trend data
         $trendData = SmStoreDailyStat::selectRaw('date, SUM(orders_count) as orders_count, SUM(orders_revenue) as revenue')
             ->whereBetween('date', [$startDate, $endDate])
-            ->when($storeId, fn($q) => $q->where('store_id', $storeId))
+            ->when($storeId, fn ($q) => $q->where('store_id', $storeId))
             ->groupBy('date')
             ->orderBy('date')
             ->get()
-            ->map(fn($row) => [
+            ->map(fn ($row) => [
                 'date' => $row->date,
                 'orders_count' => (int) $row->orders_count,
                 'revenue' => (float) $row->revenue,
@@ -236,7 +236,7 @@ final class ReportService
             ->latest('created_at')
             ->limit(5)
             ->get()
-            ->map(fn($order) => [
+            ->map(fn ($order) => [
                 'id' => $order->id,
                 'store_name' => $order->store?->name,
                 'customer_name' => $order->customer?->name,

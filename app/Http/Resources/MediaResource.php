@@ -1,6 +1,7 @@
 <?php
 
 declare(strict_types=1);
+
 namespace App\Http\Resources;
 
 use Illuminate\Http\Request;
@@ -30,7 +31,7 @@ final class MediaResource extends JsonResource
             'extension' => $this->extension,
             'type' => $this->getTypeFromExtension(),
             'caption' => $this->getCustomProperty('caption') ?? $this->name,
-            'createdAt' => $this->created_at->toDateTimeString()
+            'createdAt' => $this->created_at->toDateTimeString(),
         ];
     }
 }

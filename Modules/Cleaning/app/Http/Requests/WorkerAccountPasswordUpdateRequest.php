@@ -22,4 +22,3 @@ final class WorkerAccountPasswordUpdateRequest extends FormRequest
         ];
     }
 }
-

@@ -18,7 +18,7 @@ final class SmOrderRejectStatusRequest extends FormRequest
     {
         return [
             'reason' => 'required|string|min:10|max:500',
-            'rejectionType' => ['required', 'string', 'in:' . implode(',', array_map(fn($case) => $case->value, RejectionType::cases()))],
+            'rejectionType' => ['required', 'string', 'in:'.implode(',', array_map(fn ($case) => $case->value, RejectionType::cases()))],
         ];
     }
 
