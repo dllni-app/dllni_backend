@@ -21,6 +21,7 @@ use Modules\Resturants\Models\InventoryItem;
 use Modules\Resturants\Models\Order;
 use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
+use Modules\Resturants\Models\Review;
 use Throwable;
 
 final class RestaurantSeeder extends Seeder
@@ -138,14 +139,15 @@ final class RestaurantSeeder extends Seeder
 
             $days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
             foreach ($days as $i => $day) {
+                $allDayOpen = $restaurant->slug === 'la-piazza-italian';
                 DB::table('operating_hours')->updateOrInsert(
                     [
                         'restaurant_id' => $restaurant->id,
                         'day_of_week' => $day,
                     ],
                     [
-                        'open_time' => $i < 5 ? '11:00' : '12:00',
-                        'close_time' => $i < 5 ? '22:00' : '23:00',
+                        'open_time' => $allDayOpen ? '00:00' : ($i < 5 ? '11:00' : '12:00'),
+                        'close_time' => $allDayOpen ? '23:59' : ($i < 5 ? '22:00' : '23:00'),
                         'is_closed' => false,
                         'updated_at' => now(),
                     ]
@@ -197,6 +199,8 @@ final class RestaurantSeeder extends Seeder
             $this->seedSampleOrders($restaurant, $owner, $cancellationPolicy);
             $this->seedRequestedRestaurantData($restaurant);
             $this->seedOwnerAppData($restaurant, $owner);
+            $this->seedReviews($restaurant);
+            $this->seedModifierGroups($restaurant);
             $this->seedRestaurantImages($restaurant);
         }
     }
@@ -295,7 +299,7 @@ final class RestaurantSeeder extends Seeder
         );
 
         for ($i = 0; $i < 5; $i++) {
-            $orderNumber = 'ORD-'.mb_strtoupper(Str::random(6)).$i;
+            $orderNumber = 'ORD-' . mb_strtoupper(Str::random(6)) . $i;
             if (Order::where('order_number', $orderNumber)->exists()) {
                 continue;
             }
@@ -529,7 +533,7 @@ final class RestaurantSeeder extends Seeder
             ['email' => "employee.one+{$restaurant->id}@example.com"],
             [
                 'name' => 'موظف أول',
-                'phone' => '+962790000001'.$restaurant->id,
+                'phone' => '+962790000001' . $restaurant->id,
                 'password' => bcrypt('password'),
                 'module_type' => UserModuleType::RestaurantSeller->value,
                 'email_verified_at' => now(),
@@ -540,7 +544,7 @@ final class RestaurantSeeder extends Seeder
             ['email' => "employee.two+{$restaurant->id}@example.com"],
             [
                 'name' => 'موظف ثاني',
-                'phone' => '+962790000002'.$restaurant->id,
+                'phone' => '+962790000002' . $restaurant->id,
                 'password' => bcrypt('password'),
                 'module_type' => UserModuleType::RestaurantSeller->value,
                 'email_verified_at' => now(),
@@ -575,13 +579,13 @@ final class RestaurantSeeder extends Seeder
 
         $activeCouponId = DB::table('promo_codes')->where([
             'restaurant_id' => $restaurant->id,
-            'code' => 'SAVE25-'.$restaurant->id,
+            'code' => 'SAVE25-' . $restaurant->id,
         ])->value('id');
 
         if (! $activeCouponId) {
             $activeCouponId = DB::table('promo_codes')->insertGetId([
                 'restaurant_id' => $restaurant->id,
-                'code' => 'SAVE25-'.$restaurant->id,
+                'code' => 'SAVE25-' . $restaurant->id,
                 'discount_type' => 'percentage',
                 'discount_value' => 25,
                 'min_order_amount' => 20,
@@ -598,7 +602,7 @@ final class RestaurantSeeder extends Seeder
         DB::table('promo_codes')->updateOrInsert(
             [
                 'restaurant_id' => $restaurant->id,
-                'code' => 'OLD10-'.$restaurant->id,
+                'code' => 'OLD10-' . $restaurant->id,
             ],
             [
                 'discount_type' => 'percentage',
@@ -736,6 +740,133 @@ final class RestaurantSeeder extends Seeder
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
+        }
+    }
+
+    private function seedReviews(Restaurant $restaurant): void
+    {
+        $customer = User::query()->where('email', 'restaurant.customer@example.com')->first();
+        if (! $customer) {
+            return;
+        }
+
+        $orders = Order::query()
+            ->where('restaurant_id', $restaurant->id)
+            ->where('user_id', $customer->id)
+            ->latest('id')
+            ->limit(3)
+            ->get();
+
+        foreach ($orders as $index => $order) {
+            Review::updateOrCreate(
+                [
+                    'user_id' => $customer->id,
+                    'order_id' => $order->id,
+                ],
+                [
+                    'restaurant_id' => $restaurant->id,
+                    'rating' => match ($index) {
+                        0 => 5,
+                        1 => 4,
+                        default => 5,
+                    },
+                    'comment' => match ($index) {
+                        0 => 'Great taste and fast pickup.',
+                        1 => 'Good value, will order again.',
+                        default => 'Loved the flavors!',
+                    },
+                    'updated_at' => now(),
+                    'created_at' => $order->created_at ?? now(),
+                ]
+            );
+        }
+    }
+
+    private function seedModifierGroups(Restaurant $restaurant): void
+    {
+        $groups = [
+            [
+                'name' => 'إضافات اختيارية',
+                'is_required' => false,
+                'min_selections' => 0,
+                'max_selections' => 3,
+                'modifiers' => [
+                    ['name' => 'جبنة إضافية', 'price' => 3, 'sort_order' => 1],
+                    ['name' => 'لحم إضافي', 'price' => 8, 'sort_order' => 2],
+                    ['name' => 'صوص إضافي', 'price' => 2, 'sort_order' => 3],
+                ],
+            ],
+            [
+                'name' => 'اختيار الصوص',
+                'is_required' => false,
+                'min_selections' => 0,
+                'max_selections' => 2,
+                'modifiers' => [
+                    ['name' => 'صوص باربكيو', 'price' => 0, 'sort_order' => 1],
+                    ['name' => 'صوص رانش', 'price' => 0, 'sort_order' => 2],
+                    ['name' => 'صوص حار', 'price' => 0, 'sort_order' => 3],
+                ],
+            ],
+        ];
+
+        $productIds = DB::table('products')
+            ->where('restaurant_id', $restaurant->id)
+            ->orderBy('id')
+            ->limit(4)
+            ->pluck('id')
+            ->all();
+
+        foreach ($groups as $group) {
+            $groupId = DB::table('modifier_groups')->updateOrInsert(
+                [
+                    'restaurant_id' => $restaurant->id,
+                    'name' => $group['name'],
+                ],
+                [
+                    'is_required' => $group['is_required'],
+                    'min_selections' => $group['min_selections'],
+                    'max_selections' => $group['max_selections'],
+                    'updated_at' => now(),
+                    'created_at' => now(),
+                ]
+            )
+                ? DB::table('modifier_groups')
+                    ->where('restaurant_id', $restaurant->id)
+                    ->where('name', $group['name'])
+                    ->value('id')
+                : null;
+
+            if (! $groupId) {
+                continue;
+            }
+
+            foreach ($group['modifiers'] as $modifier) {
+                DB::table('modifiers')->updateOrInsert(
+                    [
+                        'modifier_group_id' => $groupId,
+                        'name' => $modifier['name'],
+                    ],
+                    [
+                        'price' => $modifier['price'],
+                        'sort_order' => $modifier['sort_order'],
+                        'updated_at' => now(),
+                        'created_at' => now(),
+                    ]
+                );
+            }
+
+            foreach ($productIds as $productId) {
+                DB::table('modifier_group_product')->updateOrInsert(
+                    [
+                        'modifier_group_id' => $groupId,
+                        'product_id' => $productId,
+                    ],
+                    [
+                        'updated_at' => now(),
+                        'created_at' => now(),
+                    ]
+                );
+            }
         }
     }
 

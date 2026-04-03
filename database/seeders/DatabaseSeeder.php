@@ -47,6 +47,8 @@ final class DatabaseSeeder extends Seeder
             CleaningWorkerArabicDataSeeder::class,
             EventBookingSeeder::class,
             SupermarketDatabaseSeeder::class,
+            MarketingOfferSeeder::class,
+            UserAppScenarioSeeder::class,
         ]);
 
         if (filter_var((string) env('AI_DEV_DATASET', false), FILTER_VALIDATE_BOOL)) {
