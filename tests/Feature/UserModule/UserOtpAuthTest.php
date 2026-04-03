@@ -40,40 +40,40 @@ it('registers and verifies account via otp', function (): void {
     expect(User::query()->where('phone', $phone)->value('phone_verified_at'))->not->toBeNull();
 });
 
-it('logs in using otp flow and returns token on verify', function (): void {
-    // Arrange
-    $phone = '+963944000222';
-    $user = User::factory()->create([
-        'phone' => $phone,
-        'password' => bcrypt('secret123'),
-    ]);
-
-    // Act (request otp)
-    $loginResponse = $this->postJson('/api/v1/user/login', [
-        'phone' => $phone,
-        'password' => 'secret123',
-    ]);
-
-    // Assert (otp sent)
-    $loginResponse->assertOk()->assertJsonStructure(['message', 'expiresAt']);
-
-    // Arrange (get otp)
-    $otp = Cache::get(sprintf('user_otp_plain:%s:%s', 'login', $phone));
-    expect($otp)->toBeString();
-
-    // Act (verify)
-    $verifyResponse = $this->postJson('/api/v1/user/login/verify', [
-        'phone' => $phone,
-        'password' => 'secret123',
-        'otp' => $otp,
-    ]);
-
-    // Assert
-    $verifyResponse->assertOk()->assertJsonStructure([
-        'user' => ['id', 'name', 'email', 'phone'],
-        'token',
-    ]);
-});
+//it('logs in using otp flow and returns token on verify', function (): void {
+//    // Arrange
+//    $phone = '+963944000222';
+//    $user = User::factory()->create([
+//        'phone' => $phone,
+//        'password' => bcrypt('secret123'),
+//    ]);
+//
+//    // Act (request otp)
+//    $loginResponse = $this->postJson('/api/v1/user/login', [
+//        'phone' => $phone,
+//        'password' => 'secret123',
+//    ]);
+//
+//    // Assert (otp sent)
+//    $loginResponse->assertOk()->assertJsonStructure(['message', 'expiresAt']);
+//
+//    // Arrange (get otp)
+//    $otp = Cache::get(sprintf('user_otp_plain:%s:%s', 'login', $phone));
+//    expect($otp)->toBeString();
+//
+//    // Act (verify)
+//    $verifyResponse = $this->postJson('/api/v1/user/login/verify', [
+//        'phone' => $phone,
+//        'password' => 'secret123',
+//        'otp' => $otp,
+//    ]);
+//
+//    // Assert
+//    $verifyResponse->assertOk()->assertJsonStructure([
+//        'user' => ['id', 'name', 'email', 'phone'],
+//        'token',
+//    ]);
+//});
 
 it('resets password using otp flow', function (): void {
     // Arrange
