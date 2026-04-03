@@ -15,12 +15,18 @@ final class OfferResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $imageUrl = null;
+        if ($this->relationLoaded('restaurant') && $this->restaurant !== null) {
+            $imageUrl = $this->restaurant->getFirstMediaUrl('primary-image') ?: null;
+        }
+
         return [
             'id' => $this->id,
             'restaurantId' => $this->restaurant_id,
             'name' => $this->name,
             'discountType' => $this->discount_type?->value ?? $this->discount_type,
             'discountValue' => $this->discount_value ? (float) $this->discount_value : null,
+            'imageUrl' => $imageUrl,
             'startsAt' => $this->starts_at?->toDateTimeString(),
             'endsAt' => $this->ends_at?->toDateTimeString(),
             'isActive' => $this->is_active,

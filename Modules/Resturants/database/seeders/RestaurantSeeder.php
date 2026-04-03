@@ -19,7 +19,9 @@ use Modules\Resturants\Enums\PriceRange;
 use Modules\Resturants\Enums\RestaurantPickupMode;
 use Modules\Resturants\Models\InventoryItem;
 use Modules\Resturants\Models\Order;
+use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
+use Throwable;
 
 final class RestaurantSeeder extends Seeder
 {
@@ -195,6 +197,7 @@ final class RestaurantSeeder extends Seeder
             $this->seedSampleOrders($restaurant, $owner, $cancellationPolicy);
             $this->seedRequestedRestaurantData($restaurant);
             $this->seedOwnerAppData($restaurant, $owner);
+            $this->seedRestaurantImages($restaurant);
         }
     }
 
@@ -733,6 +736,39 @@ final class RestaurantSeeder extends Seeder
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
+        }
+    }
+
+    private function seedRestaurantImages(Restaurant $restaurant): void
+    {
+        if ($restaurant->getFirstMedia('primary-image') === null) {
+            $seed = $restaurant->slug ?? (string) $restaurant->id;
+            $url = "https://picsum.photos/seed/restaurant-{$seed}/800/600";
+
+            try {
+                $restaurant->addMediaFromUrl($url)->toMediaCollection('primary-image');
+            } catch (Throwable) {
+                // Ignore remote image failures in dev seed data.
+            }
+        }
+
+        $products = Product::query()
+            ->where('restaurant_id', $restaurant->id)
+            ->get();
+
+        foreach ($products as $product) {
+            if ($product->getFirstMedia('primary-image') !== null) {
+                continue;
+            }
+
+            $seed = $restaurant->slug ?? (string) $restaurant->id;
+            $url = "https://picsum.photos/seed/restaurant-{$seed}-product-{$product->id}/600/600";
+
+            try {
+                $product->addMediaFromUrl($url)->toMediaCollection('primary-image');
+            } catch (Throwable) {
+                // Ignore remote image failures in dev seed data.
+            }
         }
     }
 }

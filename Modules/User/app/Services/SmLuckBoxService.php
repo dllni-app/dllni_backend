@@ -13,14 +13,14 @@ use Modules\Supermarket\Models\SmStore;
 final class SmLuckBoxService
 {
     /**
-     * @return array{restrictions: list<array{value: string, labelAr: string}>, categoryTypes: list<array{id: int, name: string}>}
+     * @return array{restrictions: list<array{value: string, labelAr: string}>, categoryTypes: list<array{id: int, name: string, imageUrl: string|null}>}
      */
     public function options(): array
     {
         $categoryTypes = SmCategory::query()
             ->where('is_active', true)
             ->whereHas('store', fn (Builder $q) => $q->where('is_active', true))
-            ->selectRaw('MIN(id) as id, name')
+            ->selectRaw('MIN(id) as id, name, MIN(image_path) as image_path')
             ->groupBy('name')
             ->orderBy('name')
             ->limit(50)
@@ -28,6 +28,7 @@ final class SmLuckBoxService
             ->map(fn ($row) => [
                 'id' => (int) $row->id,
                 'name' => (string) $row->name,
+                'imageUrl' => $row->image_path !== null && $row->image_path !== '' ? (string) $row->image_path : null,
             ])
             ->values()
             ->all();

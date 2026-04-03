@@ -7,6 +7,8 @@ namespace Modules\Supermarket\Database\Seeders;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Modules\Supermarket\Enums\SmProductSource;
+use Modules\Supermarket\Models\SmProduct;
+use Throwable;
 
 final class SmProductSeeder extends Seeder
 {
@@ -62,6 +64,31 @@ final class SmProductSeeder extends Seeder
                     'created_at' => now(),
                 ]
             );
+        }
+
+        $this->seedProductImages(array_column($products, 'id'));
+    }
+
+    /**
+     * @param  array<int, int>  $productIds
+     */
+    private function seedProductImages(array $productIds): void
+    {
+        $items = SmProduct::query()->whereIn('id', $productIds)->get();
+
+        foreach ($items as $product) {
+            if ($product->getFirstMedia(SmProduct::IMAGE_COLLECTION) !== null) {
+                continue;
+            }
+
+            $seed = (string) $product->id;
+            $url = "https://picsum.photos/seed/sm-product-{$seed}/600/600";
+
+            try {
+                $product->addMediaFromUrl($url)->toMediaCollection(SmProduct::IMAGE_COLLECTION);
+            } catch (Throwable) {
+                // Ignore remote image failures in dev seed data.
+            }
         }
     }
 }

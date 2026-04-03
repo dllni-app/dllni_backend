@@ -33,6 +33,7 @@ final class UserRestaurantDetailsController
         $offers = Offer::query()
             ->where('restaurant_id', $model->id)
             ->where('is_active', true)
+            ->with(['restaurant.media'])
             ->latest('starts_at')
             ->limit(10)
             ->get();

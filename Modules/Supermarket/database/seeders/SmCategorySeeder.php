@@ -60,6 +60,9 @@ final class SmCategorySeeder extends Seeder
             }
 
             foreach ($group['items'] as $item) {
+                $seed = $group['store'].'-'.$item['slug'];
+                $imageUrl = "https://picsum.photos/seed/sm-category-{$seed}/640/480";
+
                 DB::table('sm_categories')->updateOrInsert(
                     [
                         'store_id' => $store->id,
@@ -69,7 +72,7 @@ final class SmCategorySeeder extends Seeder
                         'name' => $item['name'],
                         'description' => null,
                         'sort_order' => $item['sort_order'],
-                        'image_path' => null,
+                        'image_path' => $imageUrl,
                         'is_active' => true,
                         'updated_at' => now(),
                         'created_at' => now(),
