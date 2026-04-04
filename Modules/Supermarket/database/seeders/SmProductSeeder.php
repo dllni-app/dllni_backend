@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Modules\Supermarket\Database\Seeders;
 
+use Database\Seeders\Support\SeederMedia;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Modules\Supermarket\Enums\SmProductSource;
 use Modules\Supermarket\Models\SmProduct;
-use Throwable;
 
 final class SmProductSeeder extends Seeder
 {
@@ -82,13 +82,13 @@ final class SmProductSeeder extends Seeder
             }
 
             $seed = (string) $product->id;
-            $url = "https://picsum.photos/seed/sm-product-{$seed}/600/600";
 
-            try {
-                $product->addMediaFromUrl($url)->toMediaCollection(SmProduct::IMAGE_COLLECTION);
-            } catch (Throwable) {
-                // Ignore remote image failures in dev seed data.
-            }
+            SeederMedia::ensureSingleMedia(
+                $product,
+                SmProduct::IMAGE_COLLECTION,
+                "https://picsum.photos/seed/sm-product-{$seed}/600/600",
+                "sm-product-{$seed}"
+            );
         }
     }
 }

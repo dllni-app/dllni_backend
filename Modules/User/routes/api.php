@@ -52,6 +52,8 @@ use Modules\User\Http\Controllers\API\UserRestaurantHomeNearestRestaurantsContro
 use Modules\User\Http\Controllers\API\UserRestaurantHomeSuggestedProductsController;
 use Modules\User\Http\Controllers\API\UserRestaurantOrdersController;
 use Modules\User\Http\Controllers\API\UserRestaurantOrderShowController;
+use Modules\User\Http\Controllers\API\UserRestaurantProductsByCategoryController;
+use Modules\User\Http\Controllers\API\UserRestaurantProductsWithOffersController;
 use Modules\User\Http\Controllers\API\UserSupermarketStoreFavoriteDestroyController;
 use Modules\User\Http\Controllers\API\UserSupermarketStoreFavoritesIndexController;
 use Modules\User\Http\Controllers\API\UserSupermarketStoreFavoriteStoreController;
@@ -83,6 +85,9 @@ Route::prefix('v1/user')->group(function (): void {
         Route::get('nearest-restaurants', UserRestaurantHomeNearestRestaurantsController::class);
         Route::get('suggested-products', UserRestaurantHomeSuggestedProductsController::class);
     });
+
+    Route::get('restaurants/products/with-offers', UserRestaurantProductsWithOffersController::class);
+    Route::get('restaurants/products/by-category/{category}', UserRestaurantProductsByCategoryController::class);
 
     Route::get('restaurants/discover', DiscoverRestaurantsController::class);
     Route::get('restaurants/votes/suggestions', RestaurantGroupVoteSuggestionsController::class);

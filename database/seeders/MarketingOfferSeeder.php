@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
+use Database\Seeders\Support\SeederMedia;
 use Illuminate\Database\Seeder;
 use Modules\User\Enums\MarketingOfferTheme;
 use Modules\User\Models\MarketingOffer;
-use Throwable;
 
 final class MarketingOfferSeeder extends Seeder
 {
@@ -57,13 +57,13 @@ final class MarketingOfferSeeder extends Seeder
 
             if ($model->getFirstMedia(MarketingOffer::IMAGE_COLLECTION) === null) {
                 $seed = $index + 1;
-                $url = "https://picsum.photos/seed/marketing-offer-{$seed}/900/600";
 
-                try {
-                    $model->addMediaFromUrl($url)->toMediaCollection(MarketingOffer::IMAGE_COLLECTION);
-                } catch (Throwable) {
-                    // Ignore remote image failures in dev seed data.
-                }
+                SeederMedia::ensureSingleMedia(
+                    $model,
+                    MarketingOffer::IMAGE_COLLECTION,
+                    "https://picsum.photos/seed/marketing-offer-{$seed}/900/600",
+                    "marketing-offer-{$seed}"
+                );
             }
         }
     }

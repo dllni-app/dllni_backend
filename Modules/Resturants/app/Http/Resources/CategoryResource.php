@@ -16,8 +16,10 @@ final class CategoryResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $imageUrl = null;
-        if ($this->relationLoaded('products')) {
+        $imageUrl = $this->getFirstMediaUrl('category-image') ?: null;
+
+        // Fallback to first product image if category image not available
+        if ($imageUrl === null && $this->relationLoaded('products')) {
             $firstProduct = $this->products->first();
             if ($firstProduct instanceof Product) {
                 $imageUrl = $firstProduct->getFirstMediaUrl('primary-image') ?: null;

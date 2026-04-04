@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Database\Seeders;
 
 use App\Enums\AvailabilityType;
+use App\Enums\UserModuleType;
 use App\Models\User;
 use App\Models\Worker;
 use App\Models\WorkerAvailability;
 use App\Models\WorkerZone;
+use Database\Seeders\Support\SeederMedia;
 use Illuminate\Database\Seeder;
 
 final class WorkerSeeder extends Seeder
@@ -42,15 +44,25 @@ final class WorkerSeeder extends Seeder
             ],
         ];
 
-        foreach ($workers as $data) {
+        foreach ($workers as $index => $data) {
+            $phone = sprintf('+9627900001%02d', $index + 1);
+
             $user = User::firstOrCreate(
                 ['email' => $data['email']],
                 [
-                    'name' => $data['first_name'].' عامل',
+                    'name' => $data['first_name'] . ' عامل',
+                    'phone' => $phone,
+                    'module_type' => UserModuleType::CleaningWorker,
                     'password' => bcrypt('password'),
                     'email_verified_at' => now(),
                 ]
             );
+
+            $user->forceFill([
+                'phone' => $phone,
+                'module_type' => UserModuleType::CleaningWorker,
+                'phone_verified_at' => now(),
+            ])->save();
 
             $worker = Worker::firstOrCreate(
                 ['user_id' => $user->id],
@@ -105,6 +117,13 @@ final class WorkerSeeder extends Seeder
                     ]
                 );
             }
+
+            SeederMedia::ensureSingleMedia(
+                $worker,
+                'avatar',
+                "https://picsum.photos/seed/worker-{$worker->id}-avatar/512/512",
+                "worker-{$worker->id}-avatar"
+            );
         }
     }
 }

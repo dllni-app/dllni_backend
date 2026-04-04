@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Models\Worker;
 use App\Models\WorkerAvailability;
 use App\Models\WorkerZone;
+use Database\Seeders\Support\SeederMedia;
 use Illuminate\Database\Seeder;
 use Modules\Resturants\Enums\PriceRange;
 use Modules\Resturants\Models\Restaurant;
@@ -50,7 +51,11 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
                 'email_verified_at' => now(),
             ]
         );
-        $user->forceFill(['phone' => self::CleaningWorkerPhone, 'module_type' => UserModuleType::CleaningWorker])->save();
+        $user->forceFill([
+            'phone' => self::CleaningWorkerPhone,
+            'module_type' => UserModuleType::CleaningWorker,
+            'phone_verified_at' => now(),
+        ])->save();
 
         $worker = Worker::firstOrCreate(
             ['user_id' => $user->id],
@@ -106,6 +111,13 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
                 ]
             );
         }
+
+        SeederMedia::ensureSingleMedia(
+            $worker,
+            'avatar',
+            "https://picsum.photos/seed/worker-{$worker->id}-avatar/512/512",
+            "worker-{$worker->id}-avatar"
+        );
     }
 
     private function seedRestaurantSellerUser(): void
@@ -120,7 +132,11 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
                 'email_verified_at' => now(),
             ]
         );
-        $user->forceFill(['phone' => self::RestaurantSellerPhone, 'module_type' => UserModuleType::RestaurantSeller])->save();
+        $user->forceFill([
+            'phone' => self::RestaurantSellerPhone,
+            'module_type' => UserModuleType::RestaurantSeller,
+            'phone_verified_at' => now(),
+        ])->save();
 
         if (Restaurant::where('user_id', $user->id)->exists()) {
             return;
@@ -129,7 +145,7 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
         Restaurant::create([
             'user_id' => $user->id,
             'name' => 'Seller Restaurant',
-            'slug' => 'seller-restaurant-'.mb_substr(hash('sha256', (string) $user->id), 0, 8),
+            'slug' => 'seller-restaurant-' . mb_substr(hash('sha256', (string) $user->id), 0, 8),
             'description' => 'Restaurant owned by seller user for API testing.',
             'address' => '456 Seller Ave',
             'latitude' => 31.965,
@@ -160,7 +176,11 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
                 'email_verified_at' => now(),
             ]
         );
-        $user->forceFill(['phone' => self::SupermarketSellerPhone, 'module_type' => UserModuleType::SupermarketSeller])->save();
+        $user->forceFill([
+            'phone' => self::SupermarketSellerPhone,
+            'module_type' => UserModuleType::SupermarketSeller,
+            'phone_verified_at' => now(),
+        ])->save();
 
         if (SmStore::where('owner_user_id', $user->id)->exists()) {
             return;
@@ -169,7 +189,7 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
         SmStore::create([
             'owner_user_id' => $user->id,
             'name' => 'Seller Supermarket',
-            'slug' => 'seller-supermarket-'.mb_substr(hash('sha256', (string) $user->id), 0, 8),
+            'slug' => 'seller-supermarket-' . mb_substr(hash('sha256', (string) $user->id), 0, 8),
             'description' => 'Supermarket owned by seller user for API testing.',
             'address' => '789 Store St',
             'latitude' => 31.97,

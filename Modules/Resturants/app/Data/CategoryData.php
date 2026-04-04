@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Resturants\Data;
 
+use Illuminate\Http\UploadedFile;
 use Modules\Resturants\Models\Category;
 use Mrmarchone\LaravelAutoCrud\Traits\HasModelAttributes;
 use Spatie\LaravelData\Data;
@@ -20,5 +21,6 @@ final class CategoryData extends Data
         public ?string $name,
         public ?string $slug,
         public ?int $sortOrder,
+        public ?UploadedFile $categoryImage = null,
     ) {}
 }

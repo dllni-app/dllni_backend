@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Models\Worker;
 use App\Models\WorkerAvailability;
 use App\Models\WorkerZone;
+use Database\Seeders\Support\SeederMedia;
 use Illuminate\Database\Seeder;
 
 final class WorkerUserSeeder extends Seeder
@@ -32,7 +33,11 @@ final class WorkerUserSeeder extends Seeder
                 'email_verified_at' => now(),
             ]
         );
-        $user->forceFill(['phone' => self::WorkerPhone, 'module_type' => UserModuleType::CleaningWorker])->save();
+        $user->forceFill([
+            'phone' => self::WorkerPhone,
+            'module_type' => UserModuleType::CleaningWorker,
+            'phone_verified_at' => now(),
+        ])->save();
 
         $worker = Worker::firstOrCreate(
             ['user_id' => $user->id],
@@ -88,5 +93,12 @@ final class WorkerUserSeeder extends Seeder
                 ]
             );
         }
+
+        SeederMedia::ensureSingleMedia(
+            $worker,
+            'avatar',
+            "https://picsum.photos/seed/worker-{$worker->id}-avatar/512/512",
+            "worker-{$worker->id}-avatar"
+        );
     }
 }

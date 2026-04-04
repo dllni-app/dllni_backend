@@ -6,6 +6,7 @@ namespace Database\Seeders;
 
 use App\Models\CancellationPolicy;
 use App\Models\User;
+use Database\Seeders\Support\SeederMedia;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
 use Modules\Resturants\Enums\OrderStatus;
@@ -23,6 +24,7 @@ use Modules\Supermarket\Models\SmOrder;
 use Modules\Supermarket\Models\SmOrderItem;
 use Modules\Supermarket\Models\SmProduct;
 use Modules\Supermarket\Models\SmStore;
+use Modules\User\Models\UserAddress;
 
 final class UserAppScenarioSeeder extends Seeder
 {
@@ -33,8 +35,114 @@ final class UserAppScenarioSeeder extends Seeder
             return;
         }
 
+        $this->seedUserProfileScenario($user);
         $this->seedRestaurantScenario($user);
         $this->seedSupermarketScenario($user);
+    }
+
+    private function seedUserProfileScenario(User $user): void
+    {
+        SeederMedia::ensureSingleMedia(
+            $user,
+            'primary-image',
+            "https://picsum.photos/seed/user-{$user->id}-primary/600/600",
+            "user-{$user->id}-primary"
+        );
+
+        SeederMedia::ensureSingleMedia(
+            $user,
+            'images',
+            "https://picsum.photos/seed/user-{$user->id}-gallery-1/600/600",
+            "user-{$user->id}-gallery-1"
+        );
+
+        $this->seedAddresses($user);
+        $this->seedNotifications($user);
+    }
+
+    private function seedAddresses(User $user): void
+    {
+        UserAddress::query()->updateOrCreate(
+            [
+                'user_id' => $user->id,
+                'label' => 'المنزل',
+            ],
+            [
+                'mobile' => '+963944000222',
+                'city' => 'دمشق',
+                'neighborhood' => 'المزة',
+                'street' => 'شارع الجلاء',
+                'building' => '12',
+                'floor' => '3',
+                'directions' => 'بجانب الصيدلية، المدخل الخلفي.',
+                'latitude' => 33.513807,
+                'longitude' => 36.276528,
+                'is_default' => true,
+            ]
+        );
+
+        UserAddress::query()->updateOrCreate(
+            [
+                'user_id' => $user->id,
+                'label' => 'العمل',
+            ],
+            [
+                'mobile' => '+963944000223',
+                'city' => 'دمشق',
+                'neighborhood' => 'أبو رمانة',
+                'street' => 'شارع المالكي',
+                'building' => '7',
+                'floor' => '1',
+                'directions' => 'مقابل البنك، الدور الأول.',
+                'latitude' => 33.514745,
+                'longitude' => 36.289993,
+                'is_default' => false,
+            ]
+        );
+    }
+
+    private function seedNotifications(User $user): void
+    {
+        $databaseType = 'Illuminate\\Notifications\\DatabaseNotification';
+
+        $user->notifications()
+            ->where('data->seedTag', 'user-app-scenario')
+            ->delete();
+
+        $notifications = [
+            [
+                'type' => 'order',
+                'title' => 'Order accepted',
+                'body' => 'Restaurant accepted your order and started preparing it.',
+                'bookingId' => 101,
+                'read_at' => null,
+            ],
+            [
+                'type' => 'promo',
+                'title' => 'New offer available',
+                'body' => 'Use code WELCOME15 on your next checkout.',
+                'read_at' => null,
+            ],
+            [
+                'type' => 'delivery',
+                'title' => 'Order on the way',
+                'body' => 'Your driver is approaching your saved address.',
+                'timeWarningId' => 11,
+                'read_at' => now()->subMinutes(20),
+            ],
+        ];
+
+        foreach ($notifications as $payload) {
+            $readAt = $payload['read_at'];
+            unset($payload['read_at']);
+
+            $user->notifications()->create([
+                'id' => (string) Str::uuid(),
+                'type' => $databaseType,
+                'data' => [...$payload, 'seedTag' => 'user-app-scenario'],
+                'read_at' => $readAt,
+            ]);
+        }
     }
 
     private function seedRestaurantScenario(User $user): void
@@ -83,7 +191,7 @@ final class UserAppScenarioSeeder extends Seeder
             return;
         }
 
-        $orderNumber = 'USR-REST-'.$restaurant->id.'-'.Str::upper(Str::random(5));
+        $orderNumber = 'USR-REST-' . $restaurant->id . '-' . Str::upper(Str::random(5));
         $existing = Order::query()
             ->where('user_id', $user->id)
             ->where('restaurant_id', $restaurant->id)
@@ -178,7 +286,7 @@ final class UserAppScenarioSeeder extends Seeder
             return;
         }
 
-        $orderNumber = 'USR-SM-'.$store->id.'-'.Str::upper(Str::random(5));
+        $orderNumber = 'USR-SM-' . $store->id . '-' . Str::upper(Str::random(5));
         $existing = SmOrder::query()
             ->where('customer_id', $user->id)
             ->where('store_id', $store->id)

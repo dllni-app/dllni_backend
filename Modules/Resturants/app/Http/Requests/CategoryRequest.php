@@ -28,6 +28,7 @@ final class CategoryRequest extends FormRequest
                 \Illuminate\Validation\Rule::unique('categories', 'slug')->where('restaurant_id', $restaurantId)->ignore($categoryId),
             ],
             'sortOrder' => 'nullable|integer|min:0',
+            'categoryImage' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:2048',
         ];
     }
 }

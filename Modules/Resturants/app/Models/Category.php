@@ -10,11 +10,14 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Resturants\Traits\FilterQueries\CategoryFilterQuery;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
 
-final class Category extends Model
+final class Category extends Model implements HasMedia
 {
     use CategoryFilterQuery;
     use HasFactory;
+    use InteractsWithMedia;
 
     protected $fillable = [
         'restaurant_id',
@@ -36,6 +39,11 @@ final class Category extends Model
     public function products(): HasMany
     {
         return $this->hasMany(Product::class);
+    }
+
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection('category-image')->singleFile();
     }
 
     public function casts(): array

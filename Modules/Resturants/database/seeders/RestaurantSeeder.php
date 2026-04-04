@@ -10,6 +10,7 @@ use App\Enums\SystemAlertStatus;
 use App\Enums\UserModuleType;
 use App\Models\CancellationPolicy;
 use App\Models\User;
+use Database\Seeders\Support\SeederMedia;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -22,7 +23,6 @@ use Modules\Resturants\Models\Order;
 use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
 use Modules\Resturants\Models\Review;
-use Throwable;
 
 final class RestaurantSeeder extends Seeder
 {
@@ -831,9 +831,9 @@ final class RestaurantSeeder extends Seeder
                 ]
             )
                 ? DB::table('modifier_groups')
-                    ->where('restaurant_id', $restaurant->id)
-                    ->where('name', $group['name'])
-                    ->value('id')
+                ->where('restaurant_id', $restaurant->id)
+                ->where('name', $group['name'])
+                ->value('id')
                 : null;
 
             if (! $groupId) {
@@ -872,16 +872,13 @@ final class RestaurantSeeder extends Seeder
 
     private function seedRestaurantImages(Restaurant $restaurant): void
     {
-        if ($restaurant->getFirstMedia('primary-image') === null) {
-            $seed = $restaurant->slug ?? (string) $restaurant->id;
-            $url = "https://picsum.photos/seed/restaurant-{$seed}/800/600";
-
-            try {
-                $restaurant->addMediaFromUrl($url)->toMediaCollection('primary-image');
-            } catch (Throwable) {
-                // Ignore remote image failures in dev seed data.
-            }
-        }
+        $seed = $restaurant->slug ?? (string) $restaurant->id;
+        SeederMedia::ensureSingleMedia(
+            $restaurant,
+            'primary-image',
+            "https://picsum.photos/seed/restaurant-{$seed}/800/600",
+            "restaurant-{$seed}"
+        );
 
         $products = Product::query()
             ->where('restaurant_id', $restaurant->id)
@@ -892,14 +889,12 @@ final class RestaurantSeeder extends Seeder
                 continue;
             }
 
-            $seed = $restaurant->slug ?? (string) $restaurant->id;
-            $url = "https://picsum.photos/seed/restaurant-{$seed}-product-{$product->id}/600/600";
-
-            try {
-                $product->addMediaFromUrl($url)->toMediaCollection('primary-image');
-            } catch (Throwable) {
-                // Ignore remote image failures in dev seed data.
-            }
+            SeederMedia::ensureSingleMedia(
+                $product,
+                'primary-image',
+                "https://picsum.photos/seed/restaurant-{$seed}-product-{$product->id}/600/600",
+                "restaurant-{$seed}-product-{$product->id}"
+            );
         }
     }
 }
