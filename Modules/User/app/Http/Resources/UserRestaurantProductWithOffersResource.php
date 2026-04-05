@@ -17,6 +17,7 @@ final class UserRestaurantProductWithOffersResource extends JsonResource
     {
         /** @var Product $product */
         $product = $this->resource;
+        $attributes = $product->getAttributes();
 
         $price = $product->price !== null ? (float) $product->price : null;
         $discounted = $product->discounted_price !== null ? (float) $product->discounted_price : null;
@@ -27,7 +28,7 @@ final class UserRestaurantProductWithOffersResource extends JsonResource
         $activeOffers = [];
         if ($product->relationLoaded('offers')) {
             $activeOffers = $product->offers
-                ->filter(fn ($offer) => $offer->is_active && (
+                ->filter(fn($offer) => $offer->is_active && (
                     $offer->ends_at === null || $offer->ends_at->isFuture()
                 ))
                 ->values()
@@ -42,7 +43,7 @@ final class UserRestaurantProductWithOffersResource extends JsonResource
             'originalPrice' => $hasDiscount ? $price : null,
             'currency' => config('app.currency', 'IQD'),
             'isAvailable' => $product->is_available,
-            'isFavorite' => (bool) ($product->getAttribute('isFavoritedByUser') ?? false),
+            'isFavorite' => (bool) ($attributes['isFavoritedByUser'] ?? false),
             'primaryImageUrl' => $product->getFirstMediaUrl('primary-image') ?: null,
             'restaurant' => $product->relationLoaded('restaurant') && $product->restaurant !== null ? [
                 'id' => $product->restaurant->id,

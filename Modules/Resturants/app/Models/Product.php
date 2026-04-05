@@ -69,6 +69,12 @@ final class Product extends Model implements HasMedia
             ->withTimestamps();
     }
 
+    public function offers(): BelongsToMany
+    {
+        return $this->belongsToMany(Offer::class, 'offer_product')
+            ->withTimestamps();
+    }
+
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection('primary-image')->singleFile();

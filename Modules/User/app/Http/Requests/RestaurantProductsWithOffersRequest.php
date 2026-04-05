@@ -23,11 +23,13 @@ final class RestaurantProductsWithOffersRequest extends FormRequest
 
     public function getPerPage(): int
     {
-        return $this->input('per_page', 15);
+        return (int) $this->integer('per_page', 15);
     }
 
     public function getRestaurantId(): ?int
     {
-        return $this->input('restaurant_id');
+        $restaurantId = $this->input('restaurant_id');
+
+        return $restaurantId === null ? null : (int) $restaurantId;
     }
 }

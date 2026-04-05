@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Modules\Resturants\Models;
 
 use Carbon\CarbonImmutable;
+use Database\Factories\OfferFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -14,6 +16,7 @@ use Modules\Resturants\Traits\FilterQueries\OfferFilterQuery;
 
 final class Offer extends Model
 {
+    use HasFactory;
     use OfferFilterQuery;
 
     protected $fillable = [
@@ -68,7 +71,7 @@ final class Offer extends Model
 
         return match ($discountType) {
             DiscountType::Percentage => $this->discount_value !== null
-                ? mb_rtrim(mb_rtrim(number_format((float) $this->discount_value, 2, '.', ''), '0'), '.').'%'
+                ? mb_rtrim(mb_rtrim(number_format((float) $this->discount_value, 2, '.', ''), '0'), '.') . '%'
                 : null,
             DiscountType::FixedAmount => $this->discount_value !== null
                 ? mb_rtrim(mb_rtrim(number_format((float) $this->discount_value, 2, '.', ''), '0'), '.')
@@ -86,5 +89,10 @@ final class Offer extends Model
             'ends_at' => 'datetime',
             'is_active' => 'boolean',
         ];
+    }
+
+    protected static function newFactory(): OfferFactory
+    {
+        return OfferFactory::new();
     }
 }

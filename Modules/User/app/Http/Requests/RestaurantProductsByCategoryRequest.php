@@ -22,6 +22,6 @@ final class RestaurantProductsByCategoryRequest extends FormRequest
 
     public function getPerPage(): int
     {
-        return $this->input('per_page', 15);
+        return (int) $this->integer('per_page', 15);
     }
 }

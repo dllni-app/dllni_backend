@@ -3,9 +3,9 @@
 declare(strict_types=1);
 
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Modules\Resturants\Models\Category;
 use Modules\Resturants\Models\Restaurant;
-use Storage;
 
 describe('Category Image Upload', function (): void {
     beforeEach(function (): void {

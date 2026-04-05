@@ -159,7 +159,7 @@ describe('Products with Active Offers Endpoint', function (): void {
             'endsAt',
             'urgencyTag',
         ]);
-        expect($response->json('data.0.activeOffers.0.discountValue'))->toBe(20.0);
+        expect((float) $response->json('data.0.activeOffers.0.discountValue'))->toBe(20.0);
         expect($response->json('data.0.activeOffers.0.badgeText'))->toBe('20%');
     });
 

@@ -35,8 +35,9 @@ final class UserRestaurantProductsByCategoryController
             });
         }
 
-        return response()->json(
-            UserRestaurantProductWithOffersResource::collection($products),
-        );
+        $response = UserRestaurantProductWithOffersResource::collection($products)->response();
+        $response->setEncodingOptions($response->getEncodingOptions() | JSON_PRESERVE_ZERO_FRACTION);
+
+        return $response;
     }
 }
