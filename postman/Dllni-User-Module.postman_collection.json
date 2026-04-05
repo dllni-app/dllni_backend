@@ -6969,6 +6969,204 @@
                                                                 ]
                                                    }
                                                ]
+                                  },
+                                  {
+                                      "name":  "Cleaning (User Orders)",
+                                      "item":  [
+                                                   {
+                                                       "name":  "Cleaning Orders - Create",
+                                                       "request":  {
+                                                                       "method":  "POST",
+                                                                       "auth":  {
+                                                                                    "bearer":  [
+                                                                                                   {
+                                                                                                       "key":  "token",
+                                                                                                       "type":  "string",
+                                                                                                       "value":  "{{userToken}}"
+                                                                                                   }
+                                                                                               ],
+                                                                                    "type":  "bearer"
+                                                                                },
+                                                                       "url":  {
+                                                                                   "raw":  "{{baseUrl}}/api/v1/user/cleaning/orders",
+                                                                                   "host":  [
+                                                                                                "{{baseUrl}}"
+                                                                                            ],
+                                                                                   "path":  [
+                                                                                                "api",
+                                                                                                "v1",
+                                                                                                "user",
+                                                                                                "cleaning",
+                                                                                                "orders"
+                                                                                            ]
+                                                                               },
+                                                                       "header":  [
+                                                                                      {
+                                                                                          "key":  "Content-Type",
+                                                                                          "value":  "application/json"
+                                                                                      }
+                                                                                  ],
+                                                                       "body":  {
+                                                                                    "mode":  "raw",
+                                                                                    "raw":  "{\"propertyType\":\"apartment\",\"propertyDetails\":{\"address\":\"Al Aziziyah Street, Building 12\",\"location_name\":\"Home\",\"rooms\":3,\"bedrooms\":2,\"bathrooms\":1},\"estimatedSqm\":120,\"totalHours\":3,\"scheduledDate\":\"2026-04-10\",\"scheduledTime\":\"09:00\",\"addressLatitude\":33.5138,\"addressLongitude\":36.2765,\"basePrice\":1000,\"travelFee\":200,\"addonsTotal\":0,\"termsAccepted\":true}"
+                                                                                }
+                                                                   }
+                                                   },
+                                                   {
+                                                       "name":  "Cleaning Orders - Index",
+                                                       "request":  {
+                                                                       "method":  "GET",
+                                                                       "auth":  {
+                                                                                    "bearer":  [
+                                                                                                   {
+                                                                                                       "key":  "token",
+                                                                                                       "type":  "string",
+                                                                                                       "value":  "{{userToken}}"
+                                                                                                   }
+                                                                                               ],
+                                                                                    "type":  "bearer"
+                                                                                },
+                                                                       "url":  {
+                                                                                   "raw":  "{{baseUrl}}/api/v1/user/cleaning/orders?filter[status]=pending\u0026perPage=20\u0026page=1",
+                                                                                   "host":  [
+                                                                                                "{{baseUrl}}"
+                                                                                            ],
+                                                                                   "path":  [
+                                                                                                "api",
+                                                                                                "v1",
+                                                                                                "user",
+                                                                                                "cleaning",
+                                                                                                "orders"
+                                                                                            ],
+                                                                                   "query":  [
+                                                                                                 {
+                                                                                                     "key":  "filter[status]",
+                                                                                                     "value":  "pending"
+                                                                                                 },
+                                                                                                 {
+                                                                                                     "key":  "perPage",
+                                                                                                     "value":  "20"
+                                                                                                 },
+                                                                                                 {
+                                                                                                     "key":  "page",
+                                                                                                     "value":  "1"
+                                                                                                 }
+                                                                                             ]
+                                                                               }
+                                                                   }
+                                                   },
+                                                   {
+                                                       "name":  "Cleaning Orders - Show",
+                                                       "request":  {
+                                                                       "method":  "GET",
+                                                                       "auth":  {
+                                                                                    "bearer":  [
+                                                                                                   {
+                                                                                                       "key":  "token",
+                                                                                                       "type":  "string",
+                                                                                                       "value":  "{{userToken}}"
+                                                                                                   }
+                                                                                               ],
+                                                                                    "type":  "bearer"
+                                                                                },
+                                                                       "url":  {
+                                                                                   "raw":  "{{baseUrl}}/api/v1/user/cleaning/orders/{{cleaningOrderId}}",
+                                                                                   "host":  [
+                                                                                                "{{baseUrl}}"
+                                                                                            ],
+                                                                                   "path":  [
+                                                                                                "api",
+                                                                                                "v1",
+                                                                                                "user",
+                                                                                                "cleaning",
+                                                                                                "orders",
+                                                                                                "{{cleaningOrderId}}"
+                                                                                            ]
+                                                                               }
+                                                                   }
+                                                   },
+                                                   {
+                                                       "name":  "Cleaning Orders - Update",
+                                                       "request":  {
+                                                                       "method":  "PATCH",
+                                                                       "auth":  {
+                                                                                    "bearer":  [
+                                                                                                   {
+                                                                                                       "key":  "token",
+                                                                                                       "type":  "string",
+                                                                                                       "value":  "{{userToken}}"
+                                                                                                   }
+                                                                                               ],
+                                                                                    "type":  "bearer"
+                                                                                },
+                                                                       "url":  {
+                                                                                   "raw":  "{{baseUrl}}/api/v1/user/cleaning/orders/{{cleaningOrderId}}",
+                                                                                   "host":  [
+                                                                                                "{{baseUrl}}"
+                                                                                            ],
+                                                                                   "path":  [
+                                                                                                "api",
+                                                                                                "v1",
+                                                                                                "user",
+                                                                                                "cleaning",
+                                                                                                "orders",
+                                                                                                "{{cleaningOrderId}}"
+                                                                                            ]
+                                                                               },
+                                                                       "header":  [
+                                                                                      {
+                                                                                          "key":  "Content-Type",
+                                                                                          "value":  "application/json"
+                                                                                      }
+                                                                                  ],
+                                                                       "body":  {
+                                                                                    "mode":  "raw",
+                                                                                    "raw":  "{\"scheduledDate\":\"2026-04-11\",\"scheduledTime\":\"11:00\",\"totalHours\":4}"
+                                                                                }
+                                                                   }
+                                                   },
+                                                   {
+                                                       "name":  "Cleaning Orders - Cancel",
+                                                       "request":  {
+                                                                       "method":  "POST",
+                                                                       "auth":  {
+                                                                                    "bearer":  [
+                                                                                                   {
+                                                                                                       "key":  "token",
+                                                                                                       "type":  "string",
+                                                                                                       "value":  "{{userToken}}"
+                                                                                                   }
+                                                                                               ],
+                                                                                    "type":  "bearer"
+                                                                                },
+                                                                       "url":  {
+                                                                                   "raw":  "{{baseUrl}}/api/v1/user/cleaning/orders/{{cleaningOrderId}}/cancel",
+                                                                                   "host":  [
+                                                                                                "{{baseUrl}}"
+                                                                                            ],
+                                                                                   "path":  [
+                                                                                                "api",
+                                                                                                "v1",
+                                                                                                "user",
+                                                                                                "cleaning",
+                                                                                                "orders",
+                                                                                                "{{cleaningOrderId}}",
+                                                                                                "cancel"
+                                                                                            ]
+                                                                               },
+                                                                       "header":  [
+                                                                                      {
+                                                                                          "key":  "Content-Type",
+                                                                                          "value":  "application/json"
+                                                                                      }
+                                                                                  ],
+                                                                       "body":  {
+                                                                                    "mode":  "raw",
+                                                                                    "raw":  "{\"reason\":\"Changed plans\"}"
+                                                                                }
+                                                                   }
+                                                   }
+                                               ]
                                   }
                               ]
                  }
