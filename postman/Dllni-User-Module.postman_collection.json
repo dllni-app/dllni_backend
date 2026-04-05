@@ -5869,6 +5869,1106 @@
                                                                            ]
                                                               }
                                                   }
+                                  },
+                                  {
+                                      "name":  "Cleaning Worker",
+                                      "item":  [
+                                                   {
+                                                       "name":  "Home",
+                                                       "item":  [
+                                                                    {
+                                                                        "name":  "Worker Home - Homepage",
+                                                                        "request":  {
+                                                                                        "method":  "GET",
+                                                                                        "auth":  {
+                                                                                                     "bearer":  [
+                                                                                                                    {
+                                                                                                                        "key":  "token",
+                                                                                                                        "type":  "string",
+                                                                                                                        "value":  "{{userToken}}"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                     "type":  "bearer"
+                                                                                                 },
+                                                                                        "url":  {
+                                                                                                    "raw":  "{{baseUrl}}/api/v1/cleaning/worker/homepage",
+                                                                                                    "host":  [
+                                                                                                                 "{{baseUrl}}"
+                                                                                                             ],
+                                                                                                    "path":  [
+                                                                                                                 "api",
+                                                                                                                 "v1",
+                                                                                                                 "cleaning",
+                                                                                                                 "worker",
+                                                                                                                 "homepage"
+                                                                                                             ]
+                                                                                                }
+                                                                                    }
+                                                                    },
+                                                                    {
+                                                                        "name":  "Worker Home - Statistics",
+                                                                        "request":  {
+                                                                                        "method":  "GET",
+                                                                                        "auth":  {
+                                                                                                     "bearer":  [
+                                                                                                                    {
+                                                                                                                        "key":  "token",
+                                                                                                                        "type":  "string",
+                                                                                                                        "value":  "{{userToken}}"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                     "type":  "bearer"
+                                                                                                 },
+                                                                                        "url":  {
+                                                                                                    "raw":  "{{baseUrl}}/api/v1/cleaning/worker/statistics",
+                                                                                                    "host":  [
+                                                                                                                 "{{baseUrl}}"
+                                                                                                             ],
+                                                                                                    "path":  [
+                                                                                                                 "api",
+                                                                                                                 "v1",
+                                                                                                                 "cleaning",
+                                                                                                                 "worker",
+                                                                                                                 "statistics"
+                                                                                                             ]
+                                                                                                }
+                                                                                    }
+                                                                    }
+                                                                ]
+                                                   },
+                                                   {
+                                                       "name":  "Bookings",
+                                                       "item":  [
+                                                                    {
+                                                                        "name":  "Bookings - Index",
+                                                                        "request":  {
+                                                                                        "method":  "GET",
+                                                                                        "auth":  {
+                                                                                                     "bearer":  [
+                                                                                                                    {
+                                                                                                                        "key":  "token",
+                                                                                                                        "type":  "string",
+                                                                                                                        "value":  "{{userToken}}"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                     "type":  "bearer"
+                                                                                                 },
+                                                                                        "url":  {
+                                                                                                    "raw":  "{{baseUrl}}/api/v1/cleaning-bookings?filter[status]=worker_assigned\u0026perPage=20\u0026page=1",
+                                                                                                    "host":  [
+                                                                                                                 "{{baseUrl}}"
+                                                                                                             ],
+                                                                                                    "path":  [
+                                                                                                                 "api",
+                                                                                                                 "v1",
+                                                                                                                 "cleaning-bookings"
+                                                                                                             ],
+                                                                                                    "query":  [
+                                                                                                                  {
+                                                                                                                      "key":  "filter[status]",
+                                                                                                                      "value":  "worker_assigned"
+                                                                                                                  },
+                                                                                                                  {
+                                                                                                                      "key":  "perPage",
+                                                                                                                      "value":  "20"
+                                                                                                                  },
+                                                                                                                  {
+                                                                                                                      "key":  "page",
+                                                                                                                      "value":  "1"
+                                                                                                                  }
+                                                                                                              ]
+                                                                                                }
+                                                                                    }
+                                                                    },
+                                                                    {
+                                                                        "name":  "Bookings - Show",
+                                                                        "request":  {
+                                                                                        "method":  "GET",
+                                                                                        "auth":  {
+                                                                                                     "bearer":  [
+                                                                                                                    {
+                                                                                                                        "key":  "token",
+                                                                                                                        "type":  "string",
+                                                                                                                        "value":  "{{userToken}}"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                     "type":  "bearer"
+                                                                                                 },
+                                                                                        "url":  {
+                                                                                                    "raw":  "{{baseUrl}}/api/v1/cleaning-bookings/{{cleaningBookingId}}",
+                                                                                                    "host":  [
+                                                                                                                 "{{baseUrl}}"
+                                                                                                             ],
+                                                                                                    "path":  [
+                                                                                                                 "api",
+                                                                                                                 "v1",
+                                                                                                                 "cleaning-bookings",
+                                                                                                                 "{{cleaningBookingId}}"
+                                                                                                             ]
+                                                                                                }
+                                                                                    }
+                                                                    },
+                                                                    {
+                                                                        "name":  "Bookings - Accept",
+                                                                        "request":  {
+                                                                                        "method":  "POST",
+                                                                                        "auth":  {
+                                                                                                     "bearer":  [
+                                                                                                                    {
+                                                                                                                        "key":  "token",
+                                                                                                                        "type":  "string",
+                                                                                                                        "value":  "{{userToken}}"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                     "type":  "bearer"
+                                                                                                 },
+                                                                                        "url":  {
+                                                                                                    "raw":  "{{baseUrl}}/api/v1/cleaning-bookings/{{cleaningBookingId}}/accept",
+                                                                                                    "host":  [
+                                                                                                                 "{{baseUrl}}"
+                                                                                                             ],
+                                                                                                    "path":  [
+                                                                                                                 "api",
+                                                                                                                 "v1",
+                                                                                                                 "cleaning-bookings",
+                                                                                                                 "{{cleaningBookingId}}",
+                                                                                                                 "accept"
+                                                                                                             ]
+                                                                                                },
+                                                                                        "header":  [
+                                                                                                       {
+                                                                                                           "key":  "Content-Type",
+                                                                                                           "value":  "application/json"
+                                                                                                       }
+                                                                                                   ],
+                                                                                        "body":  {
+                                                                                                     "mode":  "raw",
+                                                                                                     "raw":  "{}"
+                                                                                                 }
+                                                                                    }
+                                                                    },
+                                                                    {
+                                                                        "name":  "Bookings - Reject",
+                                                                        "request":  {
+                                                                                        "method":  "POST",
+                                                                                        "auth":  {
+                                                                                                     "bearer":  [
+                                                                                                                    {
+                                                                                                                        "key":  "token",
+                                                                                                                        "type":  "string",
+                                                                                                                        "value":  "{{userToken}}"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                     "type":  "bearer"
+                                                                                                 },
+                                                                                        "url":  {
+                                                                                                    "raw":  "{{baseUrl}}/api/v1/cleaning-bookings/{{cleaningBookingId}}/reject",
+                                                                                                    "host":  [
+                                                                                                                 "{{baseUrl}}"
+                                                                                                             ],
+                                                                                                    "path":  [
+                                                                                                                 "api",
+                                                                                                                 "v1",
+                                                                                                                 "cleaning-bookings",
+                                                                                                                 "{{cleaningBookingId}}",
+                                                                                                                 "reject"
+                                                                                                             ]
+                                                                                                },
+                                                                                        "header":  [
+                                                                                                       {
+                                                                                                           "key":  "Content-Type",
+                                                                                                           "value":  "application/json"
+                                                                                                       }
+                                                                                                   ],
+                                                                                        "body":  {
+                                                                                                     "mode":  "raw",
+                                                                                                     "raw":  "{\"reason\":\"Customer unavailable\"}"
+                                                                                                 }
+                                                                                    }
+                                                                    },
+                                                                    {
+                                                                        "name":  "Bookings - Start Travel",
+                                                                        "request":  {
+                                                                                        "method":  "POST",
+                                                                                        "auth":  {
+                                                                                                     "bearer":  [
+                                                                                                                    {
+                                                                                                                        "key":  "token",
+                                                                                                                        "type":  "string",
+                                                                                                                        "value":  "{{userToken}}"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                     "type":  "bearer"
+                                                                                                 },
+                                                                                        "url":  {
+                                                                                                    "raw":  "{{baseUrl}}/api/v1/cleaning-bookings/{{cleaningBookingId}}/start-travel",
+                                                                                                    "host":  [
+                                                                                                                 "{{baseUrl}}"
+                                                                                                             ],
+                                                                                                    "path":  [
+                                                                                                                 "api",
+                                                                                                                 "v1",
+                                                                                                                 "cleaning-bookings",
+                                                                                                                 "{{cleaningBookingId}}",
+                                                                                                                 "start-travel"
+                                                                                                             ]
+                                                                                                },
+                                                                                        "header":  [
+                                                                                                       {
+                                                                                                           "key":  "Content-Type",
+                                                                                                           "value":  "application/json"
+                                                                                                       }
+                                                                                                   ],
+                                                                                        "body":  {
+                                                                                                     "mode":  "raw",
+                                                                                                     "raw":  "{}"
+                                                                                                 }
+                                                                                    }
+                                                                    },
+                                                                    {
+                                                                        "name":  "Bookings - Update Location",
+                                                                        "request":  {
+                                                                                        "method":  "POST",
+                                                                                        "auth":  {
+                                                                                                     "bearer":  [
+                                                                                                                    {
+                                                                                                                        "key":  "token",
+                                                                                                                        "type":  "string",
+                                                                                                                        "value":  "{{userToken}}"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                     "type":  "bearer"
+                                                                                                 },
+                                                                                        "url":  {
+                                                                                                    "raw":  "{{baseUrl}}/api/v1/cleaning-bookings/{{cleaningBookingId}}/location",
+                                                                                                    "host":  [
+                                                                                                                 "{{baseUrl}}"
+                                                                                                             ],
+                                                                                                    "path":  [
+                                                                                                                 "api",
+                                                                                                                 "v1",
+                                                                                                                 "cleaning-bookings",
+                                                                                                                 "{{cleaningBookingId}}",
+                                                                                                                 "location"
+                                                                                                             ]
+                                                                                                },
+                                                                                        "header":  [
+                                                                                                       {
+                                                                                                           "key":  "Content-Type",
+                                                                                                           "value":  "application/json"
+                                                                                                       }
+                                                                                                   ],
+                                                                                        "body":  {
+                                                                                                     "mode":  "raw",
+                                                                                                     "raw":  "{\"latitude\":33.5138,\"longitude\":36.2765}"
+                                                                                                 }
+                                                                                    }
+                                                                    },
+                                                                    {
+                                                                        "name":  "Bookings - Arrive",
+                                                                        "request":  {
+                                                                                        "method":  "POST",
+                                                                                        "auth":  {
+                                                                                                     "bearer":  [
+                                                                                                                    {
+                                                                                                                        "key":  "token",
+                                                                                                                        "type":  "string",
+                                                                                                                        "value":  "{{userToken}}"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                     "type":  "bearer"
+                                                                                                 },
+                                                                                        "url":  {
+                                                                                                    "raw":  "{{baseUrl}}/api/v1/cleaning-bookings/{{cleaningBookingId}}/arrive",
+                                                                                                    "host":  [
+                                                                                                                 "{{baseUrl}}"
+                                                                                                             ],
+                                                                                                    "path":  [
+                                                                                                                 "api",
+                                                                                                                 "v1",
+                                                                                                                 "cleaning-bookings",
+                                                                                                                 "{{cleaningBookingId}}",
+                                                                                                                 "arrive"
+                                                                                                             ]
+                                                                                                },
+                                                                                        "header":  [
+                                                                                                       {
+                                                                                                           "key":  "Content-Type",
+                                                                                                           "value":  "application/json"
+                                                                                                       }
+                                                                                                   ],
+                                                                                        "body":  {
+                                                                                                     "mode":  "raw",
+                                                                                                     "raw":  "{}"
+                                                                                                 }
+                                                                                    }
+                                                                    },
+                                                                    {
+                                                                        "name":  "Bookings - Start Work",
+                                                                        "request":  {
+                                                                                        "method":  "POST",
+                                                                                        "auth":  {
+                                                                                                     "bearer":  [
+                                                                                                                    {
+                                                                                                                        "key":  "token",
+                                                                                                                        "type":  "string",
+                                                                                                                        "value":  "{{userToken}}"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                     "type":  "bearer"
+                                                                                                 },
+                                                                                        "url":  {
+                                                                                                    "raw":  "{{baseUrl}}/api/v1/cleaning-bookings/{{cleaningBookingId}}/start-work",
+                                                                                                    "host":  [
+                                                                                                                 "{{baseUrl}}"
+                                                                                                             ],
+                                                                                                    "path":  [
+                                                                                                                 "api",
+                                                                                                                 "v1",
+                                                                                                                 "cleaning-bookings",
+                                                                                                                 "{{cleaningBookingId}}",
+                                                                                                                 "start-work"
+                                                                                                             ]
+                                                                                                },
+                                                                                        "header":  [
+                                                                                                       {
+                                                                                                           "key":  "Content-Type",
+                                                                                                           "value":  "application/json"
+                                                                                                       }
+                                                                                                   ],
+                                                                                        "body":  {
+                                                                                                     "mode":  "raw",
+                                                                                                     "raw":  "{}"
+                                                                                                 }
+                                                                                    }
+                                                                    },
+                                                                    {
+                                                                        "name":  "Bookings - Complete",
+                                                                        "request":  {
+                                                                                        "method":  "POST",
+                                                                                        "auth":  {
+                                                                                                     "bearer":  [
+                                                                                                                    {
+                                                                                                                        "key":  "token",
+                                                                                                                        "type":  "string",
+                                                                                                                        "value":  "{{userToken}}"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                     "type":  "bearer"
+                                                                                                 },
+                                                                                        "url":  {
+                                                                                                    "raw":  "{{baseUrl}}/api/v1/cleaning-bookings/{{cleaningBookingId}}/complete",
+                                                                                                    "host":  [
+                                                                                                                 "{{baseUrl}}"
+                                                                                                             ],
+                                                                                                    "path":  [
+                                                                                                                 "api",
+                                                                                                                 "v1",
+                                                                                                                 "cleaning-bookings",
+                                                                                                                 "{{cleaningBookingId}}",
+                                                                                                                 "complete"
+                                                                                                             ]
+                                                                                                },
+                                                                                        "header":  [
+                                                                                                       {
+                                                                                                           "key":  "Content-Type",
+                                                                                                           "value":  "application/json"
+                                                                                                       }
+                                                                                                   ],
+                                                                                        "body":  {
+                                                                                                     "mode":  "raw",
+                                                                                                     "raw":  "{}"
+                                                                                                 }
+                                                                                    }
+                                                                    },
+                                                                    {
+                                                                        "name":  "Bookings - Cancel",
+                                                                        "request":  {
+                                                                                        "method":  "POST",
+                                                                                        "auth":  {
+                                                                                                     "bearer":  [
+                                                                                                                    {
+                                                                                                                        "key":  "token",
+                                                                                                                        "type":  "string",
+                                                                                                                        "value":  "{{userToken}}"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                     "type":  "bearer"
+                                                                                                 },
+                                                                                        "url":  {
+                                                                                                    "raw":  "{{baseUrl}}/api/v1/cleaning-bookings/{{cleaningBookingId}}/cancel",
+                                                                                                    "host":  [
+                                                                                                                 "{{baseUrl}}"
+                                                                                                             ],
+                                                                                                    "path":  [
+                                                                                                                 "api",
+                                                                                                                 "v1",
+                                                                                                                 "cleaning-bookings",
+                                                                                                                 "{{cleaningBookingId}}",
+                                                                                                                 "cancel"
+                                                                                                             ]
+                                                                                                },
+                                                                                        "header":  [
+                                                                                                       {
+                                                                                                           "key":  "Content-Type",
+                                                                                                           "value":  "application/json"
+                                                                                                       }
+                                                                                                   ],
+                                                                                        "body":  {
+                                                                                                     "mode":  "raw",
+                                                                                                     "raw":  "{\"reason\":\"Emergency cancellation\"}"
+                                                                                                 }
+                                                                                    }
+                                                                    },
+                                                                    {
+                                                                        "name":  "Bookings - Security Code",
+                                                                        "request":  {
+                                                                                        "method":  "GET",
+                                                                                        "auth":  {
+                                                                                                     "bearer":  [
+                                                                                                                    {
+                                                                                                                        "key":  "token",
+                                                                                                                        "type":  "string",
+                                                                                                                        "value":  "{{userToken}}"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                     "type":  "bearer"
+                                                                                                 },
+                                                                                        "url":  {
+                                                                                                    "raw":  "{{baseUrl}}/api/v1/cleaning-bookings/{{cleaningBookingId}}/security-code",
+                                                                                                    "host":  [
+                                                                                                                 "{{baseUrl}}"
+                                                                                                             ],
+                                                                                                    "path":  [
+                                                                                                                 "api",
+                                                                                                                 "v1",
+                                                                                                                 "cleaning-bookings",
+                                                                                                                 "{{cleaningBookingId}}",
+                                                                                                                 "security-code"
+                                                                                                             ]
+                                                                                                }
+                                                                                    }
+                                                                    }
+                                                                ]
+                                                   },
+                                                   {
+                                                       "name":  "Time Warnings",
+                                                       "item":  [
+                                                                    {
+                                                                        "name":  "Time Warnings - Index",
+                                                                        "request":  {
+                                                                                        "method":  "GET",
+                                                                                        "auth":  {
+                                                                                                     "bearer":  [
+                                                                                                                    {
+                                                                                                                        "key":  "token",
+                                                                                                                        "type":  "string",
+                                                                                                                        "value":  "{{userToken}}"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                     "type":  "bearer"
+                                                                                                 },
+                                                                                        "url":  {
+                                                                                                    "raw":  "{{baseUrl}}/api/v1/cleaning-time-warnings?perPage=20\u0026page=1",
+                                                                                                    "host":  [
+                                                                                                                 "{{baseUrl}}"
+                                                                                                             ],
+                                                                                                    "path":  [
+                                                                                                                 "api",
+                                                                                                                 "v1",
+                                                                                                                 "cleaning-time-warnings"
+                                                                                                             ],
+                                                                                                    "query":  [
+                                                                                                                  {
+                                                                                                                      "key":  "perPage",
+                                                                                                                      "value":  "20"
+                                                                                                                  },
+                                                                                                                  {
+                                                                                                                      "key":  "page",
+                                                                                                                      "value":  "1"
+                                                                                                                  }
+                                                                                                              ]
+                                                                                                }
+                                                                                    }
+                                                                    },
+                                                                    {
+                                                                        "name":  "Time Warnings - Show",
+                                                                        "request":  {
+                                                                                        "method":  "GET",
+                                                                                        "auth":  {
+                                                                                                     "bearer":  [
+                                                                                                                    {
+                                                                                                                        "key":  "token",
+                                                                                                                        "type":  "string",
+                                                                                                                        "value":  "{{userToken}}"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                     "type":  "bearer"
+                                                                                                 },
+                                                                                        "url":  {
+                                                                                                    "raw":  "{{baseUrl}}/api/v1/cleaning-time-warnings/{{cleaningTimeWarningId}}",
+                                                                                                    "host":  [
+                                                                                                                 "{{baseUrl}}"
+                                                                                                             ],
+                                                                                                    "path":  [
+                                                                                                                 "api",
+                                                                                                                 "v1",
+                                                                                                                 "cleaning-time-warnings",
+                                                                                                                 "{{cleaningTimeWarningId}}"
+                                                                                                             ]
+                                                                                                }
+                                                                                    }
+                                                                    },
+                                                                    {
+                                                                        "name":  "Time Warnings - Accept",
+                                                                        "request":  {
+                                                                                        "method":  "POST",
+                                                                                        "auth":  {
+                                                                                                     "bearer":  [
+                                                                                                                    {
+                                                                                                                        "key":  "token",
+                                                                                                                        "type":  "string",
+                                                                                                                        "value":  "{{userToken}}"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                     "type":  "bearer"
+                                                                                                 },
+                                                                                        "url":  {
+                                                                                                    "raw":  "{{baseUrl}}/api/v1/cleaning-time-warnings/{{cleaningTimeWarningId}}/accept",
+                                                                                                    "host":  [
+                                                                                                                 "{{baseUrl}}"
+                                                                                                             ],
+                                                                                                    "path":  [
+                                                                                                                 "api",
+                                                                                                                 "v1",
+                                                                                                                 "cleaning-time-warnings",
+                                                                                                                 "{{cleaningTimeWarningId}}",
+                                                                                                                 "accept"
+                                                                                                             ]
+                                                                                                },
+                                                                                        "header":  [
+                                                                                                       {
+                                                                                                           "key":  "Content-Type",
+                                                                                                           "value":  "application/json"
+                                                                                                       }
+                                                                                                   ],
+                                                                                        "body":  {
+                                                                                                     "mode":  "raw",
+                                                                                                     "raw":  "{\"additionalMinutes\":30}"
+                                                                                                 }
+                                                                                    }
+                                                                    },
+                                                                    {
+                                                                        "name":  "Time Warnings - Reject",
+                                                                        "request":  {
+                                                                                        "method":  "POST",
+                                                                                        "auth":  {
+                                                                                                     "bearer":  [
+                                                                                                                    {
+                                                                                                                        "key":  "token",
+                                                                                                                        "type":  "string",
+                                                                                                                        "value":  "{{userToken}}"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                     "type":  "bearer"
+                                                                                                 },
+                                                                                        "url":  {
+                                                                                                    "raw":  "{{baseUrl}}/api/v1/cleaning-time-warnings/{{cleaningTimeWarningId}}/reject",
+                                                                                                    "host":  [
+                                                                                                                 "{{baseUrl}}"
+                                                                                                             ],
+                                                                                                    "path":  [
+                                                                                                                 "api",
+                                                                                                                 "v1",
+                                                                                                                 "cleaning-time-warnings",
+                                                                                                                 "{{cleaningTimeWarningId}}",
+                                                                                                                 "reject"
+                                                                                                             ]
+                                                                                                },
+                                                                                        "header":  [
+                                                                                                       {
+                                                                                                           "key":  "Content-Type",
+                                                                                                           "value":  "application/json"
+                                                                                                       }
+                                                                                                   ],
+                                                                                        "body":  {
+                                                                                                     "mode":  "raw",
+                                                                                                     "raw":  "{\"message\":\"Cannot extend due to next booking.\"}"
+                                                                                                 }
+                                                                                    }
+                                                                    }
+                                                                ]
+                                                   },
+                                                   {
+                                                       "name":  "Account Profile",
+                                                       "item":  [
+                                                                    {
+                                                                        "name":  "Profile - Show",
+                                                                        "request":  {
+                                                                                        "method":  "GET",
+                                                                                        "auth":  {
+                                                                                                     "bearer":  [
+                                                                                                                    {
+                                                                                                                        "key":  "token",
+                                                                                                                        "type":  "string",
+                                                                                                                        "value":  "{{userToken}}"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                     "type":  "bearer"
+                                                                                                 },
+                                                                                        "url":  {
+                                                                                                    "raw":  "{{baseUrl}}/api/v1/cleaning/worker/profile",
+                                                                                                    "host":  [
+                                                                                                                 "{{baseUrl}}"
+                                                                                                             ],
+                                                                                                    "path":  [
+                                                                                                                 "api",
+                                                                                                                 "v1",
+                                                                                                                 "cleaning",
+                                                                                                                 "worker",
+                                                                                                                 "profile"
+                                                                                                             ]
+                                                                                                }
+                                                                                    }
+                                                                    },
+                                                                    {
+                                                                        "name":  "Account - Profile Show",
+                                                                        "request":  {
+                                                                                        "method":  "GET",
+                                                                                        "auth":  {
+                                                                                                     "bearer":  [
+                                                                                                                    {
+                                                                                                                        "key":  "token",
+                                                                                                                        "type":  "string",
+                                                                                                                        "value":  "{{userToken}}"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                     "type":  "bearer"
+                                                                                                 },
+                                                                                        "url":  {
+                                                                                                    "raw":  "{{baseUrl}}/api/v1/cleaning/worker/account/profile",
+                                                                                                    "host":  [
+                                                                                                                 "{{baseUrl}}"
+                                                                                                             ],
+                                                                                                    "path":  [
+                                                                                                                 "api",
+                                                                                                                 "v1",
+                                                                                                                 "cleaning",
+                                                                                                                 "worker",
+                                                                                                                 "account",
+                                                                                                                 "profile"
+                                                                                                             ]
+                                                                                                }
+                                                                                    }
+                                                                    },
+                                                                    {
+                                                                        "name":  "Account - Profile Update",
+                                                                        "request":  {
+                                                                                        "method":  "PUT",
+                                                                                        "auth":  {
+                                                                                                     "bearer":  [
+                                                                                                                    {
+                                                                                                                        "key":  "token",
+                                                                                                                        "type":  "string",
+                                                                                                                        "value":  "{{userToken}}"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                     "type":  "bearer"
+                                                                                                 },
+                                                                                        "url":  {
+                                                                                                    "raw":  "{{baseUrl}}/api/v1/cleaning/worker/account/profile",
+                                                                                                    "host":  [
+                                                                                                                 "{{baseUrl}}"
+                                                                                                             ],
+                                                                                                    "path":  [
+                                                                                                                 "api",
+                                                                                                                 "v1",
+                                                                                                                 "cleaning",
+                                                                                                                 "worker",
+                                                                                                                 "account",
+                                                                                                                 "profile"
+                                                                                                             ]
+                                                                                                },
+                                                                                        "header":  [
+                                                                                                       {
+                                                                                                           "key":  "Content-Type",
+                                                                                                           "value":  "application/json"
+                                                                                                       }
+                                                                                                   ],
+                                                                                        "body":  {
+                                                                                                     "mode":  "raw",
+                                                                                                     "raw":  "{\"name\":\"Worker Updated\",\"phone\":\"+963944001111\",\"bio\":\"Experienced cleaner for apartments and villas.\"}"
+                                                                                                 }
+                                                                                    }
+                                                                    },
+                                                                    {
+                                                                        "name":  "Account - Password Update",
+                                                                        "request":  {
+                                                                                        "method":  "PUT",
+                                                                                        "auth":  {
+                                                                                                     "bearer":  [
+                                                                                                                    {
+                                                                                                                        "key":  "token",
+                                                                                                                        "type":  "string",
+                                                                                                                        "value":  "{{userToken}}"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                     "type":  "bearer"
+                                                                                                 },
+                                                                                        "url":  {
+                                                                                                    "raw":  "{{baseUrl}}/api/v1/cleaning/worker/account/password",
+                                                                                                    "host":  [
+                                                                                                                 "{{baseUrl}}"
+                                                                                                             ],
+                                                                                                    "path":  [
+                                                                                                                 "api",
+                                                                                                                 "v1",
+                                                                                                                 "cleaning",
+                                                                                                                 "worker",
+                                                                                                                 "account",
+                                                                                                                 "password"
+                                                                                                             ]
+                                                                                                },
+                                                                                        "header":  [
+                                                                                                       {
+                                                                                                           "key":  "Content-Type",
+                                                                                                           "value":  "application/json"
+                                                                                                       }
+                                                                                                   ],
+                                                                                        "body":  {
+                                                                                                     "mode":  "raw",
+                                                                                                     "raw":  "{\"currentPassword\":\"password\",\"newPassword\":\"new-password123\",\"newPasswordConfirmation\":\"new-password123\"}"
+                                                                                                 }
+                                                                                    }
+                                                                    },
+                                                                    {
+                                                                        "name":  "Account - Status Show",
+                                                                        "request":  {
+                                                                                        "method":  "GET",
+                                                                                        "auth":  {
+                                                                                                     "bearer":  [
+                                                                                                                    {
+                                                                                                                        "key":  "token",
+                                                                                                                        "type":  "string",
+                                                                                                                        "value":  "{{userToken}}"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                     "type":  "bearer"
+                                                                                                 },
+                                                                                        "url":  {
+                                                                                                    "raw":  "{{baseUrl}}/api/v1/cleaning/worker/account/status",
+                                                                                                    "host":  [
+                                                                                                                 "{{baseUrl}}"
+                                                                                                             ],
+                                                                                                    "path":  [
+                                                                                                                 "api",
+                                                                                                                 "v1",
+                                                                                                                 "cleaning",
+                                                                                                                 "worker",
+                                                                                                                 "account",
+                                                                                                                 "status"
+                                                                                                             ]
+                                                                                                }
+                                                                                    }
+                                                                    },
+                                                                    {
+                                                                        "name":  "Account - Status Update",
+                                                                        "request":  {
+                                                                                        "method":  "PATCH",
+                                                                                        "auth":  {
+                                                                                                     "bearer":  [
+                                                                                                                    {
+                                                                                                                        "key":  "token",
+                                                                                                                        "type":  "string",
+                                                                                                                        "value":  "{{userToken}}"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                     "type":  "bearer"
+                                                                                                 },
+                                                                                        "url":  {
+                                                                                                    "raw":  "{{baseUrl}}/api/v1/cleaning/worker/account/status",
+                                                                                                    "host":  [
+                                                                                                                 "{{baseUrl}}"
+                                                                                                             ],
+                                                                                                    "path":  [
+                                                                                                                 "api",
+                                                                                                                 "v1",
+                                                                                                                 "cleaning",
+                                                                                                                 "worker",
+                                                                                                                 "account",
+                                                                                                                 "status"
+                                                                                                             ]
+                                                                                                },
+                                                                                        "header":  [
+                                                                                                       {
+                                                                                                           "key":  "Content-Type",
+                                                                                                           "value":  "application/json"
+                                                                                                       }
+                                                                                                   ],
+                                                                                        "body":  {
+                                                                                                     "mode":  "raw",
+                                                                                                     "raw":  "{\"isActive\":true}"
+                                                                                                 }
+                                                                                    }
+                                                                    },
+                                                                    {
+                                                                        "name":  "Work Areas - Show",
+                                                                        "request":  {
+                                                                                        "method":  "GET",
+                                                                                        "auth":  {
+                                                                                                     "bearer":  [
+                                                                                                                    {
+                                                                                                                        "key":  "token",
+                                                                                                                        "type":  "string",
+                                                                                                                        "value":  "{{userToken}}"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                     "type":  "bearer"
+                                                                                                 },
+                                                                                        "url":  {
+                                                                                                    "raw":  "{{baseUrl}}/api/v1/cleaning/worker/account/work-areas",
+                                                                                                    "host":  [
+                                                                                                                 "{{baseUrl}}"
+                                                                                                             ],
+                                                                                                    "path":  [
+                                                                                                                 "api",
+                                                                                                                 "v1",
+                                                                                                                 "cleaning",
+                                                                                                                 "worker",
+                                                                                                                 "account",
+                                                                                                                 "work-areas"
+                                                                                                             ]
+                                                                                                }
+                                                                                    }
+                                                                    },
+                                                                    {
+                                                                        "name":  "Work Areas - Update",
+                                                                        "request":  {
+                                                                                        "method":  "PUT",
+                                                                                        "auth":  {
+                                                                                                     "bearer":  [
+                                                                                                                    {
+                                                                                                                        "key":  "token",
+                                                                                                                        "type":  "string",
+                                                                                                                        "value":  "{{userToken}}"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                     "type":  "bearer"
+                                                                                                 },
+                                                                                        "url":  {
+                                                                                                    "raw":  "{{baseUrl}}/api/v1/cleaning/worker/account/work-areas",
+                                                                                                    "host":  [
+                                                                                                                 "{{baseUrl}}"
+                                                                                                             ],
+                                                                                                    "path":  [
+                                                                                                                 "api",
+                                                                                                                 "v1",
+                                                                                                                 "cleaning",
+                                                                                                                 "worker",
+                                                                                                                 "account",
+                                                                                                                 "work-areas"
+                                                                                                             ]
+                                                                                                },
+                                                                                        "header":  [
+                                                                                                       {
+                                                                                                           "key":  "Content-Type",
+                                                                                                           "value":  "application/json"
+                                                                                                       }
+                                                                                                   ],
+                                                                                        "body":  {
+                                                                                                     "mode":  "raw",
+                                                                                                     "raw":  "{\"zones\":[{\"name\":\"Damascus Central\",\"polygon\":[{\"lat\":33.50,\"lng\":36.24},{\"lat\":33.53,\"lng\":36.24},{\"lat\":33.53,\"lng\":36.30},{\"lat\":33.50,\"lng\":36.30}]}]}"
+                                                                                                 }
+                                                                                    }
+                                                                    },
+                                                                    {
+                                                                        "name":  "Working Hours - Show",
+                                                                        "request":  {
+                                                                                        "method":  "GET",
+                                                                                        "auth":  {
+                                                                                                     "bearer":  [
+                                                                                                                    {
+                                                                                                                        "key":  "token",
+                                                                                                                        "type":  "string",
+                                                                                                                        "value":  "{{userToken}}"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                     "type":  "bearer"
+                                                                                                 },
+                                                                                        "url":  {
+                                                                                                    "raw":  "{{baseUrl}}/api/v1/cleaning/worker/working-hours",
+                                                                                                    "host":  [
+                                                                                                                 "{{baseUrl}}"
+                                                                                                             ],
+                                                                                                    "path":  [
+                                                                                                                 "api",
+                                                                                                                 "v1",
+                                                                                                                 "cleaning",
+                                                                                                                 "worker",
+                                                                                                                 "working-hours"
+                                                                                                             ]
+                                                                                                }
+                                                                                    }
+                                                                    },
+                                                                    {
+                                                                        "name":  "Working Hours - Update",
+                                                                        "request":  {
+                                                                                        "method":  "PUT",
+                                                                                        "auth":  {
+                                                                                                     "bearer":  [
+                                                                                                                    {
+                                                                                                                        "key":  "token",
+                                                                                                                        "type":  "string",
+                                                                                                                        "value":  "{{userToken}}"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                     "type":  "bearer"
+                                                                                                 },
+                                                                                        "url":  {
+                                                                                                    "raw":  "{{baseUrl}}/api/v1/cleaning/worker/working-hours",
+                                                                                                    "host":  [
+                                                                                                                 "{{baseUrl}}"
+                                                                                                             ],
+                                                                                                    "path":  [
+                                                                                                                 "api",
+                                                                                                                 "v1",
+                                                                                                                 "cleaning",
+                                                                                                                 "worker",
+                                                                                                                 "working-hours"
+                                                                                                             ]
+                                                                                                },
+                                                                                        "header":  [
+                                                                                                       {
+                                                                                                           "key":  "Content-Type",
+                                                                                                           "value":  "application/json"
+                                                                                                       }
+                                                                                                   ],
+                                                                                        "body":  {
+                                                                                                     "mode":  "raw",
+                                                                                                     "raw":  "{\"defaultWorkingHours\":{\"monday\":{\"available\":true,\"data\":[{\"09:00\":\"17:00\"}]},\"tuesday\":{\"available\":true,\"data\":[{\"09:00\":\"17:00\"}]},\"wednesday\":{\"available\":true,\"data\":[{\"09:00\":\"17:00\"}]},\"thursday\":{\"available\":true,\"data\":[{\"09:00\":\"17:00\"}]},\"friday\":{\"available\":false,\"data\":[]},\"saturday\":{\"available\":false,\"data\":[]},\"sunday\":{\"available\":true,\"data\":[{\"10:00\":\"16:00\"}]}}}"
+                                                                                                 }
+                                                                                    }
+                                                                    }
+                                                                ]
+                                                   },
+                                                   {
+                                                       "name":  "Disputes",
+                                                       "item":  [
+                                                                    {
+                                                                        "name":  "Disputes - Index (Current Worker)",
+                                                                        "request":  {
+                                                                                        "method":  "GET",
+                                                                                        "auth":  {
+                                                                                                     "bearer":  [
+                                                                                                                    {
+                                                                                                                        "key":  "token",
+                                                                                                                        "type":  "string",
+                                                                                                                        "value":  "{{userToken}}"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                     "type":  "bearer"
+                                                                                                 },
+                                                                                        "url":  {
+                                                                                                    "raw":  "{{baseUrl}}/api/v1/disputes?filter[forCurrentWorker]=1\u0026filter[bookingType]=cleaning_booking\u0026perPage=20\u0026page=1",
+                                                                                                    "host":  [
+                                                                                                                 "{{baseUrl}}"
+                                                                                                             ],
+                                                                                                    "path":  [
+                                                                                                                 "api",
+                                                                                                                 "v1",
+                                                                                                                 "disputes"
+                                                                                                             ],
+                                                                                                    "query":  [
+                                                                                                                  {
+                                                                                                                      "key":  "filter[forCurrentWorker]",
+                                                                                                                      "value":  "1"
+                                                                                                                  },
+                                                                                                                  {
+                                                                                                                      "key":  "filter[bookingType]",
+                                                                                                                      "value":  "cleaning_booking"
+                                                                                                                  },
+                                                                                                                  {
+                                                                                                                      "key":  "perPage",
+                                                                                                                      "value":  "20"
+                                                                                                                  },
+                                                                                                                  {
+                                                                                                                      "key":  "page",
+                                                                                                                      "value":  "1"
+                                                                                                                  }
+                                                                                                              ]
+                                                                                                }
+                                                                                    }
+                                                                    },
+                                                                    {
+                                                                        "name":  "Disputes - Show",
+                                                                        "request":  {
+                                                                                        "method":  "GET",
+                                                                                        "auth":  {
+                                                                                                     "bearer":  [
+                                                                                                                    {
+                                                                                                                        "key":  "token",
+                                                                                                                        "type":  "string",
+                                                                                                                        "value":  "{{userToken}}"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                     "type":  "bearer"
+                                                                                                 },
+                                                                                        "url":  {
+                                                                                                    "raw":  "{{baseUrl}}/api/v1/disputes/{{disputeId}}",
+                                                                                                    "host":  [
+                                                                                                                 "{{baseUrl}}"
+                                                                                                             ],
+                                                                                                    "path":  [
+                                                                                                                 "api",
+                                                                                                                 "v1",
+                                                                                                                 "disputes",
+                                                                                                                 "{{disputeId}}"
+                                                                                                             ]
+                                                                                                }
+                                                                                    }
+                                                                    },
+                                                                    {
+                                                                        "name":  "Disputes - Reply Message",
+                                                                        "request":  {
+                                                                                        "method":  "POST",
+                                                                                        "auth":  {
+                                                                                                     "bearer":  [
+                                                                                                                    {
+                                                                                                                        "key":  "token",
+                                                                                                                        "type":  "string",
+                                                                                                                        "value":  "{{userToken}}"
+                                                                                                                    }
+                                                                                                                ],
+                                                                                                     "type":  "bearer"
+                                                                                                 },
+                                                                                        "url":  {
+                                                                                                    "raw":  "{{baseUrl}}/api/v1/disputes/{{disputeId}}/messages",
+                                                                                                    "host":  [
+                                                                                                                 "{{baseUrl}}"
+                                                                                                             ],
+                                                                                                    "path":  [
+                                                                                                                 "api",
+                                                                                                                 "v1",
+                                                                                                                 "disputes",
+                                                                                                                 "{{disputeId}}",
+                                                                                                                 "messages"
+                                                                                                             ]
+                                                                                                },
+                                                                                        "header":  [
+                                                                                                       {
+                                                                                                           "key":  "Content-Type",
+                                                                                                           "value":  "application/json"
+                                                                                                       }
+                                                                                                   ],
+                                                                                        "body":  {
+                                                                                                     "mode":  "raw",
+                                                                                                     "raw":  "{\"message\":\"تمت مراجعة الشكوى وسيتم المتابعة مع الدعم.\"}"
+                                                                                                 }
+                                                                                    }
+                                                                    }
+                                                                ]
+                                                   }
+                                               ]
                                   }
                               ]
                  }

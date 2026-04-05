@@ -11,6 +11,7 @@ use App\Models\Dispute;
 use App\Models\DisputeMessage;
 use App\Models\User;
 use App\Models\Worker;
+use Database\Seeders\Support\SeederMedia;
 use Illuminate\Database\Seeder;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningTimeWarningResponse;
@@ -75,7 +76,7 @@ final class CleaningWorkerArabicDataSeeder extends Seeder
 
     public function run(): void
     {
-        $worker = Worker::whereHas('user', fn ($q) => $q->where('email', 'cleaning.worker@example.com'))->first();
+        $worker = Worker::whereHas('user', fn($q) => $q->where('email', 'cleaning.worker@example.com'))->first();
         $billingPolicy = CleaningBillingPolicy::where('is_default', true)->first();
         $cancellationPolicy = CancellationPolicy::where('module', 'cleaning')->where('is_default', true)->first();
 
@@ -109,6 +110,22 @@ final class CleaningWorkerArabicDataSeeder extends Seeder
             ],
         ]);
 
+        SeederMedia::ensureSingleMedia(
+            $worker,
+            'avatar',
+            "https://picsum.photos/seed/cleaning-worker-{$worker->id}-avatar/512/512",
+            "cleaning-worker-{$worker->id}-avatar"
+        );
+
+        if ($worker->user) {
+            SeederMedia::ensureSingleMedia(
+                $worker->user,
+                'primary-image',
+                "https://picsum.photos/seed/cleaning-worker-user-{$worker->user->id}-primary/600/600",
+                "cleaning-worker-user-{$worker->user->id}-primary"
+            );
+        }
+
         $customers = $this->ensureArabicCustomers();
         $today = now()->startOfDay();
 
@@ -140,7 +157,7 @@ final class CleaningWorkerArabicDataSeeder extends Seeder
                 $arrivedAt = $scheduledDate->copy()->setTime(9, 50);
             }
 
-            $bookingNumber = 'CLN-AR-'.mb_str_pad((string) ($index + 1), 4, '0', STR_PAD_LEFT);
+            $bookingNumber = 'CLN-AR-' . mb_str_pad((string) ($index + 1), 4, '0', STR_PAD_LEFT);
             if (CleaningBooking::where('booking_number', $bookingNumber)->exists()) {
                 continue;
             }
@@ -187,7 +204,7 @@ final class CleaningWorkerArabicDataSeeder extends Seeder
         }
 
         $inProgressOrCompleted = collect($bookings)->filter(
-            fn (CleaningBooking $b) => $b->status === CleaningBookingStatus::InProgress || $b->status === CleaningBookingStatus::Completed
+            fn(CleaningBooking $b) => $b->status === CleaningBookingStatus::InProgress || $b->status === CleaningBookingStatus::Completed
         );
 
         foreach ($inProgressOrCompleted->take(3) as $idx => $booking) {
@@ -374,7 +391,7 @@ final class CleaningWorkerArabicDataSeeder extends Seeder
         }
 
         $completedForDispute = collect($bookings)->first(
-            fn (CleaningBooking $b) => $b->status === CleaningBookingStatus::Completed
+            fn(CleaningBooking $b) => $b->status === CleaningBookingStatus::Completed
         );
 
         if ($completedForDispute) {
@@ -400,6 +417,13 @@ final class CleaningWorkerArabicDataSeeder extends Seeder
                     'body' => 'الخدمة لم تكن بالمستوى المتوقع، يرجى المساعدة في حل المشكلة.',
                 ]);
             }
+
+            SeederMedia::ensureSingleMedia(
+                $dispute,
+                'images',
+                "https://picsum.photos/seed/cleaning-dispute-{$dispute->id}-image/1200/900",
+                "cleaning-dispute-{$dispute->id}-image"
+            );
         }
     }
 
@@ -410,15 +434,24 @@ final class CleaningWorkerArabicDataSeeder extends Seeder
     {
         $users = [];
         foreach (self::ARABIC_CUSTOMERS as $data) {
-            $users[] = User::firstOrCreate(
+            $user = User::firstOrCreate(
                 ['email' => $data['email']],
                 [
                     'name' => $data['name'],
-                    'phone' => '+9639'.mb_str_pad((string) fake()->unique()->numberBetween(1000000, 9999999), 7, '0'),
+                    'phone' => '+9639' . mb_str_pad((string) fake()->unique()->numberBetween(1000000, 9999999), 7, '0'),
                     'password' => bcrypt('password'),
                     'email_verified_at' => now(),
                 ]
             );
+
+            SeederMedia::ensureSingleMedia(
+                $user,
+                'primary-image',
+                "https://picsum.photos/seed/cleaning-customer-{$user->id}-primary/600/600",
+                "cleaning-customer-{$user->id}-primary"
+            );
+
+            $users[] = $user;
         }
 
         return $users;

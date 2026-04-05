@@ -33,6 +33,7 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     Route::get('notifications', [UserNotificationController::class, 'index'])->name('notifications.index');
     Route::patch('notifications/{id}/read', [UserNotificationController::class, 'markAsRead'])->name('notifications.markAsRead');
     Route::apiResource('workers', WorkerController::class);
+    Route::post('disputes/{dispute}/messages', [DisputeController::class, 'storeMessage']);
     Route::apiResource('disputes', DisputeController::class);
     Route::apiResource('system-alerts', SystemAlertController::class)->only(['index', 'show', 'update']);
     Route::apiResource('sos-alerts', SosAlertController::class)->only(['index', 'show']);

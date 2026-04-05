@@ -17,6 +17,8 @@ final class DisputeFilterRequest extends FormRequest
     {
         return [
             'perPage' => 'sometimes|integer|min:1|max:100',
+            'filter.forCurrentWorker' => 'sometimes|boolean',
+            'filter.bookingId' => 'sometimes|integer|min:1',
             'filter.status' => 'sometimes|string|in:open,under_review,resolved,closed',
             'filter.category' => 'sometimes|string|in:poor_quality,property_damage,unprofessional,billing_issue,other',
             'filter.bookingType' => 'sometimes|string|in:cleaning_booking,event_booking',

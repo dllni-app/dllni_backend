@@ -5,13 +5,18 @@ declare(strict_types=1);
 namespace App\Http\Controllers\API;
 
 use App\Data\DisputeData;
+use App\Http\Requests\DisputeMessageStoreRequest;
 use App\Http\Requests\DisputeRequest;
 use App\Http\Requests\DisputeRequests\DisputeFilterRequest;
 use App\Http\Resources\DisputeResource;
 use App\Models\Dispute;
+use App\Models\DisputeMessage;
 use App\Services\DisputeService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Auth;
+use Modules\Cleaning\Models\CleaningBooking;
 use Throwable;
 
 final class DisputeController
@@ -44,6 +49,22 @@ final class DisputeController
         return DisputeResource::make($dispute);
     }
 
+    public function storeMessage(DisputeMessageStoreRequest $request, Dispute $dispute): JsonResponse
+    {
+        $this->ensureWorkerCanReply($dispute);
+
+        DisputeMessage::create([
+            'dispute_id' => $dispute->id,
+            'sender_id' => $request->user()->id,
+            'sender_type' => 'worker',
+            'body' => $request->validated('message'),
+        ]);
+
+        return DisputeResource::make($dispute->fresh()->load(['booking', 'messages.sender']))
+            ->response()
+            ->setStatusCode(Response::HTTP_CREATED);
+    }
+
     /** @throws Throwable */
     public function update(DisputeRequest $request, Dispute $dispute): DisputeResource
     {
@@ -57,5 +78,24 @@ final class DisputeController
         $dispute->delete();
 
         return response()->noContent();
+    }
+
+    private function ensureWorkerCanReply(Dispute $dispute): void
+    {
+        $workerId = Auth::user()?->worker?->id;
+
+        if (! $workerId) {
+            abort(Response::HTTP_FORBIDDEN, 'User must have an associated worker.');
+        }
+
+        if ($dispute->booking_type !== 'cleaning_booking') {
+            abort(Response::HTTP_FORBIDDEN, 'Worker can only reply to cleaning booking disputes.');
+        }
+
+        $booking = $dispute->booking;
+
+        if (! $booking instanceof CleaningBooking || $booking->worker_id !== $workerId) {
+            abort(Response::HTTP_FORBIDDEN, 'Dispute is not assigned to the authenticated worker.');
+        }
     }
 }

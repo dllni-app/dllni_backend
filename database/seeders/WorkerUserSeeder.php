@@ -100,5 +100,12 @@ final class WorkerUserSeeder extends Seeder
             "https://picsum.photos/seed/worker-{$worker->id}-avatar/512/512",
             "worker-{$worker->id}-avatar"
         );
+
+        SeederMedia::ensureSingleMedia(
+            $user,
+            'primary-image',
+            "https://picsum.photos/seed/worker-user-{$user->id}-primary/600/600",
+            "worker-user-{$user->id}-primary"
+        );
     }
 }
