@@ -1,8 +1,8 @@
-﻿{
+{
     "info": {
         "_postman_id": "3d8a6f0b-9f8f-4d42-8d8c-6d4c4c8b3a10",
         "name": "Dllni - User Module (Merged)",
-        "description": "## Base URL \u0026 prefix\n- Collection variable `{{baseUrl}}` defaults to `http://Dllni.test` (Herd/Laragon).\n- User API base path: `/api/v1/user` (routes file: `Modules/User/routes/api.php`).\n\n## Authentication\n- **Public**: register, login OTP steps, reset password, supermarket/restaurant discovery, **restaurant home** (categories, exclusive offers, suggested products, nearest restaurants), products, marketing offers, vote read, luck box, etc.\n- **Sanctum**: set `{{token}}` from verify/login/reset responses; send `Authorization: Bearer {{token}}` for `me`, `account`, `addresses`, **favorites** (restaurants + supermarket stores), `notifications`, cart, checkout, orders, **restaurants/home/latest-ordered-products**, supermarket **items CRUD**, supermarket order status, vote create/ballot/end.\n\n## Favorites â€” Ø§Ù„Ù…ÙØ¶Ù„Ø© (authenticated)\nPolymorphic rows in `favorites` (`favorable_type` = `Restaurant` or `SmStore`). List order: **most recently favorited first** (`favorites.created_at` desc).\n\n| Path | Method | Notes |\n| --- | --- | --- |\n| `/api/v1/user/favorites/restaurants` | GET | Paginated `RestaurantResource`; query `perPage` (1â€“100, default 20), `page` |\n| `/api/v1/user/favorites/restaurants/{id}` | POST | No body. **201** first add, **200** if already favorited. Body: `{ \"restaurant\": â€¦ }`. **422** if restaurant not active. |\n| `/api/v1/user/favorites/restaurants/{id}` | DELETE | **204** empty body (safe if not favorited). |\n| `/api/v1/user/favorites/supermarket/stores` | GET | Paginated `SmStoreResource`; `perPage`, `page` |\n| `/api/v1/user/favorites/supermarket/stores/{id}` | POST | **201** / **200**; `{ \"store\": â€¦ }`. **422** if store inactive. |\n| `/api/v1/user/favorites/supermarket/stores/{id}` | DELETE | **204** |\n\n## Restaurant homepage (`GET /api/v1/user/restaurants/home/*`)\n| Route | Auth | Purpose |\n| --- | --- | --- |\n| `.../categories` | No | Cuisine types that have â‰¥1 **active** restaurant |\n| `.../exclusive-offers` | No | Active offers on active restaurants; optional `latitude`, `longitude`, `limit` |\n| `.../suggested-products` | No | Featured / highly rated menu items; `limit` |\n| `.../nearest-restaurants` | No | Near-user list; optional `latitude`, `longitude`, `limit`; `isFavorited` true only with Bearer token |\n| `.../latest-ordered-products` | **Yes** | Distinct products from userâ€™s non-cancelled orders (reorder / Ø§Ø·Ù„Ø¨ Ù…Ø¬Ø¯Ø¯Ø§Ù‹); `limit` |\n\n**Distance**: Haversine runs on MySQL/Postgres, etc. **SQLite** (`phpunit`) does not compute `distanceKm` (values `null`).\n\n## Success status codes (typical)\n- `200` â€” OK (JSON body).\n- `201` â€” Created (addresses, cart item, checkout order, group vote, first-time favorite add for restaurant/store).\n- `204` â€” No content (delete address).\n- `404` â€” Not found (invalid id, inactive marketing offer, wrong userâ€™s resource).\n- `403` / `401` â€” Forbidden / Unauthenticated (missing or invalid token).\n- `422` â€” Validation errors: `{ \"message\": \"...\", \"errors\": { \"field\": [\"...\"] } }`.\n\n## Pagination (Laravel)\n- Paginated resources return `data` (array of items), `links` (`first`, `last`, `prev`, `next`), and `meta` (`current_page`, `from`, `last_page`, `path`, `per_page`, `to`, `total`, â€¦).\n- Query: `page`, `perPage` (camelCase in this API where FormRequest defines it).\n\n## Media in JSON (summary)\n- **Restaurant** `RestaurantResource`: `primaryImage`, `image`, `banner`, `images`.\n- **Restaurant product** `ProductResource`: `primaryImage`, `images`.\n- **User** `UserResource` (with `media` loaded): `primaryImage` / `images` as `MediaResource` objects (`url`, `thumbnailUrl`, â€¦).\n- **Marketing offers**: `imageUrl` (Spatie `card-image`) or `null`.\n- **Supermarket** `SmStoreResource`: `cover`, `logo`; luck-box line items: `imageUrl`.\n- **Supermarket order** items: product media via `SmProductResource` when loaded.\n\n## Flow overview\n### Register + verify\n1. `POST /register` â†’ OTP sent.\n2. `POST /verify-account` â†’ `user` + `token`.\n\n### Login (SMS OTP)\n1. `POST /login` â†’ OTP sent.\n2. `POST /login/verify` â†’ `user` + `token`.\n\n### Reset password\n1. `POST /reset-password` â†’ generic message; `expiresAt` null if phone unknown.\n2. `POST /reset-password/confirm` â†’ `message` + `token`.\n\n## Examples in this collection\nEach request includes a **saved example** (`Examples` in Postman) with a representative **200/201/204** JSON body. Adjust ids and tokens to your environment.\n\n## Notes\n- SMS/OTP is behind a provider interface.\n",
+        "description": "## Base URL & prefix\n- Collection variable `{{baseUrl}}` defaults to `http://Dllni.test` (Herd/Laragon).\n- User API base path: `/api/v1/user` (routes file: `Modules/User/routes/api.php`).\n\n## Authentication\n- **Public**: register, login OTP steps, reset password, supermarket/restaurant discovery, **restaurant home** (categories, exclusive offers, suggested products, nearest restaurants), products, marketing offers, vote read, luck box, etc.\n- **Sanctum**: set `{{token}}` from verify/login/reset responses; send `Authorization: Bearer {{token}}` for `me`, `account`, `addresses`, **favorites** (restaurants + supermarket stores), `notifications`, cart, checkout, orders, **restaurants/home/latest-ordered-products**, supermarket **items CRUD**, supermarket order status, vote create/ballot/end.\n\n## Favorites â€” Ø§Ù„Ù…ÙØ¶Ù„Ø© (authenticated)\nPolymorphic rows in `favorites` (`favorable_type` = `Restaurant` or `SmStore`). List order: **most recently favorited first** (`favorites.created_at` desc).\n\n| Path | Method | Notes |\n| --- | --- | --- |\n| `/api/v1/user/favorites/restaurants` | GET | Paginated `RestaurantResource`; query `perPage` (1â€“100, default 20), `page` |\n| `/api/v1/user/favorites/restaurants/{id}` | POST | No body. **201** first add, **200** if already favorited. Body: `{ \"restaurant\": â€¦ }`. **422** if restaurant not active. |\n| `/api/v1/user/favorites/restaurants/{id}` | DELETE | **204** empty body (safe if not favorited). |\n| `/api/v1/user/favorites/supermarket/stores` | GET | Paginated `SmStoreResource`; `perPage`, `page` |\n| `/api/v1/user/favorites/supermarket/stores/{id}` | POST | **201** / **200**; `{ \"store\": â€¦ }`. **422** if store inactive. |\n| `/api/v1/user/favorites/supermarket/stores/{id}` | DELETE | **204** |\n\n## Restaurant homepage (`GET /api/v1/user/restaurants/home/*`)\n| Route | Auth | Purpose |\n| --- | --- | --- |\n| `.../categories` | No | Cuisine types that have â‰¥1 **active** restaurant |\n| `.../exclusive-offers` | No | Active offers on active restaurants; optional `latitude`, `longitude`, `limit` |\n| `.../suggested-products` | No | Featured / highly rated menu items; `limit` |\n| `.../nearest-restaurants` | No | Near-user list; optional `latitude`, `longitude`, `limit`; `isFavorited` true only with Bearer token |\n| `.../latest-ordered-products` | **Yes** | Distinct products from userâ€™s non-cancelled orders (reorder / Ø§Ø·Ù„Ø¨ Ù…Ø¬Ø¯Ø¯Ø§Ù‹); `limit` |\n\n**Distance**: Haversine runs on MySQL/Postgres, etc. **SQLite** (`phpunit`) does not compute `distanceKm` (values `null`).\n\n## Success status codes (typical)\n- `200` â€” OK (JSON body).\n- `201` â€” Created (addresses, cart item, checkout order, group vote, first-time favorite add for restaurant/store).\n- `204` â€” No content (delete address).\n- `404` â€” Not found (invalid id, inactive marketing offer, wrong userâ€™s resource).\n- `403` / `401` â€” Forbidden / Unauthenticated (missing or invalid token).\n- `422` â€” Validation errors: `{ \"message\": \"...\", \"errors\": { \"field\": [\"...\"] } }`.\n\n## Pagination (Laravel)\n- Paginated resources return `data` (array of items), `links` (`first`, `last`, `prev`, `next`), and `meta` (`current_page`, `from`, `last_page`, `path`, `per_page`, `to`, `total`, â€¦).\n- Query: `page`, `perPage` (camelCase in this API where FormRequest defines it).\n\n## Media in JSON (summary)\n- **Restaurant** `RestaurantResource`: `primaryImage`, `image`, `banner`, `images`.\n- **Restaurant product** `ProductResource`: `primaryImage`, `images`.\n- **User** `UserResource` (with `media` loaded): `primaryImage` / `images` as `MediaResource` objects (`url`, `thumbnailUrl`, â€¦).\n- **Marketing offers**: `imageUrl` (Spatie `card-image`) or `null`.\n- **Supermarket** `SmStoreResource`: `cover`, `logo`; luck-box line items: `imageUrl`.\n- **Supermarket order** items: product media via `SmProductResource` when loaded.\n\n## Flow overview\n### Register + verify\n1. `POST /register` â†’ OTP sent.\n2. `POST /verify-account` â†’ `user` + `token`.\n\n### Login (SMS OTP)\n1. `POST /login` â†’ OTP sent.\n2. `POST /login/verify` â†’ `user` + `token`.\n\n### Reset password\n1. `POST /reset-password` â†’ generic message; `expiresAt` null if phone unknown.\n2. `POST /reset-password/confirm` â†’ `message` + `token`.\n\n## Examples in this collection\nEach request includes a **saved example** (`Examples` in Postman) with a representative **200/201/204** JSON body. Adjust ids and tokens to your environment.\n\n## Notes\n- SMS/OTP is behind a provider interface.\n\n\n\n## Props Format (Request / Response Contract)\n- Path params: {id} in docs and {{id}} as Postman variables.\n- Query props: camelCase unless endpoint docs explicitly use snake_case.\n- Body props: required first, optional props marked and can be null when allowed.\n- Pagination shape: data, links, meta.\n- Validation errors (422): { \"message\": string, \"errors\": { \"field\": [string] } }.\n\n## Common Enums\n- orderType: delivery | pickup\n- pickupMode: immediate_pickup | scheduled_pickup\n- discover sort: rating | nearest | fastest\n- vote status: active | ended\n- luck-box label: best_value | fastest | balanced\n\n## What Endpoints Return\n- List endpoints: paginated data[] with links and meta (unless noted otherwise).\n- Show endpoints: single object (sometimes wrapped in data).\n- Create endpoints: 201 with created payload.\n- Update endpoints: 200 with updated payload.\n- Delete endpoints: 204 with empty body.",
         "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
     },
     "variable": [
@@ -156,7 +156,7 @@
                             ]
                         },
                         {
-                            "name": "Verify account (OTP) -\u003e token",
+                            "name": "Verify account (OTP) -> token",
                             "request": {
                                 "method": "POST",
                                 "header": [
@@ -299,7 +299,7 @@
                             ]
                         },
                         {
-                            "name": "Login verify (OTP) -\u003e token",
+                            "name": "Login verify (OTP) -> token",
                             "request": {
                                 "method": "POST",
                                 "header": [
@@ -444,7 +444,7 @@
                             ]
                         },
                         {
-                            "name": "Reset password confirm (OTP) -\u003e token",
+                            "name": "Reset password confirm (OTP) -> token",
                             "request": {
                                 "method": "POST",
                                 "header": [
@@ -919,7 +919,7 @@
                                     }
                                 ],
                                 "url": {
-                                    "raw": "{{baseUrl}}/api/v1/user/notifications?perPage=10\u0026page=1\u0026filter[unread]=",
+                                    "raw": "{{baseUrl}}/api/v1/user/notifications?perPage=10&page=1&filter[unread]=",
                                     "host": [
                                         "{{baseUrl}}"
                                     ],
@@ -959,7 +959,7 @@
                                             }
                                         ],
                                         "url": {
-                                            "raw": "{{baseUrl}}/api/v1/user/notifications?perPage=10\u0026page=1",
+                                            "raw": "{{baseUrl}}/api/v1/user/notifications?perPage=10&page=1",
                                             "host": [
                                                 "{{baseUrl}}"
                                             ],
@@ -1431,7 +1431,7 @@
                                     }
                                 ],
                                 "url": {
-                                    "raw": "{{baseUrl}}/api/v1/user/favorites/restaurants?perPage=20\u0026page=1",
+                                    "raw": "{{baseUrl}}/api/v1/user/favorites/restaurants?perPage=20&page=1",
                                     "host": [
                                         "{{baseUrl}}"
                                     ],
@@ -1468,7 +1468,7 @@
                                             }
                                         ],
                                         "url": {
-                                            "raw": "{{baseUrl}}/api/v1/user/favorites/restaurants?perPage=20\u0026page=1",
+                                            "raw": "{{baseUrl}}/api/v1/user/favorites/restaurants?perPage=20&page=1",
                                             "host": [
                                                 "{{baseUrl}}"
                                             ],
@@ -1682,7 +1682,7 @@
                                     }
                                 ],
                                 "url": {
-                                    "raw": "{{baseUrl}}/api/v1/user/favorites/supermarket/stores?perPage=20\u0026page=1",
+                                    "raw": "{{baseUrl}}/api/v1/user/favorites/supermarket/stores?perPage=20&page=1",
                                     "host": [
                                         "{{baseUrl}}"
                                     ],
@@ -1719,7 +1719,7 @@
                                             }
                                         ],
                                         "url": {
-                                            "raw": "{{baseUrl}}/api/v1/user/favorites/supermarket/stores?perPage=20\u0026page=1",
+                                            "raw": "{{baseUrl}}/api/v1/user/favorites/supermarket/stores?perPage=20&page=1",
                                             "host": [
                                                 "{{baseUrl}}"
                                             ],
@@ -1902,7 +1902,7 @@
                                     }
                                 ],
                                 "url": {
-                                    "raw": "{{baseUrl}}/api/v1/user/offers?perPage=15\u0026page=1",
+                                    "raw": "{{baseUrl}}/api/v1/user/offers?perPage=15&page=1",
                                     "host": [
                                         "{{baseUrl}}"
                                     ],
@@ -1932,7 +1932,7 @@
                                         "method": "GET",
                                         "header": [],
                                         "url": {
-                                            "raw": "{{baseUrl}}/api/v1/user/offers?perPage=15\u0026page=1",
+                                            "raw": "{{baseUrl}}/api/v1/user/offers?perPage=15&page=1",
                                             "host": [
                                                 "{{baseUrl}}"
                                             ],
@@ -2107,22 +2107,22 @@
                             }
                         },
                         {
-                            "name": "Login Verify (OTP) -\u003e sets {{userToken}}",
+                            "name": "Login Verify (OTP) -> sets {{userToken}}",
                             "event": [
                                 {
                                     "listen": "test",
                                     "script": {
                                         "type": "text/javascript",
                                         "exec": [
-                                            "pm.test(\u0027Status 200\u0027, function () {",
+                                            "pm.test('Status 200', function () {",
                                             "  pm.response.to.have.status(200);",
                                             "});",
                                             "",
                                             "var json = {};",
                                             "try { json = pm.response.json(); } catch (e) {}",
                                             "",
-                                            "if (json \u0026\u0026 json.token) {",
-                                            "  pm.collectionVariables.set(\u0027userToken\u0027, json.token);",
+                                            "if (json && json.token) {",
+                                            "  pm.collectionVariables.set('userToken', json.token);",
                                             "}"
                                         ]
                                     }
@@ -2777,7 +2777,7 @@
                                                     "type": "bearer"
                                                 },
                                                 "url": {
-                                                    "raw": "{{baseUrl}}/api/v1/cleaning-bookings?filter[status]=worker_assigned\u0026perPage=20\u0026page=1",
+                                                    "raw": "{{baseUrl}}/api/v1/cleaning-bookings?filter[status]=worker_assigned&perPage=20&page=1",
                                                     "host": [
                                                         "{{baseUrl}}"
                                                     ],
@@ -3192,7 +3192,7 @@
                                                     "type": "bearer"
                                                 },
                                                 "url": {
-                                                    "raw": "{{baseUrl}}/api/v1/cleaning-time-warnings?perPage=20\u0026page=1",
+                                                    "raw": "{{baseUrl}}/api/v1/cleaning-time-warnings?perPage=20&page=1",
                                                     "host": [
                                                         "{{baseUrl}}"
                                                     ],
@@ -3692,7 +3692,7 @@
                                                     "type": "bearer"
                                                 },
                                                 "url": {
-                                                    "raw": "{{baseUrl}}/api/v1/disputes?filter[forCurrentWorker]=1\u0026filter[bookingType]=cleaning_booking\u0026perPage=20\u0026page=1",
+                                                    "raw": "{{baseUrl}}/api/v1/disputes?filter[forCurrentWorker]=1&filter[bookingType]=cleaning_booking&perPage=20&page=1",
                                                     "host": [
                                                         "{{baseUrl}}"
                                                     ],
@@ -3850,7 +3850,7 @@
                                             "type": "bearer"
                                         },
                                         "url": {
-                                            "raw": "{{baseUrl}}/api/v1/user/cleaning/orders?filter[status]=pending\u0026perPage=20\u0026page=1",
+                                            "raw": "{{baseUrl}}/api/v1/user/cleaning/orders?filter[status]=pending&perPage=20&page=1",
                                             "host": [
                                                 "{{baseUrl}}"
                                             ],
@@ -4073,7 +4073,7 @@
                                     }
                                 ],
                                 "url": {
-                                    "raw": "{{baseUrl}}/api/v1/user/restaurants/products/with-offers?per_page=15\u0026restaurant_id=",
+                                    "raw": "{{baseUrl}}/api/v1/user/restaurants/products/with-offers?per_page=15&restaurant_id=",
                                     "host": [
                                         "{{baseUrl}}"
                                     ],
@@ -4213,7 +4213,7 @@
                                     }
                                 ],
                                 "url": {
-                                    "raw": "{{baseUrl}}/api/v1/user/restaurants/home/exclusive-offers?latitude=\u0026longitude=\u0026limit=15",
+                                    "raw": "{{baseUrl}}/api/v1/user/restaurants/home/exclusive-offers?latitude=&longitude=&limit=15",
                                     "host": [
                                         "{{baseUrl}}"
                                     ],
@@ -4311,7 +4311,7 @@
                                         }
                                     ]
                                 },
-                                "description": "Home Â«Ù…Ù‚ØªØ±Ø­ Ù„ÙƒÂ»: curated dishes (featured product + highly rated restaurant), not personalized by taste yet.\n\n**Status**: `200 OK`\n\n**Query**: `limit` (1â€“30, default 15).\n\n**Response**:\n- `suggestedProducts[]` â€” `UserRestaurantSuggestedProductResource`:\n  - `productId`, `name`, `rating` (restaurant `average_rating`, 1 decimal)\n  - `displayPrice`, `originalPrice` (when خصمed)\n  - `currency` â€” `config(\u0027app.currency\u0027, \u0027IQD\u0027)`\n  - `primaryImageUrl`\n  - `restaurant`: `{ id, name, district, city }`\n  - `tags[]`: `{ name, slug, kind }` â€” `menu_category` and/or `cuisine` (deduped by slug)\n\n**422**: invalid `limit`."
+                                "description": "Home Â«Ù…Ù‚ØªØ±Ø­ Ù„ÙƒÂ»: curated dishes (featured product + highly rated restaurant), not personalized by taste yet.\n\n**Status**: `200 OK`\n\n**Query**: `limit` (1â€“30, default 15).\n\n**Response**:\n- `suggestedProducts[]` â€” `UserRestaurantSuggestedProductResource`:\n  - `productId`, `name`, `rating` (restaurant `average_rating`, 1 decimal)\n  - `displayPrice`, `originalPrice` (when خصمed)\n  - `currency` â€” `config('app.currency', 'IQD')`\n  - `primaryImageUrl`\n  - `restaurant`: `{ id, name, district, city }`\n  - `tags[]`: `{ name, slug, kind }` â€” `menu_category` and/or `cuisine` (deduped by slug)\n\n**422**: invalid `limit`."
                             },
                             "response": [
                                 {
@@ -4364,7 +4364,7 @@
                                     }
                                 ],
                                 "url": {
-                                    "raw": "{{baseUrl}}/api/v1/user/restaurants/home/nearest-restaurants?latitude=\u0026longitude=\u0026limit=15",
+                                    "raw": "{{baseUrl}}/api/v1/user/restaurants/home/nearest-restaurants?latitude=&longitude=&limit=15",
                                     "host": [
                                         "{{baseUrl}}"
                                     ],
@@ -4403,7 +4403,7 @@
                                         "method": "GET",
                                         "header": [],
                                         "url": {
-                                            "raw": "{{baseUrl}}/api/v1/user/restaurants/home/nearest-restaurants?latitude=33.52\u0026longitude=36.29\u0026limit=15",
+                                            "raw": "{{baseUrl}}/api/v1/user/restaurants/home/nearest-restaurants?latitude=33.52&longitude=36.29&limit=15",
                                             "host": [
                                                 "{{baseUrl}}"
                                             ],
@@ -4556,7 +4556,7 @@
                                     }
                                 ],
                                 "url": {
-                                    "raw": "{{baseUrl}}/api/v1/user/restaurants/discover?perPage=10\u0026search=\u0026sort=rating\u0026filter[openNow]=0\u0026filter[hasOffers]=0\u0026latitude=\u0026longitude=",
+                                    "raw": "{{baseUrl}}/api/v1/user/restaurants/discover?perPage=10&search=&sort=rating&filter[openNow]=0&filter[hasOffers]=0&latitude=&longitude=",
                                     "host": [
                                         "{{baseUrl}}"
                                     ],
@@ -4607,7 +4607,7 @@
                                         "method": "GET",
                                         "header": [],
                                         "url": {
-                                            "raw": "{{baseUrl}}/api/v1/user/restaurants/discover?perPage=10\u0026sort=rating",
+                                            "raw": "{{baseUrl}}/api/v1/user/restaurants/discover?perPage=10&sort=rating",
                                             "host": [
                                                 "{{baseUrl}}"
                                             ],
@@ -4871,7 +4871,7 @@
                                     }
                                 ],
                                 "url": {
-                                    "raw": "{{baseUrl}}/api/v1/user/restaurants/votes/suggestions?search=\u0026cuisineTypeId=\u0026limit=20",
+                                    "raw": "{{baseUrl}}/api/v1/user/restaurants/votes/suggestions?search=&cuisineTypeId=&limit=20",
                                     "host": [
                                         "{{baseUrl}}"
                                     ],
@@ -6112,7 +6112,7 @@
                                     }
                                 ],
                                 "url": {
-                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/home/featured-offers?latitude=33.5138\u0026longitude=36.2765\u0026limit=10",
+                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/home/featured-offers?latitude=33.5138&longitude=36.2765&limit=10",
                                     "host": [
                                         "{{baseUrl}}"
                                     ],
@@ -6187,7 +6187,7 @@
                                     }
                                 ],
                                 "url": {
-                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/home/nearby-stores?latitude=33.5138\u0026longitude=36.2765\u0026limit=15",
+                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/home/nearby-stores?latitude=33.5138&longitude=36.2765&limit=15",
                                     "host": [
                                         "{{baseUrl}}"
                                     ],
@@ -6262,7 +6262,7 @@
                                     }
                                 ],
                                 "url": {
-                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/stores?perPage=20\u0026search=",
+                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/stores?perPage=20&search=",
                                     "host": [
                                         "{{baseUrl}}"
                                     ],
@@ -6331,7 +6331,7 @@
                                     }
                                 ],
                                 "url": {
-                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/products/search?perPage=20\u0026search=",
+                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/products/search?perPage=20&search=",
                                     "host": [
                                         "{{baseUrl}}"
                                     ],
@@ -6354,7 +6354,7 @@
                                         }
                                     ]
                                 },
-                                "description": "Search/browse supermarket products for active stores with available inventory. Returns paginated SmProductResource data."
+                                "description": "Search and browse supermarket products from active stores with available inventory.\n\nStatus: 200 OK.\n\nQuery props: perPage, page, search.\n\nReturns: paginated SmProductResource in data[] with links and meta."
                             },
                             "response": [
                                 {
@@ -6543,7 +6543,7 @@
                                             }
                                         ],
                                         "url": {
-                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/items?perPage=20\u0026page=1",
+                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/items?perPage=20&page=1",
                                             "host": [
                                                 "{{baseUrl}}"
                                             ],
@@ -6579,7 +6579,7 @@
                                                     }
                                                 ],
                                                 "url": {
-                                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/items?perPage=20\u0026page=1",
+                                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/items?perPage=20&page=1",
                                                     "host": [
                                                         "{{baseUrl}}"
                                                     ],
@@ -6891,7 +6891,7 @@
                             "request": {
                                 "method": "GET",
                                 "url": {
-                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/home/featured-offers?latitude=33.5138\u0026longitude=36.2765\u0026limit=10",
+                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/home/featured-offers?latitude=33.5138&longitude=36.2765&limit=10",
                                     "host": [
                                         "{{baseUrl}}"
                                     ],
@@ -6926,7 +6926,7 @@
                             "request": {
                                 "method": "GET",
                                 "url": {
-                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/home/nearby-stores?latitude=33.5138\u0026longitude=36.2765\u0026limit=15",
+                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/home/nearby-stores?latitude=33.5138&longitude=36.2765&limit=15",
                                     "host": [
                                         "{{baseUrl}}"
                                     ],
@@ -6972,7 +6972,8 @@
                                         "supermarket",
                                         "stores"
                                     ]
-                                }
+                                },
+                                "description": "Browse active supermarket stores.\n\nStatus: 200 OK.\n\nQuery props: perPage, page, search, and optional filter/sort props supported by backend filters.\n\nReturns: paginated SmStoreResource in data[] with links and meta."
                             }
                         },
                         {
@@ -6992,7 +6993,8 @@
                                         "luck-box",
                                         "options"
                                     ]
-                                }
+                                },
+                                "description": "Get luck-box options catalogs.\n\nStatus: 200 OK.\n\nReturns: restrictions[] ({ value, labelAr }) and categoryTypes[] ({ id, name })."
                             }
                         },
                         {
@@ -7022,7 +7024,8 @@
                                 "body": {
                                     "mode": "raw",
                                     "raw": "{}"
-                                }
+                                },
+                                "description": "Generate supermarket luck-box bundle suggestions.\n\nStatus: 200 OK (bundles may be empty) or 422 validation.\n\nBody props: groupSize and budgetPerPerson required; restrictions, latitude, longitude, searchRadiusKm, categoryId, storeId optional.\n\nEnum values: bundle label is best_value | fastest | balanced.\n\nReturns: budget object and bundles[] with store summary and lineItems[]."
                             }
                         }
                     ]
@@ -7057,7 +7060,8 @@
                                         "supermarket",
                                         "stores"
                                     ]
-                                }
+                                },
+                                "description": "List favorite supermarket stores for the authenticated user.\n\nAuth: Bearer token.\n\nStatus: 200 OK.\n\nQuery props: perPage, page.\n\nReturns: paginated SmStoreResource in data[] with links/meta, newest favorite first."
                             }
                         },
                         {
@@ -7088,7 +7092,8 @@
                                         "stores",
                                         "{{storeId}}"
                                     ]
-                                }
+                                },
+                                "description": "Add a supermarket store to favorites (idempotent).\n\nAuth: Bearer token.\n\nPath prop: storeId.\n\nStatus: 201 first add, 200 if already favorited, 422 if store is inactive.\n\nReturns: { \"store\": SmStoreResource }."
                             }
                         },
                         {
@@ -7119,7 +7124,8 @@
                                         "stores",
                                         "{{storeId}}"
                                     ]
-                                }
+                                },
+                                "description": "Remove a supermarket store from favorites.\n\nAuth: Bearer token.\n\nPath prop: storeId.\n\nStatus: 204 No Content.\n\nReturns: empty body."
                             }
                         },
                         {
@@ -7148,7 +7154,8 @@
                                         "supermarket",
                                         "items"
                                     ]
-                                }
+                                },
+                                "description": "List supermarket cart items for current user.\n\nAuth: Bearer token.\n\nStatus: 200 OK.\n\nQuery props: perPage, page.\n\nReturns: paginated item resources in data[] with links/meta."
                             }
                         },
                         {
@@ -7187,7 +7194,8 @@
                                 "body": {
                                     "mode": "raw",
                                     "raw": "{}"
-                                }
+                                },
+                                "description": "Create a supermarket cart item.\n\nAuth: Bearer token.\n\nStatus: 201 Created or 422 validation.\n\nBody props: cartId, productId, quantity required; unitPrice optional by backend rules.\n\nReturns: created item payload."
                             }
                         },
                         {
@@ -7217,7 +7225,8 @@
                                         "items",
                                         "{{smCartItemId}}"
                                     ]
-                                }
+                                },
+                                "description": "Show one supermarket cart item.\n\nAuth: Bearer token.\n\nPath prop: smCartItemId.\n\nStatus: 200 OK or 404 Not Found.\n\nReturns: single item payload."
                             }
                         },
                         {
@@ -7257,7 +7266,8 @@
                                 "body": {
                                     "mode": "raw",
                                     "raw": "{}"
-                                }
+                                },
+                                "description": "Replace supermarket cart item fields (full update).\n\nAuth: Bearer token.\n\nPath prop: smCartItemId.\n\nStatus: 200 OK, 422 validation, or 404.\n\nBody props: full payload for supported fields such as quantity and unitPrice.\n\nReturns: updated item payload."
                             }
                         },
                         {
@@ -7297,7 +7307,8 @@
                                 "body": {
                                     "mode": "raw",
                                     "raw": "{}"
-                                }
+                                },
+                                "description": "Partially update supermarket cart item fields.\n\nAuth: Bearer token.\n\nPath prop: smCartItemId.\n\nStatus: 200 OK, 422 validation, or 404.\n\nBody props: only changed fields such as quantity.\n\nReturns: updated item payload."
                             }
                         },
                         {
@@ -7327,7 +7338,8 @@
                                         "items",
                                         "{{smCartItemId}}"
                                     ]
-                                }
+                                },
+                                "description": "Delete a supermarket cart item.\n\nAuth: Bearer token.\n\nPath prop: smCartItemId.\n\nStatus: 204 No Content.\n\nReturns: empty body."
                             }
                         },
                         {
@@ -7358,7 +7370,8 @@
                                         "{{orderId}}",
                                         "status"
                                     ]
-                                }
+                                },
+                                "description": "Track supermarket order status for the authenticated customer.\n\nAuth: Bearer token.\n\nPath prop: orderId.\n\nStatus: 200 OK or 404 if not found/not owned.\n\nReturns: { \"order\": SmOrderResource } with items, status logs, and totals."
                             }
                         }
                     ]
