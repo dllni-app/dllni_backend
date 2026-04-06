@@ -77,6 +77,49 @@ it('returns distanceKm when sorting by nearest with coordinates', function (): v
     expect($row['distanceKm'])->toBeFloat()->toBeGreaterThan(0);
 });
 
+it('returns distanceKm when sorting by nearestBy with coordinates', function (): void {
+    if (DB::connection()->getDriverName() === 'sqlite') {
+        expect(true)->toBeTrue();
+
+        return;
+    }
+
+    SmStore::factory()->create([
+        'name' => 'Nearest By Store',
+        'is_active' => true,
+        'latitude' => 33.5138,
+        'longitude' => 36.2765,
+    ]);
+
+    $response = $this->getJson(
+        '/api/v1/user/supermarket/stores?sort=nearestBy&latitude=33.5200&longitude=36.2900'
+    );
+
+    $response->assertOk();
+    $row = collect($response->json('data'))->firstWhere('name', 'Nearest By Store');
+    expect($row)->not->toBeNull();
+    expect($row['distanceKm'])->toBeFloat()->toBeGreaterThan(0);
+});
+
+it('sorts supermarket stores alphabetically by name', function (): void {
+    SmStore::factory()->create([
+        'name' => 'Zeta Store',
+        'is_active' => true,
+    ]);
+
+    SmStore::factory()->create([
+        'name' => 'Alpha Store',
+        'is_active' => true,
+    ]);
+
+    $response = $this->getJson('/api/v1/user/supermarket/stores?sort=alphabet');
+
+    $response->assertOk();
+    $names = collect($response->json('data'))->pluck('name')->all();
+
+    expect(array_search('Alpha Store', $names, true))->toBeLessThan(array_search('Zeta Store', $names, true));
+});
+
 it('filters supermarket stores by openNow', function (): void {
     CarbonImmutable::setTestNow('2026-06-15 14:00:00');
 

@@ -31,6 +31,8 @@ trait SmStoreFilterQuery
             ])
             ->allowedSorts([
                 AllowedSort::field('name'),
+                AllowedSort::field('alphabet', 'name'),
+                AllowedSort::field('alphabetical', 'name'),
                 AllowedSort::field('slug'),
                 AllowedSort::field('city'),
                 AllowedSort::field('neighborhood'),

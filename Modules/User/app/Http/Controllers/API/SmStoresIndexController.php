@@ -32,7 +32,8 @@ final class SmStoresIndexController
         $sort = $request->validated('sort') ?? 'rating';
 
         match ($sort) {
-            'nearest' => $this->applyNearestSort($query, $request),
+            'nearest', 'nearestBy' => $this->applyNearestSort($query, $request),
+            'alphabet', 'alphabetical' => $query->orderBy('name')->orderByDesc('is_featured'),
             default => $query->orderByDesc('average_rating')->orderByDesc('is_featured'),
         };
 

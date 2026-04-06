@@ -24,7 +24,7 @@ final class DiscoverSupermarketStoresRequest extends FormRequest
             'latitude' => ['sometimes', 'numeric', 'between:-90,90'],
             'longitude' => ['sometimes', 'numeric', 'between:-180,180'],
             'filter.openNow' => ['sometimes', 'boolean'],
-            'sort' => ['sometimes', 'string', 'in:rating,nearest'],
+            'sort' => ['sometimes', 'string', 'in:rating,nearest,nearestBy,alphabet,alphabetical'],
         ];
     }
 }
