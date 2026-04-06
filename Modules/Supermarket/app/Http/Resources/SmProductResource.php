@@ -16,6 +16,8 @@ final class SmProductResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $attributes = $this->getAttributes();
+
         return [
             'id' => $this->id,
             'storeId' => $this->store_id,
@@ -29,6 +31,12 @@ final class SmProductResource extends JsonResource
             'description' => $this->description,
             'price' => $this->price,
             'discountedPrice' => $this->discounted_price,
+            'isFavorite' => (bool) ($attributes['isFavoritedByUser'] ?? false),
+            'offers' => $this->whenLoaded('offerProducts', function () {
+                return SmOfferResource::collection(
+                    $this->offerProducts->map(fn ($offerProduct) => $offerProduct->offer)->filter()
+                );
+            }),
             'image' => MediaResource::make($this->whenLoaded('media', fn () => $this->getFirstMedia(SmProduct::IMAGE_COLLECTION))),
             'imageUrl' => $this->whenLoaded('media', fn () => $this->getFirstMediaUrl(SmProduct::IMAGE_COLLECTION) ?: null),
             'images' => $this->whenLoaded('media', fn () => MediaResource::collection($this->getMedia(SmProduct::IMAGE_COLLECTION))),

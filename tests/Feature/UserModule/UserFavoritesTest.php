@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 use App\Models\User;
+use Database\Factories\SmCategoryFactory;
+use Database\Factories\SmOfferFactory;
+use Database\Factories\SmOfferProductFactory;
+use Database\Factories\SmProductFactory;
 use Laravel\Sanctum\Sanctum;
 use Modules\Resturants\Models\Favorite;
 use Modules\Resturants\Models\Product;
@@ -41,6 +45,18 @@ it('requires authentication for product favorites', function (): void {
     $this->getJson('/api/v1/user/favorites/products')->assertUnauthorized();
     $this->postJson("/api/v1/user/favorites/products/{$product->id}")->assertUnauthorized();
     $this->deleteJson("/api/v1/user/favorites/products/{$product->id}")->assertUnauthorized();
+});
+
+it('requires authentication for supermarket product favorites', function (): void {
+    $store = SmStore::factory()->create(['is_active' => true]);
+    $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+    $product = SmProductFactory::new()->create([
+        'store_id' => $store->id,
+        'category_id' => $category->id,
+        'is_available' => true,
+    ]);
+
+    $this->postJson("/api/v1/user/favorites/supermarket/products/{$product->id}")->assertUnauthorized();
 });
 
 it('adds and lists restaurant favorites', function (): void {
@@ -158,6 +174,68 @@ it('removes a supermarket store favorite', function (): void {
         ->assertNoContent();
 
     expect(Favorite::query()->where('user_id', $user->id)->count())->toBe(0);
+});
+
+it('adds supermarket product favorites', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $store = SmStore::factory()->create(['is_active' => true]);
+    $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+    $product = SmProductFactory::new()->create([
+        'store_id' => $store->id,
+        'category_id' => $category->id,
+        'name' => 'Organic Apples',
+        'is_available' => true,
+    ]);
+    $offer = SmOfferFactory::new()->create(['store_id' => $store->id]);
+    SmOfferProductFactory::new()->create([
+        'offer_id' => $offer->id,
+        'product_id' => $product->id,
+    ]);
+
+    $create = $this->postJson("/api/v1/user/favorites/supermarket/products/{$product->id}");
+    $create->assertCreated()
+        ->assertJsonPath('product.id', $product->id)
+        ->assertJsonPath('product.isFavorite', true)
+        ->assertJsonPath('product.offers.0.id', $offer->id);
+
+    $again = $this->postJson("/api/v1/user/favorites/supermarket/products/{$product->id}");
+    $again->assertOk()->assertJsonPath('product.id', $product->id)->assertJsonPath('product.isFavorite', true);
+
+    expect(Favorite::query()->where('user_id', $user->id)->count())->toBe(1);
+});
+
+it('rejects favoriting an unavailable supermarket product', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $store = SmStore::factory()->create(['is_active' => true]);
+    $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+    $product = SmProductFactory::new()->create([
+        'store_id' => $store->id,
+        'category_id' => $category->id,
+        'is_available' => false,
+    ]);
+
+    $this->postJson("/api/v1/user/favorites/supermarket/products/{$product->id}")
+        ->assertStatus(422);
+});
+
+it('rejects favoriting a supermarket product from an inactive store', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $store = SmStore::factory()->create(['is_active' => false]);
+    $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+    $product = SmProductFactory::new()->create([
+        'store_id' => $store->id,
+        'category_id' => $category->id,
+        'is_available' => true,
+    ]);
+
+    $this->postJson("/api/v1/user/favorites/supermarket/products/{$product->id}")
+        ->assertStatus(422);
 });
 
 it('adds and lists product favorites', function (): void {

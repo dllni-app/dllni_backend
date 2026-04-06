@@ -54,7 +54,10 @@
             "Modules\\Supermarket\\Database\\Seeders\\": "Modules/Supermarket/database/seeders/",
             "Modules\\User\\": "Modules/User/app/",
             "Modules\\User\\Database\\Seeders\\": "Modules/User/database/seeders/"
-        }
+            },
+            "classmap": [
+                "Modules/User/app/"
+            ]
     },
     "autoload-dev": {
         "psr-4": {

@@ -25,7 +25,7 @@ final class SmProductController
     public function index(SmProductFilterRequest $request): AnonymousResourceCollection
     {
         $products = SmProduct::getQuery()
-            ->with('store', 'category', 'media')
+            ->with('store', 'category', 'media', 'offerProducts.offer')
             ->paginate($request->get('perPage', 20));
 
         return SmProductResource::collection($products);
@@ -49,7 +49,7 @@ final class SmProductController
             $this->extractImages($request)
         );
 
-        return SmProductResource::make($product->load('store', 'category', 'media'));
+        return SmProductResource::make($product->load('store', 'category', 'media', 'offerProducts.offer'));
     }
 
     public function import(SmProductImportRequest $request): JsonResponse
@@ -65,7 +65,7 @@ final class SmProductController
 
     public function show(SmProduct $smProduct): SmProductResource
     {
-        return SmProductResource::make($smProduct->load('store', 'category', 'media'));
+        return SmProductResource::make($smProduct->load('store', 'category', 'media', 'offerProducts.offer'));
     }
 
     public function update(SmProductRequest $request, SmProduct $smProduct): SmProductResource
@@ -76,7 +76,7 @@ final class SmProductController
             $this->extractImages($request)
         );
 
-        return SmProductResource::make($product->load('store', 'category', 'media'));
+        return SmProductResource::make($product->load('store', 'category', 'media', 'offerProducts.offer'));
     }
 
     public function destroy(SmProduct $smProduct): Response

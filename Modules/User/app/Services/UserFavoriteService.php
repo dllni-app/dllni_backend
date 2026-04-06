@@ -9,6 +9,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Modules\Resturants\Models\Favorite;
 use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
+use Modules\Supermarket\Models\SmProduct;
 use Modules\Supermarket\Models\SmStore;
 
 final class UserFavoriteService
@@ -88,6 +89,15 @@ final class UserFavoriteService
         return Favorite::firstOrCreate([
             'user_id' => $user->id,
             'favorable_type' => Product::class,
+            'favorable_id' => $product->id,
+        ]);
+    }
+
+    public function addSupermarketProductFavorite(User $user, SmProduct $product): Favorite
+    {
+        return Favorite::firstOrCreate([
+            'user_id' => $user->id,
+            'favorable_type' => SmProduct::class,
             'favorable_id' => $product->id,
         ]);
     }
