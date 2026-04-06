@@ -23,6 +23,7 @@ use Modules\Resturants\Models\Order;
 use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
 use Modules\Resturants\Models\Review;
+use Throwable;
 
 final class RestaurantSeeder extends Seeder
 {
@@ -98,6 +99,46 @@ final class RestaurantSeeder extends Seeder
                 'price_range' => PriceRange::Low->value,
                 'minimum_order_amount' => 10.00,
                 'estimated_preparation_time' => 15,
+                'is_featured' => false,
+            ],
+            [
+                'name' => 'بيت الشام للمشاوي',
+                'slug' => 'beit-al-sham-grill',
+                'description' => 'مطبخ شامي يقدم المشاوي والمقبلات الشرقية بوصفات أصيلة.',
+                'address' => '10 شارع الزهور، الشميساني',
+                'city' => 'عمّان',
+                'district' => 'الشميساني',
+                'location_details' => 'قرب الدوار الثالث، بجانب مركز التسوق',
+                'latitude' => 31.952100,
+                'longitude' => 35.913600,
+                'phone' => '+962 6 555 7788',
+                'whatsapp_number' => '+962 79 555 7788',
+                'email' => 'hello@beitsham.example.com',
+                'instagram_username' => 'beitsham.jo',
+                'facebook_page_name' => 'Beit Al Sham Jo',
+                'price_range' => PriceRange::Medium->value,
+                'minimum_order_amount' => 18.00,
+                'estimated_preparation_time' => 28,
+                'is_featured' => true,
+            ],
+            [
+                'name' => 'فطور السنديان',
+                'slug' => 'cedar-breakfast-house',
+                'description' => 'إفطار عربي يومي مع مناقيش طازجة ووجبات خفيفة طوال اليوم.',
+                'address' => '5 شارع الحدائق، خلدا',
+                'city' => 'عمّان',
+                'district' => 'خلدا',
+                'location_details' => 'قرب الإشارة الرئيسية، الطابق الأرضي',
+                'latitude' => 31.989200,
+                'longitude' => 35.855900,
+                'phone' => '+962 6 555 8899',
+                'whatsapp_number' => '+962 79 555 8899',
+                'email' => 'contact@cedarbreakfast.example.com',
+                'instagram_username' => 'cedarbreakfast.jo',
+                'facebook_page_name' => 'Cedar Breakfast Jo',
+                'price_range' => PriceRange::Low->value,
+                'minimum_order_amount' => 8.00,
+                'estimated_preparation_time' => 14,
                 'is_featured' => false,
             ],
         ];
@@ -184,6 +225,8 @@ final class RestaurantSeeder extends Seeder
                 'la-piazza-italian' => 'italian',
                 'golden-dragon-asian' => 'asian',
                 'burger-haven' => 'american',
+                'beit-al-sham-grill' => 'mediterranean',
+                'cedar-breakfast-house' => 'mediterranean',
             ];
             $cuisineSlug = $cuisineMap[$data['slug']] ?? 'italian';
             $cuisineId = $cuisineTypeIds[$cuisineSlug] ?? $cuisineTypeIds['italian'];
@@ -201,6 +244,8 @@ final class RestaurantSeeder extends Seeder
             $this->seedOwnerAppData($restaurant, $owner);
             $this->seedReviews($restaurant);
             $this->seedModifierGroups($restaurant);
+            $this->seedProductSubstitutions($restaurant);
+            $this->seedProductImages($restaurant);
             $this->seedRestaurantImages($restaurant);
         }
     }
@@ -298,32 +343,79 @@ final class RestaurantSeeder extends Seeder
             ]
         );
 
-        for ($i = 0; $i < 5; $i++) {
-            $orderNumber = 'ORD-' . mb_strtoupper(Str::random(6)) . $i;
-            if (Order::where('order_number', $orderNumber)->exists()) {
-                continue;
-            }
+        $statusTemplates = [
+            ['status' => OrderStatus::Completed, 'daysAgo' => 1],
+            ['status' => OrderStatus::Completed, 'daysAgo' => 2],
+            ['status' => OrderStatus::PickedUp, 'daysAgo' => 3],
+            ['status' => OrderStatus::Completed, 'daysAgo' => 4],
+            ['status' => OrderStatus::PickedUp, 'daysAgo' => 5],
+            ['status' => OrderStatus::Accepted, 'daysAgo' => 0],
+            ['status' => OrderStatus::Cancelled, 'daysAgo' => 2],
+            ['status' => OrderStatus::Completed, 'daysAgo' => 6],
+        ];
 
-            $subtotal = fake()->randomFloat(2, 25, 80);
+        foreach ($statusTemplates as $index => $template) {
+            $status = $template['status'];
+            $baseTime = now()->subDays((int) $template['daysAgo'])->setTime(12, 0);
+            $subtotal = round(18 + ($restaurant->id * 1.75) + ($index * 2.25), 2);
             $taxAmount = round($subtotal * 0.1, 2);
             $totalAmount = $subtotal + $taxAmount;
 
-            Order::create([
-                'user_id' => $customer->id,
-                'restaurant_id' => $restaurant->id,
-                'cancellation_policy_id' => $cancellationPolicy?->id,
-                'order_number' => $orderNumber,
-                'status' => OrderStatus::Completed->value,
-                'order_type' => OrderType::Pickup->value,
-                'pickup_mode' => RestaurantPickupMode::ImmediatePickup->value,
-                'subtotal' => $subtotal,
-                'discount_amount' => 0,
-                'tax_amount' => $taxAmount,
-                'service_fee' => 0,
-                'total_amount' => $totalAmount,
-                'accepted_at' => now()->subDays($i),
-                'completed_at' => now()->subDays($i)->addMinutes(25),
-            ]);
+            $acceptedAt = null;
+            $preparingAt = null;
+            $readyForPickupAt = null;
+            $pickedUpAt = null;
+            $customerPickupConfirmedAt = null;
+            $completedAt = null;
+            $cancelledAt = null;
+            $cancellationReason = null;
+
+            if ($status === OrderStatus::Accepted) {
+                $acceptedAt = $baseTime;
+            }
+
+            if ($status === OrderStatus::PickedUp || $status === OrderStatus::Completed) {
+                $acceptedAt = $baseTime;
+                $preparingAt = $baseTime->copy()->addMinutes(5);
+                $readyForPickupAt = $baseTime->copy()->addMinutes(22);
+                $pickedUpAt = $baseTime->copy()->addMinutes(32);
+                $customerPickupConfirmedAt = $baseTime->copy()->addMinutes(33);
+            }
+
+            if ($status === OrderStatus::Completed) {
+                $completedAt = $baseTime->copy()->addMinutes(36);
+            }
+
+            if ($status === OrderStatus::Cancelled) {
+                $acceptedAt = $baseTime;
+                $cancelledAt = $baseTime->copy()->addMinutes(12);
+                $cancellationReason = 'Customer changed pickup plan';
+            }
+
+            Order::updateOrCreate(
+                ['order_number' => sprintf('RST-%d-%03d', $restaurant->id, $index + 1)],
+                [
+                    'user_id' => $customer->id,
+                    'restaurant_id' => $restaurant->id,
+                    'cancellation_policy_id' => $cancellationPolicy?->id,
+                    'status' => $status->value,
+                    'order_type' => OrderType::Pickup->value,
+                    'pickup_mode' => RestaurantPickupMode::ImmediatePickup->value,
+                    'subtotal' => $subtotal,
+                    'discount_amount' => 0,
+                    'tax_amount' => $taxAmount,
+                    'service_fee' => 0,
+                    'total_amount' => $totalAmount,
+                    'accepted_at' => $acceptedAt,
+                    'preparing_at' => $preparingAt,
+                    'ready_for_pickup_at' => $readyForPickupAt,
+                    'picked_up_at' => $pickedUpAt,
+                    'customer_pickup_confirmed_at' => $customerPickupConfirmedAt,
+                    'completed_at' => $completedAt,
+                    'cancelled_at' => $cancelledAt,
+                    'cancellation_reason' => $cancellationReason,
+                ]
+            );
         }
     }
 
@@ -533,7 +625,7 @@ final class RestaurantSeeder extends Seeder
             ['email' => "employee.one+{$restaurant->id}@example.com"],
             [
                 'name' => 'موظف أول',
-                'phone' => '+962790000001' . $restaurant->id,
+                'phone' => '+962790000001'.$restaurant->id,
                 'password' => bcrypt('password'),
                 'module_type' => UserModuleType::RestaurantSeller->value,
                 'email_verified_at' => now(),
@@ -544,7 +636,7 @@ final class RestaurantSeeder extends Seeder
             ['email' => "employee.two+{$restaurant->id}@example.com"],
             [
                 'name' => 'موظف ثاني',
-                'phone' => '+962790000002' . $restaurant->id,
+                'phone' => '+962790000002'.$restaurant->id,
                 'password' => bcrypt('password'),
                 'module_type' => UserModuleType::RestaurantSeller->value,
                 'email_verified_at' => now(),
@@ -579,13 +671,13 @@ final class RestaurantSeeder extends Seeder
 
         $activeCouponId = DB::table('promo_codes')->where([
             'restaurant_id' => $restaurant->id,
-            'code' => 'SAVE25-' . $restaurant->id,
+            'code' => 'SAVE25-'.$restaurant->id,
         ])->value('id');
 
         if (! $activeCouponId) {
             $activeCouponId = DB::table('promo_codes')->insertGetId([
                 'restaurant_id' => $restaurant->id,
-                'code' => 'SAVE25-' . $restaurant->id,
+                'code' => 'SAVE25-'.$restaurant->id,
                 'discount_type' => 'percentage',
                 'discount_value' => 25,
                 'min_order_amount' => 20,
@@ -602,7 +694,7 @@ final class RestaurantSeeder extends Seeder
         DB::table('promo_codes')->updateOrInsert(
             [
                 'restaurant_id' => $restaurant->id,
-                'code' => 'OLD10-' . $restaurant->id,
+                'code' => 'OLD10-'.$restaurant->id,
             ],
             [
                 'discount_type' => 'percentage',
@@ -831,9 +923,9 @@ final class RestaurantSeeder extends Seeder
                 ]
             )
                 ? DB::table('modifier_groups')
-                ->where('restaurant_id', $restaurant->id)
-                ->where('name', $group['name'])
-                ->value('id')
+                    ->where('restaurant_id', $restaurant->id)
+                    ->where('name', $group['name'])
+                    ->value('id')
                 : null;
 
             if (! $groupId) {
@@ -895,6 +987,119 @@ final class RestaurantSeeder extends Seeder
                 "https://picsum.photos/seed/restaurant-{$seed}-product-{$product->id}/600/600",
                 "restaurant-{$seed}-product-{$product->id}"
             );
+        }
+    }
+
+    private function seedProductSubstitutions(Restaurant $restaurant): void
+    {
+        $products = DB::table('products')
+            ->where('restaurant_id', $restaurant->id)
+            ->orderBy('id')
+            ->pluck('id')
+            ->all();
+
+        if (count($products) < 2) {
+            return;
+        }
+
+        // Create substitutions between similar products
+        foreach ($products as $index => $productId) {
+            // Each product can be substituted with the next product
+            if (isset($products[$index + 1])) {
+                DB::table('restaurant_product_substitutions')->updateOrInsert(
+                    [
+                        'restaurant_id' => $restaurant->id,
+                        'product_id' => $productId,
+                        'substitute_product_id' => $products[$index + 1],
+                    ],
+                    [
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]
+                );
+            }
+
+            // Create reverse substitution
+            if (isset($products[$index + 1])) {
+                DB::table('restaurant_product_substitutions')->updateOrInsert(
+                    [
+                        'restaurant_id' => $restaurant->id,
+                        'product_id' => $products[$index + 1],
+                        'substitute_product_id' => $productId,
+                    ],
+                    [
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]
+                );
+            }
+        }
+    }
+
+    private function seedProductImages(Restaurant $restaurant): void
+    {
+        $seed = $restaurant->slug ?? (string) $restaurant->id;
+        $products = Product::query()
+            ->where('restaurant_id', $restaurant->id)
+            ->get();
+
+        foreach ($products as $product) {
+            if ($product->getMedia('images')->isNotEmpty()) {
+                continue;
+            }
+
+            $imageCount = fake()->numberBetween(2, 3);
+            for ($i = 1; $i <= $imageCount; $i++) {
+                $imageSeed = "restaurant-{$seed}-product-{$product->id}-img{$i}";
+                $imageUrl = "https://picsum.photos/seed/{$imageSeed}/600/600";
+
+                $this->attachProductImage($product, $imageUrl, $imageSeed);
+            }
+        }
+    }
+
+    private function attachProductImage(Product $product, string $imageUrl, string $imageSeed): void
+    {
+        if (! app()->runningUnitTests()) {
+            try {
+                $product->addMediaFromUrl($imageUrl)->toMediaCollection('images');
+
+                return;
+            } catch (Throwable) {
+                // Continue to local placeholder fallback.
+            }
+        }
+
+        $tempPath = tempnam(sys_get_temp_dir(), 'seed-media-');
+        if ($tempPath === false) {
+            return;
+        }
+
+        $pngPath = $tempPath.'-'.Str::slug($imageSeed, '-').'.png';
+        @unlink($tempPath);
+
+        $decoded = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAtMB9dZYkEYAAAAASUVORK5CYII=', true);
+        if (! is_string($decoded) || $decoded === '') {
+            return;
+        }
+
+        $bytes = file_put_contents($pngPath, $decoded);
+        if ($bytes === false || $bytes === 0) {
+            @unlink($pngPath);
+
+            return;
+        }
+
+        try {
+            $product->addMedia($pngPath)
+                ->usingFileName(Str::slug($imageSeed, '-').'.png')
+                ->toMediaCollection('images');
+        } catch (Throwable) {
+            // Ignore media failures in seed data.
+        } finally {
+            if (is_file($pngPath)) {
+                @unlink($pngPath);
+            }
         }
     }
 }

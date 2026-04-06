@@ -20,6 +20,7 @@ final class UserFavoritesIndexRequest extends FormRequest
     {
         return [
             'perPage' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'page' => ['sometimes', 'integer', 'min:1'],
         ];
     }
 }

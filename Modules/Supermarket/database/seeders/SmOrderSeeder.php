@@ -7,7 +7,6 @@ namespace Modules\Supermarket\Database\Seeders;
 use App\Models\CancellationPolicy;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Modules\Supermarket\Enums\SmOrderStatus;
 use Modules\Supermarket\Enums\SmPickupMode;
 use Modules\Supermarket\Models\SmOrder;
@@ -35,47 +34,51 @@ final class SmOrderSeeder extends Seeder
 
         $policy = CancellationPolicy::where('module', 'supermarket')->where('is_default', true)->first();
 
-        $stores = SmStore::with(['products' => fn ($q) => $q->where('is_available', true)->limit(5)])->take(3)->get();
+        $stores = SmStore::query()
+            ->with(['products' => fn ($q) => $q->where('is_available', true)->orderBy('id')])
+            ->orderBy('id')
+            ->take(3)
+            ->get();
 
-        // Define statuses to seed with
-        $statuses = [
-            SmOrderStatus::Pending,
-            SmOrderStatus::Accepted,
-            SmOrderStatus::Preparing,
-            SmOrderStatus::ReadyForPickup,
-            SmOrderStatus::Completed,
-            SmOrderStatus::Cancelled,
-        ];
+        $ordersPerStore = 15;
 
-        $orderCount = 0;
-        $maxOrders = 20;
-
-        foreach ($stores as $storeIndex => $store) {
-            $products = $store->products;
+        foreach ($stores as $store) {
+            $products = $store->products->values();
             if ($products->isEmpty()) {
                 continue;
             }
 
-            // Create 10 orders per store to reach 20 total
-            for ($i = 0; $i < 10 && $orderCount < $maxOrders; $i++) {
-                $status = $statuses[$i % count($statuses)];
-                if ($storeIndex === 0 && $i < 6) {
+            for ($i = 0; $i < $ordersPerStore; $i++) {
+                $status = match (true) {
+                    $i <= 5 => SmOrderStatus::Completed,
+                    $i <= 7 => SmOrderStatus::ReadyForPickup,
+                    $i === 8 => SmOrderStatus::Preparing,
+                    $i === 9 => SmOrderStatus::Accepted,
+                    $i === 10 => SmOrderStatus::Pending,
+                    $i === 11 => SmOrderStatus::Cancelled,
+                    default => SmOrderStatus::Completed,
+                };
+
+                if ($i >= 12) {
                     $status = SmOrderStatus::Completed;
                 }
-                $index = $orderCount;
-                $orderNumber = 'SM-'.mb_strtoupper(Str::random(6)).'-'.$store->id.'-'.$index;
-                if (SmOrder::where('order_number', $orderNumber)->exists()) {
-                    continue;
-                }
 
-                $items = $products->random(min(3, $products->count()));
+                $itemCount = min(3, $products->count());
                 $subtotal = 0.0;
                 $orderItems = [];
-                foreach ($items as $product) {
-                    $qty = fake()->numberBetween(1, 3);
-                    $unitPrice = (float) $product->discounted_price ?? (float) $product->price;
+
+                for ($offset = 0; $offset < $itemCount; $offset++) {
+                    $index = ($i + $offset) % $products->count();
+                    $product = $products->get($index);
+                    if ($product === null) {
+                        continue;
+                    }
+
+                    $qty = 1 + (($i + $offset) % 3);
+                    $unitPrice = (float) ($product->discounted_price ?? $product->price);
                     $totalPrice = round($unitPrice * $qty, 2);
                     $subtotal += $totalPrice;
+
                     $orderItems[] = [
                         'product_id' => $product->id,
                         'product_name' => $product->name,
@@ -89,41 +92,53 @@ final class SmOrderSeeder extends Seeder
                 $serviceFee = round($subtotal * 0.02, 2);
                 $totalAmount = $subtotal + $serviceFee;
 
-                // Build order data based on status
-                $orderData = [
-                    'customer_id' => $customerId,
-                    'store_id' => $store->id,
-                    'coupon_id' => null,
-                    'cancellation_policy_id' => $policy?->id,
-                    'order_number' => $orderNumber,
-                    'status' => $status->value,
-                    'pickup_mode' => SmPickupMode::ImmediatePickup->value,
-                    'pickup_scheduled_for' => null,
-                    'ready_for_pickup_at' => null,
-                    'picked_up_at' => null,
-                    'customer_pickup_confirmed_at' => null,
-                    'subtotal' => $subtotal,
-                    'discount_amount' => 0,
-                    'service_fee' => $serviceFee,
-                    'total_amount' => $totalAmount,
-                    'special_instructions' => $index === 0 ? 'بدون أكياس بلاستيك إن أمكن' : null,
-                    'cancelled_at' => null,
-                    'cancellation_reason' => null,
-                ];
+                $baseTime = now()->subDays($i + 1)->setTime(13, 0);
 
-                // Set timestamps based on status
+                $readyForPickupAt = null;
+                $pickedUpAt = null;
+                $customerPickupConfirmedAt = null;
+                $cancelledAt = null;
+                $cancellationReason = null;
+
                 if ($status === SmOrderStatus::ReadyForPickup) {
-                    $orderData['ready_for_pickup_at'] = now()->subHours(1);
-                } elseif ($status === SmOrderStatus::Completed) {
-                    $orderData['ready_for_pickup_at'] = now()->subDays(2)->addMinutes(20);
-                    $orderData['picked_up_at'] = now()->subDays(2)->addMinutes(35);
-                    $orderData['customer_pickup_confirmed_at'] = now()->subDays(2)->addMinutes(36);
-                } elseif ($status === SmOrderStatus::Cancelled) {
-                    $orderData['cancelled_at'] = now()->subHours(3);
-                    $orderData['cancellation_reason'] = 'Out of stock';
+                    $readyForPickupAt = $baseTime->copy()->addMinutes(20);
                 }
 
-                $order = SmOrder::create($orderData);
+                if ($status === SmOrderStatus::Completed) {
+                    $readyForPickupAt = $baseTime->copy()->addMinutes(20);
+                    $pickedUpAt = $baseTime->copy()->addMinutes(30);
+                    $customerPickupConfirmedAt = $baseTime->copy()->addMinutes(31);
+                }
+
+                if ($status === SmOrderStatus::Cancelled) {
+                    $cancelledAt = $baseTime->copy()->addMinutes(10);
+                    $cancellationReason = 'Customer changed pickup time';
+                }
+
+                $order = SmOrder::updateOrCreate(
+                    ['order_number' => sprintf('SM-%d-%03d', $store->id, $i + 1)],
+                    [
+                        'customer_id' => $customerId,
+                        'store_id' => $store->id,
+                        'coupon_id' => null,
+                        'cancellation_policy_id' => $policy?->id,
+                        'status' => $status->value,
+                        'pickup_mode' => SmPickupMode::ImmediatePickup->value,
+                        'pickup_scheduled_for' => null,
+                        'ready_for_pickup_at' => $readyForPickupAt,
+                        'picked_up_at' => $pickedUpAt,
+                        'customer_pickup_confirmed_at' => $customerPickupConfirmedAt,
+                        'subtotal' => $subtotal,
+                        'discount_amount' => 0,
+                        'service_fee' => $serviceFee,
+                        'total_amount' => $totalAmount,
+                        'special_instructions' => $i % 4 === 0 ? 'يرجى تجهيز الطلب بدون أكياس بلاستيك' : null,
+                        'cancelled_at' => $cancelledAt,
+                        'cancellation_reason' => $cancellationReason,
+                    ]
+                );
+
+                SmOrderItem::query()->where('order_id', $order->id)->delete();
 
                 foreach ($orderItems as $item) {
                     SmOrderItem::create([
@@ -135,8 +150,6 @@ final class SmOrderSeeder extends Seeder
                         'total_price' => $item['total_price'],
                     ]);
                 }
-
-                $orderCount++;
             }
         }
     }

@@ -23,6 +23,7 @@ use Modules\User\Http\Controllers\API\SmHomeNearbyStoresController;
 use Modules\User\Http\Controllers\API\SmLuckBoxOptionsController;
 use Modules\User\Http\Controllers\API\SmLuckBoxSuggestController;
 use Modules\User\Http\Controllers\API\SmOrderStatusController;
+use Modules\User\Http\Controllers\API\SmProductsSearchController;
 use Modules\User\Http\Controllers\API\SmStoresIndexController;
 use Modules\User\Http\Controllers\API\UserAccountPasswordController;
 use Modules\User\Http\Controllers\API\UserAccountShowController;
@@ -42,6 +43,7 @@ use Modules\User\Http\Controllers\API\UserCleaningOrderUpdateController;
 use Modules\User\Http\Controllers\API\UserMarketingOfferShowController;
 use Modules\User\Http\Controllers\API\UserMarketingOffersIndexController;
 use Modules\User\Http\Controllers\API\UserNotificationsIndexController;
+use Modules\User\Http\Controllers\API\UserNotificationsMarkAsReadController;
 use Modules\User\Http\Controllers\API\UserProductDetailsController;
 use Modules\User\Http\Controllers\API\UserProductFavoriteDestroyController;
 use Modules\User\Http\Controllers\API\UserProductFavoritesIndexController;
@@ -80,6 +82,7 @@ Route::prefix('v1/user')->group(function (): void {
     });
 
     Route::get('supermarket/stores', SmStoresIndexController::class);
+    Route::get('supermarket/products/search', SmProductsSearchController::class);
 
     Route::get('supermarket/luck-box/options', SmLuckBoxOptionsController::class);
     Route::post('supermarket/luck-box/suggest', SmLuckBoxSuggestController::class);
@@ -111,6 +114,7 @@ Route::prefix('v1/user')->group(function (): void {
         Route::put('account/password', UserAccountPasswordController::class);
 
         Route::get('notifications', UserNotificationsIndexController::class);
+        Route::patch('notifications/{id}/read', UserNotificationsMarkAsReadController::class);
 
         Route::get('addresses', UserAddressIndexController::class);
         Route::post('addresses', UserAddressStoreController::class);

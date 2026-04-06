@@ -14,12 +14,13 @@ final class UserRestaurantProductsByCategoryService
         int $categoryId,
         int $perPage = 15,
     ): LengthAwarePaginator {
-        // Verify category exists
+        // Verify category exists.
         $category = Category::findOrFail($categoryId);
 
         $query = Product::query()
             ->where('category_id', $categoryId)
             ->where('is_available', true)
+            ->whereHas('restaurant', fn ($query) => $query->where('is_active', true))
             ->with([
                 'offers' => function ($query) {
                     $query->where('is_active', true)
@@ -30,6 +31,7 @@ final class UserRestaurantProductsByCategoryService
                 },
                 'restaurant' => fn ($q) => $q->select(['id', 'name', 'city', 'district']),
                 'category' => fn ($q) => $q->select(['id', 'name']),
+                'media',
             ]);
 
         return $query->paginate($perPage);

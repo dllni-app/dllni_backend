@@ -20,43 +20,60 @@ use Modules\Cleaning\Http\Controllers\API\WorkerTransactionsController;
 use Modules\Cleaning\Http\Controllers\API\WorkerWorkAreasController;
 use Modules\Cleaning\Http\Controllers\API\WorkerWorkingHoursController;
 
-Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
-    Route::get('cleaning/dashboard/overview', DashboardOverviewController::class);
-    Route::get('cleaning/worker/homepage', WorkerHomepageController::class);
-    Route::get('cleaning/worker/statistics', WorkerStatisticsController::class);
-    Route::get('cleaning/worker/profile', Modules\Cleaning\Http\Controllers\API\WorkerProfileController::class);
-    Route::get('cleaning/worker/working-hours', [WorkerWorkingHoursController::class, 'show']);
-    Route::put('cleaning/worker/working-hours', [WorkerWorkingHoursController::class, 'update']);
-    Route::prefix('cleaning/worker/account')->group(function (): void {
-        Route::get('profile', Modules\Cleaning\Http\Controllers\API\WorkerProfileController::class);
-        Route::put('profile', [WorkerAccountProfileController::class, 'update']);
-        Route::put('password', [WorkerAccountProfileController::class, 'updatePassword']);
-        Route::get('work-areas', [WorkerWorkAreasController::class, 'show']);
-        Route::put('work-areas', [WorkerWorkAreasController::class, 'update']);
-        Route::get('working-hours', [WorkerWorkingHoursController::class, 'show']);
-        Route::put('working-hours', [WorkerWorkingHoursController::class, 'update']);
-        Route::get('notifications', [UserNotificationController::class, 'index']);
-        Route::patch('notifications/{id}/read', [UserNotificationController::class, 'markAsRead']);
-        Route::get('transactions', WorkerTransactionsController::class);
-        Route::get('status', [WorkerAccountStatusController::class, 'show']);
-        Route::patch('status', [WorkerAccountStatusController::class, 'update']);
+Route::prefix('v1')->group(function () {
+    // Public endpoints - no auth required
+    Route::apiResource('cleaning-services', CleaningServiceController::class)->only(['index', 'show']);
+    Route::apiResource('cleaning-services.pricing', ServicePricingController::class)->only(['index', 'show'])->scoped();
+    Route::apiResource('cleaning-billing-policies', CleaningBillingPolicyController::class)->only(['index', 'show']);
+
+    // Protected endpoints - auth required
+    Route::middleware(['auth:sanctum'])->group(function (): void {
+        // Worker dashboard and profile endpoints
+        Route::get('cleaning/dashboard/overview', DashboardOverviewController::class);
+        Route::get('cleaning/worker/homepage', WorkerHomepageController::class);
+        Route::get('cleaning/worker/statistics', WorkerStatisticsController::class);
+        Route::get('cleaning/worker/profile', Modules\Cleaning\Http\Controllers\API\WorkerProfileController::class);
+        Route::get('cleaning/worker/working-hours', [WorkerWorkingHoursController::class, 'show']);
+        Route::put('cleaning/worker/working-hours', [WorkerWorkingHoursController::class, 'update']);
+        Route::prefix('cleaning/worker/account')->group(function (): void {
+            Route::get('profile', Modules\Cleaning\Http\Controllers\API\WorkerProfileController::class);
+            Route::put('profile', [WorkerAccountProfileController::class, 'update']);
+            Route::put('password', [WorkerAccountProfileController::class, 'updatePassword']);
+            Route::get('work-areas', [WorkerWorkAreasController::class, 'show']);
+            Route::put('work-areas', [WorkerWorkAreasController::class, 'update']);
+            Route::get('working-hours', [WorkerWorkingHoursController::class, 'show']);
+            Route::put('working-hours', [WorkerWorkingHoursController::class, 'update']);
+            Route::get('notifications', [UserNotificationController::class, 'index']);
+            Route::patch('notifications/{id}/read', [UserNotificationController::class, 'markAsRead']);
+            Route::get('transactions', WorkerTransactionsController::class);
+            Route::get('status', [WorkerAccountStatusController::class, 'show']);
+            Route::patch('status', [WorkerAccountStatusController::class, 'update']);
+        });
+
+        // Analytics endpoints
+        Route::get('cleaning/analytics/geographic-coverage', GeographicCoverageController::class);
+
+        // Resource management endpoints (admin)
+        Route::apiResource('cleaning-services', CleaningServiceController::class)->only(['store', 'update', 'destroy']);
+        Route::apiResource('cleaning-services.pricing', ServicePricingController::class)->only(['store', 'update', 'destroy'])->scoped();
+        Route::apiResource('cleaning-billing-policies', CleaningBillingPolicyController::class)->only(['store', 'update', 'destroy']);
+
+        // Booking endpoints (ordering)
+        Route::post('cleaning-bookings/{cleaning_booking}/accept', [CleaningBookingController::class, 'accept'])->name('cleaning-bookings.accept');
+        Route::post('cleaning-bookings/{cleaning_booking}/reject', [CleaningBookingController::class, 'reject'])->name('cleaning-bookings.reject');
+        Route::get('cleaning-bookings/{cleaning_booking}/security-code', [CleaningBookingController::class, 'securityCode'])->name('cleaning-bookings.security-code');
+        Route::post('cleaning-bookings/{cleaning_booking}/start-travel', [CleaningBookingController::class, 'startTravel'])->name('cleaning-bookings.start-travel');
+        Route::post('cleaning-bookings/{cleaning_booking}/location', [CleaningBookingController::class, 'updateLocation'])->name('cleaning-bookings.location');
+        Route::post('cleaning-bookings/{cleaning_booking}/arrive', [CleaningBookingController::class, 'arrive'])->name('cleaning-bookings.arrive');
+        Route::post('cleaning-bookings/{cleaning_booking}/start-work', [CleaningBookingController::class, 'startWork'])->name('cleaning-bookings.start-work');
+        Route::post('cleaning-bookings/{cleaning_booking}/complete', [CleaningBookingController::class, 'complete'])->name('cleaning-bookings.complete');
+        Route::post('cleaning-bookings/{cleaning_booking}/cancel', [CleaningBookingController::class, 'cancel'])->name('cleaning-bookings.cancel');
+        Route::apiResource('cleaning-bookings', CleaningBookingController::class);
+        Route::apiResource('event-bookings', EventBookingController::class);
+
+        // Time warning endpoints
+        Route::post('cleaning-time-warnings/{cleaning_time_warning}/accept', [CleaningTimeWarningController::class, 'accept'])->name('cleaning-time-warnings.accept');
+        Route::post('cleaning-time-warnings/{cleaning_time_warning}/reject', [CleaningTimeWarningController::class, 'reject'])->name('cleaning-time-warnings.reject');
+        Route::apiResource('cleaning-time-warnings', CleaningTimeWarningController::class)->only(['index', 'show']);
     });
-    Route::get('cleaning/analytics/geographic-coverage', GeographicCoverageController::class);
-    Route::post('cleaning-bookings/{cleaning_booking}/accept', [CleaningBookingController::class, 'accept'])->name('cleaning-bookings.accept');
-    Route::post('cleaning-bookings/{cleaning_booking}/reject', [CleaningBookingController::class, 'reject'])->name('cleaning-bookings.reject');
-    Route::get('cleaning-bookings/{cleaning_booking}/security-code', [CleaningBookingController::class, 'securityCode'])->name('cleaning-bookings.security-code');
-    Route::post('cleaning-bookings/{cleaning_booking}/start-travel', [CleaningBookingController::class, 'startTravel'])->name('cleaning-bookings.start-travel');
-    Route::post('cleaning-bookings/{cleaning_booking}/location', [CleaningBookingController::class, 'updateLocation'])->name('cleaning-bookings.location');
-    Route::post('cleaning-bookings/{cleaning_booking}/arrive', [CleaningBookingController::class, 'arrive'])->name('cleaning-bookings.arrive');
-    Route::post('cleaning-bookings/{cleaning_booking}/start-work', [CleaningBookingController::class, 'startWork'])->name('cleaning-bookings.start-work');
-    Route::post('cleaning-bookings/{cleaning_booking}/complete', [CleaningBookingController::class, 'complete'])->name('cleaning-bookings.complete');
-    Route::post('cleaning-bookings/{cleaning_booking}/cancel', [CleaningBookingController::class, 'cancel'])->name('cleaning-bookings.cancel');
-    Route::apiResource('cleaning-bookings', CleaningBookingController::class);
-    Route::apiResource('event-bookings', EventBookingController::class);
-    Route::post('cleaning-time-warnings/{cleaning_time_warning}/accept', [CleaningTimeWarningController::class, 'accept'])->name('cleaning-time-warnings.accept');
-    Route::post('cleaning-time-warnings/{cleaning_time_warning}/reject', [CleaningTimeWarningController::class, 'reject'])->name('cleaning-time-warnings.reject');
-    Route::apiResource('cleaning-time-warnings', CleaningTimeWarningController::class)->only(['index', 'show']);
-    Route::apiResource('cleaning-services', CleaningServiceController::class);
-    Route::apiResource('cleaning-services.pricing', ServicePricingController::class)->scoped();
-    Route::apiResource('cleaning-billing-policies', CleaningBillingPolicyController::class);
 });

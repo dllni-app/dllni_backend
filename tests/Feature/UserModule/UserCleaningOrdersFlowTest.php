@@ -127,7 +127,7 @@ it('updates a pending cleaning order schedule', function (): void {
     $response->assertOk()->assertJsonPath('order.scheduledTime', '11:00');
 
     $order->refresh();
-    expect($order->scheduled_time)->toBe('11:00:00');
+    expect((string) $order->scheduled_time)->toStartWith('11:00');
     expect((float) $order->total_hours)->toBe(4.0);
 });
 

@@ -6,9 +6,13 @@ namespace Database\Seeders;
 
 use App\Models\CancellationPolicy;
 use App\Models\User;
+use App\Models\Worker;
 use Database\Seeders\Support\SeederMedia;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
+use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Models\CleaningBillingPolicy;
+use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Enums\OrderType;
 use Modules\Resturants\Enums\RestaurantPickupMode;
@@ -20,6 +24,8 @@ use Modules\Resturants\Models\Restaurant;
 use Modules\Resturants\Models\Review;
 use Modules\Supermarket\Enums\SmOrderStatus;
 use Modules\Supermarket\Enums\SmPickupMode;
+use Modules\Supermarket\Models\SmCart;
+use Modules\Supermarket\Models\SmCartItem;
 use Modules\Supermarket\Models\SmOrder;
 use Modules\Supermarket\Models\SmOrderItem;
 use Modules\Supermarket\Models\SmProduct;
@@ -38,6 +44,8 @@ final class UserAppScenarioSeeder extends Seeder
         $this->seedUserProfileScenario($user);
         $this->seedRestaurantScenario($user);
         $this->seedSupermarketScenario($user);
+        $this->seedSupermarketCartScenario($user);
+        $this->seedCleaningScenario($user);
     }
 
     private function seedUserProfileScenario(User $user): void
@@ -118,10 +126,23 @@ final class UserAppScenarioSeeder extends Seeder
                 'read_at' => null,
             ],
             [
+                'type' => 'order',
+                'title' => 'Order ready for pickup',
+                'body' => 'Your restaurant order is now ready for pickup.',
+                'bookingId' => 101,
+                'read_at' => null,
+            ],
+            [
                 'type' => 'promo',
                 'title' => 'New offer available',
                 'body' => 'Use code WELCOME15 on your next checkout.',
                 'read_at' => null,
+            ],
+            [
+                'type' => 'promo',
+                'title' => 'Flash deal nearby',
+                'body' => 'A featured supermarket near you has a limited-time discount.',
+                'read_at' => now()->subMinutes(5),
             ],
             [
                 'type' => 'delivery',
@@ -129,6 +150,12 @@ final class UserAppScenarioSeeder extends Seeder
                 'body' => 'Your driver is approaching your saved address.',
                 'timeWarningId' => 11,
                 'read_at' => now()->subMinutes(20),
+            ],
+            [
+                'type' => 'account',
+                'title' => 'Security reminder',
+                'body' => 'Please review your account security settings.',
+                'read_at' => now()->subHours(2),
             ],
         ];
 
@@ -150,7 +177,7 @@ final class UserAppScenarioSeeder extends Seeder
         $restaurants = Restaurant::query()
             ->where('is_active', true)
             ->orderBy('id')
-            ->limit(2)
+            ->limit(4)
             ->get();
 
         if ($restaurants->isEmpty()) {
@@ -172,7 +199,7 @@ final class UserAppScenarioSeeder extends Seeder
             ->whereIn('restaurant_id', $restaurants->pluck('id'))
             ->where('is_available', true)
             ->orderBy('id')
-            ->limit(4)
+            ->limit(12)
             ->get();
 
         foreach ($products as $product) {
@@ -191,20 +218,15 @@ final class UserAppScenarioSeeder extends Seeder
             return;
         }
 
-        $orderNumber = 'USR-REST-' . $restaurant->id . '-' . Str::upper(Str::random(5));
-        $existing = Order::query()
-            ->where('user_id', $user->id)
-            ->where('restaurant_id', $restaurant->id)
-            ->first();
-
-        $order = $existing ?? Order::create([
+        $order = Order::query()->updateOrCreate([
+            'order_number' => sprintf('USR-REST-%d-001', $restaurant->id),
+        ], [
             'user_id' => $user->id,
             'restaurant_id' => $restaurant->id,
             'cancellation_policy_id' => CancellationPolicy::query()
                 ->where('module', 'restaurant')
                 ->where('is_default', true)
                 ->value('id'),
-            'order_number' => $orderNumber,
             'status' => OrderStatus::Completed->value,
             'order_type' => OrderType::Pickup->value,
             'pickup_mode' => RestaurantPickupMode::ImmediatePickup->value,
@@ -217,9 +239,11 @@ final class UserAppScenarioSeeder extends Seeder
             'completed_at' => now()->subDays(1)->addMinutes(20),
         ]);
 
-        if (! $order->relationLoaded('orderItems') && $order->orderItems()->count() === 0) {
-            $items = $products->take(2);
+        if (! $order->relationLoaded('orderItems') || $order->orderItems()->count() === 0) {
+            $items = $products->take(3);
             $subtotal = 0.0;
+
+            $order->orderItems()->delete();
 
             foreach ($items as $product) {
                 $unitPrice = (float) ($product->discounted_price ?? $product->price ?? 0);
@@ -262,56 +286,75 @@ final class UserAppScenarioSeeder extends Seeder
 
     private function seedSupermarketScenario(User $user): void
     {
-        $store = SmStore::query()->where('is_active', true)->orderBy('id')->first();
-        if (! $store) {
+        $stores = SmStore::query()
+            ->where('is_active', true)
+            ->where(fn ($query) => $query
+                ->whereNull('suspension_until')
+                ->orWhere('suspension_until', '<=', now()))
+            ->orderBy('id')
+            ->limit(2)
+            ->get();
+
+        if ($stores->isEmpty()) {
             return;
         }
 
-        Favorite::updateOrCreate(
-            [
-                'user_id' => $user->id,
-                'favorable_type' => SmStore::class,
-                'favorable_id' => $store->id,
-            ],
-            []
-        );
+        foreach ($stores as $store) {
+            Favorite::updateOrCreate(
+                [
+                    'user_id' => $user->id,
+                    'favorable_type' => SmStore::class,
+                    'favorable_id' => $store->id,
+                ],
+                []
+            );
+        }
 
-        $product = SmProduct::query()
+        $store = $stores->first();
+        if (! $store instanceof SmStore) {
+            return;
+        }
+
+        $products = SmProduct::query()
             ->where('store_id', $store->id)
             ->where('is_available', true)
+            ->where('stock_quantity', '>', 0)
             ->orderBy('id')
-            ->first();
+            ->limit(3)
+            ->get();
 
-        if (! $product) {
+        if ($products->isEmpty()) {
             return;
         }
 
-        $orderNumber = 'USR-SM-' . $store->id . '-' . Str::upper(Str::random(5));
-        $existing = SmOrder::query()
-            ->where('customer_id', $user->id)
-            ->where('store_id', $store->id)
-            ->first();
-
-        $order = $existing ?? SmOrder::create([
+        $order = SmOrder::query()->updateOrCreate([
+            'order_number' => sprintf('USR-SM-%d-001', $store->id),
+        ], [
             'customer_id' => $user->id,
             'store_id' => $store->id,
             'cancellation_policy_id' => CancellationPolicy::query()
                 ->where('module', 'supermarket')
                 ->where('is_default', true)
                 ->value('id'),
-            'order_number' => $orderNumber,
             'status' => SmOrderStatus::Completed->value,
             'pickup_mode' => SmPickupMode::ImmediatePickup->value,
             'subtotal' => 0,
             'discount_amount' => 0,
             'service_fee' => 0,
             'total_amount' => 0,
+            'ready_for_pickup_at' => now()->subDay()->addMinutes(20),
+            'picked_up_at' => now()->subDay()->addMinutes(35),
+            'customer_pickup_confirmed_at' => now()->subDay()->addMinutes(36),
         ]);
 
-        if ($order->items()->count() === 0) {
+        $order->items()->delete();
+
+        $subtotal = 0.0;
+        foreach ($products as $index => $product) {
             $unitPrice = (float) ($product->discounted_price ?? $product->price ?? 0);
-            $qty = 2;
-            $total = $unitPrice * $qty;
+            $qty = $index === 0 ? 2 : 1;
+            $total = round($unitPrice * $qty, 2);
+            $subtotal += $total;
 
             SmOrderItem::create([
                 'order_id' => $order->id,
@@ -321,11 +364,158 @@ final class UserAppScenarioSeeder extends Seeder
                 'total_price' => $total,
                 'product_name' => $product->name,
             ]);
+        }
 
-            $order->update([
-                'subtotal' => $total,
-                'total_amount' => $total,
-            ]);
+        $order->update([
+            'subtotal' => round($subtotal, 2),
+            'total_amount' => round($subtotal, 2),
+        ]);
+    }
+
+    private function seedSupermarketCartScenario(User $user): void
+    {
+        $store = SmStore::query()
+            ->where('is_active', true)
+            ->where(fn ($query) => $query
+                ->whereNull('suspension_until')
+                ->orWhere('suspension_until', '<=', now()))
+            ->orderBy('id')
+            ->first();
+
+        if (! $store instanceof SmStore) {
+            return;
+        }
+
+        $products = SmProduct::query()
+            ->where('store_id', $store->id)
+            ->where('is_available', true)
+            ->where('stock_quantity', '>', 0)
+            ->orderBy('id')
+            ->limit(3)
+            ->get();
+
+        if ($products->isEmpty()) {
+            return;
+        }
+
+        $cart = SmCart::query()->updateOrCreate(
+            [
+                'user_id' => $user->id,
+                'store_id' => $store->id,
+            ],
+            []
+        );
+
+        foreach ($products as $index => $product) {
+            $unitPrice = (float) ($product->discounted_price ?? $product->price ?? 0);
+
+            SmCartItem::query()->updateOrCreate(
+                [
+                    'cart_id' => $cart->id,
+                    'product_id' => $product->id,
+                ],
+                [
+                    'quantity' => $index + 1,
+                    'unit_price' => $unitPrice,
+                ]
+            );
+        }
+    }
+
+    private function seedCleaningScenario(User $user): void
+    {
+        $worker = Worker::query()->where('is_active', true)->orderBy('id')->first()
+            ?? Worker::query()->orderBy('id')->first();
+
+        $billingPolicyId = CleaningBillingPolicy::query()->where('is_default', true)->value('id');
+        if ($billingPolicyId === null) {
+            return;
+        }
+
+        $cancellationPolicyId = CancellationPolicy::query()
+            ->where('module', 'cleaning')
+            ->where('is_default', true)
+            ->value('id');
+
+        $templates = [
+            ['status' => CleaningBookingStatus::Pending, 'daysOffset' => 1, 'requiresWorker' => false],
+            ['status' => CleaningBookingStatus::WorkerAssigned, 'daysOffset' => 2, 'requiresWorker' => true],
+            ['status' => CleaningBookingStatus::InProgress, 'daysOffset' => 0, 'requiresWorker' => true],
+            ['status' => CleaningBookingStatus::Completed, 'daysOffset' => -1, 'requiresWorker' => true],
+            ['status' => CleaningBookingStatus::Cancelled, 'daysOffset' => 3, 'requiresWorker' => false],
+        ];
+
+        foreach ($templates as $index => $template) {
+            if (($template['requiresWorker'] ?? false) && $worker === null) {
+                continue;
+            }
+
+            $status = $template['status'];
+            $scheduledDate = now()->addDays((int) $template['daysOffset'])->startOfDay();
+            $basePrice = 60 + ($index * 8);
+            $travelFee = 8 + $index;
+            $totalPrice = $basePrice + $travelFee;
+
+            $workStartedAt = null;
+            $workFinishedAt = null;
+            $customerConfirmedAt = null;
+            $cancelledAt = null;
+            $cancellationReason = null;
+
+            if ($status === CleaningBookingStatus::InProgress) {
+                $workStartedAt = now()->subMinutes(75);
+            }
+
+            if ($status === CleaningBookingStatus::Completed) {
+                $workStartedAt = now()->subDay()->setTime(10, 0);
+                $workFinishedAt = now()->subDay()->setTime(13, 0);
+                $customerConfirmedAt = now()->subDay()->setTime(13, 5);
+            }
+
+            if ($status === CleaningBookingStatus::Cancelled) {
+                $cancelledAt = now()->subHours(6);
+                $cancellationReason = 'Customer requested another schedule';
+            }
+
+            CleaningBooking::query()->updateOrCreate(
+                [
+                    'booking_number' => sprintf('USR-CLN-%d-%03d', $user->id, $index + 1),
+                ],
+                [
+                    'customer_id' => $user->id,
+                    'worker_id' => $worker?->id,
+                    'preferred_worker_id' => $worker?->id,
+                    'cancellation_policy_id' => $cancellationPolicyId,
+                    'billing_policy_id' => $billingPolicyId,
+                    'status' => $status->value,
+                    'property_type' => 'apartment',
+                    'property_details' => [
+                        'location_name' => 'Home',
+                        'address' => 'Al Mazzeh, Damascus',
+                        'rooms' => 3,
+                        'bedrooms' => 2,
+                        'bathrooms' => 1,
+                    ],
+                    'address_latitude' => 33.513807,
+                    'address_longitude' => 36.276528,
+                    'estimated_sqm' => 110,
+                    'estimated_hours' => 3.0,
+                    'scheduled_date' => $scheduledDate,
+                    'scheduled_time' => '09:00',
+                    'total_hours' => 3.0,
+                    'base_price' => $basePrice,
+                    'addons_total' => 0,
+                    'travel_fee' => $travelFee,
+                    'cancellation_fee' => 0,
+                    'total_price' => $totalPrice,
+                    'terms_accepted' => true,
+                    'work_started_at' => $workStartedAt,
+                    'work_finished_at' => $workFinishedAt,
+                    'customer_confirmed_at' => $customerConfirmedAt,
+                    'cancelled_at' => $cancelledAt,
+                    'cancellation_reason' => $cancellationReason,
+                ]
+            );
         }
     }
 }

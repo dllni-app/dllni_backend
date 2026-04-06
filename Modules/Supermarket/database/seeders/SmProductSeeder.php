@@ -8,65 +8,212 @@ use Database\Seeders\Support\SeederMedia;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Modules\Supermarket\Enums\SmProductSource;
+use Modules\Supermarket\Models\SmCategory;
 use Modules\Supermarket\Models\SmProduct;
+use Modules\Supermarket\Models\SmStore;
 
 final class SmProductSeeder extends Seeder
 {
     public function run(): void
     {
-        $existingMasterProductIds = array_flip(DB::table('master_products')->pluck('id')->all());
+        $stores = SmStore::query()
+            ->whereIn('slug', [
+                'supermarket-al-atrash',
+                'supermarket-al-sultan',
+                'supermarket-al-noor',
+            ])
+            ->get()
+            ->keyBy('slug');
 
-        $products = [
-            ['id' => 1, 'store_id' => 1, 'category_id' => 1, 'master_product_id' => 1, 'name' => 'حليب كامل الدسم 1 لتر', 'price' => 6, 'discounted_price' => null, 'stock_quantity' => 200, 'is_available' => true],
-            ['id' => 2, 'store_id' => 1, 'category_id' => 2, 'master_product_id' => 4, 'name' => 'رز بسمتي 5 كغ', 'price' => 28, 'discounted_price' => 25, 'stock_quantity' => 100, 'is_available' => true],
-            ['id' => 3, 'store_id' => 1, 'category_id' => 3, 'master_product_id' => 5, 'name' => 'دجاج طازج كامل', 'price' => 22, 'discounted_price' => null, 'stock_quantity' => 50, 'is_available' => true],
-            ['id' => 4, 'store_id' => 1, 'category_id' => 4, 'master_product_id' => 6, 'name' => 'طماطم طازجة', 'price' => 4, 'discounted_price' => null, 'stock_quantity' => 150, 'is_available' => true],
-            ['id' => 5, 'store_id' => 1, 'category_id' => 4, 'master_product_id' => 7, 'name' => 'خيار طازج', 'price' => 3, 'discounted_price' => null, 'stock_quantity' => 120, 'is_available' => true],
-            ['id' => 6, 'store_id' => 1, 'category_id' => 5, 'master_product_id' => 10, 'name' => 'معكرونة سباغيتي 500غ', 'price' => 7, 'discounted_price' => null, 'stock_quantity' => 90, 'is_available' => true],
-            ['id' => 7, 'store_id' => 1, 'category_id' => 1, 'master_product_id' => 8, 'name' => 'جبنة موزاريلا 200غ', 'price' => 12, 'discounted_price' => 10, 'stock_quantity' => 60, 'is_available' => true],
-            ['id' => 8, 'store_id' => 1, 'category_id' => 2, 'master_product_id' => 11, 'name' => 'زيت زيتون 1 لتر', 'price' => 35, 'discounted_price' => null, 'stock_quantity' => 80, 'is_available' => true],
-            ['id' => 9, 'store_id' => 1, 'category_id' => 1, 'master_product_id' => 12, 'name' => 'لبن زبادي 500غ', 'price' => 5, 'discounted_price' => 4.5, 'stock_quantity' => 150, 'is_available' => true],
-            ['id' => 10, 'store_id' => 1, 'category_id' => 3, 'master_product_id' => 13, 'name' => 'لحم بقري 1 كغ', 'price' => 45, 'discounted_price' => null, 'stock_quantity' => 30, 'is_available' => true],
-            ['id' => 11, 'store_id' => 1, 'category_id' => 4, 'master_product_id' => 14, 'name' => 'بطاطا 2 كغ', 'price' => 5, 'discounted_price' => null, 'stock_quantity' => 200, 'is_available' => true],
-            ['id' => 12, 'store_id' => 1, 'category_id' => 4, 'master_product_id' => 15, 'name' => 'جزر طازج 1 كغ', 'price' => 4, 'discounted_price' => null, 'stock_quantity' => 100, 'is_available' => true],
-            ['id' => 13, 'store_id' => 1, 'category_id' => 5, 'master_product_id' => 16, 'name' => 'خبز أبيض', 'price' => 2, 'discounted_price' => null, 'stock_quantity' => 250, 'is_available' => true],
-            ['id' => 14, 'store_id' => 1, 'category_id' => 5, 'master_product_id' => 17, 'name' => 'سكر 2 كغ', 'price' => 8, 'discounted_price' => 7, 'stock_quantity' => 180, 'is_available' => true],
-            ['id' => 15, 'store_id' => 1, 'category_id' => 1, 'master_product_id' => 18, 'name' => 'بيض طازج 12 حبة', 'price' => 10, 'discounted_price' => null, 'stock_quantity' => 120, 'is_available' => true],
-            ['id' => 16, 'store_id' => 1, 'category_id' => 2, 'master_product_id' => 19, 'name' => 'معجون طماطم 400غ', 'price' => 6, 'discounted_price' => null, 'stock_quantity' => 140, 'is_available' => true],
-            ['id' => 17, 'store_id' => 1, 'category_id' => 3, 'master_product_id' => 20, 'name' => 'سمك فيليه 500غ', 'price' => 30, 'discounted_price' => 28, 'stock_quantity' => 40, 'is_available' => true],
-            ['id' => 18, 'store_id' => 1, 'category_id' => 4, 'master_product_id' => 21, 'name' => 'فلفل رومي ملون', 'price' => 7, 'discounted_price' => null, 'stock_quantity' => 90, 'is_available' => true],
-            ['id' => 19, 'store_id' => 1, 'category_id' => 5, 'master_product_id' => 22, 'name' => 'ملح طعام 1 كغ', 'price' => 3, 'discounted_price' => null, 'stock_quantity' => 200, 'is_available' => true],
-            ['id' => 20, 'store_id' => 1, 'category_id' => 1, 'master_product_id' => 23, 'name' => 'جبنة بيضاء 250غ', 'price' => 8, 'discounted_price' => null, 'stock_quantity' => 70, 'is_available' => true],
-        ];
-
-        foreach ($products as $product) {
-            $masterProductId = isset($existingMasterProductIds[$product['master_product_id']])
-                ? $product['master_product_id']
-                : null;
-
-            DB::table('sm_products')->updateOrInsert(
-                ['id' => $product['id']],
-                [
-                    'store_id' => $product['store_id'],
-                    'category_id' => $product['category_id'],
-                    'master_product_id' => $masterProductId,
-                    'name' => $product['name'],
-                    'barcode' => null,
-                    'source_type' => SmProductSource::Manual->value,
-                    'description' => null,
-                    'price' => $product['price'],
-                    'discounted_price' => $product['discounted_price'],
-                    'stock_quantity' => $product['stock_quantity'],
-                    'low_stock_threshold' => 10,
-                    'expires_at' => null,
-                    'is_available' => $product['is_available'],
-                    'updated_at' => now(),
-                    'created_at' => now(),
-                ]
-            );
+        if ($stores->isEmpty()) {
+            return;
         }
 
-        $this->seedProductImages(array_column($products, 'id'));
+        $categoriesByStore = SmCategory::query()
+            ->whereIn('store_id', $stores->pluck('id'))
+            ->get()
+            ->groupBy('store_id');
+
+        $masterProductIds = DB::table('master_products')->pluck('id')->all();
+        $masterCount = count($masterProductIds);
+        $masterCursor = 0;
+
+        $seededProductIds = [];
+        $storeBlueprints = $this->productBlueprints();
+
+        foreach ($storeBlueprints as $storeSlug => $categoryBlueprints) {
+            $store = $stores->get($storeSlug);
+            if ($store === null) {
+                continue;
+            }
+
+            $categoryMap = $categoriesByStore->get($store->id)?->keyBy('slug');
+            if ($categoryMap === null) {
+                continue;
+            }
+
+            $barcodeCounter = 1;
+
+            foreach ($categoryBlueprints as $categorySlug => $products) {
+                $category = $categoryMap->get($categorySlug);
+                if ($category === null) {
+                    continue;
+                }
+
+                foreach ($products as $productData) {
+                    $masterProductId = $masterCount > 0
+                        ? $masterProductIds[$masterCursor % $masterCount]
+                        : null;
+                    $masterCursor++;
+
+                    $expiresInDays = $productData['expires_in_days'] ?? null;
+                    $expiresAt = is_numeric($expiresInDays)
+                        ? now()->addDays((int) $expiresInDays)
+                        : null;
+
+                    $product = SmProduct::query()->updateOrCreate(
+                        [
+                            'store_id' => $store->id,
+                            'name' => (string) $productData['name'],
+                        ],
+                        [
+                            'category_id' => $category->id,
+                            'master_product_id' => $masterProductId,
+                            'barcode' => sprintf('SM-%d-%04d', $store->id, $barcodeCounter),
+                            'source_type' => SmProductSource::Manual->value,
+                            'description' => $productData['description'] ?? null,
+                            'price' => $productData['price'],
+                            'discounted_price' => $productData['discounted_price'] ?? null,
+                            'stock_quantity' => $productData['stock_quantity'],
+                            'low_stock_threshold' => $productData['low_stock_threshold'] ?? 10,
+                            'expires_at' => $expiresAt,
+                            'is_available' => $productData['is_available'] ?? true,
+                        ]
+                    );
+
+                    $seededProductIds[] = $product->id;
+                    $barcodeCounter++;
+                }
+            }
+        }
+
+        if ($seededProductIds !== []) {
+            $this->seedProductImages(array_values(array_unique($seededProductIds)));
+        }
+    }
+
+    /**
+     * @return array<string, array<string, array<int, array<string, mixed>>>>
+     */
+    private function productBlueprints(): array
+    {
+        return [
+            'supermarket-al-atrash' => [
+                'bakery' => [
+                    ['name' => 'خبز عربي أبيض', 'price' => 2.5, 'stock_quantity' => 240],
+                    ['name' => 'خبز قمح كامل', 'price' => 3.0, 'stock_quantity' => 160],
+                    ['name' => 'كرواسون زبدة', 'price' => 4.5, 'stock_quantity' => 90, 'discounted_price' => 4.0],
+                    ['name' => 'توست حبوب 600غ', 'price' => 7.5, 'stock_quantity' => 70],
+                    ['name' => 'مناقيش زعتر مجمدة', 'price' => 11.0, 'stock_quantity' => 45],
+                ],
+                'canned' => [
+                    ['name' => 'حمص معلب 400غ', 'price' => 5.0, 'stock_quantity' => 130],
+                    ['name' => 'فول مدمس 400غ', 'price' => 4.5, 'stock_quantity' => 120],
+                    ['name' => 'ذرة حلوة 340غ', 'price' => 6.0, 'stock_quantity' => 110],
+                    ['name' => 'تونة قطع خفيفة 185غ', 'price' => 9.0, 'stock_quantity' => 75, 'discounted_price' => 8.0],
+                    ['name' => 'صلصة طماطم 680غ', 'price' => 6.5, 'stock_quantity' => 100],
+                ],
+                'cleaning' => [
+                    ['name' => 'منظف أرضيات ليمون 2 لتر', 'price' => 14.0, 'stock_quantity' => 60],
+                    ['name' => 'منظف زجاج 750مل', 'price' => 8.5, 'stock_quantity' => 75],
+                    ['name' => 'سائل جلي 1 لتر', 'price' => 9.0, 'stock_quantity' => 95],
+                    ['name' => 'كلور معطر 2 لتر', 'price' => 10.0, 'stock_quantity' => 55],
+                    ['name' => 'أكياس قمامة كبيرة 50 حبة', 'price' => 12.0, 'stock_quantity' => 40, 'low_stock_threshold' => 12],
+                ],
+                'dairy' => [
+                    ['name' => 'حليب كامل الدسم 1 لتر', 'price' => 6.0, 'stock_quantity' => 180, 'expires_in_days' => 8],
+                    ['name' => 'لبن زبادي 500غ', 'price' => 5.5, 'stock_quantity' => 160, 'expires_in_days' => 6],
+                    ['name' => 'جبنة بيضاء 500غ', 'price' => 12.0, 'stock_quantity' => 95, 'expires_in_days' => 10],
+                    ['name' => 'لبنة كاملة 400غ', 'price' => 9.5, 'stock_quantity' => 85, 'expires_in_days' => 7],
+                    ['name' => 'زبدة طبيعية 200غ', 'price' => 7.5, 'stock_quantity' => 50, 'is_available' => false],
+                ],
+                'snacks' => [
+                    ['name' => 'رقائق بطاطا ملح 160غ', 'price' => 6.5, 'stock_quantity' => 120],
+                    ['name' => 'بسكويت شاي 12 قطعة', 'price' => 4.0, 'stock_quantity' => 150],
+                    ['name' => 'شوكولاتة داكنة 90غ', 'price' => 8.0, 'stock_quantity' => 80],
+                    ['name' => 'مكسرات مشكلة 250غ', 'price' => 18.0, 'stock_quantity' => 35, 'low_stock_threshold' => 10],
+                    ['name' => 'عصير برتقال 1 لتر', 'price' => 7.0, 'stock_quantity' => 95, 'discounted_price' => 6.0],
+                ],
+            ],
+            'supermarket-al-sultan' => [
+                'vegetables' => [
+                    ['name' => 'طماطم طازجة 1 كغ', 'price' => 4.5, 'stock_quantity' => 220],
+                    ['name' => 'خيار بلدي 1 كغ', 'price' => 4.0, 'stock_quantity' => 180],
+                    ['name' => 'بطاطا 2 كغ', 'price' => 6.0, 'stock_quantity' => 200],
+                    ['name' => 'جزر طازج 1 كغ', 'price' => 5.0, 'stock_quantity' => 120],
+                    ['name' => 'خس روماني', 'price' => 3.5, 'stock_quantity' => 90],
+                    ['name' => 'بصل يابس 1 كغ', 'price' => 4.5, 'stock_quantity' => 145],
+                ],
+                'fruits' => [
+                    ['name' => 'تفاح أحمر 1 كغ', 'price' => 8.5, 'stock_quantity' => 160],
+                    ['name' => 'موز مستورد 1 كغ', 'price' => 7.5, 'stock_quantity' => 150],
+                    ['name' => 'برتقال عصير 1 كغ', 'price' => 6.5, 'stock_quantity' => 140],
+                    ['name' => 'عنب أخضر 1 كغ', 'price' => 11.0, 'stock_quantity' => 85, 'discounted_price' => 9.5],
+                    ['name' => 'فراولة 500غ', 'price' => 9.0, 'stock_quantity' => 65, 'low_stock_threshold' => 15],
+                ],
+                'dairy' => [
+                    ['name' => 'حليب قليل الدسم 1 لتر', 'price' => 6.0, 'stock_quantity' => 130, 'expires_in_days' => 8],
+                    ['name' => 'لبن رائب 1 لتر', 'price' => 6.5, 'stock_quantity' => 120, 'expires_in_days' => 6],
+                    ['name' => 'جبنة موزاريلا 200غ', 'price' => 12.5, 'stock_quantity' => 70, 'expires_in_days' => 12],
+                    ['name' => 'جبنة شيدر شرائح 180غ', 'price' => 10.5, 'stock_quantity' => 75, 'expires_in_days' => 14],
+                    ['name' => 'قشطة طبخ 250مل', 'price' => 8.0, 'stock_quantity' => 60, 'is_available' => false],
+                ],
+                'cleaning' => [
+                    ['name' => 'مسحوق غسيل ملابس 3 كغ', 'price' => 24.0, 'stock_quantity' => 55],
+                    ['name' => 'مطهر متعدد الاستخدام 1 لتر', 'price' => 11.0, 'stock_quantity' => 80],
+                    ['name' => 'مناديل مبللة مطهرة 80 قطعة', 'price' => 9.5, 'stock_quantity' => 95],
+                    ['name' => 'صابون يدين رغوي 500مل', 'price' => 7.5, 'stock_quantity' => 100],
+                    ['name' => 'فوط تنظيف ميكروفايبر', 'price' => 13.0, 'stock_quantity' => 40],
+                ],
+                'household' => [
+                    ['name' => 'ورق ألمنيوم 30 متر', 'price' => 8.0, 'stock_quantity' => 100],
+                    ['name' => 'أكواب ورقية 50 حبة', 'price' => 7.0, 'stock_quantity' => 85],
+                    ['name' => 'أطباق بلاستيك 25 حبة', 'price' => 6.5, 'stock_quantity' => 92],
+                    ['name' => 'إسفنج مطبخ 6 قطع', 'price' => 5.0, 'stock_quantity' => 110],
+                    ['name' => 'قماش مائدة للاستعمال مرة', 'price' => 4.5, 'stock_quantity' => 70, 'discounted_price' => 4.0],
+                ],
+            ],
+            'supermarket-al-noor' => [
+                'canned' => [
+                    ['name' => 'فاصولياء حمراء 400غ', 'price' => 5.5, 'stock_quantity' => 95],
+                    ['name' => 'عدس معلب 400غ', 'price' => 5.0, 'stock_quantity' => 90],
+                    ['name' => 'بازلاء مع جزر 340غ', 'price' => 6.0, 'stock_quantity' => 85],
+                    ['name' => 'ذرة معلبة 340غ', 'price' => 6.0, 'stock_quantity' => 78],
+                    ['name' => 'صلصة بيتزا 400غ', 'price' => 7.0, 'stock_quantity' => 72],
+                ],
+                'cleaning' => [
+                    ['name' => 'منظف حمام 900مل', 'price' => 10.0, 'stock_quantity' => 68],
+                    ['name' => 'سائل تعقيم أسطح 750مل', 'price' => 9.0, 'stock_quantity' => 74],
+                    ['name' => 'فوط مطبخ رول مزدوج', 'price' => 12.0, 'stock_quantity' => 58],
+                    ['name' => 'أكياس طعام صغيرة 100 حبة', 'price' => 6.0, 'stock_quantity' => 120],
+                    ['name' => 'معطر جو 300مل', 'price' => 8.5, 'stock_quantity' => 66],
+                ],
+                'dairy' => [
+                    ['name' => 'حليب خالي الدسم 1 لتر', 'price' => 6.0, 'stock_quantity' => 110, 'expires_in_days' => 7],
+                    ['name' => 'لبن يوناني 170غ', 'price' => 4.0, 'stock_quantity' => 95, 'expires_in_days' => 5],
+                    ['name' => 'جبنة قشقوان 300غ', 'price' => 14.0, 'stock_quantity' => 48, 'expires_in_days' => 11],
+                    ['name' => 'لبنة قليلة الدسم 400غ', 'price' => 9.0, 'stock_quantity' => 60, 'expires_in_days' => 6],
+                    ['name' => 'حليب شوكولاتة 250مل', 'price' => 3.5, 'stock_quantity' => 130, 'expires_in_days' => 9],
+                ],
+                'snacks' => [
+                    ['name' => 'بسكويت دايجستف 250غ', 'price' => 5.0, 'stock_quantity' => 115],
+                    ['name' => 'لوح شوكولاتة بالحليب 90غ', 'price' => 6.0, 'stock_quantity' => 105],
+                    ['name' => 'فشار جاهز 80غ', 'price' => 4.0, 'stock_quantity' => 125],
+                    ['name' => 'عصير تفاح 1 لتر', 'price' => 7.0, 'stock_quantity' => 88],
+                    ['name' => 'مياه معدنية 1.5 لتر', 'price' => 1.5, 'stock_quantity' => 260],
+                ],
+            ],
+        ];
     }
 
     /**

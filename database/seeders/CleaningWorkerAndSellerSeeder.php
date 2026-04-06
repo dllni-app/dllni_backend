@@ -13,6 +13,10 @@ use App\Models\WorkerZone;
 use Database\Seeders\Support\SeederMedia;
 use Illuminate\Database\Seeder;
 use Modules\Resturants\Enums\PriceRange;
+use Modules\Resturants\Models\Category;
+use Modules\Resturants\Models\CuisineType;
+use Modules\Resturants\Models\OperatingHour;
+use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
 use Modules\Supermarket\Models\SmStore;
 
@@ -149,10 +153,11 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
             return;
         }
 
-        Restaurant::create([
+        $slug = 'seller-restaurant-'.mb_substr(hash('sha256', (string) $user->id), 0, 8);
+        $restaurant = Restaurant::create([
             'user_id' => $user->id,
             'name' => 'Seller Restaurant',
-            'slug' => 'seller-restaurant-' . mb_substr(hash('sha256', (string) $user->id), 0, 8),
+            'slug' => $slug,
             'description' => 'Restaurant owned by seller user for API testing.',
             'address' => '456 Seller Ave',
             'latitude' => 31.965,
@@ -169,6 +174,112 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
             'is_active' => true,
             'is_featured' => false,
         ]);
+
+        // Add operating hours
+        $days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+        foreach ($days as $day) {
+            OperatingHour::updateOrCreate(
+                ['restaurant_id' => $restaurant->id, 'day_of_week' => $day],
+                [
+                    'open_time' => '10:00',
+                    'close_time' => '23:00',
+                    'is_closed' => false,
+                ]
+            );
+        }
+
+        // Ensure cuisine types exist
+        $cuisineTypes = [
+            ['name' => 'Italian', 'slug' => 'italian'],
+            ['name' => 'Mediterranean', 'slug' => 'mediterranean'],
+        ];
+
+        $cuisineIds = [];
+        foreach ($cuisineTypes as $type) {
+            $cuisine = CuisineType::firstOrCreate(
+                ['slug' => $type['slug']],
+                ['name' => $type['name']]
+            );
+            $cuisineIds[] = $cuisine->id;
+        }
+
+        // Attach cuisine types to restaurant
+        if ($cuisineIds) {
+            $restaurant->cuisineTypes()->sync($cuisineIds);
+        }
+
+        // Add categories and products
+        $categories = [
+            [
+                'name' => 'Main Courses',
+                'products' => [
+                    ['name' => 'Grilled Chicken', 'price' => 12.99],
+                    ['name' => 'Beef Steak', 'price' => 15.99],
+                    ['name' => 'Pasta Carbonara', 'price' => 11.99],
+                ],
+            ],
+            [
+                'name' => 'Appetizers',
+                'products' => [
+                    ['name' => 'Caesar Salad', 'price' => 8.99],
+                    ['name' => 'Garlic Bread', 'price' => 5.99],
+                    ['name' => 'Calamari', 'price' => 9.99],
+                ],
+            ],
+            [
+                'name' => 'Desserts',
+                'products' => [
+                    ['name' => 'Chocolate Cake', 'price' => 7.99],
+                    ['name' => 'Tiramisu', 'price' => 8.99],
+                    ['name' => 'Ice Cream', 'price' => 5.50],
+                ],
+            ],
+        ];
+
+        foreach ($categories as $i => $catData) {
+            $category = Category::firstOrCreate(
+                ['restaurant_id' => $restaurant->id, 'name' => $catData['name']],
+                [
+                    'slug' => str()->slug($catData['name']),
+                    'sort_order' => $i + 1,
+                ]
+            );
+
+            foreach ($catData['products'] as $j => $productData) {
+                $product = Product::firstOrCreate(
+                    [
+                        'restaurant_id' => $restaurant->id,
+                        'category_id' => $category->id,
+                        'name' => $productData['name'],
+                    ],
+                    [
+                        'description' => "{$productData['name']} - Special restaurant item",
+                        'price' => $productData['price'],
+                        'is_available' => true,
+                        'stock_quantity' => 50,
+                        'low_stock_threshold' => 5,
+                        'preparation_time' => 15,
+                        'is_featured' => $j === 0,
+                    ]
+                );
+
+                // Add product image
+                SeederMedia::ensureSingleMedia(
+                    $product,
+                    'primary-image',
+                    "https://picsum.photos/seed/restaurant-{$slug}-product-{$product->id}/600/600",
+                    "restaurant-{$slug}-product-{$product->id}"
+                );
+            }
+        }
+
+        // Add restaurant primary image
+        SeederMedia::ensureSingleMedia(
+            $restaurant,
+            'primary-image',
+            "https://picsum.photos/seed/restaurant-{$slug}/800/600",
+            "restaurant-{$slug}"
+        );
     }
 
     private function seedSupermarketSellerUser(): void
@@ -196,7 +307,7 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
         SmStore::create([
             'owner_user_id' => $user->id,
             'name' => 'Seller Supermarket',
-            'slug' => 'seller-supermarket-' . mb_substr(hash('sha256', (string) $user->id), 0, 8),
+            'slug' => 'seller-supermarket-'.mb_substr(hash('sha256', (string) $user->id), 0, 8),
             'description' => 'Supermarket owned by seller user for API testing.',
             'address' => '789 Store St',
             'latitude' => 31.97,

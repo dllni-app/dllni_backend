@@ -17,12 +17,14 @@ final class UserRestaurantProductOfferResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'name' => $this->name,
             'discountType' => $this->discount_type?->value ?? $this->discount_type,
             'discountValue' => $this->discount_value ? (float) $this->discount_value : null,
             'badgeText' => $this->listingBadgeText(),
             'startsAt' => $this->starts_at?->toDateTimeString(),
             'endsAt' => $this->ends_at?->toDateTimeString(),
             'urgencyTag' => $this->listingUrgencyTag()?->value,
+            'isActive' => $this->is_active,
         ];
     }
 }

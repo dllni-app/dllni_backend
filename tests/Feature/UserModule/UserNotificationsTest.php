@@ -65,6 +65,30 @@ it('filters notifications to unread only', function (): void {
     expect($response->json('data.0.title'))->toBe('Unread A');
 });
 
+it('marks a notification as read', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $databaseType = 'Illuminate\\Notifications\\DatabaseNotification';
+
+    $notification = $user->notifications()->create([
+        'id' => (string) Str::uuid(),
+        'type' => $databaseType,
+        'data' => ['title' => 'Unread A', 'body' => ''],
+        'read_at' => null,
+    ]);
+
+    $this->patchJson("/api/v1/user/notifications/{$notification->id}/read")
+        ->assertNoContent();
+
+    expect($notification->fresh()->read_at)->not->toBeNull();
+});
+
+it('requires authentication to mark a notification as read', function (): void {
+    $this->patchJson('/api/v1/user/notifications/'.Str::uuid().'/read')
+        ->assertUnauthorized();
+});
+
 it('requires authentication', function (): void {
     $this->getJson('/api/v1/user/notifications')->assertUnauthorized();
 });

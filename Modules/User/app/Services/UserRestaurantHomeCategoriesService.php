@@ -16,6 +16,12 @@ final class UserRestaurantHomeCategoriesService
     {
         return CuisineType::query()
             ->whereHas('restaurants', fn ($q) => $q->where('is_active', true))
+            ->with([
+                'restaurants' => fn ($q) => $q
+                    ->where('is_active', true)
+                    ->with('media')
+                    ->orderBy('restaurants.id'),
+            ])
             ->orderBy('name')
             ->get();
     }

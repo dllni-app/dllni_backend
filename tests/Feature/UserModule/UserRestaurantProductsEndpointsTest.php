@@ -152,15 +152,19 @@ describe('Products with Active Offers Endpoint', function (): void {
         $response->assertOk();
         expect($response->json('data.0.activeOffers.0'))->toHaveKeys([
             'id',
+            'name',
             'discountType',
             'discountValue',
             'badgeText',
             'startsAt',
             'endsAt',
             'urgencyTag',
+            'isActive',
         ]);
         expect((float) $response->json('data.0.activeOffers.0.discountValue'))->toBe(20.0);
         expect($response->json('data.0.activeOffers.0.badgeText'))->toBe('20%');
+        expect($response->json('data.0.activeOffers.0.name'))->toBe($offer->name);
+        expect($response->json('data.0.activeOffers.0.isActive'))->toBeTrue();
     });
 
     it('marks products as favorite for authenticated users', function (): void {

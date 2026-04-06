@@ -15,6 +15,7 @@ final class UserRestaurantProductsWithOffersService
     ): LengthAwarePaginator {
         $query = Product::query()
             ->where('is_available', true)
+            ->whereHas('restaurant', fn ($query) => $query->where('is_active', true))
             ->with([
                 'offers' => function ($query) {
                     $query->where('is_active', true)
@@ -25,6 +26,7 @@ final class UserRestaurantProductsWithOffersService
                 },
                 'restaurant' => fn ($q) => $q->select(['id', 'name', 'city', 'district']),
                 'category' => fn ($q) => $q->select(['id', 'name']),
+                'media',
             ])
             ->whereHas('offers', function ($query) {
                 $query->where('is_active', true)

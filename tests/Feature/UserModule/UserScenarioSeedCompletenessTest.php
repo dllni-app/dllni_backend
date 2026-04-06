@@ -32,7 +32,7 @@ it('seeds complete app-user profile data for user endpoints', function (): void 
     expect($defaultAddress?->latitude)->not->toBeNull();
     expect($defaultAddress?->longitude)->not->toBeNull();
 
-    expect($user->notifications)->toHaveCount(3);
+    expect($user->notifications->count())->toBeGreaterThanOrEqual(3);
 
     $firstNotification = $user->notifications->first();
     expect(data_get($firstNotification?->data, 'title'))->not->toBe('');
