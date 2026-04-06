@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Http\UploadedFile;
 use Modules\Resturants\Models\Category;
 use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
@@ -60,7 +61,7 @@ it('returns product with multiple product images', function (): void {
 
     // Add multiple images
     for ($i = 1; $i <= 3; $i++) {
-        $product->addMedia(base64_encode('test'))
+        $product->addMedia(UploadedFile::fake()->image("product-{$i}.jpg", 100, 100))
             ->usingFileName("test-{$i}.jpg")
             ->toMediaCollection('images');
     }
