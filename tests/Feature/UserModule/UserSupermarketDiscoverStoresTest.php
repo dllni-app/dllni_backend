@@ -2,8 +2,12 @@
 
 declare(strict_types=1);
 
+use App\Models\User;
 use Carbon\CarbonImmutable;
+use Database\Factories\SmOfferFactory;
 use Illuminate\Support\Facades\DB;
+use Laravel\Sanctum\Sanctum;
+use Modules\Resturants\Models\Favorite;
 use Modules\Supermarket\Models\SmStore;
 use Modules\Supermarket\Models\SmStoreHours;
 
@@ -117,4 +121,44 @@ it('filters supermarket stores by openNow', function (): void {
     } finally {
         CarbonImmutable::setTestNow();
     }
+});
+
+it('includes isFavorited and highestOfferDiscountValue in store browse response', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $store = SmStore::factory()->create([
+        'name' => 'Favorited Store',
+        'is_active' => true,
+    ]);
+
+    Favorite::create([
+        'user_id' => $user->id,
+        'favorable_type' => SmStore::class,
+        'favorable_id' => $store->id,
+    ]);
+
+    SmOfferFactory::new()->create([
+        'store_id' => $store->id,
+        'is_active' => true,
+        'discount_value' => 5,
+        'ends_at' => now()->addDay(),
+    ]);
+
+    SmOfferFactory::new()->create([
+        'store_id' => $store->id,
+        'is_active' => true,
+        'discount_value' => 25,
+        'ends_at' => now()->addDay(),
+    ]);
+
+    $response = $this->withHeader('Authorization', "Bearer {$user->createToken('test')->plainTextToken}")
+        ->getJson('/api/v1/user/supermarket/stores');
+
+    $response->assertOk();
+    $row = collect($response->json('data'))->firstWhere('id', $store->id);
+
+    expect($row)->not->toBeNull();
+    expect($row['isFavorited'])->toBeTrue();
+    expect((float) $row['highestOfferDiscountValue'])->toBe(25.0);
 });

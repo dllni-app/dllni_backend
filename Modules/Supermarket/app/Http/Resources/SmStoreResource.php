@@ -19,6 +19,9 @@ final class SmStoreResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $attributes = $this->getAttributes();
+        $highestOffer = $this->relationLoaded('highestDiscountOffer') ? $this->highestDiscountOffer : null;
+
         return [
             'id' => $this->id,
             'ownerUserId' => $this->owner_user_id,
@@ -41,10 +44,15 @@ final class SmStoreResource extends JsonResource
             'warningCount' => $this->warning_count,
             'isActive' => $this->is_active,
             'isFeatured' => $this->is_featured,
+            'isFavorited' => (bool) ($attributes['isFavoritedByUser'] ?? false),
             'suspensionUntil' => $this->suspension_until?->toDateTimeString(),
             'distanceKm' => array_key_exists('distanceKm', $this->getAttributes())
                 ? round((float) $this->distanceKm, 2)
                 : null,
+            'highestOfferDiscountValue' => $highestOffer?->discount_value !== null
+                ? (float) $highestOffer->discount_value
+                : null,
+            'highestOffer' => $highestOffer !== null ? SmOfferResource::make($highestOffer) : null,
             'storeHours' => SmStoreHoursResource::collection($this->whenLoaded('storeHours')),
             'documents' => SmStoreDocumentResource::collection($this->whenLoaded('documents')),
             'trustLogs' => SmStoreTrustLogResource::collection($this->whenLoaded('trustLogs')),

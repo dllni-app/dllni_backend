@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Modules\User\Http\Controllers\API;
 
+use App\Models\User;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Modules\Resturants\Models\Favorite;
 use Modules\Supermarket\Http\Resources\SmStoreResource;
 use Modules\Supermarket\Models\SmStore;
 use Modules\User\Http\Requests\DiscoverSupermarketStoresRequest;
@@ -18,7 +21,7 @@ final class SmStoresIndexController
 
         $query = SmStore::getQuery()
             ->where('is_active', true)
-            ->with('owner')
+            ->with('owner', 'highestDiscountOffer')
             ->where(fn ($q) => $q->whereNull('suspension_until')->orWhere('suspension_until', '<=', $now));
 
         $search = $request->validated('search');
@@ -34,8 +37,36 @@ final class SmStoresIndexController
         };
 
         $stores = $query->paginate($request->integer('perPage', 20));
+        $this->attachFavoriteFlags($stores->getCollection(), $request->user('sanctum'));
 
         return SmStoreResource::collection($stores);
+    }
+
+    /**
+     * @param  Collection<int, SmStore>  $stores
+     */
+    private function attachFavoriteFlags(Collection $stores, ?User $user): void
+    {
+        if ($stores->isEmpty()) {
+            return;
+        }
+
+        if ($user === null) {
+            $stores->each(fn (SmStore $store) => $store->setAttribute('isFavoritedByUser', false));
+
+            return;
+        }
+
+        $favoritedIds = Favorite::query()
+            ->where('user_id', $user->id)
+            ->where('favorable_type', SmStore::class)
+            ->whereIn('favorable_id', $stores->modelKeys())
+            ->pluck('favorable_id')
+            ->flip();
+
+        $stores->each(function (SmStore $store) use ($favoritedIds): void {
+            $store->setAttribute('isFavoritedByUser', $favoritedIds->has($store->id));
+        });
     }
 
     private function applyNearestSort($query, DiscoverSupermarketStoresRequest $request): void

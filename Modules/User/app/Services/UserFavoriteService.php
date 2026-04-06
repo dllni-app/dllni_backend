@@ -80,8 +80,13 @@ final class UserFavoriteService
                     ->where('favorites.user_id', '=', $user->id);
             })
             ->orderByDesc('favorites.created_at')
-            ->with('owner')
-            ->paginate($perPage);
+            ->with('owner', 'highestDiscountOffer')
+            ->paginate($perPage)
+            ->through(function (SmStore $store): SmStore {
+                $store->setAttribute('isFavoritedByUser', true);
+
+                return $store;
+            });
     }
 
     public function addProductFavorite(User $user, Product $product): Favorite

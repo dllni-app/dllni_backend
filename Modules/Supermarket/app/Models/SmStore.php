@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Modules\Resturants\Models\Favorite;
 use Modules\Supermarket\Traits\FilterQueries\SmStoreFilterQuery;
@@ -67,6 +68,18 @@ final class SmStore extends Model
     public function offers(): HasMany
     {
         return $this->hasMany(SmOffer::class, 'store_id');
+    }
+
+    public function highestDiscountOffer(): HasOne
+    {
+        return $this->hasOne(SmOffer::class, 'store_id')
+            ->ofMany(['discount_value' => 'max', 'id' => 'max'], static function ($query): void {
+                $query->where('is_active', true)
+                    ->where(static function ($q): void {
+                        $q->whereNull('ends_at')
+                            ->orWhere('ends_at', '>=', now());
+                    });
+            });
     }
 
     public function coupons(): HasMany

@@ -20,7 +20,8 @@ final class UserSupermarketStoreFavoriteStoreController
 
         $favorite = $favoriteService->addSupermarketStoreFavorite($request->user(), $store);
 
-        $store->load('owner');
+        $store->load('owner', 'highestDiscountOffer');
+        $store->setAttribute('isFavoritedByUser', true);
 
         return response()->json([
             'store' => SmStoreResource::make($store),

@@ -122,11 +122,24 @@ it('adds and lists supermarket store favorites', function (): void {
         'is_active' => true,
     ]);
 
+    SmOfferFactory::new()->create([
+        'store_id' => $store->id,
+        'is_active' => true,
+        'discount_value' => 40,
+        'ends_at' => now()->addDay(),
+    ]);
+
     $create = $this->postJson("/api/v1/user/favorites/supermarket/stores/{$store->id}");
-    $create->assertCreated()->assertJsonPath('store.id', $store->id);
+    $create->assertCreated()
+        ->assertJsonPath('store.id', $store->id)
+        ->assertJsonPath('store.isFavorited', true);
+    expect((float) $create->json('store.highestOfferDiscountValue'))->toBe(40.0);
 
     $again = $this->postJson("/api/v1/user/favorites/supermarket/stores/{$store->id}");
-    $again->assertOk()->assertJsonPath('store.id', $store->id);
+    $again->assertOk()
+        ->assertJsonPath('store.id', $store->id)
+        ->assertJsonPath('store.isFavorited', true);
+    expect((float) $again->json('store.highestOfferDiscountValue'))->toBe(40.0);
 
     expect(Favorite::query()->where('user_id', $user->id)->count())->toBe(1);
 
@@ -134,6 +147,8 @@ it('adds and lists supermarket store favorites', function (): void {
     $list->assertOk();
     expect($list->json('data'))->toHaveCount(1);
     expect($list->json('data.0.name'))->toBe('City Market');
+    expect($list->json('data.0.isFavorited'))->toBeTrue();
+    expect((float) $list->json('data.0.highestOfferDiscountValue'))->toBe(40.0);
 });
 
 it('rejects favoriting an inactive supermarket store', function (): void {
