@@ -205,3 +205,44 @@ it('includes isFavorited and highestOfferDiscountValue in store browse response'
     expect($row['isFavorited'])->toBeTrue();
     expect((float) $row['highestOfferDiscountValue'])->toBe(25.0);
 });
+
+it('shows a supermarket store by id', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $store = SmStore::factory()->create([
+        'name' => 'Detail Store',
+        'is_active' => true,
+    ]);
+
+    Favorite::create([
+        'user_id' => $user->id,
+        'favorable_type' => SmStore::class,
+        'favorable_id' => $store->id,
+    ]);
+
+    $offer = SmOfferFactory::new()->create([
+        'store_id' => $store->id,
+        'is_active' => true,
+        'discount_value' => 30,
+        'ends_at' => now()->addDay(),
+    ]);
+
+    $response = $this->getJson("/api/v1/user/supermarket/stores/{$store->id}");
+
+    $response->assertOk()
+        ->assertJsonPath('store.id', $store->id)
+        ->assertJsonPath('store.name', 'Detail Store')
+        ->assertJsonPath('store.isFavorited', true)
+        ->assertJsonPath('store.highestOffer.id', $offer->id);
+
+    expect((float) $response->json('store.highestOfferDiscountValue'))->toBe(30.0);
+});
+
+it('does not show inactive supermarket stores', function (): void {
+    $store = SmStore::factory()->create([
+        'is_active' => false,
+    ]);
+
+    $this->getJson("/api/v1/user/supermarket/stores/{$store->id}")->assertNotFound();
+});

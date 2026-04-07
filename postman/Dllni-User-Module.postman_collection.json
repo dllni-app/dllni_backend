@@ -6464,6 +6464,74 @@
                             ]
                         },
                         {
+                            "name": "Search similar products (public)",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/products/{{productId}}/similar",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "user",
+                                        "supermarket",
+                                        "products",
+                                        "{{productId}}",
+                                        "similar"
+                                    ]
+                                },
+                                "description": "Returns products whose title/name matches the selected product title (similar products list).\n\n**Status**: `200 OK`\n\n**Path prop**: `productId`\n\n**Response**: paginated `SmProductResource` in `data[]` with links/meta. The selected product itself is excluded."
+                            },
+                            "response": [
+                                {
+                                    "name": "200 OK â€” similar products",
+                                    "originalRequest": {
+                                        "method": "GET",
+                                        "header": [
+                                            {
+                                                "key": "Accept",
+                                                "value": "application/json"
+                                            }
+                                        ],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/products/1/similar",
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "path": [
+                                                "api",
+                                                "v1",
+                                                "user",
+                                                "supermarket",
+                                                "products",
+                                                "1",
+                                                "similar"
+                                            ]
+                                        }
+                                    },
+                                    "status": "OK",
+                                    "code": 200,
+                                    "_postman_previewlanguage": "json",
+                                    "header": [
+                                        {
+                                            "key": "Content-Type",
+                                            "value": "application/json"
+                                        }
+                                    ],
+                                    "cookie": [],
+                                    "body": "{\n  \"data\": [\n    {\n      \"id\": 2,\n      \"name\": \"Fresh Milk 1L\",\n      \"barcode\": \"987654321\",\n      \"price\": \"8.50\",\n      \"stockQuantity\": 15,\n      \"isAvailable\": true\n    }\n  ],\n  \"links\": {\n    \"first\": \"http://Dllni.test/api/v1/user/supermarket/products/1/similar?page=1\",\n    \"last\": \"http://Dllni.test/api/v1/user/supermarket/products/1/similar?page=1\",\n    \"prev\": null,\n    \"next\": null\n  },\n  \"meta\": {\n    \"current_page\": 1,\n    \"from\": 1,\n    \"last_page\": 1,\n    \"per_page\": 20,\n    \"to\": 1,\n    \"total\": 1\n  }\n}"
+                                }
+                            ]
+                        },
+                        {
                             "name": "Luck Box - Options (public)",
                             "request": {
                                 "method": "GET",

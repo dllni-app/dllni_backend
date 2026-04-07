@@ -2,7 +2,13 @@
 
 declare(strict_types=1);
 
+use App\Models\User;
+use Database\Factories\SmCategoryFactory;
+use Database\Factories\SmOfferFactory;
+use Database\Factories\SmOfferProductFactory;
 use Database\Factories\SmProductFactory;
+use Laravel\Sanctum\Sanctum;
+use Modules\Resturants\Models\Favorite;
 use Modules\Supermarket\Models\SmStore;
 
 it('lists supermarket products with pagination', function (): void {
@@ -89,4 +95,103 @@ it('excludes products from unavailable inventory or inactive stores', function (
     expect($names)->toContain('Visible Product');
     expect($names)->not->toContain('Unavailable Product');
     expect($names)->not->toContain('Inactive Store Product');
+});
+
+it('shows a supermarket product by id', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $store = SmStore::factory()->create([
+        'is_active' => true,
+        'suspension_until' => null,
+    ]);
+
+    $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+    $product = SmProductFactory::new()->create([
+        'store_id' => $store->id,
+        'category_id' => $category->id,
+        'name' => 'Showcase Product',
+        'is_available' => true,
+    ]);
+
+    Favorite::create([
+        'user_id' => $user->id,
+        'favorable_type' => $product->getMorphClass(),
+        'favorable_id' => $product->id,
+    ]);
+
+    $offer = SmOfferFactory::new()->create([
+        'store_id' => $store->id,
+        'is_active' => true,
+        'discount_value' => 12,
+        'ends_at' => now()->addDay(),
+    ]);
+
+    SmOfferProductFactory::new()->create([
+        'offer_id' => $offer->id,
+        'product_id' => $product->id,
+    ]);
+
+    $response = $this->getJson("/api/v1/user/supermarket/products/{$product->id}");
+
+    $response->assertOk()
+        ->assertJsonPath('product.id', $product->id)
+        ->assertJsonPath('product.name', 'Showcase Product')
+        ->assertJsonPath('product.isFavorite', true)
+        ->assertJsonPath('product.offers.0.id', $offer->id);
+});
+
+it('does not show unavailable supermarket products', function (): void {
+    $store = SmStore::factory()->create([
+        'is_active' => true,
+        'suspension_until' => null,
+    ]);
+
+    $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+    $product = SmProductFactory::new()->create([
+        'store_id' => $store->id,
+        'category_id' => $category->id,
+        'is_available' => false,
+    ]);
+
+    $this->getJson("/api/v1/user/supermarket/products/{$product->id}")->assertNotFound();
+});
+
+it('returns similar products by the selected product title', function (): void {
+    $store = SmStore::factory()->create([
+        'is_active' => true,
+        'suspension_until' => null,
+    ]);
+
+    $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+
+    $selectedProduct = SmProductFactory::new()->create([
+        'store_id' => $store->id,
+        'category_id' => $category->id,
+        'name' => 'Fresh Milk',
+        'is_available' => true,
+    ]);
+
+    $matchingProduct = SmProductFactory::new()->create([
+        'store_id' => $store->id,
+        'category_id' => $category->id,
+        'name' => 'Fresh Milk 1L',
+        'is_available' => true,
+    ]);
+
+    SmProductFactory::new()->create([
+        'store_id' => $store->id,
+        'category_id' => $category->id,
+        'name' => 'Chocolate Drink',
+        'is_available' => true,
+    ]);
+
+    $response = $this->getJson("/api/v1/user/supermarket/products/{$selectedProduct->id}/similar");
+
+    $response->assertOk();
+    $names = collect($response->json('data'))->pluck('name')->all();
+
+    expect($names)->toContain('Fresh Milk 1L');
+    expect($names)->not->toContain('Fresh Milk');
+    expect($names)->not->toContain('Chocolate Drink');
 });

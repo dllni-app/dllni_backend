@@ -23,7 +23,10 @@ use Modules\User\Http\Controllers\API\SmHomeNearbyStoresController;
 use Modules\User\Http\Controllers\API\SmLuckBoxOptionsController;
 use Modules\User\Http\Controllers\API\SmLuckBoxSuggestController;
 use Modules\User\Http\Controllers\API\SmOrderStatusController;
+use Modules\User\Http\Controllers\API\SmProductShowController;
+use Modules\User\Http\Controllers\API\SmProductSimilarSearchController;
 use Modules\User\Http\Controllers\API\SmProductsSearchController;
+use Modules\User\Http\Controllers\API\SmStoreShowController;
 use Modules\User\Http\Controllers\API\SmStoresIndexController;
 use Modules\User\Http\Controllers\API\UserAccountPasswordController;
 use Modules\User\Http\Controllers\API\UserAccountShowController;
@@ -85,6 +88,9 @@ Route::prefix('v1/user')->group(function (): void {
 
     Route::get('supermarket/stores', SmStoresIndexController::class);
     Route::get('supermarket/products/search', SmProductsSearchController::class);
+    Route::get('supermarket/stores/{store}', SmStoreShowController::class);
+    Route::get('supermarket/products/{product}/similar', SmProductSimilarSearchController::class);
+    Route::get('supermarket/products/{product}', SmProductShowController::class);
 
     Route::get('supermarket/luck-box/options', SmLuckBoxOptionsController::class);
     Route::post('supermarket/luck-box/suggest', SmLuckBoxSuggestController::class);
