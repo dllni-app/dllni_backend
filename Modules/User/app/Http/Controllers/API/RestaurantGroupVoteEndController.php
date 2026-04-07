@@ -6,6 +6,7 @@ namespace Modules\User\Http\Controllers\API;
 
 use Illuminate\Http\JsonResponse;
 use Modules\Resturants\Models\RestaurantGroupVote;
+use Modules\User\Events\RestaurantGroupVoteUpdated;
 use Modules\User\Services\RestaurantGroupVoteService;
 
 final class RestaurantGroupVoteEndController
@@ -27,9 +28,14 @@ final class RestaurantGroupVoteEndController
 
         $model->refresh();
 
+        $payload = $this->service->publicPayload($model, $userId);
+
+        // Broadcast the vote update to all connected users
+        RestaurantGroupVoteUpdated::dispatch($model, $payload['vote']);
+
         return response()->json([
             'message' => 'Vote ended.',
-            'data' => $this->service->publicPayload($model, $userId),
+            'data' => $payload,
         ]);
     }
 }
