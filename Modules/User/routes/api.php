@@ -12,6 +12,7 @@ use Modules\User\Http\Controllers\API\RegisterController;
 use Modules\User\Http\Controllers\API\ResetPasswordConfirmController;
 use Modules\User\Http\Controllers\API\ResetPasswordController;
 use Modules\User\Http\Controllers\API\RestaurantCartAddItemController;
+use Modules\User\Http\Controllers\API\RestaurantCartProductsCountController;
 use Modules\User\Http\Controllers\API\RestaurantCheckoutController;
 use Modules\User\Http\Controllers\API\RestaurantGroupVoteCastBallotController;
 use Modules\User\Http\Controllers\API\RestaurantGroupVoteEndController;
@@ -153,6 +154,7 @@ Route::prefix('v1/user')->group(function (): void {
         Route::post('cleaning/orders/{order}/cancel', UserCleaningOrderCancelController::class);
 
         Route::post('restaurants/cart/items', RestaurantCartAddItemController::class);
+        Route::get('restaurants/cart/products-count', RestaurantCartProductsCountController::class);
         Route::post('restaurants/checkout', RestaurantCheckoutController::class);
         Route::get('restaurants/orders', UserRestaurantOrdersController::class);
         Route::get('restaurants/orders/{order}', UserRestaurantOrderShowController::class);
