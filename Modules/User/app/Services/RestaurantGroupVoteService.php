@@ -11,6 +11,7 @@ use Modules\Resturants\Models\CuisineType;
 use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\RestaurantGroupVote;
 use Modules\Resturants\Models\RestaurantGroupVoteBallot;
+use Modules\Resturants\Models\RestaurantGroupVoteInvite;
 use Modules\Resturants\Models\RestaurantGroupVoteOption;
 
 final class RestaurantGroupVoteService
@@ -112,6 +113,74 @@ final class RestaurantGroupVoteService
         });
     }
 
+    /**
+     * @param  list<int>  $userIds
+     * @return list<int>
+     */
+    public function inviteUsers(RestaurantGroupVote $vote, int $actorUserId, array $userIds): array
+    {
+        $this->finalizeIfExpired($vote);
+        $vote->refresh();
+
+        if ($vote->user_id !== $actorUserId) {
+            throw ValidationException::withMessages([
+                'vote' => ['Only the vote creator can invite users.'],
+            ]);
+        }
+
+        if ($vote->status !== RestaurantGroupVoteStatus::Active) {
+            throw ValidationException::withMessages([
+                'vote' => ['This vote is no longer active.'],
+            ]);
+        }
+
+        $filteredUserIds = collect($userIds)
+            ->map(fn(int $id): int => (int) $id)
+            ->unique()
+            ->reject(fn(int $id): bool => $id === $vote->user_id)
+            ->values()
+            ->all();
+
+        foreach ($filteredUserIds as $userId) {
+            RestaurantGroupVoteInvite::query()->firstOrCreate([
+                'vote_id' => $vote->id,
+                'user_id' => $userId,
+            ]);
+        }
+
+        return $filteredUserIds;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function activeVotesForUser(int $userId): array
+    {
+        $votes = RestaurantGroupVote::query()
+            ->where('status', RestaurantGroupVoteStatus::Active)
+            ->where(function ($query) use ($userId): void {
+                $query->where('user_id', $userId)
+                    ->orWhereHas('invites', fn($inviteQuery) => $inviteQuery->where('user_id', $userId));
+            })
+            ->orderBy('ends_at')
+            ->get();
+
+        $activePayloads = [];
+
+        foreach ($votes as $vote) {
+            $this->finalizeIfExpired($vote);
+            $vote->refresh();
+
+            if ($vote->status !== RestaurantGroupVoteStatus::Active) {
+                continue;
+            }
+
+            $activePayloads[] = $this->publicPayload($vote, $userId);
+        }
+
+        return $activePayloads;
+    }
+
     public function finalizeIfExpired(RestaurantGroupVote $vote): void
     {
         if ($vote->status !== RestaurantGroupVoteStatus::Active) {
@@ -134,7 +203,7 @@ final class RestaurantGroupVoteService
     {
         $this->finalizeIfExpired($vote);
         $vote->refresh();
-        $vote->load(['options.product', 'ballots.user', 'ballots.option', 'cuisineType', 'winningOption']);
+        $vote->load(['options.product', 'ballots.user', 'ballots.option', 'cuisineType', 'winningOption', 'invites.user']);
 
         $totalBallots = $vote->ballots->count();
         $countsByOption = $vote->ballots->groupBy('option_id')->map->count();
@@ -180,6 +249,17 @@ final class RestaurantGroupVoteService
             }
         }
 
+        $invitedUsersPayload = $vote->invites->sortBy('id')->values()->map(function (RestaurantGroupVoteInvite $invite): array {
+            return [
+                'userId' => $invite->user_id,
+                'name' => $invite->user->name,
+            ];
+        })->all();
+
+        $isInvited = $currentUserId !== null
+            ? $vote->invites->contains(fn(RestaurantGroupVoteInvite $invite): bool => $invite->user_id === $currentUserId)
+            : false;
+
         $secondsRemaining = 0;
         if ($vote->status === RestaurantGroupVoteStatus::Active) {
             $secondsRemaining = max(0, (int) ($vote->ends_at->getTimestamp() - now()->getTimestamp()));
@@ -201,10 +281,12 @@ final class RestaurantGroupVoteService
                 'secondsRemaining' => $secondsRemaining,
                 'creatorUserId' => $vote->user_id,
                 'isCreator' => $currentUserId !== null && $currentUserId === $vote->user_id,
+                'isInvited' => $isInvited,
                 'createdAt' => $vote->created_at->toIso8601String(),
             ],
             'options' => $optionsPayload,
             'voters' => $votersPayload,
+            'invitedUsers' => $invitedUsersPayload,
             'winner' => $winnerPayload,
         ];
     }
@@ -224,7 +306,7 @@ final class RestaurantGroupVoteService
             ->orderBy('name')
             ->limit(100)
             ->get(['id', 'name', 'slug'])
-            ->map(fn (CuisineType $row): array => [
+            ->map(fn(CuisineType $row): array => [
                 'id' => (int) $row->id,
                 'name' => (string) $row->name,
                 'slug' => (string) $row->slug,
@@ -240,16 +322,16 @@ final class RestaurantGroupVoteService
             ->whereHas('restaurant', function ($q): void {
                 $q->where('is_active', true)
                     ->where('is_temporarily_closed', false)
-                    ->where(fn ($qq) => $qq->whereNull('suspension_until')->orWhere('suspension_until', '<=', now()));
+                    ->where(fn($qq) => $qq->whereNull('suspension_until')->orWhere('suspension_until', '<=', now()));
             })
-            ->when($cuisineTypeId !== null, fn ($q) => $q->whereHas(
+            ->when($cuisineTypeId !== null, fn($q) => $q->whereHas(
                 'restaurant.cuisineTypes',
-                fn ($q) => $q->where('cuisine_types.id', $cuisineTypeId)
+                fn($q) => $q->where('cuisine_types.id', $cuisineTypeId)
             ))
-            ->when($escaped !== null, fn ($q) => $q->where(
-                fn ($q) => $q
-                    ->where('name', 'like', '%'.$escaped.'%')
-                    ->orWhere('description', 'like', '%'.$escaped.'%')
+            ->when($escaped !== null, fn($q) => $q->where(
+                fn($q) => $q
+                    ->where('name', 'like', '%' . $escaped . '%')
+                    ->orWhere('description', 'like', '%' . $escaped . '%')
             ))
             ->with(['restaurant:id,name'])
             ->orderByDesc('is_featured')
@@ -294,9 +376,9 @@ final class RestaurantGroupVoteService
 
         $max = $counts->max();
         $winnerId = $counts
-            ->filter(fn (int $c): bool => $c === $max)
+            ->filter(fn(int $c): bool => $c === $max)
             ->keys()
-            ->map(fn ($id) => (int) $id)
+            ->map(fn($id) => (int) $id)
             ->sort()
             ->first();
 

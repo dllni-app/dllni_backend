@@ -17,6 +17,9 @@ final class SmProductResource extends JsonResource
     public function toArray(Request $request): array
     {
         $attributes = $this->getAttributes();
+        $hasDiscount = $this->discounted_price !== null;
+        $finalPrice = $this->discounted_price ?? $this->price;
+        $originalPrice = $hasDiscount ? $this->price : null;
 
         return [
             'id' => $this->id,
@@ -31,17 +34,21 @@ final class SmProductResource extends JsonResource
             'description' => $this->description,
             'price' => $this->price,
             'discountedPrice' => $this->discounted_price,
+            'finalPrice' => $finalPrice,
+            'originalPrice' => $originalPrice,
+            'hasDiscount' => $hasDiscount,
             'isFavorite' => (bool) ($attributes['isFavoritedByUser'] ?? false),
             'offers' => $this->whenLoaded('offerProducts', function () {
                 return SmOfferResource::collection(
-                    $this->offerProducts->map(fn ($offerProduct) => $offerProduct->offer)->filter()
+                    $this->offerProducts->map(fn($offerProduct) => $offerProduct->offer)->filter()
                 );
             }),
-            'image' => MediaResource::make($this->whenLoaded('media', fn () => $this->getFirstMedia(SmProduct::IMAGE_COLLECTION))),
-            'imageUrl' => $this->whenLoaded('media', fn () => $this->getFirstMediaUrl(SmProduct::IMAGE_COLLECTION) ?: null),
-            'images' => $this->whenLoaded('media', fn () => MediaResource::collection($this->getMedia(SmProduct::IMAGE_COLLECTION))),
-            'imageUrls' => $this->whenLoaded('media', fn () => $this->getMedia(SmProduct::IMAGE_COLLECTION)
-                ->map(fn ($media): string => $media->getFullUrl())
+            'image' => MediaResource::make($this->whenLoaded('media', fn() => $this->getFirstMedia(SmProduct::IMAGE_COLLECTION))),
+            'imageUrl' => $this->whenLoaded('media', fn() => $this->getFirstMediaUrl(SmProduct::IMAGE_COLLECTION) ?: null),
+            'primaryImage' => $this->whenLoaded('media', fn() => $this->getFirstMediaUrl(SmProduct::IMAGE_COLLECTION) ?: null),
+            'images' => $this->whenLoaded('media', fn() => MediaResource::collection($this->getMedia(SmProduct::IMAGE_COLLECTION))),
+            'imageUrls' => $this->whenLoaded('media', fn() => $this->getMedia(SmProduct::IMAGE_COLLECTION)
+                ->map(fn($media): string => $media->getFullUrl())
                 ->values()
                 ->all()),
             'stockQuantity' => $this->stock_quantity,

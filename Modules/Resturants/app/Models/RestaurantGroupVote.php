@@ -47,6 +47,11 @@ final class RestaurantGroupVote extends Model
         return $this->hasMany(RestaurantGroupVoteBallot::class, 'vote_id');
     }
 
+    public function invites(): HasMany
+    {
+        return $this->hasMany(RestaurantGroupVoteInvite::class, 'vote_id');
+    }
+
     protected function casts(): array
     {
         return [

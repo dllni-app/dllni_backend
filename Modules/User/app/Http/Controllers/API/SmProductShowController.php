@@ -19,9 +19,9 @@ final class SmProductShowController
 
         $model = SmProduct::query()
             ->where('is_available', true)
-            ->whereHas('store', fn ($query) => $query
+            ->whereHas('store', fn($query) => $query
                 ->where('is_active', true)
-                ->where(fn ($storeQuery) => $storeQuery
+                ->where(fn($storeQuery) => $storeQuery
                     ->whereNull('suspension_until')
                     ->orWhere('suspension_until', '<=', $now)))
             ->with(['store', 'category', 'media', 'offerProducts.offer'])
@@ -40,8 +40,11 @@ final class SmProductShowController
             $model->setAttribute('isFavoritedByUser', false);
         }
 
+        $resource = SmProductResource::make($model);
+
         return response()->json([
-            'product' => SmProductResource::make($model),
+            'data' => $resource,
+            'product' => $resource,
         ]);
     }
 }

@@ -2,7 +2,7 @@
     "info": {
         "_postman_id": "3d8a6f0b-9f8f-4d42-8d8c-6d4c4c8b3a10",
         "name": "Dllni - User Module (Merged)",
-        "description": "## Base URL & prefix\n- Collection variable `{{baseUrl}}` defaults to `http://Dllni.test` (Herd/Laragon).\n- User API base path: `/api/v1/user` (routes file: `Modules/User/routes/api.php`).\n\n## Authentication\n- **Public**: register, login OTP steps, reset password, supermarket/restaurant discovery, **restaurant home** (categories, exclusive offers, suggested products, nearest restaurants), products, marketing offers, vote read, etc.\n- **Sanctum**: set `{{token}}` from verify/login/reset responses; send `Authorization: Bearer {{token}}` for `me`, `account`, `addresses`, **favorites** (restaurants + supermarket stores + supermarket products), `notifications`, cart, checkout, orders, **restaurants/home/latest-ordered-products**, supermarket **items CRUD**, supermarket order status, vote create/ballot/end, restaurants luck-box options/suggest.\n\n## Favorites +�G�Gǥ +�-�+�G�P+�GǪ+�-�+�-�+�G�P+�-� (authenticated)\nPolymorphic rows in `favorites` (`favorable_type` = `Restaurant` or `SmStore`). List order: **most recently favorited first** (`favorites.created_at` desc).\n\n| Path | Method | Notes |\n| --- | --- | --- |\n| `/api/v1/user/favorites/restaurants` | GET | Paginated `RestaurantResource`; query `perPage` (1+�G�Gǣ100, default 20), `page` |\n| `/api/v1/user/favorites/restaurants/{id}` | POST | No body. **201** first add, **200** if already favorited. Body: `{ \"restaurant\": +�G�-� }`. **422** if restaurant not active. |\n| `/api/v1/user/favorites/restaurants/{id}` | DELETE | **204** empty body (safe if not favorited). |\n| `/api/v1/user/favorites/supermarket/stores` | GET | Paginated `SmStoreResource`; `perPage`, `page` |\n| `/api/v1/user/favorites/supermarket/stores/{id}` | POST | **201** / **200**; `{ \"store\": +�G�-� }`. **422** if store inactive. |\n| `/api/v1/user/favorites/supermarket/stores/{id}` | DELETE | **204** |\n| `/api/v1/user/favorites/supermarket/products/{id}` | POST | **201** / **200**; `{ \"product\": +�G�-� }`. **422** if product unavailable or store inactive. |\n\n## Restaurant homepage (`GET /api/v1/user/restaurants/home/*`)\n| Route | Auth | Purpose |\n| --- | --- | --- |\n| `.../categories` | No | Cuisine types that have +�GǦ-�1 **active** restaurant |\n| `.../exclusive-offers` | No | Active offers on active restaurants; optional `latitude`, `longitude`, `limit` |\n| `.../suggested-products` | No | Featured / highly rated menu items; `limit` |\n| `.../nearest-restaurants` | No | Near-user list; optional `latitude`, `longitude`, `limit`; `isFavorited` true only with Bearer token |\n| `.../latest-ordered-products` | **Yes** | Distinct products from user+�G�G��s non-cancelled orders (reorder / +�-�+�-++�G�P+�-� +�GǪ+�-�+�-�+�-�+�-�+�GǦ); `limit` |\n\n**Distance**: Haversine runs on MySQL/Postgres, etc. **SQLite** (`phpunit`) does not compute `distanceKm` (values `null`).\n\n## Success status codes (typical)\n- `200` +�G�Gǥ OK (JSON body).\n- `201` +�G�Gǥ Created (addresses, cart item, checkout order, group vote, first-time favorite add for restaurant/store).\n- `204` +�G�Gǥ No content (delete address).\n- `404` +�G�Gǥ Not found (invalid id, inactive marketing offer, wrong user+�G�G��s resource).\n- `403` / `401` +�G�Gǥ Forbidden / Unauthenticated (missing or invalid token).\n- `422` +�G�Gǥ Validation errors: `{ \"message\": \"...\", \"errors\": { \"field\": [\"...\"] } }`.\n\n## Pagination (Laravel)\n- Paginated resources return `data` (array of items), `links` (`first`, `last`, `prev`, `next`), and `meta` (`current_page`, `from`, `last_page`, `path`, `per_page`, `to`, `total`, +�G�-�).\n- Query: `page`, `perPage` (camelCase in this API where FormRequest defines it).\n\n## Media in JSON (summary)\n- **Restaurant** `RestaurantResource`: `primaryImage`, `image`, `banner`, `images`.\n- **Restaurant product** `ProductResource`: `primaryImage`, `images`.\n- **User** `UserResource` (with `media` loaded): `primaryImage` / `images` as `MediaResource` objects (`url`, `thumbnailUrl`, +�G�-�).\n- **Marketing offers**: `imageUrl` (Spatie `card-image`) or `null`.\n- **Supermarket** `SmStoreResource`: `cover`, `logo`.\n- **Restaurant Luck Box** line items: `imageUrl`; bundle host object: `restaurant` with `primaryImageUrl`, `bannerImageUrl`.\n- **Supermarket order** items: product media via `SmProductResource` when loaded.\n\n## Flow overview\n### Register + verify\n1. `POST /register` +�G��G�� OTP sent.\n2. `POST /verify-account` +�G��G�� `user` + `token`.\n\n### Login (SMS OTP)\n1. `POST /login` +�G��G�� OTP sent.\n2. `POST /login/verify` +�G��G�� `user` + `token`.\n\n### Reset password\n1. `POST /reset-password` +�G��G�� generic message; `expiresAt` null if phone unknown.\n2. `POST /reset-password/confirm` +�G��G�� `message` + `token`.\n\n## Examples in this collection\nEach request includes a **saved example** (`Examples` in Postman) with a representative **200/201/204** JSON body. Adjust ids and tokens to your environment.\n\n## Notes\n- SMS/OTP is behind a provider interface.\n\n\n\n## Props Format (Request / Response Contract)\n- Path params: {id} in docs and {{id}} as Postman variables.\n- Query props: camelCase unless endpoint docs explicitly use snake_case.\n- Body props: required first, optional props marked and can be null when allowed.\n- Pagination shape: data, links, meta.\n- Validation errors (422): { \"message\": string, \"errors\": { \"field\": [string] } }.\n\n## Common Enums\n- orderType: delivery | pickup\n- pickupMode: immediate_pickup | scheduled_pickup\n- discover sort: rating | nearest | fastest\n- vote status: active | ended\n- luck-box label: best_value | fastest | balanced\n\n## What Endpoints Return\n- List endpoints: paginated data[] with links and meta (unless noted otherwise).\n- Show endpoints: single object (sometimes wrapped in data).\n- Create endpoints: 201 with created payload.\n- Update endpoints: 200 with updated payload.\n- Delete endpoints: 204 with empty body.",
+        "description": "## Base URL & prefix\n- Collection variable `{{baseUrl}}` defaults to `http://Dllni.test` (Herd/Laragon).\n- User API base path: `/api/v1/user` (routes file: `Modules/User/routes/api.php`).\n\n## Authentication\n- **Public**: register, login OTP steps, reset password, supermarket/restaurant discovery, **restaurant home** (categories, exclusive offers, suggested products, nearest restaurants), products, marketing offers, vote read, etc.\n- **Sanctum**: set `{{token}}` from verify/login/reset responses; send `Authorization: Bearer {{token}}` for `me`, `account`, `addresses`, **favorites** (restaurants + supermarket stores + supermarket products), `notifications`, cart, checkout, orders, **restaurants/home/latest-ordered-products**, supermarket **items CRUD**, supermarket order status, vote create/active/invite/ballot/end, restaurants luck-box options/suggest.\n\n## Favorites +�G�Gǥ +�-�+�G�P+�GǪ+�-�+�-�+�G�P+�-� (authenticated)\nPolymorphic rows in `favorites` (`favorable_type` = `Restaurant` or `SmStore`). List order: **most recently favorited first** (`favorites.created_at` desc).\n\n| Path | Method | Notes |\n| --- | --- | --- |\n| `/api/v1/user/favorites/restaurants` | GET | Paginated `RestaurantResource`; query `perPage` (1+�G�Gǣ100, default 20), `page` |\n| `/api/v1/user/favorites/restaurants/{id}` | POST | No body. **201** first add, **200** if already favorited. Body: `{ \"restaurant\": +�G�-� }`. **422** if restaurant not active. |\n| `/api/v1/user/favorites/restaurants/{id}` | DELETE | **204** empty body (safe if not favorited). |\n| `/api/v1/user/favorites/supermarket/stores` | GET | Paginated `SmStoreResource`; `perPage`, `page` |\n| `/api/v1/user/favorites/supermarket/stores/{id}` | POST | **201** / **200**; `{ \"store\": +�G�-� }`. **422** if store inactive. |\n| `/api/v1/user/favorites/supermarket/stores/{id}` | DELETE | **204** |\n| `/api/v1/user/favorites/supermarket/products/{id}` | POST | **201** / **200**; `{ \"product\": +�G�-� }`. **422** if product unavailable or store inactive. |\n\n## Restaurant homepage (`GET /api/v1/user/restaurants/home/*`)\n| Route | Auth | Purpose |\n| --- | --- | --- |\n| `.../categories` | No | Cuisine types that have +�GǦ-�1 **active** restaurant |\n| `.../exclusive-offers` | No | Active offers on active restaurants; optional `latitude`, `longitude`, `limit` |\n| `.../suggested-products` | No | Featured / highly rated menu items; `limit` |\n| `.../nearest-restaurants` | No | Near-user list; optional `latitude`, `longitude`, `limit`; `isFavorited` true only with Bearer token |\n| `.../latest-ordered-products` | **Yes** | Distinct products from user+�G�G��s non-cancelled orders (reorder / +�-�+�-++�G�P+�-� +�GǪ+�-�+�-�+�-�+�-�+�GǦ); `limit` |\n\n**Distance**: Haversine runs on MySQL/Postgres, etc. **SQLite** (`phpunit`) does not compute `distanceKm` (values `null`).\n\n## Success status codes (typical)\n- `200` +�G�Gǥ OK (JSON body).\n- `201` +�G�Gǥ Created (addresses, cart item, checkout order, group vote, first-time favorite add for restaurant/store).\n- `204` +�G�Gǥ No content (delete address).\n- `404` +�G�Gǥ Not found (invalid id, inactive marketing offer, wrong user+�G�G��s resource).\n- `403` / `401` +�G�Gǥ Forbidden / Unauthenticated (missing or invalid token).\n- `422` +�G�Gǥ Validation errors: `{ \"message\": \"...\", \"errors\": { \"field\": [\"...\"] } }`.\n\n## Pagination (Laravel)\n- Paginated resources return `data` (array of items), `links` (`first`, `last`, `prev`, `next`), and `meta` (`current_page`, `from`, `last_page`, `path`, `per_page`, `to`, `total`, +�G�-�).\n- Query: `page`, `perPage` (camelCase in this API where FormRequest defines it).\n\n## Media in JSON (summary)\n- **Restaurant** `RestaurantResource`: `primaryImage`, `image`, `banner`, `images`.\n- **Restaurant product** `ProductResource`: `primaryImage`, `images`.\n- **User** `UserResource` (with `media` loaded): `primaryImage` / `images` as `MediaResource` objects (`url`, `thumbnailUrl`, +�G�-�).\n- **Marketing offers**: `imageUrl` (Spatie `card-image`) or `null`.\n- **Supermarket** `SmStoreResource`: `cover`, `logo`.\n- **Restaurant Luck Box** line items: `imageUrl`; bundle host object: `restaurant` with `primaryImageUrl`, `bannerImageUrl`.\n- **Supermarket order** items: product media via `SmProductResource` when loaded.\n\n## Flow overview\n### Register + verify\n1. `POST /register` +�G��G�� OTP sent.\n2. `POST /verify-account` +�G��G�� `user` + `token`.\n\n### Login (SMS OTP)\n1. `POST /login` +�G��G�� OTP sent.\n2. `POST /login/verify` +�G��G�� `user` + `token`.\n\n### Reset password\n1. `POST /reset-password` +�G��G�� generic message; `expiresAt` null if phone unknown.\n2. `POST /reset-password/confirm` +�G��G�� `message` + `token`.\n\n## Examples in this collection\nEach request includes a **saved example** (`Examples` in Postman) with a representative **200/201/204** JSON body. Adjust ids and tokens to your environment.\n\n## Notes\n- SMS/OTP is behind a provider interface.\n\n\n\n## Props Format (Request / Response Contract)\n- Path params: {id} in docs and {{id}} as Postman variables.\n- Query props: camelCase unless endpoint docs explicitly use snake_case.\n- Body props: required first, optional props marked and can be null when allowed.\n- Pagination shape: data, links, meta.\n- Validation errors (422): { \"message\": string, \"errors\": { \"field\": [string] } }.\n\n## Common Enums\n- orderType: delivery | pickup\n- pickupMode: immediate_pickup | scheduled_pickup\n- discover sort: rating | nearest | fastest\n- vote status: active | ended\n- luck-box label: best_value | fastest | balanced\n\n## What Endpoints Return\n- List endpoints: paginated data[] with links and meta (unless noted otherwise).\n- Show endpoints: single object (sometimes wrapped in data).\n- Create endpoints: 201 with created payload.\n- Update endpoints: 200 with updated payload.\n- Delete endpoints: 204 with empty body.",
         "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
     },
     "variable": [
@@ -4281,7 +4281,7 @@
                                         "votes"
                                     ]
                                 },
-                                "description": "Create group vote (creator = auth user).\n\n**Status**: `201 Created` | `422`\n\n**Body**: `durationMinutes` +�-�-� presets; optional `foodCategoryHint`, `cuisineTypeId`; `options` 2+�G�Gǣ10 items `{ label, productId? }`.\n\n**Response**: `message`, `data` +�G�Gǥ same shape as **Show group vote** (`vote`, `options`, `voters`, `winner`)."
+                                "description": "Create group vote (creator = auth user).\n\n**Status**: `201 Created` | `422`\n\n**Body**: `durationMinutes` +�-�-� presets; optional `foodCategoryHint`, `cuisineTypeId`; `options` 2+�G�Gǣ10 items `{ label, productId? }`.\n\n**Response**: `message`, `data` +�G�Gǥ same shape as **Show group vote** (`vote`, `options`, `voters`, `invitedUsers`, `winner`). `vote` now includes `isInvited`."
                             },
                             "response": [
                                 {
@@ -4318,7 +4318,165 @@
                                         }
                                     ],
                                     "cookie": [],
-                                    "body": "{\n  \"message\": \"Vote created.\",\n  \"data\": {\n    \"vote\": {\n      \"id\": 1,\n      \"status\": \"active\",\n      \"foodCategoryHint\": \"burger\",\n      \"cuisineTypeId\": null,\n      \"cuisineType\": null,\n      \"durationMinutes\": 30,\n      \"endsAt\": \"2026-04-01T13:00:00+00:00\",\n      \"secondsRemaining\": 1800,\n      \"creatorUserId\": 5,\n      \"isCreator\": true,\n      \"createdAt\": \"2026-04-01T12:30:00+00:00\"\n    },\n    \"options\": [\n      {\"id\": 1, \"label\": \"Option A\", \"productId\": 10, \"voteCount\": 0, \"percent\": 0, \"unitPrice\": 5.5},\n      {\"id\": 2, \"label\": \"Option B\", \"productId\": null, \"voteCount\": 0, \"percent\": 0, \"unitPrice\": null}\n    ],\n    \"voters\": [],\n    \"winner\": null\n  }\n}"
+                                    "body": "{\n  \"message\": \"Vote created.\",\n  \"data\": {\n    \"vote\": {\n      \"id\": 1,\n      \"status\": \"active\",\n      \"foodCategoryHint\": \"burger\",\n      \"cuisineTypeId\": null,\n      \"cuisineType\": null,\n      \"durationMinutes\": 30,\n      \"endsAt\": \"2026-04-01T13:00:00+00:00\",\n      \"secondsRemaining\": 1800,\n      \"creatorUserId\": 5,\n      \"isCreator\": true,\n      \"isInvited\": false,\n      \"createdAt\": \"2026-04-01T12:30:00+00:00\"\n    },\n    \"options\": [\n      {\"id\": 1, \"label\": \"Option A\", \"productId\": 10, \"voteCount\": 0, \"percent\": 0, \"unitPrice\": 5.5},\n      {\"id\": 2, \"label\": \"Option B\", \"productId\": null, \"voteCount\": 0, \"percent\": 0, \"unitPrice\": null}\n    ],\n    \"voters\": [],\n    \"invitedUsers\": [],\n    \"winner\": null\n  }\n}"
+                                }
+                            ]
+                        },
+                        {
+                            "name": "List my active group votes (requires token)",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/v1/user/restaurants/votes/active",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "user",
+                                        "restaurants",
+                                        "votes",
+                                        "active"
+                                    ]
+                                },
+                                "description": "Returns active votes where the current user is creator or invited.\n\n**Status**: `200 OK` | `401`\n\n**Response**: `{ \"data\": [ { \"vote\", \"options\", \"voters\", \"invitedUsers\", \"winner\" } ] }`."
+                            },
+                            "response": [
+                                {
+                                    "name": "200 OK - my active votes",
+                                    "originalRequest": {
+                                        "method": "GET",
+                                        "header": [
+                                            {
+                                                "key": "Authorization",
+                                                "value": "Bearer {{token}}"
+                                            }
+                                        ],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/user/restaurants/votes/active",
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "path": [
+                                                "api",
+                                                "v1",
+                                                "user",
+                                                "restaurants",
+                                                "votes",
+                                                "active"
+                                            ]
+                                        }
+                                    },
+                                    "status": "OK",
+                                    "code": 200,
+                                    "_postman_previewlanguage": "json",
+                                    "header": [
+                                        {
+                                            "key": "Content-Type",
+                                            "value": "application/json"
+                                        }
+                                    ],
+                                    "cookie": [],
+                                    "body": "{\n  \"data\": [\n    {\n      \"vote\": {\n        \"id\": 1,\n        \"status\": \"active\",\n        \"isCreator\": false,\n        \"isInvited\": true,\n        \"secondsRemaining\": 900\n      },\n      \"options\": [],\n      \"voters\": [],\n      \"invitedUsers\": [\n        {\"userId\": 5, \"name\": \"Ahmed\"}\n      ],\n      \"winner\": null\n    }\n  ]\n}"
+                                }
+                            ]
+                        },
+                        {
+                            "name": "Invite users to group vote (requires token)",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{token}}"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"userIds\": [2, 3]\n}"
+                                },
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/v1/user/restaurants/votes/{{voteId}}/invite",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "user",
+                                        "restaurants",
+                                        "votes",
+                                        "{{voteId}}",
+                                        "invite"
+                                    ]
+                                },
+                                "description": "Invite users to join a vote (creator only).\n\n**Status**: `200 OK` | `401` | `422`\n\n**Body**: `{ \"userIds\": number[] }` (1..50 unique user ids).\n\n**Response**: `message`, `data.vote`, `data.invitedUserIds`."
+                            },
+                            "response": [
+                                {
+                                    "name": "200 OK - users invited",
+                                    "originalRequest": {
+                                        "method": "POST",
+                                        "header": [
+                                            {
+                                                "key": "Authorization",
+                                                "value": "Bearer {{token}}"
+                                            },
+                                            {
+                                                "key": "Content-Type",
+                                                "value": "application/json"
+                                            }
+                                        ],
+                                        "body": {
+                                            "mode": "raw",
+                                            "raw": "{\"userIds\":[2,3]}"
+                                        },
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/user/restaurants/votes/{{voteId}}/invite",
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "path": [
+                                                "api",
+                                                "v1",
+                                                "user",
+                                                "restaurants",
+                                                "votes",
+                                                "{{voteId}}",
+                                                "invite"
+                                            ]
+                                        }
+                                    },
+                                    "status": "OK",
+                                    "code": 200,
+                                    "_postman_previewlanguage": "json",
+                                    "header": [
+                                        {
+                                            "key": "Content-Type",
+                                            "value": "application/json"
+                                        }
+                                    ],
+                                    "cookie": [],
+                                    "body": "{\n  \"message\": \"Users invited.\",\n  \"data\": {\n    \"vote\": {\n      \"id\": 1,\n      \"status\": \"active\",\n      \"isCreator\": true,\n      \"isInvited\": false\n    },\n    \"invitedUserIds\": [2, 3]\n  }\n}"
                                 }
                             ]
                         },
@@ -4346,7 +4504,7 @@
                                         "{{voteId}}"
                                     ]
                                 },
-                                "description": "Public vote state (refreshed for live UI).\n\n**Status**: `200 OK` | `404`\n\n**Response**: `{ \"data\": { \"vote\", \"options\", \"voters\", \"winner\" } }` +�G�Gǥ see create-vote example; `winner` set when `status` is `ended`."
+                                "description": "Public vote state (refreshed for live UI).\n\n**Status**: `200 OK` | `404`\n\n**Response**: `{ \"data\": { \"vote\", \"options\", \"voters\", \"invitedUsers\", \"winner\" } }` +�G�Gǥ see create-vote example; `winner` set when `status` is `ended`."
                             },
                             "response": [
                                 {
@@ -4379,7 +4537,7 @@
                                         }
                                     ],
                                     "cookie": [],
-                                    "body": "{\n  \"data\": {\n    \"vote\": {\n      \"id\": 1,\n      \"status\": \"active\",\n      \"endsAt\": \"2026-04-01T13:00:00+00:00\",\n      \"secondsRemaining\": 1200,\n      \"isCreator\": false\n    },\n    \"options\": [\n      {\"id\": 1, \"label\": \"Option A\", \"productId\": 10, \"voteCount\": 2, \"percent\": 66.7, \"unitPrice\": 5.5},\n      {\"id\": 2, \"label\": \"Option B\", \"productId\": null, \"voteCount\": 1, \"percent\": 33.3, \"unitPrice\": null}\n    ],\n    \"voters\": [\n      {\"userId\": 5, \"name\": \"Ahmed\", \"optionId\": 1, \"optionLabel\": \"Option A\"}\n    ],\n    \"winner\": null\n  }\n}"
+                                    "body": "{\n  \"data\": {\n    \"vote\": {\n      \"id\": 1,\n      \"status\": \"active\",\n      \"endsAt\": \"2026-04-01T13:00:00+00:00\",\n      \"secondsRemaining\": 1200,\n      \"isCreator\": false,\n      \"isInvited\": true\n    },\n    \"options\": [\n      {\"id\": 1, \"label\": \"Option A\", \"productId\": 10, \"voteCount\": 2, \"percent\": 66.7, \"unitPrice\": 5.5},\n      {\"id\": 2, \"label\": \"Option B\", \"productId\": null, \"voteCount\": 1, \"percent\": 33.3, \"unitPrice\": null}\n    ],\n    \"voters\": [\n      {\"userId\": 5, \"name\": \"Ahmed\", \"optionId\": 1, \"optionLabel\": \"Option A\"}\n    ],\n    \"invitedUsers\": [\n      {\"userId\": 5, \"name\": \"Ahmed\"}\n    ],\n    \"winner\": null\n  }\n}"
                                 }
                             ]
                         },
@@ -5331,6 +5489,77 @@
                             }
                         },
                         {
+                            "name": "Restaurant Votes - Active",
+                            "request": {
+                                "method": "GET",
+                                "auth": {
+                                    "type": "bearer",
+                                    "bearer": [
+                                        {
+                                            "key": "token",
+                                            "value": "{{userToken}}",
+                                            "type": "string"
+                                        }
+                                    ]
+                                },
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/v1/user/restaurants/votes/active",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "user",
+                                        "restaurants",
+                                        "votes",
+                                        "active"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Restaurant Votes - Invite Users",
+                            "request": {
+                                "method": "POST",
+                                "auth": {
+                                    "type": "bearer",
+                                    "bearer": [
+                                        {
+                                            "key": "token",
+                                            "value": "{{userToken}}",
+                                            "type": "string"
+                                        }
+                                    ]
+                                },
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/v1/user/restaurants/votes/{{voteId}}/invite",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "user",
+                                        "restaurants",
+                                        "votes",
+                                        "{{voteId}}",
+                                        "invite"
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"userIds\": [2, 3]\n}"
+                                }
+                            }
+                        },
+                        {
                             "name": "Restaurant Votes - Cast Ballot",
                             "request": {
                                 "method": "POST",
@@ -5943,7 +6172,7 @@
                                         "{{productId}}"
                                     ]
                                 },
-                                "description": "Get detailed information about a specific supermarket product.\n\n**Status**: `200 OK` | `404` if product not found or unavailable\n\n**Response**: `{ \"data\": SmProductResource }` with full product details (store, price, stock, media, etc.)"
+                                "description": "Get detailed information about a specific supermarket product.\n\n**Status**: `200 OK` | `404` if product not found or unavailable\n\n**Response**: compatibility payload with both `{ \"data\": SmProductResource, \"product\": SmProductResource }` for clients using either key. Product pricing/media include fields such as `price`, `discountedPrice`, `finalPrice`, `originalPrice`, `hasDiscount`, and `primaryImage`."
                             },
                             "response": [
                                 {
@@ -5980,7 +6209,7 @@
                                             "value": "application/json"
                                         }
                                     ],
-                                    "body": "{\n  \"data\": {\n    \"id\": 1,\n    \"name\": \"Fresh Bread\",\n    \"barcode\": \"123456789\",\n    \"price\": \"12.50\",\n    \"originalPrice\": null,\n    \"stockQuantity\": 8,\n    \"isAvailable\": true,\n    \"store\": {\n      \"id\": 1,\n      \"name\": \"+�+�+�+� +�+�+�+�+� +�+�+�+�+�\"\n    },\n    \"primaryImage\": \"https://example.test/storage/products/1.jpg\"\n  }\n}"
+                                    "body": "{\n  \"data\": {\n    \"id\": 1,\n    \"name\": \"Fresh Bread\",\n    \"barcode\": \"123456789\",\n    \"price\": \"12.50\",\n    \"discountedPrice\": null,\n    \"finalPrice\": \"12.50\",\n    \"originalPrice\": null,\n    \"hasDiscount\": false,\n    \"stockQuantity\": 8,\n    \"isAvailable\": true,\n    \"store\": {\n      \"id\": 1,\n      \"name\": \"+�+�+�+� +�+�+�+�+� +�+�+�+�+�\"\n    },\n    \"primaryImage\": \"https://example.test/storage/products/1.jpg\"\n  },\n  \"product\": {\n    \"id\": 1,\n    \"name\": \"Fresh Bread\",\n    \"barcode\": \"123456789\",\n    \"price\": \"12.50\",\n    \"discountedPrice\": null,\n    \"finalPrice\": \"12.50\",\n    \"originalPrice\": null,\n    \"hasDiscount\": false,\n    \"stockQuantity\": 8,\n    \"isAvailable\": true,\n    \"store\": {\n      \"id\": 1,\n      \"name\": \"+�+�+�+� +�+�+�+�+� +�+�+�+�+�\"\n    },\n    \"primaryImage\": \"https://example.test/storage/products/1.jpg\"\n  }\n}"
                                 }
                             ]
                         },
@@ -6009,7 +6238,7 @@
                                         "similar"
                                     ]
                                 },
-                                "description": "Returns products whose title/name matches the selected product title (similar products list).\n\n**Status**: `200 OK`\n\n**Path prop**: `productId`\n\n**Response**: paginated `SmProductResource` in `data[]` with links/meta. The selected product itself is excluded."
+                                "description": "Returns products whose title/name matches the selected product title (similar products list).\n\n**Status**: `200 OK`\n\n**Path prop**: `productId`\n\n**Response**: paginated `SmProductResource` in `data[]` with links/meta. The selected product itself is excluded.\n\n**Alias**: `/api/v1/user/supermarket/products/{productId}/compare` returns the same payload and supports `perPage`."
                             },
                             "response": [
                                 {
@@ -6049,6 +6278,86 @@
                                     ],
                                     "cookie": [],
                                     "body": "{\n  \"data\": [\n    {\n      \"id\": 2,\n      \"name\": \"Fresh Milk 1L\",\n      \"barcode\": \"987654321\",\n      \"price\": \"8.50\",\n      \"stockQuantity\": 15,\n      \"isAvailable\": true\n    }\n  ],\n  \"links\": {\n    \"first\": \"http://Dllni.test/api/v1/user/supermarket/products/1/similar?page=1\",\n    \"last\": \"http://Dllni.test/api/v1/user/supermarket/products/1/similar?page=1\",\n    \"prev\": null,\n    \"next\": null\n  },\n  \"meta\": {\n    \"current_page\": 1,\n    \"from\": 1,\n    \"last_page\": 1,\n    \"per_page\": 20,\n    \"to\": 1,\n    \"total\": 1\n  }\n}"
+                                }
+                            ]
+                        },
+                        {
+                            "name": "Compare products (public)",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/products/{{productId}}/compare?perPage=20",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "user",
+                                        "supermarket",
+                                        "products",
+                                        "{{productId}}",
+                                        "compare"
+                                    ],
+                                    "query": [
+                                        {
+                                            "key": "perPage",
+                                            "value": "20"
+                                        }
+                                    ]
+                                },
+                                "description": "Alias of the similar-products endpoint for compare screens.\n\n**Status**: `200 OK`\n\n**Path prop**: `productId`\n\n**Query**: `perPage` (1 to 100, default 20).\n\n**Response**: paginated `SmProductResource` in `data[]` with links/meta. The selected product itself is excluded."
+                            },
+                            "response": [
+                                {
+                                    "name": "200 OK +�G�Gǥ compare products",
+                                    "originalRequest": {
+                                        "method": "GET",
+                                        "header": [
+                                            {
+                                                "key": "Accept",
+                                                "value": "application/json"
+                                            }
+                                        ],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/products/1/compare?perPage=20",
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "path": [
+                                                "api",
+                                                "v1",
+                                                "user",
+                                                "supermarket",
+                                                "products",
+                                                "1",
+                                                "compare"
+                                            ],
+                                            "query": [
+                                                {
+                                                    "key": "perPage",
+                                                    "value": "20"
+                                                }
+                                            ]
+                                        }
+                                    },
+                                    "status": "OK",
+                                    "code": 200,
+                                    "_postman_previewlanguage": "json",
+                                    "header": [
+                                        {
+                                            "key": "Content-Type",
+                                            "value": "application/json"
+                                        }
+                                    ],
+                                    "cookie": [],
+                                    "body": "{\n  \"data\": [\n    {\n      \"id\": 2,\n      \"name\": \"Fresh Milk 1L\",\n      \"barcode\": \"987654321\",\n      \"price\": \"8.50\",\n      \"stockQuantity\": 15,\n      \"isAvailable\": true,\n      \"isFavorite\": false\n    }\n  ],\n  \"links\": {\n    \"first\": \"http://Dllni.test/api/v1/user/supermarket/products/1/compare?page=1\",\n    \"last\": \"http://Dllni.test/api/v1/user/supermarket/products/1/compare?page=1\",\n    \"prev\": null,\n    \"next\": null\n  },\n  \"meta\": {\n    \"current_page\": 1,\n    \"from\": 1,\n    \"last_page\": 1,\n    \"per_page\": 20,\n    \"to\": 1,\n    \"total\": 1\n  }\n}"
                                 }
                             ]
                         },
@@ -6573,7 +6882,7 @@
                                         "{{productId}}"
                                     ]
                                 },
-                                "description": "Get detailed information about a specific supermarket product.\n\n**Status**: `200 OK` | `404` if product not found or unavailable\n\n**Response**: `{ \"data\": SmProductResource }` with full product details"
+                                "description": "Get detailed information about a specific supermarket product.\n\n**Status**: `200 OK` | `404` if product not found or unavailable\n\n**Response**: compatibility payload with both `{ \"data\": SmProductResource, \"product\": SmProductResource }`. Includes pricing/media fields like `discountedPrice`, `finalPrice`, `originalPrice`, `hasDiscount`, and `primaryImage`."
                             }
                         },
                         {
@@ -6595,7 +6904,7 @@
                                         "similar"
                                     ]
                                 },
-                                "description": "Returns products whose title/name matches the selected product title (similar products list).\n\n**Status**: `200 OK`\n\n**Path prop**: `productId`\n\n**Response**: paginated `SmProductResource` in `data[]` with links/meta. The selected product itself is excluded."
+                                "description": "Returns products whose title/name matches the selected product title (similar products list).\n\n**Status**: `200 OK`\n\n**Path prop**: `productId`\n\n**Response**: paginated `SmProductResource` in `data[]` with links/meta. The selected product itself is excluded.\n\n**Alias**: `/api/v1/user/supermarket/products/{productId}/compare` returns the same payload and supports `perPage`."
                             }
                         }
                     ]

@@ -16,6 +16,8 @@ use Modules\User\Http\Controllers\API\RestaurantCartProductsCountController;
 use Modules\User\Http\Controllers\API\RestaurantCheckoutController;
 use Modules\User\Http\Controllers\API\RestaurantGroupVoteCastBallotController;
 use Modules\User\Http\Controllers\API\RestaurantGroupVoteEndController;
+use Modules\User\Http\Controllers\API\RestaurantGroupVoteInviteUsersController;
+use Modules\User\Http\Controllers\API\RestaurantGroupVoteMyActiveController;
 use Modules\User\Http\Controllers\API\RestaurantGroupVoteShowController;
 use Modules\User\Http\Controllers\API\RestaurantGroupVoteStoreController;
 use Modules\User\Http\Controllers\API\RestaurantGroupVoteSuggestionsController;
@@ -55,6 +57,7 @@ use Modules\User\Http\Controllers\API\UserProductDetailsController;
 use Modules\User\Http\Controllers\API\UserProductFavoriteDestroyController;
 use Modules\User\Http\Controllers\API\UserProductFavoritesIndexController;
 use Modules\User\Http\Controllers\API\UserProductFavoriteStoreController;
+use Modules\User\Http\Controllers\API\UserRestaurantActiveCouponsController;
 use Modules\User\Http\Controllers\API\UserRestaurantDetailsController;
 use Modules\User\Http\Controllers\API\UserRestaurantFavoriteDestroyController;
 use Modules\User\Http\Controllers\API\UserRestaurantFavoritesIndexController;
@@ -69,7 +72,6 @@ use Modules\User\Http\Controllers\API\UserRestaurantOrdersController;
 use Modules\User\Http\Controllers\API\UserRestaurantOrderShowController;
 use Modules\User\Http\Controllers\API\UserRestaurantProductsByCategoryController;
 use Modules\User\Http\Controllers\API\UserRestaurantProductsWithOffersController;
-use Modules\User\Http\Controllers\API\UserRestaurantActiveCouponsController;
 use Modules\User\Http\Controllers\API\UserSupermarketProductFavoriteDestroyController;
 use Modules\User\Http\Controllers\API\UserSupermarketProductFavoritesIndexController;
 use Modules\User\Http\Controllers\API\UserSupermarketProductFavoriteStoreController;
@@ -97,6 +99,7 @@ Route::prefix('v1/user')->group(function (): void {
     Route::get('supermarket/products/search', SmProductsSearchController::class);
     Route::get('supermarket/stores/{store}', SmStoreShowController::class);
     Route::get('supermarket/products/{product}/similar', SmProductSimilarSearchController::class);
+    Route::get('supermarket/products/{product}/compare', SmProductSimilarSearchController::class);
     Route::get('supermarket/products/{product}', SmProductShowController::class);
 
     Route::prefix('restaurants/home')->group(function (): void {
@@ -111,7 +114,7 @@ Route::prefix('v1/user')->group(function (): void {
 
     Route::get('restaurants/discover', DiscoverRestaurantsController::class);
     Route::get('restaurants/votes/suggestions', RestaurantGroupVoteSuggestionsController::class);
-    Route::get('restaurants/votes/{vote}', RestaurantGroupVoteShowController::class);
+    Route::get('restaurants/votes/{vote}', RestaurantGroupVoteShowController::class)->whereNumber('vote');
     Route::get('restaurants/{restaurant}/coupons', UserRestaurantActiveCouponsController::class);
     Route::get('restaurants/{restaurant}', UserRestaurantDetailsController::class);
     Route::get('products/{product}', UserProductDetailsController::class);
@@ -179,7 +182,9 @@ Route::prefix('v1/user')->group(function (): void {
         Route::post('restaurants/home/latest-ordered-products/reorder', UserRestaurantHomeReorderLatestOrderProductsController::class);
 
         Route::post('restaurants/votes', RestaurantGroupVoteStoreController::class);
-        Route::post('restaurants/votes/{vote}/ballots', RestaurantGroupVoteCastBallotController::class);
-        Route::post('restaurants/votes/{vote}/end', RestaurantGroupVoteEndController::class);
+        Route::get('restaurants/votes/active', RestaurantGroupVoteMyActiveController::class);
+        Route::post('restaurants/votes/{vote}/invite', RestaurantGroupVoteInviteUsersController::class)->whereNumber('vote');
+        Route::post('restaurants/votes/{vote}/ballots', RestaurantGroupVoteCastBallotController::class)->whereNumber('vote');
+        Route::post('restaurants/votes/{vote}/end', RestaurantGroupVoteEndController::class)->whereNumber('vote');
     });
 });
