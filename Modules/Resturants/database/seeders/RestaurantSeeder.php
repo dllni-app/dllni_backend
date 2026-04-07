@@ -475,8 +475,8 @@ final class RestaurantSeeder extends Seeder
         }
 
         $offers = [
-            ['id' => 1, 'name' => 'عرض البيتزا العائلية', 'is_active' => true],
-            ['id' => 2, 'name' => 'خصم 10% على المشروبات', 'is_active' => true],
+            ['id' => 1, 'name' => 'عرض البيتزا العائلية', 'description' => 'وفر أكثر عند طلب حجم العائلة مع تشكيلة الإضافات.', 'is_active' => true],
+            ['id' => 2, 'name' => 'خصم 10% على المشروبات', 'description' => 'خصم فوري على جميع المشروبات الباردة والساخنة.', 'is_active' => true],
         ];
 
         foreach ($offers as $offer) {
@@ -485,6 +485,7 @@ final class RestaurantSeeder extends Seeder
                 [
                     'restaurant_id' => $restaurant->id,
                     'name' => $offer['name'],
+                    'description' => $offer['description'],
                     'discount_type' => 'percentage',
                     'discount_value' => 10,
                     'starts_at' => null,
@@ -625,7 +626,7 @@ final class RestaurantSeeder extends Seeder
             ['email' => "employee.one+{$restaurant->id}@example.com"],
             [
                 'name' => 'موظف أول',
-                'phone' => '+962790000001'.$restaurant->id,
+                'phone' => '+962790000001' . $restaurant->id,
                 'password' => bcrypt('password'),
                 'module_type' => UserModuleType::RestaurantSeller->value,
                 'email_verified_at' => now(),
@@ -636,7 +637,7 @@ final class RestaurantSeeder extends Seeder
             ['email' => "employee.two+{$restaurant->id}@example.com"],
             [
                 'name' => 'موظف ثاني',
-                'phone' => '+962790000002'.$restaurant->id,
+                'phone' => '+962790000002' . $restaurant->id,
                 'password' => bcrypt('password'),
                 'module_type' => UserModuleType::RestaurantSeller->value,
                 'email_verified_at' => now(),
@@ -671,13 +672,13 @@ final class RestaurantSeeder extends Seeder
 
         $activeCouponId = DB::table('promo_codes')->where([
             'restaurant_id' => $restaurant->id,
-            'code' => 'SAVE25-'.$restaurant->id,
+            'code' => 'SAVE25-' . $restaurant->id,
         ])->value('id');
 
         if (! $activeCouponId) {
             $activeCouponId = DB::table('promo_codes')->insertGetId([
                 'restaurant_id' => $restaurant->id,
-                'code' => 'SAVE25-'.$restaurant->id,
+                'code' => 'SAVE25-' . $restaurant->id,
                 'discount_type' => 'percentage',
                 'discount_value' => 25,
                 'min_order_amount' => 20,
@@ -694,7 +695,7 @@ final class RestaurantSeeder extends Seeder
         DB::table('promo_codes')->updateOrInsert(
             [
                 'restaurant_id' => $restaurant->id,
-                'code' => 'OLD10-'.$restaurant->id,
+                'code' => 'OLD10-' . $restaurant->id,
             ],
             [
                 'discount_type' => 'percentage',
@@ -719,6 +720,7 @@ final class RestaurantSeeder extends Seeder
             $activeOfferId = DB::table('offers')->insertGetId([
                 'restaurant_id' => $restaurant->id,
                 'name' => 'عرض الوجبات العائلية',
+                'description' => 'تخفيض خاص على وجبات العائلة لفترة محدودة.',
                 'discount_type' => 'percentage',
                 'discount_value' => 15,
                 'starts_at' => now()->subDay(),
@@ -735,6 +737,7 @@ final class RestaurantSeeder extends Seeder
                 'name' => 'عرض نهاية الأسبوع',
             ],
             [
+                'description' => 'وفر أكثر خلال عطلة نهاية الأسبوع على أصناف مختارة.',
                 'discount_type' => 'percentage',
                 'discount_value' => 20,
                 'starts_at' => now()->addDays(2),
@@ -923,9 +926,9 @@ final class RestaurantSeeder extends Seeder
                 ]
             )
                 ? DB::table('modifier_groups')
-                    ->where('restaurant_id', $restaurant->id)
-                    ->where('name', $group['name'])
-                    ->value('id')
+                ->where('restaurant_id', $restaurant->id)
+                ->where('name', $group['name'])
+                ->value('id')
                 : null;
 
             if (! $groupId) {
@@ -1075,7 +1078,7 @@ final class RestaurantSeeder extends Seeder
             return;
         }
 
-        $pngPath = $tempPath.'-'.Str::slug($imageSeed, '-').'.png';
+        $pngPath = $tempPath . '-' . Str::slug($imageSeed, '-') . '.png';
         @unlink($tempPath);
 
         $decoded = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAtMB9dZYkEYAAAAASUVORK5CYII=', true);
@@ -1092,7 +1095,7 @@ final class RestaurantSeeder extends Seeder
 
         try {
             $product->addMedia($pngPath)
-                ->usingFileName(Str::slug($imageSeed, '-').'.png')
+                ->usingFileName(Str::slug($imageSeed, '-') . '.png')
                 ->toMediaCollection('images');
         } catch (Throwable) {
             // Ignore media failures in seed data.

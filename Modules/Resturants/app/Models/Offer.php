@@ -22,6 +22,7 @@ final class Offer extends Model
     protected $fillable = [
         'restaurant_id',
         'name',
+        'description',
         'discount_type',
         'discount_value',
         'starts_at',
@@ -80,6 +81,11 @@ final class Offer extends Model
         };
     }
 
+    protected static function newFactory(): OfferFactory
+    {
+        return OfferFactory::new();
+    }
+
     protected function casts(): array
     {
         return [
@@ -89,10 +95,5 @@ final class Offer extends Model
             'ends_at' => 'datetime',
             'is_active' => 'boolean',
         ];
-    }
-
-    protected static function newFactory(): OfferFactory
-    {
-        return OfferFactory::new();
     }
 }

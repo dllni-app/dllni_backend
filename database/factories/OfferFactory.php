@@ -21,6 +21,7 @@ final class OfferFactory extends Factory
         return [
             'restaurant_id' => Restaurant::factory(),
             'name' => fake()->words(3, true),
+            'description' => fake()->sentence(),
             'discount_type' => fake()->randomElement([
                 DiscountType::Percentage->value,
                 DiscountType::FixedAmount->value,
