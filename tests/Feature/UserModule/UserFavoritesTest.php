@@ -57,6 +57,7 @@ it('requires authentication for supermarket product favorites', function (): voi
     ]);
 
     $this->postJson("/api/v1/user/favorites/supermarket/products/{$product->id}")->assertUnauthorized();
+    $this->deleteJson("/api/v1/user/favorites/supermarket/products/{$product->id}")->assertUnauthorized();
 });
 
 it('adds and lists restaurant favorites', function (): void {
@@ -251,6 +252,36 @@ it('rejects favoriting a supermarket product from an inactive store', function (
 
     $this->postJson("/api/v1/user/favorites/supermarket/products/{$product->id}")
         ->assertStatus(422);
+});
+
+it('removes a supermarket product favorite', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $store = SmStore::factory()->create(['is_active' => true]);
+    $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+    $product = SmProductFactory::new()->create([
+        'store_id' => $store->id,
+        'category_id' => $category->id,
+        'is_available' => true,
+    ]);
+
+    Favorite::create([
+        'user_id' => $user->id,
+        'favorable_type' => $product->getMorphClass(),
+        'favorable_id' => $product->id,
+    ]);
+
+    $this->deleteJson("/api/v1/user/favorites/supermarket/products/{$product->id}")
+        ->assertNoContent();
+
+    expect(
+        Favorite::query()
+            ->where('user_id', $user->id)
+            ->where('favorable_type', $product->getMorphClass())
+            ->where('favorable_id', $product->id)
+            ->exists()
+    )->toBeFalse();
 });
 
 it('adds and lists product favorites', function (): void {

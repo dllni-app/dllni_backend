@@ -100,11 +100,24 @@ final class UserFavoriteService
 
     public function addSupermarketProductFavorite(User $user, SmProduct $product): Favorite
     {
+        $favoriteType = $product->getMorphClass();
+
         return Favorite::firstOrCreate([
             'user_id' => $user->id,
-            'favorable_type' => SmProduct::class,
+            'favorable_type' => $favoriteType,
             'favorable_id' => $product->id,
         ]);
+    }
+
+    public function removeSupermarketProductFavorite(User $user, SmProduct $product): void
+    {
+        $favoriteType = $product->getMorphClass();
+
+        Favorite::query()
+            ->where('user_id', $user->id)
+            ->where('favorable_type', $favoriteType)
+            ->where('favorable_id', $product->id)
+            ->delete();
     }
 
     public function removeProductFavorite(User $user, Product $product): void
