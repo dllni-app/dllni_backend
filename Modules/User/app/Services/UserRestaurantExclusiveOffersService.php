@@ -57,6 +57,6 @@ final class UserRestaurantExclusiveOffersService
                 ->orderByDesc('offers.id');
         }
 
-        return $query->limit($limit)->get();
+        return $query->limit($limit)->with(['products' , 'restaurant'])->get();
     }
 }

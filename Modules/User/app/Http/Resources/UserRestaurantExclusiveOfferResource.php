@@ -6,6 +6,8 @@ namespace Modules\User\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Modules\Resturants\Http\Resources\ProductResource;
+use Modules\Resturants\Http\Resources\RestaurantResource;
 use Modules\Resturants\Models\Offer;
 
 /**
@@ -35,6 +37,8 @@ final class UserRestaurantExclusiveOfferResource extends JsonResource
             'distanceKm' => $distanceKm,
             'distanceUnit' => $distanceKm !== null ? 'km' : null,
             'imageUrl' => $restaurant->getFirstMediaUrl('primary-image') ?: null,
+            'restaurant' => RestaurantResource::make($this->whenLoaded('restaurant')),
+            'products' => ProductResource::collection($this->whenLoaded('products')),
         ];
     }
 }

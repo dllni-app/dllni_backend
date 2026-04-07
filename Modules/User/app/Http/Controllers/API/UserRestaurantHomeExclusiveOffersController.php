@@ -12,7 +12,7 @@ use Modules\User\Services\UserRestaurantExclusiveOffersService;
 final class UserRestaurantHomeExclusiveOffersController
 {
     public function __construct(
-        private UserRestaurantExclusiveOffersService $exclusiveOffersService,
+        private readonly UserRestaurantExclusiveOffersService $exclusiveOffersService,
     ) {}
 
     public function __invoke(RestaurantHomeExclusiveOffersRequest $request): JsonResponse
