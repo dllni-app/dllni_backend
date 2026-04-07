@@ -1887,6 +1887,48 @@
                             ]
                         },
                         {
+                            "name": "List favorite supermarket products",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/v1/user/favorites/supermarket/products?perPage=20&page=1",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "user",
+                                        "favorites",
+                                        "supermarket",
+                                        "products"
+                                    ],
+                                    "query": [
+                                        {
+                                            "key": "perPage",
+                                            "value": "20"
+                                        },
+                                        {
+                                            "key": "page",
+                                            "value": "1"
+                                        }
+                                    ]
+                                },
+                                "description": "Paginated favorite supermarket products for the authenticated user (`SmProductResource`).\n\n**Status**: `200 OK`\n\n**Query**: `perPage`, `page`.\n\n**Order**: newest favorite first (by `favorites.created_at`)."
+                            },
+                            "response": []
+                        },
+                        {
                             "name": "Add supermarket product to favorites",
                             "request": {
                                 "method": "POST",
@@ -1957,6 +1999,39 @@
                                     "body": "{\n  \"product\": {\n    \"id\": 1,\n    \"name\": \"Organic Apples\",\n    \"isAvailable\": true,\n    \"isFavorite\": true\n  }\n}"
                                 }
                             ]
+                        },
+                        {
+                            "name": "Remove supermarket product from favorites",
+                            "request": {
+                                "method": "DELETE",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/v1/user/favorites/supermarket/products/{{productId}}",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "user",
+                                        "favorites",
+                                        "supermarket",
+                                        "products",
+                                        "{{productId}}"
+                                    ]
+                                },
+                                "description": "Remove a supermarket product from favorites.\n\n**Status**: `204 No Content`."
+                            },
+                            "response": []
                         }
                     ]
                 },
@@ -6652,6 +6727,37 @@
                             }
                         },
                         {
+                            "name": "Favorites - Supermarket Products (Index)",
+                            "request": {
+                                "method": "GET",
+                                "auth": {
+                                    "type": "bearer",
+                                    "bearer": [
+                                        {
+                                            "key": "token",
+                                            "value": "{{userToken}}",
+                                            "type": "string"
+                                        }
+                                    ]
+                                },
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/v1/user/favorites/supermarket/products",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "user",
+                                        "favorites",
+                                        "supermarket",
+                                        "products"
+                                    ]
+                                },
+                                "description": "List favorite supermarket products for the authenticated user.\n\nAuth: Bearer token.\n\nStatus: 200 OK.\n\nQuery props: perPage, page.\n\nReturns: paginated SmProductResource in data[] with links/meta, newest favorite first."
+                            }
+                        },
+                        {
                             "name": "Favorites - Supermarket Products (Store)",
                             "request": {
                                 "method": "POST",
@@ -6681,6 +6787,38 @@
                                     ]
                                 },
                                 "description": "Add a supermarket product to favorites (idempotent).\n\nAuth: Bearer token.\n\nPath prop: productId.\n\nStatus: 201 first add, 200 if already favorited, 422 if product unavailable or store inactive.\n\nReturns: { \"product\": SmProductResource }."
+                            }
+                        },
+                        {
+                            "name": "Favorites - Supermarket Products (Destroy)",
+                            "request": {
+                                "method": "DELETE",
+                                "auth": {
+                                    "type": "bearer",
+                                    "bearer": [
+                                        {
+                                            "key": "token",
+                                            "value": "{{userToken}}",
+                                            "type": "string"
+                                        }
+                                    ]
+                                },
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/v1/user/favorites/supermarket/products/{{productId}}",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "user",
+                                        "favorites",
+                                        "supermarket",
+                                        "products",
+                                        "{{productId}}"
+                                    ]
+                                },
+                                "description": "Remove a supermarket product from favorites.\n\nAuth: Bearer token.\n\nPath prop: productId.\n\nStatus: 204 No Content.\n\nReturns: empty body."
                             }
                         },
                         {

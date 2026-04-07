@@ -70,6 +70,7 @@ use Modules\User\Http\Controllers\API\UserRestaurantOrderShowController;
 use Modules\User\Http\Controllers\API\UserRestaurantProductsByCategoryController;
 use Modules\User\Http\Controllers\API\UserRestaurantProductsWithOffersController;
 use Modules\User\Http\Controllers\API\UserSupermarketProductFavoriteDestroyController;
+use Modules\User\Http\Controllers\API\UserSupermarketProductFavoritesIndexController;
 use Modules\User\Http\Controllers\API\UserSupermarketProductFavoriteStoreController;
 use Modules\User\Http\Controllers\API\UserSupermarketStoreFavoriteDestroyController;
 use Modules\User\Http\Controllers\API\UserSupermarketStoreFavoritesIndexController;
@@ -145,6 +146,7 @@ Route::prefix('v1/user')->group(function (): void {
         Route::post('favorites/supermarket/stores/{store}', UserSupermarketStoreFavoriteStoreController::class);
         Route::delete('favorites/supermarket/stores/{store}', UserSupermarketStoreFavoriteDestroyController::class);
 
+        Route::get('favorites/supermarket/products', UserSupermarketProductFavoritesIndexController::class);
         Route::post('favorites/supermarket/products/{product}', UserSupermarketProductFavoriteStoreController::class);
         Route::delete('favorites/supermarket/products/{product}', UserSupermarketProductFavoriteDestroyController::class);
 

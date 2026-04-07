@@ -22,7 +22,26 @@ final class SmStoreShowController
             ->where(fn ($query) => $query
                 ->whereNull('suspension_until')
                 ->orWhere('suspension_until', '<=', $now))
-            ->with(['owner', 'highestDiscountOffer'])
+            ->with([
+                'owner',
+                'highestDiscountOffer',
+                'storeHours',
+                'categories',
+                'products.category',
+                'products.media',
+                'products.offerProducts.offer',
+                'offers',
+                'coupons',
+                'orders',
+                'documents',
+                'trustLogs',
+                'dailyStats',
+                'commissionRules',
+                'carts',
+                'assistantQueries',
+                'recurringOrders',
+              //  'staff.user',
+            ])
             ->findOrFail($store);
 
         $user = $request->user('sanctum');

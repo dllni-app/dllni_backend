@@ -56,6 +56,7 @@ it('requires authentication for supermarket product favorites', function (): voi
         'is_available' => true,
     ]);
 
+    $this->getJson('/api/v1/user/favorites/supermarket/products')->assertUnauthorized();
     $this->postJson("/api/v1/user/favorites/supermarket/products/{$product->id}")->assertUnauthorized();
     $this->deleteJson("/api/v1/user/favorites/supermarket/products/{$product->id}")->assertUnauthorized();
 });
@@ -220,6 +221,13 @@ it('adds supermarket product favorites', function (): void {
     $again->assertOk()->assertJsonPath('product.id', $product->id)->assertJsonPath('product.isFavorite', true);
 
     expect(Favorite::query()->where('user_id', $user->id)->count())->toBe(1);
+
+    $list = $this->getJson('/api/v1/user/favorites/supermarket/products');
+    $list->assertOk();
+    expect($list->json('data'))->toHaveCount(1);
+    expect($list->json('data.0.id'))->toBe($product->id);
+    expect($list->json('data.0.isFavorite'))->toBeTrue();
+    expect($list->json('data.0.offers.0.id'))->toBe($offer->id);
 });
 
 it('rejects favoriting an unavailable supermarket product', function (): void {
