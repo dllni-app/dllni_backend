@@ -3904,7 +3904,7 @@
                                         },
                                         "body": {
                                             "mode": "raw",
-                                            "raw": "{\"propertyType\":\"apartment\",\"estimatedSqm\":120,\"rooms\":3,\"bedrooms\":2,\"bathrooms\":1}"
+                                            "raw": "{\"propertyType\":\"apartment\",\"propertyDetails\":{\"bedrooms\":2,\"rooms\":3,\"bathrooms\":1,\"living_room_size\":\"medium\"}}"
                                         },
                                         "description": "Estimate cleaning size and service hours based on property details.\n\n**Status**: `200 OK` | `422` validation error\n\n**Headers**: `Authorization: Bearer {{token}}`\n\n**Body**:\n- `propertyType` (required): `apartment` | `villa` | `house` | `office`\n- `estimatedSqm` (optional): Square meters\n- `rooms` (optional): Total rooms count\n- `bedrooms` (optional): Bedrooms count\n- `bathrooms` (optional): Bathrooms count\n\n**Response**:\n```json\n{\n  \"data\": {\n    \"estimatedSqm\": 120,\n    \"sizeCategory\": \"medium\",\n    \"estimatedHours\": 3.5,\n    \"hoursRange\": { \"min\": 3, \"max\": 4 },\n    \"suggestedServices\": [\"standard_cleaning\", \"window_cleaning\"],\n    \"priceEstimate\": 875\n  }\n}\n```"
                                     },
@@ -4080,7 +4080,7 @@
                                         },
                                         "body": {
                                             "mode": "raw",
-                                            "raw": "{\"propertyType\":\"apartment\",\"estimatedSqm\":120,\"totalHours\":3.5,\"serviceType\":\"standard_cleaning\",\"addons\":[\"window_cleaning\"],\"scheduledDate\":\"2026-04-10\",\"addressLatitude\":33.5138,\"addressLongitude\":36.2765,\"preferredWorkerId\":null}"
+                                            "raw": "{\"propertyType\":\"apartment\",\"propertyDetails\":{\"bedrooms\":2,\"rooms\":3,\"bathrooms\":1,\"living_room_size\":\"medium\"},\"addressLatitude\":33.5138,\"addressLongitude\":36.2765,\"preferredWorkerId\":null}"
                                         },
                                         "description": "Calculate detailed price estimate for a cleaning order based on property and service details.\n\n**Status**: `200 OK` | `422` validation error\n\n**Headers**: `Authorization: Bearer {{token}}`\n\n**Body**:\n- `propertyType` (required): `apartment` | `villa` | `house` | `office`\n- `estimatedSqm` (required): Square meters\n- `totalHours` (required): Estimated hours (decimal)\n- `serviceType` (required): `standard_cleaning` | `deep_cleaning` | `move_cleaning`\n- `addons` (optional): Array of addon service codes\n- `scheduledDate` (required): Date in YYYY-MM-DD format\n- `addressLatitude` (required): Latitude for travel fee calculation\n- `addressLongitude` (required): Longitude for travel fee calculation\n- `preferredWorkerId` (optional): Specific worker ID for re-booking\n\n**Response**:\n```json\n{\n  \"data\": {\n    \"basePrice\": 750,\n    \"addonsTotal\": 125,\n    \"travelFee\": 75,\n    \"taxes\": 0,\n    \"discounts\": 0,\n    \"totalPrice\": 950,\n    \"currency\": \"IQD\",\n    \"breakdown\": {\n      \"hourlyRate\": 150,\n      \"sqmRate\": 0,\n      \"minimumCharge\": false\n    },\n    \"paymentMethods\": [\"wallet\", \"card\", \"cash\"]\n  }\n}\n```"
                                     },
@@ -4161,7 +4161,7 @@
                                         ],
                                         "body": {
                                             "mode": "raw",
-                                            "raw": "{\"propertyType\":\"apartment\",\"propertyDetails\":{\"address\":\"Al Aziziyah Street, Building 12\",\"location_name\":\"Home\",\"rooms\":3,\"bedrooms\":2,\"bathrooms\":1},\"estimatedSqm\":120,\"totalHours\":3,\"scheduledDate\":\"2026-04-10\",\"scheduledTime\":\"09:00\",\"addressLatitude\":33.5138,\"addressLongitude\":36.2765,\"basePrice\":1000,\"travelFee\":200,\"addonsTotal\":0,\"termsAccepted\":true}"
+                                            "raw": "{\"propertyType\":\"apartment\",\"propertyDetails\":{\"address\":\"Al Aziziyah Street, Building 12\",\"location_name\":\"Home\",\"bedrooms\":2,\"rooms\":3,\"bathrooms\":1,\"living_room_size\":\"medium\"},\"scheduledDate\":\"2026-04-10\",\"scheduledTime\":\"09:00\",\"addressLatitude\":33.5138,\"addressLongitude\":36.2765,\"preferredWorkerId\":null,\"termsAccepted\":true}"
                                         }
                                     }
                                 },
@@ -4274,7 +4274,7 @@
                                         ],
                                         "body": {
                                             "mode": "raw",
-                                            "raw": "{\"scheduledDate\":\"2026-04-11\",\"scheduledTime\":\"11:00\",\"totalHours\":4}"
+                                            "raw": "{\"scheduledDate\":\"2026-04-11\",\"scheduledTime\":\"11:00\",\"propertyDetails\":{\"address\":\"New Address\",\"bedrooms\":2,\"rooms\":3,\"bathrooms\":1}}"
                                         }
                                     }
                                 },
@@ -6722,6 +6722,136 @@
                             ]
                         },
                         {
+                            "name": "Show store (public)",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/stores/{{smStoreId}}",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "user",
+                                        "supermarket",
+                                        "stores",
+                                        "{{smStoreId}}"
+                                    ]
+                                },
+                                "description": "Get detailed information about a specific supermarket store.\n\n**Status**: `200 OK` | `404` if store not found or inactive\n\n**Response**: `{ \"data\": SmStoreResource }` with full store details (owner, categories, ratings, etc.)"
+                            },
+                            "response": [
+                                {
+                                    "name": "200 OK — store details",
+                                    "originalRequest": {
+                                        "method": "GET",
+                                        "header": [
+                                            {
+                                                "key": "Accept",
+                                                "value": "application/json"
+                                            }
+                                        ],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/stores/1",
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "path": [
+                                                "api",
+                                                "v1",
+                                                "user",
+                                                "supermarket",
+                                                "stores",
+                                                "1"
+                                            ]
+                                        }
+                                    },
+                                    "status": "OK",
+                                    "code": 200,
+                                    "_postman_previewlanguage": "json",
+                                    "header": [
+                                        {
+                                            "key": "Content-Type",
+                                            "value": "application/json"
+                                        }
+                                    ],
+                                    "body": "{\n  \"data\": {\n    \"id\": 1,\n    \"name\": \"سوبر ماركت النور\",\n    \"slug\": \"al-noor\",\n    \"cover\": \"https://example.test/storage/covers/1.jpg\",\n    \"logo\": \"https://example.test/storage/logos/1.png\",\n    \"averageRating\": 4.5,\n    \"isActive\": true,\n    \"owner\": {\n      \"id\": 1,\n      \"name\": \"محمد علي\",\n      \"email\": \"owner@example.test\"\n    }\n  }\n}"
+                                }
+                            ]
+                        },
+                        {
+                            "name": "Show product (public)",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/products/{{productId}}",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "user",
+                                        "supermarket",
+                                        "products",
+                                        "{{productId}}"
+                                    ]
+                                },
+                                "description": "Get detailed information about a specific supermarket product.\n\n**Status**: `200 OK` | `404` if product not found or unavailable\n\n**Response**: `{ \"data\": SmProductResource }` with full product details (store, price, stock, media, etc.)"
+                            },
+                            "response": [
+                                {
+                                    "name": "200 OK — product details",
+                                    "originalRequest": {
+                                        "method": "GET",
+                                        "header": [
+                                            {
+                                                "key": "Accept",
+                                                "value": "application/json"
+                                            }
+                                        ],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/products/1",
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "path": [
+                                                "api",
+                                                "v1",
+                                                "user",
+                                                "supermarket",
+                                                "products",
+                                                "1"
+                                            ]
+                                        }
+                                    },
+                                    "status": "OK",
+                                    "code": 200,
+                                    "_postman_previewlanguage": "json",
+                                    "header": [
+                                        {
+                                            "key": "Content-Type",
+                                            "value": "application/json"
+                                        }
+                                    ],
+                                    "body": "{\n  \"data\": {\n    \"id\": 1,\n    \"name\": \"Fresh Bread\",\n    \"barcode\": \"123456789\",\n    \"price\": \"12.50\",\n    \"originalPrice\": null,\n    \"stockQuantity\": 8,\n    \"isAvailable\": true,\n    \"store\": {\n      \"id\": 1,\n      \"name\": \"سوبر ماركت النور\"\n    },\n    \"primaryImage\": \"https://example.test/storage/products/1.jpg\"\n  }\n}"
+                                }
+                            ]
+                        },
+                        {
                             "name": "Search similar products (public)",
                             "request": {
                                 "method": "GET",
@@ -7372,6 +7502,101 @@
                                     ]
                                 },
                                 "description": "Browse active supermarket stores.\n\nStatus: 200 OK.\n\nQuery props: perPage, page, search, and optional filter/sort props supported by backend filters.\n\nReturns: paginated SmStoreResource in data[] with links and meta."
+                            }
+                        },
+                        {
+                            "name": "Supermarket Store Show",
+                            "request": {
+                                "method": "GET",
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/stores/{{smStoreId}}",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "user",
+                                        "supermarket",
+                                        "stores",
+                                        "{{smStoreId}}"
+                                    ]
+                                },
+                                "description": "Get detailed information about a specific supermarket store.\n\n**Status**: `200 OK` | `404` if store not found or inactive\n\n**Response**: `{ \"data\": SmStoreResource }` with full store details"
+                            }
+                        },
+                        {
+                            "name": "Supermarket Products Search",
+                            "request": {
+                                "method": "GET",
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/products/search?perPage=20&search=",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "user",
+                                        "supermarket",
+                                        "products",
+                                        "search"
+                                    ],
+                                    "query": [
+                                        {
+                                            "key": "perPage",
+                                            "value": "20"
+                                        },
+                                        {
+                                            "key": "search",
+                                            "value": ""
+                                        }
+                                    ]
+                                },
+                                "description": "Search and browse supermarket products from active stores with available inventory.\n\nStatus: 200 OK.\n\nQuery props: perPage, page, search.\n\nReturns: paginated SmProductResource in data[] with links and meta."
+                            }
+                        },
+                        {
+                            "name": "Supermarket Product Show",
+                            "request": {
+                                "method": "GET",
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/products/{{productId}}",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "user",
+                                        "supermarket",
+                                        "products",
+                                        "{{productId}}"
+                                    ]
+                                },
+                                "description": "Get detailed information about a specific supermarket product.\n\n**Status**: `200 OK` | `404` if product not found or unavailable\n\n**Response**: `{ \"data\": SmProductResource }` with full product details"
+                            }
+                        },
+                        {
+                            "name": "Supermarket Product Similar",
+                            "request": {
+                                "method": "GET",
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/products/{{productId}}/similar",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "user",
+                                        "supermarket",
+                                        "products",
+                                        "{{productId}}",
+                                        "similar"
+                                    ]
+                                },
+                                "description": "Returns products whose title/name matches the selected product title (similar products list).\n\n**Status**: `200 OK`\n\n**Path prop**: `productId`\n\n**Response**: paginated `SmProductResource` in `data[]` with links/meta. The selected product itself is excluded."
                             }
                         },
                         {
