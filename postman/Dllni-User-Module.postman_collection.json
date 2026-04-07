@@ -2,7 +2,7 @@
     "info": {
         "_postman_id": "3d8a6f0b-9f8f-4d42-8d8c-6d4c4c8b3a10",
         "name": "Dllni - User Module (Merged)",
-        "description": "## Base URL & prefix\n- Collection variable `{{baseUrl}}` defaults to `http://Dllni.test` (Herd/Laragon).\n- User API base path: `/api/v1/user` (routes file: `Modules/User/routes/api.php`).\n\n## Authentication\n- **Public**: register, login OTP steps, reset password, supermarket/restaurant discovery, **restaurant home** (categories, exclusive offers, suggested products, nearest restaurants), products, marketing offers, vote read, luck box, etc.\n- **Sanctum**: set `{{token}}` from verify/login/reset responses; send `Authorization: Bearer {{token}}` for `me`, `account`, `addresses`, **favorites** (restaurants + supermarket stores + supermarket products), `notifications`, cart, checkout, orders, **restaurants/home/latest-ordered-products**, supermarket **items CRUD**, supermarket order status, vote create/ballot/end.\n\n## Favorites â€” Ø§Ù„Ù…ÙØ¶Ù„Ø© (authenticated)\nPolymorphic rows in `favorites` (`favorable_type` = `Restaurant` or `SmStore`). List order: **most recently favorited first** (`favorites.created_at` desc).\n\n| Path | Method | Notes |\n| --- | --- | --- |\n| `/api/v1/user/favorites/restaurants` | GET | Paginated `RestaurantResource`; query `perPage` (1â€“100, default 20), `page` |\n| `/api/v1/user/favorites/restaurants/{id}` | POST | No body. **201** first add, **200** if already favorited. Body: `{ \"restaurant\": â€¦ }`. **422** if restaurant not active. |\n| `/api/v1/user/favorites/restaurants/{id}` | DELETE | **204** empty body (safe if not favorited). |\n| `/api/v1/user/favorites/supermarket/stores` | GET | Paginated `SmStoreResource`; `perPage`, `page` |\n| `/api/v1/user/favorites/supermarket/stores/{id}` | POST | **201** / **200**; `{ \"store\": â€¦ }`. **422** if store inactive. |\n| `/api/v1/user/favorites/supermarket/stores/{id}` | DELETE | **204** |\n| `/api/v1/user/favorites/supermarket/products/{id}` | POST | **201** / **200**; `{ \"product\": â€¦ }`. **422** if product unavailable or store inactive. |\n\n## Restaurant homepage (`GET /api/v1/user/restaurants/home/*`)\n| Route | Auth | Purpose |\n| --- | --- | --- |\n| `.../categories` | No | Cuisine types that have â‰¥1 **active** restaurant |\n| `.../exclusive-offers` | No | Active offers on active restaurants; optional `latitude`, `longitude`, `limit` |\n| `.../suggested-products` | No | Featured / highly rated menu items; `limit` |\n| `.../nearest-restaurants` | No | Near-user list; optional `latitude`, `longitude`, `limit`; `isFavorited` true only with Bearer token |\n| `.../latest-ordered-products` | **Yes** | Distinct products from userâ€™s non-cancelled orders (reorder / Ø§Ø·Ù„Ø¨ Ù…Ø¬Ø¯Ø¯Ø§Ù‹); `limit` |\n\n**Distance**: Haversine runs on MySQL/Postgres, etc. **SQLite** (`phpunit`) does not compute `distanceKm` (values `null`).\n\n## Success status codes (typical)\n- `200` â€” OK (JSON body).\n- `201` â€” Created (addresses, cart item, checkout order, group vote, first-time favorite add for restaurant/store).\n- `204` â€” No content (delete address).\n- `404` â€” Not found (invalid id, inactive marketing offer, wrong userâ€™s resource).\n- `403` / `401` â€” Forbidden / Unauthenticated (missing or invalid token).\n- `422` â€” Validation errors: `{ \"message\": \"...\", \"errors\": { \"field\": [\"...\"] } }`.\n\n## Pagination (Laravel)\n- Paginated resources return `data` (array of items), `links` (`first`, `last`, `prev`, `next`), and `meta` (`current_page`, `from`, `last_page`, `path`, `per_page`, `to`, `total`, â€¦).\n- Query: `page`, `perPage` (camelCase in this API where FormRequest defines it).\n\n## Media in JSON (summary)\n- **Restaurant** `RestaurantResource`: `primaryImage`, `image`, `banner`, `images`.\n- **Restaurant product** `ProductResource`: `primaryImage`, `images`.\n- **User** `UserResource` (with `media` loaded): `primaryImage` / `images` as `MediaResource` objects (`url`, `thumbnailUrl`, â€¦).\n- **Marketing offers**: `imageUrl` (Spatie `card-image`) or `null`.\n- **Supermarket** `SmStoreResource`: `cover`, `logo`; luck-box line items: `imageUrl`.\n- **Supermarket order** items: product media via `SmProductResource` when loaded.\n\n## Flow overview\n### Register + verify\n1. `POST /register` â†’ OTP sent.\n2. `POST /verify-account` â†’ `user` + `token`.\n\n### Login (SMS OTP)\n1. `POST /login` â†’ OTP sent.\n2. `POST /login/verify` â†’ `user` + `token`.\n\n### Reset password\n1. `POST /reset-password` â†’ generic message; `expiresAt` null if phone unknown.\n2. `POST /reset-password/confirm` â†’ `message` + `token`.\n\n## Examples in this collection\nEach request includes a **saved example** (`Examples` in Postman) with a representative **200/201/204** JSON body. Adjust ids and tokens to your environment.\n\n## Notes\n- SMS/OTP is behind a provider interface.\n\n\n\n## Props Format (Request / Response Contract)\n- Path params: {id} in docs and {{id}} as Postman variables.\n- Query props: camelCase unless endpoint docs explicitly use snake_case.\n- Body props: required first, optional props marked and can be null when allowed.\n- Pagination shape: data, links, meta.\n- Validation errors (422): { \"message\": string, \"errors\": { \"field\": [string] } }.\n\n## Common Enums\n- orderType: delivery | pickup\n- pickupMode: immediate_pickup | scheduled_pickup\n- discover sort: rating | nearest | fastest\n- vote status: active | ended\n- luck-box label: best_value | fastest | balanced\n\n## What Endpoints Return\n- List endpoints: paginated data[] with links and meta (unless noted otherwise).\n- Show endpoints: single object (sometimes wrapped in data).\n- Create endpoints: 201 with created payload.\n- Update endpoints: 200 with updated payload.\n- Delete endpoints: 204 with empty body.",
+        "description": "## Base URL & prefix\n- Collection variable `{{baseUrl}}` defaults to `http://Dllni.test` (Herd/Laragon).\n- User API base path: `/api/v1/user` (routes file: `Modules/User/routes/api.php`).\n\n## Authentication\n- **Public**: register, login OTP steps, reset password, supermarket/restaurant discovery, **restaurant home** (categories, exclusive offers, suggested products, nearest restaurants), products, marketing offers, vote read, luck box, etc.\n- **Sanctum**: set `{{token}}` from verify/login/reset responses; send `Authorization: Bearer {{token}}` for `me`, `account`, `addresses`, **favorites** (restaurants + supermarket stores + supermarket products), `notifications`, cart, checkout, orders, **restaurants/home/latest-ordered-products**, supermarket **items CRUD**, supermarket order status, vote create/ballot/end.\n\n## Favorites â€” Ø§Ù„Ù…ÙØ¶Ù„Ø© (authenticated)\nPolymorphic rows in `favorites` (`favorable_type` = `Restaurant`, `SmStore`, or supermarket product morph type). List order: **most recently favorited first** (`favorites.created_at` desc).\n\n| Path | Method | Notes |\n| --- | --- | --- |\n| `/api/v1/user/favorites/restaurants` | GET | Paginated `RestaurantResource`; query `perPage` (1â€“100, default 20), `page` |\n| `/api/v1/user/favorites/restaurants/{id}` | POST | No body. **201** first add, **200** if already favorited. Body: `{ \"restaurant\": â€¦ }`. **422** if restaurant not active. |\n| `/api/v1/user/favorites/restaurants/{id}` | DELETE | **204** empty body (safe if not favorited). |\n| `/api/v1/user/favorites/supermarket/stores` | GET | Paginated `SmStoreResource`; `perPage`, `page` |\n| `/api/v1/user/favorites/supermarket/stores/{id}` | POST | **201** / **200**; `{ \"store\": â€¦ }`. **422** if store inactive. |\n| `/api/v1/user/favorites/supermarket/stores/{id}` | DELETE | **204** |\n| `/api/v1/user/favorites/supermarket/products` | GET | Paginated `SmProductResource`; `perPage`, `page` |\n| `/api/v1/user/favorites/supermarket/products/{id}` | POST | **201** / **200**; `{ \"product\": â€¦ }`. **422** if product unavailable or store inactive. |\n| `/api/v1/user/favorites/supermarket/products/{id}` | DELETE | **204** |\n\n## Restaurant homepage (`GET /api/v1/user/restaurants/home/*`)\n| Route | Auth | Purpose |\n| --- | --- | --- |\n| `.../categories` | No | Cuisine types that have â‰¥1 **active** restaurant |\n| `.../exclusive-offers` | No | Active offers on active restaurants; optional `latitude`, `longitude`, `limit` |\n| `.../suggested-products` | No | Featured / highly rated menu items; `limit` |\n| `.../nearest-restaurants` | No | Near-user list; optional `latitude`, `longitude`, `limit`; `isFavorited` true only with Bearer token |\n| `.../latest-ordered-products` | **Yes** | Distinct products from userâ€™s non-cancelled orders (reorder / Ø§Ø·Ù„Ø¨ Ù…Ø¬Ø¯Ø¯Ø§Ù‹); `limit` |\n\n**Distance**: Haversine runs on MySQL/Postgres, etc. **SQLite** (`phpunit`) does not compute `distanceKm` (values `null`).\n\n## Success status codes (typical)\n- `200` â€” OK (JSON body).\n- `201` â€” Created (addresses, cart item, checkout order, group vote, first-time favorite add for restaurant/store).\n- `204` â€” No content (delete address).\n- `404` â€” Not found (invalid id, inactive marketing offer, wrong userâ€™s resource).\n- `403` / `401` â€” Forbidden / Unauthenticated (missing or invalid token).\n- `422` â€” Validation errors: `{ \"message\": \"...\", \"errors\": { \"field\": [\"...\"] } }`.\n\n## Pagination (Laravel)\n- Paginated resources return `data` (array of items), `links` (`first`, `last`, `prev`, `next`), and `meta` (`current_page`, `from`, `last_page`, `path`, `per_page`, `to`, `total`, â€¦).\n- Query: `page`, `perPage` (camelCase in this API where FormRequest defines it).\n\n## Media in JSON (summary)\n- **Restaurant** `RestaurantResource`: `primaryImage`, `image`, `banner`, `images`.\n- **Restaurant product** `ProductResource`: `primaryImage`, `images`.\n- **User** `UserResource` (with `media` loaded): `primaryImage` / `images` as `MediaResource` objects (`url`, `thumbnailUrl`, â€¦).\n- **Marketing offers**: `imageUrl` (Spatie `card-image`) or `null`.\n- **Supermarket** `SmStoreResource`: `cover`, `logo`; luck-box line items: `imageUrl`.\n- **Supermarket order** items: product media via `SmProductResource` when loaded.\n\n## Flow overview\n### Register + verify\n1. `POST /register` â†’ OTP sent.\n2. `POST /verify-account` â†’ `user` + `token`.\n\n### Login (SMS OTP)\n1. `POST /login` â†’ OTP sent.\n2. `POST /login/verify` â†’ `user` + `token`.\n\n### Reset password\n1. `POST /reset-password` â†’ generic message; `expiresAt` null if phone unknown.\n2. `POST /reset-password/confirm` â†’ `message` + `token`.\n\n## Examples in this collection\nEach request includes a **saved example** (`Examples` in Postman) with a representative **200/201/204** JSON body. Adjust ids and tokens to your environment.\n\n## Notes\n- SMS/OTP is behind a provider interface.\n\n\n\n## Props Format (Request / Response Contract)\n- Path params: {id} in docs and {{id}} as Postman variables.\n- Query props: camelCase unless endpoint docs explicitly use snake_case.\n- Body props: required first, optional props marked and can be null when allowed.\n- Pagination shape: data, links, meta.\n- Validation errors (422): { \"message\": string, \"errors\": { \"field\": [string] } }.\n\n## Common Enums\n- orderType: delivery | pickup\n- pickupMode: immediate_pickup | scheduled_pickup\n- discover sort: rating | nearest | fastest\n- vote status: active | ended\n- luck-box label: best_value | fastest | balanced\n\n## What Endpoints Return\n- List endpoints: paginated data[] with links and meta (unless noted otherwise).\n- Show endpoints: single object (sometimes wrapped in data).\n- Create endpoints: 201 with created payload.\n- Update endpoints: 200 with updated payload.\n- Delete endpoints: 204 with empty body.",
         "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
     },
     "variable": [
@@ -1887,6 +1887,48 @@
                             ]
                         },
                         {
+                            "name": "List favorite supermarket products",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/v1/user/favorites/supermarket/products?perPage=20&page=1",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "user",
+                                        "favorites",
+                                        "supermarket",
+                                        "products"
+                                    ],
+                                    "query": [
+                                        {
+                                            "key": "perPage",
+                                            "value": "20"
+                                        },
+                                        {
+                                            "key": "page",
+                                            "value": "1"
+                                        }
+                                    ]
+                                },
+                                "description": "Paginated favorite supermarket products for the authenticated user (`SmProductResource`).\n\n**Status**: `200 OK`\n\n**Query**: `perPage`, `page`.\n\n**Order**: newest favorite first (by `favorites.created_at`)."
+                            },
+                            "response": []
+                        },
+                        {
                             "name": "Add supermarket product to favorites",
                             "request": {
                                 "method": "POST",
@@ -1957,6 +1999,39 @@
                                     "body": "{\n  \"product\": {\n    \"id\": 1,\n    \"name\": \"Organic Apples\",\n    \"isAvailable\": true,\n    \"isFavorite\": true\n  }\n}"
                                 }
                             ]
+                        },
+                        {
+                            "name": "Remove supermarket product from favorites",
+                            "request": {
+                                "method": "DELETE",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/v1/user/favorites/supermarket/products/{{productId}}",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "user",
+                                        "favorites",
+                                        "supermarket",
+                                        "products",
+                                        "{{productId}}"
+                                    ]
+                                },
+                                "description": "Remove a supermarket product from favorites.\n\n**Status**: `204 No Content`."
+                            },
+                            "response": []
                         }
                     ]
                 },
@@ -7752,6 +7827,37 @@
                             }
                         },
                         {
+                            "name": "Favorites - Supermarket Products (Index)",
+                            "request": {
+                                "method": "GET",
+                                "auth": {
+                                    "type": "bearer",
+                                    "bearer": [
+                                        {
+                                            "key": "token",
+                                            "value": "{{userToken}}",
+                                            "type": "string"
+                                        }
+                                    ]
+                                },
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/v1/user/favorites/supermarket/products",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "user",
+                                        "favorites",
+                                        "supermarket",
+                                        "products"
+                                    ]
+                                },
+                                "description": "List favorite supermarket products for the authenticated user.\n\nAuth: Bearer token.\n\nStatus: 200 OK.\n\nQuery props: perPage, page.\n\nReturns: paginated SmProductResource in data[] with links/meta, newest favorite first."
+                            }
+                        },
+                        {
                             "name": "Favorites - Supermarket Products (Store)",
                             "request": {
                                 "method": "POST",
@@ -7781,6 +7887,38 @@
                                     ]
                                 },
                                 "description": "Add a supermarket product to favorites (idempotent).\n\nAuth: Bearer token.\n\nPath prop: productId.\n\nStatus: 201 first add, 200 if already favorited, 422 if product unavailable or store inactive.\n\nReturns: { \"product\": SmProductResource }."
+                            }
+                        },
+                        {
+                            "name": "Favorites - Supermarket Products (Destroy)",
+                            "request": {
+                                "method": "DELETE",
+                                "auth": {
+                                    "type": "bearer",
+                                    "bearer": [
+                                        {
+                                            "key": "token",
+                                            "value": "{{userToken}}",
+                                            "type": "string"
+                                        }
+                                    ]
+                                },
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/v1/user/favorites/supermarket/products/{{productId}}",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "user",
+                                        "favorites",
+                                        "supermarket",
+                                        "products",
+                                        "{{productId}}"
+                                    ]
+                                },
+                                "description": "Remove a supermarket product from favorites.\n\nAuth: Bearer token.\n\nPath prop: productId.\n\nStatus: 204 No Content.\n\nReturns: empty body."
                             }
                         },
                         {

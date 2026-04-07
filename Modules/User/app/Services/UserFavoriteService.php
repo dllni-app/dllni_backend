@@ -120,6 +120,34 @@ final class UserFavoriteService
             ->delete();
     }
 
+    /**
+     * @return LengthAwarePaginator<int, SmProduct>
+     */
+    public function paginateFavoriteSupermarketProducts(User $user, int $perPage): LengthAwarePaginator
+    {
+        $favoriteType = (new SmProduct())->getMorphClass();
+
+        $paginator = SmProduct::query()
+            ->select('sm_products.*')
+            ->join('favorites', function ($join) use ($user, $favoriteType): void {
+                $join->on('sm_products.id', '=', 'favorites.favorable_id')
+                    ->where('favorites.favorable_type', '=', $favoriteType)
+                    ->where('favorites.user_id', '=', $user->id);
+            })
+            ->join('sm_stores', 'sm_stores.id', '=', 'sm_products.store_id')
+            ->where('sm_products.is_available', true)
+            ->where('sm_stores.is_active', true)
+            ->orderByDesc('favorites.created_at')
+            ->with(['store', 'category', 'media', 'offerProducts.offer'])
+            ->paginate($perPage);
+
+        $paginator->getCollection()->each(function (SmProduct $product): void {
+            $product->setAttribute('isFavoritedByUser', true);
+        });
+
+        return $paginator;
+    }
+
     public function removeProductFavorite(User $user, Product $product): void
     {
         Favorite::query()
