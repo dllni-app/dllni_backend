@@ -15,13 +15,22 @@ use Modules\Cleaning\Models\CleaningBooking;
 
 final class UserCleaningOrderService
 {
+    public function __construct(private UserCleaningOrderEstimationService $estimationService) {}
+
     public function store(User $user, array $validated): CleaningBooking
     {
         return DB::transaction(function () use ($user, $validated): CleaningBooking {
-            $basePrice = (float) ($validated['basePrice'] ?? 0);
-            $travelFee = (float) ($validated['travelFee'] ?? 0);
-            $addonsTotal = (float) ($validated['addonsTotal'] ?? 0);
-            $totalPrice = (float) ($validated['totalPrice'] ?? ($basePrice + $travelFee + $addonsTotal));
+            $estimation = $this->estimationService->estimate(
+                (string) $validated['propertyType'],
+                (array) $validated['propertyDetails']
+            );
+            $pricing = $this->estimationService->price(
+                (string) $validated['propertyType'],
+                (array) $validated['propertyDetails'],
+                $validated['addressLatitude'] ?? null,
+                $validated['addressLongitude'] ?? null,
+                $validated['preferredWorkerId'] ?? null
+            );
 
             $booking = CleaningBooking::create([
                 'customer_id' => $user->id,
@@ -35,16 +44,16 @@ final class UserCleaningOrderService
                 'property_details' => $validated['propertyDetails'],
                 'address_latitude' => $validated['addressLatitude'] ?? null,
                 'address_longitude' => $validated['addressLongitude'] ?? null,
-                'estimated_sqm' => $validated['estimatedSqm'] ?? null,
-                'estimated_hours' => $validated['totalHours'],
+                'estimated_sqm' => $estimation['estimatedSqm'],
+                'estimated_hours' => $estimation['estimatedHours'],
                 'scheduled_date' => $validated['scheduledDate'],
                 'scheduled_time' => $validated['scheduledTime'],
-                'total_hours' => $validated['totalHours'],
-                'base_price' => $basePrice,
-                'addons_total' => $addonsTotal,
-                'travel_fee' => $travelFee,
+                'total_hours' => $estimation['estimatedHours'],
+                'base_price' => $pricing['basePrice'],
+                'addons_total' => $pricing['addonsTotal'],
+                'travel_fee' => $pricing['travelFee'],
                 'cancellation_fee' => 0,
-                'total_price' => $totalPrice,
+                'total_price' => $pricing['totalPrice'],
                 'terms_accepted' => true,
             ]);
 
@@ -66,13 +75,6 @@ final class UserCleaningOrderService
             if (array_key_exists('propertyDetails', $validated)) {
                 $updates['property_details'] = $validated['propertyDetails'];
             }
-            if (array_key_exists('estimatedSqm', $validated)) {
-                $updates['estimated_sqm'] = $validated['estimatedSqm'];
-            }
-            if (array_key_exists('totalHours', $validated)) {
-                $updates['total_hours'] = $validated['totalHours'];
-                $updates['estimated_hours'] = $validated['totalHours'];
-            }
             if (array_key_exists('scheduledDate', $validated)) {
                 $updates['scheduled_date'] = $validated['scheduledDate'];
             }
@@ -88,26 +90,35 @@ final class UserCleaningOrderService
             if (array_key_exists('preferredWorkerId', $validated)) {
                 $updates['preferred_worker_id'] = $validated['preferredWorkerId'];
             }
-            if (array_key_exists('basePrice', $validated)) {
-                $updates['base_price'] = $validated['basePrice'];
-            }
-            if (array_key_exists('travelFee', $validated)) {
-                $updates['travel_fee'] = $validated['travelFee'];
-            }
-            if (array_key_exists('addonsTotal', $validated)) {
-                $updates['addons_total'] = $validated['addonsTotal'];
-            }
-            if (array_key_exists('totalPrice', $validated)) {
-                $updates['total_price'] = $validated['totalPrice'];
-            } elseif (
-                array_key_exists('basePrice', $validated)
-                || array_key_exists('travelFee', $validated)
-                || array_key_exists('addonsTotal', $validated)
+
+            if (
+                array_key_exists('propertyDetails', $validated)
+                || array_key_exists('addressLatitude', $validated)
+                || array_key_exists('addressLongitude', $validated)
+                || array_key_exists('preferredWorkerId', $validated)
             ) {
-                $basePrice = (float) ($updates['base_price'] ?? $booking->base_price);
-                $travelFee = (float) ($updates['travel_fee'] ?? $booking->travel_fee);
-                $addonsTotal = (float) ($updates['addons_total'] ?? $booking->addons_total);
-                $updates['total_price'] = $basePrice + $travelFee + $addonsTotal;
+                $propertyType = (string) ($validated['propertyType'] ?? $booking->property_type);
+                $propertyDetails = (array) ($updates['property_details'] ?? $booking->property_details ?? []);
+                $addressLatitude = $updates['address_latitude'] ?? $booking->address_latitude;
+                $addressLongitude = $updates['address_longitude'] ?? $booking->address_longitude;
+                $preferredWorkerId = $updates['preferred_worker_id'] ?? $booking->preferred_worker_id;
+
+                $estimation = $this->estimationService->estimate($propertyType, $propertyDetails);
+                $pricing = $this->estimationService->price(
+                    $propertyType,
+                    $propertyDetails,
+                    $addressLatitude,
+                    $addressLongitude,
+                    $preferredWorkerId
+                );
+
+                $updates['estimated_sqm'] = $estimation['estimatedSqm'];
+                $updates['estimated_hours'] = $estimation['estimatedHours'];
+                $updates['total_hours'] = $estimation['estimatedHours'];
+                $updates['base_price'] = $pricing['basePrice'];
+                $updates['travel_fee'] = $pricing['travelFee'];
+                $updates['addons_total'] = $pricing['addonsTotal'];
+                $updates['total_price'] = $pricing['totalPrice'];
             }
 
             if ($updates !== []) {

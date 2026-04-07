@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Models\CancellationPolicy;
 use App\Models\User;
+use App\Models\Worker;
 use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBillingMode;
@@ -49,16 +50,12 @@ it('creates a cleaning order for authenticated user', function (): void {
             'rooms' => 3,
             'bedrooms' => 2,
             'bathrooms' => 1,
+            'living_room_size' => 'small',
         ],
-        'estimatedSqm' => 120,
-        'totalHours' => 3,
         'scheduledDate' => now()->addDay()->format('Y-m-d'),
         'scheduledTime' => '09:00',
         'addressLatitude' => 33.5138,
         'addressLongitude' => 36.2765,
-        'basePrice' => 1000,
-        'travelFee' => 200,
-        'addonsTotal' => 0,
         'termsAccepted' => true,
     ]);
 
@@ -72,10 +69,12 @@ it('creates a cleaning order for authenticated user', function (): void {
         ->where('id', $orderId)
         ->where('customer_id', $user->id)
         ->where('status', CleaningBookingStatus::Pending->value)
-        ->where('base_price', 1000)
-        ->where('travel_fee', 200)
-        ->where('total_price', 1200)
         ->exists())->toBeTrue();
+
+    expect((float) $response->json('order.basePrice'))->toBeGreaterThan(0);
+    expect((float) $response->json('order.totalPrice'))->toBeGreaterThan(0);
+    expect((float) $response->json('order.estimatedSqm'))->toBeGreaterThan(0);
+    expect((float) $response->json('order.totalHours'))->toBeGreaterThan(0);
 });
 
 it('lists only current user cleaning orders', function (): void {
@@ -121,14 +120,84 @@ it('updates a pending cleaning order schedule', function (): void {
     $response = patchJson("/api/v1/user/cleaning/orders/{$order->id}", [
         'scheduledDate' => now()->addDays(2)->format('Y-m-d'),
         'scheduledTime' => '11:00',
-        'totalHours' => 4,
+        'propertyDetails' => [
+            'address' => 'Updated address',
+            'rooms' => 4,
+            'bedrooms' => 3,
+            'bathrooms' => 2,
+            'living_room_size' => 'large',
+        ],
     ]);
 
     $response->assertOk()->assertJsonPath('order.scheduledTime', '11:00');
 
     $order->refresh();
     expect((string) $order->scheduled_time)->toStartWith('11:00');
-    expect((float) $order->total_hours)->toBe(4.0);
+    expect((float) $order->total_hours)->toBeGreaterThan(0);
+    expect((float) $order->total_price)->toBeGreaterThan(0);
+});
+
+it('returns estimated size and time for cleaning order wizard', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $response = postJson('/api/v1/user/cleaning/orders/estimate-size', [
+        'propertyType' => 'house',
+        'propertyDetails' => [
+            'rooms' => 3,
+            'bedrooms' => 2,
+            'bathrooms' => 1,
+            'living_room_size' => 'medium',
+        ],
+    ]);
+
+    $response->assertOk()->assertJsonStructure([
+        'size' => ['estimatedSqm', 'sizeTier'],
+        'estimation' => ['estimatedHours', 'estimatedMinutes'],
+    ]);
+});
+
+it('returns previously worked cleaning workers for current user', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $worker = Worker::factory()->create();
+
+    CleaningBooking::factory()->create([
+        'customer_id' => $user->id,
+        'worker_id' => $worker->id,
+        'status' => CleaningBookingStatus::Completed->value,
+    ]);
+
+    $response = getJson('/api/v1/user/cleaning/orders/previous-workers');
+
+    $response->assertOk();
+    expect($response->json('workers'))->toHaveCount(1);
+    expect((int) $response->json('workers.0.workerId'))->toBe($worker->id);
+});
+
+it('returns estimated cleaning price from backend algorithm', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $response = postJson('/api/v1/user/cleaning/orders/estimate-price', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'rooms' => 2,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+        ],
+        'addressLatitude' => 33.5,
+        'addressLongitude' => 36.3,
+    ]);
+
+    $response->assertOk()->assertJsonStructure([
+        'size' => ['estimatedSqm', 'estimatedHours', 'sizeTier'],
+        'pricing' => ['basePrice', 'travelFee', 'addonsTotal', 'totalPrice', 'currency'],
+    ]);
+
+    expect((float) $response->json('pricing.totalPrice'))->toBeGreaterThan(0);
 });
 
 it('cancels pending cleaning order and rejects cancelling completed order', function (): void {

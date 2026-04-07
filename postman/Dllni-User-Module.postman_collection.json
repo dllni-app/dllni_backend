@@ -3869,6 +3869,264 @@
                             "name": "Cleaning (User Orders)",
                             "item": [
                                 {
+                                    "name": "Estimate order size",
+                                    "request": {
+                                        "method": "POST",
+                                        "auth": {
+                                            "bearer": [
+                                                {
+                                                    "key": "token",
+                                                    "type": "string",
+                                                    "value": "{{userToken}}"
+                                                }
+                                            ],
+                                            "type": "bearer"
+                                        },
+                                        "header": [
+                                            {
+                                                "key": "Content-Type",
+                                                "value": "application/json"
+                                            }
+                                        ],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/user/cleaning/orders/estimate-size",
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "path": [
+                                                "api",
+                                                "v1",
+                                                "user",
+                                                "cleaning",
+                                                "orders",
+                                                "estimate-size"
+                                            ]
+                                        },
+                                        "body": {
+                                            "mode": "raw",
+                                            "raw": "{\"propertyType\":\"apartment\",\"estimatedSqm\":120,\"rooms\":3,\"bedrooms\":2,\"bathrooms\":1}"
+                                        },
+                                        "description": "Estimate cleaning size and service hours based on property details.\n\n**Status**: `200 OK` | `422` validation error\n\n**Headers**: `Authorization: Bearer {{token}}`\n\n**Body**:\n- `propertyType` (required): `apartment` | `villa` | `house` | `office`\n- `estimatedSqm` (optional): Square meters\n- `rooms` (optional): Total rooms count\n- `bedrooms` (optional): Bedrooms count\n- `bathrooms` (optional): Bathrooms count\n\n**Response**:\n```json\n{\n  \"data\": {\n    \"estimatedSqm\": 120,\n    \"sizeCategory\": \"medium\",\n    \"estimatedHours\": 3.5,\n    \"hoursRange\": { \"min\": 3, \"max\": 4 },\n    \"suggestedServices\": [\"standard_cleaning\", \"window_cleaning\"],\n    \"priceEstimate\": 875\n  }\n}\n```"
+                                    },
+                                    "response": [
+                                        {
+                                            "name": "200 OK - Size Estimate",
+                                            "originalRequest": {
+                                                "method": "POST",
+                                                "header": [
+                                                    {
+                                                        "key": "Content-Type",
+                                                        "value": "application/json"
+                                                    }
+                                                ],
+                                                "body": {
+                                                    "mode": "raw",
+                                                    "raw": "{\"propertyType\":\"apartment\",\"estimatedSqm\":120,\"rooms\":3,\"bedrooms\":2,\"bathrooms\":1}"
+                                                },
+                                                "url": {
+                                                    "raw": "{{baseUrl}}/api/v1/user/cleaning/orders/estimate-size",
+                                                    "host": [
+                                                        "{{baseUrl}}"
+                                                    ],
+                                                    "path": [
+                                                        "api",
+                                                        "v1",
+                                                        "user",
+                                                        "cleaning",
+                                                        "orders",
+                                                        "estimate-size"
+                                                    ]
+                                                }
+                                            },
+                                            "status": "OK",
+                                            "code": 200,
+                                            "header": [
+                                                {
+                                                    "key": "Content-Type",
+                                                    "value": "application/json"
+                                                }
+                                            ],
+                                            "body": "{\"data\": {\"estimatedSqm\": 120, \"sizeCategory\": \"medium\", \"estimatedHours\": 3.5, \"hoursRange\": {\"min\": 3, \"max\": 4}, \"suggestedServices\": [\"standard_cleaning\", \"window_cleaning\"], \"priceEstimate\": 875}}"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "name": "List previous workers",
+                                    "request": {
+                                        "method": "GET",
+                                        "auth": {
+                                            "bearer": [
+                                                {
+                                                    "key": "token",
+                                                    "type": "string",
+                                                    "value": "{{userToken}}"
+                                                }
+                                            ],
+                                            "type": "bearer"
+                                        },
+                                        "header": [
+                                            {
+                                                "key": "Accept",
+                                                "value": "application/json"
+                                            }
+                                        ],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/user/cleaning/orders/previous-workers?limit=10&page=1",
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "path": [
+                                                "api",
+                                                "v1",
+                                                "user",
+                                                "cleaning",
+                                                "orders",
+                                                "previous-workers"
+                                            ],
+                                            "query": [
+                                                {
+                                                    "key": "limit",
+                                                    "value": "10"
+                                                },
+                                                {
+                                                    "key": "page",
+                                                    "value": "1"
+                                                }
+                                            ]
+                                        },
+                                        "description": "Get list of workers who have provided cleaning services for the authenticated user (for re-booking/favorite workers).\n\n**Status**: `200 OK`\n\n**Headers**: `Authorization: Bearer {{token}}`\n\n**Query**:\n- `limit` (optional, default 10): Max workers to return (1–100)\n- `page` (optional, default 1): Pagination page\n\n**Response**: Paginated worker list with details.\n```json\n{\n  \"data\": [\n    {\n      \"id\": 42,\n      \"name\": \"محمد أحمد\",\n      \"phone\": \"+963944123456\",\n      \"rating\": 4.8,\n      \"totalJobs\": 15,\n      \"completedJobs\": 14,\n      \"isFavorited\": true,\n      \"lastServiceDate\": \"2026-03-28\",\n      \"profileImage\": \"https://...\",\n      \"badges\": [\"verified\", \"top_rated\"]\n    }\n  ],\n  \"links\": { \"first\": \"...\", \"last\": \"...\", \"prev\": null, \"next\": \"...\" },\n  \"meta\": { \"current_page\": 1, \"from\": 1, \"last_page\": 1, \"per_page\": 10, \"to\": 5, \"total\": 5 }\n}\n```"
+                                    },
+                                    "response": [
+                                        {
+                                            "name": "200 OK - Previous Workers List",
+                                            "originalRequest": {
+                                                "method": "GET",
+                                                "header": [
+                                                    {
+                                                        "key": "Accept",
+                                                        "value": "application/json"
+                                                    }
+                                                ],
+                                                "url": {
+                                                    "raw": "{{baseUrl}}/api/v1/user/cleaning/orders/previous-workers?limit=10&page=1",
+                                                    "host": [
+                                                        "{{baseUrl}}"
+                                                    ],
+                                                    "path": [
+                                                        "api",
+                                                        "v1",
+                                                        "user",
+                                                        "cleaning",
+                                                        "orders",
+                                                        "previous-workers"
+                                                    ],
+                                                    "query": [
+                                                        {
+                                                            "key": "limit",
+                                                            "value": "10"
+                                                        },
+                                                        {
+                                                            "key": "page",
+                                                            "value": "1"
+                                                        }
+                                                    ]
+                                                }
+                                            },
+                                            "status": "OK",
+                                            "code": 200,
+                                            "header": [
+                                                {
+                                                    "key": "Content-Type",
+                                                    "value": "application/json"
+                                                }
+                                            ],
+                                            "body": "{\"data\": [{\"id\": 42, \"name\": \"محمد أحمد\", \"phone\": \"+963944123456\", \"rating\": 4.8, \"totalJobs\": 15, \"completedJobs\": 14, \"isFavorited\": true, \"lastServiceDate\": \"2026-03-28\", \"profileImage\": \"https://example.com/worker.jpg\", \"badges\": [\"verified\", \"top_rated\"]}, {\"id\": 43, \"name\": \"فاطمة علي\", \"phone\": \"+963944789012\", \"rating\": 4.6, \"totalJobs\": 8, \"completedJobs\": 8, \"isFavorited\": false, \"lastServiceDate\": \"2026-03-15\", \"profileImage\": \"https://example.com/worker2.jpg\", \"badges\": [\"verified\"]}], \"links\": {\"first\": \"http://Dllni.test/api/v1/user/cleaning/orders/previous-workers?page=1\", \"last\": \"http://Dllni.test/api/v1/user/cleaning/orders/previous-workers?page=1\", \"prev\": null, \"next\": null}, \"meta\": {\"current_page\": 1, \"from\": 1, \"last_page\": 1, \"per_page\": 10, \"to\": 2, \"total\": 2}}"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "name": "Estimate order price",
+                                    "request": {
+                                        "method": "POST",
+                                        "auth": {
+                                            "bearer": [
+                                                {
+                                                    "key": "token",
+                                                    "type": "string",
+                                                    "value": "{{userToken}}"
+                                                }
+                                            ],
+                                            "type": "bearer"
+                                        },
+                                        "header": [
+                                            {
+                                                "key": "Content-Type",
+                                                "value": "application/json"
+                                            }
+                                        ],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/user/cleaning/orders/estimate-price",
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "path": [
+                                                "api",
+                                                "v1",
+                                                "user",
+                                                "cleaning",
+                                                "orders",
+                                                "estimate-price"
+                                            ]
+                                        },
+                                        "body": {
+                                            "mode": "raw",
+                                            "raw": "{\"propertyType\":\"apartment\",\"estimatedSqm\":120,\"totalHours\":3.5,\"serviceType\":\"standard_cleaning\",\"addons\":[\"window_cleaning\"],\"scheduledDate\":\"2026-04-10\",\"addressLatitude\":33.5138,\"addressLongitude\":36.2765,\"preferredWorkerId\":null}"
+                                        },
+                                        "description": "Calculate detailed price estimate for a cleaning order based on property and service details.\n\n**Status**: `200 OK` | `422` validation error\n\n**Headers**: `Authorization: Bearer {{token}}`\n\n**Body**:\n- `propertyType` (required): `apartment` | `villa` | `house` | `office`\n- `estimatedSqm` (required): Square meters\n- `totalHours` (required): Estimated hours (decimal)\n- `serviceType` (required): `standard_cleaning` | `deep_cleaning` | `move_cleaning`\n- `addons` (optional): Array of addon service codes\n- `scheduledDate` (required): Date in YYYY-MM-DD format\n- `addressLatitude` (required): Latitude for travel fee calculation\n- `addressLongitude` (required): Longitude for travel fee calculation\n- `preferredWorkerId` (optional): Specific worker ID for re-booking\n\n**Response**:\n```json\n{\n  \"data\": {\n    \"basePrice\": 750,\n    \"addonsTotal\": 125,\n    \"travelFee\": 75,\n    \"taxes\": 0,\n    \"discounts\": 0,\n    \"totalPrice\": 950,\n    \"currency\": \"IQD\",\n    \"breakdown\": {\n      \"hourlyRate\": 150,\n      \"sqmRate\": 0,\n      \"minimumCharge\": false\n    },\n    \"paymentMethods\": [\"wallet\", \"card\", \"cash\"]\n  }\n}\n```"
+                                    },
+                                    "response": [
+                                        {
+                                            "name": "200 OK - Price Estimate",
+                                            "originalRequest": {
+                                                "method": "POST",
+                                                "header": [
+                                                    {
+                                                        "key": "Content-Type",
+                                                        "value": "application/json"
+                                                    }
+                                                ],
+                                                "body": {
+                                                    "mode": "raw",
+                                                    "raw": "{\"propertyType\":\"apartment\",\"estimatedSqm\":120,\"totalHours\":3.5,\"serviceType\":\"standard_cleaning\",\"addons\":[\"window_cleaning\"],\"scheduledDate\":\"2026-04-10\",\"addressLatitude\":33.5138,\"addressLongitude\":36.2765,\"preferredWorkerId\":null}"
+                                                },
+                                                "url": {
+                                                    "raw": "{{baseUrl}}/api/v1/user/cleaning/orders/estimate-price",
+                                                    "host": [
+                                                        "{{baseUrl}}"
+                                                    ],
+                                                    "path": [
+                                                        "api",
+                                                        "v1",
+                                                        "user",
+                                                        "cleaning",
+                                                        "orders",
+                                                        "estimate-price"
+                                                    ]
+                                                }
+                                            },
+                                            "status": "OK",
+                                            "code": 200,
+                                            "header": [
+                                                {
+                                                    "key": "Content-Type",
+                                                    "value": "application/json"
+                                                }
+                                            ],
+                                            "body": "{\"data\": {\"basePrice\": 750, \"addonsTotal\": 125, \"travelFee\": 75, \"taxes\": 0, \"discounts\": 0, \"totalPrice\": 950, \"currency\": \"IQD\", \"breakdown\": {\"hourlyRate\": 150, \"sqmRate\": 0, \"minimumCharge\": false}, \"paymentMethods\": [\"wallet\", \"card\", \"cash\"]}}"
+                                        }
+                                    ]
+                                },
+                                {
                                     "name": "Cleaning Orders - Create",
                                     "request": {
                                         "method": "POST",
