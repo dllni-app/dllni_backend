@@ -56,6 +56,7 @@ use Modules\User\Http\Controllers\API\UserRestaurantHomeCategoriesController;
 use Modules\User\Http\Controllers\API\UserRestaurantHomeExclusiveOffersController;
 use Modules\User\Http\Controllers\API\UserRestaurantHomeLatestOrderedProductsController;
 use Modules\User\Http\Controllers\API\UserRestaurantHomeNearestRestaurantsController;
+use Modules\User\Http\Controllers\API\UserRestaurantHomeReorderLatestOrderProductsController;
 use Modules\User\Http\Controllers\API\UserRestaurantHomeSuggestedProductsController;
 use Modules\User\Http\Controllers\API\UserRestaurantOrdersController;
 use Modules\User\Http\Controllers\API\UserRestaurantOrderShowController;
@@ -156,6 +157,7 @@ Route::prefix('v1/user')->group(function (): void {
         Route::get('restaurants/orders', UserRestaurantOrdersController::class);
         Route::get('restaurants/orders/{order}', UserRestaurantOrderShowController::class);
         Route::get('restaurants/home/latest-ordered-products', UserRestaurantHomeLatestOrderedProductsController::class);
+        Route::post('restaurants/home/latest-ordered-products/reorder', UserRestaurantHomeReorderLatestOrderProductsController::class);
 
         Route::post('restaurants/votes', RestaurantGroupVoteStoreController::class);
         Route::post('restaurants/votes/{vote}/ballots', RestaurantGroupVoteCastBallotController::class);
