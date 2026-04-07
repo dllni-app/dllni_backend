@@ -1,0 +1,528 @@
+{
+    "info": {
+        "_postman_id": "de4c6e5b-6a1b-44d4-b4ea-0f4f5df8f002",
+        "name": "Dllni - Supermarket Owner Module",
+        "description": "## Base URL and Prefix\n- Collection variable `{{baseUrl}}` defaults to `http://Dllni.test`.\n- Prefix: `/api/v1`.\n- Owner routes are under `/api/v1/store-owner/*`.\n\n## Authentication\n- All requests require Sanctum bearer token: `Authorization: Bearer {{token}}`.\n\n## Props Format\n- Path props: `{order}`, `{product}`, `{store}` as `{{orderId}}`, `{{productId}}`, `{{storeId}}`.\n- Query props: dashboard and employee list use `storeId`; inventory reports mostly use `store_id`.\n- Validation errors: `{ \"message\": string, \"errors\": { \"field\": [string] } }`.\n\n## Common Enums\n- rejectionType: `out_of_stock | fake_order | other`\n- stock operation: `SET | INCREMENT | DECREMENT`\n\n## Notes\n- Store ownership scope is enforced server-side.\n- For employee forms, load permission ids from `/store-owner/permissions` first.",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "variable": [
+        {
+            "key": "baseUrl",
+            "value": "http://Dllni.test"
+        },
+        {
+            "key": "token",
+            "value": ""
+        },
+        {
+            "key": "storeId",
+            "value": "1"
+        },
+        {
+            "key": "orderId",
+            "value": "1"
+        },
+        {
+            "key": "productId",
+            "value": "1"
+        },
+        {
+            "key": "staffId",
+            "value": "1"
+        }
+    ],
+    "item": [
+        {
+            "name": "Dashboard",
+            "item": [
+                {
+                    "name": "Store owner dashboard",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/v1/store-owner/dashboard?storeId={{storeId}}",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "store-owner",
+                                "dashboard"
+                            ],
+                            "query": [
+                                {
+                                    "key": "storeId",
+                                    "value": "{{storeId}}"
+                                }
+                            ]
+                        },
+                        "description": "Today metrics for selected store.\n\nQuery props:\n- storeId: integer (required)."
+                    },
+                    "response": [
+                        {
+                            "name": "200 OK - dashboard",
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [],
+                            "cookie": [],
+                            "body": "{\n  \"message\": \"Dashboard data retrieved successfully.\",\n  \"data\": {\n    \"totalOrders\": 20,\n    \"completedOrders\": 7,\n    \"newOrders\": 5,\n    \"pendingOrders\": 8,\n    \"totalSales\": 4523.75\n  }\n}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Orders Actions",
+            "item": [
+                {
+                    "name": "Accept order",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/v1/store-owner/orders/{{orderId}}/accept",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "store-owner",
+                                "orders",
+                                "{{orderId}}",
+                                "accept"
+                            ]
+                        },
+                        "description": "Accepts order and triggers stock deduction when applicable."
+                    },
+                    "response": [
+                        {
+                            "name": "200 OK - accepted",
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [],
+                            "cookie": [],
+                            "body": "{\n  \"data\": {\n    \"id\": 311,\n    \"status\": \"accepted\",\n    \"orderNumber\": \"SM-311\"\n  }\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "Reject order",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"reason\": \"Out of stock for requested items\",\n  \"rejectionType\": \"out_of_stock\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/api/v1/store-owner/orders/{{orderId}}/reject",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "store-owner",
+                                "orders",
+                                "{{orderId}}",
+                                "reject"
+                            ]
+                        },
+                        "description": "Request props:\n- reason: string (required)\n- rejectionType: out_of_stock|fake_order|other"
+                    },
+                    "response": [
+                        {
+                            "name": "200 OK - rejected",
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [],
+                            "cookie": [],
+                            "body": "{\n  \"data\": {\n    \"id\": 311,\n    \"status\": \"cancelled\",\n    \"rejectionType\": \"out_of_stock\",\n    \"reason\": \"Out of stock for requested items\"\n  }\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "Process order return",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"items\": [\n    {\n      \"order_item_id\": 1,\n      \"quantity\": 2\n    }\n  ],\n  \"reason\": \"Customer reported defective product\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/api/v1/store-owner/orders/{{orderId}}/return",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "store-owner",
+                                "orders",
+                                "{{orderId}}",
+                                "return"
+                            ]
+                        },
+                        "description": "Restocks returned quantities and logs inventory movement."
+                    },
+                    "response": [
+                        {
+                            "name": "200 OK - return processed",
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [],
+                            "cookie": [],
+                            "body": "{\n  \"success\": true,\n  \"message\": \"Order return processed successfully.\",\n  \"data\": {\n    \"order_id\": 311,\n    \"order_number\": \"SM-311\",\n    \"returned_items\": [\n      {\n        \"product_id\": 5,\n        \"product_name\": \"Fresh Milk\",\n        \"returned_quantity\": 2,\n        \"new_stock\": 52\n      }\n    ],\n    \"reason\": \"Customer reported defective product\"\n  }\n}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Store",
+            "item": [
+                {
+                    "name": "Get store details",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/v1/store-owner/stores/{{storeId}}",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "store-owner",
+                                "stores",
+                                "{{storeId}}"
+                            ]
+                        }
+                    },
+                    "response": [
+                        {
+                            "name": "200 OK - store",
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [],
+                            "cookie": [],
+                            "body": "{\n  \"data\": {\n    \"id\": 1,\n    \"ownerUserId\": 5,\n    \"name\": \"My Store\",\n    \"slug\": \"my-store\",\n    \"description\": \"Fresh groceries\",\n    \"city\": \"Amman\",\n    \"neighborhood\": \"Abdoun\",\n    \"phone\": \"+1234567890\",\n    \"email\": \"store@example.com\",\n    \"cover\": \"https://cdn.example.com/stores/cover.jpg\",\n    \"logo\": \"https://cdn.example.com/stores/logo.jpg\",\n    \"isActive\": true\n  }\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "Update store",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"name\": \"Updated Store Name\",\n  \"description\": \"Updated description\",\n  \"city\": \"Amman\",\n  \"neighborhood\": \"Abdoun\",\n  \"cover\": \"https://cdn.example.com/stores/cover.jpg\",\n  \"logo\": \"https://cdn.example.com/stores/logo.jpg\",\n  \"phone\": \"+1234567890\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/api/v1/store-owner/stores/{{storeId}}",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "store-owner",
+                                "stores",
+                                "{{storeId}}"
+                            ]
+                        }
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Inventory and Products",
+            "item": [
+                {
+                    "name": "List store products",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/v1/store-owner/products?perPage=20&page=1",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "store-owner",
+                                "products"
+                            ],
+                            "query": [
+                                {
+                                    "key": "perPage",
+                                    "value": "20"
+                                },
+                                {
+                                    "key": "page",
+                                    "value": "1"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Low stock alerts",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/v1/store-owner/products/low-stock?store_id={{storeId}}",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "store-owner",
+                                "products",
+                                "low-stock"
+                            ],
+                            "query": [
+                                {
+                                    "key": "store_id",
+                                    "value": "{{storeId}}"
+                                }
+                            ]
+                        }
+                    },
+                    "response": [
+                        {
+                            "name": "200 OK - low stock",
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [],
+                            "cookie": [],
+                            "body": "{\n  \"success\": true,\n  \"data\": {\n    \"products\": [\n      {\n        \"product_id\": 1,\n        \"product_name\": \"Fresh Milk\",\n        \"current_stock\": 5,\n        \"threshold\": 10,\n        \"category\": \"Dairy\",\n        \"barcode\": \"1234567890123\"\n      }\n    ],\n    \"total\": 1\n  }\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "Manual stock update",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"quantity\": 50,\n  \"operation\": \"SET\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/api/v1/store-owner/products/{{productId}}/stock",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "store-owner",
+                                "products",
+                                "{{productId}}",
+                                "stock"
+                            ]
+                        },
+                        "description": "Request props:\n- quantity: number\n- operation: SET|INCREMENT|DECREMENT"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Employees",
+            "item": [
+                {
+                    "name": "Permissions catalog",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/v1/store-owner/permissions",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "store-owner",
+                                "permissions"
+                            ]
+                        }
+                    },
+                    "response": [
+                        {
+                            "name": "200 OK - permissions",
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [],
+                            "cookie": [],
+                            "body": "{\n  \"data\": {\n    \"permissions\": [\n      { \"id\": 1, \"name\": \"products.view\" },\n      { \"id\": 2, \"name\": \"orders.view\" },\n      { \"id\": 3, \"name\": \"inventory.manage\" }\n    ]\n  }\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "Create employee",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"storeId\": {{storeId}},\n  \"name\": \"Store Staff\",\n  \"email\": \"staff@store.test\",\n  \"phone\": \"+963944005555\",\n  \"password\": \"minimum-8-chars\",\n  \"permissionIds\": [1, 2, 3]\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/api/v1/store-owner/employees",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "store-owner",
+                                "employees"
+                            ]
+                        }
+                    },
+                    "response": []
+                }
+            ]
+        }
+    ]
+}

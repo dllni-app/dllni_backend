@@ -37,8 +37,8 @@ final class UserRestaurantExclusiveOfferResource extends JsonResource
             'distanceKm' => $distanceKm,
             'distanceUnit' => $distanceKm !== null ? 'km' : null,
             'imageUrl' => $restaurant->getFirstMediaUrl('primary-image') ?: null,
-            'restaurant' => RestaurantResource::make($this->whenLoaded('restaurant')),
-            'products' => ProductResource::collection($this->whenLoaded('products')),
+            'restaurant' => RestaurantResource::make($restaurant),
+            'products' => ProductResource::collection($this->products),
         ];
     }
 }
