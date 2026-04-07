@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Database\Factories\SmCategoryFactory;
 use Database\Factories\SmOfferFactory;
+use Database\Factories\SmProductFactory;
 use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use Modules\Resturants\Models\Favorite;
@@ -228,13 +230,40 @@ it('shows a supermarket store by id', function (): void {
         'ends_at' => now()->addDay(),
     ]);
 
+    $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+    SmProductFactory::new()->create([
+        'store_id' => $store->id,
+        'category_id' => $category->id,
+        'name' => 'Detail Product',
+        'is_available' => true,
+    ]);
+
     $response = $this->getJson("/api/v1/user/supermarket/stores/{$store->id}");
 
     $response->assertOk()
         ->assertJsonPath('store.id', $store->id)
         ->assertJsonPath('store.name', 'Detail Store')
         ->assertJsonPath('store.isFavorited', true)
-        ->assertJsonPath('store.highestOffer.id', $offer->id);
+        ->assertJsonPath('store.highestOffer.id', $offer->id)
+        ->assertJsonStructure([
+            'store' => [
+                'owner',
+                'storeHours',
+                'categories',
+                'products',
+                'offers',
+                'coupons',
+                'orders',
+                'documents',
+                'trustLogs',
+                'dailyStats',
+                'commissionRules',
+                'carts',
+                'assistantQueries',
+                'recurringOrders',
+                'staff',
+            ],
+        ]);
 
     expect((float) $response->json('store.highestOfferDiscountValue'))->toBe(30.0);
 });
