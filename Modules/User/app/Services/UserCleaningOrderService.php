@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
 
@@ -143,7 +144,21 @@ final class UserCleaningOrderService
             'cancellation_reason' => $reason,
         ]);
 
-        return $booking->fresh();
+        $updated = $booking->fresh();
+
+        CleaningBookingTrackingUpdated::dispatch($updated->id, [
+            'cleaningBookingId' => $updated->id,
+            'status' => $updated->status?->value,
+            'workerId' => $updated->worker_id,
+            'startedTravelAt' => $updated->started_travel_at?->toIso8601String(),
+            'arrivedAt' => $updated->arrived_at?->toIso8601String(),
+            'workStartedAt' => $updated->work_started_at?->toIso8601String(),
+            'workFinishedAt' => $updated->work_finished_at?->toIso8601String(),
+            'cancelledAt' => $updated->cancelled_at?->toIso8601String(),
+            'updatedAt' => now()->toIso8601String(),
+        ]);
+
+        return $updated;
     }
 
     private function defaultCancellationPolicyId(): ?int
@@ -170,7 +185,7 @@ final class UserCleaningOrderService
     private function generateBookingNumber(): string
     {
         do {
-            $bookingNumber = 'CLN-USER-' . Str::upper(Str::random(8));
+            $bookingNumber = 'CLN-USER-'.Str::upper(Str::random(8));
         } while (CleaningBooking::query()->where('booking_number', $bookingNumber)->exists());
 
         return $bookingNumber;

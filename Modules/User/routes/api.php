@@ -19,10 +19,10 @@ use Modules\User\Http\Controllers\API\RestaurantGroupVoteEndController;
 use Modules\User\Http\Controllers\API\RestaurantGroupVoteShowController;
 use Modules\User\Http\Controllers\API\RestaurantGroupVoteStoreController;
 use Modules\User\Http\Controllers\API\RestaurantGroupVoteSuggestionsController;
+use Modules\User\Http\Controllers\API\RestaurantLuckBoxOptionsController;
+use Modules\User\Http\Controllers\API\RestaurantLuckBoxSuggestController;
 use Modules\User\Http\Controllers\API\SmHomeFeaturedOffersController;
 use Modules\User\Http\Controllers\API\SmHomeNearbyStoresController;
-use Modules\User\Http\Controllers\API\SmLuckBoxOptionsController;
-use Modules\User\Http\Controllers\API\SmLuckBoxSuggestController;
 use Modules\User\Http\Controllers\API\SmOrderStatusController;
 use Modules\User\Http\Controllers\API\SmProductShowController;
 use Modules\User\Http\Controllers\API\SmProductSimilarSearchController;
@@ -69,6 +69,7 @@ use Modules\User\Http\Controllers\API\UserRestaurantOrdersController;
 use Modules\User\Http\Controllers\API\UserRestaurantOrderShowController;
 use Modules\User\Http\Controllers\API\UserRestaurantProductsByCategoryController;
 use Modules\User\Http\Controllers\API\UserRestaurantProductsWithOffersController;
+use Modules\User\Http\Controllers\API\UserRestaurantActiveCouponsController;
 use Modules\User\Http\Controllers\API\UserSupermarketProductFavoriteDestroyController;
 use Modules\User\Http\Controllers\API\UserSupermarketProductFavoritesIndexController;
 use Modules\User\Http\Controllers\API\UserSupermarketProductFavoriteStoreController;
@@ -98,9 +99,6 @@ Route::prefix('v1/user')->group(function (): void {
     Route::get('supermarket/products/{product}/similar', SmProductSimilarSearchController::class);
     Route::get('supermarket/products/{product}', SmProductShowController::class);
 
-    Route::get('supermarket/luck-box/options', SmLuckBoxOptionsController::class);
-    Route::post('supermarket/luck-box/suggest', SmLuckBoxSuggestController::class);
-
     Route::prefix('restaurants/home')->group(function (): void {
         Route::get('categories', UserRestaurantHomeCategoriesController::class);
         Route::get('exclusive-offers', UserRestaurantHomeExclusiveOffersController::class);
@@ -114,6 +112,7 @@ Route::prefix('v1/user')->group(function (): void {
     Route::get('restaurants/discover', DiscoverRestaurantsController::class);
     Route::get('restaurants/votes/suggestions', RestaurantGroupVoteSuggestionsController::class);
     Route::get('restaurants/votes/{vote}', RestaurantGroupVoteShowController::class);
+    Route::get('restaurants/{restaurant}/coupons', UserRestaurantActiveCouponsController::class);
     Route::get('restaurants/{restaurant}', UserRestaurantDetailsController::class);
     Route::get('products/{product}', UserProductDetailsController::class);
 
@@ -174,6 +173,8 @@ Route::prefix('v1/user')->group(function (): void {
         Route::post('restaurants/checkout', RestaurantCheckoutController::class);
         Route::get('restaurants/orders', UserRestaurantOrdersController::class);
         Route::get('restaurants/orders/{order}', UserRestaurantOrderShowController::class);
+        Route::get('restaurants/luck-box/options', RestaurantLuckBoxOptionsController::class);
+        Route::post('restaurants/luck-box/suggest', RestaurantLuckBoxSuggestController::class);
         Route::get('restaurants/home/latest-ordered-products', UserRestaurantHomeLatestOrderedProductsController::class);
         Route::post('restaurants/home/latest-ordered-products/reorder', UserRestaurantHomeReorderLatestOrderProductsController::class);
 

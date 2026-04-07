@@ -6,42 +6,42 @@ namespace Modules\User\Services;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
-use Modules\Supermarket\Models\SmCategory;
-use Modules\Supermarket\Models\SmProduct;
-use Modules\Supermarket\Models\SmStore;
+use Modules\Resturants\Models\CuisineType;
+use Modules\Resturants\Models\Product;
+use Modules\Resturants\Models\Restaurant;
 
-final class SmLuckBoxService
+final class RestaurantLuckBoxService
 {
+    private const float DEFAULT_SEARCH_RADIUS_KM = 10.0;
+
+    private const array RESTRICTIONS = [
+        ['value' => 'vegetarian', 'labelAr' => 'نباتي'],
+        ['value' => 'gluten_free', 'labelAr' => 'خالي من الغلوتين'],
+        ['value' => 'nut_free', 'labelAr' => 'خالي من المكسرات'],
+        ['value' => 'dairy_free', 'labelAr' => 'خالي من الألبان'],
+        ['value' => 'halal_friendly', 'labelAr' => 'مناسب للحلال'],
+    ];
+
     /**
-     * @return array{restrictions: list<array{value: string, labelAr: string}>, categoryTypes: list<array{id: int, name: string, imageUrl: string|null}>}
+     * @return array{restrictions: list<array{value: string, labelAr: string}>, cuisineTypes: list<array{id: int, name: string}>}
      */
     public function options(): array
     {
-        $categoryTypes = SmCategory::query()
-            ->where('is_active', true)
-            ->whereHas('store', fn (Builder $q) => $q->where('is_active', true))
-            ->selectRaw('MIN(id) as id, name, MIN(image_path) as image_path')
-            ->groupBy('name')
+        $cuisineTypes = CuisineType::query()
+            ->whereHas('restaurants', fn(Builder $q) => $q->where('is_active', true))
             ->orderBy('name')
             ->limit(50)
-            ->get()
-            ->map(fn ($row) => [
-                'id' => (int) $row->id,
-                'name' => (string) $row->name,
-                'imageUrl' => $row->image_path !== null && $row->image_path !== '' ? (string) $row->image_path : null,
+            ->get(['id', 'name'])
+            ->map(fn(CuisineType $type) => [
+                'id' => $type->id,
+                'name' => $type->name,
             ])
             ->values()
             ->all();
 
         return [
-            'restrictions' => [
-                ['value' => 'vegetarian', 'labelAr' => 'نباتي'],
-                ['value' => 'gluten_free', 'labelAr' => 'خالي من الغلوتين'],
-                ['value' => 'nut_free', 'labelAr' => 'خالي من المكسرات'],
-                ['value' => 'dairy_free', 'labelAr' => 'خالي من الألبان'],
-                ['value' => 'halal_friendly', 'labelAr' => 'مناسب للحلال'],
-            ],
-            'categoryTypes' => $categoryTypes,
+            'restrictions' => self::RESTRICTIONS,
+            'cuisineTypes' => $cuisineTypes,
         ];
     }
 
@@ -55,37 +55,55 @@ final class SmLuckBoxService
         array $restrictions = [],
         ?float $latitude = null,
         ?float $longitude = null,
-        ?float $searchRadiusKm = null,
-        ?int $categoryId = null,
-        ?int $storeId = null,
+        ?int $cuisineTypeId = null,
+        ?int $restaurantId = null,
     ): array {
         $budgetTotal = round($groupSize * $budgetPerPerson, 2);
+        $driver = Restaurant::query()->getConnection()->getDriverName();
 
-        $storesQuery = SmStore::query()
+        $restaurantsQuery = Restaurant::query()
             ->where('is_active', true)
             ->where(function (Builder $q): void {
                 $q->whereNull('suspension_until')->orWhere('suspension_until', '<=', now());
             });
 
-        if ($storeId !== null) {
-            $storesQuery->where('id', $storeId);
+        if ($restaurantId !== null) {
+            $restaurantsQuery->where('id', $restaurantId);
         }
 
-        if (is_numeric($latitude) && is_numeric($longitude) && is_numeric($searchRadiusKm)) {
+        if ($cuisineTypeId !== null) {
+            $restaurantsQuery->whereHas('cuisineTypes', fn(Builder $q) => $q->where('cuisine_types.id', $cuisineTypeId));
+        }
+
+        if (is_numeric($latitude) && is_numeric($longitude)) {
             $lat = (float) $latitude;
             $lng = (float) $longitude;
-            $storesQuery
-                ->select('sm_stores.*')
-                ->selectRaw(
-                    '(6371 * acos(cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude)))) as distance_km',
-                    [$lat, $lng, $lat]
-                )
-                ->whereNotNull('latitude')
-                ->whereNotNull('longitude')
-                ->havingRaw('distance_km <= ?', [(float) $searchRadiusKm]);
+
+            if ($driver === 'sqlite') {
+                $latDelta = self::DEFAULT_SEARCH_RADIUS_KM / 111.0;
+                $cosLat = cos(deg2rad($lat));
+                $lngDelta = self::DEFAULT_SEARCH_RADIUS_KM / (111.0 * max(abs($cosLat), 0.01));
+
+                $restaurantsQuery
+                    ->whereNotNull('latitude')
+                    ->whereNotNull('longitude')
+                    ->whereBetween('latitude', [$lat - $latDelta, $lat + $latDelta])
+                    ->whereBetween('longitude', [$lng - $lngDelta, $lng + $lngDelta]);
+            } else {
+                $restaurantsQuery
+                    ->select('restaurants.*')
+                    ->selectRaw(
+                        '(6371 * acos(cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude)))) as distance_km',
+                        [$lat, $lng, $lat]
+                    )
+                    ->whereNotNull('latitude')
+                    ->whereNotNull('longitude')
+                    ->havingRaw('distance_km <= ?', [self::DEFAULT_SEARCH_RADIUS_KM]);
+            }
         }
 
-        $stores = $storesQuery
+        $restaurants = $restaurantsQuery
+            ->with('media')
             ->orderByDesc('is_featured')
             ->orderByDesc('average_rating')
             ->limit(40)
@@ -95,27 +113,27 @@ final class SmLuckBoxService
         $fastest = null;
         $balanced = null;
 
-        foreach ($stores as $store) {
-            if (! $store instanceof SmStore) {
+        foreach ($restaurants as $restaurant) {
+            if (! $restaurant instanceof Restaurant) {
                 continue;
             }
 
-            $products = $this->productsForStore($store->id, $restrictions, $categoryId);
+            $products = $this->productsForRestaurant($restaurant->id, $restrictions);
             if ($products->isEmpty()) {
                 continue;
             }
 
-            $bv = $this->buildBestValueBundle($store, $products, $budgetTotal);
+            $bv = $this->buildBestValueBundle($restaurant, $products, $budgetTotal);
             if ($bv !== null && ($bestValue === null || $bv['score'] > $bestValue['score'])) {
                 $bestValue = $bv;
             }
 
-            $ft = $this->buildFastestBundle($store, $products, $budgetTotal);
+            $ft = $this->buildFastestBundle($restaurant, $products, $budgetTotal);
             if ($ft !== null && ($fastest === null || $ft['score'] > $fastest['score'])) {
                 $fastest = $ft;
             }
 
-            $bl = $this->buildBalancedBundle($store, $products, $budgetTotal);
+            $bl = $this->buildBalancedBundle($restaurant, $products, $budgetTotal);
             if ($bl !== null && ($balanced === null || $bl['score'] > $balanced['score'])) {
                 $balanced = $bl;
             }
@@ -139,18 +157,14 @@ final class SmLuckBoxService
 
     /**
      * @param  list<string>  $restrictions
-     * @return Collection<int, SmProduct>
+     * @return Collection<int, Product>
      */
-    private function productsForStore(int $storeId, array $restrictions, ?int $categoryId): Collection
+    private function productsForRestaurant(int $restaurantId, array $restrictions): Collection
     {
-        $query = SmProduct::query()
-            ->where('store_id', $storeId)
+        $query = Product::query()
+            ->where('restaurant_id', $restaurantId)
             ->where('is_available', true)
             ->where('stock_quantity', '>', 0);
-
-        if ($categoryId !== null) {
-            $query->where('category_id', $categoryId);
-        }
 
         $this->applyRestrictions($query, $restrictions);
 
@@ -173,7 +187,7 @@ final class SmLuckBoxService
             };
 
             foreach ($patterns as $word) {
-                $like = '%'.$word.'%';
+                $like = '%' . $word . '%';
                 $query->where(function (Builder $inner) use ($like): void {
                     $inner->where('name', 'not like', $like)
                         ->where(function (Builder $d) use ($like): void {
@@ -187,9 +201,13 @@ final class SmLuckBoxService
     /**
      * @return array{productId: int, name: string, quantity: int, unitPrice: float, lineTotal: float, imageUrl: string|null}
      */
-    private function lineItemFromProduct(SmProduct $product, float $unitPrice): array
+    private function lineItemFromProduct(Product $product, float $unitPrice): array
     {
-        $url = $product->getFirstMediaUrl(SmProduct::IMAGE_COLLECTION);
+        $url = $product->getFirstMediaUrl('primary-image');
+
+        if ($url === '') {
+            $url = $product->getFirstMediaUrl('images');
+        }
 
         return [
             'productId' => $product->id,
@@ -201,20 +219,20 @@ final class SmLuckBoxService
         ];
     }
 
-    private function effectivePrice(SmProduct $p): float
+    private function effectivePrice(Product $product): float
     {
-        $discounted = $p->discounted_price;
+        $discounted = $product->discounted_price;
 
-        return (float) (($discounted !== null && (float) $discounted > 0) ? $discounted : $p->price);
+        return (float) (($discounted !== null && (float) $discounted > 0) ? $discounted : $product->price);
     }
 
     /**
-     * @param  Collection<int, SmProduct>  $products
-     * @return array{store: SmStore, lineItems: list<array{productId: int, name: string, quantity: int, unitPrice: float, lineTotal: float, imageUrl: string|null}>, totalPrice: float, totalProducts: int, itemsDescription: string, estimatedMinutes: int, score: float}|null
+     * @param  Collection<int, Product>  $products
+     * @return array{restaurant: Restaurant, lineItems: list<array{productId: int, name: string, quantity: int, unitPrice: float, lineTotal: float, imageUrl: string|null}>, totalPrice: float, totalProducts: int, itemsDescription: string, estimatedMinutes: int, score: float}|null
      */
-    private function buildBestValueBundle(SmStore $store, Collection $products, float $budgetTotal): ?array
+    private function buildBestValueBundle(Restaurant $restaurant, Collection $products, float $budgetTotal): ?array
     {
-        $sorted = $products->sortBy(fn (SmProduct $p) => $this->effectivePrice($p))->values();
+        $sorted = $products->sortBy(fn(Product $p) => $this->effectivePrice($p))->values();
         $lineItems = [];
         $total = 0.0;
 
@@ -236,17 +254,17 @@ final class SmLuckBoxService
 
         $score = count($lineItems) / max($total, 0.01);
 
-        return $this->bundlePayload($store, $lineItems, $total, $score);
+        return $this->bundlePayload($restaurant, $lineItems, $total, $score);
     }
 
     /**
-     * @param  Collection<int, SmProduct>  $products
-     * @return array{store: SmStore, lineItems: list<array{productId: int, name: string, quantity: int, unitPrice: float, lineTotal: float, imageUrl: string|null}>, totalPrice: float, totalProducts: int, itemsDescription: string, estimatedMinutes: int, score: float}|null
+     * @param  Collection<int, Product>  $products
+     * @return array{restaurant: Restaurant, lineItems: list<array{productId: int, name: string, quantity: int, unitPrice: float, lineTotal: float, imageUrl: string|null}>, totalPrice: float, totalProducts: int, itemsDescription: string, estimatedMinutes: int, score: float}|null
      */
-    private function buildFastestBundle(SmStore $store, Collection $products, float $budgetTotal): ?array
+    private function buildFastestBundle(Restaurant $restaurant, Collection $products, float $budgetTotal): ?array
     {
         $targetMin = $budgetTotal * 0.45;
-        $sorted = $products->sortByDesc(fn (SmProduct $p) => $this->effectivePrice($p))->values();
+        $sorted = $products->sortByDesc(fn(Product $p) => $this->effectivePrice($p))->values();
         $lineItems = [];
         $total = 0.0;
 
@@ -273,29 +291,30 @@ final class SmLuckBoxService
         $utilization = $total / max($budgetTotal, 0.01);
         $score = 500 - ($itemCount * 25) + ($utilization * 100);
 
-        return $this->bundlePayload($store, $lineItems, $total, $score);
+        return $this->bundlePayload($restaurant, $lineItems, $total, $score);
     }
 
     /**
-     * @param  Collection<int, SmProduct>  $products
-     * @return array{store: SmStore, lineItems: list<array{productId: int, name: string, quantity: int, unitPrice: float, lineTotal: float, imageUrl: string|null}>, totalPrice: float, totalProducts: int, itemsDescription: string, estimatedMinutes: int, score: float}|null
+     * @param  Collection<int, Product>  $products
+     * @return array{restaurant: Restaurant, lineItems: list<array{productId: int, name: string, quantity: int, unitPrice: float, lineTotal: float, imageUrl: string|null}>, totalPrice: float, totalProducts: int, itemsDescription: string, estimatedMinutes: int, score: float}|null
      */
-    private function buildBalancedBundle(SmStore $store, Collection $products, float $budgetTotal): ?array
+    private function buildBalancedBundle(Restaurant $restaurant, Collection $products, float $budgetTotal): ?array
     {
-        $byCategory = $products->groupBy(fn (SmProduct $p) => $p->category_id ?? 0);
+        $byCategory = $products->groupBy(fn(Product $p) => $p->category_id ?? 0);
         $roundRobin = collect();
         $keys = $byCategory->keys()->sort()->values();
         $maxRounds = 50;
+
         for ($r = 0; $r < $maxRounds; $r++) {
             foreach ($keys as $key) {
                 $group = $byCategory->get($key);
                 if (! $group instanceof Collection) {
                     continue;
                 }
-                $picked = $group->sortBy(fn (SmProduct $p) => $this->effectivePrice($p))->first();
-                if ($picked instanceof SmProduct) {
+                $picked = $group->sortBy(fn(Product $p) => $this->effectivePrice($p))->first();
+                if ($picked instanceof Product) {
                     $roundRobin->push($picked);
-                    $byCategory->put($key, $group->reject(fn (SmProduct $p) => $p->id === $picked->id)->values());
+                    $byCategory->put($key, $group->reject(fn(Product $p) => $p->id === $picked->id)->values());
                 }
             }
         }
@@ -319,34 +338,37 @@ final class SmLuckBoxService
         }
 
         $distinctCategories = collect($lineItems)->map(function (array $li) use ($products): ?int {
-            $p = $products->firstWhere('id', $li['productId']);
+            $product = $products->firstWhere('id', $li['productId']);
 
-            return $p?->category_id;
+            return $product?->category_id;
         })->filter()->unique()->count();
 
         $score = (float) $distinctCategories * 10 + count($lineItems);
 
-        return $this->bundlePayload($store, $lineItems, $total, $score);
+        return $this->bundlePayload($restaurant, $lineItems, $total, $score);
     }
 
     /**
      * @param  list<array{productId: int, name: string, quantity: int, unitPrice: float, lineTotal: float, imageUrl: string|null}>  $lineItems
-     * @return array{store: SmStore, lineItems: list<array{productId: int, name: string, quantity: int, unitPrice: float, lineTotal: float, imageUrl: string|null}>, totalPrice: float, totalProducts: int, itemsDescription: string, estimatedMinutes: int, score: float}
+     * @return array{restaurant: Restaurant, lineItems: list<array{productId: int, name: string, quantity: int, unitPrice: float, lineTotal: float, imageUrl: string|null}>, totalPrice: float, totalProducts: int, itemsDescription: string, estimatedMinutes: int, score: float}
      */
-    private function bundlePayload(SmStore $store, array $lineItems, float $total, float $score): array
+    private function bundlePayload(Restaurant $restaurant, array $lineItems, float $total, float $score): array
     {
-        $qty = array_sum(array_column($lineItems, 'quantity'));
+        $quantity = array_sum(array_column($lineItems, 'quantity'));
         $parts = [];
-        foreach ($lineItems as $li) {
-            $parts[] = $li['quantity'].'× '.$li['name'];
+
+        foreach ($lineItems as $lineItem) {
+            $parts[] = $lineItem['quantity'] . '× ' . $lineItem['name'];
         }
-        $estimatedMinutes = min(120, 12 + (3 * count($lineItems)));
+
+        $basePreparationMinutes = (int) ($restaurant->estimated_preparation_time ?? 12);
+        $estimatedMinutes = min(120, max(10, $basePreparationMinutes + (2 * count($lineItems))));
 
         return [
-            'store' => $store,
+            'restaurant' => $restaurant,
             'lineItems' => $lineItems,
             'totalPrice' => round($total, 2),
-            'totalProducts' => $qty,
+            'totalProducts' => $quantity,
             'itemsDescription' => implode('، ', $parts),
             'estimatedMinutes' => $estimatedMinutes,
             'score' => $score,
@@ -354,22 +376,25 @@ final class SmLuckBoxService
     }
 
     /**
-     * @param  array{store: SmStore, lineItems: list<array{productId: int, name: string, quantity: int, unitPrice: float, lineTotal: float, imageUrl: string|null}>, totalPrice: float, totalProducts: int, itemsDescription: string, estimatedMinutes: int, score: float}  $bundle
+     * @param  array{restaurant: Restaurant, lineItems: list<array{productId: int, name: string, quantity: int, unitPrice: float, lineTotal: float, imageUrl: string|null}>, totalPrice: float, totalProducts: int, itemsDescription: string, estimatedMinutes: int, score: float}  $bundle
      * @return array<string, mixed>
      */
     private function formatBundle(string $label, string $labelAr, array $bundle): array
     {
-        $store = $bundle['store'];
+        $restaurant = $bundle['restaurant'];
+
+        $primaryImageUrl = $restaurant->getFirstMediaUrl('primary-image');
+        $bannerImageUrl = $restaurant->getFirstMediaUrl('banner-image');
 
         return [
             'label' => $label,
             'labelAr' => $labelAr,
-            'store' => [
-                'id' => $store->id,
-                'name' => $store->name,
-                'slug' => $store->slug,
-                'logo' => $store->logo,
-                'cover' => $store->cover,
+            'restaurant' => [
+                'id' => $restaurant->id,
+                'name' => $restaurant->name,
+                'slug' => $restaurant->slug,
+                'primaryImageUrl' => $primaryImageUrl !== '' ? $primaryImageUrl : null,
+                'bannerImageUrl' => $bannerImageUrl !== '' ? $bannerImageUrl : null,
             ],
             'totalProducts' => $bundle['totalProducts'],
             'itemsDescription' => $bundle['itemsDescription'],

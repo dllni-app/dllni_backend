@@ -5,16 +5,16 @@ declare(strict_types=1);
 namespace Modules\User\Http\Controllers\API;
 
 use Illuminate\Http\JsonResponse;
-use Modules\User\Http\Requests\SmLuckBoxSuggestRequest;
-use Modules\User\Services\SmLuckBoxService;
+use Modules\User\Http\Requests\RestaurantLuckBoxSuggestRequest;
+use Modules\User\Services\RestaurantLuckBoxService;
 
-final class SmLuckBoxSuggestController
+final class RestaurantLuckBoxSuggestController
 {
     public function __construct(
-        private SmLuckBoxService $service,
+        private RestaurantLuckBoxService $service,
     ) {}
 
-    public function __invoke(SmLuckBoxSuggestRequest $request): JsonResponse
+    public function __invoke(RestaurantLuckBoxSuggestRequest $request): JsonResponse
     {
         $validated = $request->validated();
 
@@ -24,9 +24,8 @@ final class SmLuckBoxSuggestController
             restrictions: $validated['restrictions'] ?? [],
             latitude: isset($validated['latitude']) ? (float) $validated['latitude'] : null,
             longitude: isset($validated['longitude']) ? (float) $validated['longitude'] : null,
-            searchRadiusKm: isset($validated['searchRadiusKm']) ? (float) $validated['searchRadiusKm'] : null,
-            categoryId: isset($validated['categoryId']) ? (int) $validated['categoryId'] : null,
-            storeId: isset($validated['storeId']) ? (int) $validated['storeId'] : null,
+            cuisineTypeId: isset($validated['cuisineTypeId']) ? (int) $validated['cuisineTypeId'] : null,
+            restaurantId: isset($validated['restaurantId']) ? (int) $validated['restaurantId'] : null,
         );
 
         return response()->json($payload);

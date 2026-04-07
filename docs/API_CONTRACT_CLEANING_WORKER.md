@@ -288,11 +288,13 @@ Only the **customer** and the **assigned worker** (and admins, if implemented) a
 
 #### Channel and events
 
-| Channel (private)                | Events (broadcast by server)   | When |
-|----------------------------------|--------------------------------|------|
-| `private-cleaning-booking.{id}`  | `WorkerLocationUpdated`        | Worker sends location via `POST …/location` (after start-travel). |
-| `private-cleaning-booking.{id}`  | `WorkerArrived`                | Worker taps "I have arrived" via `POST …/arrive`. |
+| Channel (private)                | Events (broadcast by server)     | When |
+|----------------------------------|----------------------------------|------|
+| `private-cleaning-booking.{id}`  | `CleaningBookingTrackingUpdated` | Booking tracking state changes (status/timestamps) on accept, reject, start-travel, arrive, start-work, complete, cancel. |
+| `private-cleaning-booking.{id}`  | `WorkerLocationUpdated`          | Worker sends location via `POST …/location` (after start-travel). |
+| `private-cleaning-booking.{id}`  | `WorkerArrived`                  | Worker taps "I have arrived" via `POST …/arrive`. |
 
+- **CleaningBookingTrackingUpdated** payload: `{ "tracking": { "cleaningBookingId", "status", "workerId", "startedTravelAt", "arrivedAt", "workStartedAt", "workFinishedAt", "cancelledAt", "updatedAt" } }`.
 - **WorkerLocationUpdated** payload: `{ "latitude", "longitude", "workerId", "updatedAt" }` (ISO datetime).
 - **WorkerArrived** payload: `{ "cleaningBookingId", "arrivedAt" }` (ISO datetime).
 
@@ -385,7 +387,7 @@ Use these when initializing the Pusher client in the worker or customer app. Aut
 
 **Request body:** None
 
-**Response (200):** Updated booking resource (status `in_progress`, `workStartedAt` set).
+**Response (200):** Updated booking resource (status `in_progress`, `workStartedAt` set). Server also broadcasts `CleaningBookingTrackingUpdated` for realtime tracking UI updates.
 
 **Errors:**
 - `403` – User has no worker, or booking is not assigned to worker
@@ -405,7 +407,7 @@ Use these when initializing the Pusher client in the worker or customer app. Aut
 
 **Request body:** None
 
-**Response (200):** Updated booking resource (status `completed`, `workFinishedAt` set).
+**Response (200):** Updated booking resource (status `completed`, `workFinishedAt` set). Server also broadcasts `CleaningBookingTrackingUpdated`.
 
 **Errors:**
 - `403` – User has no worker, or booking is not assigned to worker
@@ -431,7 +433,7 @@ Use these when initializing the Pusher client in the worker or customer app. Aut
 }
 ```
 
-**Response (200):** Updated booking resource (status `cancelled`).
+**Response (200):** Updated booking resource (status `cancelled`). Server also broadcasts `CleaningBookingTrackingUpdated`.
 
 **Errors:**
 - `403` – User has no worker, or booking is not assigned to worker

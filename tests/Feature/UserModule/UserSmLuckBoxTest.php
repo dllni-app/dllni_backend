@@ -2,58 +2,103 @@
 
 declare(strict_types=1);
 
-use Database\Factories\SmCategoryFactory;
-use Database\Factories\SmProductFactory;
-use Database\Factories\SmStoreFactory;
+use App\Models\User;
+use Database\Factories\CategoryFactory;
+use Database\Factories\ProductFactory;
+use Database\Factories\RestaurantFactory;
+use Laravel\Sanctum\Sanctum;
+use Modules\Resturants\Models\CuisineType;
 
-it('returns luck box options', function (): void {
-    $response = $this->getJson('/api/v1/user/supermarket/luck-box/options');
+it('requires auth for restaurant luck box endpoints', function (): void {
+    $this->getJson('/api/v1/user/restaurants/luck-box/options')
+        ->assertUnauthorized();
+
+    $this->postJson('/api/v1/user/restaurants/luck-box/suggest', [
+        'groupSize' => 2,
+        'budgetPerPerson' => 100,
+    ])->assertUnauthorized();
+});
+
+it('removes legacy supermarket luck box endpoints', function (): void {
+    $this->getJson('/api/v1/user/supermarket/luck-box/options')->assertNotFound();
+    $this->postJson('/api/v1/user/supermarket/luck-box/suggest', [
+        'groupSize' => 2,
+        'budgetPerPerson' => 100,
+    ])->assertNotFound();
+});
+
+it('returns restaurant luck box options', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $restaurant = RestaurantFactory::new()->create(['is_active' => true]);
+
+    $cuisine = CuisineType::query()->create([
+        'name' => 'Italian',
+        'slug' => 'italian',
+    ]);
+    $restaurant->cuisineTypes()->attach($cuisine->id);
+
+    $response = $this->getJson('/api/v1/user/restaurants/luck-box/options');
 
     $response->assertOk()->assertJsonStructure([
         'restrictions',
-        'categoryTypes',
+        'cuisineTypes',
     ]);
+
+    expect($response->json('cuisineTypes.0.id'))->toBe($cuisine->id);
 });
 
-it('returns luck box bundle suggestions', function (): void {
-    $store = SmStoreFactory::new()->create([
+it('returns restaurant luck box bundle suggestions', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $restaurant = RestaurantFactory::new()->create([
         'is_active' => true,
         'latitude' => 33.5138,
         'longitude' => 36.2765,
+        'estimated_preparation_time' => 20,
     ]);
 
-    $catA = SmCategoryFactory::new()->create(['store_id' => $store->id, 'name' => 'Snacks']);
-    $catB = SmCategoryFactory::new()->create(['store_id' => $store->id, 'name' => 'Drinks']);
+    $cuisine = CuisineType::query()->create([
+        'name' => 'Mediterranean',
+        'slug' => 'mediterranean',
+    ]);
+    $restaurant->cuisineTypes()->attach($cuisine->id);
 
-    SmProductFactory::new()->create([
-        'store_id' => $store->id,
+    $catA = CategoryFactory::new()->create(['restaurant_id' => $restaurant->id, 'name' => 'Main']);
+    $catB = CategoryFactory::new()->create(['restaurant_id' => $restaurant->id, 'name' => 'Sides']);
+
+    ProductFactory::new()->create([
+        'restaurant_id' => $restaurant->id,
         'category_id' => $catA->id,
-        'name' => 'Rice crackers',
+        'name' => 'Chicken Shawarma',
         'price' => 50,
         'stock_quantity' => 10,
         'is_available' => true,
     ]);
-    SmProductFactory::new()->create([
-        'store_id' => $store->id,
+    ProductFactory::new()->create([
+        'restaurant_id' => $restaurant->id,
         'category_id' => $catA->id,
-        'name' => 'Apple chips',
+        'name' => 'Falafel Plate',
         'price' => 80,
         'stock_quantity' => 10,
         'is_available' => true,
     ]);
-    SmProductFactory::new()->create([
-        'store_id' => $store->id,
+    ProductFactory::new()->create([
+        'restaurant_id' => $restaurant->id,
         'category_id' => $catB->id,
-        'name' => 'Juice bottle',
+        'name' => 'Lentil Soup',
         'price' => 120,
         'stock_quantity' => 10,
         'is_available' => true,
     ]);
 
-    $response = $this->postJson('/api/v1/user/supermarket/luck-box/suggest', [
+    $response = $this->postJson('/api/v1/user/restaurants/luck-box/suggest', [
         'groupSize' => 2,
         'budgetPerPerson' => 150,
-        'storeId' => $store->id,
+        'restaurantId' => $restaurant->id,
+        'cuisineTypeId' => $cuisine->id,
     ]);
 
     $response->assertOk()->assertJsonStructure([
@@ -62,7 +107,7 @@ it('returns luck box bundle suggestions', function (): void {
             [
                 'label',
                 'labelAr',
-                'store' => ['id', 'name'],
+                'restaurant' => ['id', 'name'],
                 'totalProducts',
                 'itemsDescription',
                 'totalPrice',
@@ -82,4 +127,53 @@ it('returns luck box bundle suggestions', function (): void {
     ]);
 
     expect($response->json('bundles'))->not->toBeEmpty();
+});
+
+it('applies default 10km radius when coordinates are provided', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $nearRestaurant = RestaurantFactory::new()->create([
+        'is_active' => true,
+        'latitude' => 33.5138,
+        'longitude' => 36.2765,
+    ]);
+
+    $farRestaurant = RestaurantFactory::new()->create([
+        'is_active' => true,
+        'latitude' => 34.4000,
+        'longitude' => 36.9000,
+    ]);
+
+    $nearCategory = CategoryFactory::new()->create(['restaurant_id' => $nearRestaurant->id]);
+    $farCategory = CategoryFactory::new()->create(['restaurant_id' => $farRestaurant->id]);
+
+    ProductFactory::new()->create([
+        'restaurant_id' => $nearRestaurant->id,
+        'category_id' => $nearCategory->id,
+        'name' => 'Nearby Burger',
+        'price' => 100,
+        'stock_quantity' => 10,
+        'is_available' => true,
+    ]);
+
+    ProductFactory::new()->create([
+        'restaurant_id' => $farRestaurant->id,
+        'category_id' => $farCategory->id,
+        'name' => 'Far Pizza',
+        'price' => 100,
+        'stock_quantity' => 10,
+        'is_available' => true,
+    ]);
+
+    $response = $this->postJson('/api/v1/user/restaurants/luck-box/suggest', [
+        'groupSize' => 2,
+        'budgetPerPerson' => 120,
+        'latitude' => 33.5138,
+        'longitude' => 36.2765,
+    ])->assertOk();
+
+    $restaurantIds = collect($response->json('bundles'))->pluck('restaurant.id')->unique()->values();
+    expect($restaurantIds)->toContain($nearRestaurant->id);
+    expect($restaurantIds)->not->toContain($farRestaurant->id);
 });

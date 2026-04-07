@@ -7,6 +7,7 @@ use App\Models\Worker;
 use Illuminate\Support\Facades\Event;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
 use Modules\Cleaning\Events\WorkerArrived;
 use Modules\Cleaning\Events\WorkerLocationUpdated;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
@@ -23,6 +24,8 @@ beforeEach(function () {
 });
 
 it('accepts a cleaning booking when status is pending (worker takes order)', function () {
+    Event::fake([CleaningBookingTrackingUpdated::class]);
+
     $workerUser = User::factory()->create(['email' => 'worker-accept@example.com']);
     $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
@@ -42,6 +45,12 @@ it('accepts a cleaning booking when status is pending (worker takes order)', fun
         'status' => CleaningBookingStatus::WorkerAssigned->value,
         'worker_id' => $worker->id,
     ]);
+
+    Event::assertDispatched(CleaningBookingTrackingUpdated::class, function (CleaningBookingTrackingUpdated $event) use ($booking, $worker): bool {
+        return $event->cleaningBookingId === $booking->id
+            && $event->tracking['status'] === CleaningBookingStatus::WorkerAssigned->value
+            && $event->tracking['workerId'] === $worker->id;
+    });
 });
 
 it('returns 422 when accept from non-pending status', function () {
@@ -116,6 +125,8 @@ it('rejects a cleaning booking', function () {
 });
 
 it('starts travel for a cleaning booking (sets started_travel_at, status stays worker_assigned)', function () {
+    Event::fake([CleaningBookingTrackingUpdated::class]);
+
     $workerUser = User::factory()->create(['email' => 'worker-travel@example.com']);
     $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
@@ -137,9 +148,17 @@ it('starts travel for a cleaning booking (sets started_travel_at, status stays w
     ]);
     $booking->refresh();
     expect($booking->started_travel_at)->not->toBeNull();
+
+    Event::assertDispatched(CleaningBookingTrackingUpdated::class, function (CleaningBookingTrackingUpdated $event) use ($booking): bool {
+        return $event->cleaningBookingId === $booking->id
+            && $event->tracking['status'] === CleaningBookingStatus::WorkerAssigned->value
+            && $event->tracking['startedTravelAt'] !== null;
+    });
 });
 
 it('completes a cleaning booking', function () {
+    Event::fake([CleaningBookingTrackingUpdated::class]);
+
     $workerUser = User::factory()->create(['email' => 'worker-complete@example.com']);
     $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
@@ -159,6 +178,12 @@ it('completes a cleaning booking', function () {
         'status' => CleaningBookingStatus::Completed->value,
     ]);
     expect($response->json('data.workFinishedAt'))->not->toBeNull();
+
+    Event::assertDispatched(CleaningBookingTrackingUpdated::class, function (CleaningBookingTrackingUpdated $event) use ($booking): bool {
+        return $event->cleaningBookingId === $booking->id
+            && $event->tracking['status'] === CleaningBookingStatus::Completed->value
+            && $event->tracking['workFinishedAt'] !== null;
+    });
 });
 
 it('returns 422 when completing booking not in progress', function () {
@@ -178,6 +203,8 @@ it('returns 422 when completing booking not in progress', function () {
 });
 
 it('cancels a cleaning booking', function () {
+    Event::fake([CleaningBookingTrackingUpdated::class]);
+
     $workerUser = User::factory()->create(['email' => 'worker-cancel@example.com']);
     $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
@@ -199,6 +226,12 @@ it('cancels a cleaning booking', function () {
         'status' => CleaningBookingStatus::Cancelled->value,
         'cancellation_reason' => 'Emergency',
     ]);
+
+    Event::assertDispatched(CleaningBookingTrackingUpdated::class, function (CleaningBookingTrackingUpdated $event) use ($booking): bool {
+        return $event->cleaningBookingId === $booking->id
+            && $event->tracking['status'] === CleaningBookingStatus::Cancelled->value
+            && $event->tracking['cancelledAt'] !== null;
+    });
 });
 
 it('returns 403 when worker tries to cancel booking not assigned to them', function () {
