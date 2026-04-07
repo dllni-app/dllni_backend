@@ -7,6 +7,7 @@ namespace Modules\Supermarket\Models;
 use App\Models\MasterProduct;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Supermarket\Enums\SmProductSource;
 use Modules\Supermarket\Traits\FilterQueries\SmProductFilterQuery;
@@ -62,6 +63,12 @@ final class SmProduct extends Model implements HasMedia
     public function offerProducts(): HasMany
     {
         return $this->hasMany(SmOfferProduct::class, 'product_id');
+    }
+
+    public function modifierGroups(): BelongsToMany
+    {
+        return $this->belongsToMany(SmModifierGroup::class, 'sm_modifier_group_product', 'product_id', 'modifier_group_id')
+            ->withTimestamps();
     }
 
     public function cartItems(): HasMany

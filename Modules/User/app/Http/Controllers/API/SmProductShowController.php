@@ -24,7 +24,22 @@ final class SmProductShowController
                 ->where(fn($storeQuery) => $storeQuery
                     ->whereNull('suspension_until')
                     ->orWhere('suspension_until', '<=', $now)))
-            ->with(['store', 'category', 'media', 'offerProducts.offer'])
+            ->with([
+                'store',
+                'category',
+                'media',
+                'offerProducts.offer',
+                'modifierGroups' => fn($query) => $query
+                    ->where('sm_modifier_groups.is_active', true)
+                    ->orderBy('sm_modifier_groups.sort_order')
+                    ->orderBy('sm_modifier_groups.id')
+                    ->with([
+                        'modifiers' => fn($modifierQuery) => $modifierQuery
+                            ->where('is_available', true)
+                            ->orderBy('sort_order')
+                            ->orderBy('id'),
+                    ]),
+            ])
             ->findOrFail($product);
 
         $user = $request->user('sanctum');
@@ -40,11 +55,11 @@ final class SmProductShowController
             $model->setAttribute('isFavoritedByUser', false);
         }
 
-        $resource = SmProductResource::make($model);
+        $payload = SmProductResource::make($model)->resolve($request);
 
         return response()->json([
-            'data' => $resource,
-            'product' => $resource,
+            'data' => $payload,
+            'product' => $payload,
         ]);
     }
 }

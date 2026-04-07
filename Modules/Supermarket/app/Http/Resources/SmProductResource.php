@@ -43,6 +43,29 @@ final class SmProductResource extends JsonResource
                     $this->offerProducts->map(fn($offerProduct) => $offerProduct->offer)->filter()
                 );
             }),
+            'options' => $this->whenLoaded('modifierGroups', fn() => $this->modifierGroups
+                ->values()
+                ->map(fn($group): array => [
+                    'id' => $group->id,
+                    'storeId' => $group->store_id,
+                    'name' => $group->name,
+                    'isRequired' => (bool) $group->is_required,
+                    'minSelections' => (int) $group->min_selections,
+                    'maxSelections' => (int) $group->max_selections,
+                    'sortOrder' => (int) $group->sort_order,
+                    'modifiers' => $group->modifiers
+                        ->values()
+                        ->map(fn($modifier): array => [
+                            'id' => $modifier->id,
+                            'modifierGroupId' => $modifier->modifier_group_id,
+                            'name' => $modifier->name,
+                            'price' => (float) $modifier->price,
+                            'sortOrder' => (int) $modifier->sort_order,
+                            'isAvailable' => (bool) $modifier->is_available,
+                        ])
+                        ->all(),
+                ])
+                ->all()),
             'image' => MediaResource::make($this->whenLoaded('media', fn() => $this->getFirstMedia(SmProduct::IMAGE_COLLECTION))),
             'imageUrl' => $this->whenLoaded('media', fn() => $this->getFirstMediaUrl(SmProduct::IMAGE_COLLECTION) ?: null),
             'primaryImage' => $this->whenLoaded('media', fn() => $this->getFirstMediaUrl(SmProduct::IMAGE_COLLECTION) ?: null),

@@ -9,6 +9,8 @@ use Database\Factories\SmOfferProductFactory;
 use Database\Factories\SmProductFactory;
 use Laravel\Sanctum\Sanctum;
 use Modules\Resturants\Models\Favorite;
+use Modules\Supermarket\Models\SmModifier;
+use Modules\Supermarket\Models\SmModifierGroup;
 use Modules\Supermarket\Models\SmStore;
 
 it('lists supermarket products with pagination', function (): void {
@@ -161,6 +163,50 @@ it('does not show unavailable supermarket products', function (): void {
     ]);
 
     $this->getJson("/api/v1/user/supermarket/products/{$product->id}")->assertNotFound();
+});
+
+it('returns selectable options in supermarket product show response', function (): void {
+    $store = SmStore::factory()->create([
+        'is_active' => true,
+        'suspension_until' => null,
+    ]);
+
+    $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+    $product = SmProductFactory::new()->create([
+        'store_id' => $store->id,
+        'category_id' => $category->id,
+        'is_available' => true,
+    ]);
+
+    $group = SmModifierGroup::create([
+        'store_id' => $store->id,
+        'name' => 'Optional Add-ons',
+        'is_required' => false,
+        'min_selections' => 0,
+        'max_selections' => 3,
+        'sort_order' => 1,
+        'is_active' => true,
+    ]);
+
+    $group->products()->attach($product->id);
+
+    $modifier = SmModifier::create([
+        'modifier_group_id' => $group->id,
+        'name' => 'Extra cheese',
+        'price' => 3,
+        'sort_order' => 1,
+        'is_available' => true,
+    ]);
+
+    $response = $this->getJson("/api/v1/user/supermarket/products/{$product->id}");
+
+    $response->assertOk()
+        ->assertJsonPath('data.options.0.id', $group->id)
+        ->assertJsonPath('data.options.0.name', 'Optional Add-ons')
+        ->assertJsonPath('data.options.0.modifiers.0.id', $modifier->id)
+        ->assertJsonPath('data.options.0.modifiers.0.name', 'Extra cheese')
+        ->assertJsonPath('data.options.0.modifiers.0.price', 3)
+        ->assertJsonPath('product.options.0.id', $group->id);
 });
 
 it('returns similar products by the selected product title', function (): void {
