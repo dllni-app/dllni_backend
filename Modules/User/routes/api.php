@@ -12,6 +12,7 @@ use Modules\User\Http\Controllers\API\RegisterController;
 use Modules\User\Http\Controllers\API\ResetPasswordConfirmController;
 use Modules\User\Http\Controllers\API\ResetPasswordController;
 use Modules\User\Http\Controllers\API\RestaurantCartAddItemController;
+use Modules\User\Http\Controllers\API\RestaurantCartProductsCountController;
 use Modules\User\Http\Controllers\API\RestaurantCheckoutController;
 use Modules\User\Http\Controllers\API\RestaurantGroupVoteCastBallotController;
 use Modules\User\Http\Controllers\API\RestaurantGroupVoteEndController;
@@ -59,6 +60,7 @@ use Modules\User\Http\Controllers\API\UserRestaurantHomeCategoriesController;
 use Modules\User\Http\Controllers\API\UserRestaurantHomeExclusiveOffersController;
 use Modules\User\Http\Controllers\API\UserRestaurantHomeLatestOrderedProductsController;
 use Modules\User\Http\Controllers\API\UserRestaurantHomeNearestRestaurantsController;
+use Modules\User\Http\Controllers\API\UserRestaurantHomeReorderLatestOrderProductsController;
 use Modules\User\Http\Controllers\API\UserRestaurantHomeSuggestedProductsController;
 use Modules\User\Http\Controllers\API\UserRestaurantOrdersController;
 use Modules\User\Http\Controllers\API\UserRestaurantOrderShowController;
@@ -160,10 +162,12 @@ Route::prefix('v1/user')->group(function (): void {
         Route::post('cleaning/orders/{order}/cancel', UserCleaningOrderCancelController::class);
 
         Route::post('restaurants/cart/items', RestaurantCartAddItemController::class);
+        Route::get('restaurants/cart/products-count', RestaurantCartProductsCountController::class);
         Route::post('restaurants/checkout', RestaurantCheckoutController::class);
         Route::get('restaurants/orders', UserRestaurantOrdersController::class);
         Route::get('restaurants/orders/{order}', UserRestaurantOrderShowController::class);
         Route::get('restaurants/home/latest-ordered-products', UserRestaurantHomeLatestOrderedProductsController::class);
+        Route::post('restaurants/home/latest-ordered-products/reorder', UserRestaurantHomeReorderLatestOrderProductsController::class);
 
         Route::post('restaurants/votes', RestaurantGroupVoteStoreController::class);
         Route::post('restaurants/votes/{vote}/ballots', RestaurantGroupVoteCastBallotController::class);

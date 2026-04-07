@@ -1,0 +1,512 @@
+{
+    "info": {
+        "_postman_id": "de4c6e5b-6a1b-44d4-b4ea-0f4f5df8f001",
+        "name": "Dllni - Restaurant Owner Module",
+        "description": "## Base URL and Prefix\n- Collection variable `{{baseUrl}}` defaults to `http://Dllni.test`.\n- Prefix: `/api/v1`.\n- Owner app routes are mostly under `/api/v1/restaurant-owner/*`.\n\n## Authentication\n- All endpoints in this collection require Sanctum token.\n- Header: `Authorization: Bearer {{token}}`.\n\n## Props Format (Request / Response Contract)\n- Path props: `{id}` in docs and `{{id}}` in Postman variables.\n- Query props: mostly camelCase (`perPage`, `page`, `range`, `from`, `to`).\n- Validation errors (422): `{ \"message\": string, \"errors\": { \"field\": [string] } }`.\n\n## Common Enums\n- performance range: `today | week | month | year | custom`\n- product availability mode: `available | sold_out_today | manual_unavailable`\n- offer status: `active | scheduled | expired | all`\n\n## Notes\n- Restaurant context is inferred from authenticated owner account; do not send restaurant id for owner-scoped endpoints.\n- Order item edits are allowed only while order status is `pending` or `accepted`.",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "variable": [
+        {
+            "key": "baseUrl",
+            "value": "http://Dllni.test"
+        },
+        {
+            "key": "token",
+            "value": ""
+        },
+        {
+            "key": "orderId",
+            "value": "1"
+        },
+        {
+            "key": "itemId",
+            "value": "1"
+        },
+        {
+            "key": "productId",
+            "value": "1"
+        },
+        {
+            "key": "employeeUserId",
+            "value": "1"
+        }
+    ],
+    "item": [
+        {
+            "name": "Restaurant Profile",
+            "item": [
+                {
+                    "name": "Get current restaurant",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/v1/restaurant-owner/restaurant",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "restaurant-owner",
+                                "restaurant"
+                            ]
+                        },
+                        "description": "Returns the owner restaurant context for the authenticated user.\n\nProps:\n- Headers: Authorization bearer token.\n\nResponse (200):\n- data.id, data.name, data.slug\n- data.primaryImage, data.images[]\n- data.city, data.district, data.phone"
+                    },
+                    "response": [
+                        {
+                            "name": "200 OK - restaurant",
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [],
+                            "cookie": [],
+                            "body": "{\n  \"data\": {\n    \"id\": 1,\n    \"name\": \"Sham Kitchen\",\n    \"slug\": \"sham-kitchen\",\n    \"description\": \"Levantine cuisine\",\n    \"city\": \"Aleppo\",\n    \"district\": \"New Aleppo\",\n    \"phone\": \"+963944000333\",\n    \"primaryImage\": \"https://example.test/storage/media/r1/main.jpg\",\n    \"images\": []\n  }\n}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Dashboard",
+            "item": [
+                {
+                    "name": "Performance overview",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/v1/restaurant-owner/dashboard/performance?range=today",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "restaurant-owner",
+                                "dashboard",
+                                "performance"
+                            ],
+                            "query": [
+                                {
+                                    "key": "range",
+                                    "value": "today"
+                                }
+                            ]
+                        },
+                        "description": "Owner KPI endpoint for cards/charts.\n\nQuery props:\n- range: today|week|month|year|custom\n- from: YYYY-MM-DD (required when range=custom)\n- to: YYYY-MM-DD (required when range=custom)."
+                    },
+                    "response": [
+                        {
+                            "name": "200 OK - performance",
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [],
+                            "cookie": [],
+                            "body": "{\n  \"range\": {\n    \"key\": \"today\",\n    \"from\": \"2026-04-07\",\n    \"to\": \"2026-04-07\"\n  },\n  \"summary\": {\n    \"totalOrders\": 34,\n    \"newOrdersCount\": 7,\n    \"confirmedOrdersCount\": 10,\n    \"completedOrdersCount\": 14,\n    \"totalRevenue\": 2480.5,\n    \"averageOrderValue\": 72.96,\n    \"cancellationRatePercent\": 5.9\n  },\n  \"topProducts\": [\n    {\n      \"productId\": 10,\n      \"name\": \"Burger Combo\",\n      \"quantity\": 22,\n      \"revenue\": 770\n    }\n  ],\n  \"fulfillment\": {\n    \"averagePrepTimeMinutes\": 18,\n    \"averageReadyToPickupMinutes\": 26,\n    \"delayedOrdersPercent\": 12,\n    \"onTimePercent\": 88\n  },\n  \"offersImpact\": {\n    \"discountedOrdersCount\": 8,\n    \"conversionRatePercent\": 13,\n    \"discountedRevenue\": 640,\n    \"totalSavings\": 90\n  }\n}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Orders",
+            "item": [
+                {
+                    "name": "Show order owner view",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/v1/restaurant-owner/orders/{{orderId}}",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "restaurant-owner",
+                                "orders",
+                                "{{orderId}}"
+                            ]
+                        },
+                        "description": "Returns rich owner order payload including paymentBreakdown and canEditItems flag."
+                    },
+                    "response": [
+                        {
+                            "name": "200 OK - order",
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [],
+                            "cookie": [],
+                            "body": "{\n  \"data\": {\n    \"id\": 120,\n    \"orderNumber\": \"ORD-120\",\n    \"status\": \"accepted\",\n    \"customer\": {\n      \"id\": 55,\n      \"name\": \"Ahmad\",\n      \"phone\": \"+963944001111\"\n    },\n    \"items\": [\n      {\n        \"id\": 1,\n        \"productId\": 10,\n        \"name\": \"Burger Combo\",\n        \"quantity\": 2,\n        \"unitPrice\": 7.5,\n        \"totalPrice\": 15\n      }\n    ],\n    \"paymentBreakdown\": {\n      \"subtotal\": 15,\n      \"deliveryFee\": 2,\n      \"serviceFee\": 1,\n      \"discount\": 0,\n      \"total\": 18\n    },\n    \"canEditItems\": true\n  }\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "Add order item",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"productId\": {{productId}},\n  \"quantity\": 1,\n  \"substituteProductId\": null,\n  \"specialInstructions\": \"No onions\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/api/v1/restaurant-owner/orders/{{orderId}}/items",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "restaurant-owner",
+                                "orders",
+                                "{{orderId}}",
+                                "items"
+                            ]
+                        },
+                        "description": "Adds a line item while order is pending/accepted.\n\nRequest props:\n- productId: int (required)\n- quantity: int >=1\n- substituteProductId: int|null\n- specialInstructions: string|null"
+                    },
+                    "response": [
+                        {
+                            "name": "200 OK - item added",
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [],
+                            "cookie": [],
+                            "body": "{\n  \"data\": {\n    \"id\": 120,\n    \"status\": \"accepted\",\n    \"items\": [\n      {\n        \"id\": 7,\n        \"productId\": 15,\n        \"name\": \"Chicken Wrap\",\n        \"quantity\": 1,\n        \"unitPrice\": 6,\n        \"totalPrice\": 6\n      }\n    ],\n    \"paymentBreakdown\": {\n      \"subtotal\": 21,\n      \"deliveryFee\": 2,\n      \"serviceFee\": 1,\n      \"discount\": 0,\n      \"total\": 24\n    }\n  }\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "Update order item",
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"quantity\": 3,\n  \"specialInstructions\": \"No mayo\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/api/v1/restaurant-owner/orders/{{orderId}}/items/{{itemId}}",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "restaurant-owner",
+                                "orders",
+                                "{{orderId}}",
+                                "items",
+                                "{{itemId}}"
+                            ]
+                        },
+                        "description": "Partial update for an existing order item."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Toggle product availability",
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"mode\": \"sold_out_today\",\n  \"note\": \"Sold out after 8pm\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/api/v1/restaurant-owner/products/{{productId}}/availability",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "restaurant-owner",
+                                "products",
+                                "{{productId}}",
+                                "availability"
+                            ]
+                        },
+                        "description": "Modes: available | sold_out_today | manual_unavailable."
+                    },
+                    "response": [
+                        {
+                            "name": "200 OK - availability updated",
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [],
+                            "cookie": [],
+                            "body": "{\n  \"data\": {\n    \"id\": 10,\n    \"name\": \"Burger Combo\",\n    \"isAvailableNow\": false,\n    \"availabilityMode\": \"sold_out_today\",\n    \"unavailableUntil\": \"2026-04-07T23:59:59+03:00\",\n    \"availabilityNote\": \"Sold out after 8pm\"\n  }\n}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Offers and Coupons",
+            "item": [
+                {
+                    "name": "List offers",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/v1/restaurant-owner/offers?status=active&perPage=20&page=1",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "restaurant-owner",
+                                "offers"
+                            ],
+                            "query": [
+                                {
+                                    "key": "status",
+                                    "value": "active"
+                                },
+                                {
+                                    "key": "perPage",
+                                    "value": "20"
+                                },
+                                {
+                                    "key": "page",
+                                    "value": "1"
+                                }
+                            ]
+                        },
+                        "description": "Offer list with filters and pagination."
+                    },
+                    "response": [
+                        {
+                            "name": "200 OK - offers page",
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [],
+                            "cookie": [],
+                            "body": "{\n  \"data\": [\n    {\n      \"id\": 1,\n      \"name\": \"Lunch Discount\",\n      \"status\": \"active\",\n      \"type\": \"percentage\",\n      \"value\": 15,\n      \"usageCount\": 120,\n      \"generatedRevenue\": 5000\n    }\n  ],\n  \"links\": {\n    \"first\": \"http://Dllni.test/api/v1/restaurant-owner/offers?page=1\",\n    \"last\": \"http://Dllni.test/api/v1/restaurant-owner/offers?page=1\",\n    \"prev\": null,\n    \"next\": null\n  },\n  \"meta\": {\n    \"current_page\": 1,\n    \"per_page\": 20,\n    \"total\": 1\n  }\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "Offers summary",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/v1/restaurant-owner/offers/summary",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "restaurant-owner",
+                                "offers",
+                                "summary"
+                            ]
+                        }
+                    },
+                    "response": [
+                        {
+                            "name": "200 OK - offers summary",
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [],
+                            "cookie": [],
+                            "body": "{\n  \"summary\": {\n    \"activeCount\": 3,\n    \"expiredCount\": 5,\n    \"totalUsageOrders\": 300,\n    \"totalSavings\": 2000,\n    \"revenueImpact\": 15000,\n    \"topPerforming\": {\n      \"id\": 1,\n      \"name\": \"Lunch Discount\",\n      \"usageCount\": 120,\n      \"generatedRevenue\": 5000\n    }\n  }\n}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Employees",
+            "item": [
+                {
+                    "name": "Permissions catalog",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/v1/restaurant-owner/permissions",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "restaurant-owner",
+                                "permissions"
+                            ]
+                        },
+                        "description": "Use returned permission ids in employee create/update payloads."
+                    },
+                    "response": [
+                        {
+                            "name": "200 OK - permissions",
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [],
+                            "cookie": [],
+                            "body": "{\n  \"data\": {\n    \"permissions\": [\n      { \"id\": 1, \"name\": \"orders.view\" },\n      { \"id\": 2, \"name\": \"orders.update\" },\n      { \"id\": 3, \"name\": \"products.manage\" }\n    ]\n  }\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "Create employee",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"name\": \"Omar\",\n  \"email\": \"omar@example.com\",\n  \"phone\": \"+963998765432\",\n  \"password\": \"minimum-8-chars\",\n  \"permissionIds\": [1, 2, 3],\n  \"isActive\": true\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/api/v1/restaurant-owner/employees",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "restaurant-owner",
+                                "employees"
+                            ]
+                        },
+                        "description": "Create staff member for current owner restaurant."
+                    },
+                    "response": [
+                        {
+                            "name": "201 Created - employee",
+                            "status": "Created",
+                            "code": 201,
+                            "_postman_previewlanguage": "json",
+                            "header": [],
+                            "cookie": [],
+                            "body": "{\n  \"data\": {\n    \"id\": 22,\n    \"restaurantId\": 1,\n    \"user\": {\n      \"id\": 91,\n      \"name\": \"Omar\",\n      \"email\": \"omar@example.com\",\n      \"phone\": \"+963998765432\"\n    },\n    \"permissionIds\": [1, 2, 3],\n    \"isActive\": true\n  }\n}"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

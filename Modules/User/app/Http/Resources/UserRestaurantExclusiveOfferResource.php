@@ -6,13 +6,15 @@ namespace Modules\User\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Modules\Resturants\Http\Resources\ProductResource;
+use Modules\Resturants\Http\Resources\RestaurantResource;
 use Modules\Resturants\Models\Offer;
 
 /**
  * @mixin Offer
  */
 final class UserRestaurantExclusiveOfferResource extends JsonResource
-{
+{   
     public function toArray(Request $request): array
     {
         /** @var Offer $offer */
@@ -35,6 +37,8 @@ final class UserRestaurantExclusiveOfferResource extends JsonResource
             'distanceKm' => $distanceKm,
             'distanceUnit' => $distanceKm !== null ? 'km' : null,
             'imageUrl' => $restaurant->getFirstMediaUrl('primary-image') ?: null,
+            'restaurant' => RestaurantResource::make($restaurant),
+            'products' => ProductResource::collection($this->products),
         ];
     }
 }
