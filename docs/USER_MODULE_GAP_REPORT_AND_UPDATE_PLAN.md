@@ -121,7 +121,7 @@ This report audits cleaning user flows and shared pages against current code and
 
 1. Cleaning order details and tracking
 - Add timeline payload (status log entries) for booking detail and optionally list view.
-- Include richer worker summary for tracking card (minimum: `id`, `name`, `phone`, avatar URL) when assigned.
+- Worker summary was enriched for tracking card (`id`, `firstName`, `name`, `phone`, `averageRating`, `totalCompletedJobs`, `isVerified`, `avatarUrl`).
 - Return server-calculated pricing breakdown fields from quote source, not client pass-through values.
 
 2. Shared envelope normalization

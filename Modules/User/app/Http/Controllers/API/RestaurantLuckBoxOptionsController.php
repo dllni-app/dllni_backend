@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace Modules\User\Http\Controllers\API;
 
 use Illuminate\Http\JsonResponse;
-use Modules\User\Services\SmLuckBoxService;
+use Modules\User\Services\RestaurantLuckBoxService;
 
-final class SmLuckBoxOptionsController
+final class RestaurantLuckBoxOptionsController
 {
     public function __construct(
-        private SmLuckBoxService $service,
+        private RestaurantLuckBoxService $service,
     ) {}
 
     public function __invoke(): JsonResponse

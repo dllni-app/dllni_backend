@@ -55,10 +55,27 @@ final class CleaningBookingResource extends JsonResource
                 'email' => $this->customer->email,
                 'phone' => $this->customer->phone,
             ]),
-            'worker' => $this->whenLoaded('worker', fn () => $this->worker ? [
-                'id' => $this->worker->id,
-                'firstName' => $this->worker->first_name,
-            ] : null),
+            'worker' => $this->whenLoaded('worker', function () {
+                if (! $this->worker) {
+                    return null;
+                }
+
+                $workerUser = $this->worker->relationLoaded('user') ? $this->worker->user : null;
+                $userAvatar = $workerUser?->getFirstMediaUrl('primary-image');
+                $workerAvatar = $this->worker->getFirstMediaUrl('primary-image');
+                $avatarUrl = $userAvatar !== '' ? $userAvatar : ($workerAvatar !== '' ? $workerAvatar : null);
+
+                return [
+                    'id' => $this->worker->id,
+                    'firstName' => $this->worker->first_name,
+                    'name' => $workerUser?->name,
+                    'phone' => $workerUser?->phone,
+                    'averageRating' => $this->worker->average_rating !== null ? (float) $this->worker->average_rating : null,
+                    'totalCompletedJobs' => $this->worker->total_completed_jobs,
+                    'isVerified' => (bool) $this->worker->is_verified,
+                    'avatarUrl' => $avatarUrl,
+                ];
+            }),
             'services' => $this->whenLoaded('services'),
             'addons' => $this->whenLoaded('addons'),
             'billingPolicy' => $this->whenLoaded('billingPolicy'),

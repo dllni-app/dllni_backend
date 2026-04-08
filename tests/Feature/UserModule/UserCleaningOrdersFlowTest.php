@@ -6,9 +6,11 @@ use App\Models\CancellationPolicy;
 use App\Models\User;
 use App\Models\Worker;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBillingMode;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
 
@@ -201,6 +203,8 @@ it('returns estimated cleaning price from backend algorithm', function (): void 
 });
 
 it('cancels pending cleaning order and rejects cancelling completed order', function (): void {
+    Event::fake([CleaningBookingTrackingUpdated::class]);
+
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
@@ -212,6 +216,12 @@ it('cancels pending cleaning order and rejects cancelling completed order', func
     postJson("/api/v1/user/cleaning/orders/{$pendingOrder->id}/cancel", [
         'reason' => 'Changed plans',
     ])->assertOk()->assertJsonPath('order.status', CleaningBookingStatus::Cancelled->value);
+
+    Event::assertDispatched(CleaningBookingTrackingUpdated::class, function (CleaningBookingTrackingUpdated $event) use ($pendingOrder): bool {
+        return $event->cleaningBookingId === $pendingOrder->id
+            && $event->tracking['status'] === CleaningBookingStatus::Cancelled->value
+            && $event->tracking['cancelledAt'] !== null;
+    });
 
     $completedOrder = CleaningBooking::factory()->create([
         'customer_id' => $user->id,
