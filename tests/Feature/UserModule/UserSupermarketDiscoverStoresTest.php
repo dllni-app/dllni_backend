@@ -231,11 +231,17 @@ it('shows a supermarket store by id', function (): void {
     ]);
 
     $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
-    SmProductFactory::new()->create([
+    $product = SmProductFactory::new()->create([
         'store_id' => $store->id,
         'category_id' => $category->id,
         'name' => 'Detail Product',
         'is_available' => true,
+    ]);
+
+    Favorite::create([
+        'user_id' => $user->id,
+        'favorable_type' => $product->getMorphClass(),
+        'favorable_id' => $product->id,
     ]);
 
     $response = $this->getJson("/api/v1/user/supermarket/stores/{$store->id}");
@@ -261,11 +267,15 @@ it('shows a supermarket store by id', function (): void {
                 'carts',
                 'assistantQueries',
                 'recurringOrders',
-               // 'staff',
+                // 'staff',
             ],
         ]);
 
     expect((float) $response->json('store.highestOfferDiscountValue'))->toBe(30.0);
+
+    $productRow = collect($response->json('store.products'))->firstWhere('id', $product->id);
+    expect($productRow)->not->toBeNull();
+    expect($productRow['isFavorite'])->toBeTrue();
 });
 
 it('does not show inactive supermarket stores', function (): void {
