@@ -4017,7 +4017,7 @@
                     ],
                     "body": {
                       "mode": "raw",
-                      "raw": "{\"propertyType\":\"apartment\",\"propertyDetails\":{\"address\":\"Al Aziziyah Street, Building 12\",\"location_name\":\"Home\",\"rooms\":3,\"bedrooms\":2,\"bathrooms\":1},\"estimatedSqm\":120,\"totalHours\":3,\"scheduledDate\":\"2026-04-10\",\"scheduledTime\":\"09:00\",\"addressLatitude\":33.5138,\"addressLongitude\":36.2765,\"basePrice\":1000,\"travelFee\":200,\"addonsTotal\":0,\"termsAccepted\":true}"
+                      "raw": "{\"propertyType\":\"apartment\",\"propertyDetails\":{\"address\":\"Al Aziziyah Street, Building 12\",\"location_name\":\"Home\",\"rooms\":3,\"bedrooms\":2,\"bathrooms\":1,\"living_room_size\":\"medium\"},\"scheduledDate\":\"2026-04-10\",\"scheduledTime\":\"09:00\",\"addressLatitude\":33.5138,\"addressLongitude\":36.2765,\"termsAccepted\":true}"
                     }
                   }
                 },

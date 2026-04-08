@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
-use Modules\Supermarket\Http\Controllers\API\SmCartItemController;
 use Modules\User\Http\Controllers\API\DiscoverRestaurantsController;
 use Modules\User\Http\Controllers\API\LoginController;
 use Modules\User\Http\Controllers\API\LoginVerifyController;
@@ -11,9 +10,7 @@ use Modules\User\Http\Controllers\API\MeController;
 use Modules\User\Http\Controllers\API\RegisterController;
 use Modules\User\Http\Controllers\API\ResetPasswordConfirmController;
 use Modules\User\Http\Controllers\API\ResetPasswordController;
-use Modules\User\Http\Controllers\API\RestaurantCartAddItemController;
 use Modules\User\Http\Controllers\API\RestaurantCartProductsCountController;
-use Modules\User\Http\Controllers\API\RestaurantCheckoutController;
 use Modules\User\Http\Controllers\API\RestaurantGroupVoteCastBallotController;
 use Modules\User\Http\Controllers\API\RestaurantGroupVoteEndController;
 use Modules\User\Http\Controllers\API\RestaurantGroupVoteInviteUsersController;
@@ -25,7 +22,6 @@ use Modules\User\Http\Controllers\API\RestaurantLuckBoxOptionsController;
 use Modules\User\Http\Controllers\API\RestaurantLuckBoxSuggestController;
 use Modules\User\Http\Controllers\API\SmHomeFeaturedOffersController;
 use Modules\User\Http\Controllers\API\SmHomeNearbyStoresController;
-use Modules\User\Http\Controllers\API\SmOrderStatusController;
 use Modules\User\Http\Controllers\API\SmProductShowController;
 use Modules\User\Http\Controllers\API\SmProductSimilarSearchController;
 use Modules\User\Http\Controllers\API\SmProductsSearchController;
@@ -68,13 +64,30 @@ use Modules\User\Http\Controllers\API\UserRestaurantHomeLatestOrderedProductsCon
 use Modules\User\Http\Controllers\API\UserRestaurantHomeNearestRestaurantsController;
 use Modules\User\Http\Controllers\API\UserRestaurantHomeReorderLatestOrderProductsController;
 use Modules\User\Http\Controllers\API\UserRestaurantHomeSuggestedProductsController;
-use Modules\User\Http\Controllers\API\UserRestaurantOrdersController;
-use Modules\User\Http\Controllers\API\UserRestaurantOrderShowController;
+use Modules\User\Http\Controllers\API\UserOrderCancelController;
+use Modules\User\Http\Controllers\API\UserOrderReorderController;
+use Modules\User\Http\Controllers\API\UserOrdersIndexController;
+use Modules\User\Http\Controllers\API\UserOrderScheduleController;
+use Modules\User\Http\Controllers\API\UserOrderShowController;
+use Modules\User\Http\Controllers\API\UserOrderSlotsController;
+use Modules\User\Http\Controllers\API\UserOrderTrackingController;
+use Modules\User\Http\Controllers\API\UserRestaurantCartItemDestroyController;
+use Modules\User\Http\Controllers\API\UserRestaurantCartItemStoreController;
+use Modules\User\Http\Controllers\API\UserRestaurantCartItemUpdateController;
+use Modules\User\Http\Controllers\API\UserRestaurantCartShowController;
+use Modules\User\Http\Controllers\API\UserRestaurantCheckoutPreviewController;
+use Modules\User\Http\Controllers\API\UserRestaurantOrderStoreController;
 use Modules\User\Http\Controllers\API\UserRestaurantProductsByCategoryController;
 use Modules\User\Http\Controllers\API\UserRestaurantProductsWithOffersController;
 use Modules\User\Http\Controllers\API\UserSupermarketProductFavoriteDestroyController;
 use Modules\User\Http\Controllers\API\UserSupermarketProductFavoritesIndexController;
 use Modules\User\Http\Controllers\API\UserSupermarketProductFavoriteStoreController;
+use Modules\User\Http\Controllers\API\UserSupermarketCartItemDestroyController;
+use Modules\User\Http\Controllers\API\UserSupermarketCartItemStoreController;
+use Modules\User\Http\Controllers\API\UserSupermarketCartItemUpdateController;
+use Modules\User\Http\Controllers\API\UserSupermarketCartShowController;
+use Modules\User\Http\Controllers\API\UserSupermarketCheckoutPreviewController;
+use Modules\User\Http\Controllers\API\UserSupermarketOrderStoreController;
 use Modules\User\Http\Controllers\API\UserSupermarketStoreFavoriteDestroyController;
 use Modules\User\Http\Controllers\API\UserSupermarketStoreFavoritesIndexController;
 use Modules\User\Http\Controllers\API\UserSupermarketStoreFavoriteStoreController;
@@ -156,12 +169,6 @@ Route::prefix('v1/user')->group(function (): void {
         Route::post('favorites/products/{product}', UserProductFavoriteStoreController::class);
         Route::delete('favorites/products/{product}', UserProductFavoriteDestroyController::class);
 
-        Route::prefix('supermarket')->group(function (): void {
-            Route::apiResource('items', SmCartItemController::class)->parameters(['items' => 'sm_cart_item']);
-        });
-
-        Route::get('supermarket/orders/{order}/status', SmOrderStatusController::class);
-
         Route::get('cleaning/orders', UserCleaningOrdersController::class);
         Route::post('cleaning/orders', UserCleaningOrderStoreController::class);
         Route::post('cleaning/orders/estimate-size', UserCleaningOrderEstimateSizeController::class);
@@ -171,11 +178,29 @@ Route::prefix('v1/user')->group(function (): void {
         Route::patch('cleaning/orders/{order}', UserCleaningOrderUpdateController::class);
         Route::post('cleaning/orders/{order}/cancel', UserCleaningOrderCancelController::class);
 
-        Route::post('restaurants/cart/items', RestaurantCartAddItemController::class);
+        Route::get('orders', UserOrdersIndexController::class);
+        Route::get('orders/slots', UserOrderSlotsController::class);
+        Route::get('orders/{section}/{orderId}', UserOrderShowController::class);
+        Route::get('orders/{section}/{orderId}/tracking', UserOrderTrackingController::class);
+        Route::post('orders/{section}/{orderId}/cancel', UserOrderCancelController::class);
+        Route::post('orders/{section}/{orderId}/reorder', UserOrderReorderController::class);
+        Route::patch('orders/{section}/{orderId}/schedule', UserOrderScheduleController::class);
+
+        Route::get('restaurants/cart', UserRestaurantCartShowController::class);
+        Route::post('restaurants/cart/items', UserRestaurantCartItemStoreController::class);
+        Route::patch('restaurants/cart/items/{itemId}', UserRestaurantCartItemUpdateController::class);
+        Route::delete('restaurants/cart/items/{itemId}', UserRestaurantCartItemDestroyController::class);
         Route::get('restaurants/cart/products-count', RestaurantCartProductsCountController::class);
-        Route::post('restaurants/checkout', RestaurantCheckoutController::class);
-        Route::get('restaurants/orders', UserRestaurantOrdersController::class);
-        Route::get('restaurants/orders/{order}', UserRestaurantOrderShowController::class);
+        Route::post('restaurants/checkout/preview', UserRestaurantCheckoutPreviewController::class);
+        Route::post('restaurants/orders', UserRestaurantOrderStoreController::class);
+
+        Route::get('supermarket/cart', UserSupermarketCartShowController::class);
+        Route::post('supermarket/cart/items', UserSupermarketCartItemStoreController::class);
+        Route::patch('supermarket/cart/items/{itemId}', UserSupermarketCartItemUpdateController::class);
+        Route::delete('supermarket/cart/items/{itemId}', UserSupermarketCartItemDestroyController::class);
+        Route::post('supermarket/checkout/preview', UserSupermarketCheckoutPreviewController::class);
+        Route::post('supermarket/orders', UserSupermarketOrderStoreController::class);
+
         Route::get('restaurants/luck-box/options', RestaurantLuckBoxOptionsController::class);
         Route::post('restaurants/luck-box/suggest', RestaurantLuckBoxSuggestController::class);
         Route::get('restaurants/home/latest-ordered-products', UserRestaurantHomeLatestOrderedProductsController::class);

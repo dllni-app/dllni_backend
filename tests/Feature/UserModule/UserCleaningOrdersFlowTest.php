@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Models\CancellationPolicy;
 use App\Models\User;
 use App\Models\Worker;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Laravel\Sanctum\Sanctum;
@@ -77,6 +78,47 @@ it('creates a cleaning order for authenticated user', function (): void {
     expect((float) $response->json('order.totalPrice'))->toBeGreaterThan(0);
     expect((float) $response->json('order.estimatedSqm'))->toBeGreaterThan(0);
     expect((float) $response->json('order.totalHours'))->toBeGreaterThan(0);
+});
+
+it('rejects calculated cleaning values supplied by the client when creating an order', function (): void {
+    Carbon::setTestNow(Carbon::parse('2026-04-10 09:00:00'));
+
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    postJson('/api/v1/user/cleaning/orders', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'address' => 'Al Aziziyah Street, Building 12',
+            'location_name' => 'Home',
+            'rooms' => 3,
+            'bedrooms' => 2,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+            'estimatedSqm' => 120,
+        ],
+        'scheduledDate' => now()->addDay()->format('Y-m-d'),
+        'scheduledTime' => '09:00',
+        'addressLatitude' => 33.5138,
+        'addressLongitude' => 36.2765,
+        'estimatedSqm' => 120,
+        'estimatedHours' => 3,
+        'totalHours' => 3,
+        'basePrice' => 1000,
+        'travelFee' => 200,
+        'addonsTotal' => 0,
+        'totalPrice' => 1200,
+        'termsAccepted' => true,
+    ])->assertUnprocessable()->assertJsonValidationErrors([
+        'propertyDetails',
+        'estimatedSqm',
+        'estimatedHours',
+        'totalHours',
+        'basePrice',
+        'travelFee',
+        'addonsTotal',
+        'totalPrice',
+    ]);
 });
 
 it('lists only current user cleaning orders', function (): void {
@@ -157,6 +199,50 @@ it('returns estimated size and time for cleaning order wizard', function (): voi
         'size' => ['estimatedSqm', 'sizeTier'],
         'estimation' => ['estimatedHours', 'estimatedMinutes'],
     ]);
+
+    expect((float) $response->json('size.estimatedSqm'))->toBe(171.0);
+    expect((string) $response->json('size.sizeTier'))->toBe('large');
+    expect((float) $response->json('estimation.estimatedHours'))->toBe(5.5);
+    expect((int) $response->json('estimation.estimatedMinutes'))->toBe(330);
+});
+
+it('rejects calculated cleaning values supplied by the client when updating an order', function (): void {
+    Carbon::setTestNow(Carbon::parse('2026-04-10 09:00:00'));
+
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $order = CleaningBooking::factory()->create([
+        'customer_id' => $user->id,
+        'status' => CleaningBookingStatus::Pending->value,
+    ]);
+
+    patchJson("/api/v1/user/cleaning/orders/{$order->id}", [
+        'propertyDetails' => [
+            'address' => 'Updated address',
+            'rooms' => 4,
+            'bedrooms' => 3,
+            'bathrooms' => 2,
+            'living_room_size' => 'large',
+            'estimatedSqm' => 180,
+        ],
+        'estimatedSqm' => 180,
+        'estimatedHours' => 6,
+        'totalHours' => 6,
+        'basePrice' => 1500,
+        'travelFee' => 200,
+        'addonsTotal' => 0,
+        'totalPrice' => 1700,
+    ])->assertUnprocessable()->assertJsonValidationErrors([
+        'propertyDetails',
+        'estimatedSqm',
+        'estimatedHours',
+        'totalHours',
+        'basePrice',
+        'travelFee',
+        'addonsTotal',
+        'totalPrice',
+    ]);
 });
 
 it('returns previously worked cleaning workers for current user', function (): void {
@@ -197,9 +283,332 @@ it('returns estimated cleaning price from backend algorithm', function (): void 
     $response->assertOk()->assertJsonStructure([
         'size' => ['estimatedSqm', 'estimatedHours', 'sizeTier'],
         'pricing' => ['basePrice', 'travelFee', 'addonsTotal', 'totalPrice', 'currency'],
+        'quote' => ['quoteId', 'expiresAt', 'algorithmVersion'],
     ]);
 
-    expect((float) $response->json('pricing.totalPrice'))->toBeGreaterThan(0);
+    expect((float) $response->json('size.estimatedSqm'))->toBe(115.0);
+    expect((float) $response->json('size.estimatedHours'))->toBe(4.0);
+    expect((string) $response->json('size.sizeTier'))->toBe('medium');
+    expect((float) $response->json('pricing.basePrice'))->toBe(920.0);
+    expect((float) $response->json('pricing.travelFee'))->toBe(150.0);
+    expect((float) $response->json('pricing.addonsTotal'))->toBe(0.0);
+    expect((float) $response->json('pricing.totalPrice'))->toBe(1070.0);
+    expect((string) $response->json('quote.quoteId'))->toStartWith('clnq_');
+    expect((string) $response->json('quote.algorithmVersion'))->toBe('2026-04-08-v1');
+});
+
+it('creates a cleaning order using a valid quote and persists quote-owned totals', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $pricePayload = [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'rooms' => 2,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+        ],
+        'addressLatitude' => 33.5,
+        'addressLongitude' => 36.3,
+    ];
+
+    $priceResponse = postJson('/api/v1/user/cleaning/orders/estimate-price', $pricePayload)
+        ->assertOk();
+
+    $quoteId = (string) $priceResponse->json('quote.quoteId');
+    $expectedBasePrice = (float) $priceResponse->json('pricing.basePrice');
+    $expectedTravelFee = (float) $priceResponse->json('pricing.travelFee');
+    $expectedAddonsTotal = (float) $priceResponse->json('pricing.addonsTotal');
+    $expectedTotalPrice = (float) $priceResponse->json('pricing.totalPrice');
+    $expectedEstimatedSqm = (float) $priceResponse->json('size.estimatedSqm');
+    $expectedEstimatedHours = (float) $priceResponse->json('size.estimatedHours');
+
+    $createResponse = postJson('/api/v1/user/cleaning/orders', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'address' => 'Al Aziziyah Street, Building 12',
+            'location_name' => 'Home',
+            'rooms' => 2,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+        ],
+        'scheduledDate' => now()->addDay()->format('Y-m-d'),
+        'scheduledTime' => '09:00',
+        'addressLatitude' => 33.5,
+        'addressLongitude' => 36.3,
+        'quoteId' => $quoteId,
+        'termsAccepted' => true,
+    ]);
+
+    $createResponse->assertCreated();
+    expect((float) $createResponse->json('order.basePrice'))->toBe($expectedBasePrice);
+    expect((float) $createResponse->json('order.travelFee'))->toBe($expectedTravelFee);
+    expect((float) $createResponse->json('order.addonsTotal'))->toBe($expectedAddonsTotal);
+    expect((float) $createResponse->json('order.totalPrice'))->toBe($expectedTotalPrice);
+    expect((float) $createResponse->json('order.estimatedSqm'))->toBe($expectedEstimatedSqm);
+    expect((float) $createResponse->json('order.estimatedHours'))->toBe($expectedEstimatedHours);
+});
+
+it('allows creating a cleaning order without quote during grace period', function (): void {
+    Carbon::setTestNow(Carbon::parse('2026-04-10 09:00:00'));
+
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    postJson('/api/v1/user/cleaning/orders', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'address' => 'Al Aziziyah Street, Building 12',
+            'location_name' => 'Home',
+            'rooms' => 3,
+            'bedrooms' => 2,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+        ],
+        'scheduledDate' => now()->addDay()->format('Y-m-d'),
+        'scheduledTime' => '09:00',
+        'addressLatitude' => 33.5138,
+        'addressLongitude' => 36.2765,
+        'termsAccepted' => true,
+    ])->assertCreated();
+});
+
+it('rejects creating a cleaning order without quote after enforcement date', function (): void {
+    Carbon::setTestNow(Carbon::parse('2026-04-23 10:00:00'));
+
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    postJson('/api/v1/user/cleaning/orders', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'address' => 'Al Aziziyah Street, Building 12',
+            'location_name' => 'Home',
+            'rooms' => 3,
+            'bedrooms' => 2,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+        ],
+        'scheduledDate' => now()->addDay()->format('Y-m-d'),
+        'scheduledTime' => '09:00',
+        'addressLatitude' => 33.5138,
+        'addressLongitude' => 36.2765,
+        'termsAccepted' => true,
+    ])->assertUnprocessable()->assertJsonValidationErrors(['quoteId']);
+});
+
+it('rejects creating a cleaning order with an expired quote', function (): void {
+    Carbon::setTestNow(Carbon::parse('2026-04-10 08:00:00'));
+
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $priceResponse = postJson('/api/v1/user/cleaning/orders/estimate-price', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'rooms' => 2,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+        ],
+        'addressLatitude' => 33.5,
+        'addressLongitude' => 36.3,
+    ])->assertOk();
+
+    $quoteId = (string) $priceResponse->json('quote.quoteId');
+
+    Carbon::setTestNow(now()->addMinutes(16));
+
+    postJson('/api/v1/user/cleaning/orders', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'address' => 'Al Aziziyah Street, Building 12',
+            'location_name' => 'Home',
+            'rooms' => 2,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+        ],
+        'scheduledDate' => now()->addDay()->format('Y-m-d'),
+        'scheduledTime' => '09:00',
+        'addressLatitude' => 33.5,
+        'addressLongitude' => 36.3,
+        'quoteId' => $quoteId,
+        'termsAccepted' => true,
+    ])->assertUnprocessable()->assertJsonValidationErrors(['quoteId']);
+});
+
+it('rejects creating a cleaning order with mismatched quote details', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $priceResponse = postJson('/api/v1/user/cleaning/orders/estimate-price', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'rooms' => 2,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+        ],
+        'addressLatitude' => 33.5,
+        'addressLongitude' => 36.3,
+    ])->assertOk();
+
+    $quoteId = (string) $priceResponse->json('quote.quoteId');
+
+    postJson('/api/v1/user/cleaning/orders', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'address' => 'Al Aziziyah Street, Building 12',
+            'location_name' => 'Home',
+            'rooms' => 3,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+        ],
+        'scheduledDate' => now()->addDay()->format('Y-m-d'),
+        'scheduledTime' => '09:00',
+        'addressLatitude' => 33.5,
+        'addressLongitude' => 36.3,
+        'quoteId' => $quoteId,
+        'termsAccepted' => true,
+    ])->assertUnprocessable()->assertJsonValidationErrors(['quoteId']);
+});
+
+it('rejects creating a cleaning order with quote issued for another user', function (): void {
+    $userOne = User::factory()->create();
+    Sanctum::actingAs($userOne);
+
+    $priceResponse = postJson('/api/v1/user/cleaning/orders/estimate-price', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'rooms' => 2,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+        ],
+        'addressLatitude' => 33.5,
+        'addressLongitude' => 36.3,
+    ])->assertOk();
+
+    $quoteId = (string) $priceResponse->json('quote.quoteId');
+
+    $userTwo = User::factory()->create();
+    Sanctum::actingAs($userTwo);
+
+    postJson('/api/v1/user/cleaning/orders', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'address' => 'Al Aziziyah Street, Building 12',
+            'location_name' => 'Home',
+            'rooms' => 2,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+        ],
+        'scheduledDate' => now()->addDay()->format('Y-m-d'),
+        'scheduledTime' => '09:00',
+        'addressLatitude' => 33.5,
+        'addressLongitude' => 36.3,
+        'quoteId' => $quoteId,
+        'termsAccepted' => true,
+    ])->assertUnprocessable()->assertJsonValidationErrors(['quoteId']);
+});
+
+it('allows schedule-only update without quote after enforcement date', function (): void {
+    Carbon::setTestNow(Carbon::parse('2026-04-23 09:00:00'));
+
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $order = CleaningBooking::factory()->create([
+        'customer_id' => $user->id,
+        'status' => CleaningBookingStatus::Pending->value,
+    ]);
+
+    patchJson("/api/v1/user/cleaning/orders/{$order->id}", [
+        'scheduledDate' => now()->addDays(2)->format('Y-m-d'),
+        'scheduledTime' => '12:30',
+    ])->assertOk()->assertJsonPath('order.scheduledTime', '12:30');
+});
+
+it('rejects price-affecting update without quote after enforcement date', function (): void {
+    Carbon::setTestNow(Carbon::parse('2026-04-23 09:00:00'));
+
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $order = CleaningBooking::factory()->create([
+        'customer_id' => $user->id,
+        'status' => CleaningBookingStatus::Pending->value,
+    ]);
+
+    patchJson("/api/v1/user/cleaning/orders/{$order->id}", [
+        'propertyDetails' => [
+            'address' => 'Updated address',
+            'rooms' => 4,
+            'bedrooms' => 3,
+            'bathrooms' => 2,
+            'living_room_size' => 'large',
+        ],
+    ])->assertUnprocessable()->assertJsonValidationErrors(['quoteId']);
+});
+
+it('updates property type with valid quote and recalculates totals', function (): void {
+    Carbon::setTestNow(Carbon::parse('2026-04-23 09:00:00'));
+
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $order = CleaningBooking::factory()->create([
+        'customer_id' => $user->id,
+        'status' => CleaningBookingStatus::Pending->value,
+        'property_type' => 'apartment',
+        'property_details' => [
+            'address' => 'Old address',
+            'rooms' => 2,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+        ],
+        'address_latitude' => 33.5,
+        'address_longitude' => 36.3,
+    ]);
+
+    $priceResponse = postJson('/api/v1/user/cleaning/orders/estimate-price', [
+        'propertyType' => 'villa',
+        'propertyDetails' => [
+            'rooms' => 4,
+            'bedrooms' => 3,
+            'bathrooms' => 2,
+            'living_room_size' => 'large',
+        ],
+        'addressLatitude' => 33.6,
+        'addressLongitude' => 36.4,
+    ])->assertOk();
+
+    $quoteId = (string) $priceResponse->json('quote.quoteId');
+    $expectedTotalPrice = (float) $priceResponse->json('pricing.totalPrice');
+
+    patchJson("/api/v1/user/cleaning/orders/{$order->id}", [
+        'propertyType' => 'villa',
+        'propertyDetails' => [
+            'address' => 'Updated address',
+            'rooms' => 4,
+            'bedrooms' => 3,
+            'bathrooms' => 2,
+            'living_room_size' => 'large',
+        ],
+        'addressLatitude' => 33.6,
+        'addressLongitude' => 36.4,
+        'quoteId' => $quoteId,
+    ])->assertOk()->assertJsonPath('order.propertyType', 'villa');
+
+    $order->refresh();
+    expect((string) $order->property_type)->toBe('villa');
+    expect((float) $order->total_price)->toBe($expectedTotalPrice);
 });
 
 it('cancels pending cleaning order and rejects cancelling completed order', function (): void {

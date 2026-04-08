@@ -16,35 +16,57 @@ use Modules\Cleaning\Models\CleaningBooking;
 
 final class UserCleaningOrderService
 {
-    public function __construct(private UserCleaningOrderEstimationService $estimationService) {}
+    public function __construct(
+        private UserCleaningOrderEstimationService $estimationService,
+        private UserCleaningOrderQuoteService $quoteService,
+    ) {}
 
     public function store(User $user, array $validated): CleaningBooking
     {
         return DB::transaction(function () use ($user, $validated): CleaningBooking {
-            $estimation = $this->estimationService->estimate(
-                (string) $validated['propertyType'],
-                (array) $validated['propertyDetails']
-            );
-            $pricing = $this->estimationService->price(
-                (string) $validated['propertyType'],
-                (array) $validated['propertyDetails'],
+            $normalizedPropertyType = $this->estimationService->normalizePropertyType((string) $validated['propertyType']);
+            $normalizedPropertyDetails = $this->estimationService->normalizePropertyDetailsForStorage((array) $validated['propertyDetails']);
+            $normalizedInput = $this->estimationService->pricingSnapshotInput(
+                $normalizedPropertyType,
+                $normalizedPropertyDetails,
                 $validated['addressLatitude'] ?? null,
                 $validated['addressLongitude'] ?? null,
                 $validated['preferredWorkerId'] ?? null
             );
 
+            $estimation = $this->estimationService->estimate(
+                $normalizedInput['propertyType'],
+                $normalizedInput['propertyDetails']
+            );
+            $pricing = $this->estimationService->price(
+                $normalizedInput['propertyType'],
+                $normalizedInput['propertyDetails'],
+                $normalizedInput['addressLatitude'],
+                $normalizedInput['addressLongitude'],
+                $normalizedInput['preferredWorkerId']
+            );
+
+            $this->quoteService->validateQuote(
+                $validated['quoteId'] ?? null,
+                (int) $user->id,
+                $normalizedInput,
+                $estimation,
+                $pricing,
+                $this->quoteService->isQuoteRequiredNow(),
+            );
+
             $booking = CleaningBooking::create([
                 'customer_id' => $user->id,
                 'worker_id' => null,
-                'preferred_worker_id' => $validated['preferredWorkerId'] ?? null,
+                'preferred_worker_id' => $normalizedInput['preferredWorkerId'],
                 'cancellation_policy_id' => $validated['cancellationPolicyId'] ?? $this->defaultCancellationPolicyId(),
                 'billing_policy_id' => $validated['billingPolicyId'] ?? $this->defaultBillingPolicyId(),
                 'booking_number' => $this->generateBookingNumber(),
                 'status' => CleaningBookingStatus::Pending,
-                'property_type' => $validated['propertyType'],
-                'property_details' => $validated['propertyDetails'],
-                'address_latitude' => $validated['addressLatitude'] ?? null,
-                'address_longitude' => $validated['addressLongitude'] ?? null,
+                'property_type' => $normalizedPropertyType,
+                'property_details' => $normalizedPropertyDetails,
+                'address_latitude' => $normalizedInput['addressLatitude'],
+                'address_longitude' => $normalizedInput['addressLongitude'],
                 'estimated_sqm' => $estimation['estimatedSqm'],
                 'estimated_hours' => $estimation['estimatedHours'],
                 'scheduled_date' => $validated['scheduledDate'],
@@ -72,9 +94,16 @@ final class UserCleaningOrderService
 
         return DB::transaction(function () use ($booking, $validated): CleaningBooking {
             $updates = [];
+            $pricingFieldsChanged = false;
+
+            if (array_key_exists('propertyType', $validated)) {
+                $updates['property_type'] = $this->estimationService->normalizePropertyType((string) $validated['propertyType']);
+                $pricingFieldsChanged = true;
+            }
 
             if (array_key_exists('propertyDetails', $validated)) {
-                $updates['property_details'] = $validated['propertyDetails'];
+                $updates['property_details'] = $this->estimationService->normalizePropertyDetailsForStorage((array) $validated['propertyDetails']);
+                $pricingFieldsChanged = true;
             }
             if (array_key_exists('scheduledDate', $validated)) {
                 $updates['scheduled_date'] = $validated['scheduledDate'];
@@ -84,34 +113,62 @@ final class UserCleaningOrderService
             }
             if (array_key_exists('addressLatitude', $validated)) {
                 $updates['address_latitude'] = $validated['addressLatitude'];
+                $pricingFieldsChanged = true;
             }
             if (array_key_exists('addressLongitude', $validated)) {
                 $updates['address_longitude'] = $validated['addressLongitude'];
+                $pricingFieldsChanged = true;
             }
             if (array_key_exists('preferredWorkerId', $validated)) {
                 $updates['preferred_worker_id'] = $validated['preferredWorkerId'];
+                $pricingFieldsChanged = true;
             }
 
-            if (
-                array_key_exists('propertyDetails', $validated)
-                || array_key_exists('addressLatitude', $validated)
-                || array_key_exists('addressLongitude', $validated)
-                || array_key_exists('preferredWorkerId', $validated)
-            ) {
-                $propertyType = (string) ($validated['propertyType'] ?? $booking->property_type);
+            if ($pricingFieldsChanged) {
+                $propertyType = (string) ($updates['property_type'] ?? $booking->property_type);
                 $propertyDetails = (array) ($updates['property_details'] ?? $booking->property_details ?? []);
                 $addressLatitude = $updates['address_latitude'] ?? $booking->address_latitude;
                 $addressLongitude = $updates['address_longitude'] ?? $booking->address_longitude;
                 $preferredWorkerId = $updates['preferred_worker_id'] ?? $booking->preferred_worker_id;
 
-                $estimation = $this->estimationService->estimate($propertyType, $propertyDetails);
-                $pricing = $this->estimationService->price(
+                $normalizedInput = $this->estimationService->pricingSnapshotInput(
                     $propertyType,
                     $propertyDetails,
                     $addressLatitude,
                     $addressLongitude,
                     $preferredWorkerId
                 );
+                $estimation = $this->estimationService->estimate($normalizedInput['propertyType'], $normalizedInput['propertyDetails']);
+                $pricing = $this->estimationService->price(
+                    $normalizedInput['propertyType'],
+                    $normalizedInput['propertyDetails'],
+                    $normalizedInput['addressLatitude'],
+                    $normalizedInput['addressLongitude'],
+                    $normalizedInput['preferredWorkerId']
+                );
+
+                $this->quoteService->validateQuote(
+                    $validated['quoteId'] ?? null,
+                    (int) $booking->customer_id,
+                    $normalizedInput,
+                    $estimation,
+                    $pricing,
+                    $this->quoteService->isQuoteRequiredNow(),
+                );
+
+                $updates['property_type'] = $normalizedInput['propertyType'];
+                if (array_key_exists('propertyDetails', $validated)) {
+                    $updates['property_details'] = $this->estimationService->normalizePropertyDetailsForStorage((array) $propertyDetails);
+                }
+                if (array_key_exists('addressLatitude', $validated)) {
+                    $updates['address_latitude'] = $normalizedInput['addressLatitude'];
+                }
+                if (array_key_exists('addressLongitude', $validated)) {
+                    $updates['address_longitude'] = $normalizedInput['addressLongitude'];
+                }
+                if (array_key_exists('preferredWorkerId', $validated)) {
+                    $updates['preferred_worker_id'] = $normalizedInput['preferredWorkerId'];
+                }
 
                 $updates['estimated_sqm'] = $estimation['estimatedSqm'];
                 $updates['estimated_hours'] = $estimation['estimatedHours'];
