@@ -6,13 +6,17 @@ use Modules\Resturants\Enums\DiscountType;
 use Modules\Resturants\Models\PromoCode;
 use Modules\Resturants\Models\Restaurant;
 
-it('returns only currently active coupons for a restaurant', function (): void {
-    $restaurant = Restaurant::factory()->create([
+it('returns only currently active coupons for active restaurants', function (): void {
+    $activeRestaurant = Restaurant::factory()->create([
         'is_active' => true,
     ]);
 
+    $inactiveRestaurant = Restaurant::factory()->create([
+        'is_active' => false,
+    ]);
+
     $activeCoupon = PromoCode::query()->create([
-        'restaurant_id' => $restaurant->id,
+        'restaurant_id' => $activeRestaurant->id,
         'code' => 'ACTIVE-' . uniqid('', true),
         'discount_type' => DiscountType::Percentage->value,
         'discount_value' => 10,
@@ -25,7 +29,7 @@ it('returns only currently active coupons for a restaurant', function (): void {
     ]);
 
     PromoCode::query()->create([
-        'restaurant_id' => $restaurant->id,
+        'restaurant_id' => $activeRestaurant->id,
         'code' => 'INACTIVE-' . uniqid('', true),
         'discount_type' => DiscountType::Percentage->value,
         'discount_value' => 10,
@@ -34,7 +38,7 @@ it('returns only currently active coupons for a restaurant', function (): void {
     ]);
 
     PromoCode::query()->create([
-        'restaurant_id' => $restaurant->id,
+        'restaurant_id' => $activeRestaurant->id,
         'code' => 'SCHEDULED-' . uniqid('', true),
         'discount_type' => DiscountType::FixedAmount->value,
         'discount_value' => 20,
@@ -44,7 +48,7 @@ it('returns only currently active coupons for a restaurant', function (): void {
     ]);
 
     PromoCode::query()->create([
-        'restaurant_id' => $restaurant->id,
+        'restaurant_id' => $activeRestaurant->id,
         'code' => 'EXPIRED-' . uniqid('', true),
         'discount_type' => DiscountType::FixedAmount->value,
         'discount_value' => 15,
@@ -54,7 +58,7 @@ it('returns only currently active coupons for a restaurant', function (): void {
     ]);
 
     PromoCode::query()->create([
-        'restaurant_id' => $restaurant->id,
+        'restaurant_id' => $activeRestaurant->id,
         'code' => 'USED-UP-' . uniqid('', true),
         'discount_type' => DiscountType::FixedAmount->value,
         'discount_value' => 15,
@@ -63,7 +67,16 @@ it('returns only currently active coupons for a restaurant', function (): void {
         'is_active' => true,
     ]);
 
-    $response = $this->getJson("/api/v1/user/restaurants/{$restaurant->id}/coupons");
+    PromoCode::query()->create([
+        'restaurant_id' => $inactiveRestaurant->id,
+        'code' => 'INACTIVE-RESTAURANT-' . uniqid('', true),
+        'discount_type' => DiscountType::Percentage->value,
+        'discount_value' => 5,
+        'usage_count' => 0,
+        'is_active' => true,
+    ]);
+
+    $response = $this->getJson('/api/v1/user/restaurants/coupons');
 
     $response->assertOk()->assertJsonStructure([
         'coupons' => [
@@ -78,30 +91,27 @@ it('returns only currently active coupons for a restaurant', function (): void {
                 'startsAt',
                 'endsAt',
                 'isActive',
+                'restaurant' => [
+                    'id',
+                    'name',
+                    'slug',
+                    'imageUrl',
+                ],
             ],
         ],
     ]);
 
     expect($response->json('coupons'))->toHaveCount(1);
     expect($response->json('coupons.0.id'))->toBe($activeCoupon->id);
-});
-
-it('returns not found for inactive restaurant', function (): void {
-    $restaurant = Restaurant::factory()->create([
-        'is_active' => false,
-    ]);
-
-    $response = $this->getJson("/api/v1/user/restaurants/{$restaurant->id}/coupons");
-
-    $response->assertNotFound();
+    expect($response->json('coupons.0.restaurant.id'))->toBe($activeRestaurant->id);
 });
 
 it('returns empty coupons list when no active coupons exist', function (): void {
-    $restaurant = Restaurant::factory()->create([
+    Restaurant::factory()->create([
         'is_active' => true,
     ]);
 
-    $response = $this->getJson("/api/v1/user/restaurants/{$restaurant->id}/coupons");
+    $response = $this->getJson('/api/v1/user/restaurants/coupons');
 
     $response->assertOk();
     expect($response->json('coupons'))->toBeArray();
