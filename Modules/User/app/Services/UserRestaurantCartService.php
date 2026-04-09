@@ -91,7 +91,11 @@ final class UserRestaurantCartService
                 );
             }
 
-            return $this->toPayload($cart->fresh(['restaurant', 'items.product', 'items.modifiers']));
+            return [
+                'cartId' => $cart->id,
+                'itemId' => $item->id,
+                'cart' => $this->toPayload($cart->fresh(['restaurant', 'items.product', 'items.modifiers'])),
+            ];
         });
     }
 

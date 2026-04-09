@@ -22,6 +22,7 @@ use Modules\User\Http\Controllers\API\RestaurantLuckBoxOptionsController;
 use Modules\User\Http\Controllers\API\RestaurantLuckBoxSuggestController;
 use Modules\User\Http\Controllers\API\SmHomeFeaturedOffersController;
 use Modules\User\Http\Controllers\API\SmHomeNearbyStoresController;
+use Modules\User\Http\Controllers\API\SmOrderStatusController;
 use Modules\User\Http\Controllers\API\SmProductShowController;
 use Modules\User\Http\Controllers\API\SmProductSimilarSearchController;
 use Modules\User\Http\Controllers\API\SmProductsSearchController;
@@ -66,6 +67,7 @@ use Modules\User\Http\Controllers\API\UserRestaurantCartItemDestroyController;
 use Modules\User\Http\Controllers\API\UserRestaurantCartItemStoreController;
 use Modules\User\Http\Controllers\API\UserRestaurantCartItemUpdateController;
 use Modules\User\Http\Controllers\API\UserRestaurantCartShowController;
+use Modules\User\Http\Controllers\API\UserRestaurantCheckoutController;
 use Modules\User\Http\Controllers\API\UserRestaurantCheckoutPreviewController;
 use Modules\User\Http\Controllers\API\UserRestaurantDetailsController;
 use Modules\User\Http\Controllers\API\UserRestaurantFavoriteDestroyController;
@@ -194,6 +196,7 @@ Route::prefix('v1/user')->group(function (): void {
         Route::patch('restaurants/cart/items/{itemId}', UserRestaurantCartItemUpdateController::class);
         Route::delete('restaurants/cart/items/{itemId}', UserRestaurantCartItemDestroyController::class);
         Route::get('restaurants/cart/products-count', RestaurantCartProductsCountController::class);
+        Route::post('restaurants/checkout', UserRestaurantCheckoutController::class);
         Route::post('restaurants/checkout/preview', UserRestaurantCheckoutPreviewController::class);
         Route::post('restaurants/orders', UserRestaurantOrderStoreController::class);
 
@@ -203,6 +206,7 @@ Route::prefix('v1/user')->group(function (): void {
         Route::delete('supermarket/cart/items/{itemId}', UserSupermarketCartItemDestroyController::class);
         Route::post('supermarket/checkout/preview', UserSupermarketCheckoutPreviewController::class);
         Route::post('supermarket/orders', UserSupermarketOrderStoreController::class);
+        Route::get('supermarket/orders/{order}/status', SmOrderStatusController::class)->whereNumber('order');
 
         Route::get('restaurants/luck-box/options', RestaurantLuckBoxOptionsController::class);
         Route::post('restaurants/luck-box/suggest', RestaurantLuckBoxSuggestController::class);

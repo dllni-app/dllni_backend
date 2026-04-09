@@ -16,15 +16,19 @@ final class UserRestaurantCartItemStoreController
 
     public function __invoke(UserRestaurantCartItemStoreRequest $request): JsonResponse
     {
+        $result = $this->carts->addItem(
+            userId: (int) $request->user()->id,
+            productId: (int) $request->integer('productId'),
+            quantity: (int) $request->integer('quantity'),
+            modifierIds: $request->input('modifierIds', []),
+            substituteProductId: $request->input('substituteProductId'),
+            note: $request->input('specialInstructions') ?? $request->input('note'),
+        );
+
         return response()->json([
-            'data' => $this->carts->addItem(
-                userId: (int) $request->user()->id,
-                productId: (int) $request->integer('productId'),
-                quantity: (int) $request->integer('quantity'),
-                modifierIds: $request->input('modifierIds', []),
-                substituteProductId: $request->input('substituteProductId'),
-                note: $request->input('note'),
-            ),
+            'message' => 'Item added to cart.',
+            'cartId' => $result['cartId'],
+            'itemId' => $result['itemId'],
         ], 201);
     }
 }
