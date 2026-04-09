@@ -16,7 +16,6 @@ final class UserSupermarketCartItemStoreRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'merchantId' => ['required', 'integer', 'exists:sm_stores,id'],
             'productId' => ['required', 'integer', 'exists:sm_products,id'],
             'quantity' => ['required', 'integer', 'min:1', 'max:200'],
             'modifierIds' => ['sometimes', 'array'],

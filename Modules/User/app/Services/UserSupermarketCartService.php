@@ -15,15 +15,11 @@ final class UserSupermarketCartService
     /**
      * @return array<string, mixed>
      */
-    public function show(int $userId, ?int $merchantId = null): array
+    public function show(int $userId): array
     {
         $query = SmCart::query()
             ->where('user_id', $userId)
             ->with(['store', 'items.product']);
-
-        if ($merchantId !== null) {
-            $query->where('store_id', $merchantId);
-        }
 
         $cart = $query->latest()->first();
 
@@ -45,17 +41,18 @@ final class UserSupermarketCartService
     /**
      * @return array<string, mixed>
      */
-    public function addItem(int $userId, int $merchantId, int $productId, int $quantity): array
+    public function addItem(int $userId, int $productId, int $quantity): array
     {
-        return DB::transaction(function () use ($userId, $merchantId, $productId, $quantity): array {
+        return DB::transaction(function () use ($userId, $productId, $quantity): array {
             $product = SmProduct::query()->findOrFail($productId);
 
-            if ((int) $product->store_id !== $merchantId) {
+            if (! $product->store_id) {
                 throw ValidationException::withMessages([
-                    'merchantId' => ['The selected product does not belong to the given merchant.'],
+                    'productId' => ['The selected product is not linked to a store.'],
                 ]);
             }
 
+            $merchantId = (int) $product->store_id;
             $cart = SmCart::query()->firstOrCreate([
                 'user_id' => $userId,
                 'store_id' => $merchantId,
@@ -144,4 +141,3 @@ final class UserSupermarketCartService
         ];
     }
 }
-

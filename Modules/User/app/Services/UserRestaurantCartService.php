@@ -16,15 +16,11 @@ final class UserRestaurantCartService
     /**
      * @return array<string, mixed>
      */
-    public function show(int $userId, ?int $merchantId = null): array
+    public function show(int $userId): array
     {
         $query = Cart::query()
             ->where('user_id', $userId)
             ->with(['restaurant', 'items.product', 'items.modifiers']);
-
-        if ($merchantId !== null) {
-            $query->where('restaurant_id', $merchantId);
-        }
 
         $cart = $query->latest()->first();
 
@@ -49,24 +45,24 @@ final class UserRestaurantCartService
      */
     public function addItem(
         int $userId,
-        int $merchantId,
         int $productId,
         int $quantity,
         array $modifierIds = [],
         ?int $substituteProductId = null,
         ?string $note = null,
     ): array {
-        return DB::transaction(function () use ($userId, $merchantId, $productId, $quantity, $modifierIds, $substituteProductId, $note): array {
+        return DB::transaction(function () use ($userId, $productId, $quantity, $modifierIds, $substituteProductId, $note): array {
             $product = Product::query()
                 ->with(['modifierGroups.modifiers'])
                 ->findOrFail($productId);
 
-            if ((int) $product->restaurant_id !== $merchantId) {
+            if (! $product->restaurant_id) {
                 throw ValidationException::withMessages([
-                    'merchantId' => ['The selected product does not belong to the given merchant.'],
+                    'productId' => ['The selected product is not linked to a restaurant.'],
                 ]);
             }
 
+            $merchantId = (int) $product->restaurant_id;
             $cart = Cart::query()->firstOrCreate([
                 'user_id' => $userId,
                 'restaurant_id' => $merchantId,
@@ -223,4 +219,3 @@ final class UserRestaurantCartService
         ];
     }
 }
-

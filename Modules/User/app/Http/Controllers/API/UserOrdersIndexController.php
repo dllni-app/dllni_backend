@@ -21,6 +21,7 @@ final class UserOrdersIndexController
             section: (string) $request->input('section', 'all'),
             status: $request->input('status'),
             search: $request->input('search'),
+            restaurantId: $request->filled('restaurantId') ? (int) $request->integer('restaurantId') : null,
             perPage: (int) $request->integer('perPage', 20),
             page: (int) $request->integer('page', 1),
         );

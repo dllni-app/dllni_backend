@@ -19,7 +19,6 @@ final class UserRestaurantCartItemStoreController
         return response()->json([
             'data' => $this->carts->addItem(
                 userId: (int) $request->user()->id,
-                merchantId: (int) $request->integer('merchantId'),
                 productId: (int) $request->integer('productId'),
                 quantity: (int) $request->integer('quantity'),
                 modifierIds: $request->input('modifierIds', []),

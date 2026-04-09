@@ -20,7 +20,6 @@ final class UserRestaurantOrderStoreController
     {
         $order = $this->checkout->place(
             userId: (int) $request->user()->id,
-            merchantId: (int) $request->integer('merchantId'),
             fulfillmentType: (string) $request->string('fulfillmentType'),
             receiveMode: (string) $request->string('receiveMode'),
             scheduledAt: $request->input('scheduledAt'),

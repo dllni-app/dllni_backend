@@ -17,7 +17,6 @@ final class UserRestaurantOrderStoreRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'merchantId' => ['required', 'integer', 'exists:restaurants,id'],
             'fulfillmentType' => ['required', 'string', Rule::in(['delivery', 'pickup', 'dine_in'])],
             'receiveMode' => ['required', 'string', Rule::in(['immediate', 'scheduled'])],
             'scheduledAt' => ['nullable', 'date', 'after:now'],

@@ -19,7 +19,6 @@ final class UserSupermarketCheckoutPreviewController
         return response()->json([
             'data' => $this->checkout->preview(
                 userId: (int) $request->user()->id,
-                merchantId: (int) $request->integer('merchantId'),
                 receiveMode: (string) $request->string('receiveMode'),
                 scheduledAt: $request->input('scheduledAt'),
                 couponCode: $request->input('couponCode'),

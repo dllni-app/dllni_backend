@@ -20,6 +20,7 @@ final class UserOrdersIndexRequest extends FormRequest
             'section' => ['sometimes', 'string', Rule::in(['all', 'restaurant', 'supermarket'])],
             'status' => ['sometimes', 'string', 'max:50'],
             'search' => ['sometimes', 'string', 'max:255'],
+            'restaurantId' => ['sometimes', 'integer', 'min:1'],
             'perPage' => ['sometimes', 'integer', 'min:1', 'max:100'],
             'page' => ['sometimes', 'integer', 'min:1'],
         ];

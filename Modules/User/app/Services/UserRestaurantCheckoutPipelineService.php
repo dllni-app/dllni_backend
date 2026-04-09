@@ -23,7 +23,6 @@ final class UserRestaurantCheckoutPipelineService
      */
     public function preview(
         int $userId,
-        int $merchantId,
         string $fulfillmentType,
         string $receiveMode,
         ?string $scheduledAt,
@@ -32,8 +31,8 @@ final class UserRestaurantCheckoutPipelineService
     ): array {
         $cart = Cart::query()
             ->where('user_id', $userId)
-            ->where('restaurant_id', $merchantId)
             ->with(['items.product'])
+            ->latest()
             ->first();
 
         if (! $cart || $cart->items->isEmpty()) {
@@ -42,6 +41,7 @@ final class UserRestaurantCheckoutPipelineService
             ]);
         }
 
+        $merchantId = (int) $cart->restaurant_id;
         $subtotal = (float) $cart->items->sum(fn ($item): float => (float) ($item->total_price ?? 0));
         $discount = $this->computeDiscount($merchantId, $couponCode, $subtotal);
         $serviceFee = 0.0;
@@ -76,13 +76,25 @@ final class UserRestaurantCheckoutPipelineService
 
     public function place(
         int $userId,
-        int $merchantId,
         string $fulfillmentType,
         string $receiveMode,
         ?string $scheduledAt,
         ?string $couponCode,
         ?string $note,
     ): Order {
+        $cart = Cart::query()
+            ->where('user_id', $userId)
+            ->with(['items.product'])
+            ->latest()
+            ->first();
+
+        if (! $cart || $cart->items->isEmpty()) {
+            throw ValidationException::withMessages([
+                'cart' => ['Cart is empty.'],
+            ]);
+        }
+
+        $merchantId = (int) $cart->restaurant_id;
         $order = $this->checkoutService->checkout(
             userId: $userId,
             restaurantId: $merchantId,
@@ -108,7 +120,7 @@ final class UserRestaurantCheckoutPipelineService
 
     private function computeDiscount(int $merchantId, ?string $couponCode, float $subtotal): float
     {
-        if (! is_string($couponCode) || trim($couponCode) === '') {
+        if (! is_string($couponCode) || mb_trim($couponCode) === '') {
             return 0.0;
         }
 
@@ -133,6 +145,10 @@ final class UserRestaurantCheckoutPipelineService
             return 0.0;
         }
 
+        if ($coupon->usage_limit !== null && (int) $coupon->usage_count >= (int) $coupon->usage_limit) {
+            return 0.0;
+        }
+
         if ($coupon->discount_type?->value === 'percentage') {
             return round($subtotal * ((float) $coupon->discount_value / 100), 2);
         }
@@ -140,4 +156,3 @@ final class UserRestaurantCheckoutPipelineService
         return round(min((float) $coupon->discount_value, $subtotal), 2);
     }
 }
-

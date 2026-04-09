@@ -6,8 +6,8 @@ namespace Modules\User\Services;
 
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Models\Cart;
 use Modules\Resturants\Models\CartItem;
@@ -29,11 +29,12 @@ final class UserOrderHubService
         string $section = 'all',
         ?string $status = null,
         ?string $search = null,
+        ?int $restaurantId = null,
         int $perPage = 20,
         int $page = 1,
     ): array {
         if ($section === 'restaurant') {
-            return $this->paginateRestaurant($userId, $status, $search, $perPage, $page);
+            return $this->paginateRestaurant($userId, $status, $search, $restaurantId, $perPage, $page);
         }
 
         if ($section === 'supermarket') {
@@ -43,6 +44,7 @@ final class UserOrderHubService
         $restaurantOrders = Order::query()
             ->where('user_id', $userId)
             ->with(['restaurant', 'orderItems.product', 'orderStatusLogs'])
+            ->when($restaurantId, fn ($q) => $q->where('restaurant_id', $restaurantId))
             ->when($status, fn ($q) => $q->where('status', $status))
             ->when($search, fn ($q) => $q->where('order_number', 'like', '%'.$search.'%'))
             ->latest()
@@ -269,9 +271,6 @@ final class UserOrderHubService
         return ['slots' => $slots];
     }
 
-    /**
-     * @return Order|SmOrder
-     */
     private function findOrderModel(int $userId, string $section, int $orderId): Order|SmOrder
     {
         if ($section === 'restaurant') {
@@ -294,12 +293,14 @@ final class UserOrderHubService
         int $userId,
         ?string $status,
         ?string $search,
+        ?int $restaurantId,
         int $perPage,
         int $page,
     ): array {
         $paginator = Order::query()
             ->where('user_id', $userId)
             ->with(['restaurant', 'orderItems.product', 'orderStatusLogs'])
+            ->when($restaurantId, fn ($q) => $q->where('restaurant_id', $restaurantId))
             ->when($status, fn ($q) => $q->where('status', $status))
             ->when($search, fn ($q) => $q->where('order_number', 'like', '%'.$search.'%'))
             ->latest()
@@ -385,7 +386,6 @@ final class UserOrderHubService
     }
 
     /**
-     * @param  Order|SmOrder  $order
      * @return array<string, mixed>
      */
     private function toPayload(string $section, Order|SmOrder $order): array

@@ -16,7 +16,6 @@ final class UserRestaurantCartItemStoreRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'merchantId' => ['required', 'integer', 'exists:restaurants,id'],
             'productId' => ['required', 'integer', 'exists:products,id'],
             'quantity' => ['required', 'integer', 'min:1', 'max:50'],
             'modifierIds' => ['sometimes', 'array', 'max:30'],

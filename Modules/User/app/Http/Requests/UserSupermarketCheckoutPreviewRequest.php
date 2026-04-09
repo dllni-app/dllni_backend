@@ -17,7 +17,6 @@ final class UserSupermarketCheckoutPreviewRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'merchantId' => ['required', 'integer', 'exists:sm_stores,id'],
             'fulfillmentType' => ['required', 'string', Rule::in(['pickup'])],
             'receiveMode' => ['required', 'string', Rule::in(['immediate', 'scheduled'])],
             'scheduledAt' => ['nullable', 'date', 'after:now'],

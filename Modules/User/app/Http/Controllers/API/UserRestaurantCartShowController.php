@@ -18,7 +18,6 @@ final class UserRestaurantCartShowController
         return response()->json([
             'data' => $this->carts->show(
                 userId: (int) auth()->id(),
-                merchantId: request()->integer('merchantId') ?: null,
             ),
         ]);
     }

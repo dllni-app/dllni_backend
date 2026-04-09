@@ -22,7 +22,6 @@ final class UserSupermarketCheckoutPipelineService
      */
     public function preview(
         int $userId,
-        int $merchantId,
         string $receiveMode,
         ?string $scheduledAt,
         ?string $couponCode,
@@ -30,8 +29,8 @@ final class UserSupermarketCheckoutPipelineService
     ): array {
         $cart = SmCart::query()
             ->where('user_id', $userId)
-            ->where('store_id', $merchantId)
             ->with(['items.product'])
+            ->latest()
             ->first();
 
         if (! $cart || $cart->items->isEmpty()) {
@@ -40,6 +39,7 @@ final class UserSupermarketCheckoutPipelineService
             ]);
         }
 
+        $merchantId = (int) $cart->store_id;
         $subtotal = (float) $cart->items->sum(fn ($item): float => (float) ($item->unit_price ?? 0) * (int) $item->quantity);
         $discount = $this->computeDiscount($merchantId, $couponCode, $subtotal);
         $serviceFee = 0.0;
@@ -72,17 +72,16 @@ final class UserSupermarketCheckoutPipelineService
 
     public function place(
         int $userId,
-        int $merchantId,
         string $receiveMode,
         ?string $scheduledAt,
         ?string $couponCode,
         ?string $note,
     ): SmOrder {
-        return DB::transaction(function () use ($userId, $merchantId, $receiveMode, $scheduledAt, $couponCode, $note): SmOrder {
+        return DB::transaction(function () use ($userId, $receiveMode, $scheduledAt, $couponCode, $note): SmOrder {
             $cart = SmCart::query()
                 ->where('user_id', $userId)
-                ->where('store_id', $merchantId)
                 ->with(['items.product'])
+                ->latest()
                 ->first();
 
             if (! $cart || $cart->items->isEmpty()) {
@@ -91,6 +90,7 @@ final class UserSupermarketCheckoutPipelineService
                 ]);
             }
 
+            $merchantId = (int) $cart->store_id;
             $subtotal = (float) $cart->items->sum(fn ($item): float => (float) ($item->unit_price ?? 0) * (int) $item->quantity);
             $coupon = $this->findCoupon($merchantId, $couponCode, $subtotal);
             $discount = $coupon ? $this->computeDiscount($merchantId, $couponCode, $subtotal) : 0.0;
@@ -160,7 +160,7 @@ final class UserSupermarketCheckoutPipelineService
 
     private function findCoupon(int $merchantId, ?string $couponCode, float $subtotal): ?SmCoupon
     {
-        if (! is_string($couponCode) || trim($couponCode) === '') {
+        if (! is_string($couponCode) || mb_trim($couponCode) === '') {
             return null;
         }
 
@@ -192,4 +192,3 @@ final class UserSupermarketCheckoutPipelineService
         return $coupon;
     }
 }
-
