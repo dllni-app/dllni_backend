@@ -24,7 +24,7 @@ final class SmOrderFactory extends Factory
             'store_id' => SmStoreFactory::new(),
             'coupon_id' => null,
             'cancellation_policy_id' => null,
-            'order_number' => mb_strtoupper(fake()->bothify('ORD-####')),
+            'order_number' => mb_strtoupper(fake()->unique()->bothify('ORD-####-????')),
             'status' => SmOrderStatus::Pending->value,
             'pickup_mode' => fake()->randomElement(['immediate_pickup', 'scheduled_pickup']),
             'pickup_scheduled_for' => fake()->numberBetween(5, 30),
