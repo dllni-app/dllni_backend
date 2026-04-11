@@ -60,8 +60,17 @@ final class SmCategorySeeder extends Seeder
             }
 
             foreach ($group['items'] as $item) {
-                $seed = $group['store'].'-'.$item['slug'];
-                $imageUrl = "https://picsum.photos/seed/sm-category-{$seed}/640/480";
+                $imageUrl = match ($item['slug']) {
+                    'bakery' => 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=1200&q=80',
+                    'canned' => 'https://images.unsplash.com/photo-1584263347416-85a696b4eda7?auto=format&fit=crop&w=1200&q=80',
+                    'cleaning' => 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1200&q=80',
+                    'dairy' => 'https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&w=1200&q=80',
+                    'snacks' => 'https://images.unsplash.com/photo-1599490659213-e2b9527bd087?auto=format&fit=crop&w=1200&q=80',
+                    'vegetables' => 'https://images.unsplash.com/photo-1518843875459-f738682238a6?auto=format&fit=crop&w=1200&q=80',
+                    'fruits' => 'https://images.unsplash.com/photo-1610832958506-aa56368176cf?auto=format&fit=crop&w=1200&q=80',
+                    'household' => 'https://images.unsplash.com/photo-1583947215259-38e31be8751f?auto=format&fit=crop&w=1200&q=80',
+                    default => 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1200&q=80',
+                };
 
                 DB::table('sm_categories')->updateOrInsert(
                     [

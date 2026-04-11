@@ -33,8 +33,8 @@ final class SmStoreSeeder extends Seeder
                 'longitude' => 36.2765,
                 'phone' => '+963 11 555 3001',
                 'email' => 'info@atrash-market.example.com',
-                'cover' => 'https://example.com/sm/atrash/cover.jpg',
-                'logo' => 'https://example.com/sm/atrash/logo.png',
+                'cover' => 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=80',
+                'logo' => 'https://images.unsplash.com/photo-1579113800032-c38bd7635818?auto=format&fit=crop&w=512&q=80',
                 'is_featured' => true,
             ],
             [
@@ -48,8 +48,8 @@ final class SmStoreSeeder extends Seeder
                 'longitude' => 36.2798,
                 'phone' => '+963 11 555 3002',
                 'email' => 'hello@alsultan-market.example.com',
-                'cover' => 'https://example.com/sm/sultan/cover.jpg',
-                'logo' => 'https://example.com/sm/sultan/logo.png',
+                'cover' => 'https://images.unsplash.com/photo-1516594915697-87eb3b1c14ea?auto=format&fit=crop&w=1400&q=80',
+                'logo' => 'https://images.unsplash.com/photo-1556740749-887f6717d7e4?auto=format&fit=crop&w=512&q=80',
                 'is_featured' => true,
             ],
             [
@@ -63,8 +63,8 @@ final class SmStoreSeeder extends Seeder
                 'longitude' => 36.2842,
                 'phone' => '+963 11 555 3003',
                 'email' => 'contact@alnoor-market.example.com',
-                'cover' => 'https://example.com/sm/noor/cover.jpg',
-                'logo' => 'https://example.com/sm/noor/logo.png',
+                'cover' => 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?auto=format&fit=crop&w=1400&q=80',
+                'logo' => 'https://images.unsplash.com/photo-1604719312566-8912e9227c6a?auto=format&fit=crop&w=512&q=80',
                 'is_featured' => false,
             ],
         ];
