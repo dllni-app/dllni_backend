@@ -27,6 +27,7 @@ final class SmSmartListItemResource extends JsonResource
             'quantity' => $this->quantity,
             'unit' => $this->unit,
             'sortOrder' => $this->sort_order,
+            'isIncluded' => (bool) ($this->is_included ?? true),
             'createdAt' => $this->created_at?->toDateTimeString(),
             'updatedAt' => $this->updated_at?->toDateTimeString(),
         ];

@@ -59,12 +59,72 @@ final class UserSupermarketCartService
             ]);
 
             $unitPrice = (float) ($product->discounted_price ?? $product->price ?? 0);
-            SmCartItem::query()->create([
+            SmCartItem::create([
                 'cart_id' => $cart->id,
                 'product_id' => $product->id,
                 'quantity' => $quantity,
                 'unit_price' => $unitPrice,
             ]);
+
+            return $this->toPayload($cart->fresh(['store', 'items.product']));
+        });
+    }
+
+    /**
+     * @param  array<int, array{productId: int, quantity: int}>  $lines
+     * @return array<string, mixed>
+     */
+    public function addLinesForStore(int $userId, int $storeId, array $lines): array
+    {
+        return DB::transaction(function () use ($userId, $storeId, $lines): array {
+            if ($lines === []) {
+                throw ValidationException::withMessages([
+                    'lines' => ['No cart lines were provided.'],
+                ]);
+            }
+
+            $mergedQuantities = [];
+            foreach ($lines as $line) {
+                $pid = (int) $line['productId'];
+                $qty = max(1, (int) $line['quantity']);
+                $mergedQuantities[$pid] = ($mergedQuantities[$pid] ?? 0) + $qty;
+            }
+
+            $productIds = array_keys($mergedQuantities);
+            $products = SmProduct::query()
+                ->whereIn('id', $productIds)
+                ->get()
+                ->keyBy('id');
+
+            foreach ($mergedQuantities as $productId => $quantity) {
+                $product = $products->get($productId);
+                if (! $product || (int) $product->store_id !== $storeId) {
+                    throw ValidationException::withMessages([
+                        'storeId' => ['One or more products do not belong to the selected store.'],
+                    ]);
+                }
+                if (! $product->is_available) {
+                    throw ValidationException::withMessages([
+                        'productId' => ["Product {$productId} is not available."],
+                    ]);
+                }
+            }
+
+            $cart = SmCart::query()->firstOrCreate([
+                'user_id' => $userId,
+                'store_id' => $storeId,
+            ]);
+
+            foreach ($mergedQuantities as $productId => $quantity) {
+                $product = $products->get($productId);
+                $unitPrice = (float) ($product->discounted_price ?? $product->price ?? 0);
+                SmCartItem::create([
+                    'cart_id' => $cart->id,
+                    'product_id' => $productId,
+                    'quantity' => $quantity,
+                    'unit_price' => $unitPrice,
+                ]);
+            }
 
             return $this->toPayload($cart->fresh(['store', 'items.product']));
         });

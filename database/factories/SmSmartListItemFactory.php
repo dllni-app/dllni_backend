@@ -19,6 +19,7 @@ final class SmSmartListItemFactory extends Factory
             'quantity' => fake()->randomFloat(2, 1, 5),
             'unit' => fake()->optional()->word(),
             'sort_order' => fake()->numberBetween(0, 10),
+            'is_included' => true,
         ];
     }
 }

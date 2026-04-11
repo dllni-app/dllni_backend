@@ -86,7 +86,7 @@ final class Order extends Model
 
     public function orderStatusLogs(): HasMany
     {
-        return $this->hasMany(OrderStatusLog::class);
+        return $this->hasMany(OrderStatusLog::class)->orderBy('created_at')->orderBy('id');
     }
 
     public function disputes(): HasMany

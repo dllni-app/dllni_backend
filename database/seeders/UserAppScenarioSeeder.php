@@ -8,6 +8,7 @@ use App\Models\CancellationPolicy;
 use App\Models\User;
 use App\Models\Worker;
 use Database\Seeders\Support\SeederMedia;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
@@ -19,6 +20,7 @@ use Modules\Resturants\Enums\RestaurantPickupMode;
 use Modules\Resturants\Models\Favorite;
 use Modules\Resturants\Models\Order;
 use Modules\Resturants\Models\OrderItem;
+use Modules\Resturants\Models\OrderStatusLog;
 use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
 use Modules\Resturants\Models\Review;
@@ -218,6 +220,8 @@ final class UserAppScenarioSeeder extends Seeder
             return;
         }
 
+        $timelineAnchor = now()->subDays(1)->setTime(16, 0, 0);
+
         $order = Order::query()->updateOrCreate([
             'order_number' => sprintf('USR-REST-%d-001', $restaurant->id),
         ], [
@@ -235,8 +239,12 @@ final class UserAppScenarioSeeder extends Seeder
             'tax_amount' => 0,
             'service_fee' => 0,
             'total_amount' => 0,
-            'accepted_at' => now()->subDays(1),
-            'completed_at' => now()->subDays(1)->addMinutes(20),
+            'accepted_at' => $timelineAnchor->copy()->addMinutes(3),
+            'preparing_at' => $timelineAnchor->copy()->addMinutes(8),
+            'ready_for_pickup_at' => $timelineAnchor->copy()->addMinutes(22),
+            'picked_up_at' => $timelineAnchor->copy()->addMinutes(28),
+            'customer_pickup_confirmed_at' => $timelineAnchor->copy()->addMinutes(29),
+            'completed_at' => $timelineAnchor->copy()->addMinutes(30),
         ]);
 
         if (! $order->relationLoaded('orderItems') || $order->orderItems()->count() === 0) {
@@ -282,6 +290,39 @@ final class UserAppScenarioSeeder extends Seeder
                 'created_at' => now()->subDays(1),
             ]
         );
+
+        $this->recreateRestaurantOrderStatusTimeline($order->fresh(), $timelineAnchor);
+    }
+
+    private function recreateRestaurantOrderStatusTimeline(Order $order, CarbonInterface $anchor): void
+    {
+        if ($order->status !== OrderStatus::Completed) {
+            return;
+        }
+
+        OrderStatusLog::query()->where('order_id', $order->id)->delete();
+
+        $steps = [
+            [null, OrderStatus::Pending->value, 'Order placed by customer.', 0],
+            [OrderStatus::Pending->value, OrderStatus::Accepted->value, 'Restaurant accepted your order.', 3],
+            [OrderStatus::Accepted->value, OrderStatus::Preparing->value, 'Kitchen started preparing your items.', 8],
+            [OrderStatus::Preparing->value, OrderStatus::ReadyForPickup->value, 'Your order is ready for pickup.', 22],
+            [OrderStatus::ReadyForPickup->value, OrderStatus::PickedUp->value, 'Order handed to customer.', 28],
+            [OrderStatus::PickedUp->value, OrderStatus::Completed->value, 'Order completed. Thank you!', 30],
+        ];
+
+        foreach ($steps as [$fromStatus, $toStatus, $note, $offsetMinutes]) {
+            $at = $anchor->copy()->addMinutes($offsetMinutes);
+
+            OrderStatusLog::forceCreate([
+                'order_id' => $order->id,
+                'from_status' => $fromStatus,
+                'to_status' => $toStatus,
+                'note' => $note,
+                'created_at' => $at,
+                'updated_at' => $at,
+            ]);
+        }
     }
 
     private function seedSupermarketScenario(User $user): void

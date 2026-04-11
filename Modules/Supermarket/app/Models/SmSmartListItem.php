@@ -21,6 +21,7 @@ final class SmSmartListItem extends Model
         'quantity',
         'unit',
         'sort_order',
+        'is_included',
     ];
 
     public function smartList(): BelongsTo
@@ -37,6 +38,7 @@ final class SmSmartListItem extends Model
     {
         return [
             'quantity' => 'decimal:2',
+            'is_included' => 'boolean',
         ];
     }
 }
