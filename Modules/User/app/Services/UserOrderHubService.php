@@ -12,6 +12,7 @@ use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Models\Cart;
 use Modules\Resturants\Models\CartItem;
 use Modules\Resturants\Models\Order;
+use Modules\Resturants\Models\OrderItem;
 use Modules\Resturants\Models\OrderStatusLog;
 use Modules\Supermarket\Enums\SmOrderStatus;
 use Modules\Supermarket\Models\SmCart;
@@ -43,7 +44,7 @@ final class UserOrderHubService
 
         $restaurantOrders = Order::query()
             ->where('user_id', $userId)
-            ->with(['restaurant', 'orderItems.product', 'orderStatusLogs'])
+            ->with($this->restaurantOrderEagerLoads())
             ->when($restaurantId, fn ($q) => $q->where('restaurant_id', $restaurantId))
             ->when($status, fn ($q) => $q->where('status', $status))
             ->when($search, fn ($q) => $q->where('order_number', 'like', '%'.$search.'%'))
@@ -125,7 +126,7 @@ final class UserOrderHubService
                 'note' => $reason,
             ]);
 
-            return $this->toPayload($section, $order->fresh(['restaurant', 'orderItems.product', 'orderStatusLogs']));
+            return $this->toPayload($section, $order->fresh($this->restaurantOrderEagerLoads()));
         }
 
         /** @var SmOrder $order */
@@ -167,7 +168,7 @@ final class UserOrderHubService
             /** @var Order $order */
             $order->update($changes);
 
-            return $this->toPayload($section, $order->fresh(['restaurant', 'orderItems.product', 'orderStatusLogs']));
+            return $this->toPayload($section, $order->fresh($this->restaurantOrderEagerLoads()));
         }
 
         /** @var SmOrder $order */
@@ -276,7 +277,7 @@ final class UserOrderHubService
         if ($section === 'restaurant') {
             return Order::query()
                 ->where('user_id', $userId)
-                ->with(['restaurant', 'orderItems.product', 'orderStatusLogs'])
+                ->with($this->restaurantOrderEagerLoads())
                 ->findOrFail($orderId);
         }
 
@@ -299,7 +300,7 @@ final class UserOrderHubService
     ): array {
         $paginator = Order::query()
             ->where('user_id', $userId)
-            ->with(['restaurant', 'orderItems.product', 'orderStatusLogs'])
+            ->with($this->restaurantOrderEagerLoads())
             ->when($restaurantId, fn ($q) => $q->where('restaurant_id', $restaurantId))
             ->when($status, fn ($q) => $q->where('status', $status))
             ->when($search, fn ($q) => $q->where('order_number', 'like', '%'.$search.'%'))
@@ -409,6 +410,8 @@ final class UserOrderHubService
                 'merchant' => [
                     'id' => $order->restaurant?->id,
                     'name' => $order->restaurant?->name,
+                    'primaryImageUrl' => $order->restaurant?->getFirstMediaUrl('primary-image') ?: null,
+                    'bannerImageUrl' => $order->restaurant?->getFirstMediaUrl('banner-image') ?: null,
                 ],
                 'fulfillment' => [
                     'type' => $order->order_type?->value ?? $order->order_type,
@@ -422,15 +425,23 @@ final class UserOrderHubService
                     'tax' => (float) ($order->tax_amount ?? 0),
                     'total' => (float) ($order->total_amount ?? 0),
                 ],
-                'items' => $order->orderItems->map(fn ($item): array => [
-                    'id' => $item->id,
-                    'productId' => $item->product_id,
-                    'name' => $item->product?->name,
-                    'quantity' => $item->quantity,
-                    'unitPrice' => (float) ($item->unit_price ?? 0),
-                    'totalPrice' => (float) ($item->total_price ?? 0),
-                    'note' => $item->special_instructions,
-                ])->values()->all(),
+                'items' => $order->orderItems->map(function (OrderItem $item): array {
+                    $product = $item->product;
+
+                    return [
+                        'id' => $item->id,
+                        'productId' => $item->product_id,
+                        'name' => $product?->name,
+                        'primaryImageUrl' => $product?->getFirstMediaUrl('primary-image') ?: null,
+                        'images' => $product !== null
+                            ? $product->getMedia('images')->map(fn ($media) => $media->getUrl())->values()->all()
+                            : [],
+                        'quantity' => $item->quantity,
+                        'unitPrice' => (float) ($item->unit_price ?? 0),
+                        'totalPrice' => (float) ($item->total_price ?? 0),
+                        'note' => $item->special_instructions,
+                    ];
+                })->values()->all(),
                 'timeline' => $timeline,
                 'actions' => $this->actionsFor($status),
                 'createdAt' => $order->created_at?->toISOString(),
@@ -482,6 +493,18 @@ final class UserOrderHubService
             'actions' => $this->actionsFor($status),
             'createdAt' => $order->created_at?->toISOString(),
             'updatedAt' => $order->updated_at?->toISOString(),
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function restaurantOrderEagerLoads(): array
+    {
+        return [
+            'restaurant.media',
+            'orderItems.product.media',
+            'orderStatusLogs',
         ];
     }
 

@@ -132,7 +132,7 @@ Route::prefix('v1/user')->group(function (): void {
     Route::get('restaurants/votes/suggestions', RestaurantGroupVoteSuggestionsController::class);
     Route::get('restaurants/votes/{vote}', RestaurantGroupVoteShowController::class)->whereNumber('vote');
     Route::get('restaurants/coupons', UserRestaurantActiveCouponsController::class);
-    Route::get('restaurants/{restaurant}', UserRestaurantDetailsController::class);
+    Route::get('restaurants/{restaurant}', UserRestaurantDetailsController::class)->whereNumber('restaurant');
     Route::get('products/{product}', UserProductDetailsController::class);
 
     Route::get('offers', UserMarketingOffersIndexController::class);
