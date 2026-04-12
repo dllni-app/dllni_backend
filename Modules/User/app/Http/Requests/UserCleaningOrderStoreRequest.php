@@ -35,7 +35,6 @@ final class UserCleaningOrderStoreRequest extends FormRequest
             'addressLatitude' => ['nullable', 'numeric', 'between:-90,90'],
             'addressLongitude' => ['nullable', 'numeric', 'between:-180,180'],
             'preferredWorkerId' => ['nullable', 'exists:workers,id'],
-            'quoteId' => ['nullable', 'string', 'max:255'],
             'estimatedSqm' => ['prohibited'],
             'estimatedHours' => ['prohibited'],
             'totalHours' => ['prohibited'],

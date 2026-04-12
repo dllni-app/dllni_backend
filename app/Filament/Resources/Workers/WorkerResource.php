@@ -20,6 +20,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 
 final class WorkerResource extends Resource
 {
@@ -69,6 +70,31 @@ final class WorkerResource extends Resource
         return WorkersTable::configure($table);
     }
 
+    public static function canViewAny(): bool
+    {
+        return self::hasPermission('workers.view');
+    }
+
+    public static function canView(Model $record): bool
+    {
+        return self::hasPermission('workers.view');
+    }
+
+    public static function canCreate(): bool
+    {
+        return self::hasPermission('workers.create');
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return self::hasPermission('workers.update');
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return self::hasPermission('workers.delete');
+    }
+
     public static function getRelations(): array
     {
         return [
@@ -86,5 +112,20 @@ final class WorkerResource extends Resource
             'view' => ViewWorker::route('/{record}'),
             'edit' => EditWorker::route('/{record}/edit'),
         ];
+    }
+
+    private static function hasPermission(string $permission): bool
+    {
+        $user = auth()->user();
+
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->hasAnyRole(['admin', 'Super Admin'])) {
+            return true;
+        }
+
+        return $user->can($permission);
     }
 }

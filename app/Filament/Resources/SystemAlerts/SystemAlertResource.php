@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\SystemAlerts;
 
-use App\Filament\Resources\SystemAlerts\Pages\CreateSystemAlert;
 use App\Filament\Resources\SystemAlerts\Pages\EditSystemAlert;
 use App\Filament\Resources\SystemAlerts\Pages\ListSystemAlerts;
 use App\Filament\Resources\SystemAlerts\Pages\ViewSystemAlert;
@@ -17,6 +16,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 
 final class SystemAlertResource extends Resource
 {
@@ -56,6 +56,31 @@ final class SystemAlertResource extends Resource
         return SystemAlertsTable::configure($table);
     }
 
+    public static function canViewAny(): bool
+    {
+        return self::hasPermission('system_alerts.view');
+    }
+
+    public static function canView(Model $record): bool
+    {
+        return self::hasPermission('system_alerts.view');
+    }
+
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return self::hasPermission('system_alerts.update');
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return false;
+    }
+
     public static function getRelations(): array
     {
         return [];
@@ -65,9 +90,23 @@ final class SystemAlertResource extends Resource
     {
         return [
             'index' => ListSystemAlerts::route('/'),
-            'create' => CreateSystemAlert::route('/create'),
             'view' => ViewSystemAlert::route('/{record}'),
             'edit' => EditSystemAlert::route('/{record}/edit'),
         ];
+    }
+
+    private static function hasPermission(string $permission): bool
+    {
+        $user = auth()->user();
+
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->hasAnyRole(['admin', 'Super Admin'])) {
+            return true;
+        }
+
+        return $user->can($permission);
     }
 }

@@ -389,7 +389,7 @@ final class RestaurantSeeder extends Seeder
             if ($status === OrderStatus::Cancelled) {
                 $acceptedAt = $baseTime;
                 $cancelledAt = $baseTime->copy()->addMinutes(12);
-                $cancellationReason = 'Customer changed pickup plan';
+                $cancellationReason = 'قام العميل بتغيير خطة الاستلام';
             }
 
             Order::updateOrCreate(

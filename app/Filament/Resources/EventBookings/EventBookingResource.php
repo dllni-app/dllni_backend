@@ -14,6 +14,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 use Modules\Cleaning\Models\EventBooking;
 
 final class EventBookingResource extends Resource
@@ -56,6 +57,31 @@ final class EventBookingResource extends Resource
         return EventBookingsTable::configure($table);
     }
 
+    public static function canViewAny(): bool
+    {
+        return self::hasPermission('bookings.view');
+    }
+
+    public static function canView(Model $record): bool
+    {
+        return self::hasPermission('bookings.view');
+    }
+
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return false;
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return false;
+    }
+
     public static function getRelations(): array
     {
         return [];
@@ -67,5 +93,20 @@ final class EventBookingResource extends Resource
             'index' => ListEventBookings::route('/'),
             'view' => ViewEventBooking::route('/{record}'),
         ];
+    }
+
+    private static function hasPermission(string $permission): bool
+    {
+        $user = auth()->user();
+
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->hasAnyRole(['admin', 'Super Admin'])) {
+            return true;
+        }
+
+        return $user->can($permission);
     }
 }

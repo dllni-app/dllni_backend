@@ -22,7 +22,7 @@ final class DatabaseSeeder extends Seeder
         User::updateOrCreate(
             ['email' => 'admin@dllni.sy'],
             [
-                'name' => 'Admin User',
+                'name' => 'مدير النظام',
                 'password' => bcrypt('password'),
             ]
         );

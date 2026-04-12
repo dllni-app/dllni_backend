@@ -56,6 +56,21 @@ final class FinancialSettings extends Page
         return __('cleaning_admin.financial.tooltip');
     }
 
+    public static function canAccess(): bool
+    {
+        $user = auth()->user();
+
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->hasAnyRole(['admin', 'Super Admin'])) {
+            return true;
+        }
+
+        return $user->can('pricing.view') || $user->can('settings.view');
+    }
+
     public function getTitle(): string
     {
         return __('cleaning_admin.financial.title');

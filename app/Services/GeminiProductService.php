@@ -443,6 +443,8 @@ final class GeminiProductService
             ->retry(
                 (int) config('gemini.retry_times'),
                 (int) config('gemini.retry_sleep'),
+                when: null,
+                throw: false,
             )
             ->withHeaders(['Content-Type' => 'application/json'])
             ->post($url, $payload);

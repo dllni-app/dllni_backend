@@ -12,8 +12,8 @@ final class AdminUserSeeder extends Seeder
     public function run(): void
     {
         $admins = [
-            ['name' => 'Admin', 'email' => 'admin@admin.com'],
-            ['name' => 'Admin User', 'email' => 'admin@dllni.sy'],
+            ['name' => 'مدير', 'email' => 'admin@admin.com'],
+            ['name' => 'مدير النظام', 'email' => 'admin@dllni.sy'],
         ];
 
         foreach ($admins as $adminData) {

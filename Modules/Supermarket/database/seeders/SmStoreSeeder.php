@@ -15,7 +15,7 @@ final class SmStoreSeeder extends Seeder
         $owner = User::firstOrCreate(
             ['email' => 'supermarket.owner@dllni.sy'],
             [
-                'name' => 'Supermarket Owner',
+                'name' => 'مالك السوبرماركت',
                 'password' => bcrypt('password'),
                 'email_verified_at' => now(),
             ]
@@ -23,12 +23,12 @@ final class SmStoreSeeder extends Seeder
 
         $stores = [
             [
-                'name' => 'Supermarket Al Atrash',
+                'name' => 'سوبرماركت الأطرش',
                 'slug' => 'supermarket-al-atrash',
-                'description' => 'Bakery, canned goods, cleaning products, dairy and snacks.',
-                'address' => 'Al Furqan, Abdul Qader Al Saleh Street, Aleppo',
-                'city' => 'Aleppo',
-                'neighborhood' => 'Al Furqan',
+                'description' => 'مخبوزات ومعلبات ومنتجات تنظيف وألبان وتسالي.',
+                'address' => 'حي الفرقان، شارع عبد القادر الصالح، حلب',
+                'city' => 'حلب',
+                'neighborhood' => 'الفرقان',
                 'latitude' => 36.2021,
                 'longitude' => 37.1343,
                 'phone' => '+963 11 555 3001',
@@ -38,12 +38,12 @@ final class SmStoreSeeder extends Seeder
                 'is_featured' => true,
             ],
             [
-                'name' => 'Supermarket Al Sultan',
+                'name' => 'سوبرماركت السلطان',
                 'slug' => 'supermarket-al-sultan',
-                'description' => 'Vegetables, fruits, dairy, cleaning products, and household tools.',
-                'address' => 'Al Hamdaniyah, Al Quds Street, Aleppo',
-                'city' => 'Aleppo',
-                'neighborhood' => 'Al Hamdaniyah',
+                'description' => 'خضار وفواكه وألبان ومنتجات تنظيف وأدوات منزلية.',
+                'address' => 'حي الحمدانية، شارع القدس، حلب',
+                'city' => 'حلب',
+                'neighborhood' => 'الحمدانية',
                 'latitude' => 36.1795,
                 'longitude' => 37.1082,
                 'phone' => '+963 11 555 3002',
@@ -53,12 +53,12 @@ final class SmStoreSeeder extends Seeder
                 'is_featured' => true,
             ],
             [
-                'name' => 'Supermarket Al Noor',
+                'name' => 'سوبرماركت النور',
                 'slug' => 'supermarket-al-noor',
-                'description' => 'Canned goods, cleaning products, dairy, and snacks.',
-                'address' => 'New Saraya, Tishreen Street, Aleppo',
-                'city' => 'Aleppo',
-                'neighborhood' => 'New Saraya',
+                'description' => 'معلبات ومنتجات تنظيف وألبان وتسالي.',
+                'address' => 'السرايا الجديدة، شارع تشرين، حلب',
+                'city' => 'حلب',
+                'neighborhood' => 'السرايا الجديدة',
                 'latitude' => 36.2168,
                 'longitude' => 37.1317,
                 'phone' => '+963 11 555 3003',

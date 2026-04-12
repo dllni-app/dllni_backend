@@ -25,7 +25,7 @@ final class VerifiedUserSeeder extends Seeder
         }
 
         $user->forceFill([
-            'name' => 'User',
+            'name' => 'مستخدم التطبيق',
             'phone' => '+963944000222',
             'email' => 'user@dllni.sy',
             'password' => bcrypt('secret123'),

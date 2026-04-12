@@ -35,7 +35,6 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
             'addressLatitude' => ['sometimes', 'numeric', 'between:-90,90'],
             'addressLongitude' => ['sometimes', 'numeric', 'between:-180,180'],
             'preferredWorkerId' => ['sometimes', 'nullable', 'exists:workers,id'],
-            'quoteId' => ['sometimes', 'nullable', 'string', 'max:255'],
             'estimatedSqm' => ['prohibited'],
             'estimatedHours' => ['prohibited'],
             'totalHours' => ['prohibited'],

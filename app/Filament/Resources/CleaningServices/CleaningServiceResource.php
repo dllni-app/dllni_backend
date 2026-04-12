@@ -17,6 +17,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 use Modules\Cleaning\Models\CleaningService;
 
 final class CleaningServiceResource extends Resource
@@ -57,6 +58,31 @@ final class CleaningServiceResource extends Resource
         return CleaningServicesTable::configure($table);
     }
 
+    public static function canViewAny(): bool
+    {
+        return self::hasPermission('pricing.view');
+    }
+
+    public static function canView(Model $record): bool
+    {
+        return self::hasPermission('pricing.view');
+    }
+
+    public static function canCreate(): bool
+    {
+        return self::hasPermission('pricing.create');
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return self::hasPermission('pricing.update');
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return self::hasPermission('pricing.delete');
+    }
+
     public static function getRelations(): array
     {
         return [
@@ -72,5 +98,20 @@ final class CleaningServiceResource extends Resource
             'view' => ViewCleaningService::route('/{record}'),
             'edit' => EditCleaningService::route('/{record}/edit'),
         ];
+    }
+
+    private static function hasPermission(string $permission): bool
+    {
+        $user = auth()->user();
+
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->hasAnyRole(['admin', 'Super Admin'])) {
+            return true;
+        }
+
+        return $user->can($permission);
     }
 }

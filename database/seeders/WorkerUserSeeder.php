@@ -26,7 +26,7 @@ final class WorkerUserSeeder extends Seeder
         $user = User::firstOrCreate(
             ['email' => self::WorkerEmail],
             [
-                'name' => 'Worker User',
+                'name' => 'عامل التنظيف',
                 'phone' => self::WorkerPhone,
                 'module_type' => UserModuleType::CleaningWorker,
                 'password' => bcrypt(self::Password),
@@ -42,8 +42,8 @@ final class WorkerUserSeeder extends Seeder
         $worker = Worker::firstOrCreate(
             ['user_id' => $user->id],
             [
-                'first_name' => 'Worker',
-                'bio' => 'Cleaning worker for API and app testing.',
+                'first_name' => 'عامل',
+                'bio' => 'عامل تنظيف للاستخدام في اختبارات الواجهة البرمجية والتطبيق.',
                 'average_rating' => 4.6,
                 'total_completed_jobs' => 50,
                 'trust_score' => 88,

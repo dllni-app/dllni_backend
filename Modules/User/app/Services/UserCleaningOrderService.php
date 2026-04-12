@@ -18,7 +18,6 @@ final class UserCleaningOrderService
 {
     public function __construct(
         private UserCleaningOrderEstimationService $estimationService,
-        private UserCleaningOrderQuoteService $quoteService,
     ) {}
 
     public function store(User $user, array $validated): CleaningBooking
@@ -44,15 +43,6 @@ final class UserCleaningOrderService
                 $normalizedInput['addressLatitude'],
                 $normalizedInput['addressLongitude'],
                 $normalizedInput['preferredWorkerId']
-            );
-
-            $this->quoteService->validateQuote(
-                $validated['quoteId'] ?? null,
-                (int) $user->id,
-                $normalizedInput,
-                $estimation,
-                $pricing,
-                $this->quoteService->isQuoteRequiredNow(),
             );
 
             $booking = CleaningBooking::create([
@@ -145,15 +135,6 @@ final class UserCleaningOrderService
                     $normalizedInput['addressLatitude'],
                     $normalizedInput['addressLongitude'],
                     $normalizedInput['preferredWorkerId']
-                );
-
-                $this->quoteService->validateQuote(
-                    $validated['quoteId'] ?? null,
-                    (int) $booking->customer_id,
-                    $normalizedInput,
-                    $estimation,
-                    $pricing,
-                    $this->quoteService->isQuoteRequiredNow(),
                 );
 
                 $updates['property_type'] = $normalizedInput['propertyType'];

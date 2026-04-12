@@ -122,41 +122,41 @@ final class UserAppScenarioSeeder extends Seeder
         $notifications = [
             [
                 'type' => 'order',
-                'title' => 'Order accepted',
-                'body' => 'Restaurant accepted your order and started preparing it.',
+                'title' => 'تم قبول الطلب',
+                'body' => 'وافق المطعم على طلبك وبدأ التحضير.',
                 'bookingId' => 101,
                 'read_at' => null,
             ],
             [
                 'type' => 'order',
-                'title' => 'Order ready for pickup',
-                'body' => 'Your restaurant order is now ready for pickup.',
+                'title' => 'طلبك جاهز للاستلام',
+                'body' => 'طلب المطعم أصبح جاهزاً للاستلام الآن.',
                 'bookingId' => 101,
                 'read_at' => null,
             ],
             [
                 'type' => 'promo',
-                'title' => 'New offer available',
-                'body' => 'Use code WELCOME15 on your next checkout.',
+                'title' => 'عرض جديد متاح',
+                'body' => 'استخدم كود AHLAN15 في عملية الدفع القادمة.',
                 'read_at' => null,
             ],
             [
                 'type' => 'promo',
-                'title' => 'Flash deal nearby',
-                'body' => 'A featured supermarket near you has a limited-time discount.',
+                'title' => 'عرض سريع قريب منك',
+                'body' => 'يوجد خصم لفترة محدودة في سوبرماركت قريب منك.',
                 'read_at' => now()->subMinutes(5),
             ],
             [
                 'type' => 'delivery',
-                'title' => 'Order on the way',
-                'body' => 'Your driver is approaching your saved address.',
+                'title' => 'الطلب في الطريق',
+                'body' => 'السائق يقترب من عنوانك المحفوظ.',
                 'timeWarningId' => 11,
                 'read_at' => now()->subMinutes(20),
             ],
             [
                 'type' => 'account',
-                'title' => 'Security reminder',
-                'body' => 'Please review your account security settings.',
+                'title' => 'تذكير أمني',
+                'body' => 'يرجى مراجعة إعدادات الأمان في حسابك.',
                 'read_at' => now()->subHours(2),
             ],
         ];
@@ -285,7 +285,7 @@ final class UserAppScenarioSeeder extends Seeder
             [
                 'restaurant_id' => $restaurant->id,
                 'rating' => 5,
-                'comment' => 'Excellent service and tasty food.',
+                'comment' => 'خدمة ممتازة وطعام لذيذ.',
                 'updated_at' => now(),
                 'created_at' => now()->subDays(1),
             ]
@@ -303,12 +303,12 @@ final class UserAppScenarioSeeder extends Seeder
         OrderStatusLog::query()->where('order_id', $order->id)->delete();
 
         $steps = [
-            [null, OrderStatus::Pending->value, 'Order placed by customer.', 0],
-            [OrderStatus::Pending->value, OrderStatus::Accepted->value, 'Restaurant accepted your order.', 3],
-            [OrderStatus::Accepted->value, OrderStatus::Preparing->value, 'Kitchen started preparing your items.', 8],
-            [OrderStatus::Preparing->value, OrderStatus::ReadyForPickup->value, 'Your order is ready for pickup.', 22],
-            [OrderStatus::ReadyForPickup->value, OrderStatus::PickedUp->value, 'Order handed to customer.', 28],
-            [OrderStatus::PickedUp->value, OrderStatus::Completed->value, 'Order completed. Thank you!', 30],
+            [null, OrderStatus::Pending->value, 'تم إنشاء الطلب من قبل العميل.', 0],
+            [OrderStatus::Pending->value, OrderStatus::Accepted->value, 'وافق المطعم على طلبك.', 3],
+            [OrderStatus::Accepted->value, OrderStatus::Preparing->value, 'بدأ المطبخ بتحضير الأصناف.', 8],
+            [OrderStatus::Preparing->value, OrderStatus::ReadyForPickup->value, 'طلبك أصبح جاهزاً للاستلام.', 22],
+            [OrderStatus::ReadyForPickup->value, OrderStatus::PickedUp->value, 'تم تسليم الطلب للعميل.', 28],
+            [OrderStatus::PickedUp->value, OrderStatus::Completed->value, 'اكتمل الطلب، شكراً لك.', 30],
         ];
 
         foreach ($steps as [$fromStatus, $toStatus, $note, $offsetMinutes]) {
@@ -515,7 +515,7 @@ final class UserAppScenarioSeeder extends Seeder
 
             if ($status === CleaningBookingStatus::Cancelled) {
                 $cancelledAt = now()->subHours(6);
-                $cancellationReason = 'Customer requested another schedule';
+                $cancellationReason = 'طلب العميل تغيير موعد الخدمة';
             }
 
             CleaningBooking::query()->updateOrCreate(
@@ -531,8 +531,8 @@ final class UserAppScenarioSeeder extends Seeder
                     'status' => $status->value,
                     'property_type' => 'apartment',
                     'property_details' => [
-                        'location_name' => 'Home',
-                        'address' => 'Al Hamdaniyah, Aleppo',
+                        'location_name' => 'المنزل',
+                        'address' => 'الحمدانية، حلب',
                         'rooms' => 3,
                         'bedrooms' => 2,
                         'bathrooms' => 1,

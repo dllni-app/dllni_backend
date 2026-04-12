@@ -51,6 +51,24 @@ final class CleaningOverview extends Page
         ];
     }
 
+    public static function canAccess(): bool
+    {
+        $user = auth()->user();
+
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->hasAnyRole(['admin', 'Super Admin'])) {
+            return true;
+        }
+
+        return $user->can('bookings.view')
+            || $user->can('workers.view')
+            || $user->can('disputes.view')
+            || $user->can('system_alerts.view');
+    }
+
     public function getTitle(): string
     {
         return __('cleaning_admin.overview.title');
