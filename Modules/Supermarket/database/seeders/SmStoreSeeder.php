@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 declare(strict_types=1);
 
@@ -15,7 +15,7 @@ final class SmStoreSeeder extends Seeder
         $owner = User::firstOrCreate(
             ['email' => 'supermarket.owner@dllni.sy'],
             [
-                'name' => '�T�?��~§�T�?z�T�' �~§�T�?z�~³�T�?�~¨�~±�T�?��~§�~±�T�'�~ª',
+                'name' => 'Supermarket Owner',
                 'password' => bcrypt('password'),
                 'email_verified_at' => now(),
             ]
@@ -23,12 +23,12 @@ final class SmStoreSeeder extends Seeder
 
         $stores = [
             [
-                'name' => 'س�^بر �.ار�fت ا�"أطرش',
+                'name' => 'Supermarket Al Atrash',
                 'slug' => 'supermarket-al-atrash',
-                'description' => '�.خب�^زات �?� �.ع�"بات �?� �.�?ظفات �?� أ�"با�? �^ تسا�"�S',
-                'address' => 'ا�"فر�,ا�?�O شارع عبد ا�"�,ادر ا�"صا�"ح�O ح�"ب',
-                'city' => 'ح�"ب',
-                'neighborhood' => 'ا�"فر�,ا�?',
+                'description' => 'Bakery, canned goods, cleaning products, dairy and snacks.',
+                'address' => 'Al Furqan, Abdul Qader Al Saleh Street, Aleppo',
+                'city' => 'Aleppo',
+                'neighborhood' => 'Al Furqan',
                 'latitude' => 36.2021,
                 'longitude' => 37.1343,
                 'phone' => '+963 11 555 3001',
@@ -38,12 +38,12 @@ final class SmStoreSeeder extends Seeder
                 'is_featured' => true,
             ],
             [
-                'name' => 'س�^بر �.ار�fت ا�"س�"طا�?',
+                'name' => 'Supermarket Al Sultan',
                 'slug' => 'supermarket-al-sultan',
-                'description' => 'خضار �?� ف�^ا�f�? �?� أ�"با�? �?� �.�?ظفات �?� أد�^ات �.�?ز�"�Sة',
-                'address' => 'ا�"ح�.دا�?�Sة�O شارع ا�"�,دس�O ح�"ب',
-                'city' => 'ح�"ب',
-                'neighborhood' => 'ا�"ح�.دا�?�Sة',
+                'description' => 'Vegetables, fruits, dairy, cleaning products, and household tools.',
+                'address' => 'Al Hamdaniyah, Al Quds Street, Aleppo',
+                'city' => 'Aleppo',
+                'neighborhood' => 'Al Hamdaniyah',
                 'latitude' => 36.1795,
                 'longitude' => 37.1082,
                 'phone' => '+963 11 555 3002',
@@ -53,12 +53,12 @@ final class SmStoreSeeder extends Seeder
                 'is_featured' => true,
             ],
             [
-                'name' => 'س�^بر �.ار�fت ا�"�?�^ر',
+                'name' => 'Supermarket Al Noor',
                 'slug' => 'supermarket-al-noor',
-                'description' => '�.ع�"بات �?� �.�?ظفات �?� أ�"با�? �^ تسا�"�S',
-                'address' => 'ا�"سر�Sا�? ا�"جد�Sدة�O شارع تشر�S�?�O ح�"ب',
-                'city' => 'ح�"ب',
-                'neighborhood' => 'ا�"سر�Sا�? ا�"جد�Sدة',
+                'description' => 'Canned goods, cleaning products, dairy, and snacks.',
+                'address' => 'New Saraya, Tishreen Street, Aleppo',
+                'city' => 'Aleppo',
+                'neighborhood' => 'New Saraya',
                 'latitude' => 36.2168,
                 'longitude' => 37.1317,
                 'phone' => '+963 11 555 3003',
@@ -95,5 +95,3 @@ final class SmStoreSeeder extends Seeder
         }
     }
 }
-
-

@@ -43,10 +43,12 @@ use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerPermissionsCon
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerStoreController;
 
 Route::prefix('v1')->group(function () {
-    // Dashboard and Reports
-    Route::get('sm-dashboard', [SmDashboardController::class, 'index'])->name('dashboard');
-    Route::get('sm-reports/financial', [SmFinancialReportController::class, 'index'])->name('reports.financial');
-    Route::get('sm-reports/performance', [SmPerformanceAnalyticsController::class, 'index'])->name('reports.performance');
+    // Dashboard and reports are system-admin only.
+    Route::middleware(['auth:sanctum', 'dashboard.admin'])->group(function () {
+        Route::get('sm-dashboard', [SmDashboardController::class, 'index'])->name('dashboard');
+        Route::get('sm-reports/financial', [SmFinancialReportController::class, 'index'])->name('reports.financial');
+        Route::get('sm-reports/performance', [SmPerformanceAnalyticsController::class, 'index'])->name('reports.performance');
+    });
 
     Route::apiResource('sm-assistant-queries', SmAssistantQueryController::class)->only(['index', 'show'])->names('sm-assistant-queries');
     Route::apiResource('sm-carts', SmCartController::class)->names('sm-carts');
