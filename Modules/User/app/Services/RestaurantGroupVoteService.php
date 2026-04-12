@@ -135,9 +135,9 @@ final class RestaurantGroupVoteService
         }
 
         $filteredUserIds = collect($userIds)
-            ->map(fn(int $id): int => (int) $id)
+            ->map(fn (int $id): int => (int) $id)
             ->unique()
-            ->reject(fn(int $id): bool => $id === $vote->user_id)
+            ->reject(fn (int $id): bool => $id === $vote->user_id)
             ->values()
             ->all();
 
@@ -160,7 +160,7 @@ final class RestaurantGroupVoteService
             ->where('status', RestaurantGroupVoteStatus::Active)
             ->where(function ($query) use ($userId): void {
                 $query->where('user_id', $userId)
-                    ->orWhereHas('invites', fn($inviteQuery) => $inviteQuery->where('user_id', $userId));
+                    ->orWhereHas('invites', fn ($inviteQuery) => $inviteQuery->where('user_id', $userId));
             })
             ->orderBy('ends_at')
             ->get();
@@ -257,7 +257,7 @@ final class RestaurantGroupVoteService
         })->all();
 
         $isInvited = $currentUserId !== null
-            ? $vote->invites->contains(fn(RestaurantGroupVoteInvite $invite): bool => $invite->user_id === $currentUserId)
+            ? $vote->invites->contains(fn (RestaurantGroupVoteInvite $invite): bool => $invite->user_id === $currentUserId)
             : false;
 
         $secondsRemaining = 0;
@@ -306,7 +306,7 @@ final class RestaurantGroupVoteService
             ->orderBy('name')
             ->limit(100)
             ->get(['id', 'name', 'slug'])
-            ->map(fn(CuisineType $row): array => [
+            ->map(fn (CuisineType $row): array => [
                 'id' => (int) $row->id,
                 'name' => (string) $row->name,
                 'slug' => (string) $row->slug,
@@ -322,16 +322,16 @@ final class RestaurantGroupVoteService
             ->whereHas('restaurant', function ($q): void {
                 $q->where('is_active', true)
                     ->where('is_temporarily_closed', false)
-                    ->where(fn($qq) => $qq->whereNull('suspension_until')->orWhere('suspension_until', '<=', now()));
+                    ->where(fn ($qq) => $qq->whereNull('suspension_until')->orWhere('suspension_until', '<=', now()));
             })
-            ->when($cuisineTypeId !== null, fn($q) => $q->whereHas(
+            ->when($cuisineTypeId !== null, fn ($q) => $q->whereHas(
                 'restaurant.cuisineTypes',
-                fn($q) => $q->where('cuisine_types.id', $cuisineTypeId)
+                fn ($q) => $q->where('cuisine_types.id', $cuisineTypeId)
             ))
-            ->when($escaped !== null, fn($q) => $q->where(
-                fn($q) => $q
-                    ->where('name', 'like', '%' . $escaped . '%')
-                    ->orWhere('description', 'like', '%' . $escaped . '%')
+            ->when($escaped !== null, fn ($q) => $q->where(
+                fn ($q) => $q
+                    ->where('name', 'like', '%'.$escaped.'%')
+                    ->orWhere('description', 'like', '%'.$escaped.'%')
             ))
             ->with(['restaurant:id,name'])
             ->orderByDesc('is_featured')
@@ -376,9 +376,9 @@ final class RestaurantGroupVoteService
 
         $max = $counts->max();
         $winnerId = $counts
-            ->filter(fn(int $c): bool => $c === $max)
+            ->filter(fn (int $c): bool => $c === $max)
             ->keys()
-            ->map(fn($id) => (int) $id)
+            ->map(fn ($id) => (int) $id)
             ->sort()
             ->first();
 

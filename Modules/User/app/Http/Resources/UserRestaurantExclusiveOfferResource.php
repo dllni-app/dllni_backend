@@ -14,7 +14,7 @@ use Modules\Resturants\Models\Offer;
  * @mixin Offer
  */
 final class UserRestaurantExclusiveOfferResource extends JsonResource
-{   
+{
     public function toArray(Request $request): array
     {
         /** @var Offer $offer */

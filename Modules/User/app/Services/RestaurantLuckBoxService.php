@@ -28,11 +28,11 @@ final class RestaurantLuckBoxService
     public function options(): array
     {
         $cuisineTypes = CuisineType::query()
-            ->whereHas('restaurants', fn(Builder $q) => $q->where('is_active', true))
+            ->whereHas('restaurants', fn (Builder $q) => $q->where('is_active', true))
             ->orderBy('name')
             ->limit(50)
             ->get(['id', 'name'])
-            ->map(fn(CuisineType $type) => [
+            ->map(fn (CuisineType $type) => [
                 'id' => $type->id,
                 'name' => $type->name,
             ])
@@ -72,7 +72,7 @@ final class RestaurantLuckBoxService
         }
 
         if ($cuisineTypeId !== null) {
-            $restaurantsQuery->whereHas('cuisineTypes', fn(Builder $q) => $q->where('cuisine_types.id', $cuisineTypeId));
+            $restaurantsQuery->whereHas('cuisineTypes', fn (Builder $q) => $q->where('cuisine_types.id', $cuisineTypeId));
         }
 
         if (is_numeric($latitude) && is_numeric($longitude)) {
@@ -187,7 +187,7 @@ final class RestaurantLuckBoxService
             };
 
             foreach ($patterns as $word) {
-                $like = '%' . $word . '%';
+                $like = '%'.$word.'%';
                 $query->where(function (Builder $inner) use ($like): void {
                     $inner->where('name', 'not like', $like)
                         ->where(function (Builder $d) use ($like): void {
@@ -232,7 +232,7 @@ final class RestaurantLuckBoxService
      */
     private function buildBestValueBundle(Restaurant $restaurant, Collection $products, float $budgetTotal): ?array
     {
-        $sorted = $products->sortBy(fn(Product $p) => $this->effectivePrice($p))->values();
+        $sorted = $products->sortBy(fn (Product $p) => $this->effectivePrice($p))->values();
         $lineItems = [];
         $total = 0.0;
 
@@ -264,7 +264,7 @@ final class RestaurantLuckBoxService
     private function buildFastestBundle(Restaurant $restaurant, Collection $products, float $budgetTotal): ?array
     {
         $targetMin = $budgetTotal * 0.45;
-        $sorted = $products->sortByDesc(fn(Product $p) => $this->effectivePrice($p))->values();
+        $sorted = $products->sortByDesc(fn (Product $p) => $this->effectivePrice($p))->values();
         $lineItems = [];
         $total = 0.0;
 
@@ -300,7 +300,7 @@ final class RestaurantLuckBoxService
      */
     private function buildBalancedBundle(Restaurant $restaurant, Collection $products, float $budgetTotal): ?array
     {
-        $byCategory = $products->groupBy(fn(Product $p) => $p->category_id ?? 0);
+        $byCategory = $products->groupBy(fn (Product $p) => $p->category_id ?? 0);
         $roundRobin = collect();
         $keys = $byCategory->keys()->sort()->values();
         $maxRounds = 50;
@@ -311,10 +311,10 @@ final class RestaurantLuckBoxService
                 if (! $group instanceof Collection) {
                     continue;
                 }
-                $picked = $group->sortBy(fn(Product $p) => $this->effectivePrice($p))->first();
+                $picked = $group->sortBy(fn (Product $p) => $this->effectivePrice($p))->first();
                 if ($picked instanceof Product) {
                     $roundRobin->push($picked);
-                    $byCategory->put($key, $group->reject(fn(Product $p) => $p->id === $picked->id)->values());
+                    $byCategory->put($key, $group->reject(fn (Product $p) => $p->id === $picked->id)->values());
                 }
             }
         }
@@ -358,7 +358,7 @@ final class RestaurantLuckBoxService
         $parts = [];
 
         foreach ($lineItems as $lineItem) {
-            $parts[] = $lineItem['quantity'] . '× ' . $lineItem['name'];
+            $parts[] = $lineItem['quantity'].'× '.$lineItem['name'];
         }
 
         $basePreparationMinutes = (int) ($restaurant->estimated_preparation_time ?? 12);

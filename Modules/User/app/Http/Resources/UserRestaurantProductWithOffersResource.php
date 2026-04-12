@@ -28,7 +28,7 @@ final class UserRestaurantProductWithOffersResource extends JsonResource
         $activeOffers = [];
         if ($product->relationLoaded('offers')) {
             $activeOffers = $product->offers
-                ->filter(fn($offer) => $offer->is_active && (
+                ->filter(fn ($offer) => $offer->is_active && (
                     $offer->ends_at === null || $offer->ends_at->isFuture()
                 ))
                 ->values()

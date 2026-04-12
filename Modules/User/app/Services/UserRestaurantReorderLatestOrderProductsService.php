@@ -58,7 +58,7 @@ final class UserRestaurantReorderLatestOrderProductsService
             $modifierIds = DB::table('order_item_modifier')
                 ->where('order_item_id', $orderItem->id)
                 ->pluck('modifier_id')
-                ->map(fn(mixed $value): int => (int) $value)
+                ->map(fn (mixed $value): int => (int) $value)
                 ->all();
 
             try {
