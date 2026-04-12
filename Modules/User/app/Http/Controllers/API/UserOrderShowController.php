@@ -9,10 +9,10 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Modules\User\Services\UserOrderHubService;
 
-final class UserOrderShowController
+final readonly class UserOrderShowController
 {
     public function __construct(
-        private readonly UserOrderHubService $orders,
+        private UserOrderHubService $orders,
     ) {}
 
     public function __invoke(string $section, int $orderId): JsonResponse

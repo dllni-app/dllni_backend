@@ -4,29 +4,17 @@ declare(strict_types=1);
 
 namespace App\Services;
 
-use Gemini\Data\Blob;
-use Gemini\Data\GenerationConfig;
-use Gemini\Data\Schema;
-use Gemini\Enums\DataType;
-use Gemini\Enums\MimeType;
-use Gemini\Enums\ResponseMimeType;
-use Gemini\Enums\ResponseModality;
-use Gemini\Laravel\Facades\Gemini;
-use Gemini\Responses\GenerativeModel\GenerateContentResponse;
+use App\Exceptions\GeminiApiException;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use JsonException;
 use RuntimeException;
 use Throwable;
 
 final class GeminiProductService
 {
-    private const VISION_MODEL = 'gemini-2.5-flash';
-
-    private const IMAGE_MODEL = 'gemini-2.5-flash';
-
     /**
-     * Analyze an uploaded product image and return a structured title and description.
-     *
      * @return array{title: string|null, description: string|null}
      */
     public function extractProductFromImageFile(UploadedFile $file, ?string $locale = null): array
@@ -35,7 +23,7 @@ final class GeminiProductService
             return $this->extractProductFromImage(
                 base64Image: $this->encodeUploadedFile($file),
                 locale: $locale,
-                mimeType: $this->resolveMimeType($file->getMimeType()),
+                mimeType: $this->resolveMimeTypeString($file->getMimeType()),
             );
         } catch (Throwable $exception) {
             $this->logFailure(__FUNCTION__, $exception);
@@ -48,18 +36,16 @@ final class GeminiProductService
     }
 
     /**
-     * Analyze a single product image (base64) and return a structured title and description.
-     *
      * @return array{title: string|null, description: string|null}
      */
     public function extractProductFromImage(
         string $base64Image,
         ?string $locale = null,
-        MimeType $mimeType = MimeType::IMAGE_JPEG,
+        string $mimeType = 'image/jpeg',
     ): array {
         $payload = $this->generateStructuredVisionResponse(
             prompt: $this->buildProductPrompt($locale),
-            schema: $this->productSchema(),
+            responseSchema: $this->productResponseSchema(),
             base64Image: $base64Image,
             mimeType: $mimeType,
             operation: __FUNCTION__,
@@ -79,8 +65,6 @@ final class GeminiProductService
     }
 
     /**
-     * Analyze an uploaded menu image and return an array of items with titles and descriptions.
-     *
      * @return array<int, array{title: string, description: string|null}>
      */
     public function extractMenuFromImageFile(UploadedFile $file, ?string $locale = null): array
@@ -89,7 +73,7 @@ final class GeminiProductService
             return $this->extractMenuFromImage(
                 base64Image: $this->encodeUploadedFile($file),
                 locale: $locale,
-                mimeType: $this->resolveMimeType($file->getMimeType()),
+                mimeType: $this->resolveMimeTypeString($file->getMimeType()),
             );
         } catch (Throwable $exception) {
             $this->logFailure(__FUNCTION__, $exception);
@@ -99,18 +83,16 @@ final class GeminiProductService
     }
 
     /**
-     * Analyze a menu/price-list image (base64) and return an array of items with titles and descriptions.
-     *
      * @return array<int, array{title: string, description: string|null}>
      */
     public function extractMenuFromImage(
         string $base64Image,
         ?string $locale = null,
-        MimeType $mimeType = MimeType::IMAGE_JPEG,
+        string $mimeType = 'image/jpeg',
     ): array {
         $payload = $this->generateStructuredVisionResponse(
             prompt: $this->buildMenuPrompt($locale),
-            schema: $this->menuSchema(),
+            responseSchema: $this->menuResponseSchema(),
             base64Image: $base64Image,
             mimeType: $mimeType,
             operation: __FUNCTION__,
@@ -142,25 +124,39 @@ final class GeminiProductService
         return $items;
     }
 
-    /**
-     * Generate a product image as a base64-encoded PNG from a title and description.
-     */
     public function generateProductImage(string $title, ?string $description = null): ?string
     {
         try {
-            $response = Gemini::generativeModel(model: self::IMAGE_MODEL)
-                ->withGenerationConfig($this->imageGenerationConfig())
-                ->generateContent($this->buildImagePrompt($title, $description));
+            $model = (string) config('gemini.image_gen_model');
+            $payload = [
+                'contents' => [[
+                    'parts' => [
+                        ['text' => $this->buildImagePrompt($title, $description)],
+                    ],
+                ]],
+                'generationConfig' => [
+                    'responseModalities' => ['IMAGE'],
+                    'imageConfig' => [
+                        'aspectRatio' => '1:1',
+                        'imageSize' => '1K',
+                    ],
+                ],
+            ];
 
-            $imageData = $this->extractInlineImageData($response);
+            $response = $this->postGeminiGenerateContent($model, $payload);
+            $imageData = $this->extractInlineImageDataFromResponse($response);
 
             if ($imageData === null) {
-                $firstCandidate = $response->candidates[0] ?? null;
+                $firstCandidate = is_array($response['candidates'][0] ?? null)
+                    ? $response['candidates'][0]
+                    : null;
 
                 Log::warning('Gemini generateProductImage returned no inline image data', [
-                    'model' => self::IMAGE_MODEL,
-                    'finish_reason' => $firstCandidate?->finishReason?->value,
-                    'response_text' => $this->extractResponseText($response),
+                    'model' => $model,
+                    'finish_reason' => is_array($firstCandidate)
+                        ? ($firstCandidate['finishReason'] ?? $firstCandidate['finish_reason'] ?? null)
+                        : null,
+                    'response_text' => $this->extractResponseTextFromDecoded($response),
                 ]);
             }
 
@@ -186,7 +182,7 @@ final class GeminiProductService
     {
         return 'You are digitizing a restaurant or supermarket menu from a photo. '
             .'Identify individual products or dishes and return them as structured JSON. '
-            .'Return an object with a single field "items", wh ich is an array of objects with '
+            .'Return an object with a single field "items", which is an array of objects with '
             .'"title" and "description" fields. '
             .'Do not include prices, allergens, or categories. '
             .'Write titles and descriptions in '
@@ -213,50 +209,43 @@ final class GeminiProductService
         return implode(' ', $promptLines);
     }
 
-    private function productSchema(): Schema
+    /**
+     * @return array<string, mixed>
+     */
+    private function productResponseSchema(): array
     {
-        return new Schema(
-            type: DataType::OBJECT,
-            properties: [
-                'title' => new Schema(type: DataType::STRING),
-                'description' => new Schema(type: DataType::STRING),
+        return [
+            'type' => 'OBJECT',
+            'properties' => [
+                'title' => ['type' => 'STRING'],
+                'description' => ['type' => 'STRING'],
             ],
-            required: ['title', 'description'],
-        );
+            'required' => ['title', 'description'],
+        ];
     }
 
-    private function menuSchema(): Schema
+    /**
+     * @return array<string, mixed>
+     */
+    private function menuResponseSchema(): array
     {
-        return new Schema(
-            type: DataType::OBJECT,
-            properties: [
-                'items' => new Schema(
-                    type: DataType::ARRAY,
-                    items: new Schema(
-                        type: DataType::OBJECT,
-                        properties: [
-                            'title' => new Schema(type: DataType::STRING),
-                            'description' => new Schema(type: DataType::STRING),
+        return [
+            'type' => 'OBJECT',
+            'properties' => [
+                'items' => [
+                    'type' => 'ARRAY',
+                    'items' => [
+                        'type' => 'OBJECT',
+                        'properties' => [
+                            'title' => ['type' => 'STRING'],
+                            'description' => ['type' => 'STRING'],
                         ],
-                        required: ['title'],
-                    ),
-                ),
+                        'required' => ['title'],
+                    ],
+                ],
             ],
-            required: ['items'],
-        );
-    }
-
-    private function jsonGenerationConfig(Schema $schema): GenerationConfig
-    {
-        return new GenerationConfig(
-            responseMimeType: ResponseMimeType::APPLICATION_JSON,
-            responseSchema: $schema,
-        );
-    }
-
-    private function imageGenerationConfig(): GenerationConfig
-    {
-        return new GenerationConfig(responseModalities: [ResponseModality::IMAGE]);
+            'required' => ['items'],
+        ];
     }
 
     /**
@@ -264,22 +253,45 @@ final class GeminiProductService
      */
     private function generateStructuredVisionResponse(
         string $prompt,
-        Schema $schema,
+        array $responseSchema,
         string $base64Image,
-        MimeType $mimeType,
+        string $mimeType,
         string $operation,
     ): ?array {
         try {
-            $response = Gemini::generativeModel(model: self::VISION_MODEL)
-                ->withGenerationConfig($this->jsonGenerationConfig($schema))
-                ->generateContent([
-                    $prompt,
-                    new Blob(mimeType: $mimeType, data: $base64Image),
-                ]);
+            $model = (string) config('gemini.vision_model');
+            $payload = [
+                'contents' => [[
+                    'parts' => [
+                        ['text' => $prompt],
+                        [
+                            'inline_data' => [
+                                'mime_type' => $mimeType,
+                                'data' => $base64Image,
+                            ],
+                        ],
+                    ],
+                ]],
+                'generationConfig' => [
+                    'response_mime_type' => 'application/json',
+                    'response_schema' => $responseSchema,
+                ],
+            ];
 
-            $payload = $response->json(true, JSON_THROW_ON_ERROR);
+            $response = $this->postGeminiGenerateContent($model, $payload);
+            $jsonText = $this->extractResponseTextFromDecoded($response);
 
-            return is_array($payload) ? $payload : null;
+            if ($jsonText === null || $jsonText === '') {
+                return null;
+            }
+
+            try {
+                $payloadDecoded = json_decode($jsonText, true, 512, JSON_THROW_ON_ERROR);
+            } catch (JsonException) {
+                return null;
+            }
+
+            return is_array($payloadDecoded) ? $payloadDecoded : null;
         } catch (Throwable $exception) {
             $this->logFailure($operation, $exception);
 
@@ -287,24 +299,80 @@ final class GeminiProductService
         }
     }
 
-    private function extractInlineImageData(GenerateContentResponse $response): ?string
+    /**
+     * @param  array<string, mixed>  $response
+     */
+    private function extractInlineImageDataFromResponse(array $response): ?string
     {
-        foreach ($response->parts() as $part) {
-            if ($part->inlineData !== null) {
-                return $part->inlineData->data;
+        $candidates = $response['candidates'] ?? [];
+
+        if (! is_array($candidates)) {
+            return null;
+        }
+
+        foreach ($candidates as $candidate) {
+            if (! is_array($candidate)) {
+                continue;
+            }
+
+            $parts = $candidate['content']['parts'] ?? [];
+
+            if (! is_array($parts)) {
+                continue;
+            }
+
+            foreach ($parts as $part) {
+                if (! is_array($part)) {
+                    continue;
+                }
+
+                $inline = $part['inline_data'] ?? $part['inlineData'] ?? null;
+
+                if (is_array($inline) && isset($inline['data']) && is_string($inline['data']) && $inline['data'] !== '') {
+                    return $inline['data'];
+                }
             }
         }
 
         return null;
     }
 
-    private function extractResponseText(GenerateContentResponse $response): ?string
+    /**
+     * @param  array<string, mixed>  $response
+     */
+    private function extractResponseTextFromDecoded(array $response): ?string
     {
-        try {
-            return $response->text();
-        } catch (Throwable) {
+        $candidates = $response['candidates'] ?? [];
+
+        if (! is_array($candidates)) {
             return null;
         }
+
+        $textParts = [];
+
+        foreach ($candidates as $candidate) {
+            if (! is_array($candidate)) {
+                continue;
+            }
+
+            $parts = $candidate['content']['parts'] ?? [];
+
+            if (! is_array($parts)) {
+                continue;
+            }
+
+            foreach ($parts as $part) {
+                if (is_array($part) && isset($part['text']) && is_string($part['text']) && $part['text'] !== '') {
+                    $textParts[] = $part['text'];
+                }
+            }
+        }
+
+        if ($textParts === []) {
+            return null;
+        }
+
+        return implode('', $textParts);
     }
 
     private function encodeUploadedFile(UploadedFile $file): string
@@ -324,9 +392,20 @@ final class GeminiProductService
         return base64_encode($contents);
     }
 
-    private function resolveMimeType(?string $mimeType): MimeType
+    private function resolveMimeTypeString(?string $mimeType): string
     {
-        return MimeType::tryFrom((string) $mimeType) ?? MimeType::IMAGE_JPEG;
+        $allowed = [
+            'image/jpeg',
+            'image/png',
+            'image/webp',
+            'image/gif',
+            'image/heic',
+            'image/heif',
+        ];
+
+        $mime = is_string($mimeType) ? mb_strtolower($mimeType) : '';
+
+        return in_array($mime, $allowed, true) ? $mime : 'image/jpeg';
     }
 
     private function normalizeString(mixed $value): ?string
@@ -343,8 +422,45 @@ final class GeminiProductService
     private function logFailure(string $operation, Throwable $exception): void
     {
         Log::error("Gemini {$operation} failed", [
-            'model' => $operation === 'generateProductImage' ? self::IMAGE_MODEL : self::VISION_MODEL,
+            'model' => $operation === 'generateProductImage'
+                ? config('gemini.image_gen_model')
+                : config('gemini.vision_model'),
             'exception' => $exception,
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function postGeminiGenerateContent(string $model, array $payload): array
+    {
+        $baseUrl = mb_rtrim((string) config('gemini.base_url'), '/');
+        $apiKey = (string) config('gemini.api_key');
+        $url = "{$baseUrl}/models/{$model}:generateContent?key={$apiKey}";
+
+        $response = Http::timeout((int) config('gemini.timeout'))
+            ->retry(
+                (int) config('gemini.retry_times'),
+                (int) config('gemini.retry_sleep'),
+            )
+            ->withHeaders(['Content-Type' => 'application/json'])
+            ->post($url, $payload);
+
+        if ($response->failed()) {
+            throw new GeminiApiException(
+                "Gemini API error [{$response->status()}]: ".$response->body(),
+                $response->status(),
+            );
+        }
+
+        /** @var array<string, mixed>|null $decoded */
+        $decoded = $response->json();
+
+        if (! is_array($decoded)) {
+            throw new GeminiApiException('Gemini API returned an invalid JSON body.', $response->status());
+        }
+
+        return $decoded;
     }
 }

@@ -222,47 +222,20 @@ final class SmProductSeeder extends Seeder
     private function seedProductImages(array $productIds): void
     {
         $items = SmProduct::query()->whereIn('id', $productIds)->get();
-        $imageUrls = $this->productImageUrls();
-        $imageUrlsCount = count($imageUrls);
-
-        if ($imageUrlsCount === 0) {
-            return;
-        }
 
         foreach ($items as $product) {
             if ($product->getFirstMedia(SmProduct::IMAGE_COLLECTION) !== null) {
                 continue;
             }
 
-            $imageUrl = $imageUrls[($product->id - 1) % $imageUrlsCount];
+            $seed = (string) $product->id;
 
             SeederMedia::ensureSingleMedia(
                 $product,
                 SmProduct::IMAGE_COLLECTION,
-                $imageUrl,
-                "sm-product-{$product->id}"
+                "https://picsum.photos/seed/sm-product-{$seed}/600/600",
+                "sm-product-{$seed}"
             );
         }
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    private function productImageUrls(): array
-    {
-        return [
-            'https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?auto=format&fit=crop&w=900&q=80',
-            'https://images.unsplash.com/photo-1584473457409-ce65d3b33155?auto=format&fit=crop&w=900&q=80',
-            'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=900&q=80',
-            'https://images.unsplash.com/photo-1518843875459-f738682238a6?auto=format&fit=crop&w=900&q=80',
-            'https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?auto=format&fit=crop&w=900&q=80',
-            'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=900&q=80',
-            'https://images.unsplash.com/photo-1615485290382-441e4d049cb5?auto=format&fit=crop&w=900&q=80',
-            'https://images.unsplash.com/photo-1578916171728-46686eac8d58?auto=format&fit=crop&w=900&q=80',
-            'https://images.unsplash.com/photo-1627485937980-221c88ac04f9?auto=format&fit=crop&w=900&q=80',
-            'https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&w=900&q=80',
-            'https://images.unsplash.com/photo-1473093295043-cdd812d0e601?auto=format&fit=crop&w=900&q=80',
-            'https://images.unsplash.com/photo-1604719312566-8912e9227c6a?auto=format&fit=crop&w=900&q=80',
-        ];
     }
 }

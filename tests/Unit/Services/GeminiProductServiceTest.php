@@ -3,16 +3,19 @@
 declare(strict_types=1);
 
 use App\Services\GeminiProductService;
-use Gemini\Data\Blob;
-use Gemini\Enums\MimeType;
-use Gemini\Laravel\Facades\Gemini;
-use Gemini\Resources\GenerativeModel;
-use Gemini\Responses\GenerativeModel\GenerateContentResponse;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Http;
+
+beforeEach(function (): void {
+    Config::set('gemini.api_key', 'test-api-key');
+    Config::set('gemini.vision_model', 'gemini-test-vision');
+    Config::set('gemini.image_gen_model', 'gemini-test-image');
+});
 
 it('extracts product details from an uploaded image', function (): void {
-    Gemini::fake([
-        GenerateContentResponse::fake([
+    Http::fake([
+        'https://generativelanguage.googleapis.com/*' => Http::response([
             'candidates' => [[
                 'content' => [
                     'parts' => [[
@@ -20,7 +23,7 @@ it('extracts product details from an uploaded image', function (): void {
                     ]],
                 ],
             ]],
-        ]),
+        ], 200),
     ]);
 
     $service = app(GeminiProductService::class);
@@ -32,22 +35,16 @@ it('extracts product details from an uploaded image', function (): void {
             'description' => 'Rich and creamy milk.',
         ]);
 
-    Gemini::assertSent(
-        resource: GenerativeModel::class,
-        callback: function (string $method, array $parameters): bool {
-            if ($method !== 'generateContent' || ! isset($parameters[0][1])) {
-                return false;
-            }
+    Http::assertSent(function ($request): bool {
+        $data = $request->data();
 
-            return $parameters[0][1] instanceof Blob
-                && $parameters[0][1]->mimeType === MimeType::IMAGE_PNG;
-        },
-    );
+        return ($data['contents'][0]['parts'][1]['inline_data']['mime_type'] ?? null) === 'image/png';
+    });
 });
 
 it('extracts menu items and filters blank titles', function (): void {
-    Gemini::fake([
-        GenerateContentResponse::fake([
+    Http::fake([
+        'https://generativelanguage.googleapis.com/*' => Http::response([
             'candidates' => [[
                 'content' => [
                     'parts' => [[
@@ -55,7 +52,7 @@ it('extracts menu items and filters blank titles', function (): void {
                     ]],
                 ],
             ]],
-        ]),
+        ], 200),
     ]);
 
     $service = app(GeminiProductService::class);
@@ -78,17 +75,22 @@ it('extracts menu items and filters blank titles', function (): void {
 });
 
 it('returns the first inline image part from image generation responses', function (): void {
-    Gemini::fake([
-        GenerateContentResponse::fake([
+    Http::fake([
+        'https://generativelanguage.googleapis.com/*' => Http::response([
             'candidates' => [[
                 'content' => [
                     'parts' => [
                         ['text' => 'Generated image attached.'],
-                        ['inlineData' => ['mimeType' => 'image/png', 'data' => 'encoded-image-data']],
+                        [
+                            'inline_data' => [
+                                'mime_type' => 'image/png',
+                                'data' => 'encoded-image-data',
+                            ],
+                        ],
                     ],
                 ],
             ]],
-        ]),
+        ], 200),
     ]);
 
     $service = app(GeminiProductService::class);
@@ -98,10 +100,8 @@ it('returns the first inline image part from image generation responses', functi
 });
 
 it('returns safe fallbacks when gemini throws', function (): void {
-    Gemini::fake([
-        new RuntimeException('Gemini exploded.'),
-        new RuntimeException('Gemini exploded again.'),
-        new RuntimeException('Gemini exploded for images.'),
+    Http::fake([
+        'https://generativelanguage.googleapis.com/*' => Http::response('error', 500),
     ]);
 
     $service = app(GeminiProductService::class);
