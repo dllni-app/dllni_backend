@@ -2,7 +2,7 @@
     "info": {
         "_postman_id": "3d8a6f0b-9f8f-4d42-8d8c-6d4c4c8b3a10",
         "name": "Dllni - User Module (Merged)",
-        "description": "## Base URL & prefix\n- Collection variable `{{baseUrl}}` defaults to `http://Dllni.test` (Herd/Laragon).\n- User API base path: `/api/v1/user` (routes file: `Modules/User/routes/api.php`).\n\n## Cleaning booking disputes (global API)\nCleaning disputes use **`POST /api/v1/disputes`** (and related CRUD on `/api/v1/disputes/{id}`) from `routes/api.php`, **not** under `/api/v1/user/...`. Reuse the same Sanctum token as the user app. In this collection: **Cleaning Endpoints → Verified → Cleaning disputes (app: global API)**. Written contract: `docs/API_CONTRACT_V1_DISPUTES_CLEANING_BOOKING.md`.\n\n## Authentication\n- **Public**: register, login OTP steps, reset password, supermarket/restaurant discovery, **restaurant home** (categories, exclusive offers, suggested products, nearest restaurants), products, marketing offers, vote read, etc.\n- **Sanctum**: set `{{token}}` from verify/login/reset responses; send `Authorization: Bearer {{token}}` for `me`, `account`, `addresses`, **favorites** (restaurants + supermarket stores + supermarket products), `notifications`, cart, checkout, orders, **restaurants/home/latest-ordered-products**, supermarket **items CRUD**, supermarket order status, vote create/active/invite/ballot/end, restaurants luck-box options/suggest.\n\n## Favorites +�G�Gǥ +�-�+�G�P+�GǪ+�-�+�-�+�G�P+�-� (authenticated)\nPolymorphic rows in `favorites` (`favorable_type` = `Restaurant` or `SmStore`). List order: **most recently favorited first** (`favorites.created_at` desc).\n\n| Path | Method | Notes |\n| --- | --- | --- |\n| `/api/v1/user/favorites/restaurants` | GET | Paginated `RestaurantResource`; query `perPage` (1+�G�Gǣ100, default 20), `page` |\n| `/api/v1/user/favorites/restaurants/{id}` | POST | No body. **201** first add, **200** if already favorited. Body: `{ \"restaurant\": +�G�-� }`. **422** if restaurant not active. |\n| `/api/v1/user/favorites/restaurants/{id}` | DELETE | **204** empty body (safe if not favorited). |\n| `/api/v1/user/favorites/supermarket/stores` | GET | Paginated `SmStoreResource`; `perPage`, `page` |\n| `/api/v1/user/favorites/supermarket/stores/{id}` | POST | **201** / **200**; `{ \"store\": +�G�-� }`. **422** if store inactive. |\n| `/api/v1/user/favorites/supermarket/stores/{id}` | DELETE | **204** |\n| `/api/v1/user/favorites/supermarket/products/{id}` | POST | **201** / **200**; `{ \"product\": +�G�-� }`. **422** if product unavailable or store inactive. |\n\n## Restaurant homepage (`GET /api/v1/user/restaurants/home/*`)\n| Route | Auth | Purpose |\n| --- | --- | --- |\n| `.../categories` | No | Cuisine types that have +�GǦ-�1 **active** restaurant |\n| `.../exclusive-offers` | No | Active offers on active restaurants; optional `latitude`, `longitude`, `limit` |\n| `.../suggested-products` | No | Featured / highly rated menu items; `limit` |\n| `.../nearest-restaurants` | No | Near-user list; optional `latitude`, `longitude`, `limit`; `isFavorited` true only with Bearer token |\n| `.../latest-ordered-products` | **Yes** | Distinct products from user+�G�G��s non-cancelled orders (reorder / +�-�+�-++�G�P+�-� +�GǪ+�-�+�-�+�-�+�-�+�GǦ); `limit` |\n\n**Distance**: Haversine runs on MySQL/Postgres, etc. **SQLite** (`phpunit`) does not compute `distanceKm` (values `null`).\n\n## Success status codes (typical)\n- `200` +�G�Gǥ OK (JSON body).\n- `201` +�G�Gǥ Created (addresses, cart item, checkout order, group vote, first-time favorite add for restaurant/store).\n- `204` +�G�Gǥ No content (delete address).\n- `404` +�G�Gǥ Not found (invalid id, inactive marketing offer, wrong user+�G�G��s resource).\n- `403` / `401` +�G�Gǥ Forbidden / Unauthenticated (missing or invalid token).\n- `422` +�G�Gǥ Validation errors: `{ \"message\": \"...\", \"errors\": { \"field\": [\"...\"] } }`.\n\n## Pagination (Laravel)\n- Paginated resources return `data` (array of items), `links` (`first`, `last`, `prev`, `next`), and `meta` (`current_page`, `from`, `last_page`, `path`, `per_page`, `to`, `total`, +�G�-�).\n- Query: `page`, `perPage` (camelCase in this API where FormRequest defines it).\n\n## Media in JSON (summary)\n- **Restaurant** `RestaurantResource`: `primaryImage`, `image`, `banner`, `images`.\n- **Restaurant product** `ProductResource`: `primaryImage`, `images`.\n- **User** `UserResource` (with `media` loaded): `primaryImage` / `images` as `MediaResource` objects (`url`, `thumbnailUrl`, +�G�-�).\n- **Marketing offers**: `imageUrl` (Spatie `card-image`) or `null`.\n- **Supermarket** `SmStoreResource`: `cover`, `logo`.\n- **Restaurant Luck Box** line items: `imageUrl`; bundle host object: `restaurant` with `primaryImageUrl`, `bannerImageUrl`.\n- **Supermarket order** items: product media via `SmProductResource` when loaded.\n\n## Flow overview\n### Register + verify\n1. `POST /register` +�G��G�� OTP sent.\n2. `POST /verify-account` +�G��G�� `user` + `token`.\n\n### Login (SMS OTP)\n1. `POST /login` +�G��G�� OTP sent.\n2. `POST /login/verify` +�G��G�� `user` + `token`.\n\n### Reset password\n1. `POST /reset-password` +�G��G�� generic message; `expiresAt` null if phone unknown.\n2. `POST /reset-password/confirm` +�G��G�� `message` + `token`.\n\n## Examples in this collection\nEach request includes a **saved example** (`Examples` in Postman) with a representative **200/201/204** JSON body. Adjust ids and tokens to your environment.\n\n## Notes\n- SMS/OTP is behind a provider interface.\n\n\n\n## Props Format (Request / Response Contract)\n- Path params: {id} in docs and {{id}} as Postman variables.\n- Query props: camelCase unless endpoint docs explicitly use snake_case.\n- Body props: required first, optional props marked and can be null when allowed.\n- Pagination shape: data, links, meta.\n- Validation errors (422): { \"message\": string, \"errors\": { \"field\": [string] } }.\n\n## Common Enums\n- orderType: delivery | pickup\n- pickupMode: immediate_pickup | scheduled_pickup\n- discover sort: rating | nearest | fastest\n- vote status: active | ended\n- luck-box label: best_value | fastest | balanced\n\n## What Endpoints Return\n- List endpoints: paginated data[] with links and meta (unless noted otherwise).\n- Show endpoints: single object (sometimes wrapped in data).\n- Create endpoints: 201 with created payload.\n- Update endpoints: 200 with updated payload.\n- Delete endpoints: 204 with empty body.",
+        "description": "## Base URL & prefix\n- Collection variable `{{baseUrl}}` defaults to `http://Dllni.test` (Herd/Laragon).\n- User API base path: `/api/v1/user` (routes file: `Modules/User/routes/api.php`).\n\n## Cleaning booking disputes (global API)\nCleaning disputes use **`POST /api/v1/disputes`** (and related CRUD on `/api/v1/disputes/{id}`) from `routes/api.php`, **not** under `/api/v1/user/...`. Reuse the same Sanctum token as the user app. In this collection: **Cleaning Endpoints → Verified → Cleaning disputes (app: global API)**. Written contract: `docs/API_CONTRACT_V1_DISPUTES_CLEANING_BOOKING.md`.\n\n## Supermarket shopping lists (authenticated user API)\nSaved lists and bulk add-to-cart live under **`/api/v1/user/supermarket/shopping-lists`** (`auth:sanctum`). Written contracts: `docs/API_CONTRACT_V1_USER_SUPERMARKET_SHOPPING_LISTS.md` and `docs/API_CONTRACT_USER_SUPERMARKET_SHOPPING_LISTS.md`. Collection folder: **User Module → Supermarket → Shopping lists (requires token)** and **Verified → Supermarket shopping lists**.\n\n## Authentication\n- **Public**: register, login OTP steps, reset password, supermarket/restaurant discovery, **restaurant home** (categories, exclusive offers, suggested products, nearest restaurants), products, marketing offers, vote read, etc.\n- **Sanctum**: set `{{token}}` from verify/login/reset responses; send `Authorization: Bearer {{token}}` for `me`, `account`, `addresses`, **favorites** (restaurants + supermarket stores + supermarket products), `notifications`, **supermarket cart** (`GET/POST/PATCH/DELETE` under `/api/v1/user/supermarket/cart`), supermarket **shopping lists**, checkout, orders, **restaurants/home/latest-ordered-products**, supermarket order status, vote create/active/invite/ballot/end, restaurants luck-box options/suggest.\n\n## Favorites +�G�Gǥ +�-�+�G�P+�GǪ+�-�+�-�+�G�P+�-� (authenticated)\nPolymorphic rows in `favorites` (`favorable_type` = `Restaurant` or `SmStore`). List order: **most recently favorited first** (`favorites.created_at` desc).\n\n| Path | Method | Notes |\n| --- | --- | --- |\n| `/api/v1/user/favorites/restaurants` | GET | Paginated `RestaurantResource`; query `perPage` (1+�G�Gǣ100, default 20), `page` |\n| `/api/v1/user/favorites/restaurants/{id}` | POST | No body. **201** first add, **200** if already favorited. Body: `{ \"restaurant\": +�G�-� }`. **422** if restaurant not active. |\n| `/api/v1/user/favorites/restaurants/{id}` | DELETE | **204** empty body (safe if not favorited). |\n| `/api/v1/user/favorites/supermarket/stores` | GET | Paginated `SmStoreResource`; `perPage`, `page` |\n| `/api/v1/user/favorites/supermarket/stores/{id}` | POST | **201** / **200**; `{ \"store\": +�G�-� }`. **422** if store inactive. |\n| `/api/v1/user/favorites/supermarket/stores/{id}` | DELETE | **204** |\n| `/api/v1/user/favorites/supermarket/products/{id}` | POST | **201** / **200**; `{ \"product\": +�G�-� }`. **422** if product unavailable or store inactive. |\n\n## Restaurant homepage (`GET /api/v1/user/restaurants/home/*`)\n| Route | Auth | Purpose |\n| --- | --- | --- |\n| `.../categories` | No | Cuisine types that have +�GǦ-�1 **active** restaurant |\n| `.../exclusive-offers` | No | Active offers on active restaurants; optional `latitude`, `longitude`, `limit` |\n| `.../suggested-products` | No | Featured / highly rated menu items; `limit` |\n| `.../nearest-restaurants` | No | Near-user list; optional `latitude`, `longitude`, `limit`; `isFavorited` true only with Bearer token |\n| `.../latest-ordered-products` | **Yes** | Distinct products from user+�G�G��s non-cancelled orders (reorder / +�-�+�-++�G�P+�-� +�GǪ+�-�+�-�+�-�+�-�+�GǦ); `limit` |\n\n**Distance**: Haversine runs on MySQL/Postgres, etc. **SQLite** (`phpunit`) does not compute `distanceKm` (values `null`).\n\n## Success status codes (typical)\n- `200` +�G�Gǥ OK (JSON body).\n- `201` +�G�Gǥ Created (addresses, cart item, checkout order, group vote, first-time favorite add for restaurant/store).\n- `204` +�G�Gǥ No content (delete address).\n- `404` +�G�Gǥ Not found (invalid id, inactive marketing offer, wrong user+�G�G��s resource).\n- `403` / `401` +�G�Gǥ Forbidden / Unauthenticated (missing or invalid token).\n- `422` +�G�Gǥ Validation errors: `{ \"message\": \"...\", \"errors\": { \"field\": [\"...\"] } }`.\n\n## Pagination (Laravel)\n- Paginated resources return `data` (array of items), `links` (`first`, `last`, `prev`, `next`), and `meta` (`current_page`, `from`, `last_page`, `path`, `per_page`, `to`, `total`, +�G�-�).\n- Query: `page`, `perPage` (camelCase in this API where FormRequest defines it).\n\n## Media in JSON (summary)\n- **Restaurant** `RestaurantResource`: `primaryImage`, `image`, `banner`, `images`.\n- **Restaurant product** `ProductResource`: `primaryImage`, `images`.\n- **User** `UserResource` (with `media` loaded): `primaryImage` / `images` as `MediaResource` objects (`url`, `thumbnailUrl`, +�G�-�).\n- **Marketing offers**: `imageUrl` (Spatie `card-image`) or `null`.\n- **Supermarket** `SmStoreResource`: `cover`, `logo`.\n- **Restaurant Luck Box** line items: `imageUrl`; bundle host object: `restaurant` with `primaryImageUrl`, `bannerImageUrl`.\n- **Supermarket order** items: product media via `SmProductResource` when loaded.\n\n## Flow overview\n### Register + verify\n1. `POST /register` +�G��G�� OTP sent.\n2. `POST /verify-account` +�G��G�� `user` + `token`.\n\n### Login (SMS OTP)\n1. `POST /login` +�G��G�� OTP sent.\n2. `POST /login/verify` +�G��G�� `user` + `token`.\n\n### Reset password\n1. `POST /reset-password` +�G��G�� generic message; `expiresAt` null if phone unknown.\n2. `POST /reset-password/confirm` +�G��G�� `message` + `token`.\n\n## Examples in this collection\nEach request includes a **saved example** (`Examples` in Postman) with a representative **200/201/204** JSON body. Adjust ids and tokens to your environment.\n\n## Notes\n- SMS/OTP is behind a provider interface.\n\n\n\n## Props Format (Request / Response Contract)\n- Path params: {id} in docs and {{id}} as Postman variables.\n- Query props: camelCase unless endpoint docs explicitly use snake_case.\n- Body props: required first, optional props marked and can be null when allowed.\n- Pagination shape: data, links, meta.\n- Validation errors (422): { \"message\": string, \"errors\": { \"field\": [string] } }.\n\n## Common Enums\n- orderType: delivery | pickup\n- pickupMode: immediate_pickup | scheduled_pickup\n- discover sort: rating | nearest | fastest\n- vote status: active | ended\n- luck-box label: best_value | fastest | balanced\n\n## What Endpoints Return\n- List endpoints: paginated data[] with links and meta (unless noted otherwise).\n- Show endpoints: single object (sometimes wrapped in data).\n- Create endpoints: 201 with created payload.\n- Update endpoints: 200 with updated payload.\n- Delete endpoints: 204 with empty body.",
         "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
     },
     "variable": [
@@ -81,6 +81,18 @@
         {
             "key": "smCartItemId",
             "value": ""
+        },
+        {
+            "key": "smShoppingListId",
+            "value": "1"
+        },
+        {
+            "key": "smShoppingListItemId",
+            "value": "1"
+        },
+        {
+            "key": "smMasterProductId",
+            "value": "1"
         },
         {
             "key": "disputeId",
@@ -6677,283 +6689,281 @@
                             ]
                         },
                         {
-                            "name": "Items (requires token)",
+                            "name": "Cart (requires token)",
                             "item": [
                                 {
-                                    "name": "List items",
+                                    "name": "Get cart",
                                     "request": {
                                         "method": "GET",
                                         "header": [
-                                            {
-                                                "key": "Accept",
-                                                "value": "application/json"
-                                            },
-                                            {
-                                                "key": "Authorization",
-                                                "value": "Bearer {{token}}"
-                                            }
+                                            { "key": "Accept", "value": "application/json" },
+                                            { "key": "Authorization", "value": "Bearer {{token}}" }
                                         ],
                                         "url": {
-                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/items?perPage=20&page=1",
-                                            "host": [
-                                                "{{baseUrl}}"
-                                            ],
-                                            "path": [
-                                                "api",
-                                                "v1",
-                                                "user",
-                                                "supermarket",
-                                                "items"
-                                            ],
-                                            "query": [
-                                                {
-                                                    "key": "perPage",
-                                                    "value": "20"
-                                                },
-                                                {
-                                                    "key": "page",
-                                                    "value": "1"
-                                                }
-                                            ]
+                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/cart",
+                                            "host": ["{{baseUrl}}"],
+                                            "path": ["api", "v1", "user", "supermarket", "cart"]
                                         },
-                                        "description": "Paginated supermarket customer items (cart items).\n\n**Auth**: `Authorization: Bearer {{token}}`\n\n**Status**: `200 OK`"
+                                        "description": "GET /api/v1/user/supermarket/cart — current cart in `data` (`id`, `merchant`, `items[]`, `amounts`). Empty cart: `id` and `merchant` may be null."
                                     },
                                     "response": [
                                         {
-                                            "name": "200 OK +�G�Gǥ items list",
+                                            "name": "200 OK empty cart example",
                                             "originalRequest": {
                                                 "method": "GET",
-                                                "header": [
-                                                    {
-                                                        "key": "Authorization",
-                                                        "value": "Bearer {{token}}"
-                                                    }
-                                                ],
+                                                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
                                                 "url": {
-                                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/items?perPage=20&page=1",
-                                                    "host": [
-                                                        "{{baseUrl}}"
-                                                    ],
-                                                    "path": [
-                                                        "api",
-                                                        "v1",
-                                                        "user",
-                                                        "supermarket",
-                                                        "items"
-                                                    ],
-                                                    "query": [
-                                                        {
-                                                            "key": "perPage",
-                                                            "value": "20"
-                                                        },
-                                                        {
-                                                            "key": "page",
-                                                            "value": "1"
-                                                        }
-                                                    ]
+                                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/cart",
+                                                    "host": ["{{baseUrl}}"],
+                                                    "path": ["api", "v1", "user", "supermarket", "cart"]
                                                 }
                                             },
                                             "status": "OK",
                                             "code": 200,
                                             "_postman_previewlanguage": "json",
-                                            "header": [
-                                                {
-                                                    "key": "Content-Type",
-                                                    "value": "application/json"
-                                                }
-                                            ],
+                                            "header": [{ "key": "Content-Type", "value": "application/json" }],
                                             "cookie": [],
-                                            "body": "{\n  \"data\": [],\n  \"links\": {\n    \"first\": \"http://Dllni.test/api/v1/user/supermarket/items?page=1\",\n    \"last\": \"http://Dllni.test/api/v1/user/supermarket/items?page=1\",\n    \"prev\": null,\n    \"next\": null\n  },\n  \"meta\": {\n    \"current_page\": 1,\n    \"from\": null,\n    \"last_page\": 1,\n    \"path\": \"http://Dllni.test/api/v1/user/supermarket/items\",\n    \"per_page\": 20,\n    \"to\": null,\n    \"total\": 0\n  }\n}"
+                                            "body": "{\n  \"data\": {\n    \"id\": null,\n    \"merchant\": null,\n    \"items\": [],\n    \"amounts\": { \"subtotal\": 0, \"total\": 0 }\n  }\n}"
                                         }
                                     ]
                                 },
                                 {
-                                    "name": "Create item",
+                                    "name": "Add cart line",
                                     "request": {
                                         "method": "POST",
                                         "header": [
-                                            {
-                                                "key": "Accept",
-                                                "value": "application/json"
-                                            },
-                                            {
-                                                "key": "Authorization",
-                                                "value": "Bearer {{token}}"
-                                            },
-                                            {
-                                                "key": "Content-Type",
-                                                "value": "application/json"
-                                            }
+                                            { "key": "Accept", "value": "application/json" },
+                                            { "key": "Authorization", "value": "Bearer {{token}}" },
+                                            { "key": "Content-Type", "value": "application/json" }
                                         ],
                                         "body": {
                                             "mode": "raw",
-                                            "raw": "{\n  \"cartId\": 1,\n  \"productId\": 10,\n  \"quantity\": 2,\n  \"unitPrice\": 75\n}"
+                                            "raw": "{\n  \"productId\": {{productId}},\n  \"quantity\": 2\n}"
                                         },
                                         "url": {
-                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/items",
-                                            "host": [
-                                                "{{baseUrl}}"
-                                            ],
-                                            "path": [
-                                                "api",
-                                                "v1",
-                                                "user",
-                                                "supermarket",
-                                                "items"
-                                            ]
+                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/cart/items",
+                                            "host": ["{{baseUrl}}"],
+                                            "path": ["api", "v1", "user", "supermarket", "cart", "items"]
                                         },
-                                        "description": "Add an item to a supermarket cart.\n\n**Auth**: `Authorization: Bearer {{token}}`\n\n**Status**: `201 Created`"
-                                    },
-                                    "response": [
-                                        {
-                                            "name": "201 Created +�G�Gǥ item",
-                                            "originalRequest": {
-                                                "method": "POST",
-                                                "header": [
-                                                    {
-                                                        "key": "Authorization",
-                                                        "value": "Bearer {{token}}"
-                                                    }
-                                                ],
-                                                "body": {
-                                                    "mode": "raw",
-                                                    "raw": "{\n  \"cartId\": 1,\n  \"productId\": 10,\n  \"quantity\": 2,\n  \"unitPrice\": 75\n}"
-                                                },
-                                                "url": {
-                                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/items",
-                                                    "host": [
-                                                        "{{baseUrl}}"
-                                                    ],
-                                                    "path": [
-                                                        "api",
-                                                        "v1",
-                                                        "user",
-                                                        "supermarket",
-                                                        "items"
-                                                    ]
-                                                }
-                                            },
-                                            "status": "Created",
-                                            "code": 201,
-                                            "_postman_previewlanguage": "json",
-                                            "header": [
-                                                {
-                                                    "key": "Content-Type",
-                                                    "value": "application/json"
-                                                }
-                                            ],
-                                            "cookie": [],
-                                            "body": "{\n  \"data\": {\n    \"id\": 1,\n    \"cartId\": 1,\n    \"productId\": 10,\n    \"quantity\": 2,\n    \"unitPrice\": 75,\n    \"createdAt\": \"2026-04-01 10:00:00\",\n    \"updatedAt\": \"2026-04-01 10:00:00\"\n  }\n}"
-                                        }
-                                    ]
-                                },
-                                {
-                                    "name": "Show item",
-                                    "request": {
-                                        "method": "GET",
-                                        "header": [
-                                            {
-                                                "key": "Accept",
-                                                "value": "application/json"
-                                            },
-                                            {
-                                                "key": "Authorization",
-                                                "value": "Bearer {{token}}"
-                                            }
-                                        ],
-                                        "url": {
-                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/items/{{smCartItemId}}",
-                                            "host": [
-                                                "{{baseUrl}}"
-                                            ],
-                                            "path": [
-                                                "api",
-                                                "v1",
-                                                "user",
-                                                "supermarket",
-                                                "items",
-                                                "{{smCartItemId}}"
-                                            ]
-                                        },
-                                        "description": "Show a single cart item.\n\n**Auth**: `Authorization: Bearer {{token}}`\n\n**Status**: `200 OK` | `404 Not Found`"
+                                        "description": "POST /api/v1/user/supermarket/cart/items — body: `productId` (sm_products), `quantity` (int 1–200). Optional: `modifierIds`, `substituteProductId`, `note`. 201 — full cart in `data`."
                                     },
                                     "response": []
                                 },
                                 {
-                                    "name": "Update item",
+                                    "name": "Update cart line",
                                     "request": {
                                         "method": "PATCH",
                                         "header": [
-                                            {
-                                                "key": "Accept",
-                                                "value": "application/json"
-                                            },
-                                            {
-                                                "key": "Authorization",
-                                                "value": "Bearer {{token}}"
-                                            },
-                                            {
-                                                "key": "Content-Type",
-                                                "value": "application/json"
-                                            }
+                                            { "key": "Accept", "value": "application/json" },
+                                            { "key": "Authorization", "value": "Bearer {{token}}" },
+                                            { "key": "Content-Type", "value": "application/json" }
                                         ],
-                                        "body": {
-                                            "mode": "raw",
-                                            "raw": "{\n  \"quantity\": 3\n}"
-                                        },
+                                        "body": { "mode": "raw", "raw": "{\n  \"quantity\": 3\n}" },
                                         "url": {
-                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/items/{{smCartItemId}}",
-                                            "host": [
-                                                "{{baseUrl}}"
-                                            ],
-                                            "path": [
-                                                "api",
-                                                "v1",
-                                                "user",
-                                                "supermarket",
-                                                "items",
-                                                "{{smCartItemId}}"
-                                            ]
+                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/cart/items/{{smCartItemId}}",
+                                            "host": ["{{baseUrl}}"],
+                                            "path": ["api", "v1", "user", "supermarket", "cart", "items", "{{smCartItemId}}"]
                                         },
-                                        "description": "Update a cart item (quantity / unitPrice).\n\n**Auth**: `Authorization: Bearer {{token}}`\n\n**Status**: `200 OK`"
+                                        "description": "PATCH /api/v1/user/supermarket/cart/items/{itemId} — `quantity` required (1–200). 200 — full cart in `data`."
                                     },
                                     "response": []
                                 },
                                 {
-                                    "name": "Delete item",
+                                    "name": "Delete cart line",
                                     "request": {
                                         "method": "DELETE",
                                         "header": [
-                                            {
-                                                "key": "Accept",
-                                                "value": "application/json"
-                                            },
-                                            {
-                                                "key": "Authorization",
-                                                "value": "Bearer {{token}}"
-                                            }
+                                            { "key": "Accept", "value": "application/json" },
+                                            { "key": "Authorization", "value": "Bearer {{token}}" }
                                         ],
                                         "url": {
-                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/items/{{smCartItemId}}",
-                                            "host": [
-                                                "{{baseUrl}}"
-                                            ],
-                                            "path": [
-                                                "api",
-                                                "v1",
-                                                "user",
-                                                "supermarket",
-                                                "items",
-                                                "{{smCartItemId}}"
-                                            ]
+                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/cart/items/{{smCartItemId}}",
+                                            "host": ["{{baseUrl}}"],
+                                            "path": ["api", "v1", "user", "supermarket", "cart", "items", "{{smCartItemId}}"]
                                         },
-                                        "description": "Remove a cart item.\n\n**Auth**: `Authorization: Bearer {{token}}`\n\n**Status**: `204 No Content`"
+                                        "description": "DELETE /api/v1/user/supermarket/cart/items/{itemId} — 200 with updated cart in `data`."
                                     },
                                     "response": []
                                 }
                             ],
-                            "description": "CRUD for supermarket items (cart items) under the user module supermarket prefix."
+                            "description": "Routes: Modules/User/routes/api.php — supermarket cart. Same cart `data` as shopping list add-to-cart."
                         },
+                        {
+                            "name": "Shopping lists (requires token)",
+                            "item": [
+                                {
+                                    "name": "List shopping lists",
+                                    "request": {
+                                        "method": "GET",
+                                        "header": [
+                                            { "key": "Accept", "value": "application/json" },
+                                            { "key": "Authorization", "value": "Bearer {{token}}" }
+                                        ],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/shopping-lists",
+                                            "host": ["{{baseUrl}}"],
+                                            "path": ["api", "v1", "user", "supermarket", "shopping-lists"]
+                                        },
+                                        "description": "GET /api/v1/user/supermarket/shopping-lists — `data[]` summaries. Contract: docs/API_CONTRACT_V1_USER_SUPERMARKET_SHOPPING_LISTS.md"
+                                    },
+                                    "response": []
+                                },
+                                {
+                                    "name": "Create shopping list",
+                                    "request": {
+                                        "method": "POST",
+                                        "header": [
+                                            { "key": "Accept", "value": "application/json" },
+                                            { "key": "Authorization", "value": "Bearer {{token}}" },
+                                            { "key": "Content-Type", "value": "application/json" }
+                                        ],
+                                        "body": {
+                                            "mode": "raw",
+                                            "raw": "{\n  \"name\": \"Weekly groceries\",\n  \"description\": \"Basics\",\n  \"isActive\": true\n}"
+                                        },
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/shopping-lists",
+                                            "host": ["{{baseUrl}}"],
+                                            "path": ["api", "v1", "user", "supermarket", "shopping-lists"]
+                                        },
+                                        "description": "POST …/shopping-lists — `name` required. 201 — list detail in `data`."
+                                    },
+                                    "response": []
+                                },
+                                {
+                                    "name": "Show shopping list",
+                                    "request": {
+                                        "method": "GET",
+                                        "header": [
+                                            { "key": "Accept", "value": "application/json" },
+                                            { "key": "Authorization", "value": "Bearer {{token}}" }
+                                        ],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/shopping-lists/{{smShoppingListId}}",
+                                            "host": ["{{baseUrl}}"],
+                                            "path": ["api", "v1", "user", "supermarket", "shopping-lists", "{{smShoppingListId}}"]
+                                        },
+                                        "description": "GET …/shopping-lists/{id} — full list + `items[]`."
+                                    },
+                                    "response": []
+                                },
+                                {
+                                    "name": "Update shopping list",
+                                    "request": {
+                                        "method": "PATCH",
+                                        "header": [
+                                            { "key": "Accept", "value": "application/json" },
+                                            { "key": "Authorization", "value": "Bearer {{token}}" },
+                                            { "key": "Content-Type", "value": "application/json" }
+                                        ],
+                                        "body": { "mode": "raw", "raw": "{\n  \"name\": \"Renamed\",\n  \"isActive\": true\n}" },
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/shopping-lists/{{smShoppingListId}}",
+                                            "host": ["{{baseUrl}}"],
+                                            "path": ["api", "v1", "user", "supermarket", "shopping-lists", "{{smShoppingListId}}"]
+                                        },
+                                        "description": "PATCH …/shopping-lists/{id}"
+                                    },
+                                    "response": []
+                                },
+                                {
+                                    "name": "Delete shopping list",
+                                    "request": {
+                                        "method": "DELETE",
+                                        "header": [
+                                            { "key": "Accept", "value": "application/json" },
+                                            { "key": "Authorization", "value": "Bearer {{token}}" }
+                                        ],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/shopping-lists/{{smShoppingListId}}",
+                                            "host": ["{{baseUrl}}"],
+                                            "path": ["api", "v1", "user", "supermarket", "shopping-lists", "{{smShoppingListId}}"]
+                                        },
+                                        "description": "DELETE …/shopping-lists/{id} — 204 empty body."
+                                    },
+                                    "response": []
+                                },
+                                {
+                                    "name": "Add list lines to cart",
+                                    "request": {
+                                        "method": "POST",
+                                        "header": [
+                                            { "key": "Accept", "value": "application/json" },
+                                            { "key": "Authorization", "value": "Bearer {{token}}" },
+                                            { "key": "Content-Type", "value": "application/json" }
+                                        ],
+                                        "body": { "mode": "raw", "raw": "{\n  \"storeId\": {{smStoreId}}\n}" },
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/shopping-lists/{{smShoppingListId}}/add-to-cart",
+                                            "host": ["{{baseUrl}}"],
+                                            "path": ["api", "v1", "user", "supermarket", "shopping-lists", "{{smShoppingListId}}", "add-to-cart"]
+                                        },
+                                        "description": "POST …/add-to-cart — body `storeId`. 201 — cart in `data` (same as GET cart)."
+                                    },
+                                    "response": []
+                                },
+                                {
+                                    "name": "Add line to shopping list",
+                                    "request": {
+                                        "method": "POST",
+                                        "header": [
+                                            { "key": "Accept", "value": "application/json" },
+                                            { "key": "Authorization", "value": "Bearer {{token}}" },
+                                            { "key": "Content-Type", "value": "application/json" }
+                                        ],
+                                        "body": {
+                                            "mode": "raw",
+                                            "raw": "{\n  \"masterProductId\": {{smMasterProductId}},\n  \"quantity\": 2,\n  \"unit\": \"kg\",\n  \"sortOrder\": 0,\n  \"isIncluded\": true\n}"
+                                        },
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/shopping-lists/{{smShoppingListId}}/items",
+                                            "host": ["{{baseUrl}}"],
+                                            "path": ["api", "v1", "user", "supermarket", "shopping-lists", "{{smShoppingListId}}", "items"]
+                                        },
+                                        "description": "POST …/items — `masterProductId` + `quantity` (0.01–9999)."
+                                    },
+                                    "response": []
+                                },
+                                {
+                                    "name": "Update shopping list line",
+                                    "request": {
+                                        "method": "PATCH",
+                                        "header": [
+                                            { "key": "Accept", "value": "application/json" },
+                                            { "key": "Authorization", "value": "Bearer {{token}}" },
+                                            { "key": "Content-Type", "value": "application/json" }
+                                        ],
+                                        "body": { "mode": "raw", "raw": "{\n  \"quantity\": 3,\n  \"isIncluded\": true\n}" },
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/shopping-lists/{{smShoppingListId}}/items/{{smShoppingListItemId}}",
+                                            "host": ["{{baseUrl}}"],
+                                            "path": ["api", "v1", "user", "supermarket", "shopping-lists", "{{smShoppingListId}}", "items", "{{smShoppingListItemId}}"]
+                                        },
+                                        "description": "PATCH …/items/{item}"
+                                    },
+                                    "response": []
+                                },
+                                {
+                                    "name": "Delete shopping list line",
+                                    "request": {
+                                        "method": "DELETE",
+                                        "header": [
+                                            { "key": "Accept", "value": "application/json" },
+                                            { "key": "Authorization", "value": "Bearer {{token}}" }
+                                        ],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/shopping-lists/{{smShoppingListId}}/items/{{smShoppingListItemId}}",
+                                            "host": ["{{baseUrl}}"],
+                                            "path": ["api", "v1", "user", "supermarket", "shopping-lists", "{{smShoppingListId}}", "items", "{{smShoppingListItemId}}"]
+                                        },
+                                        "description": "DELETE …/items/{item} — 204."
+                                    },
+                                    "response": []
+                                }
+                            ],
+                            "description": "docs/API_CONTRACT_V1_USER_SUPERMARKET_SHOPPING_LISTS.md — smart lists; lines use masterProductId."
+                        },
+
                         {
                             "name": "Order status (requires token)",
                             "request": {
@@ -7418,10 +7428,10 @@
                             }
                         },
                         {
-                            "name": "Supermarket Cart Items - Index",
+                            "name": "Supermarket Cart - Show",
                             "request": {
                                 "method": "GET",
-                                "auth": {
+                                                                "auth": {
                                     "type": "bearer",
                                     "bearer": [
                                         {
@@ -7431,8 +7441,14 @@
                                         }
                                     ]
                                 },
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    }
+                                ],
                                 "url": {
-                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/items",
+                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/cart",
                                     "host": [
                                         "{{baseUrl}}"
                                     ],
@@ -7441,17 +7457,17 @@
                                         "v1",
                                         "user",
                                         "supermarket",
-                                        "items"
+                                        "cart"
                                     ]
                                 },
-                                "description": "List supermarket cart items for current user.\n\nAuth: Bearer token.\n\nStatus: 200 OK.\n\nQuery props: perPage, page.\n\nReturns: paginated item resources in data[] with links/meta."
+                                "description": "GET /api/v1/user/supermarket/cart. Returns `data` cart object (`id`, `merchant`, `items[]`, `amounts`). Auth: Bearer {{userToken}}."
                             }
                         },
                         {
-                            "name": "Supermarket Cart Items - Store",
+                            "name": "Supermarket Cart - Add line",
                             "request": {
                                 "method": "POST",
-                                "auth": {
+                                                                "auth": {
                                     "type": "bearer",
                                     "bearer": [
                                         {
@@ -7463,12 +7479,20 @@
                                 },
                                 "header": [
                                     {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
                                         "key": "Content-Type",
                                         "value": "application/json"
                                     }
                                 ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"productId\": {{productId}},\n  \"quantity\": 1\n}"
+                                },
                                 "url": {
-                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/items",
+                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/cart/items",
                                     "host": [
                                         "{{baseUrl}}"
                                     ],
@@ -7477,93 +7501,18 @@
                                         "v1",
                                         "user",
                                         "supermarket",
+                                        "cart",
                                         "items"
                                     ]
                                 },
-                                "body": {
-                                    "mode": "raw",
-                                    "raw": "{\n  \"cartId\": 1,\n  \"productId\": 1,\n  \"quantity\": 1,\n  \"unitPrice\": 1000\n}"
-                                },
-                                "description": "Create a supermarket cart item.\n\nAuth: Bearer token.\n\nStatus: 201 Created or 422 validation.\n\nBody props: cartId, productId, quantity required; unitPrice optional by backend rules.\n\nReturns: created item payload."
+                                "description": "POST /api/v1/user/supermarket/cart/items — `productId`, `quantity` (int 1–200). Optional: modifierIds, substituteProductId, note. 201 — full cart in `data`."
                             }
                         },
                         {
-                            "name": "Supermarket Cart Items - Show",
-                            "request": {
-                                "method": "GET",
-                                "auth": {
-                                    "type": "bearer",
-                                    "bearer": [
-                                        {
-                                            "key": "token",
-                                            "value": "{{userToken}}",
-                                            "type": "string"
-                                        }
-                                    ]
-                                },
-                                "url": {
-                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/items/{{smCartItemId}}",
-                                    "host": [
-                                        "{{baseUrl}}"
-                                    ],
-                                    "path": [
-                                        "api",
-                                        "v1",
-                                        "user",
-                                        "supermarket",
-                                        "items",
-                                        "{{smCartItemId}}"
-                                    ]
-                                },
-                                "description": "Show one supermarket cart item.\n\nAuth: Bearer token.\n\nPath prop: smCartItemId.\n\nStatus: 200 OK or 404 Not Found.\n\nReturns: single item payload."
-                            }
-                        },
-                        {
-                            "name": "Supermarket Cart Items - Update (PUT)",
-                            "request": {
-                                "method": "PUT",
-                                "auth": {
-                                    "type": "bearer",
-                                    "bearer": [
-                                        {
-                                            "key": "token",
-                                            "value": "{{userToken}}",
-                                            "type": "string"
-                                        }
-                                    ]
-                                },
-                                "header": [
-                                    {
-                                        "key": "Content-Type",
-                                        "value": "application/json"
-                                    }
-                                ],
-                                "url": {
-                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/items/{{smCartItemId}}",
-                                    "host": [
-                                        "{{baseUrl}}"
-                                    ],
-                                    "path": [
-                                        "api",
-                                        "v1",
-                                        "user",
-                                        "supermarket",
-                                        "items",
-                                        "{{smCartItemId}}"
-                                    ]
-                                },
-                                "body": {
-                                    "mode": "raw",
-                                    "raw": "{\n  \"cartId\": 1,\n  \"productId\": 1,\n  \"quantity\": 2,\n  \"unitPrice\": 1200\n}"
-                                },
-                                "description": "Replace supermarket cart item fields (full update).\n\nAuth: Bearer token.\n\nPath prop: smCartItemId.\n\nStatus: 200 OK, 422 validation, or 404.\n\nBody props: full payload for supported fields such as quantity and unitPrice.\n\nReturns: updated item payload."
-                            }
-                        },
-                        {
-                            "name": "Supermarket Cart Items - Update (PATCH)",
+                            "name": "Supermarket Cart - Update line",
                             "request": {
                                 "method": "PATCH",
-                                "auth": {
+                                                                "auth": {
                                     "type": "bearer",
                                     "bearer": [
                                         {
@@ -7575,12 +7524,20 @@
                                 },
                                 "header": [
                                     {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    },
+                                    {
                                         "key": "Content-Type",
                                         "value": "application/json"
                                     }
                                 ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"quantity\": 2\n}"
+                                },
                                 "url": {
-                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/items/{{smCartItemId}}",
+                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/cart/items/{{smCartItemId}}",
                                     "host": [
                                         "{{baseUrl}}"
                                     ],
@@ -7589,22 +7546,19 @@
                                         "v1",
                                         "user",
                                         "supermarket",
+                                        "cart",
                                         "items",
                                         "{{smCartItemId}}"
                                     ]
                                 },
-                                "body": {
-                                    "mode": "raw",
-                                    "raw": "{\n  \"quantity\": 3,\n  \"unitPrice\": 1300\n}"
-                                },
-                                "description": "Partially update supermarket cart item fields.\n\nAuth: Bearer token.\n\nPath prop: smCartItemId.\n\nStatus: 200 OK, 422 validation, or 404.\n\nBody props: only changed fields such as quantity.\n\nReturns: updated item payload."
+                                "description": "PATCH /api/v1/user/supermarket/cart/items/{itemId} — `quantity` required. 200 — full cart in `data`."
                             }
                         },
                         {
-                            "name": "Supermarket Cart Items - Destroy",
+                            "name": "Supermarket Cart - Delete line",
                             "request": {
                                 "method": "DELETE",
-                                "auth": {
+                                                                "auth": {
                                     "type": "bearer",
                                     "bearer": [
                                         {
@@ -7614,8 +7568,14 @@
                                         }
                                     ]
                                 },
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    }
+                                ],
                                 "url": {
-                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/items/{{smCartItemId}}",
+                                    "raw": "{{baseUrl}}/api/v1/user/supermarket/cart/items/{{smCartItemId}}",
                                     "host": [
                                         "{{baseUrl}}"
                                     ],
@@ -7624,14 +7584,247 @@
                                         "v1",
                                         "user",
                                         "supermarket",
+                                        "cart",
                                         "items",
                                         "{{smCartItemId}}"
                                     ]
                                 },
-                                "description": "Delete a supermarket cart item.\n\nAuth: Bearer token.\n\nPath prop: smCartItemId.\n\nStatus: 204 No Content.\n\nReturns: empty body."
+                                "description": "DELETE /api/v1/user/supermarket/cart/items/{itemId}. 200 — updated cart in `data`."
                             }
                         },
                         {
+                            "name": "Supermarket shopping lists",
+                            "description": "Saved lists + bulk add-to-cart. Contract: docs/API_CONTRACT_V1_USER_SUPERMARKET_SHOPPING_LISTS.md",
+                            "item": [
+                                {
+                                    "name": "List shopping lists",
+                                    "request": {
+                                        "method": "GET",
+                                                                        "auth": {
+                                    "type": "bearer",
+                                    "bearer": [
+                                        {
+                                            "key": "token",
+                                            "value": "{{userToken}}",
+                                            "type": "string"
+                                        }
+                                    ]
+                                },
+                                        "header": [{ "key": "Accept", "value": "application/json" }],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/shopping-lists",
+                                            "host": ["{{baseUrl}}"],
+                                            "path": ["api", "v1", "user", "supermarket", "shopping-lists"]
+                                        },
+                                        "description": "GET …/shopping-lists — summaries in `data[]`."
+                                    }
+                                },
+                                {
+                                    "name": "Create shopping list",
+                                    "request": {
+                                        "method": "POST",
+                                                                        "auth": {
+                                    "type": "bearer",
+                                    "bearer": [
+                                        {
+                                            "key": "token",
+                                            "value": "{{userToken}}",
+                                            "type": "string"
+                                        }
+                                    ]
+                                },
+                                        "header": [
+                                            { "key": "Accept", "value": "application/json" },
+                                            { "key": "Content-Type", "value": "application/json" }
+                                        ],
+                                        "body": { "mode": "raw", "raw": "{\n  \"name\": \"List name\",\n  \"description\": null,\n  \"isActive\": true\n}" },
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/shopping-lists",
+                                            "host": ["{{baseUrl}}"],
+                                            "path": ["api", "v1", "user", "supermarket", "shopping-lists"]
+                                        },
+                                        "description": "POST …/shopping-lists — 201 list detail in `data`."
+                                    }
+                                },
+                                {
+                                    "name": "Show shopping list",
+                                    "request": {
+                                        "method": "GET",
+                                                                        "auth": {
+                                    "type": "bearer",
+                                    "bearer": [
+                                        {
+                                            "key": "token",
+                                            "value": "{{userToken}}",
+                                            "type": "string"
+                                        }
+                                    ]
+                                },
+                                        "header": [{ "key": "Accept", "value": "application/json" }],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/shopping-lists/{{smShoppingListId}}",
+                                            "host": ["{{baseUrl}}"],
+                                            "path": ["api", "v1", "user", "supermarket", "shopping-lists", "{{smShoppingListId}}"]
+                                        },
+                                        "description": "GET …/shopping-lists/{id}"
+                                    }
+                                },
+                                {
+                                    "name": "Update shopping list",
+                                    "request": {
+                                        "method": "PATCH",
+                                                                        "auth": {
+                                    "type": "bearer",
+                                    "bearer": [
+                                        {
+                                            "key": "token",
+                                            "value": "{{userToken}}",
+                                            "type": "string"
+                                        }
+                                    ]
+                                },
+                                        "header": [
+                                            { "key": "Accept", "value": "application/json" },
+                                            { "key": "Content-Type", "value": "application/json" }
+                                        ],
+                                        "body": { "mode": "raw", "raw": "{\n  \"name\": \"Updated name\"\n}" },
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/shopping-lists/{{smShoppingListId}}",
+                                            "host": ["{{baseUrl}}"],
+                                            "path": ["api", "v1", "user", "supermarket", "shopping-lists", "{{smShoppingListId}}"]
+                                        },
+                                        "description": "PATCH …/shopping-lists/{id}"
+                                    }
+                                },
+                                {
+                                    "name": "Delete shopping list",
+                                    "request": {
+                                        "method": "DELETE",
+                                                                        "auth": {
+                                    "type": "bearer",
+                                    "bearer": [
+                                        {
+                                            "key": "token",
+                                            "value": "{{userToken}}",
+                                            "type": "string"
+                                        }
+                                    ]
+                                },
+                                        "header": [{ "key": "Accept", "value": "application/json" }],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/shopping-lists/{{smShoppingListId}}",
+                                            "host": ["{{baseUrl}}"],
+                                            "path": ["api", "v1", "user", "supermarket", "shopping-lists", "{{smShoppingListId}}"]
+                                        },
+                                        "description": "DELETE …/shopping-lists/{id} — 204"
+                                    }
+                                },
+                                {
+                                    "name": "Add list to cart",
+                                    "request": {
+                                        "method": "POST",
+                                                                        "auth": {
+                                    "type": "bearer",
+                                    "bearer": [
+                                        {
+                                            "key": "token",
+                                            "value": "{{userToken}}",
+                                            "type": "string"
+                                        }
+                                    ]
+                                },
+                                        "header": [
+                                            { "key": "Accept", "value": "application/json" },
+                                            { "key": "Content-Type", "value": "application/json" }
+                                        ],
+                                        "body": { "mode": "raw", "raw": "{\n  \"storeId\": {{smStoreId}}\n}" },
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/shopping-lists/{{smShoppingListId}}/add-to-cart",
+                                            "host": ["{{baseUrl}}"],
+                                            "path": ["api", "v1", "user", "supermarket", "shopping-lists", "{{smShoppingListId}}", "add-to-cart"]
+                                        },
+                                        "description": "POST …/add-to-cart — body `storeId`. 201 cart in `data`."
+                                    }
+                                },
+                                {
+                                    "name": "Add list line",
+                                    "request": {
+                                        "method": "POST",
+                                                                        "auth": {
+                                    "type": "bearer",
+                                    "bearer": [
+                                        {
+                                            "key": "token",
+                                            "value": "{{userToken}}",
+                                            "type": "string"
+                                        }
+                                    ]
+                                },
+                                        "header": [
+                                            { "key": "Accept", "value": "application/json" },
+                                            { "key": "Content-Type", "value": "application/json" }
+                                        ],
+                                        "body": { "mode": "raw", "raw": "{\n  \"masterProductId\": {{smMasterProductId}},\n  \"quantity\": 1\n}" },
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/shopping-lists/{{smShoppingListId}}/items",
+                                            "host": ["{{baseUrl}}"],
+                                            "path": ["api", "v1", "user", "supermarket", "shopping-lists", "{{smShoppingListId}}", "items"]
+                                        },
+                                        "description": "POST …/items — masterProductId + quantity"
+                                    }
+                                },
+                                {
+                                    "name": "Update list line",
+                                    "request": {
+                                        "method": "PATCH",
+                                                                        "auth": {
+                                    "type": "bearer",
+                                    "bearer": [
+                                        {
+                                            "key": "token",
+                                            "value": "{{userToken}}",
+                                            "type": "string"
+                                        }
+                                    ]
+                                },
+                                        "header": [
+                                            { "key": "Accept", "value": "application/json" },
+                                            { "key": "Content-Type", "value": "application/json" }
+                                        ],
+                                        "body": { "mode": "raw", "raw": "{\n  \"quantity\": 2,\n  \"isIncluded\": true\n}" },
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/shopping-lists/{{smShoppingListId}}/items/{{smShoppingListItemId}}",
+                                            "host": ["{{baseUrl}}"],
+                                            "path": ["api", "v1", "user", "supermarket", "shopping-lists", "{{smShoppingListId}}", "items", "{{smShoppingListItemId}}"]
+                                        },
+                                        "description": "PATCH …/items/{item}"
+                                    }
+                                },
+                                {
+                                    "name": "Delete list line",
+                                    "request": {
+                                        "method": "DELETE",
+                                                                        "auth": {
+                                    "type": "bearer",
+                                    "bearer": [
+                                        {
+                                            "key": "token",
+                                            "value": "{{userToken}}",
+                                            "type": "string"
+                                        }
+                                    ]
+                                },
+                                        "header": [{ "key": "Accept", "value": "application/json" }],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/shopping-lists/{{smShoppingListId}}/items/{{smShoppingListItemId}}",
+                                            "host": ["{{baseUrl}}"],
+                                            "path": ["api", "v1", "user", "supermarket", "shopping-lists", "{{smShoppingListId}}", "items", "{{smShoppingListItemId}}"]
+                                        },
+                                        "description": "DELETE …/items/{item} — 204"
+                                    }
+                                }
+                            ]
+                        },                        {
                             "name": "Supermarket Order Status",
                             "request": {
                                 "method": "GET",

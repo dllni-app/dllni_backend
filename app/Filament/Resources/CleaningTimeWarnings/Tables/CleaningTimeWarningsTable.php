@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningTimeWarnings\Tables;
 
+use App\Support\BookingMorphTypeLabel;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -18,7 +19,9 @@ final class CleaningTimeWarningsTable
 
         return $table
             ->columns([
-                TextColumn::make('booking_type')->label('نوع الحجز')->formatStateUsing(fn (?string $state) => $state === 'cleaning' ? 'تنظيف' : ($state === 'event' ? 'مناسبة' : $state)),
+                TextColumn::make('booking_type')
+                    ->label('نوع الحجز')
+                    ->formatStateUsing(fn (?string $state): string => BookingMorphTypeLabel::resolve($state)),
                 TextColumn::make('booking_id')->label('رقم الحجز'),
                 TextColumn::make('customer_response')->label('رد العميل')->badge()->placeholder('-')->formatStateUsing(fn ($state) => $state?->label()),
                 TextColumn::make('worker_response')->label('رد العامل')->badge()->placeholder('-')->formatStateUsing(fn ($state) => $state?->label()),

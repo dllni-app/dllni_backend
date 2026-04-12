@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningTimeWarnings\Schemas;
 
+use App\Support\BookingMorphTypeLabel;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Schema;
 
@@ -13,7 +14,9 @@ final class CleaningTimeWarningInfolist
     {
         return $schema
             ->components([
-                TextEntry::make('booking_type')->label('نوع الحجز')->formatStateUsing(fn (?string $state) => $state === 'cleaning' ? 'تنظيف' : ($state === 'event' ? 'مناسبة' : $state ?? '-')),
+                TextEntry::make('booking_type')
+                    ->label('نوع الحجز')
+                    ->formatStateUsing(fn (?string $state): string => BookingMorphTypeLabel::resolve($state)),
                 TextEntry::make('booking_id')->label('رقم الحجز'),
                 TextEntry::make('sent_at')->label('وقت الإرسال')->dateTime('Y-m-d H:i'),
                 TextEntry::make('customer_response')->label('رد العميل')->badge()->placeholder('-')->formatStateUsing(fn ($state) => $state?->label()),

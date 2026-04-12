@@ -11,8 +11,10 @@ use App\Models\SystemAlert;
 use BackedEnum;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\EventBooking;
+use Modules\Resturants\Models\Order;
 
 final class CleaningOverview extends Page
 {
@@ -82,7 +84,13 @@ final class CleaningOverview extends Page
     public function getViewData(): array
     {
         $allAlerts = SystemAlert::query()
-            ->with(['booking' => fn ($q) => $q->with(['customer', 'worker.user'])])
+            ->with(['booking' => function (MorphTo $morphTo): void {
+                $morphTo->morphWith([
+                    CleaningBooking::class => ['customer', 'worker.user'],
+                    EventBooking::class => ['customer'],
+                    Order::class => ['customer'],
+                ]);
+            }])
             ->latest()
             ->limit(20)
             ->get();

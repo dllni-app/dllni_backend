@@ -42,11 +42,11 @@ final class WorkersTable
                     ->sortable(),
                 IconColumn::make('is_active')
                     ->label(__('cleaning_admin.workers.fields.is_active'))
-                    ->description(__('cleaning_admin.column_descriptions.is_active'))
+                    ->tooltip(__('cleaning_admin.column_descriptions.is_active'))
                     ->boolean(),
                 IconColumn::make('is_suspended')
                     ->label(__('cleaning_admin.workers.fields.suspended'))
-                    ->description(__('cleaning_admin.column_descriptions.is_suspended'))
+                    ->tooltip(__('cleaning_admin.column_descriptions.is_suspended'))
                     ->boolean(),
             ])
             ->filters([

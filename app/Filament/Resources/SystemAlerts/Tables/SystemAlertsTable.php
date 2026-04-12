@@ -6,6 +6,7 @@ namespace App\Filament\Resources\SystemAlerts\Tables;
 
 use App\Enums\AlertSeverity;
 use App\Enums\SystemAlertStatus;
+use App\Support\BookingMorphTypeLabel;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
@@ -21,7 +22,9 @@ final class SystemAlertsTable
                 TextColumn::make('alert_type')->label('نوع التنبيه')->badge()->formatStateUsing(fn ($state) => $state?->label()),
                 TextColumn::make('severity')->label('الخطورة')->badge()->formatStateUsing(fn ($state) => $state?->label()),
                 TextColumn::make('status')->label('الحالة')->badge()->formatStateUsing(fn ($state) => $state?->label()),
-                TextColumn::make('booking_type')->label('نوع الحجز')->formatStateUsing(fn (?string $state) => $state === 'cleaning' ? 'تنظيف' : ($state === 'event' ? 'مناسبة' : $state ?? '-')),
+                TextColumn::make('booking_type')
+                    ->label('نوع الحجز')
+                    ->formatStateUsing(fn (?string $state): string => BookingMorphTypeLabel::resolve($state)),
                 TextColumn::make('created_at')->label('تاريخ الإنشاء')->since()->sortable(),
             ])
             ->filters([

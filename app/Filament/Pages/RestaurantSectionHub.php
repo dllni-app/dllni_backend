@@ -74,7 +74,7 @@ final class RestaurantSectionHub extends Page
             [
                 'label' => __('restaurant_admin.hub.kpis.low_stock_products'),
                 'value' => Product::query()->lowStock()->count(),
-                'url' => RestaurantInventoryMonitoring::getUrl(),
+                'url' => self::getUrl([], isAbsolute: false).'#restaurant-hub-low-stock',
             ],
             [
                 'label' => __('restaurant_admin.hub.kpis.active_offers'),
@@ -162,7 +162,6 @@ final class RestaurantSectionHub extends Page
                 ['label' => __('restaurant_admin.hub.quick_actions.restaurants'), 'url' => RestaurantResource::getUrl('index')],
                 ['label' => __('restaurant_admin.hub.quick_actions.orders'), 'url' => OrderResource::getUrl('index')],
                 ['label' => __('restaurant_admin.hub.quick_actions.disputes'), 'url' => RestaurantOrderDisputeResource::getUrl('index')],
-                ['label' => __('restaurant_admin.hub.quick_actions.inventory'), 'url' => RestaurantInventoryMonitoring::getUrl()],
                 ['label' => __('restaurant_admin.hub.quick_actions.stats'), 'url' => RestaurantStatsPage::getUrl()],
             ],
             'priorityRestaurantRows' => $priorityRestaurants->map(fn (Restaurant $restaurant): array => [

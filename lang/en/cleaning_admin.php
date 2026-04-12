@@ -127,6 +127,13 @@ return [
         'tooltip' => 'Delayed mutual rating, frozen location, SOS, time exceeded without end; contact or resolve actions.',
     ],
 
+    'booking_morph_labels' => [
+        'cleaning' => 'Cleaning booking',
+        'event' => 'Event booking',
+        'restaurant_order' => 'Restaurant order',
+        'unknown' => 'Other (:type)',
+    ],
+
     'time_warnings' => [
         'nav_label' => 'Time-End Warnings',
         'tooltip' => 'Log of time-end warnings: booking #, type (cleaning/event), sent at, customer response (extend/commit/finish early), worker response.',

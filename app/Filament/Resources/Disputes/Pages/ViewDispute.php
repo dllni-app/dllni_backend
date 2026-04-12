@@ -14,6 +14,10 @@ use Filament\Actions\EditAction;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\EventBooking;
+use Modules\Resturants\Models\Order;
 
 final class ViewDispute extends ViewRecord
 {
@@ -22,7 +26,16 @@ final class ViewDispute extends ViewRecord
     public function mount(int|string $record): void
     {
         parent::mount($record);
-        $this->record->load(['messages.sender', 'booking.customer', 'booking.worker']);
+        $this->record->load([
+            'messages.sender',
+            'booking' => function (MorphTo $morphTo): void {
+                $morphTo->morphWith([
+                    CleaningBooking::class => ['customer', 'worker'],
+                    EventBooking::class => ['customer'],
+                    Order::class => ['customer'],
+                ]);
+            },
+        ]);
     }
 
     protected function getHeaderActions(): array

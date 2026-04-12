@@ -2,10 +2,16 @@
 
 declare(strict_types=1);
 
+use App\Enums\AlertSeverity;
+use App\Enums\AlertType;
+use App\Enums\SystemAlertStatus;
 use App\Filament\Pages\CleaningOverview;
 use App\Filament\Pages\RestaurantSectionHub;
 use App\Filament\Pages\SupermarketSectionHub;
+use App\Models\SystemAlert;
 use App\Models\User;
+use Database\Factories\OrderFactory;
+use Modules\Resturants\Models\Order;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -36,6 +42,22 @@ it('allows an admin to load the restaurant section hub', function (): void {
 });
 
 it('allows an admin to load the cleaning overview command center', function (): void {
+    $this->get(CleaningOverview::getUrl([], isAbsolute: false))
+        ->assertSuccessful();
+});
+
+it('allows an admin to load the cleaning overview when a system alert targets a restaurant order', function (): void {
+    $order = OrderFactory::new()->create();
+
+    SystemAlert::query()->create([
+        'booking_id' => $order->id,
+        'booking_type' => Order::class,
+        'alert_type' => AlertType::DelayedRating,
+        'severity' => AlertSeverity::Medium,
+        'status' => SystemAlertStatus::New,
+        'payload' => [],
+    ]);
+
     $this->get(CleaningOverview::getUrl([], isAbsolute: false))
         ->assertSuccessful();
 });

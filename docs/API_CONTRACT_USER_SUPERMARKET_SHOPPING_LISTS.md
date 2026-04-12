@@ -5,6 +5,8 @@ Auth: **required** for all endpoints in this document (`auth:sanctum`)
 
 Related: supermarket cart, checkout, and orders are documented in [`API_CONTRACT_USER_ORDERS_AND_CART.md`](./API_CONTRACT_USER_ORDERS_AND_CART.md).
 
+Compact **v1 table layout** (paths, field tables, errors): [`API_CONTRACT_V1_USER_SUPERMARKET_SHOPPING_LISTS.md`](./API_CONTRACT_V1_USER_SUPERMARKET_SHOPPING_LISTS.md).
+
 ---
 
 ## Purpose
@@ -134,7 +136,7 @@ Items are ordered by `sortOrder`, then `id`.
 
 **Body** (all optional; send only fields to change)
 
-- `name` (sometimes required with patch, string, max: `255`)
+- `name` (optional; if the key is sent, required string, max: `255`)
 - `description` (optional, string|null — may be sent to clear)
 - `isActive` (optional, boolean)
 
@@ -203,11 +205,11 @@ Full list detail including the new line.
 - `shoppingList` (required, integer)
 - `item` (required, integer): `sm_smart_list_items.id` belonging to that list
 
-**Body** (at least one field recommended; empty body is accepted and returns unchanged list)
+**Body** (empty `{}` is accepted and returns the unchanged list)
 
-- `quantity` (optional, numeric, `0.01`..`9999`)
-- `sortOrder` (optional, integer, `0`..`999999`)
-- `isIncluded` (optional, boolean)
+- `quantity` (optional; if the key is sent, required numeric, `0.01`..`9999`)
+- `sortOrder` (optional; if the key is sent, required integer, `0`..`999999`)
+- `isIncluded` (optional; if the key is sent, required boolean)
 
 **200 Response**
 

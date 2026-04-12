@@ -15,14 +15,15 @@
                 :items="$priorityRestaurantRows" :empty-message="__('restaurant_admin.hub.empty_state')" />
             <x-filament-hub.priority-column :title="__('restaurant_admin.hub.priorities.disputes')"
                 :items="$priorityDisputeRows" :empty-message="__('restaurant_admin.hub.empty_state')" />
-            <x-filament-hub.priority-column :title="__('restaurant_admin.hub.priorities.inventory')"
-                :items="$priorityProductRows" :empty-message="__('restaurant_admin.hub.empty_state')" />
+            <x-filament-hub.priority-column id="restaurant-hub-low-stock"
+                :title="__('restaurant_admin.hub.priorities.inventory')" :items="$priorityProductRows"
+                :empty-message="__('restaurant_admin.hub.empty_state')" />
         </x-filament-hub.lane-grid>
     </x-filament::section>
 
     <x-filament::section :heading="__('restaurant_admin.hub.quick_actions.heading')"
         :description="__('restaurant_admin.hub.quick_actions.description')">
-        <x-filament-hub.quick-links :links="$quickActions" columns="grid gap-4 md:grid-cols-2 xl:grid-cols-5"
+        <x-filament-hub.quick-links :links="$quickActions" columns="grid gap-4 md:grid-cols-2 xl:grid-cols-4"
             :centered="true" />
     </x-filament::section>
 
