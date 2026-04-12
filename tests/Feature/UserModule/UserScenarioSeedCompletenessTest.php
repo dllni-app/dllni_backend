@@ -12,7 +12,7 @@ it('seeds complete app-user profile data for user endpoints', function (): void 
     Artisan::call('db:seed', ['--class' => UserAppScenarioSeeder::class, '--no-interaction' => true]);
 
     $user = User::query()
-        ->where('email', 'user@example.com')
+        ->where('email', 'user@dllni.sy')
         ->with(['media', 'addresses', 'notifications'])
         ->firstOrFail();
 
