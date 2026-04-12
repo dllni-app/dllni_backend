@@ -15,19 +15,19 @@ final class UserRestaurantActiveCouponsController
 
         $coupons = PromoCode::query()
             ->with([
-                'restaurant' => fn($query) => $query
+                'restaurant' => fn ($query) => $query
                     ->select(['id', 'name', 'slug', 'is_active'])
                     ->with('media'),
             ])
-            ->whereHas('restaurant', fn($query) => $query->where('is_active', true))
+            ->whereHas('restaurant', fn ($query) => $query->where('is_active', true))
             ->where('is_active', true)
-            ->where(fn($query) => $query->whereNull('starts_at')->orWhere('starts_at', '<=', $now))
-            ->where(fn($query) => $query->whereNull('ends_at')->orWhere('ends_at', '>=', $now))
-            ->where(fn($query) => $query->whereNull('usage_limit')->orWhereColumn('usage_count', '<', 'usage_limit'))
+            ->where(fn ($query) => $query->whereNull('starts_at')->orWhere('starts_at', '<=', $now))
+            ->where(fn ($query) => $query->whereNull('ends_at')->orWhere('ends_at', '>=', $now))
+            ->where(fn ($query) => $query->whereNull('usage_limit')->orWhereColumn('usage_count', '<', 'usage_limit'))
             ->orderByDesc('starts_at')
             ->orderByDesc('id')
             ->get()
-            ->map(fn(PromoCode $coupon): array => [
+            ->map(fn (PromoCode $coupon): array => [
                 'id' => $coupon->id,
                 'code' => $coupon->code,
                 'discountType' => $coupon->discount_type?->value ?? $coupon->discount_type,

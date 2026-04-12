@@ -20,9 +20,9 @@ final class SmProductSimilarSearchController
 
         $selectedProduct = SmProduct::query()
             ->where('is_available', true)
-            ->whereHas('store', fn($storeQuery) => $storeQuery
+            ->whereHas('store', fn ($storeQuery) => $storeQuery
                 ->where('is_active', true)
-                ->where(fn($query) => $query
+                ->where(fn ($query) => $query
                     ->whereNull('suspension_until')
                     ->orWhere('suspension_until', '<=', $now)))
             ->findOrFail($product);
@@ -33,9 +33,9 @@ final class SmProductSimilarSearchController
         $products = SmProduct::query()
             ->whereKeyNot($selectedProduct->id)
             ->where('is_available', true)
-            ->whereHas('store', fn($storeQuery) => $storeQuery
+            ->whereHas('store', fn ($storeQuery) => $storeQuery
                 ->where('is_active', true)
-                ->where(fn($query) => $query
+                ->where(fn ($query) => $query
                     ->whereNull('suspension_until')
                     ->orWhere('suspension_until', '<=', $now)))
             ->whereRaw("name LIKE ? ESCAPE '!'", ["%{$searchTerm}%"])
@@ -51,7 +51,7 @@ final class SmProductSimilarSearchController
                 ->where('favorable_type', (new SmProduct())->getMorphClass())
                 ->whereIn('favorable_id', $products->getCollection()->modelKeys())
                 ->pluck('favorable_id')
-                ->map(static fn($id): int => (int) $id)
+                ->map(static fn ($id): int => (int) $id)
                 ->all();
 
             $favoriteLookup = array_flip($favoriteIds);

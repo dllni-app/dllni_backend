@@ -40,12 +40,12 @@ final class SmProductResource extends JsonResource
             'isFavorite' => (bool) ($attributes['isFavoritedByUser'] ?? false),
             'offers' => $this->whenLoaded('offerProducts', function () {
                 return SmOfferResource::collection(
-                    $this->offerProducts->map(fn($offerProduct) => $offerProduct->offer)->filter()
+                    $this->offerProducts->map(fn ($offerProduct) => $offerProduct->offer)->filter()
                 );
             }),
-            'options' => $this->whenLoaded('modifierGroups', fn() => $this->modifierGroups
+            'options' => $this->whenLoaded('modifierGroups', fn () => $this->modifierGroups
                 ->values()
-                ->map(fn($group): array => [
+                ->map(fn ($group): array => [
                     'id' => $group->id,
                     'storeId' => $group->store_id,
                     'name' => $group->name,
@@ -55,7 +55,7 @@ final class SmProductResource extends JsonResource
                     'sortOrder' => (int) $group->sort_order,
                     'modifiers' => $group->modifiers
                         ->values()
-                        ->map(fn($modifier): array => [
+                        ->map(fn ($modifier): array => [
                             'id' => $modifier->id,
                             'modifierGroupId' => $modifier->modifier_group_id,
                             'name' => $modifier->name,
@@ -66,12 +66,12 @@ final class SmProductResource extends JsonResource
                         ->all(),
                 ])
                 ->all()),
-            'image' => MediaResource::make($this->whenLoaded('media', fn() => $this->getFirstMedia(SmProduct::IMAGE_COLLECTION))),
-            'imageUrl' => $this->whenLoaded('media', fn() => $this->getFirstMediaUrl(SmProduct::IMAGE_COLLECTION) ?: null),
-            'primaryImage' => $this->whenLoaded('media', fn() => $this->getFirstMediaUrl(SmProduct::IMAGE_COLLECTION) ?: null),
-            'images' => $this->whenLoaded('media', fn() => MediaResource::collection($this->getMedia(SmProduct::IMAGE_COLLECTION))),
-            'imageUrls' => $this->whenLoaded('media', fn() => $this->getMedia(SmProduct::IMAGE_COLLECTION)
-                ->map(fn($media): string => $media->getFullUrl())
+            'image' => MediaResource::make($this->whenLoaded('media', fn () => $this->getFirstMedia(SmProduct::IMAGE_COLLECTION))),
+            'imageUrl' => $this->whenLoaded('media', fn () => $this->getFirstMediaUrl(SmProduct::IMAGE_COLLECTION) ?: null),
+            'primaryImage' => $this->whenLoaded('media', fn () => $this->getFirstMediaUrl(SmProduct::IMAGE_COLLECTION) ?: null),
+            'images' => $this->whenLoaded('media', fn () => MediaResource::collection($this->getMedia(SmProduct::IMAGE_COLLECTION))),
+            'imageUrls' => $this->whenLoaded('media', fn () => $this->getMedia(SmProduct::IMAGE_COLLECTION)
+                ->map(fn ($media): string => $media->getFullUrl())
                 ->values()
                 ->all()),
             'stockQuantity' => $this->stock_quantity,

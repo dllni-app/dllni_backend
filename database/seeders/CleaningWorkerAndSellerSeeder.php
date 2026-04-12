@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 declare(strict_types=1);
 
@@ -159,7 +159,7 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
             'phone_verified_at' => now(),
         ])->save();
 
-        $slug = 'seller-restaurant-'.mb_substr(hash('sha256', (string) $user->id), 0, 8);
+        $slug = 'seller-restaurant-' . mb_substr(hash('sha256', (string) $user->id), 0, 8);
         $restaurant = Restaurant::firstOrCreate(
             ['user_id' => $user->id],
             [
@@ -487,7 +487,7 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
         }
 
         $promoCodeTen = PromoCode::updateOrCreate(
-            ['code' => 'SELLER10-'.$restaurant->id],
+            ['code' => 'SELLER10-' . $restaurant->id],
             [
                 'restaurant_id' => $restaurant->id,
                 'discount_type' => DiscountType::Percentage->value,
@@ -502,7 +502,7 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
         );
 
         $promoCodeFive = PromoCode::updateOrCreate(
-            ['code' => 'FAMILY5-'.$restaurant->id],
+            ['code' => 'FAMILY5-' . $restaurant->id],
             [
                 'restaurant_id' => $restaurant->id,
                 'discount_type' => DiscountType::FixedAmount->value,
@@ -556,7 +556,7 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
 
         $orders = [
             [
-                'order_number' => 'SR-'.$restaurant->id.'-1001',
+                'order_number' => 'SR-' . $restaurant->id . '-1001',
                 'customer_email' => 'omar.customer@dllni.sy',
                 'status' => OrderStatus::Completed->value,
                 'order_type' => OrderType::Delivery->value,
@@ -583,7 +583,7 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
                 ],
             ],
             [
-                'order_number' => 'SR-'.$restaurant->id.'-1002',
+                'order_number' => 'SR-' . $restaurant->id . '-1002',
                 'customer_email' => 'lina.customer@dllni.sy',
                 'status' => OrderStatus::Completed->value,
                 'order_type' => OrderType::Pickup->value,
@@ -610,7 +610,7 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
                 ],
             ],
             [
-                'order_number' => 'SR-'.$restaurant->id.'-1003',
+                'order_number' => 'SR-' . $restaurant->id . '-1003',
                 'customer_email' => 'ahmad.customer@dllni.sy',
                 'status' => OrderStatus::Preparing->value,
                 'order_type' => OrderType::Delivery->value,
@@ -634,7 +634,7 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
                 'review' => null,
             ],
             [
-                'order_number' => 'SR-'.$restaurant->id.'-1004',
+                'order_number' => 'SR-' . $restaurant->id . '-1004',
                 'customer_email' => 'omar.customer@dllni.sy',
                 'status' => OrderStatus::Pending->value,
                 'order_type' => OrderType::Pickup->value,
@@ -824,7 +824,7 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
         SmStore::create([
             'owner_user_id' => $user->id,
             'name' => 'Seller Supermarket',
-            'slug' => 'seller-supermarket-'.mb_substr(hash('sha256', (string) $user->id), 0, 8),
+            'slug' => 'seller-supermarket-' . mb_substr(hash('sha256', (string) $user->id), 0, 8),
             'description' => 'Supermarket owned by seller user for API testing.',
             'address' => 'ح�"ب - ا�"سر�Sا�? ا�"جد�Sدة - شارع تشر�S�?',
             'city' => 'ح�"ب',

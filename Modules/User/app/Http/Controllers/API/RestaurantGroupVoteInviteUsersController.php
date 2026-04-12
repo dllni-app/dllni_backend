@@ -22,7 +22,7 @@ final class RestaurantGroupVoteInviteUsersController
 
         /** @var list<int> $userIds */
         $userIds = array_map(
-            fn(mixed $id): int => (int) $id,
+            fn (mixed $id): int => (int) $id,
             $request->validated('userIds')
         );
 

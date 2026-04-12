@@ -19,9 +19,9 @@ final class SmProductShowController
 
         $model = SmProduct::query()
             ->where('is_available', true)
-            ->whereHas('store', fn($query) => $query
+            ->whereHas('store', fn ($query) => $query
                 ->where('is_active', true)
-                ->where(fn($storeQuery) => $storeQuery
+                ->where(fn ($storeQuery) => $storeQuery
                     ->whereNull('suspension_until')
                     ->orWhere('suspension_until', '<=', $now)))
             ->with([
@@ -29,12 +29,12 @@ final class SmProductShowController
                 'category',
                 'media',
                 'offerProducts.offer',
-                'modifierGroups' => fn($query) => $query
+                'modifierGroups' => fn ($query) => $query
                     ->where('sm_modifier_groups.is_active', true)
                     ->orderBy('sm_modifier_groups.sort_order')
                     ->orderBy('sm_modifier_groups.id')
                     ->with([
-                        'modifiers' => fn($modifierQuery) => $modifierQuery
+                        'modifiers' => fn ($modifierQuery) => $modifierQuery
                             ->where('is_available', true)
                             ->orderBy('sort_order')
                             ->orderBy('id'),

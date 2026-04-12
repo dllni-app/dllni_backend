@@ -39,7 +39,7 @@ final class SeederMedia
 
         try {
             $model->addMedia($tempPath)
-                ->usingFileName(self::safeFileName($seed) . '.png')
+                ->usingFileName(self::safeFileName($seed).'.png')
                 ->toMediaCollection($collection);
         } catch (Throwable) {
             // Ignore media failures in dev seed data.
@@ -64,7 +64,7 @@ final class SeederMedia
             return null;
         }
 
-        $pngPath = $tempPath . '-' . self::safeFileName($seed) . '.png';
+        $pngPath = $tempPath.'-'.self::safeFileName($seed).'.png';
         @unlink($tempPath);
 
         $decoded = base64_decode(self::PlaceholderPngBase64, true);

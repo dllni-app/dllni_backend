@@ -24,7 +24,6 @@ final class LoginController
             ]);
         }
 
-
         return response()->json([
             'data' => UserResource::make($user->load('media')),
             'token' => $user->createToken('auth_token')->plainTextToken,

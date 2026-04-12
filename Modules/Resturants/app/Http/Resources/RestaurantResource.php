@@ -53,10 +53,10 @@ final class RestaurantResource extends JsonResource
             'image' => $this->getFirstMediaUrl('primary-image'),
             'imageUrl' => $this->getFirstMediaUrl('primary-image') ?: null,
             'banner' => $this->getFirstMediaUrl('banner-image'),
-            'images' => $this->getMedia('images')->map(fn($media) => $media->getUrl())->values()->all(),
+            'images' => $this->getMedia('images')->map(fn ($media) => $media->getUrl())->values()->all(),
             'lat' => $this->latitude ? (float) $this->latitude : null,
             'long' => $this->longitude ? (float) $this->longitude : null,
-            'user' => $this->whenLoaded('user', fn() => [
+            'user' => $this->whenLoaded('user', fn () => [
                 'id' => $this->user->id,
                 'name' => $this->user->name,
                 'email' => $this->user->email,
@@ -66,9 +66,9 @@ final class RestaurantResource extends JsonResource
                 : null,
             'listingOffer' => $this->when(
                 $this->relationLoaded('primaryActiveOffer'),
-                fn(): ?array => $this->formatListingOffer($this->primaryActiveOffer),
+                fn (): ?array => $this->formatListingOffer($this->primaryActiveOffer),
             ),
-            'cuisineTypes' => $this->whenLoaded('cuisineTypes', fn() => $this->cuisineTypes->map(fn($ct) => [
+            'cuisineTypes' => $this->whenLoaded('cuisineTypes', fn () => $this->cuisineTypes->map(fn ($ct) => [
                 'id' => $ct->id,
                 'name' => $ct->name,
                 'slug' => $ct->slug,

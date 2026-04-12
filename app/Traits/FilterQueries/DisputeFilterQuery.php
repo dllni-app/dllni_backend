@@ -34,7 +34,7 @@ trait DisputeFilterQuery
                         ->whereHasMorph(
                             'booking',
                             [CleaningBooking::class],
-                            fn($bookingQuery) => $bookingQuery->where('worker_id', $workerId)
+                            fn ($bookingQuery) => $bookingQuery->where('worker_id', $workerId)
                         );
                 }),
                 AllowedFilter::exact('bookingId', 'booking_id'),

@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 declare(strict_types=1);
 
@@ -50,7 +50,7 @@ final class WorkerSeeder extends Seeder
             $user = User::firstOrCreate(
                 ['email' => $data['email']],
                 [
-                    'name' => $data['first_name'].' عا�.�"',
+                    'name' => $data['first_name'] . ' عا�.�"',
                     'phone' => $phone,
                     'module_type' => UserModuleType::CleaningWorker,
                     'password' => bcrypt('password'),
