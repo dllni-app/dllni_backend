@@ -17,7 +17,7 @@ final class UserSupermarketOrderStoreRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'fulfillmentType' => ['required', 'string', Rule::in(['pickup'])],
+            'fulfillmentType' => ['required', 'string', Rule::in(['delivery', 'dine_in'])],
             'receiveMode' => ['required', 'string', Rule::in(['immediate', 'scheduled'])],
             'scheduledAt' => ['nullable', 'date', 'after:now'],
             'addressId' => ['sometimes', 'nullable', 'integer', 'exists:user_addresses,id'],

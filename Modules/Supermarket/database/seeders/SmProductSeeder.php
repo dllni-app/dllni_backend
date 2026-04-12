@@ -233,7 +233,7 @@ final class SmProductSeeder extends Seeder
             SeederMedia::ensureSingleMedia(
                 $product,
                 SmProduct::IMAGE_COLLECTION,
-                "https://picsum.photos/seed/sm-product-{$seed}/600/600",
+                'https://images.unsplash.com/photo-1583258292688-d0213dc5a3a8?auto=format&fit=crop&w=800&q=80',
                 "sm-product-{$seed}"
             );
         }

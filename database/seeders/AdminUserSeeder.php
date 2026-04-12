@@ -13,7 +13,7 @@ final class AdminUserSeeder extends Seeder
     {
         $admins = [
             ['name' => 'Admin', 'email' => 'admin@admin.com'],
-            ['name' => 'Admin User', 'email' => 'admin@example.com'],
+            ['name' => 'Admin User', 'email' => 'admin@dllni.sy'],
         ];
 
         foreach ($admins as $adminData) {

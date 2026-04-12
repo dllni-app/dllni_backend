@@ -16,11 +16,11 @@ final class VerifiedUserSeeder extends Seeder
         Model::unguard();
 
         $user = User::updateOrCreate(
-            ['email' => 'user@example.com'],
+            ['email' => 'user@dllni.sy'],
             [
                 'name' => 'User',
                 'phone' => '+963944000222',
-                'email' => 'user@example.com',
+                'email' => 'user@dllni.sy',
                 'password' => bcrypt('secret123'),
                 'phone_verified_at' => now(),
                 'email_verified_at' => now(),
@@ -30,7 +30,7 @@ final class VerifiedUserSeeder extends Seeder
         SeederMedia::ensureSingleMedia(
             $user,
             'primary-image',
-            "https://picsum.photos/seed/user-{$user->id}-primary/600/600",
+            'https://images.unsplash.com/photo-1545167622-3a6ac756afa4?auto=format&fit=crop&w=600&q=80',
             "user-{$user->id}-primary"
         );
     }

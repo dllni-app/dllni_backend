@@ -18,9 +18,9 @@ final class EventBookingSeeder extends Seeder
     public function run(): void
     {
         $customer = User::firstOrCreate(
-            ['email' => 'event.customer@example.com'],
+            ['email' => 'event.customer@dllni.sy'],
             [
-                'name' => 'عميل المناسبات',
+                'name' => 'ع�.�S�" ا�"�.�?اسبات',
                 'password' => bcrypt('password'),
                 'email_verified_at' => now(),
             ]

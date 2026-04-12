@@ -15,9 +15,9 @@ use Illuminate\Database\Seeder;
 
 final class WorkerUserSeeder extends Seeder
 {
-    private const string WorkerEmail = 'worker@example.com';
+    private const string WorkerEmail = 'worker@dllni.sy';
 
-    private const string WorkerPhone = '+962790000010';
+    private const string WorkerPhone = '+963944100010';
 
     private const string Password = 'password';
 
@@ -52,9 +52,9 @@ final class WorkerUserSeeder extends Seeder
                 'open_disputes_count' => 0,
                 'is_active' => true,
                 'is_suspended' => false,
-                'home_address' => '456 Worker Ave',
-                'home_latitude' => 31.96,
-                'home_longitude' => 35.93,
+                'home_address' => 'ح�"ب - ا�"أشرف�Sة - شارع ا�"حدائ�,',
+                'home_latitude' => 36.2308,
+                'home_longitude' => 37.1279,
                 'default_working_hours' => [
                     'sunday' => ['available' => false, 'data' => []],
                     'monday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
@@ -68,13 +68,13 @@ final class WorkerUserSeeder extends Seeder
         );
 
         WorkerZone::firstOrCreate(
-            ['worker_id' => $worker->id, 'name' => 'Amman Central'],
+            ['worker_id' => $worker->id, 'name' => 'ح�"ب - ا�"أشرف�Sة'],
             [
                 'polygon' => [
-                    ['lat' => 31.91, 'lng' => 35.88],
-                    ['lat' => 31.99, 'lng' => 35.88],
-                    ['lat' => 31.99, 'lng' => 35.98],
-                    ['lat' => 31.91, 'lng' => 35.98],
+                    ['lat' => 36.2190, 'lng' => 37.1140],
+                    ['lat' => 36.2420, 'lng' => 37.1140],
+                    ['lat' => 36.2420, 'lng' => 37.1410],
+                    ['lat' => 36.2190, 'lng' => 37.1410],
                 ],
                 'is_active' => true,
             ]
@@ -97,14 +97,14 @@ final class WorkerUserSeeder extends Seeder
         SeederMedia::ensureSingleMedia(
             $worker,
             'avatar',
-            "https://picsum.photos/seed/worker-{$worker->id}-avatar/512/512",
+            'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=512&q=80',
             "worker-{$worker->id}-avatar"
         );
 
         SeederMedia::ensureSingleMedia(
             $user,
             'primary-image',
-            "https://picsum.photos/seed/worker-user-{$user->id}-primary/600/600",
+            'https://images.unsplash.com/photo-1541534401786-2077eed87a72?auto=format&fit=crop&w=600&q=80',
             "worker-user-{$user->id}-primary"
         );
     }

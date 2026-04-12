@@ -18,7 +18,7 @@ it('creates cleaning worker user with Worker record and module type', function (
 
     expect($user)->not->toBeNull();
     expect($user->name)->toBe('Cleaning Worker');
-    expect($user->phone)->toBe('+962790000001');
+    expect($user->phone)->toBe('+963944100001');
     expect($user->module_type)->toBe(UserModuleType::CleaningWorker);
 
     $worker = Worker::where('user_id', $user->id)->first();
@@ -32,7 +32,7 @@ it('creates restaurant seller user with linked Restaurant and module type', func
 
     expect($user)->not->toBeNull();
     expect($user->name)->toBe('Restaurant Seller');
-    expect($user->phone)->toBe('+962790000002');
+    expect($user->phone)->toBe('+963944100002');
     expect($user->module_type)->toBe(UserModuleType::RestaurantSeller);
 
     $restaurant = Restaurant::where('user_id', $user->id)->first();
@@ -46,7 +46,7 @@ it('creates supermarket seller user with linked store and module type', function
 
     expect($user)->not->toBeNull();
     expect($user->name)->toBe('Supermarket Seller');
-    expect($user->phone)->toBe('+962790000003');
+    expect($user->phone)->toBe('+963944100003');
     expect($user->module_type)->toBe(UserModuleType::SupermarketSeller);
 
     $store = SmStore::where('owner_user_id', $user->id)->first();

@@ -7,8 +7,8 @@ namespace Database\Seeders;
 use App\Models\CancellationPolicy;
 use App\Models\User;
 use App\Models\Worker;
-use Database\Seeders\Support\SeederMedia;
 use Carbon\CarbonInterface;
+use Database\Seeders\Support\SeederMedia;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
@@ -38,7 +38,7 @@ final class UserAppScenarioSeeder extends Seeder
 {
     public function run(): void
     {
-        $user = User::query()->where('email', 'user@example.com')->first();
+        $user = User::query()->where('email', 'user@dllni.sy')->first();
         if (! $user) {
             return;
         }
@@ -55,14 +55,14 @@ final class UserAppScenarioSeeder extends Seeder
         SeederMedia::ensureSingleMedia(
             $user,
             'primary-image',
-            "https://picsum.photos/seed/user-{$user->id}-primary/600/600",
+            'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=600&q=80',
             "user-{$user->id}-primary"
         );
 
         SeederMedia::ensureSingleMedia(
             $user,
             'images',
-            "https://picsum.photos/seed/user-{$user->id}-gallery-1/600/600",
+            'https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=600&q=80',
             "user-{$user->id}-gallery-1"
         );
 
@@ -75,18 +75,18 @@ final class UserAppScenarioSeeder extends Seeder
         UserAddress::query()->updateOrCreate(
             [
                 'user_id' => $user->id,
-                'label' => 'المنزل',
+                'label' => 'ا�"�.�?ز�"',
             ],
             [
                 'mobile' => '+963944000222',
-                'city' => 'دمشق',
-                'neighborhood' => 'المزة',
-                'street' => 'شارع الجلاء',
+                'city' => 'ح�"ب',
+                'neighborhood' => 'ا�"ح�.دا�?�Sة',
+                'street' => 'شارع ا�"�,دس',
                 'building' => '12',
                 'floor' => '3',
-                'directions' => 'بجانب الصيدلية، المدخل الخلفي.',
-                'latitude' => 33.513807,
-                'longitude' => 36.276528,
+                'directions' => 'بجا�?ب ا�"ص�Sد�"�Sة�O ا�"�.دخ�" ا�"خ�"ف�S.',
+                'latitude' => 36.1795,
+                'longitude' => 37.1082,
                 'is_default' => true,
             ]
         );
@@ -94,18 +94,18 @@ final class UserAppScenarioSeeder extends Seeder
         UserAddress::query()->updateOrCreate(
             [
                 'user_id' => $user->id,
-                'label' => 'العمل',
+                'label' => 'ا�"ع�.�"',
             ],
             [
                 'mobile' => '+963944000223',
-                'city' => 'دمشق',
-                'neighborhood' => 'أبو رمانة',
-                'street' => 'شارع المالكي',
+                'city' => 'ح�"ب',
+                'neighborhood' => 'ا�"فر�,ا�?',
+                'street' => 'شارع عبد ا�"�,ادر ا�"صا�"ح',
                 'building' => '7',
                 'floor' => '1',
-                'directions' => 'مقابل البنك، الدور الأول.',
-                'latitude' => 33.514745,
-                'longitude' => 36.289993,
+                'directions' => '�.�,اب�" ا�"ب�?�f�O ا�"د�^ر ا�"أ�^�".',
+                'latitude' => 36.2021,
+                'longitude' => 37.1343,
                 'is_default' => false,
             ]
         );
@@ -532,13 +532,13 @@ final class UserAppScenarioSeeder extends Seeder
                     'property_type' => 'apartment',
                     'property_details' => [
                         'location_name' => 'Home',
-                        'address' => 'Al Mazzeh, Damascus',
+                        'address' => 'Al Hamdaniyah, Aleppo',
                         'rooms' => 3,
                         'bedrooms' => 2,
                         'bathrooms' => 1,
                     ],
-                    'address_latitude' => 33.513807,
-                    'address_longitude' => 36.276528,
+                    'address_latitude' => 36.1795,
+                    'address_longitude' => 37.1082,
                     'estimated_sqm' => 110,
                     'estimated_hours' => 3.0,
                     'scheduled_date' => $scheduledDate,

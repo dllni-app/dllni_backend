@@ -19,38 +19,38 @@ final class WorkerSeeder extends Seeder
     {
         $workers = [
             [
-                'email' => 'worker1@example.com',
+                'email' => 'worker1@dllni.sy',
                 'first_name' => 'سارة',
-                'bio' => 'منظفة محترفة بخبرة أكثر من 5 سنوات. متخصصة في التنظيف العميق والمنتجات الصديقة للبيئة.',
-                'address' => '123 الشارع الرئيسي، وسط البلد',
-                'lat' => 31.963158,
-                'lng' => 35.930359,
+                'bio' => '�.�?ظفة �.حترفة بخبرة أ�fثر �.�? 5 س�?�^ات. �.تخصصة ف�S ا�"ت�?ظ�Sف ا�"ع�.�S�, �^ا�"�.�?تجات ا�"صد�S�,ة �"�"ب�Sئة.',
+                'address' => 'ح�"ب - ا�"ج�.�S�"�Sة - شارع ف�Sص�"',
+                'lat' => 36.2127,
+                'lng' => 37.1456,
             ],
             [
-                'email' => 'worker2@example.com',
-                'first_name' => 'أحمد',
-                'bio' => 'موثوق ومنضبط. ذو خبرة في مساعدة المناسبات والتجمعات الكبيرة.',
-                'address' => '456 جادة البلوط، الحي الشمالي',
-                'lat' => 31.970000,
-                'lng' => 35.940000,
+                'email' => 'worker2@dllni.sy',
+                'first_name' => 'أح�.د',
+                'bio' => '�.�^ث�^�, �^�.�?ضبط. ذ�^ خبرة ف�S �.ساعدة ا�"�.�?اسبات �^ا�"تج�.عات ا�"�fب�Sرة.',
+                'address' => 'ح�"ب - ا�"ح�.دا�?�Sة - شارع ا�"�,دس',
+                'lat' => 36.1795,
+                'lng' => 37.1082,
             ],
             [
-                'email' => 'worker3@example.com',
-                'first_name' => 'ليلى',
-                'bio' => 'منظفة تهتم بالتفاصيل. متاحة للتنظيف الدوري والمرة الواحدة.',
-                'address' => '789 طريق الصنوبر، الجانب الشرقي',
-                'lat' => 31.955000,
-                'lng' => 35.920000,
+                'email' => 'worker3@dllni.sy',
+                'first_name' => '�"�S�"�?',
+                'bio' => '�.�?ظفة ت�?ت�. با�"تفاص�S�". �.تاحة �"�"ت�?ظ�Sف ا�"د�^ر�S �^ا�"�.رة ا�"�^احدة.',
+                'address' => 'ح�"ب - ا�"سر�Sا�? ا�"جد�Sدة - شارع تشر�S�?',
+                'lat' => 36.2168,
+                'lng' => 37.1317,
             ],
         ];
 
         foreach ($workers as $index => $data) {
-            $phone = sprintf('+9627900001%02d', $index + 1);
+            $phone = sprintf('+9639441201%02d', $index + 1);
 
             $user = User::firstOrCreate(
                 ['email' => $data['email']],
                 [
-                    'name' => $data['first_name'] . ' عامل',
+                    'name' => $data['first_name'].' عا�.�"',
                     'phone' => $phone,
                     'module_type' => UserModuleType::CleaningWorker,
                     'password' => bcrypt('password'),
@@ -92,7 +92,7 @@ final class WorkerSeeder extends Seeder
             );
 
             WorkerZone::firstOrCreate(
-                ['worker_id' => $worker->id, 'name' => 'المنطقة الأساسية'],
+                ['worker_id' => $worker->id, 'name' => 'ا�"�.�?ط�,ة ا�"أساس�Sة'],
                 [
                     'polygon' => [
                         ['lat' => $data['lat'] - 0.05, 'lng' => $data['lng'] - 0.05],
@@ -121,7 +121,7 @@ final class WorkerSeeder extends Seeder
             SeederMedia::ensureSingleMedia(
                 $worker,
                 'avatar',
-                "https://picsum.photos/seed/worker-{$worker->id}-avatar/512/512",
+                'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=512&q=80',
                 "worker-{$worker->id}-avatar"
             );
         }

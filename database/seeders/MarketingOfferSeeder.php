@@ -61,7 +61,7 @@ final class MarketingOfferSeeder extends Seeder
                 SeederMedia::ensureSingleMedia(
                     $model,
                     MarketingOffer::IMAGE_COLLECTION,
-                    "https://picsum.photos/seed/marketing-offer-{$seed}/900/600",
+                    'https://images.unsplash.com/photo-1607082350899-7e105aa886ae?auto=format&fit=crop&w=1200&q=80',
                     "marketing-offer-{$seed}"
                 );
             }

@@ -27,6 +27,9 @@ final class DashboardOverviewController
         $yesterday = Carbon::yesterday();
 
         $baseOrderQuery = fn () => Order::query()->where('restaurant_id', $restaurantId);
+        $completedStatus = OrderStatus::Completed->value;
+        $preparingStatus = OrderStatus::Preparing->value;
+        $readyForPickupStatus = OrderStatus::ReadyForPickup->value;
 
         $todayOrdersQuery = $baseOrderQuery()->whereDate('created_at', $today);
         $todayOrders = (clone $todayOrdersQuery)->count();
@@ -45,12 +48,12 @@ final class DashboardOverviewController
 
         $todayTotalSales = (float) (clone $baseOrderQuery())
             ->whereDate('created_at', $today)
-            ->where('status', OrderStatus::Completed)
+            ->where('status', $completedStatus)
             ->sum('total_amount');
 
         $yesterdayTotalSales = (float) (clone $baseOrderQuery())
             ->whereDate('created_at', $yesterday)
-            ->where('status', OrderStatus::Completed)
+            ->where('status', $completedStatus)
             ->sum('total_amount');
 
         $salesChangePercent = $yesterdayTotalSales > 0
@@ -61,17 +64,20 @@ final class DashboardOverviewController
 
         $openDisputes = RestaurantOrderDispute::query()
             ->restaurantId($restaurantId)
-            ->whereIn('status', [RestaurantDisputeStatus::Open, RestaurantDisputeStatus::UnderReview])
+            ->whereIn('status', [
+                RestaurantDisputeStatus::Open->value,
+                RestaurantDisputeStatus::UnderReview->value,
+            ])
             ->count();
 
         $ordersPendingPickup = (clone $baseOrderQuery())
             ->whereDate('created_at', $today)
-            ->where('status', OrderStatus::Preparing)
+            ->where('status', $preparingStatus)
             ->count();
 
         $ordersReadyForPickup = (clone $baseOrderQuery())
             ->whereDate('created_at', $today)
-            ->where('status', OrderStatus::ReadyForPickup)
+            ->where('status', $readyForPickupStatus)
             ->count();
 
         $lowStockBaseQuery = Product::query()

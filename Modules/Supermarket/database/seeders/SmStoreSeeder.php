@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 declare(strict_types=1);
 
@@ -13,9 +13,9 @@ final class SmStoreSeeder extends Seeder
     public function run(): void
     {
         $owner = User::firstOrCreate(
-            ['email' => 'supermarket.owner@example.com'],
+            ['email' => 'supermarket.owner@dllni.sy'],
             [
-                'name' => 'Ù…Ø§Ù„Ùƒ Ø§Ù„Ø³ÙˆØ¨Ø±Ù…Ø§Ø±ÙƒØª',
+                'name' => '�T�?��~§�T�?z�T�' �~§�T�?z�~³�T�?�~¨�~±�T�?��~§�~±�T�'�~ª',
                 'password' => bcrypt('password'),
                 'email_verified_at' => now(),
             ]
@@ -23,46 +23,46 @@ final class SmStoreSeeder extends Seeder
 
         $stores = [
             [
-                'name' => 'سوبر ماركت الأطرش',
+                'name' => 'س�^بر �.ار�fت ا�"أطرش',
                 'slug' => 'supermarket-al-atrash',
-                'description' => 'مخبوزات • معلبات • منظفات • ألبان و تسالي',
-                'address' => 'المزة، شارع الجلاء، دمشق',
-                'city' => 'دمشق',
-                'neighborhood' => 'المزة',
-                'latitude' => 33.5138,
-                'longitude' => 36.2765,
+                'description' => '�.خب�^زات �?� �.ع�"بات �?� �.�?ظفات �?� أ�"با�? �^ تسا�"�S',
+                'address' => 'ا�"فر�,ا�?�O شارع عبد ا�"�,ادر ا�"صا�"ح�O ح�"ب',
+                'city' => 'ح�"ب',
+                'neighborhood' => 'ا�"فر�,ا�?',
+                'latitude' => 36.2021,
+                'longitude' => 37.1343,
                 'phone' => '+963 11 555 3001',
-                'email' => 'info@atrash-market.example.com',
+                'email' => 'info@atrash-market.dllni.sy',
                 'cover' => 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=80',
-                'logo' => 'https://images.unsplash.com/photo-1579113800032-c38bd7635818?auto=format&fit=crop&w=512&q=80',
+                'logo' => 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=512&q=80',
                 'is_featured' => true,
             ],
             [
-                'name' => 'سوبر ماركت السلطان',
+                'name' => 'س�^بر �.ار�fت ا�"س�"طا�?',
                 'slug' => 'supermarket-al-sultan',
-                'description' => 'خضار • فواكه • ألبان • منظفات • أدوات منزلية',
-                'address' => 'البرامكة، شارع الثورة، دمشق',
-                'city' => 'دمشق',
-                'neighborhood' => 'البرامكة',
-                'latitude' => 33.5105,
-                'longitude' => 36.2798,
+                'description' => 'خضار �?� ف�^ا�f�? �?� أ�"با�? �?� �.�?ظفات �?� أد�^ات �.�?ز�"�Sة',
+                'address' => 'ا�"ح�.دا�?�Sة�O شارع ا�"�,دس�O ح�"ب',
+                'city' => 'ح�"ب',
+                'neighborhood' => 'ا�"ح�.دا�?�Sة',
+                'latitude' => 36.1795,
+                'longitude' => 37.1082,
                 'phone' => '+963 11 555 3002',
-                'email' => 'hello@alsultan-market.example.com',
+                'email' => 'hello@alsultan-market.dllni.sy',
                 'cover' => 'https://images.unsplash.com/photo-1516594915697-87eb3b1c14ea?auto=format&fit=crop&w=1400&q=80',
                 'logo' => 'https://images.unsplash.com/photo-1556740749-887f6717d7e4?auto=format&fit=crop&w=512&q=80',
                 'is_featured' => true,
             ],
             [
-                'name' => 'سوبر ماركت النور',
+                'name' => 'س�^بر �.ار�fت ا�"�?�^ر',
                 'slug' => 'supermarket-al-noor',
-                'description' => 'معلبات • منظفات • ألبان و تسالي',
-                'address' => 'المالكي، شارع بغداد، دمشق',
-                'city' => 'دمشق',
-                'neighborhood' => 'المالكي',
-                'latitude' => 33.5162,
-                'longitude' => 36.2842,
+                'description' => '�.ع�"بات �?� �.�?ظفات �?� أ�"با�? �^ تسا�"�S',
+                'address' => 'ا�"سر�Sا�? ا�"جد�Sدة�O شارع تشر�S�?�O ح�"ب',
+                'city' => 'ح�"ب',
+                'neighborhood' => 'ا�"سر�Sا�? ا�"جد�Sدة',
+                'latitude' => 36.2168,
+                'longitude' => 37.1317,
                 'phone' => '+963 11 555 3003',
-                'email' => 'contact@alnoor-market.example.com',
+                'email' => 'contact@alnoor-market.dllni.sy',
                 'cover' => 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?auto=format&fit=crop&w=1400&q=80',
                 'logo' => 'https://images.unsplash.com/photo-1604719312566-8912e9227c6a?auto=format&fit=crop&w=512&q=80',
                 'is_featured' => false,
@@ -95,3 +95,5 @@ final class SmStoreSeeder extends Seeder
         }
     }
 }
+
+

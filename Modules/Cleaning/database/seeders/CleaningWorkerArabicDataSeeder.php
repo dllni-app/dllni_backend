@@ -22,61 +22,61 @@ use Modules\Cleaning\Models\CleaningTimeWarning;
 final class CleaningWorkerArabicDataSeeder extends Seeder
 {
     private const array ARABIC_CUSTOMERS = [
-        ['name' => 'أحمد الأحمد', 'email' => 'ahmed.alahmad@example.com'],
-        ['name' => 'فاطمة محمد', 'email' => 'fatima.mohammad@example.com'],
-        ['name' => 'خالد السعيد', 'email' => 'khalid.alsaeed@example.com'],
-        ['name' => 'نورة العلي', 'email' => 'nora.alali@example.com'],
-        ['name' => 'عمر حسن', 'email' => 'omar.hassan@example.com'],
+        ['name' => 'أح�.د ا�"أح�.د', 'email' => 'ahmed.alahmad@dllni.sy'],
+        ['name' => 'فاط�.ة �.ح�.د', 'email' => 'fatima.mohammad@dllni.sy'],
+        ['name' => 'خا�"د ا�"سع�Sد', 'email' => 'khalid.alsaeed@dllni.sy'],
+        ['name' => '�?�^رة ا�"ع�"�S', 'email' => 'nora.alali@dllni.sy'],
+        ['name' => 'ع�.ر حس�?', 'email' => 'omar.hassan@dllni.sy'],
     ];
 
     private const array ARABIC_LOCATIONS = [
         [
-            'location_name' => 'فيلا الحمدانية',
-            'address' => 'الحمدانية، شارع النخيل',
-            'latitude' => 33.5138,
-            'longitude' => 36.2765,
+            'location_name' => 'ف�S�"ا ا�"ح�.دا�?�Sة',
+            'address' => 'ا�"ح�.دا�?�Sة�O شارع ا�"�,دس',
+            'latitude' => 36.1795,
+            'longitude' => 37.1082,
         ],
         [
-            'location_name' => 'شقة الميدان',
-            'address' => 'الميدان، بناية ٥',
-            'latitude' => 33.5155,
-            'longitude' => 36.2801,
+            'location_name' => 'ش�,ة ا�"�.�Sدا�?',
+            'address' => 'ا�"فر�,ا�?�O ب�?ا�Sة ٥',
+            'latitude' => 36.2021,
+            'longitude' => 37.1343,
         ],
         [
-            'location_name' => 'بيت الزهراء',
-            'address' => 'الزهراء، قرب المسجد',
-            'latitude' => 33.5202,
-            'longitude' => 36.2704,
+            'location_name' => 'ب�Sت ا�"ز�?راء',
+            'address' => 'ا�"أشرف�Sة�O �,رب ا�"�.سجد',
+            'latitude' => 36.2308,
+            'longitude' => 37.1279,
         ],
         [
-            'location_name' => 'عمارة الروضة',
-            'address' => 'الروضة، الطابق الثالث',
-            'latitude' => 33.5099,
-            'longitude' => 36.2857,
+            'location_name' => 'ع�.ارة ا�"ر�^ضة',
+            'address' => 'ا�"سر�Sا�? ا�"جد�Sدة�O ا�"طاب�, ا�"ثا�"ث',
+            'latitude' => 36.2168,
+            'longitude' => 37.1317,
         ],
         [
-            'location_name' => 'فيلا النور',
-            'address' => 'النور، حي السعادة',
-            'latitude' => 33.5181,
-            'longitude' => 36.2903,
+            'location_name' => 'ف�S�"ا ا�"�?�^ر',
+            'address' => 'ا�"ج�.�S�"�Sة�O ح�S ا�"سعادة',
+            'latitude' => 36.2127,
+            'longitude' => 37.1456,
         ],
     ];
 
     private const array ARABIC_CANCELLATION_REASONS = [
-        'ظرف عائلي طارئ',
-        'تعارض مع موعد آخر',
-        'الزبون ألغى الموعد',
+        'ظرف عائ�"�S طارئ',
+        'تعارض �.ع �.�^عد آخر',
+        'ا�"زب�^�? أ�"غ�? ا�"�.�^عد',
     ];
 
     private const array ARABIC_REJECT_MESSAGES = [
-        'أعتذر، لا أستطيع تمديد الوقت اليوم.',
-        'لدي موعد آخر بعد هذه الخدمة.',
-        'نأسف، الوقت الإضافي غير متاح.',
+        'أعتذر�O �"ا أستط�Sع ت�.د�Sد ا�"�^�,ت ا�"�S�^�..',
+        '�"د�S �.�^عد آخر بعد �?ذ�? ا�"خد�.ة.',
+        '�?أسف�O ا�"�^�,ت ا�"إضاف�S غ�Sر �.تاح.',
     ];
 
     public function run(): void
     {
-        $worker = Worker::whereHas('user', fn($q) => $q->where('email', 'cleaning.worker@example.com'))->first();
+        $worker = Worker::whereHas('user', fn ($q) => $q->where('email', 'cleaning.worker@dllni.sy'))->first();
         $billingPolicy = CleaningBillingPolicy::where('is_default', true)->first();
         $cancellationPolicy = CancellationPolicy::where('module', 'cleaning')->where('is_default', true)->first();
 
@@ -84,10 +84,10 @@ final class CleaningWorkerArabicDataSeeder extends Seeder
             return;
         }
 
-        $worker->user->update(['name' => 'راما أحمد']);
+        $worker->user->update(['name' => 'را�.ا أح�.د']);
         $worker->update([
-            'first_name' => 'راما',
-            'bio' => 'عاملة تنظيف ذات خبرة للتجارب داخل التطبيق.',
+            'first_name' => 'را�.ا',
+            'bio' => 'عا�.�"ة ت�?ظ�Sف ذات خبرة �"�"تجارب داخ�" ا�"تطب�S�,.',
             'average_rating' => 4.8,
             'total_completed_jobs' => 120,
             'trust_score' => 85,
@@ -96,9 +96,9 @@ final class CleaningWorkerArabicDataSeeder extends Seeder
             'open_disputes_count' => 1,
             'is_active' => true,
             'is_suspended' => false,
-            'home_address' => 'دمشق',
-            'home_latitude' => 33.5138,
-            'home_longitude' => 36.2765,
+            'home_address' => 'ح�"ب - ا�"ح�.دا�?�Sة',
+            'home_latitude' => 36.1795,
+            'home_longitude' => 37.1082,
             'default_working_hours' => [
                 'sunday' => ['available' => true, 'data' => [['09:00' => '17:00']]],
                 'monday' => ['available' => true, 'data' => [['09:00' => '17:00']]],
@@ -113,7 +113,7 @@ final class CleaningWorkerArabicDataSeeder extends Seeder
         SeederMedia::ensureSingleMedia(
             $worker,
             'avatar',
-            "https://picsum.photos/seed/cleaning-worker-{$worker->id}-avatar/512/512",
+            'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=512&q=80',
             "cleaning-worker-{$worker->id}-avatar"
         );
 
@@ -121,7 +121,7 @@ final class CleaningWorkerArabicDataSeeder extends Seeder
             SeederMedia::ensureSingleMedia(
                 $worker->user,
                 'primary-image',
-                "https://picsum.photos/seed/cleaning-worker-user-{$worker->user->id}-primary/600/600",
+                'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=600&q=80',
                 "cleaning-worker-user-{$worker->user->id}-primary"
             );
         }
@@ -157,7 +157,7 @@ final class CleaningWorkerArabicDataSeeder extends Seeder
                 $arrivedAt = $scheduledDate->copy()->setTime(9, 50);
             }
 
-            $bookingNumber = 'CLN-AR-' . mb_str_pad((string) ($index + 1), 4, '0', STR_PAD_LEFT);
+            $bookingNumber = 'CLN-AR-'.mb_str_pad((string) ($index + 1), 4, '0', STR_PAD_LEFT);
             if (CleaningBooking::where('booking_number', $bookingNumber)->exists()) {
                 continue;
             }
@@ -204,7 +204,7 @@ final class CleaningWorkerArabicDataSeeder extends Seeder
         }
 
         $inProgressOrCompleted = collect($bookings)->filter(
-            fn(CleaningBooking $b) => $b->status === CleaningBookingStatus::InProgress || $b->status === CleaningBookingStatus::Completed
+            fn (CleaningBooking $b) => $b->status === CleaningBookingStatus::InProgress || $b->status === CleaningBookingStatus::Completed
         );
 
         foreach ($inProgressOrCompleted->take(3) as $idx => $booking) {
@@ -391,7 +391,7 @@ final class CleaningWorkerArabicDataSeeder extends Seeder
         }
 
         $completedForDispute = collect($bookings)->first(
-            fn(CleaningBooking $b) => $b->status === CleaningBookingStatus::Completed
+            fn (CleaningBooking $b) => $b->status === CleaningBookingStatus::Completed
         );
 
         if ($completedForDispute) {
@@ -414,14 +414,14 @@ final class CleaningWorkerArabicDataSeeder extends Seeder
                     'dispute_id' => $dispute->id,
                     'sender_id' => $customerUser?->id ?? $worker->user_id,
                     'sender_type' => $customerUser ? 'customer' : 'worker',
-                    'body' => 'الخدمة لم تكن بالمستوى المتوقع، يرجى المساعدة في حل المشكلة.',
+                    'body' => 'ا�"خد�.ة �"�. ت�f�? با�"�.ست�^�? ا�"�.ت�^�,ع�O �Sرج�? ا�"�.ساعدة ف�S ح�" ا�"�.ش�f�"ة.',
                 ]);
             }
 
             SeederMedia::ensureSingleMedia(
                 $dispute,
                 'images',
-                "https://picsum.photos/seed/cleaning-dispute-{$dispute->id}-image/1200/900",
+                'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1200&q=80',
                 "cleaning-dispute-{$dispute->id}-image"
             );
         }
@@ -438,7 +438,7 @@ final class CleaningWorkerArabicDataSeeder extends Seeder
                 ['email' => $data['email']],
                 [
                     'name' => $data['name'],
-                    'phone' => '+9639' . mb_str_pad((string) fake()->unique()->numberBetween(1000000, 9999999), 7, '0'),
+                    'phone' => '+9639'.mb_str_pad((string) fake()->unique()->numberBetween(1000000, 9999999), 7, '0'),
                     'password' => bcrypt('password'),
                     'email_verified_at' => now(),
                 ]
@@ -447,7 +447,7 @@ final class CleaningWorkerArabicDataSeeder extends Seeder
             SeederMedia::ensureSingleMedia(
                 $user,
                 'primary-image',
-                "https://picsum.photos/seed/cleaning-customer-{$user->id}-primary/600/600",
+                'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?auto=format&fit=crop&w=600&q=80',
                 "cleaning-customer-{$user->id}-primary"
             );
 

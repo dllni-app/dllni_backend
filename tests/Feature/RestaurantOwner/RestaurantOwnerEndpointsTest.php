@@ -64,6 +64,20 @@ it('returns performance dashboard payload', function () {
     ]);
 });
 
+it('returns owner overview with today total sales KPI', function () {
+    Order::factory()->create([
+        'restaurant_id' => $this->restaurant->id,
+        'status' => OrderStatus::Completed->value,
+        'total_amount' => 120.50,
+        'created_at' => now(),
+    ]);
+
+    $response = $this->getJson('/api/v1/restaurant-owner/dashboard/overview');
+
+    $response->assertOk();
+    $response->assertJsonPath('kpis.todayTotalSales', 120.5);
+});
+
 it('adds order item and recalculates totals only for editable statuses', function () {
     $category = Category::factory()->create(['restaurant_id' => $this->restaurant->id]);
     $product = Product::factory()->create([

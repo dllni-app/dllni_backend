@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 declare(strict_types=1);
 
@@ -18,13 +18,13 @@ final class SmOrderSeeder extends Seeder
     public function run(): void
     {
         $customerId = DB::table('users')
-            ->where('email', 'supermarket.customer@example.com')
+            ->where('email', 'supermarket.customer@dllni.sy')
             ->value('id');
 
         if ($customerId === null) {
             $customerId = DB::table('users')->insertGetId([
-                'name' => 'عميل السوبرماركت',
-                'email' => 'supermarket.customer@example.com',
+                'name' => 'ع�.�S�" ا�"س�^بر�.ار�fت',
+                'email' => 'supermarket.customer@dllni.sy',
                 'password' => bcrypt('password'),
                 'email_verified_at' => now(),
                 'created_at' => now(),
@@ -132,7 +132,7 @@ final class SmOrderSeeder extends Seeder
                         'discount_amount' => 0,
                         'service_fee' => $serviceFee,
                         'total_amount' => $totalAmount,
-                        'special_instructions' => $i % 4 === 0 ? 'يرجى تجهيز الطلب بدون أكياس بلاستيك' : null,
+                        'special_instructions' => $i % 4 === 0 ? '�Sرج�? تج�?�Sز ا�"ط�"ب بد�^�? أ�f�Sاس ب�"است�S�f' : null,
                         'cancelled_at' => $cancelledAt,
                         'cancellation_reason' => $cancellationReason,
                     ]
@@ -154,3 +154,5 @@ final class SmOrderSeeder extends Seeder
         }
     }
 }
+
+
