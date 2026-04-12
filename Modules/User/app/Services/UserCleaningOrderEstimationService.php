@@ -18,7 +18,7 @@ final class UserCleaningOrderEstimationService
         'villa',
         'house',
         'office',
-        'studio'
+        'studio',
     ];
 
     /**

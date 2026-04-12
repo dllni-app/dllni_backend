@@ -8,7 +8,6 @@ use App\Models\CleaningFinancialSetting;
 use App\Models\WorkerZone;
 use BackedEnum;
 use Filament\Pages\Page;
-use UnitEnum;
 
 final class GeographicCoverage extends Page
 {
@@ -20,11 +19,14 @@ final class GeographicCoverage extends Page
 
     protected static ?string $title = 'التغطية حسب المنطقة';
 
-    protected static string|UnitEnum|null $navigationGroup = 'قسم التنظيف';
+    protected static ?int $navigationSort = 26;
 
-    protected static ?int $navigationSort = 6;
+    protected static bool $shouldRegisterNavigation = true;
 
-    protected static bool $shouldRegisterNavigation = false;
+    public static function getNavigationGroup(): ?string
+    {
+        return __('cleaning_admin.nav_groups.settings');
+    }
 
     public static function getNavigationTooltip(): ?string
     {

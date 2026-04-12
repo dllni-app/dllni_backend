@@ -173,7 +173,7 @@ final class User extends Authenticatable implements HasMedia
 
     public function canAccessPanel(Panel $panel): bool
     {
-        return $this->roles()->exists();
+        return $this->hasAnyRole(['admin', 'Super Admin']);
     }
 
     public function registerMediaCollections(): void

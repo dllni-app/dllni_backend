@@ -16,7 +16,10 @@ final class SmStoreForm
             ->components([
                 Toggle::make('is_active')->label(__('supermarket_admin.form.is_active'))->default(true),
                 Toggle::make('is_featured')->label(__('supermarket_admin.form.is_featured'))->default(false),
-                DateTimePicker::make('suspension_until')->label(__('supermarket_admin.form.suspension_until'))->nullable(),
+                DateTimePicker::make('suspension_until')
+                    ->label(__('supermarket_admin.form.suspension_until'))
+                    ->nullable()
+                    ->rules(['nullable', 'date', 'after:now']),
             ]);
     }
 }

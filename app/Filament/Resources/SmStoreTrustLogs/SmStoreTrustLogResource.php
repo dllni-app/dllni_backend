@@ -28,6 +28,8 @@ final class SmStoreTrustLogResource extends Resource
 
     protected static ?int $navigationSort = 4;
 
+    protected static bool $shouldRegisterNavigation = false;
+
     public static function getNavigationLabel(): string
     {
         return __('supermarket_admin.trust_logs');

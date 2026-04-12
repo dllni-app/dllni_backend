@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 return [
     'nav_group' => 'قسم التنظيف',
+    'nav_groups' => [
+        'operations' => 'عمليات التنظيف',
+        'settings' => 'إعدادات التنظيف',
+    ],
 
     'overview' => [
         'title' => 'مركز القيادة المباشر',

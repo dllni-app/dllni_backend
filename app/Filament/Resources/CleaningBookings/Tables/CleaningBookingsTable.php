@@ -6,6 +6,7 @@ namespace App\Filament\Resources\CleaningBookings\Tables;
 
 use App\Models\Worker;
 use Filament\Actions\Action;
+use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
@@ -32,7 +33,7 @@ final class CleaningBookingsTable
                     ->label(__('cleaning_admin.booking.fields.status'))
                     ->description(__('cleaning_admin.column_descriptions.status'))
                     ->badge()
-                    ->formatStateUsing(fn ($state) => $state?->label()),
+                    ->formatStateUsing(fn($state) => $state?->label()),
                 TextColumn::make('customer.name')
                     ->label(__('cleaning_admin.booking.fields.customer'))
                     ->description(__('cleaning_admin.column_descriptions.customer'))
@@ -62,41 +63,75 @@ final class CleaningBookingsTable
             ->filters([
                 SelectFilter::make('status')
                     ->label('الحالة')
-                    ->options(collect(CleaningBookingStatus::cases())->mapWithKeys(fn ($c) => [$c->value => $c->label()])->all()),
+                    ->options(collect(CleaningBookingStatus::cases())->mapWithKeys(fn($c) => [$c->value => $c->label()])->all()),
                 Filter::make('has_dispute')
                     ->label('يحتوي على نزاع')
-                    ->query(fn (Builder $query): Builder => $query->whereHas('disputes')),
+                    ->query(fn(Builder $query): Builder => $query->whereHas('disputes')),
                 Filter::make('scheduled_today')
                     ->label('اليوم فقط')
-                    ->query(fn (Builder $query): Builder => $query->whereDate('scheduled_date', today())),
+                    ->query(fn(Builder $query): Builder => $query->whereDate('scheduled_date', today())),
             ])
             ->recordActions([
                 Action::make('assign_worker')
                     ->label('تعيين عامل')
                     ->icon('heroicon-o-user-plus')
-                    ->visible(fn (CleaningBooking $record) => $record->status === CleaningBookingStatus::Pending)
+                    ->visible(fn(CleaningBooking $record) => $record->status === CleaningBookingStatus::Pending)
                     ->form([
                         Select::make('worker_id')
                             ->label('العامل')
-                            ->options(Worker::query()->where('is_active', true)->get()->mapWithKeys(fn ($w) => [$w->id => $w->first_name.' ('.$w->user?->phone.')']))
+                            ->options(Worker::query()->where('is_active', true)->get()->mapWithKeys(fn($w) => [$w->id => $w->first_name . ' (' . $w->user?->phone . ')']))
                             ->searchable()
                             ->required(),
                     ])
                     ->action(function (CleaningBooking $record, array $data): void {
-                        $record->update(['worker_id' => $data['worker_id'], 'status' => CleaningBookingStatus::WorkerAssigned]);
+                        $record->update([
+                            'worker_id' => $data['worker_id'],
+                            'status' => CleaningBookingStatus::WorkerAssigned,
+                            'cancelled_at' => null,
+                            'cancellation_reason' => null,
+                        ]);
                         Notification::make()->title('تم تعيين العامل')->success()->send();
+                    }),
+                Action::make('start_work')
+                    ->label('بدء العمل')
+                    ->icon('heroicon-o-play')
+                    ->color('info')
+                    ->visible(fn(CleaningBooking $record): bool => $record->status === CleaningBookingStatus::WorkerAssigned)
+                    ->requiresConfirmation()
+                    ->action(function (CleaningBooking $record): void {
+                        $record->update([
+                            'status' => CleaningBookingStatus::InProgress,
+                            'work_started_at' => $record->work_started_at ?? now(),
+                        ]);
+
+                        Notification::make()->title('تم بدء العمل')->success()->send();
+                    }),
+                Action::make('complete')
+                    ->label('إنهاء')
+                    ->icon('heroicon-o-check-circle')
+                    ->color('success')
+                    ->visible(fn(CleaningBooking $record): bool => $record->status === CleaningBookingStatus::InProgress)
+                    ->requiresConfirmation()
+                    ->action(function (CleaningBooking $record): void {
+                        $record->update([
+                            'status' => CleaningBookingStatus::Completed,
+                            'work_finished_at' => now(),
+                        ]);
+
+                        Notification::make()->title('تم إنهاء الحجز')->success()->send();
                     }),
                 Action::make('cancel')
                     ->label('إلغاء')
                     ->color('danger')
                     ->icon('heroicon-o-x-circle')
-                    ->visible(fn (CleaningBooking $record) => ! in_array($record->status, [CleaningBookingStatus::Completed, CleaningBookingStatus::Cancelled], true))
+                    ->visible(fn(CleaningBooking $record) => ! in_array($record->status, [CleaningBookingStatus::Completed, CleaningBookingStatus::Cancelled], true))
                     ->requiresConfirmation()
                     ->modalHeading('إلغاء الحجز')
                     ->action(function (CleaningBooking $record): void {
                         $record->update(['status' => CleaningBookingStatus::Cancelled, 'cancelled_at' => now()]);
                         Notification::make()->title('تم إلغاء الحجز')->success()->send();
                     }),
+                EditAction::make(),
                 ViewAction::make(),
             ]);
     }

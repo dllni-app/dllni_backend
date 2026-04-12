@@ -26,6 +26,8 @@ final class OrderResource extends Resource
 
     protected static string|UnitEnum|null $navigationGroup = 'قسم المطاعم';
 
+    protected static ?int $navigationSort = 3;
+
     public static function getNavigationTooltip(): ?string
     {
         return 'مراقبة دورة حياة الطلبات وحالاتها.';

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Filament\Pages;
 
+use App\Filament\Resources\Orders\OrderResource;
+use App\Filament\Resources\Restaurants\RestaurantResource;
 use BackedEnum;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
@@ -20,7 +22,7 @@ final class RestaurantStatsPage extends Page
 
     protected static ?string $navigationLabel = 'الإحصائيات اليومية والشهرية';
 
-    protected static ?int $navigationSort = 7;
+    protected static ?int $navigationSort = 6;
 
     protected string $view = 'filament.cleaning-admin.pages.restaurant-stats';
 
@@ -49,9 +51,28 @@ final class RestaurantStatsPage extends Page
             ->limit(100)
             ->get();
 
+        $totalOrders = (int) $dailyStats->sum('orders_count');
+        $totalRevenue = (float) $dailyStats->sum(fn ($row) => (float) ($row->revenue ?? 0));
+        $averageOrderValue = (float) $dailyStats->avg(fn ($row) => (float) ($row->average_order_value ?? 0));
+        $trackedRestaurants = (int) $dailyStats
+            ->pluck('restaurant_id')
+            ->filter()
+            ->unique()
+            ->count();
+
         return [
             'dailyStats' => $dailyStats,
             'monthlyStats' => $monthlyStats,
+            'summary' => [
+                'totalOrders' => $totalOrders,
+                'totalRevenue' => round($totalRevenue, 2),
+                'averageOrderValue' => round($averageOrderValue, 2),
+                'trackedRestaurants' => $trackedRestaurants,
+            ],
+            'actionUrls' => [
+                'restaurants' => RestaurantResource::getUrl('index'),
+                'orders' => OrderResource::getUrl('index'),
+            ],
         ];
     }
 }

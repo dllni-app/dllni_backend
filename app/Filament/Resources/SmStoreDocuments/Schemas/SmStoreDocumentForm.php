@@ -14,7 +14,7 @@ final class SmStoreDocumentForm
     public static function configure(Schema $schema): Schema
     {
         $documentTypeOptions = collect(SmDocumentType::cases())->mapWithKeys(
-            fn (SmDocumentType $c) => [$c->value => __('supermarket_admin.enums.document_type.'.$c->value)]
+            fn(SmDocumentType $c) => [$c->value => __('supermarket_admin.enums.document_type.' . $c->value)]
         )->all();
 
         $verificationOptions = [
@@ -38,7 +38,10 @@ final class SmStoreDocumentForm
                 Textarea::make('rejection_reason')
                     ->label(__('supermarket_admin.form.rejection_reason'))
                     ->rows(3)
-                    ->visible(fn ($get) => $get('verification_status') === 'rejected'),
+                    ->required(fn($get) => $get('verification_status') === 'rejected')
+                    ->dehydrated(fn($get) => $get('verification_status') === 'rejected')
+                    ->maxLength(1000)
+                    ->visible(fn($get) => $get('verification_status') === 'rejected'),
             ]);
     }
 }

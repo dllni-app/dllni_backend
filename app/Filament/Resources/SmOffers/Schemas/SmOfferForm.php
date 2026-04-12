@@ -16,7 +16,10 @@ final class SmOfferForm
             ->components([
                 Toggle::make('is_active')->label(__('supermarket_admin.form.is_active'))->default(true),
                 DateTimePicker::make('starts_at')->label(__('supermarket_admin.form.starts_at'))->nullable(),
-                DateTimePicker::make('ends_at')->label(__('supermarket_admin.form.ends_at'))->nullable(),
+                DateTimePicker::make('ends_at')
+                    ->label(__('supermarket_admin.form.ends_at'))
+                    ->nullable()
+                    ->rules(['nullable', 'date', 'after_or_equal:starts_at']),
             ]);
     }
 }

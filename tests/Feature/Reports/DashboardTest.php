@@ -6,10 +6,21 @@ use App\Models\User;
 use Database\Factories\SmOrderFactory;
 use Database\Factories\SmStoreFactory;
 use Laravel\Sanctum\Sanctum;
+use Spatie\Permission\Models\Role;
 
 beforeEach(function (): void {
+    $guardName = (string) config('auth.defaults.guard', 'web');
+    Role::findOrCreate('admin', $guardName);
+
     $user = User::factory()->create();
+    $user->assignRole('admin');
     Sanctum::actingAs($user);
+});
+
+it('forbids non-admin users from dashboard endpoint', function (): void {
+    Sanctum::actingAs(User::factory()->create());
+
+    $this->getJson('/api/v1/sm-dashboard')->assertForbidden();
 });
 
 it('returns dashboard data', function (): void {

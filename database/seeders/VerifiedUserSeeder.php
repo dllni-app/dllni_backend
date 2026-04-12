@@ -15,17 +15,23 @@ final class VerifiedUserSeeder extends Seeder
     {
         Model::unguard();
 
-        $user = User::updateOrCreate(
-            ['email' => 'user@dllni.sy'],
-            [
-                'name' => 'User',
-                'phone' => '+963944000222',
-                'email' => 'user@dllni.sy',
-                'password' => bcrypt('secret123'),
-                'phone_verified_at' => now(),
-                'email_verified_at' => now(),
-            ],
-        );
+        $user = User::query()
+            ->where('phone', '+963944000222')
+            ->orWhere('email', 'user@dllni.sy')
+            ->first();
+
+        if ($user === null) {
+            $user = new User();
+        }
+
+        $user->forceFill([
+            'name' => 'User',
+            'phone' => '+963944000222',
+            'email' => 'user@dllni.sy',
+            'password' => bcrypt('secret123'),
+            'phone_verified_at' => now(),
+            'email_verified_at' => now(),
+        ])->save();
 
         SeederMedia::ensureSingleMedia(
             $user,

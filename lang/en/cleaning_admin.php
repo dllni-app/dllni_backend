@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 return [
     'nav_group' => 'Cleaning Section',
+    'nav_groups' => [
+        'operations' => 'Cleaning Operations',
+        'settings' => 'Cleaning Settings',
+    ],
 
     'overview' => [
         'title' => 'Live Command Center',

@@ -24,11 +24,11 @@ final class TravelCostConfigResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTruck;
 
-    protected static ?int $navigationSort = 12;
+    protected static ?int $navigationSort = 24;
 
     public static function getNavigationGroup(): ?string
     {
-        return __('cleaning_admin.nav_group');
+        return __('cleaning_admin.nav_groups.settings');
     }
 
     public static function getNavigationLabel(): string

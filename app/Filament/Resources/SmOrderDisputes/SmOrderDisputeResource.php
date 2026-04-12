@@ -31,6 +31,8 @@ final class SmOrderDisputeResource extends Resource
 
     protected static ?int $navigationSort = 9;
 
+    protected static bool $shouldRegisterNavigation = false;
+
     public static function getNavigationLabel(): string
     {
         return __('supermarket_admin.disputes');

@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Filament\Pages;
 
+use App\Filament\Resources\Orders\OrderResource;
+use App\Filament\Resources\RestaurantDisputes\RestaurantOrderDisputeResource;
+use App\Filament\Resources\Restaurants\RestaurantResource;
 use BackedEnum;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
@@ -20,7 +23,7 @@ final class RestaurantInventoryMonitoring extends Page
 
     protected static ?string $navigationLabel = 'مراقبة المخزون والتنبيهات';
 
-    protected static ?int $navigationSort = 6;
+    protected static ?int $navigationSort = 5;
 
     protected string $view = 'filament.cleaning-admin.pages.restaurant-inventory-monitoring';
 
@@ -52,6 +55,11 @@ final class RestaurantInventoryMonitoring extends Page
         return [
             'lowStockProducts' => $lowStockProducts,
             'recentInventoryLogs' => $recentInventoryLogs,
+            'actionUrls' => [
+                'restaurants' => RestaurantResource::getUrl('index'),
+                'orders' => OrderResource::getUrl('index'),
+                'disputes' => RestaurantOrderDisputeResource::getUrl('index'),
+            ],
         ];
     }
 }

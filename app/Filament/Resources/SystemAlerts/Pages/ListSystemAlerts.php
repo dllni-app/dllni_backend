@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Filament\Resources\SystemAlerts\Pages;
 
 use App\Filament\Resources\SystemAlerts\SystemAlertResource;
-use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
 final class ListSystemAlerts extends ListRecords
@@ -19,8 +18,6 @@ final class ListSystemAlerts extends ListRecords
 
     protected function getHeaderActions(): array
     {
-        return [
-            CreateAction::make(),
-        ];
+        return [];
     }
 }

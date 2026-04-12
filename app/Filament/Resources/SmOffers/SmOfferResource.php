@@ -30,6 +30,8 @@ final class SmOfferResource extends Resource
 
     protected static ?int $navigationSort = 6;
 
+    protected static bool $shouldRegisterNavigation = false;
+
     public static function getNavigationLabel(): string
     {
         return __('supermarket_admin.offers');

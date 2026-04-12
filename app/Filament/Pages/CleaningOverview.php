@@ -26,7 +26,7 @@ final class CleaningOverview extends Page
 
     public static function getNavigationGroup(): ?string
     {
-        return __('cleaning_admin.nav_group');
+        return __('cleaning_admin.nav_groups.operations');
     }
 
     public static function getNavigationLabel(): string

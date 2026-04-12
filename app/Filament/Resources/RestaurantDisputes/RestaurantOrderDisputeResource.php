@@ -28,6 +28,8 @@ final class RestaurantOrderDisputeResource extends Resource
 
     protected static string|UnitEnum|null $navigationGroup = 'قسم المطاعم';
 
+    protected static ?int $navigationSort = 4;
+
     public static function getNavigationTooltip(): ?string
     {
         return 'إدارة النزاعات واتخاذ القرارات المالية وإغلاق الحالات.';

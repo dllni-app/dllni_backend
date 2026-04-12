@@ -35,6 +35,8 @@ final class RestaurantResource extends Resource
 
     protected static string|UnitEnum|null $navigationGroup = 'قسم المطاعم';
 
+    protected static ?int $navigationSort = 2;
+
     public static function getNavigationTooltip(): ?string
     {
         return 'إدارة ملف المطعم ونقاط الثقة والتقييمات ومؤشرات الأداء.';

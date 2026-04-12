@@ -14,7 +14,7 @@ final class SmOrderDisputeForm
     public static function configure(Schema $schema): Schema
     {
         $statusOptions = collect(SmDisputeStatus::cases())->mapWithKeys(
-            fn (SmDisputeStatus $c) => [$c->value => __('supermarket_admin.enums.dispute_status.'.$c->value)]
+            fn(SmDisputeStatus $c) => [$c->value => __('supermarket_admin.enums.dispute_status.' . $c->value)]
         )->all();
 
         return $schema
@@ -26,7 +26,8 @@ final class SmOrderDisputeForm
                     ->native(false),
                 Textarea::make('resolution_notes')
                     ->label(__('supermarket_admin.form.resolution_notes'))
-                    ->rows(4),
+                    ->rows(4)
+                    ->required(fn($get) => in_array($get('status'), ['resolved', 'closed'], true)),
             ]);
     }
 }

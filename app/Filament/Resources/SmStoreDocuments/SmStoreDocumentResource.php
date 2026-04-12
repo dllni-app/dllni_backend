@@ -30,6 +30,8 @@ final class SmStoreDocumentResource extends Resource
 
     protected static ?int $navigationSort = 3;
 
+    protected static bool $shouldRegisterNavigation = false;
+
     public static function getNavigationLabel(): string
     {
         return __('supermarket_admin.store_documents');

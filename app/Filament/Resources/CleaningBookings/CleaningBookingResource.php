@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningBookings;
 
+use App\Filament\Resources\CleaningBookings\Pages\EditCleaningBooking;
 use App\Filament\Resources\CleaningBookings\Pages\ListCleaningBookings;
 use App\Filament\Resources\CleaningBookings\Pages\ViewCleaningBooking;
 use App\Filament\Resources\CleaningBookings\Schemas\CleaningBookingForm;
@@ -26,7 +27,7 @@ final class CleaningBookingResource extends Resource
 
     public static function getNavigationGroup(): ?string
     {
-        return __('cleaning_admin.nav_group');
+        return __('cleaning_admin.nav_groups.operations');
     }
 
     public static function getNavigationLabel(): string
@@ -64,6 +65,7 @@ final class CleaningBookingResource extends Resource
         return [
             'index' => ListCleaningBookings::route('/'),
             'view' => ViewCleaningBooking::route('/{record}'),
+            'edit' => EditCleaningBooking::route('/{record}/edit'),
         ];
     }
 }

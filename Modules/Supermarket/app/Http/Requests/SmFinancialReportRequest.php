@@ -10,7 +10,7 @@ final class SmFinancialReportRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        return $this->user()?->hasAnyRole(['admin', 'Super Admin']) ?? false;
     }
 
     public function rules(): array

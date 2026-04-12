@@ -24,9 +24,11 @@ final class CleaningTimeWarningResource extends Resource
 
     protected static ?int $navigationSort = 8;
 
+    protected static bool $shouldRegisterNavigation = false;
+
     public static function getNavigationGroup(): ?string
     {
-        return __('cleaning_admin.nav_group');
+        return __('cleaning_admin.nav_groups.operations');
     }
 
     public static function getNavigationLabel(): string

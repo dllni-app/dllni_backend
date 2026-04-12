@@ -329,7 +329,7 @@ final class UserAppScenarioSeeder extends Seeder
     {
         $stores = SmStore::query()
             ->where('is_active', true)
-            ->where(fn($query) => $query
+            ->where(fn ($query) => $query
                 ->whereNull('suspension_until')
                 ->orWhere('suspension_until', '<=', now()))
             ->orderBy('id')
@@ -417,7 +417,7 @@ final class UserAppScenarioSeeder extends Seeder
     {
         $store = SmStore::query()
             ->where('is_active', true)
-            ->where(fn($query) => $query
+            ->where(fn ($query) => $query
                 ->whereNull('suspension_until')
                 ->orWhere('suspension_until', '<=', now()))
             ->orderBy('id')

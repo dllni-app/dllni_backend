@@ -12,7 +12,7 @@ final class EnsureDashboardAdmin
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if (! $request->user()?->hasRole('admin')) {
+        if (! $request->user()?->hasAnyRole(['admin', 'Super Admin'])) {
             abort(403);
         }
 

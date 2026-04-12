@@ -24,11 +24,11 @@ final class CleaningBillingPolicyResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentList;
 
-    protected static ?int $navigationSort = 13;
+    protected static ?int $navigationSort = 23;
 
     public static function getNavigationGroup(): ?string
     {
-        return __('cleaning_admin.nav_group');
+        return __('cleaning_admin.nav_groups.settings');
     }
 
     public static function getNavigationLabel(): string

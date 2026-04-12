@@ -16,6 +16,8 @@ final class RestaurantTeamManagement extends Page
 
     protected static string|UnitEnum|null $navigationGroup = 'قسم المطاعم';
 
+    protected static bool $shouldRegisterNavigation = false;
+
     protected string $view = 'filament.cleaning-admin.pages.restaurant-team-management';
 
     public static function getNavigationLabel(): string

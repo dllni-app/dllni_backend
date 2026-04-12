@@ -25,11 +25,11 @@ final class CleaningServiceResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedWrenchScrewdriver;
 
-    protected static ?int $navigationSort = 10;
+    protected static ?int $navigationSort = 21;
 
     public static function getNavigationGroup(): ?string
     {
-        return __('cleaning_admin.nav_group');
+        return __('cleaning_admin.nav_groups.settings');
     }
 
     public static function getNavigationLabel(): string
