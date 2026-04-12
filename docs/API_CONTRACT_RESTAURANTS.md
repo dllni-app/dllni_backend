@@ -14,6 +14,7 @@ This is the main contract index for Restaurant module APIs implemented under:
 
 Detailed contracts:
 - Core dashboard/admin flows: [API_CONTRACT_RESTAURANTS_DASHBOARD.md](API_CONTRACT_RESTAURANTS_DASHBOARD.md)
+- Product AI (extract/generate): [API_CONTRACT_RESTAURANT_PRODUCTS_AI.md](API_CONTRACT_RESTAURANT_PRODUCTS_AI.md)
 
 ---
 

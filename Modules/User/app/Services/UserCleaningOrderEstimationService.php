@@ -48,7 +48,7 @@ final class UserCleaningOrderEstimationService
 
     /**
      * @param  array<string, mixed>  $propertyDetails
-     * @return array{address: ?string, location_name: ?string, bedrooms: int, rooms: int, bathrooms: int, living_room_size: string}
+     * @return array{address: ?string, location_name: ?string, bedrooms: int, rooms: int, bathrooms: int, kitchens: int, living_room_size: string}
      */
     public function normalizePropertyDetails(array $propertyDetails): array
     {
@@ -71,13 +71,14 @@ final class UserCleaningOrderEstimationService
             'bedrooms' => max(0, (int) Arr::get($propertyDetails, 'bedrooms', 0)),
             'rooms' => max(0, (int) Arr::get($propertyDetails, 'rooms', 0)),
             'bathrooms' => max(0, (int) Arr::get($propertyDetails, 'bathrooms', 0)),
+            'kitchens' => max(0, (int) Arr::get($propertyDetails, 'kitchens', Arr::get($propertyDetails, 'kitchen_included') ? 1 : 0)),
             'living_room_size' => $livingRoomSize,
         ];
     }
 
     /**
      * @param  array<string, mixed>  $propertyDetails
-     * @return array{propertyType: string, propertyDetails: array{bedrooms: int, rooms: int, bathrooms: int, living_room_size: string}, addressLatitude: ?float, addressLongitude: ?float, preferredWorkerId: ?int}
+     * @return array{propertyType: string, propertyDetails: array{bedrooms: int, rooms: int, bathrooms: int, kitchens: int, living_room_size: string}, addressLatitude: ?float, addressLongitude: ?float, preferredWorkerId: ?int}
      */
     public function pricingSnapshotInput(
         string $propertyType,
@@ -94,6 +95,7 @@ final class UserCleaningOrderEstimationService
                 'bedrooms' => $normalizedDetails['bedrooms'],
                 'rooms' => $normalizedDetails['rooms'],
                 'bathrooms' => $normalizedDetails['bathrooms'],
+                'kitchens' => $normalizedDetails['kitchens'],
                 'living_room_size' => $normalizedDetails['living_room_size'],
             ],
             'addressLatitude' => $this->normalizeCoordinate($addressLatitude),
@@ -126,15 +128,17 @@ final class UserCleaningOrderEstimationService
         $bedrooms = $normalizedDetails['bedrooms'];
         $rooms = $normalizedDetails['rooms'];
         $bathrooms = $normalizedDetails['bathrooms'];
+        $kitchens = $normalizedDetails['kitchens'];
         $livingRoomSize = $normalizedDetails['living_room_size'];
 
         $baseSqm = $this->baseSqmByPropertyType($normalizedPropertyType);
         $livingRoomSqm = $this->livingRoomSqmAdjustment($livingRoomSize);
 
-        $estimatedSqm = max(25.0, $baseSqm + ($bedrooms * 18.0) + ($rooms * 8.0) + ($bathrooms * 6.0) + $livingRoomSqm);
+        $estimatedSqm = max(25.0, $baseSqm + ($bedrooms * 18.0) + ($rooms * 8.0) + ($bathrooms * 6.0) + ($kitchens * 10.0) + $livingRoomSqm);
 
         $rawHours = ($estimatedSqm / 35.0)
             + ($bathrooms * 0.25)
+            + ($kitchens * 0.20)
             + ($livingRoomSize === 'large' ? 0.25 : 0.0)
             + ($livingRoomSize === 'very_large' ? 0.50 : 0.0);
 

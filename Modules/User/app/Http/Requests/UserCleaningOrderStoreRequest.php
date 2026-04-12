@@ -22,12 +22,13 @@ final class UserCleaningOrderStoreRequest extends FormRequest
     {
         return [
             'propertyType' => ['required', 'string', Rule::in(UserCleaningOrderEstimationService::PROPERTY_TYPES)],
-            'propertyDetails' => ['required', 'array:address,location_name,bedrooms,rooms,bathrooms,living_room_size'],
+            'propertyDetails' => ['required', 'array:address,location_name,bedrooms,rooms,bathrooms,kitchens,living_room_size'],
             'propertyDetails.address' => ['required', 'string', 'max:500'],
             'propertyDetails.location_name' => ['nullable', 'string', 'max:255'],
             'propertyDetails.bedrooms' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.rooms' => ['nullable', 'integer', 'min:0', 'max:30'],
             'propertyDetails.bathrooms' => ['nullable', 'integer', 'min:0', 'max:20'],
+            'propertyDetails.kitchens' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.living_room_size' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::LIVING_ROOM_SIZES)],
             'scheduledDate' => ['required', 'date', 'after_or_equal:today'],
             'scheduledTime' => ['required', 'date_format:H:i'],

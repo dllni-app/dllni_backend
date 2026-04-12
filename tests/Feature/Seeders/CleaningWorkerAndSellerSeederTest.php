@@ -14,7 +14,7 @@ beforeEach(function (): void {
 });
 
 it('creates cleaning worker user with Worker record and module type', function (): void {
-    $user = User::where('email', 'cleaning.worker@example.com')->first();
+    $user = User::where('email', 'cleaning.worker@dllni.sy')->first();
 
     expect($user)->not->toBeNull();
     expect($user->name)->toBe('Cleaning Worker');
@@ -28,7 +28,7 @@ it('creates cleaning worker user with Worker record and module type', function (
 });
 
 it('creates restaurant seller user with linked Restaurant and module type', function (): void {
-    $user = User::where('email', 'seller@example.com')->first();
+    $user = User::where('email', 'seller@dllni.sy')->first();
 
     expect($user)->not->toBeNull();
     expect($user->name)->toBe('Restaurant Seller');
@@ -42,7 +42,7 @@ it('creates restaurant seller user with linked Restaurant and module type', func
 });
 
 it('creates supermarket seller user with linked store and module type', function (): void {
-    $user = User::where('email', 'supermarket.seller@example.com')->first();
+    $user = User::where('email', 'supermarket.seller@dllni.sy')->first();
 
     expect($user)->not->toBeNull();
     expect($user->name)->toBe('Supermarket Seller');
@@ -58,7 +58,7 @@ it('creates supermarket seller user with linked store and module type', function
 it('is idempotent when run twice', function (): void {
     $this->seed(CleaningWorkerAndSellerSeeder::class);
 
-    expect(User::where('email', 'cleaning.worker@example.com')->count())->toBe(1);
-    expect(User::where('email', 'seller@example.com')->count())->toBe(1);
-    expect(User::where('email', 'supermarket.seller@example.com')->count())->toBe(1);
+    expect(User::where('email', 'cleaning.worker@dllni.sy')->count())->toBe(1);
+    expect(User::where('email', 'seller@dllni.sy')->count())->toBe(1);
+    expect(User::where('email', 'supermarket.seller@dllni.sy')->count())->toBe(1);
 });

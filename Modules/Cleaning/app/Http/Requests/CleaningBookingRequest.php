@@ -25,6 +25,7 @@ final class CleaningBookingRequest extends FormRequest
             'status' => 'nullable|string|in:pending,worker_assigned,in_progress,completed,cancelled',
             'propertyType' => 'nullable|string|max:255',
             'propertyDetails' => 'nullable|array',
+            'propertyDetails.kitchens' => 'nullable|integer|min:0|max:20',
             'estimatedSqm' => 'nullable|numeric',
             'estimatedHours' => 'nullable|numeric',
             'scheduledDate' => 'nullable|date',

@@ -16,6 +16,8 @@ final class CleaningBookingResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $normalizedPropertyDetails = $this->normalizedPropertyDetails();
+
         return [
             'id' => $this->id,
             'customerId' => $this->customer_id,
@@ -26,11 +28,12 @@ final class CleaningBookingResource extends JsonResource
             'bookingNumber' => $this->booking_number,
             'status' => $this->status?->value ?? $this->status,
             'propertyType' => $this->property_type,
-            'propertyDetails' => $this->property_details,
+            'propertyDetails' => $normalizedPropertyDetails,
             'addressLatitude' => $this->address_latitude !== null ? (float) $this->address_latitude : null,
             'addressLongitude' => $this->address_longitude !== null ? (float) $this->address_longitude : null,
-            'locationName' => Arr::get($this->property_details, 'location_name') ?? Arr::get($this->property_details, 'address') ?? $this->property_type,
-            'numberOfRooms' => Arr::get($this->property_details, 'bedrooms') ?? Arr::get($this->property_details, 'rooms'),
+            'locationName' => Arr::get($normalizedPropertyDetails, 'location_name') ?? Arr::get($normalizedPropertyDetails, 'address') ?? $this->property_type,
+            'numberOfRooms' => Arr::get($normalizedPropertyDetails, 'bedrooms') ?? Arr::get($normalizedPropertyDetails, 'rooms'),
+            'numberOfKitchens' => Arr::get($normalizedPropertyDetails, 'kitchens', 0),
             'estimatedSqm' => $this->estimated_sqm,
             'estimatedHours' => $this->estimated_hours,
             'scheduledDate' => $this->scheduled_date?->format('Y-m-d'),
@@ -84,5 +87,20 @@ final class CleaningBookingResource extends JsonResource
             'createdAt' => $this->created_at->toDateTimeString(),
             'updatedAt' => $this->updated_at->toDateTimeString(),
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function normalizedPropertyDetails(): array
+    {
+        $propertyDetails = is_array($this->property_details) ? $this->property_details : [];
+
+        if (! array_key_exists('kitchens', $propertyDetails) && array_key_exists('kitchen_included', $propertyDetails)) {
+            $propertyDetails['kitchens'] = (bool) $propertyDetails['kitchen_included'] ? 1 : 0;
+            unset($propertyDetails['kitchen_included']);
+        }
+
+        return $propertyDetails;
     }
 }

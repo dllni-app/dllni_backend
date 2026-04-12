@@ -36,6 +36,7 @@ final class CleaningBookingFactory extends Factory
             'property_details' => [
                 'bedrooms' => fake()->numberBetween(1, 5),
                 'bathrooms' => fake()->numberBetween(1, 3),
+                'kitchens' => fake()->numberBetween(1, 2),
                 'living_room_size' => fake()->randomElement(['small', 'medium', 'large']),
             ],
             'estimated_sqm' => fake()->randomFloat(2, 50, 300),

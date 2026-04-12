@@ -17,7 +17,7 @@ it('returns only currently active coupons for active restaurants', function (): 
 
     $activeCoupon = PromoCode::query()->create([
         'restaurant_id' => $activeRestaurant->id,
-        'code' => 'ACTIVE-' . uniqid('', true),
+        'code' => 'ACTIVE-'.uniqid('', true),
         'discount_type' => DiscountType::Percentage->value,
         'discount_value' => 10,
         'min_order_amount' => 100,
@@ -30,7 +30,7 @@ it('returns only currently active coupons for active restaurants', function (): 
 
     PromoCode::query()->create([
         'restaurant_id' => $activeRestaurant->id,
-        'code' => 'INACTIVE-' . uniqid('', true),
+        'code' => 'INACTIVE-'.uniqid('', true),
         'discount_type' => DiscountType::Percentage->value,
         'discount_value' => 10,
         'usage_count' => 0,
@@ -39,7 +39,7 @@ it('returns only currently active coupons for active restaurants', function (): 
 
     PromoCode::query()->create([
         'restaurant_id' => $activeRestaurant->id,
-        'code' => 'SCHEDULED-' . uniqid('', true),
+        'code' => 'SCHEDULED-'.uniqid('', true),
         'discount_type' => DiscountType::FixedAmount->value,
         'discount_value' => 20,
         'usage_count' => 0,
@@ -49,7 +49,7 @@ it('returns only currently active coupons for active restaurants', function (): 
 
     PromoCode::query()->create([
         'restaurant_id' => $activeRestaurant->id,
-        'code' => 'EXPIRED-' . uniqid('', true),
+        'code' => 'EXPIRED-'.uniqid('', true),
         'discount_type' => DiscountType::FixedAmount->value,
         'discount_value' => 15,
         'usage_count' => 0,
@@ -59,7 +59,7 @@ it('returns only currently active coupons for active restaurants', function (): 
 
     PromoCode::query()->create([
         'restaurant_id' => $activeRestaurant->id,
-        'code' => 'USED-UP-' . uniqid('', true),
+        'code' => 'USED-UP-'.uniqid('', true),
         'discount_type' => DiscountType::FixedAmount->value,
         'discount_value' => 15,
         'usage_limit' => 5,
@@ -69,7 +69,7 @@ it('returns only currently active coupons for active restaurants', function (): 
 
     PromoCode::query()->create([
         'restaurant_id' => $inactiveRestaurant->id,
-        'code' => 'INACTIVE-RESTAURANT-' . uniqid('', true),
+        'code' => 'INACTIVE-RESTAURANT-'.uniqid('', true),
         'discount_type' => DiscountType::Percentage->value,
         'discount_value' => 5,
         'usage_count' => 0,

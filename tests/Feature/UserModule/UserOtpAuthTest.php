@@ -40,7 +40,7 @@ it('registers and verifies account via otp', function (): void {
     expect(User::query()->where('phone', $phone)->value('phone_verified_at'))->not->toBeNull();
 });
 
-//it('logs in using otp flow and returns token on verify', function (): void {
+// it('logs in using otp flow and returns token on verify', function (): void {
 //    // Arrange
 //    $phone = '+963944000222';
 //    $user = User::factory()->create([
@@ -73,7 +73,7 @@ it('registers and verifies account via otp', function (): void {
 //        'user' => ['id', 'name', 'email', 'phone'],
 //        'token',
 //    ]);
-//});
+// });
 
 it('resets password using otp flow', function (): void {
     // Arrange

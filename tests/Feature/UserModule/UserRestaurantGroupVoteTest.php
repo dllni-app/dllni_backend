@@ -24,7 +24,7 @@ it('returns vote suggestions payload', function (): void {
 it('filters suggestions by cuisine type', function (): void {
     $cuisine = CuisineType::query()->create([
         'name' => 'Italian Test',
-        'slug' => 'italian-test-' . uniqid(),
+        'slug' => 'italian-test-'.uniqid(),
     ]);
 
     $restaurantMatch = Restaurant::factory()->create(['is_active' => true]);
@@ -44,7 +44,7 @@ it('filters suggestions by cuisine type', function (): void {
         'is_available' => true,
     ]);
 
-    $response = $this->getJson('/api/v1/user/restaurants/votes/suggestions?cuisineTypeId=' . $cuisine->id);
+    $response = $this->getJson('/api/v1/user/restaurants/votes/suggestions?cuisineTypeId='.$cuisine->id);
 
     $response->assertSuccessful();
     $ids = collect($response->json('suggestions'))->pluck('id')->all();
@@ -108,18 +108,18 @@ it('shows vote without authentication', function (): void {
 
     $optionAId = (int) $vote->options->firstWhere('label', 'A')->id;
 
-    $show = $this->getJson('/api/v1/user/restaurants/votes/' . $vote->id);
+    $show = $this->getJson('/api/v1/user/restaurants/votes/'.$vote->id);
     $show->assertSuccessful()->assertJsonPath('data.vote.id', $vote->id);
     expect($show->json('data.vote.isCreator'))->toBeFalse();
 
     $voter = User::factory()->create();
     Sanctum::actingAs($voter);
 
-    $this->postJson('/api/v1/user/restaurants/votes/' . $vote->id . '/ballots', [
+    $this->postJson('/api/v1/user/restaurants/votes/'.$vote->id.'/ballots', [
         'optionId' => $optionAId,
     ])->assertSuccessful();
 
-    $updated = collect($this->getJson('/api/v1/user/restaurants/votes/' . $vote->id)->json('data.options'));
+    $updated = collect($this->getJson('/api/v1/user/restaurants/votes/'.$vote->id)->json('data.options'));
     expect($updated->firstWhere('id', $optionAId)['voteCount'])->toBe(1);
 });
 
@@ -146,16 +146,16 @@ it('only creator can end vote early', function (): void {
 
     Sanctum::actingAs($intruder);
 
-    $this->postJson('/api/v1/user/restaurants/votes/' . $voteId . '/end')
+    $this->postJson('/api/v1/user/restaurants/votes/'.$voteId.'/end')
         ->assertUnprocessable();
 
     Sanctum::actingAs($creator);
 
-    $this->postJson('/api/v1/user/restaurants/votes/' . $voteId . '/ballots', [
+    $this->postJson('/api/v1/user/restaurants/votes/'.$voteId.'/ballots', [
         'optionId' => $optionAId,
     ])->assertSuccessful();
 
-    $end = $this->postJson('/api/v1/user/restaurants/votes/' . $voteId . '/end');
+    $end = $this->postJson('/api/v1/user/restaurants/votes/'.$voteId.'/end');
     $end->assertSuccessful()->assertJsonPath('data.vote.status', 'ended');
     expect($end->json('data.winner'))->not->toBeNull();
 });
@@ -181,7 +181,7 @@ it('finalizes expired votes on read', function (): void {
 
     $voter = User::factory()->create();
     Sanctum::actingAs($voter);
-    $this->postJson('/api/v1/user/restaurants/votes/' . $voteId . '/ballots', [
+    $this->postJson('/api/v1/user/restaurants/votes/'.$voteId.'/ballots', [
         'optionId' => $optionAId,
     ])->assertSuccessful();
 
@@ -190,7 +190,7 @@ it('finalizes expired votes on read', function (): void {
         'ends_at' => now()->subMinute(),
     ]);
 
-    $show = $this->getJson('/api/v1/user/restaurants/votes/' . $voteId);
+    $show = $this->getJson('/api/v1/user/restaurants/votes/'.$voteId);
     $show->assertSuccessful()->assertJsonPath('data.vote.status', 'ended');
     expect($show->json('data.winner.optionId'))->toBe($optionAId);
 });
@@ -219,7 +219,7 @@ it('creator can invite users and invited user can see active vote', function ():
 
     $voteId = (int) $create->json('data.vote.id');
 
-    $invite = $this->postJson('/api/v1/user/restaurants/votes/' . $voteId . '/invite', [
+    $invite = $this->postJson('/api/v1/user/restaurants/votes/'.$voteId.'/invite', [
         'userIds' => [$invitee->id],
     ]);
 
@@ -256,7 +256,7 @@ it('only creator can invite users to a vote', function (): void {
 
     Sanctum::actingAs($intruder);
 
-    $this->postJson('/api/v1/user/restaurants/votes/' . $voteId . '/invite', [
+    $this->postJson('/api/v1/user/restaurants/votes/'.$voteId.'/invite', [
         'userIds' => [$invitee->id],
     ])->assertUnprocessable();
 });
@@ -280,7 +280,7 @@ it('active votes endpoint excludes ended votes', function (): void {
 
     $voteId = (int) $create->json('data.vote.id');
 
-    $this->postJson('/api/v1/user/restaurants/votes/' . $voteId . '/end')->assertSuccessful();
+    $this->postJson('/api/v1/user/restaurants/votes/'.$voteId.'/end')->assertSuccessful();
 
     $this->getJson('/api/v1/user/restaurants/votes/active')
         ->assertSuccessful()

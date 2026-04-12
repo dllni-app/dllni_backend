@@ -66,6 +66,7 @@ final class CleaningBookingSeeder extends Seeder
                 'property_details' => [
                     'bedrooms' => 2,
                     'bathrooms' => 1,
+                    'kitchens' => 1,
                     'living_room_size' => 'medium',
                 ],
                 'estimated_sqm' => 85,

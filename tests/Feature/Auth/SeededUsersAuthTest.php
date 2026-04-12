@@ -17,7 +17,7 @@ it('user login with seeded cleaning worker phone returns user and token', functi
     ]);
 
     $response->assertOk()
-        ->assertJsonPath('user.email', 'cleaning.worker@example.com')
+        ->assertJsonPath('user.email', 'cleaning.worker@dllni.sy')
         ->assertJsonPath('user.name', 'Cleaning Worker')
         ->assertJsonPath('user.phone', '+963944100001')
         ->assertJsonStructure(['user' => ['id', 'name', 'email', 'phone'], 'token']);
@@ -31,7 +31,7 @@ it('user login with seeded seller phone returns user and token', function (): vo
     ]);
 
     $response->assertOk()
-        ->assertJsonPath('user.email', 'seller@example.com')
+        ->assertJsonPath('user.email', 'seller@dllni.sy')
         ->assertJsonPath('user.name', 'Restaurant Seller')
         ->assertJsonPath('user.phone', '+963944100002')
         ->assertJsonStructure(['user' => ['id', 'name', 'email', 'phone'], 'token']);
@@ -49,7 +49,7 @@ it('user login fails for seeded cleaning worker with wrong password', function (
 });
 
 it('seeded cleaning worker can logout with token', function (): void {
-    $user = User::where('email', 'cleaning.worker@example.com')->first();
+    $user = User::where('email', 'cleaning.worker@dllni.sy')->first();
     Sanctum::actingAs($user);
 
     $response = $this->postJson('/api/logout');
@@ -58,7 +58,7 @@ it('seeded cleaning worker can logout with token', function (): void {
 });
 
 it('seeded seller can logout with token', function (): void {
-    $user = User::where('email', 'seller@example.com')->first();
+    $user = User::where('email', 'seller@dllni.sy')->first();
     Sanctum::actingAs($user);
 
     $response = $this->postJson('/api/logout');
