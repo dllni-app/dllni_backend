@@ -33,6 +33,7 @@ final class UserCleaningPreviousWorkersController
 
         $workers = Worker::query()
             ->with('user')
+            ->withCount('customerRatings')
             ->whereIn('id', $history->pluck('worker_id')->all())
             ->get()
             ->keyBy('id');
@@ -49,6 +50,11 @@ final class UserCleaningPreviousWorkersController
                     'workerId' => $worker->id,
                     'name' => $worker->first_name,
                     'avatarUrl' => $worker->getFirstMediaUrl('avatar') ?: $worker->user?->getFirstMediaUrl('primary-image') ?: null,
+                    'description' => $worker->bio,
+                    'ratings' => [
+                        'average' => (float) $worker->average_rating,
+                        'count' => (int) ($worker->customer_ratings_count ?? 0),
+                    ],
                     'averageRating' => (float) $worker->average_rating,
                     'completedJobsWithUser' => (int) $booking->completed_jobs_count,
                     'lastWorkedDate' => (string) $booking->last_worked_date,
