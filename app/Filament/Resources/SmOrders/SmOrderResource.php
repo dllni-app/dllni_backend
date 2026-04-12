@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\SmOrders;
 
+use App\Filament\Concerns\ResolvesSupermarketNavigationGroup;
 use App\Filament\Resources\SmOrders\Pages\ListSmOrders;
 use App\Filament\Resources\SmOrders\Pages\ViewSmOrder;
 use App\Filament\Resources\SmOrders\Schemas\SmOrderInfolist;
@@ -14,17 +15,16 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Modules\Supermarket\Models\SmOrder;
-use UnitEnum;
 
 final class SmOrderResource extends Resource
 {
+    use ResolvesSupermarketNavigationGroup;
+
     protected static ?string $model = SmOrder::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedShoppingCart;
 
     protected static ?string $navigationLabel = null;
-
-    protected static string|UnitEnum|null $navigationGroup = 'قسم المتاجر';
 
     protected static ?int $navigationSort = 8;
 

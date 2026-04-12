@@ -14,11 +14,11 @@ This plan defines **admin-only** dashboard sections for the Supermarket module (
 ## 1. Live overview / command center
 
 - **Purpose:** High-level KPIs and operational snapshot; first screen after admin login.
-- **Data (ERD):** Counts from `sm_orders` (by status), `sm_stores` (active/suspended), `sm_order_disputes` (open), optional today’s revenue; low-stock products count from `sm_products` (stock_quantity &lt;= low_stock_threshold).
+- **Data (ERD):** Counts from `sm_orders` (by status), `sm_stores` (active/suspended), `sm_order_disputes` (open), optional today’s revenue; low-stock products count from `sm_products` (stock_quantity <= low_stock_threshold).
 - **UI:**
   - **KPI cards:** Today’s orders (total, by status: Pending, Accepted, Preparing, ReadyForPickup, Completed), active stores, open disputes, orders pending pickup, low-stock alerts count.
   - **Quick links:** Jump to Orders, Stores, Disputes, Low stock.
-- **Notes:** Low-stock and open-dispute counts should be visually prominent (e.g. warning style) when &gt; 0.
+- **Notes:** Low-stock and open-dispute counts should be visually prominent (e.g. warning style) when > 0.
 
 ---
 
@@ -46,7 +46,7 @@ This plan defines **admin-only** dashboard sections for the Supermarket module (
   - **Store selector:** Filter by store (or “All stores” for cross-store view).
   - **Categories:** List categories per store (name, slug, sort_order, product count). Actions: View products, Edit sort order (if admin can change).
   - **Products table:** Product name, store, category, barcode, price, discounted_price, stock_quantity, low_stock_threshold, expires_at, is_available, source_type (BarcodeScan, CatalogSearch, Manual, Template, BulkImport), actions (View, Toggle availability, View inventory log).
-  - **Filters:** Store, category, is_available, low stock (stock_quantity &lt;= low_stock_threshold), expiring soon, source_type.
+  - **Filters:** Store, category, is_available, low stock (stock_quantity <= low_stock_threshold), expiring soon, source_type.
   - **Detail view:** Full product fields, optional inventory log history, link to master_product if present.
 - **Notes:** Product creation/edit may stay in store-owner panel; admin view is for oversight, moderation, and low-stock/expiry alerts.
 
@@ -119,7 +119,7 @@ This plan defines **admin-only** dashboard sections for the Supermarket module (
 - **UI:**
   - **Stores by trust:** List or table of stores with trust_score, warning_count, last trust change; quick actions: View log, Suspend.
   - **Trust log (per store):** Entries from `sm_store_trust_logs` (reason, score change, created_at). Optional filter by store.
-  - **Automation rules (if in scope):** e.g. “If trust &lt; X then suspend and notify admin” (UI to configure thresholds; logic is backend).
+  - **Automation rules (if in scope):** e.g. “If trust < X then suspend and notify admin” (UI to configure thresholds; logic is backend).
 - **Notes:** Trust card and log are also in Store detail (section 2); this section gives a trust-centric view across all stores.
 
 ---

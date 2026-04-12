@@ -3,9 +3,13 @@
 declare(strict_types=1);
 
 return [
+    'navigation' => [
+        'group' => 'Supermarket',
+    ],
     'section' => 'Supermarket Section',
     'hub' => [
         'title' => 'Supermarket Section Hub',
+        'back_to_hub' => 'Back to supermarket hub',
         'description' => 'Command center for marketplace governance, moderation queues, and operational follow-up.',
         'stores' => 'Store Governance',
         'documents' => 'Store Documents',
@@ -33,7 +37,7 @@ return [
         'description' => 'Use these lanes to complete admin tasks in a consistent sequence.',
         'governance' => [
             'title' => 'Merchant governance',
-            'description' => 'Approve merchants, verify documents, and audit trust activity.',
+            'description' => 'Approve merchants and verify store documentation.',
         ],
         'catalog' => [
             'title' => 'Catalog & promotions',
@@ -58,6 +62,21 @@ return [
         'expiring_promotions' => 'Expiring promotions (72h)',
         'offer_label' => 'Offer: :name',
         'coupon_label' => 'Coupon: :code',
+    ],
+    'reference' => [
+        'title' => 'Reference data',
+        'description' => 'Read-only analytics and audit trails. Use when investigating a store or order.',
+        'card_title' => 'Analytics & trust',
+    ],
+    'attention' => [
+        'section_title' => 'Needs attention',
+        'section_description' => 'Work queues grouped by compliance, fulfillment, and catalog health.',
+        'compliance_title' => 'Compliance & trust',
+        'compliance_description' => 'Documents, disputes, and suspended merchants.',
+        'fulfillment_title' => 'Fulfillment',
+        'fulfillment_description' => 'Orders waiting for customer pickup.',
+        'catalog_title' => 'Catalog health',
+        'catalog_description' => 'Stock risk and promotions ending soon.',
     ],
     'global' => [
         'title' => 'Global Admin Areas',

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Filament\Pages;
 
 use App\Filament\Resources\Orders\OrderResource;
-use App\Filament\Resources\RestaurantDisputes\RestaurantOrderDisputeResource;
 use App\Filament\Resources\Restaurants\RestaurantResource;
+use App\Filament\Support\RestaurantAdminUrls;
 use BackedEnum;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
@@ -58,7 +58,7 @@ final class RestaurantInventoryMonitoring extends Page
             'actionUrls' => [
                 'restaurants' => RestaurantResource::getUrl('index'),
                 'orders' => OrderResource::getUrl('index'),
-                'disputes' => RestaurantOrderDisputeResource::getUrl('index'),
+                'disputes' => RestaurantAdminUrls::disputesOpenOrReview(),
             ],
         ];
     }

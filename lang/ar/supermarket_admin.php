@@ -3,9 +3,13 @@
 declare(strict_types=1);
 
 return [
+    'navigation' => [
+        'group' => 'قسم المتاجر',
+    ],
     'section' => 'قسم المتاجر',
     'hub' => [
         'title' => 'مركز قسم المتاجر',
+        'back_to_hub' => 'العودة لمركز المتاجر',
         'description' => 'لوحة قيادة مركزية لحوكمة المتاجر ومتابعة قوائم المهام الحرجة.',
         'stores' => 'حوكمة المتاجر',
         'documents' => 'وثائق المتجر',
@@ -33,7 +37,7 @@ return [
         'description' => 'نفذ مهام الإدارة عبر مسارات واضحة ومتسلسلة.',
         'governance' => [
             'title' => 'حوكمة التجار',
-            'description' => 'اعتماد المتاجر ومراجعة الوثائق وتتبع الثقة.',
+            'description' => 'اعتماد المتاجر ومراجعة وثائق المتجر.',
         ],
         'catalog' => [
             'title' => 'الكتالوج والعروض',
@@ -58,6 +62,21 @@ return [
         'expiring_promotions' => 'عروض تنتهي خلال 72 ساعة',
         'offer_label' => 'عرض: :name',
         'coupon_label' => 'كوبون: :code',
+    ],
+    'reference' => [
+        'title' => 'بيانات مرجعية',
+        'description' => 'تحليلات للقراءة فقط وسجلات تدقيق. استخدمها عند التحقيق في متجر أو طلب.',
+        'card_title' => 'التحليلات والثقة',
+    ],
+    'attention' => [
+        'section_title' => 'يتطلب متابعة',
+        'section_description' => 'قوائم عمل مجمّعة حسب الامتثال والتنفيذ وصحة الكتالوج.',
+        'compliance_title' => 'الامتثال والثقة',
+        'compliance_description' => 'الوثائق والنزاعات والمتاجر المعلقة.',
+        'fulfillment_title' => 'التنفيذ',
+        'fulfillment_description' => 'طلبات بانتظار استلام العميل.',
+        'catalog_title' => 'صحة الكتالوج',
+        'catalog_description' => 'مخاطر المخزون والعروض التي تنتهي قريباً.',
     ],
     'global' => [
         'title' => 'مناطق الإدارة العامة',

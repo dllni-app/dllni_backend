@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\SmProducts;
 
+use App\Filament\Concerns\ResolvesSupermarketNavigationGroup;
 use App\Filament\Resources\SmProducts\Pages\EditSmProduct;
 use App\Filament\Resources\SmProducts\Pages\ListSmProducts;
 use App\Filament\Resources\SmProducts\Pages\ViewSmProduct;
@@ -16,17 +17,16 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Modules\Supermarket\Models\SmProduct;
-use UnitEnum;
 
 final class SmProductResource extends Resource
 {
+    use ResolvesSupermarketNavigationGroup;
+
     protected static ?string $model = SmProduct::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCube;
 
     protected static ?string $navigationLabel = null;
-
-    protected static string|UnitEnum|null $navigationGroup = 'قسم المتاجر';
 
     protected static ?int $navigationSort = 5;
 

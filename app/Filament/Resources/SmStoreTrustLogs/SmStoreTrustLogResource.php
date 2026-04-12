@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\SmStoreTrustLogs;
 
+use App\Filament\Concerns\ResolvesSupermarketNavigationGroup;
 use App\Filament\Resources\SmStoreTrustLogs\Pages\ListSmStoreTrustLogs;
 use App\Filament\Resources\SmStoreTrustLogs\Pages\ViewSmStoreTrustLog;
 use App\Filament\Resources\SmStoreTrustLogs\Schemas\SmStoreTrustLogInfolist;
@@ -14,17 +15,16 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Modules\Supermarket\Models\SmStoreTrustLog;
-use UnitEnum;
 
 final class SmStoreTrustLogResource extends Resource
 {
+    use ResolvesSupermarketNavigationGroup;
+
     protected static ?string $model = SmStoreTrustLog::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentList;
 
     protected static ?string $navigationLabel = null;
-
-    protected static string|UnitEnum|null $navigationGroup = 'قسم المتاجر';
 
     protected static ?int $navigationSort = 4;
 

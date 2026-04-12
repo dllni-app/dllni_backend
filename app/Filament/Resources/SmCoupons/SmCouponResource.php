@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\SmCoupons;
 
+use App\Filament\Concerns\ResolvesSupermarketNavigationGroup;
 use App\Filament\Resources\SmCoupons\Pages\EditSmCoupon;
 use App\Filament\Resources\SmCoupons\Pages\ListSmCoupons;
 use App\Filament\Resources\SmCoupons\Pages\ViewSmCoupon;
@@ -16,17 +17,16 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Modules\Supermarket\Models\SmCoupon;
-use UnitEnum;
 
 final class SmCouponResource extends Resource
 {
+    use ResolvesSupermarketNavigationGroup;
+
     protected static ?string $model = SmCoupon::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTicket;
 
     protected static ?string $navigationLabel = null;
-
-    protected static string|UnitEnum|null $navigationGroup = 'قسم المتاجر';
 
     protected static ?int $navigationSort = 7;
 

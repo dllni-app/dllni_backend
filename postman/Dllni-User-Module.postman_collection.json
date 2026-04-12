@@ -2,7 +2,7 @@
     "info": {
         "_postman_id": "3d8a6f0b-9f8f-4d42-8d8c-6d4c4c8b3a10",
         "name": "Dllni - User Module (Merged)",
-        "description": "## Base URL & prefix\n- Collection variable `{{baseUrl}}` defaults to `http://Dllni.test` (Herd/Laragon).\n- User API base path: `/api/v1/user` (routes file: `Modules/User/routes/api.php`).\n\n## Authentication\n- **Public**: register, login OTP steps, reset password, supermarket/restaurant discovery, **restaurant home** (categories, exclusive offers, suggested products, nearest restaurants), products, marketing offers, vote read, etc.\n- **Sanctum**: set `{{token}}` from verify/login/reset responses; send `Authorization: Bearer {{token}}` for `me`, `account`, `addresses`, **favorites** (restaurants + supermarket stores + supermarket products), `notifications`, cart, checkout, orders, **restaurants/home/latest-ordered-products**, supermarket **items CRUD**, supermarket order status, vote create/active/invite/ballot/end, restaurants luck-box options/suggest.\n\n## Favorites +�G�Gǥ +�-�+�G�P+�GǪ+�-�+�-�+�G�P+�-� (authenticated)\nPolymorphic rows in `favorites` (`favorable_type` = `Restaurant` or `SmStore`). List order: **most recently favorited first** (`favorites.created_at` desc).\n\n| Path | Method | Notes |\n| --- | --- | --- |\n| `/api/v1/user/favorites/restaurants` | GET | Paginated `RestaurantResource`; query `perPage` (1+�G�Gǣ100, default 20), `page` |\n| `/api/v1/user/favorites/restaurants/{id}` | POST | No body. **201** first add, **200** if already favorited. Body: `{ \"restaurant\": +�G�-� }`. **422** if restaurant not active. |\n| `/api/v1/user/favorites/restaurants/{id}` | DELETE | **204** empty body (safe if not favorited). |\n| `/api/v1/user/favorites/supermarket/stores` | GET | Paginated `SmStoreResource`; `perPage`, `page` |\n| `/api/v1/user/favorites/supermarket/stores/{id}` | POST | **201** / **200**; `{ \"store\": +�G�-� }`. **422** if store inactive. |\n| `/api/v1/user/favorites/supermarket/stores/{id}` | DELETE | **204** |\n| `/api/v1/user/favorites/supermarket/products/{id}` | POST | **201** / **200**; `{ \"product\": +�G�-� }`. **422** if product unavailable or store inactive. |\n\n## Restaurant homepage (`GET /api/v1/user/restaurants/home/*`)\n| Route | Auth | Purpose |\n| --- | --- | --- |\n| `.../categories` | No | Cuisine types that have +�GǦ-�1 **active** restaurant |\n| `.../exclusive-offers` | No | Active offers on active restaurants; optional `latitude`, `longitude`, `limit` |\n| `.../suggested-products` | No | Featured / highly rated menu items; `limit` |\n| `.../nearest-restaurants` | No | Near-user list; optional `latitude`, `longitude`, `limit`; `isFavorited` true only with Bearer token |\n| `.../latest-ordered-products` | **Yes** | Distinct products from user+�G�G��s non-cancelled orders (reorder / +�-�+�-++�G�P+�-� +�GǪ+�-�+�-�+�-�+�-�+�GǦ); `limit` |\n\n**Distance**: Haversine runs on MySQL/Postgres, etc. **SQLite** (`phpunit`) does not compute `distanceKm` (values `null`).\n\n## Success status codes (typical)\n- `200` +�G�Gǥ OK (JSON body).\n- `201` +�G�Gǥ Created (addresses, cart item, checkout order, group vote, first-time favorite add for restaurant/store).\n- `204` +�G�Gǥ No content (delete address).\n- `404` +�G�Gǥ Not found (invalid id, inactive marketing offer, wrong user+�G�G��s resource).\n- `403` / `401` +�G�Gǥ Forbidden / Unauthenticated (missing or invalid token).\n- `422` +�G�Gǥ Validation errors: `{ \"message\": \"...\", \"errors\": { \"field\": [\"...\"] } }`.\n\n## Pagination (Laravel)\n- Paginated resources return `data` (array of items), `links` (`first`, `last`, `prev`, `next`), and `meta` (`current_page`, `from`, `last_page`, `path`, `per_page`, `to`, `total`, +�G�-�).\n- Query: `page`, `perPage` (camelCase in this API where FormRequest defines it).\n\n## Media in JSON (summary)\n- **Restaurant** `RestaurantResource`: `primaryImage`, `image`, `banner`, `images`.\n- **Restaurant product** `ProductResource`: `primaryImage`, `images`.\n- **User** `UserResource` (with `media` loaded): `primaryImage` / `images` as `MediaResource` objects (`url`, `thumbnailUrl`, +�G�-�).\n- **Marketing offers**: `imageUrl` (Spatie `card-image`) or `null`.\n- **Supermarket** `SmStoreResource`: `cover`, `logo`.\n- **Restaurant Luck Box** line items: `imageUrl`; bundle host object: `restaurant` with `primaryImageUrl`, `bannerImageUrl`.\n- **Supermarket order** items: product media via `SmProductResource` when loaded.\n\n## Flow overview\n### Register + verify\n1. `POST /register` +�G��G�� OTP sent.\n2. `POST /verify-account` +�G��G�� `user` + `token`.\n\n### Login (SMS OTP)\n1. `POST /login` +�G��G�� OTP sent.\n2. `POST /login/verify` +�G��G�� `user` + `token`.\n\n### Reset password\n1. `POST /reset-password` +�G��G�� generic message; `expiresAt` null if phone unknown.\n2. `POST /reset-password/confirm` +�G��G�� `message` + `token`.\n\n## Examples in this collection\nEach request includes a **saved example** (`Examples` in Postman) with a representative **200/201/204** JSON body. Adjust ids and tokens to your environment.\n\n## Notes\n- SMS/OTP is behind a provider interface.\n\n\n\n## Props Format (Request / Response Contract)\n- Path params: {id} in docs and {{id}} as Postman variables.\n- Query props: camelCase unless endpoint docs explicitly use snake_case.\n- Body props: required first, optional props marked and can be null when allowed.\n- Pagination shape: data, links, meta.\n- Validation errors (422): { \"message\": string, \"errors\": { \"field\": [string] } }.\n\n## Common Enums\n- orderType: delivery | pickup\n- pickupMode: immediate_pickup | scheduled_pickup\n- discover sort: rating | nearest | fastest\n- vote status: active | ended\n- luck-box label: best_value | fastest | balanced\n\n## What Endpoints Return\n- List endpoints: paginated data[] with links and meta (unless noted otherwise).\n- Show endpoints: single object (sometimes wrapped in data).\n- Create endpoints: 201 with created payload.\n- Update endpoints: 200 with updated payload.\n- Delete endpoints: 204 with empty body.",
+        "description": "## Base URL & prefix\n- Collection variable `{{baseUrl}}` defaults to `http://Dllni.test` (Herd/Laragon).\n- User API base path: `/api/v1/user` (routes file: `Modules/User/routes/api.php`).\n\n## Cleaning booking disputes (global API)\nCleaning disputes use **`POST /api/v1/disputes`** (and related CRUD on `/api/v1/disputes/{id}`) from `routes/api.php`, **not** under `/api/v1/user/...`. Reuse the same Sanctum token as the user app. In this collection: **Cleaning Endpoints → Verified → Cleaning disputes (app: global API)**. Written contract: `docs/API_CONTRACT_V1_DISPUTES_CLEANING_BOOKING.md`.\n\n## Authentication\n- **Public**: register, login OTP steps, reset password, supermarket/restaurant discovery, **restaurant home** (categories, exclusive offers, suggested products, nearest restaurants), products, marketing offers, vote read, etc.\n- **Sanctum**: set `{{token}}` from verify/login/reset responses; send `Authorization: Bearer {{token}}` for `me`, `account`, `addresses`, **favorites** (restaurants + supermarket stores + supermarket products), `notifications`, cart, checkout, orders, **restaurants/home/latest-ordered-products**, supermarket **items CRUD**, supermarket order status, vote create/active/invite/ballot/end, restaurants luck-box options/suggest.\n\n## Favorites +�G�Gǥ +�-�+�G�P+�GǪ+�-�+�-�+�G�P+�-� (authenticated)\nPolymorphic rows in `favorites` (`favorable_type` = `Restaurant` or `SmStore`). List order: **most recently favorited first** (`favorites.created_at` desc).\n\n| Path | Method | Notes |\n| --- | --- | --- |\n| `/api/v1/user/favorites/restaurants` | GET | Paginated `RestaurantResource`; query `perPage` (1+�G�Gǣ100, default 20), `page` |\n| `/api/v1/user/favorites/restaurants/{id}` | POST | No body. **201** first add, **200** if already favorited. Body: `{ \"restaurant\": +�G�-� }`. **422** if restaurant not active. |\n| `/api/v1/user/favorites/restaurants/{id}` | DELETE | **204** empty body (safe if not favorited). |\n| `/api/v1/user/favorites/supermarket/stores` | GET | Paginated `SmStoreResource`; `perPage`, `page` |\n| `/api/v1/user/favorites/supermarket/stores/{id}` | POST | **201** / **200**; `{ \"store\": +�G�-� }`. **422** if store inactive. |\n| `/api/v1/user/favorites/supermarket/stores/{id}` | DELETE | **204** |\n| `/api/v1/user/favorites/supermarket/products/{id}` | POST | **201** / **200**; `{ \"product\": +�G�-� }`. **422** if product unavailable or store inactive. |\n\n## Restaurant homepage (`GET /api/v1/user/restaurants/home/*`)\n| Route | Auth | Purpose |\n| --- | --- | --- |\n| `.../categories` | No | Cuisine types that have +�GǦ-�1 **active** restaurant |\n| `.../exclusive-offers` | No | Active offers on active restaurants; optional `latitude`, `longitude`, `limit` |\n| `.../suggested-products` | No | Featured / highly rated menu items; `limit` |\n| `.../nearest-restaurants` | No | Near-user list; optional `latitude`, `longitude`, `limit`; `isFavorited` true only with Bearer token |\n| `.../latest-ordered-products` | **Yes** | Distinct products from user+�G�G��s non-cancelled orders (reorder / +�-�+�-++�G�P+�-� +�GǪ+�-�+�-�+�-�+�-�+�GǦ); `limit` |\n\n**Distance**: Haversine runs on MySQL/Postgres, etc. **SQLite** (`phpunit`) does not compute `distanceKm` (values `null`).\n\n## Success status codes (typical)\n- `200` +�G�Gǥ OK (JSON body).\n- `201` +�G�Gǥ Created (addresses, cart item, checkout order, group vote, first-time favorite add for restaurant/store).\n- `204` +�G�Gǥ No content (delete address).\n- `404` +�G�Gǥ Not found (invalid id, inactive marketing offer, wrong user+�G�G��s resource).\n- `403` / `401` +�G�Gǥ Forbidden / Unauthenticated (missing or invalid token).\n- `422` +�G�Gǥ Validation errors: `{ \"message\": \"...\", \"errors\": { \"field\": [\"...\"] } }`.\n\n## Pagination (Laravel)\n- Paginated resources return `data` (array of items), `links` (`first`, `last`, `prev`, `next`), and `meta` (`current_page`, `from`, `last_page`, `path`, `per_page`, `to`, `total`, +�G�-�).\n- Query: `page`, `perPage` (camelCase in this API where FormRequest defines it).\n\n## Media in JSON (summary)\n- **Restaurant** `RestaurantResource`: `primaryImage`, `image`, `banner`, `images`.\n- **Restaurant product** `ProductResource`: `primaryImage`, `images`.\n- **User** `UserResource` (with `media` loaded): `primaryImage` / `images` as `MediaResource` objects (`url`, `thumbnailUrl`, +�G�-�).\n- **Marketing offers**: `imageUrl` (Spatie `card-image`) or `null`.\n- **Supermarket** `SmStoreResource`: `cover`, `logo`.\n- **Restaurant Luck Box** line items: `imageUrl`; bundle host object: `restaurant` with `primaryImageUrl`, `bannerImageUrl`.\n- **Supermarket order** items: product media via `SmProductResource` when loaded.\n\n## Flow overview\n### Register + verify\n1. `POST /register` +�G��G�� OTP sent.\n2. `POST /verify-account` +�G��G�� `user` + `token`.\n\n### Login (SMS OTP)\n1. `POST /login` +�G��G�� OTP sent.\n2. `POST /login/verify` +�G��G�� `user` + `token`.\n\n### Reset password\n1. `POST /reset-password` +�G��G�� generic message; `expiresAt` null if phone unknown.\n2. `POST /reset-password/confirm` +�G��G�� `message` + `token`.\n\n## Examples in this collection\nEach request includes a **saved example** (`Examples` in Postman) with a representative **200/201/204** JSON body. Adjust ids and tokens to your environment.\n\n## Notes\n- SMS/OTP is behind a provider interface.\n\n\n\n## Props Format (Request / Response Contract)\n- Path params: {id} in docs and {{id}} as Postman variables.\n- Query props: camelCase unless endpoint docs explicitly use snake_case.\n- Body props: required first, optional props marked and can be null when allowed.\n- Pagination shape: data, links, meta.\n- Validation errors (422): { \"message\": string, \"errors\": { \"field\": [string] } }.\n\n## Common Enums\n- orderType: delivery | pickup\n- pickupMode: immediate_pickup | scheduled_pickup\n- discover sort: rating | nearest | fastest\n- vote status: active | ended\n- luck-box label: best_value | fastest | balanced\n\n## What Endpoints Return\n- List endpoints: paginated data[] with links and meta (unless noted otherwise).\n- Show endpoints: single object (sometimes wrapped in data).\n- Create endpoints: 201 with created payload.\n- Update endpoints: 200 with updated payload.\n- Delete endpoints: 204 with empty body.",
         "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
     },
     "variable": [
@@ -81,6 +81,10 @@
         {
             "key": "smCartItemId",
             "value": ""
+        },
+        {
+            "key": "disputeId",
+            "value": "1"
         }
     ],
     "item": [
@@ -3343,6 +3347,273 @@
                                         },
                                         "description": "Cancel one cleaning order for the authenticated customer.\n\n**Status**: `200 OK` | `422` | `404`\n\n**Headers**: `Authorization: Bearer {{token}}`\n\n**Body**:\n- `reason` (optional): cancellation reason\n\n**Response**: `{ \"order\": CleaningBookingResource }` with `status=cancelled` and `cancelledAt` populated.\n\n**Realtime note**: backend broadcasts `CleaningBookingTrackingUpdated` on `private-cleaning-booking.{id}` after successful cancellation so tracking screens can update immediately."
                                     }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "Cleaning disputes (app: global API)",
+                            "description": "## Base path (not under /user)\nThese calls hit **`/api/v1/disputes`** (`routes/api.php`), not `/api/v1/user/...`. Use the same **`Authorization: Bearer {{userToken}}`** as other authenticated user requests.\n\n## Full contract\nRepository file: **`docs/API_CONTRACT_V1_DISPUTES_CLEANING_BOOKING.md`**\n\n## Quick reference\n| Action | Method | Path |\n| --- | --- | --- |\n| Create | POST | `/api/v1/disputes` |\n| List | GET | `/api/v1/disputes` |\n| Show | GET | `/api/v1/disputes/{id}` |\n| Update | PATCH | `/api/v1/disputes/{id}` |\n| Delete | DELETE | `/api/v1/disputes/{id}` |\n| Post message | POST | `/api/v1/disputes/{id}/messages` — **worker accounts only** (403 for normal customers).\n\n**Create (required):** `bookingId` = cleaning order id from `GET .../user/cleaning/orders/{order}`, `bookingType` = `cleaning_booking`. **Optional:** `category` = `poor_quality` | `property_damage` | `unprofessional` | `billing_issue` | `other`.\n\n**List filters:** `filter[bookingId]`, `filter[bookingType]`, `filter[status]`, `filter[category]`, `filter[forCurrentWorker]` (workers), `perPage` (1–100, default 10), `sort` = `createdAt` | `-createdAt` | `status` | `-status`.\n\n**Note:** `description` and image uploads are not validated on this endpoint yet; align mobile forms with backend before relying on them.",
+                            "item": [
+                                {
+                                    "name": "Disputes - Create (cleaning booking)",
+                                    "request": {
+                                        "auth": {
+                                            "type": "bearer",
+                                            "bearer": [
+                                                {
+                                                    "key": "token",
+                                                    "type": "string",
+                                                    "value": "{{userToken}}"
+                                                }
+                                            ]
+                                        },
+                                        "method": "POST",
+                                        "header": [
+                                            {
+                                                "key": "Accept",
+                                                "value": "application/json"
+                                            },
+                                            {
+                                                "key": "Content-Type",
+                                                "value": "application/json"
+                                            }
+                                        ],
+                                        "body": {
+                                            "mode": "raw",
+                                            "raw": "{\n  \"bookingId\": {{cleaningOrderId}},\n  \"bookingType\": \"cleaning_booking\",\n  \"category\": \"poor_quality\"\n}"
+                                        },
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/disputes",
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "path": [
+                                                "api",
+                                                "v1",
+                                                "disputes"
+                                            ]
+                                        },
+                                        "description": "**POST** `/api/v1/disputes`\n\nOpens a dispute linked to a cleaning booking.\n\n**JSON body**\n| Field | Required | Description |\n| --- | --- | --- |\n| `bookingId` | Yes | `CleaningBooking` id (same as `{{cleaningOrderId}}` from user cleaning order APIs). |\n| `bookingType` | Yes | Must be `cleaning_booking` for cleaning. |\n| `category` | No | Complaint type: `poor_quality`, `property_damage`, `unprofessional`, `billing_issue`, `other`. |\n| `ticketNumber` | No | Unique ticket string if client generates it. |\n| `status` | No | `open`, `under_review`, `resolved`, `closed` — omit on create unless you have a special flow. |\n| `resolution` | No | Refund / outcome enums — omit on create. |\n\n**Success:** `201 Created` with dispute `data` including nested `booking` and `messages` when loaded."
+                                    },
+                                    "response": []
+                                },
+                                {
+                                    "name": "Disputes - List (filter by booking)",
+                                    "request": {
+                                        "auth": {
+                                            "type": "bearer",
+                                            "bearer": [
+                                                {
+                                                    "key": "token",
+                                                    "type": "string",
+                                                    "value": "{{userToken}}"
+                                                }
+                                            ]
+                                        },
+                                        "method": "GET",
+                                        "header": [
+                                            {
+                                                "key": "Accept",
+                                                "value": "application/json"
+                                            }
+                                        ],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/disputes?filter[bookingId]={{cleaningOrderId}}&filter[bookingType]=cleaning_booking&perPage=20&page=1&sort=-createdAt",
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "path": [
+                                                "api",
+                                                "v1",
+                                                "disputes"
+                                            ],
+                                            "query": [
+                                                {
+                                                    "key": "filter[bookingId]",
+                                                    "value": "{{cleaningOrderId}}"
+                                                },
+                                                {
+                                                    "key": "filter[bookingType]",
+                                                    "value": "cleaning_booking"
+                                                },
+                                                {
+                                                    "key": "perPage",
+                                                    "value": "20"
+                                                },
+                                                {
+                                                    "key": "page",
+                                                    "value": "1"
+                                                },
+                                                {
+                                                    "key": "sort",
+                                                    "value": "-createdAt"
+                                                }
+                                            ]
+                                        },
+                                        "description": "**GET** `/api/v1/disputes`\n\nPaginated list (`perPage` default **10**, max 100). Use `filter[bookingId]` + `filter[bookingType]=cleaning_booking` to scope to one order. Optional: `filter[status]`, `filter[category]`. Workers may use `filter[forCurrentWorker]=1` (not typical for customer apps)."
+                                    },
+                                    "response": []
+                                },
+                                {
+                                    "name": "Disputes - Show",
+                                    "request": {
+                                        "auth": {
+                                            "type": "bearer",
+                                            "bearer": [
+                                                {
+                                                    "key": "token",
+                                                    "type": "string",
+                                                    "value": "{{userToken}}"
+                                                }
+                                            ]
+                                        },
+                                        "method": "GET",
+                                        "header": [
+                                            {
+                                                "key": "Accept",
+                                                "value": "application/json"
+                                            }
+                                        ],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/disputes/{{disputeId}}",
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "path": [
+                                                "api",
+                                                "v1",
+                                                "disputes",
+                                                "{{disputeId}}"
+                                            ]
+                                        },
+                                        "description": "**GET** `/api/v1/disputes/{id}`\n\nReturns one dispute with `booking` and `messages` loaded. Set `{{disputeId}}` from the create response `data.id`."
+                                    },
+                                    "response": []
+                                },
+                                {
+                                    "name": "Disputes - Update (PATCH)",
+                                    "request": {
+                                        "auth": {
+                                            "type": "bearer",
+                                            "bearer": [
+                                                {
+                                                    "key": "token",
+                                                    "type": "string",
+                                                    "value": "{{userToken}}"
+                                                }
+                                            ]
+                                        },
+                                        "method": "PATCH",
+                                        "header": [
+                                            {
+                                                "key": "Accept",
+                                                "value": "application/json"
+                                            },
+                                            {
+                                                "key": "Content-Type",
+                                                "value": "application/json"
+                                            }
+                                        ],
+                                        "body": {
+                                            "mode": "raw",
+                                            "raw": "{\n  \"bookingId\": {{cleaningOrderId}},\n  \"bookingType\": \"cleaning_booking\",\n  \"category\": \"billing_issue\",\n  \"status\": \"open\"\n}"
+                                        },
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/disputes/{{disputeId}}",
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "path": [
+                                                "api",
+                                                "v1",
+                                                "disputes",
+                                                "{{disputeId}}"
+                                            ]
+                                        },
+                                        "description": "**PATCH** `/api/v1/disputes/{id}`\n\nUses the same `DisputeRequest` rules as create. Send fields you need to change; many apps only use this from admin tools."
+                                    },
+                                    "response": []
+                                },
+                                {
+                                    "name": "Disputes - Delete",
+                                    "request": {
+                                        "auth": {
+                                            "type": "bearer",
+                                            "bearer": [
+                                                {
+                                                    "key": "token",
+                                                    "type": "string",
+                                                    "value": "{{userToken}}"
+                                                }
+                                            ]
+                                        },
+                                        "method": "DELETE",
+                                        "header": [
+                                            {
+                                                "key": "Accept",
+                                                "value": "application/json"
+                                            }
+                                        ],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/disputes/{{disputeId}}",
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "path": [
+                                                "api",
+                                                "v1",
+                                                "disputes",
+                                                "{{disputeId}}"
+                                            ]
+                                        },
+                                        "description": "**DELETE** `/api/v1/disputes/{id}`\n\n**204 No Content** on success. Use with care; prefer status transitions via update if the product should retain history."
+                                    },
+                                    "response": []
+                                },
+                                {
+                                    "name": "Disputes - Post message (worker only)",
+                                    "request": {
+                                        "auth": {
+                                            "type": "bearer",
+                                            "bearer": [
+                                                {
+                                                    "key": "token",
+                                                    "type": "string",
+                                                    "value": "{{userToken}}"
+                                                }
+                                            ]
+                                        },
+                                        "method": "POST",
+                                        "header": [
+                                            {
+                                                "key": "Accept",
+                                                "value": "application/json"
+                                            },
+                                            {
+                                                "key": "Content-Type",
+                                                "value": "application/json"
+                                            }
+                                        ],
+                                        "body": {
+                                            "mode": "raw",
+                                            "raw": "{\n  \"message\": \"Thank you for the details. We are reviewing your case.\"\n}"
+                                        },
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/disputes/{{disputeId}}/messages",
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "path": [
+                                                "api",
+                                                "v1",
+                                                "disputes",
+                                                "{{disputeId}}",
+                                                "messages"
+                                            ]
+                                        },
+                                        "description": "**POST** `/api/v1/disputes/{id}/messages`\n\n**Customer tokens get 403.** Implemented for workers assigned to the cleaning booking (`sender_type` stored as `worker`). Documented here so QA knows it exists; use a worker Sanctum token to test.\n\nBody: `{ \"message\": \"...\" }` (see `DisputeMessageStoreRequest`)."
+                                    },
+                                    "response": []
                                 }
                             ]
                         }

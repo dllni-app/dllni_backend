@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\SmOffers;
 
+use App\Filament\Concerns\ResolvesSupermarketNavigationGroup;
 use App\Filament\Resources\SmOffers\Pages\EditSmOffer;
 use App\Filament\Resources\SmOffers\Pages\ListSmOffers;
 use App\Filament\Resources\SmOffers\Pages\ViewSmOffer;
@@ -16,17 +17,16 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Modules\Supermarket\Models\SmOffer;
-use UnitEnum;
 
 final class SmOfferResource extends Resource
 {
+    use ResolvesSupermarketNavigationGroup;
+
     protected static ?string $model = SmOffer::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTag;
 
     protected static ?string $navigationLabel = null;
-
-    protected static string|UnitEnum|null $navigationGroup = 'قسم المتاجر';
 
     protected static ?int $navigationSort = 6;
 

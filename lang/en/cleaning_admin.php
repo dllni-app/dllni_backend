@@ -13,6 +13,22 @@ return [
         'title' => 'Live Command Center',
         'tooltip' => 'Live overview: KPIs, today\'s bookings, disputes, SOS and system alerts with quick actions.',
         'subheading' => 'Live overview of KPIs, today\'s bookings, open disputes, SOS and system alerts with quick actions for contact or resolution.',
+        'kpis' => [
+            'cleaning_bookings' => 'Cleaning bookings',
+            'event_bookings' => 'Event bookings',
+            'open_disputes' => 'Open disputes',
+            'open_sos' => 'SOS alerts',
+            'new_system_alerts' => 'New system alerts',
+        ],
+        'alerts' => [
+            'sos_heading' => 'Critical alerts (SOS)',
+            'system_heading' => 'System alerts',
+            'none' => 'No current alerts.',
+            'call_customer' => 'Call customer',
+            'call_worker' => 'Call worker',
+            'resolve' => 'Resolve / close',
+            'booking_ref' => 'Booking #:number',
+        ],
     ],
 
     'workers' => [

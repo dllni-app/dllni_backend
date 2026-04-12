@@ -14,11 +14,11 @@ This plan defines **admin-only** dashboard sections for the Restaurant module (b
 ## 1. Live overview / command center
 
 - **Purpose:** High-level KPIs and operational snapshot; first screen after admin login.
-- **Data (ERD):** Counts from `orders` (by status), `restaurants` (active/suspended), `restaurant_order_disputes` (open); optional today’s revenue; low-stock products count from `products` (stock_quantity &lt;= low_stock_threshold).
+- **Data (ERD):** Counts from `orders` (by status), `restaurants` (active/suspended), `restaurant_order_disputes` (open); optional today’s revenue; low-stock products count from `products` (stock_quantity <= low_stock_threshold).
 - **UI:**
   - **KPI cards:** Today’s orders (total, by status), active restaurants, open disputes, orders pending pickup / ready for pickup, low-stock alerts count.
   - **Quick links:** Jump to Orders, Restaurants, Disputes, Low stock.
-- **Notes:** Low-stock and open-dispute counts should be visually prominent (e.g. warning style) when &gt; 0. Order status enum: Pending, Accepted, Preparing, ReadyForPickup, Completed, Cancelled (from ERD).
+- **Notes:** Low-stock and open-dispute counts should be visually prominent (e.g. warning style) when > 0. Order status enum: Pending, Accepted, Preparing, ReadyForPickup, Completed, Cancelled (from ERD).
 
 ---
 

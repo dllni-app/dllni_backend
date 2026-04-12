@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Pages;
 
-use App\Filament\Resources\Roles\RoleResource;
+use App\Filament\Concerns\ResolvesSupermarketNavigationGroup;
 use App\Filament\Resources\SmCoupons\SmCouponResource;
 use App\Filament\Resources\SmOffers\SmOfferResource;
 use App\Filament\Resources\SmOrderDisputes\SmOrderDisputeResource;
@@ -14,7 +14,6 @@ use App\Filament\Resources\SmStoreDailyStats\SmStoreDailyStatResource;
 use App\Filament\Resources\SmStoreDocuments\SmStoreDocumentResource;
 use App\Filament\Resources\SmStores\SmStoreResource;
 use App\Filament\Resources\SmStoreTrustLogs\SmStoreTrustLogResource;
-use App\Filament\Resources\Users\UserResource;
 use BackedEnum;
 use Carbon\CarbonImmutable;
 use Filament\Pages\Page;
@@ -28,17 +27,16 @@ use Modules\Supermarket\Models\SmProduct;
 use Modules\Supermarket\Models\SmStore;
 use Modules\Supermarket\Models\SmStoreDocument;
 use Modules\Supermarket\Services\ReportService;
-use UnitEnum;
 
 final class SupermarketSectionHub extends Page
 {
+    use ResolvesSupermarketNavigationGroup;
+
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-building-storefront';
 
     protected static ?string $navigationLabel = null;
 
     protected static ?string $title = null;
-
-    protected static string|UnitEnum|null $navigationGroup = 'قسم المتاجر';
 
     protected static ?int $navigationSort = 1;
 
@@ -64,6 +62,7 @@ final class SupermarketSectionHub extends Page
         $activityMetrics = $dashboard['activity_metrics'] ?? [];
         $salesSummary = $dashboard['sales_summary'] ?? [];
         $operationalAlerts = $dashboard['operational_alerts'] ?? [];
+        $queueCounts = $dashboard['queue_counts'] ?? [];
 
         $pendingDocuments = SmStoreDocument::query()
             ->where('verification_status', 'pending')
@@ -82,19 +81,19 @@ final class SupermarketSectionHub extends Page
             ->limit(6)
             ->get();
 
-        $pendingPickupOrders = SmOrder::query()
-            ->where('status', SmOrderStatus::ReadyForPickup->value)
-            ->with('store:id,name')
-            ->latest('ready_for_pickup_at')
-            ->limit(6)
-            ->get();
-
         $suspendedStores = SmStore::query()
             ->whereNotNull('suspension_until')
             ->where('suspension_until', '>', $now)
             ->orderBy('suspension_until')
             ->limit(6)
             ->get(['id', 'name', 'suspension_until']);
+
+        $pendingPickupOrders = SmOrder::query()
+            ->where('status', SmOrderStatus::ReadyForPickup->value)
+            ->with('store:id,name')
+            ->latest('ready_for_pickup_at')
+            ->limit(6)
+            ->get();
 
         $lowStockProducts = SmProduct::query()
             ->where('is_available', true)
@@ -121,6 +120,90 @@ final class SupermarketSectionHub extends Page
             ->orderBy('ends_at')
             ->limit(6)
             ->get();
+
+        $queueEmpty = __('supermarket_admin.queues.empty');
+
+        $attentionComplianceQueues = [
+            $this->makeQueue(
+                __('supermarket_admin.queues.pending_documents'),
+                (int) ($queueCounts['pending_documents'] ?? 0),
+                $pendingDocuments->map(function (SmStoreDocument $document): array {
+                    $documentType = $document->document_type?->value;
+
+                    return [
+                        'label' => ($document->store?->name ?? __('supermarket_admin.labels.unknown_store')).' - '.($documentType ? __('supermarket_admin.enums.document_type.'.$documentType) : '—'),
+                        'meta' => $document->created_at?->diffForHumans() ?? '—',
+                        'url' => SmStoreDocumentResource::getUrl('edit', ['record' => $document]),
+                    ];
+                })->all(),
+                $queueEmpty,
+            ),
+            $this->makeQueue(
+                __('supermarket_admin.queues.open_disputes'),
+                (int) ($queueCounts['open_disputes'] ?? 0),
+                $openDisputes->map(fn (SmOrderDispute $dispute): array => [
+                    'label' => $dispute->ticket_number.' - '.($dispute->order?->order_number ?? '—'),
+                    'meta' => $dispute->order?->store?->name ?? __('supermarket_admin.labels.unknown_store'),
+                    'url' => SmOrderDisputeResource::getUrl('edit', ['record' => $dispute]),
+                ])->all(),
+                $queueEmpty,
+            ),
+            $this->makeQueue(
+                __('supermarket_admin.queues.suspended_stores'),
+                (int) ($queueCounts['suspended_stores'] ?? 0),
+                $suspendedStores->map(fn (SmStore $store): array => [
+                    'label' => $store->name,
+                    'meta' => __('supermarket_admin.queues.suspended_until', ['date' => $store->suspension_until?->format('Y-m-d H:i') ?? '—']),
+                    'url' => SmStoreResource::getUrl('edit', ['record' => $store]),
+                ])->all(),
+                $queueEmpty,
+            ),
+        ];
+
+        $attentionFulfillmentQueues = [
+            $this->makeQueue(
+                __('supermarket_admin.queues.pending_pickup_orders'),
+                (int) ($queueCounts['pending_pickup_orders'] ?? 0),
+                $pendingPickupOrders->map(fn (SmOrder $order): array => [
+                    'label' => $order->order_number.' - '.($order->store?->name ?? __('supermarket_admin.labels.unknown_store')),
+                    'meta' => $order->ready_for_pickup_at?->diffForHumans() ?? ($order->created_at?->diffForHumans() ?? '—'),
+                    'url' => SmOrderResource::getUrl('view', ['record' => $order]),
+                ])->all(),
+                $queueEmpty,
+            ),
+        ];
+
+        $attentionCatalogQueues = [
+            $this->makeQueue(
+                __('supermarket_admin.queues.low_stock_products'),
+                (int) ($queueCounts['low_stock_products'] ?? 0),
+                $lowStockProducts->map(fn (SmProduct $product): array => [
+                    'label' => $product->name.' - '.($product->store?->name ?? __('supermarket_admin.labels.unknown_store')),
+                    'meta' => __('supermarket_admin.queues.stock_value', [
+                        'stock' => (int) ($product->stock_quantity ?? 0),
+                        'threshold' => (int) ($product->low_stock_threshold ?? 0),
+                    ]),
+                    'url' => SmProductResource::getUrl('edit', ['record' => $product]),
+                ])->all(),
+                $queueEmpty,
+            ),
+            $this->makeQueue(
+                __('supermarket_admin.queues.expiring_promotions'),
+                (int) ($queueCounts['expiring_promotions'] ?? 0),
+                $expiringOffers->map(fn (SmOffer $offer): array => [
+                    'label' => __('supermarket_admin.queues.offer_label', ['name' => $offer->name]),
+                    'meta' => ($offer->store?->name ?? __('supermarket_admin.labels.unknown_store')).' - '.($offer->ends_at?->format('Y-m-d H:i') ?? '—'),
+                    'url' => SmOfferResource::getUrl('edit', ['record' => $offer]),
+                ])->concat(
+                    $expiringCoupons->map(fn (SmCoupon $coupon): array => [
+                        'label' => __('supermarket_admin.queues.coupon_label', ['code' => $coupon->code]),
+                        'meta' => ($coupon->store?->name ?? __('supermarket_admin.labels.unknown_store')).' - '.($coupon->ends_at?->format('Y-m-d H:i') ?? '—'),
+                        'url' => SmCouponResource::getUrl('edit', ['record' => $coupon]),
+                    ])
+                )->take(6)->values()->all(),
+                $queueEmpty,
+            ),
+        ];
 
         return [
             'overviewKpis' => [
@@ -152,7 +235,6 @@ final class SupermarketSectionHub extends Page
                     'links' => [
                         ['label' => __('supermarket_admin.hub.stores'), 'url' => SmStoreResource::getUrl('index')],
                         ['label' => __('supermarket_admin.hub.documents'), 'url' => SmStoreDocumentResource::getUrl('index')],
-                        ['label' => __('supermarket_admin.hub.trust_logs'), 'url' => SmStoreTrustLogResource::getUrl('index'), 'badge' => __('supermarket_admin.labels.read_only')],
                     ],
                 ],
                 [
@@ -170,84 +252,45 @@ final class SupermarketSectionHub extends Page
                     'links' => [
                         ['label' => __('supermarket_admin.hub.orders'), 'url' => SmOrderResource::getUrl('index'), 'badge' => __('supermarket_admin.labels.read_only')],
                         ['label' => __('supermarket_admin.hub.disputes'), 'url' => SmOrderDisputeResource::getUrl('index')],
-                        ['label' => __('supermarket_admin.hub.daily_stats'), 'url' => SmStoreDailyStatResource::getUrl('index'), 'badge' => __('supermarket_admin.labels.read_only')],
                     ],
                 ],
             ],
-            'priorityQueues' => [
-                [
-                    'title' => __('supermarket_admin.queues.pending_documents'),
-                    'count' => $pendingDocuments->count(),
-                    'items' => $pendingDocuments->map(function (SmStoreDocument $document): array {
-                        $documentType = $document->document_type?->value;
-
-                        return [
-                            'label' => ($document->store?->name ?? __('supermarket_admin.labels.unknown_store')).' - '.($documentType ? __('supermarket_admin.enums.document_type.'.$documentType) : '—'),
-                            'meta' => $document->created_at?->diffForHumans() ?? '—',
-                            'url' => SmStoreDocumentResource::getUrl('edit', ['record' => $document]),
-                        ];
-                    })->all(),
-                ],
-                [
-                    'title' => __('supermarket_admin.queues.open_disputes'),
-                    'count' => $openDisputes->count(),
-                    'items' => $openDisputes->map(fn (SmOrderDispute $dispute): array => [
-                        'label' => $dispute->ticket_number.' - '.($dispute->order?->order_number ?? '—'),
-                        'meta' => $dispute->order?->store?->name ?? __('supermarket_admin.labels.unknown_store'),
-                        'url' => SmOrderDisputeResource::getUrl('edit', ['record' => $dispute]),
-                    ])->all(),
-                ],
-                [
-                    'title' => __('supermarket_admin.queues.pending_pickup_orders'),
-                    'count' => $pendingPickupOrders->count(),
-                    'items' => $pendingPickupOrders->map(fn (SmOrder $order): array => [
-                        'label' => $order->order_number.' - '.($order->store?->name ?? __('supermarket_admin.labels.unknown_store')),
-                        'meta' => $order->ready_for_pickup_at?->diffForHumans() ?? ($order->created_at?->diffForHumans() ?? '—'),
-                        'url' => SmOrderResource::getUrl('view', ['record' => $order]),
-                    ])->all(),
-                ],
-                [
-                    'title' => __('supermarket_admin.queues.suspended_stores'),
-                    'count' => $suspendedStores->count(),
-                    'items' => $suspendedStores->map(fn (SmStore $store): array => [
-                        'label' => $store->name,
-                        'meta' => __('supermarket_admin.queues.suspended_until', ['date' => $store->suspension_until?->format('Y-m-d H:i') ?? '—']),
-                        'url' => SmStoreResource::getUrl('edit', ['record' => $store]),
-                    ])->all(),
-                ],
-                [
-                    'title' => __('supermarket_admin.queues.low_stock_products'),
-                    'count' => $lowStockProducts->count(),
-                    'items' => $lowStockProducts->map(fn (SmProduct $product): array => [
-                        'label' => $product->name.' - '.($product->store?->name ?? __('supermarket_admin.labels.unknown_store')),
-                        'meta' => __('supermarket_admin.queues.stock_value', [
-                            'stock' => (int) ($product->stock_quantity ?? 0),
-                            'threshold' => (int) ($product->low_stock_threshold ?? 0),
-                        ]),
-                        'url' => SmProductResource::getUrl('edit', ['record' => $product]),
-                    ])->all(),
-                ],
-                [
-                    'title' => __('supermarket_admin.queues.expiring_promotions'),
-                    'count' => $expiringOffers->count() + $expiringCoupons->count(),
-                    'items' => $expiringOffers->map(fn (SmOffer $offer): array => [
-                        'label' => __('supermarket_admin.queues.offer_label', ['name' => $offer->name]),
-                        'meta' => ($offer->store?->name ?? __('supermarket_admin.labels.unknown_store')).' - '.($offer->ends_at?->format('Y-m-d H:i') ?? '—'),
-                        'url' => SmOfferResource::getUrl('edit', ['record' => $offer]),
-                    ])->concat(
-                        $expiringCoupons->map(fn (SmCoupon $coupon): array => [
-                            'label' => __('supermarket_admin.queues.coupon_label', ['code' => $coupon->code]),
-                            'meta' => ($coupon->store?->name ?? __('supermarket_admin.labels.unknown_store')).' - '.($coupon->ends_at?->format('Y-m-d H:i') ?? '—'),
-                            'url' => SmCouponResource::getUrl('edit', ['record' => $coupon]),
-                        ])
-                    )->take(6)->values()->all(),
-                ],
+            'referenceLinks' => [
+                ['label' => __('supermarket_admin.hub.trust_logs'), 'url' => SmStoreTrustLogResource::getUrl('index'), 'badge' => __('supermarket_admin.labels.read_only')],
+                ['label' => __('supermarket_admin.hub.daily_stats'), 'url' => SmStoreDailyStatResource::getUrl('index'), 'badge' => __('supermarket_admin.labels.read_only')],
             ],
-            'globalLinks' => [
-                ['label' => __('supermarket_admin.global.roles'), 'url' => RoleResource::getUrl('index')],
-                ['label' => __('supermarket_admin.global.admin_users'), 'url' => UserResource::getUrl('index')],
+            'attentionGroups' => [
+                [
+                    'title' => __('supermarket_admin.attention.compliance_title'),
+                    'description' => __('supermarket_admin.attention.compliance_description'),
+                    'queues' => $attentionComplianceQueues,
+                ],
+                [
+                    'title' => __('supermarket_admin.attention.fulfillment_title'),
+                    'description' => __('supermarket_admin.attention.fulfillment_description'),
+                    'queues' => $attentionFulfillmentQueues,
+                ],
+                [
+                    'title' => __('supermarket_admin.attention.catalog_title'),
+                    'description' => __('supermarket_admin.attention.catalog_description'),
+                    'queues' => $attentionCatalogQueues,
+                ],
             ],
             'recentActivity' => $dashboard['recent_activity'] ?? [],
+        ];
+    }
+
+    /**
+     * @param  list<array{label: string, meta: string, url: string}>  $items
+     * @return array{title: string, count: int, items: list<array{label: string, meta: string, url: string}>, emptyMessage: string}
+     */
+    private function makeQueue(string $title, int $count, array $items, string $emptyMessage): array
+    {
+        return [
+            'title' => $title,
+            'count' => $count,
+            'items' => $items,
+            'emptyMessage' => $emptyMessage,
         ];
     }
 

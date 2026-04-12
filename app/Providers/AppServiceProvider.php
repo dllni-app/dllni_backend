@@ -14,8 +14,13 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Resturants\Models\Category;
+use Modules\Resturants\Models\Order;
 use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
+use Modules\Resturants\Models\RestaurantOrderDispute;
+use Modules\Resturants\Policies\OrderPolicy;
+use Modules\Resturants\Policies\RestaurantOrderDisputePolicy;
+use Modules\Resturants\Policies\RestaurantPolicy;
 use Modules\Supermarket\Models\SmCoupon;
 use Modules\Supermarket\Models\SmOffer;
 use Modules\Supermarket\Models\SmOrder;
@@ -65,7 +70,15 @@ final class AppServiceProvider extends ServiceProvider
         $this->bootModelsDefaults();
         $this->bootMorphMap();
         $this->bootBroadcastChannels();
+        $this->bootRestaurantPolicies();
         $this->bootSupermarketPolicies();
+    }
+
+    private function bootRestaurantPolicies(): void
+    {
+        Gate::policy(Restaurant::class, RestaurantPolicy::class);
+        Gate::policy(Order::class, OrderPolicy::class);
+        Gate::policy(RestaurantOrderDispute::class, RestaurantOrderDisputePolicy::class);
     }
 
     private function bootSupermarketPolicies(): void

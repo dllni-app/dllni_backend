@@ -5,10 +5,18 @@ declare(strict_types=1);
 namespace Modules\Supermarket\Services;
 
 use Carbon\Carbon;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
+use Modules\Supermarket\Enums\SmDisputeStatus;
+use Modules\Supermarket\Enums\SmOrderStatus;
+use Modules\Supermarket\Models\SmCoupon;
+use Modules\Supermarket\Models\SmOffer;
 use Modules\Supermarket\Models\SmOrder;
+use Modules\Supermarket\Models\SmOrderDispute;
+use Modules\Supermarket\Models\SmProduct;
 use Modules\Supermarket\Models\SmStore;
 use Modules\Supermarket\Models\SmStoreDailyStat;
+use Modules\Supermarket\Models\SmStoreDocument;
 
 final class ReportService
 {
@@ -217,18 +225,15 @@ final class ReportService
         // Activity metrics
         $totalStores = SmStore::count();
         $activeStores = SmStore::where('is_active', true)->count();
-        $pendingPickupOrders = SmOrder::where('status', 'ready_for_pickup')->count();
+        $pendingPickupOrders = SmOrder::where('status', SmOrderStatus::ReadyForPickup->value)->count();
 
-        // Operational alerts
-        $lowStockProducts = 0; // TODO: implement when sm_products has inventory tracking
+        $queueCounts = $this->buildQueueCounts(CarbonImmutable::now());
+
         $highCancellationStores = DB::table('sm_orders')
             ->selectRaw('store_id')
             ->whereDate('created_at', '>=', Carbon::today()->subDays(7))
             ->groupBy('store_id')
             ->havingRaw('(SUM(CASE WHEN status = "cancelled" THEN 1 ELSE 0 END) / COUNT(*)) > 0.2')
-            ->count();
-        $openDisputes = DB::table('sm_order_disputes')
-            ->where('status', 'open')
             ->count();
 
         // Recent activity
@@ -238,6 +243,7 @@ final class ReportService
             ->get()
             ->map(fn ($order) => [
                 'id' => $order->id,
+                'order_number' => $order->order_number,
                 'store_name' => $order->store?->name,
                 'customer_name' => $order->customer?->name,
                 'order_total' => (float) $order->total_amount,
@@ -262,11 +268,51 @@ final class ReportService
                 'pending_pickup_orders' => $pendingPickupOrders,
             ],
             'operational_alerts' => [
-                'low_stock_products_count' => $lowStockProducts,
+                'low_stock_products_count' => $queueCounts['low_stock_products'],
                 'high_cancellation_stores_count' => $highCancellationStores,
-                'open_disputes_count' => $openDisputes,
+                'open_disputes_count' => $queueCounts['open_disputes'],
             ],
+            'queue_counts' => $queueCounts,
             'recent_activity' => $recentOrders,
         ];
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function buildQueueCounts(CarbonImmutable $now): array
+    {
+        $expiringEnd = $now->addDays(3);
+
+        return [
+            'pending_documents' => SmStoreDocument::query()->where('verification_status', 'pending')->count(),
+            'open_disputes' => SmOrderDispute::query()
+                ->whereIn('status', [SmDisputeStatus::Open->value, SmDisputeStatus::UnderReview->value])
+                ->count(),
+            'pending_pickup_orders' => SmOrder::query()->where('status', SmOrderStatus::ReadyForPickup->value)->count(),
+            'suspended_stores' => SmStore::query()
+                ->whereNotNull('suspension_until')
+                ->where('suspension_until', '>', $now)
+                ->count(),
+            'low_stock_products' => $this->countLowStockProducts(),
+            'expiring_promotions' => SmOffer::query()
+                ->where('is_active', true)
+                ->whereNotNull('ends_at')
+                ->whereBetween('ends_at', [$now, $expiringEnd])
+                ->count()
+                + SmCoupon::query()
+                    ->where('is_active', true)
+                    ->whereNotNull('ends_at')
+                    ->whereBetween('ends_at', [$now, $expiringEnd])
+                    ->count(),
+        ];
+    }
+
+    private function countLowStockProducts(): int
+    {
+        return SmProduct::query()
+            ->where('is_available', true)
+            ->whereColumn('stock_quantity', '<=', 'low_stock_threshold')
+            ->count();
     }
 }

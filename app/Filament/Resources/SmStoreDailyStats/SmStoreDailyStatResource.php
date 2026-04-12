@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\SmStoreDailyStats;
 
+use App\Filament\Concerns\ResolvesSupermarketNavigationGroup;
 use App\Filament\Resources\SmStoreDailyStats\Pages\ListSmStoreDailyStats;
 use App\Filament\Resources\SmStoreDailyStats\Pages\ViewSmStoreDailyStat;
 use App\Filament\Resources\SmStoreDailyStats\Schemas\SmStoreDailyStatInfolist;
@@ -14,17 +15,16 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Modules\Supermarket\Models\SmStoreDailyStat;
-use UnitEnum;
 
 final class SmStoreDailyStatResource extends Resource
 {
+    use ResolvesSupermarketNavigationGroup;
+
     protected static ?string $model = SmStoreDailyStat::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChartBar;
 
     protected static ?string $navigationLabel = null;
-
-    protected static string|UnitEnum|null $navigationGroup = 'قسم المتاجر';
 
     protected static ?int $navigationSort = 10;
 

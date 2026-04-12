@@ -6,6 +6,7 @@ namespace Modules\Resturants\Models;
 
 use App\Models\User;
 use Database\Factories\RestaurantFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -164,6 +165,53 @@ final class Restaurant extends Model implements HasMedia
         $this->addMediaCollection('primary-image')->singleFile();
         $this->addMediaCollection('banner-image')->singleFile();
         $this->addMediaCollection('images');
+    }
+
+    public function scopeAdminMissingOperatingHours(Builder $query): Builder
+    {
+        return $query->whereDoesntHave('operatingHours', function (Builder $q): void {
+            $q
+                ->where('is_closed', false)
+                ->whereNotNull('open_time')
+                ->whereNotNull('close_time');
+        });
+    }
+
+    public function scopeAdminMissingCuisineTypes(Builder $query): Builder
+    {
+        return $query->whereDoesntHave('cuisineTypes');
+    }
+
+    public function scopeAdminMissingAvailableProducts(Builder $query): Builder
+    {
+        return $query->whereDoesntHave('products', function (Builder $q): void {
+            $q->where('is_available', true);
+        });
+    }
+
+    public function scopeAdminMissingActiveOffers(Builder $query): Builder
+    {
+        $now = now();
+
+        return $query->whereDoesntHave('offers', function (Builder $q) use ($now): void {
+            $q
+                ->where('is_active', true)
+                ->where(fn (Builder $nested) => $nested->whereNull('starts_at')->orWhere('starts_at', '<=', $now))
+                ->where(fn (Builder $nested) => $nested->whereNull('ends_at')->orWhere('ends_at', '>=', $now));
+        });
+    }
+
+    public function scopeAdminMissingActiveCoupons(Builder $query): Builder
+    {
+        $now = now();
+
+        return $query->whereDoesntHave('promoCodes', function (Builder $q) use ($now): void {
+            $q
+                ->where('is_active', true)
+                ->where(fn (Builder $nested) => $nested->whereNull('starts_at')->orWhere('starts_at', '<=', $now))
+                ->where(fn (Builder $nested) => $nested->whereNull('ends_at')->orWhere('ends_at', '>=', $now))
+                ->where(fn (Builder $nested) => $nested->whereNull('usage_limit')->orWhereColumn('usage_count', '<', 'usage_limit'));
+        });
     }
 
     protected static function newFactory(): RestaurantFactory

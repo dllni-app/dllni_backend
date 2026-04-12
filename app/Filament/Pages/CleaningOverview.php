@@ -90,12 +90,27 @@ final class CleaningOverview extends Page
         $otherAlerts = $allAlerts->filter(fn ($a) => $a->alert_type?->value !== AlertType::SOSTriggered->value);
 
         return [
-            'kpis' => [
-                'cleaning_bookings' => CleaningBooking::query()->count(),
-                'event_bookings' => EventBooking::query()->count(),
-                'open_disputes' => Dispute::query()->whereIn('status', ['open', 'under_review'])->count(),
-                'open_sos' => SosAlert::query()->where('status', '!=', 'resolved')->count(),
-                'new_system_alerts' => SystemAlert::query()->where('status', 'new')->count(),
+            'overviewKpis' => [
+                [
+                    'label' => __('cleaning_admin.overview.kpis.cleaning_bookings'),
+                    'value' => CleaningBooking::query()->count(),
+                ],
+                [
+                    'label' => __('cleaning_admin.overview.kpis.event_bookings'),
+                    'value' => EventBooking::query()->count(),
+                ],
+                [
+                    'label' => __('cleaning_admin.overview.kpis.open_disputes'),
+                    'value' => Dispute::query()->whereIn('status', ['open', 'under_review'])->count(),
+                ],
+                [
+                    'label' => __('cleaning_admin.overview.kpis.open_sos'),
+                    'value' => SosAlert::query()->where('status', '!=', 'resolved')->count(),
+                ],
+                [
+                    'label' => __('cleaning_admin.overview.kpis.new_system_alerts'),
+                    'value' => SystemAlert::query()->where('status', 'new')->count(),
+                ],
             ],
             'sosAlerts' => $sosAlerts,
             'otherAlerts' => $otherAlerts,

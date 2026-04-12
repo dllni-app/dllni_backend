@@ -45,30 +45,30 @@ The following are intentionally excluded from active ERD coverage:
 ## Tier 1 - Global shared tables
 
 
-| Table                    | Notes                                                            |
-| ------------------------ | ---------------------------------------------------------------- |
+| Table                    | Notes                                                                  |
+| ------------------------ | ---------------------------------------------------------------------- |
 | `users`                  | Existing Laravel user table (with `phone`, `module_type`, `fcm_token`) |
-| `media`                  | Spatie MediaLibrary polymorphic table                            |
-| `notifications`          | Laravel notifications table                                      |
-| `personal_access_tokens` | Sanctum tokens                                                   |
-| `roles`                  | Platform-level RBAC roles (`is_system` flag)                     |
-| `permissions`            | Global permissions                                               |
-| `permission_role`        | Pivot between `roles` and `permissions`                          |
-| `cancellation_policies`  | Module-scoped policies (`restaurant`, `cleaning`, `supermarket`) |
+| `media`                  | Spatie MediaLibrary polymorphic table                                  |
+| `notifications`          | Laravel notifications table                                            |
+| `personal_access_tokens` | Sanctum tokens                                                         |
+| `roles`                  | Platform-level RBAC roles (`is_system` flag)                           |
+| `permissions`            | Global permissions                                                     |
+| `permission_role`        | Pivot between `roles` and `permissions`                                |
+| `cancellation_policies`  | Module-scoped policies (`restaurant`, `cleaning`, `supermarket`)       |
 
 
 ## Tier 2 - Shared worker-service tables (Cleaning domain)
 
 
-| Table                   | Notes                                        |
-| ----------------------- | -------------------------------------------- |
+| Table                   | Notes                                             |
+| ----------------------- | ------------------------------------------------- |
 | `workers`               | Worker profile, KPIs, verification, and featuring |
-| `worker_zones`          | Preferred work areas (polygon support)       |
-| `worker_availability`   | Availability calendar                        |
-| `worker_trust_logs`     | Trust score audit log                        |
-| `property_type_configs` | Guided-estimation lookup                     |
-| `service_addons`        | Shared add-ons for cleaning-related bookings |
-| `travel_cost_configs`   | Travel compensation rules                    |
+| `worker_zones`          | Preferred work areas (polygon support)            |
+| `worker_availability`   | Availability calendar                             |
+| `worker_trust_logs`     | Trust score audit log                             |
+| `property_type_configs` | Guided-estimation lookup                          |
+| `service_addons`        | Shared add-ons for cleaning-related bookings      |
+| `travel_cost_configs`   | Travel compensation rules                         |
 
 
 ## Tier 3 - Shared catalog and recipe tables (Restaurant + Supermarket)
@@ -108,12 +108,12 @@ The following are intentionally excluded from active ERD coverage:
 ## Tier 6 - Shared financial settings and automation rules
 
 
-| Table                         | Notes                                                          |
-| ----------------------------- | -------------------------------------------------------------- |
-| `cleaning_financial_settings` | Global financial and time-billing defaults for Cleaning        |
-| `cleaning_automation_rules`   | Rule engine for Cleaning worker suspension / rewards           |
-| `restaurant_financial_settings` | Global financial and time-billing defaults for Restaurant    |
-| `restaurant_automation_rules`   | Rule engine for Restaurant operational automation workflows  |
+| Table                           | Notes                                                       |
+| ------------------------------- | ----------------------------------------------------------- |
+| `cleaning_financial_settings`   | Global financial and time-billing defaults for Cleaning     |
+| `cleaning_automation_rules`     | Rule engine for Cleaning worker suspension / rewards        |
+| `restaurant_financial_settings` | Global financial and time-billing defaults for Restaurant   |
+| `restaurant_automation_rules`   | Rule engine for Restaurant operational automation workflows |
 
 
 ## ERD Diagram (shared entities)

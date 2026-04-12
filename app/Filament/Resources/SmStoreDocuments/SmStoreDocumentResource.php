@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\SmStoreDocuments;
 
+use App\Filament\Concerns\ResolvesSupermarketNavigationGroup;
 use App\Filament\Resources\SmStoreDocuments\Pages\EditSmStoreDocument;
 use App\Filament\Resources\SmStoreDocuments\Pages\ListSmStoreDocuments;
 use App\Filament\Resources\SmStoreDocuments\Pages\ViewSmStoreDocument;
@@ -16,17 +17,16 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Modules\Supermarket\Models\SmStoreDocument;
-use UnitEnum;
 
 final class SmStoreDocumentResource extends Resource
 {
+    use ResolvesSupermarketNavigationGroup;
+
     protected static ?string $model = SmStoreDocument::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedDocumentText;
 
     protected static ?string $navigationLabel = null;
-
-    protected static string|UnitEnum|null $navigationGroup = 'قسم المتاجر';
 
     protected static ?int $navigationSort = 3;
 

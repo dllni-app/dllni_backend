@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\SmOrderDisputes;
 
+use App\Filament\Concerns\ResolvesSupermarketNavigationGroup;
 use App\Filament\Resources\SmOrderDisputes\Pages\EditSmOrderDispute;
 use App\Filament\Resources\SmOrderDisputes\Pages\ListSmOrderDisputes;
 use App\Filament\Resources\SmOrderDisputes\Pages\ViewSmOrderDispute;
@@ -17,17 +18,16 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Modules\Supermarket\Models\SmOrderDispute;
-use UnitEnum;
 
 final class SmOrderDisputeResource extends Resource
 {
+    use ResolvesSupermarketNavigationGroup;
+
     protected static ?string $model = SmOrderDispute::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedExclamationTriangle;
 
     protected static ?string $navigationLabel = null;
-
-    protected static string|UnitEnum|null $navigationGroup = 'قسم المتاجر';
 
     protected static ?int $navigationSort = 9;
 
