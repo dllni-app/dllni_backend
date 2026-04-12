@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 declare(strict_types=1);
 
@@ -626,7 +626,7 @@ final class RestaurantSeeder extends Seeder
             ['email' => "employee.one+{$restaurant->id}@dllni.sy"],
             [
                 'name' => '�.�^ظف أ�^�"',
-                'phone' => '+963944200001' . $restaurant->id,
+                'phone' => '+963944200001'.$restaurant->id,
                 'password' => bcrypt('password'),
                 'module_type' => UserModuleType::RestaurantSeller->value,
                 'email_verified_at' => now(),
@@ -637,7 +637,7 @@ final class RestaurantSeeder extends Seeder
             ['email' => "employee.two+{$restaurant->id}@dllni.sy"],
             [
                 'name' => '�.�^ظف ثا�?�S',
-                'phone' => '+963944200002' . $restaurant->id,
+                'phone' => '+963944200002'.$restaurant->id,
                 'password' => bcrypt('password'),
                 'module_type' => UserModuleType::RestaurantSeller->value,
                 'email_verified_at' => now(),
@@ -672,13 +672,13 @@ final class RestaurantSeeder extends Seeder
 
         $activeCouponId = DB::table('promo_codes')->where([
             'restaurant_id' => $restaurant->id,
-            'code' => 'SAVE25-' . $restaurant->id,
+            'code' => 'SAVE25-'.$restaurant->id,
         ])->value('id');
 
         if (! $activeCouponId) {
             $activeCouponId = DB::table('promo_codes')->insertGetId([
                 'restaurant_id' => $restaurant->id,
-                'code' => 'SAVE25-' . $restaurant->id,
+                'code' => 'SAVE25-'.$restaurant->id,
                 'discount_type' => 'percentage',
                 'discount_value' => 25,
                 'min_order_amount' => 20,
@@ -695,7 +695,7 @@ final class RestaurantSeeder extends Seeder
         DB::table('promo_codes')->updateOrInsert(
             [
                 'restaurant_id' => $restaurant->id,
-                'code' => 'OLD10-' . $restaurant->id,
+                'code' => 'OLD10-'.$restaurant->id,
             ],
             [
                 'discount_type' => 'percentage',
@@ -926,9 +926,9 @@ final class RestaurantSeeder extends Seeder
                 ]
             )
                 ? DB::table('modifier_groups')
-                ->where('restaurant_id', $restaurant->id)
-                ->where('name', $group['name'])
-                ->value('id')
+                    ->where('restaurant_id', $restaurant->id)
+                    ->where('name', $group['name'])
+                    ->value('id')
                 : null;
 
             if (! $groupId) {
@@ -1078,7 +1078,7 @@ final class RestaurantSeeder extends Seeder
             return;
         }
 
-        $pngPath = $tempPath . '-' . Str::slug($imageSeed, '-') . '.png';
+        $pngPath = $tempPath.'-'.Str::slug($imageSeed, '-').'.png';
         @unlink($tempPath);
 
         $decoded = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAtMB9dZYkEYAAAAASUVORK5CYII=', true);
@@ -1095,7 +1095,7 @@ final class RestaurantSeeder extends Seeder
 
         try {
             $product->addMedia($pngPath)
-                ->usingFileName(Str::slug($imageSeed, '-') . '.png')
+                ->usingFileName(Str::slug($imageSeed, '-').'.png')
                 ->toMediaCollection('images');
         } catch (Throwable) {
             // Ignore media failures in seed data.
