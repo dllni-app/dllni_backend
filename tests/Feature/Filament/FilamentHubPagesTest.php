@@ -8,6 +8,12 @@ use App\Enums\SystemAlertStatus;
 use App\Filament\Pages\CleaningOverview;
 use App\Filament\Pages\RestaurantSectionHub;
 use App\Filament\Pages\SupermarketSectionHub;
+use App\Filament\Pages\SupermarketStatsPage;
+use App\Filament\Resources\MasterProducts\MasterProductResource;
+use App\Filament\Resources\SmCategories\SmCategoryResource;
+use App\Filament\Resources\SmOrderDisputes\SmOrderDisputeResource;
+use App\Filament\Resources\SmOrders\SmOrderResource;
+use App\Filament\Resources\SmStores\SmStoreResource;
 use App\Models\SystemAlert;
 use App\Models\User;
 use Database\Factories\OrderFactory;
@@ -33,6 +39,27 @@ beforeEach(function (): void {
 
 it('allows an admin to load the supermarket section hub', function (): void {
     $this->get(SupermarketSectionHub::getUrl([], isAbsolute: false))
+        ->assertSuccessful();
+});
+
+it('allows an admin to load the supermarket statistics page', function (): void {
+    $this->get(SupermarketStatsPage::getUrl([], isAbsolute: false))
+        ->assertSuccessful();
+});
+
+it('allows an admin to load supermarket store order and dispute list pages', function (): void {
+    $this->get(SmStoreResource::getUrl('index', [], isAbsolute: false))
+        ->assertSuccessful();
+    $this->get(SmOrderResource::getUrl('index', [], isAbsolute: false))
+        ->assertSuccessful();
+    $this->get(SmOrderDisputeResource::getUrl('index', [], isAbsolute: false))
+        ->assertSuccessful();
+});
+
+it('allows an admin to load supermarket category and master product list pages', function (): void {
+    $this->get(SmCategoryResource::getUrl('index', [], isAbsolute: false))
+        ->assertSuccessful();
+    $this->get(MasterProductResource::getUrl('index', [], isAbsolute: false))
         ->assertSuccessful();
 });
 

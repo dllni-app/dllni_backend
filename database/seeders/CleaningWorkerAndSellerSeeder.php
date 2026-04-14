@@ -84,7 +84,7 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
                 'open_disputes_count' => 0,
                 'is_active' => true,
                 'is_suspended' => false,
-                'home_address' => 'ح�"ب - ا�"ح�.دا�?�Sة - شارع ا�"�,دس',
+                'home_address' => 'حلب - الحمدانية - شارع القدس',
                 'home_latitude' => 36.1795,
                 'home_longitude' => 37.1082,
                 'default_working_hours' => [
@@ -100,7 +100,7 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
         );
 
         WorkerZone::firstOrCreate(
-            ['worker_id' => $worker->id, 'name' => 'ح�"ب - �?طا�, ا�"ح�.دا�?�Sة'],
+            ['worker_id' => $worker->id, 'name' => 'حلب - قطاع الحمدانية'],
             [
                 'polygon' => [
                     ['lat' => 36.1670, 'lng' => 37.0950],

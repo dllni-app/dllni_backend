@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace App\Filament\Pages;
 
 use App\Filament\Concerns\ResolvesSupermarketNavigationGroup;
+use App\Filament\Resources\MasterProducts\MasterProductResource;
+use App\Filament\Resources\SmCategories\SmCategoryResource;
 use App\Filament\Resources\SmCoupons\SmCouponResource;
 use App\Filament\Resources\SmOffers\SmOfferResource;
 use App\Filament\Resources\SmOrderDisputes\SmOrderDisputeResource;
 use App\Filament\Resources\SmOrders\SmOrderResource;
 use App\Filament\Resources\SmProducts\SmProductResource;
-use App\Filament\Resources\SmStoreDailyStats\SmStoreDailyStatResource;
 use App\Filament\Resources\SmStoreDocuments\SmStoreDocumentResource;
 use App\Filament\Resources\SmStores\SmStoreResource;
 use App\Filament\Resources\SmStoreTrustLogs\SmStoreTrustLogResource;
@@ -241,6 +242,8 @@ final class SupermarketSectionHub extends Page
                     'title' => __('supermarket_admin.flow.catalog.title'),
                     'description' => __('supermarket_admin.flow.catalog.description'),
                     'links' => [
+                        ['label' => __('supermarket_admin.hub.master_products'), 'url' => MasterProductResource::getUrl('index')],
+                        ['label' => __('supermarket_admin.hub.categories'), 'url' => SmCategoryResource::getUrl('index')],
                         ['label' => __('supermarket_admin.hub.products'), 'url' => SmProductResource::getUrl('index')],
                         ['label' => __('supermarket_admin.hub.offers'), 'url' => SmOfferResource::getUrl('index')],
                         ['label' => __('supermarket_admin.hub.coupons'), 'url' => SmCouponResource::getUrl('index')],
@@ -257,7 +260,7 @@ final class SupermarketSectionHub extends Page
             ],
             'referenceLinks' => [
                 ['label' => __('supermarket_admin.hub.trust_logs'), 'url' => SmStoreTrustLogResource::getUrl('index'), 'badge' => __('supermarket_admin.labels.read_only')],
-                ['label' => __('supermarket_admin.hub.daily_stats'), 'url' => SmStoreDailyStatResource::getUrl('index'), 'badge' => __('supermarket_admin.labels.read_only')],
+                ['label' => __('supermarket_admin.hub.daily_stats'), 'url' => SupermarketStatsPage::getUrl()],
             ],
             'attentionGroups' => [
                 [

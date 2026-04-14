@@ -23,7 +23,7 @@ final class SmOrderSeeder extends Seeder
 
         if ($customerId === null) {
             $customerId = DB::table('users')->insertGetId([
-                'name' => 'ع�.�S�" ا�"س�^بر�.ار�fت',
+                'name' => 'عميل السوبرماركت',
                 'email' => 'supermarket.customer@dllni.sy',
                 'password' => bcrypt('password'),
                 'email_verified_at' => now(),

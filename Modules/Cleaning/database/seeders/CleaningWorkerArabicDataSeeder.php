@@ -22,56 +22,56 @@ use Modules\Cleaning\Models\CleaningTimeWarning;
 final class CleaningWorkerArabicDataSeeder extends Seeder
 {
     private const array ARABIC_CUSTOMERS = [
-        ['name' => 'أح�.د ا�"أح�.د', 'email' => 'ahmed.alahmad@dllni.sy'],
-        ['name' => 'فاط�.ة �.ح�.د', 'email' => 'fatima.mohammad@dllni.sy'],
-        ['name' => 'خا�"د ا�"سع�Sد', 'email' => 'khalid.alsaeed@dllni.sy'],
-        ['name' => '�?�^رة ا�"ع�"�S', 'email' => 'nora.alali@dllni.sy'],
-        ['name' => 'ع�.ر حس�?', 'email' => 'omar.hassan@dllni.sy'],
+        ['name' => 'أحمد الأحمد', 'email' => 'ahmed.alahmad@dllni.sy'],
+        ['name' => 'فاطمة محمد', 'email' => 'fatima.mohammad@dllni.sy'],
+        ['name' => 'خالد السعيد', 'email' => 'khalid.alsaeed@dllni.sy'],
+        ['name' => 'نورة العلي', 'email' => 'nora.alali@dllni.sy'],
+        ['name' => 'عمر حسن', 'email' => 'omar.hassan@dllni.sy'],
     ];
 
     private const array ARABIC_LOCATIONS = [
         [
-            'location_name' => 'ف�S�"ا ا�"ح�.دا�?�Sة',
-            'address' => 'ا�"ح�.دا�?�Sة�O شارع ا�"�,دس',
+            'location_name' => 'فيلا الحمدانية',
+            'address' => 'الحمدانية، شارع القدس',
             'latitude' => 36.1795,
             'longitude' => 37.1082,
         ],
         [
-            'location_name' => 'ش�,ة ا�"�.�Sدا�?',
-            'address' => 'ا�"فر�,ا�?�O ب�?ا�Sة ٥',
+            'location_name' => 'شقة الفراتي',
+            'address' => 'الفراتي، بناء ٥',
             'latitude' => 36.2021,
             'longitude' => 37.1343,
         ],
         [
-            'location_name' => 'ب�Sت ا�"ز�?راء',
-            'address' => 'ا�"أشرف�Sة�O �,رب ا�"�.سجد',
+            'location_name' => 'بيت الزهراء',
+            'address' => 'الأشرفية، قرب المسجد',
             'latitude' => 36.2308,
             'longitude' => 37.1279,
         ],
         [
-            'location_name' => 'ع�.ارة ا�"ر�^ضة',
-            'address' => 'ا�"سر�Sا�? ا�"جد�Sدة�O ا�"طاب�, ا�"ثا�"ث',
+            'location_name' => 'عمارة الرضا',
+            'address' => 'السرايا الجديدة، الطابق الثالث',
             'latitude' => 36.2168,
             'longitude' => 37.1317,
         ],
         [
-            'location_name' => 'ف�S�"ا ا�"�?�^ر',
-            'address' => 'ا�"ج�.�S�"�Sة�O ح�S ا�"سعادة',
+            'location_name' => 'فيلا النور',
+            'address' => 'الجميلية، حي السعادة',
             'latitude' => 36.2127,
             'longitude' => 37.1456,
         ],
     ];
 
     private const array ARABIC_CANCELLATION_REASONS = [
-        'ظرف عائ�"�S طارئ',
-        'تعارض �.ع �.�^عد آخر',
-        'ا�"زب�^�? أ�"غ�? ا�"�.�^عد',
+        'ظرف عائلي طارئ',
+        'تعارض مع موعد آخر',
+        'الزبون ألغى الموعد',
     ];
 
     private const array ARABIC_REJECT_MESSAGES = [
-        'أعتذر�O �"ا أستط�Sع ت�.د�Sد ا�"�^�,ت ا�"�S�^�..',
-        '�"د�S �.�^عد آخر بعد �?ذ�? ا�"خد�.ة.',
-        '�?أسف�O ا�"�^�,ت ا�"إضاف�S غ�Sر �.تاح.',
+        'أعتذر، لا أستطيع تمديد الوقت اليوم.',
+        'لدي موعد آخر بعد نهاية الخدمة.',
+        'للأسف، الوقت الإضافي غير متاح.',
     ];
 
     public function run(): void
@@ -84,10 +84,10 @@ final class CleaningWorkerArabicDataSeeder extends Seeder
             return;
         }
 
-        $worker->user->update(['name' => 'را�.ا أح�.د']);
+        $worker->user->update(['name' => 'رنا أحمد']);
         $worker->update([
-            'first_name' => 'را�.ا',
-            'bio' => 'عا�.�"ة ت�?ظ�Sف ذات خبرة �"�"تجارب داخ�" ا�"تطب�S�,.',
+            'first_name' => 'رنا',
+            'bio' => 'عاملة تنظيف ذات خبرة من التجارب داخل التطبيق.',
             'average_rating' => 4.8,
             'total_completed_jobs' => 120,
             'trust_score' => 85,
@@ -96,7 +96,7 @@ final class CleaningWorkerArabicDataSeeder extends Seeder
             'open_disputes_count' => 1,
             'is_active' => true,
             'is_suspended' => false,
-            'home_address' => 'ح�"ب - ا�"ح�.دا�?�Sة',
+            'home_address' => 'حلب - الحمدانية',
             'home_latitude' => 36.1795,
             'home_longitude' => 37.1082,
             'default_working_hours' => [

@@ -32,8 +32,8 @@ final class RestaurantSeeder extends Seeder
         $owner = User::updateOrCreate(
             ['email' => 'restaurant.owner@dllni.sy'],
             [
-                'name' => '�.ا�"�f ا�"�.طع�.',
-                'phone' => '+963933000001',
+                'name' => 'مالك المطعم',
+                'phone' => '+963933000101',
                 'password' => bcrypt('password'),
                 'module_type' => UserModuleType::RestaurantSeller->value,
                 'email_verified_at' => now(),
@@ -42,13 +42,13 @@ final class RestaurantSeeder extends Seeder
 
         $restaurants = [
             [
-                'name' => '�.طبخ �"ا ب�Sازا ا�"إ�Sطا�"�S',
+                'name' => 'مطبخ لا بياتزا الإيطالي',
                 'slug' => 'la-piazza-italian',
-                'description' => '�.طبخ إ�Sطا�"�S أص�S�" �.ع ب�Sتزا با�"خشب �^�.ع�fر�^�?ة �.�?ز�"�Sة. �^صفات عائ�"�Sة تت�^ارث�?ا ا�"أج�Sا�".',
-                'address' => '15 شارع ا�"�.طاع�.�O ا�"فر�,ا�?',
-                'city' => 'ح�"ب',
-                'district' => 'ا�"فر�,ا�?',
-                'location_details' => '�,رب د�^ار ا�"صخرة�O �.�,اب�" �.ج�.ع ا�"�.طاع�.',
+                'description' => 'مطبخ إيطالي أصيل مع بيتزا بالفرن الحجري ووصفات عائلية تتوارثها الأجيال.',
+                'address' => '15 شارع المطاعم الفراتي',
+                'city' => 'حلب',
+                'district' => 'الفراتي',
+                'location_details' => 'قرب دوار الصخرة، مقابل مجمع المطاعم',
                 'latitude' => 36.2021,
                 'longitude' => 37.1343,
                 'phone' => '+963 21 555 1234',
@@ -62,13 +62,13 @@ final class RestaurantSeeder extends Seeder
                 'is_featured' => true,
             ],
             [
-                'name' => 'ا�"ت�?�S�? ا�"ذ�?ب�S - بستر�^ آس�S�^�S',
+                'name' => 'التنين الذهبي - بستري آسيوي',
                 'slug' => 'golden-dragon-asian',
-                'description' => '�.طبخ آس�S�^�S عصر�S �.ع س�^ش�S �^د�.ب�"�?غ �^أطبا�, ا�"�^�^�f. �.�f�^�?ات طازجة �S�^�.�Sا�<.',
-                'address' => '88 شارع ا�"�.طاع�.�O ا�"ج�.�S�"�Sة',
-                'city' => 'ح�"ب',
-                'district' => 'ا�"ج�.�S�"�Sة',
-                'location_details' => 'ا�"طاب�, ا�"ثا�?�S ف�^�, �.�,�?�? �.عر�^ف ف�S ا�"شارع ا�"رئ�Sس�S',
+                'description' => 'مطبخ آسيوي عصري مع سوشي وديم سوم وأطباق الووك ومكونات طازجة يومياً.',
+                'address' => '88 شارع المطاعم الجميلية',
+                'city' => 'حلب',
+                'district' => 'الجميلية',
+                'location_details' => 'الطابق الثاني فوق محل عريف في الشارع الرئيسي',
                 'latitude' => 36.2127,
                 'longitude' => 37.1456,
                 'phone' => '+963 21 555 5678',
@@ -82,13 +82,13 @@ final class RestaurantSeeder extends Seeder
                 'is_featured' => true,
             ],
             [
-                'name' => '�.�"اذ ا�"برغر',
+                'name' => 'ملاذ البرغر',
                 'slug' => 'burger-haven',
-                'description' => 'برغر فاخر �^بطاطس �.�,طعة �Sد�^�Sا�<. خد�.ة سر�Sعة �"�"است�"ا�. �^ت�?ا�^�" ا�"طعا�..',
-                'address' => '42 شارع ا�"�^جبات ا�"سر�Sعة',
-                'city' => 'ح�"ب',
-                'district' => 'ا�"أشرف�Sة',
-                'location_details' => 'بجا�?ب ا�"جا�.عة�O �.�,اب�" �.حطة ا�"�^�,�^د ا�"رئ�Sس�Sة',
+                'description' => 'برغر فاخر وبطاطس مقلية يدوياً وخدمة سريعة للاستلام وتنوع في الطعم.',
+                'address' => '42 شارع الوجبات السريعة',
+                'city' => 'حلب',
+                'district' => 'الأشرفية',
+                'location_details' => 'بجانب الجامعة، مقابل محطة الحافلات الرئيسية',
                 'latitude' => 36.2308,
                 'longitude' => 37.1279,
                 'phone' => '+963 21 555 9012',
@@ -102,13 +102,13 @@ final class RestaurantSeeder extends Seeder
                 'is_featured' => false,
             ],
             [
-                'name' => 'ب�Sت ا�"شا�. �"�"�.شا�^�S',
+                'name' => 'بيت الشام للمشاوي',
                 'slug' => 'beit-al-sham-grill',
-                'description' => '�.طبخ شا�.�S �S�,د�. ا�"�.شا�^�S �^ا�"�.�,ب�"ات ا�"شر�,�Sة ب�^صفات أص�S�"ة.',
-                'address' => '10 شارع ا�"ر�^ضة�O ا�"سر�Sا�? ا�"جد�Sدة',
-                'city' => 'ح�"ب',
-                'district' => 'ا�"سر�Sا�? ا�"جد�Sدة',
-                'location_details' => '�,رب ساحة سعد ا�"�"�? ا�"جابر�S�O بجا�?ب �.ر�fز ا�"تس�^�,',
+                'description' => 'مطبخ شامي يركز على المشاوي والمشويات الشرقية بوصفات أصيلة.',
+                'address' => '10 شارع الرضى السرايا الجديدة',
+                'city' => 'حلب',
+                'district' => 'السرايا الجديدة',
+                'location_details' => 'قرب ساحة سعد الله الجابري بجانب برج التسوق',
                 'latitude' => 36.2168,
                 'longitude' => 37.1317,
                 'phone' => '+963 21 555 7788',
@@ -122,13 +122,13 @@ final class RestaurantSeeder extends Seeder
                 'is_featured' => true,
             ],
             [
-                'name' => 'فط�^ر ا�"س�?د�Sا�?',
+                'name' => 'دار فطور السنديان',
                 'slug' => 'cedar-breakfast-house',
-                'description' => 'إفطار عرب�S �S�^�.�S �.ع �.�?ا�,�Sش طازجة �^�^جبات خف�Sفة ط�^ا�" ا�"�S�^�..',
-                'address' => '5 شارع ا�"حدائ�,�O ا�"ح�.دا�?�Sة',
-                'city' => 'ح�"ب',
-                'district' => 'ا�"ح�.دا�?�Sة',
-                'location_details' => '�,رب ا�"إشارة ا�"رئ�Sس�Sة�O ا�"طاب�, ا�"أرض�S',
+                'description' => 'إفطار عربي يومي مع منقوش طازجة ووجبات خفيفة طوال اليوم.',
+                'address' => '5 شارع الحديقة الحمدانية',
+                'city' => 'حلب',
+                'district' => 'الحمدانية',
+                'location_details' => 'قرب الإشارة الرئيسية، الطابق الأرضي',
                 'latitude' => 36.1795,
                 'longitude' => 37.1082,
                 'phone' => '+963 21 555 8899',
@@ -142,7 +142,6 @@ final class RestaurantSeeder extends Seeder
                 'is_featured' => false,
             ],
         ];
-
         $cancellationPolicy = CancellationPolicy::where('module', 'restaurant')->where('is_default', true)->first();
 
         $cuisineTypeIds = $this->ensureCuisineTypes();
@@ -196,12 +195,11 @@ final class RestaurantSeeder extends Seeder
             }
 
             $categories = [
-                ['name' => '�.�,ب�"ات', 'slug' => 'starters'],
-                ['name' => 'ا�"طب�, ا�"رئ�Sس�S', 'slug' => 'main-course'],
-                ['name' => 'ح�"�^�Sات', 'slug' => 'desserts'],
-                ['name' => '�.شر�^بات', 'slug' => 'drinks'],
+                ['name' => 'مقبلات', 'slug' => 'starters'],
+                ['name' => 'الطبق الرئيسي', 'slug' => 'main-course'],
+                ['name' => 'حلويات', 'slug' => 'desserts'],
+                ['name' => 'مشروبات', 'slug' => 'drinks'],
             ];
-
             foreach ($categories as $i => $cat) {
                 $category = DB::table('categories')->where('restaurant_id', $restaurant->id)->where('slug', $cat['slug'])->first();
                 if (! $category) {
@@ -257,27 +255,27 @@ final class RestaurantSeeder extends Seeder
     {
         $baseProducts = match ($categorySlug) {
             'starters' => [
-                ['name' => 'س�"طة س�Sزر', 'price' => 8.99],
-                ['name' => 'ش�^ربة ا�"�S�^�.', 'price' => 6.50],
-                ['name' => 'خبز با�"ث�^�.', 'price' => 5.99],
-                ['name' => 'بر�^ش�Sتا', 'price' => 7.50],
+                ['name' => 'سلطة سيزر', 'price' => 8.99],
+                ['name' => 'شوربة اليوم', 'price' => 6.50],
+                ['name' => 'خبز بالثوم', 'price' => 5.99],
+                ['name' => 'بروشيتا', 'price' => 7.50],
             ],
             'main-course' => [
-                ['name' => 'دجاج �.ش�^�S', 'price' => 14.99],
-                ['name' => 'برغر �"ح�.', 'price' => 12.99],
-                ['name' => 'باستا �fارب�^�?ارا', 'price' => 13.50],
-                ['name' => 'س�.�f �^ر�,اص', 'price' => 15.99],
+                ['name' => 'دجاج مشوي', 'price' => 14.99],
+                ['name' => 'برغر لحم', 'price' => 12.99],
+                ['name' => 'باستا كاربونارا', 'price' => 13.50],
+                ['name' => 'ستيك ومرافقات', 'price' => 15.99],
             ],
             'desserts' => [
-                ['name' => '�f�S�f ش�^�f�^�"اتة', 'price' => 7.99],
-                ['name' => 'آ�Sس �fر�S�.', 'price' => 5.50],
-                ['name' => 'ت�Sرا�.�Sس�^', 'price' => 8.99],
+                ['name' => 'كيك شوكولاتة', 'price' => 7.99],
+                ['name' => 'آيس كريم', 'price' => 5.50],
+                ['name' => 'تيراميسو', 'price' => 8.99],
             ],
             'drinks' => [
-                ['name' => 'عص�Sر طازج', 'price' => 4.50],
-                ['name' => '�.شر�^ب غاز�S', 'price' => 2.99],
-                ['name' => '�,�?�^ة', 'price' => 3.50],
-                ['name' => '�.اء', 'price' => 1.50],
+                ['name' => 'عصير طازج', 'price' => 4.50],
+                ['name' => 'مشروب غازي', 'price' => 2.99],
+                ['name' => 'شاي', 'price' => 3.50],
+                ['name' => 'ماء', 'price' => 1.50],
             ],
             default => [],
         };
@@ -310,10 +308,10 @@ final class RestaurantSeeder extends Seeder
     private function ensureCuisineTypes(): array
     {
         $types = [
-            'italian' => ['name' => 'إ�Sطا�"�S', 'slug' => 'italian'],
-            'asian' => ['name' => 'آس�S�^�S', 'slug' => 'asian'],
-            'american' => ['name' => 'أ�.ر�S�f�S', 'slug' => 'american'],
-            'mediterranean' => ['name' => '�.ت�^سط�S', 'slug' => 'mediterranean'],
+            'italian' => ['name' => 'إيطالي', 'slug' => 'italian'],
+            'asian' => ['name' => 'آسيوي', 'slug' => 'asian'],
+            'american' => ['name' => 'أمريكي', 'slug' => 'american'],
+            'mediterranean' => ['name' => 'متوسطي', 'slug' => 'mediterranean'],
         ];
 
         $ids = [];
@@ -337,7 +335,7 @@ final class RestaurantSeeder extends Seeder
         $customer = User::firstOrCreate(
             ['email' => 'restaurant.customer@dllni.sy'],
             [
-                'name' => 'ع�.�S�" ا�"�.طع�.',
+                'name' => 'عميل المطعم',
                 'password' => bcrypt('password'),
                 'email_verified_at' => now(),
             ]
@@ -426,10 +424,10 @@ final class RestaurantSeeder extends Seeder
         }
 
         $categories = [
-            ['id' => 1, 'name' => 'ا�"�.�,ب�"ات', 'slug' => 'appetizers', 'sort_order' => 1],
-            ['id' => 2, 'name' => 'ا�"أطبا�, ا�"رئ�Sس�Sة', 'slug' => 'main-dishes', 'sort_order' => 2],
-            ['id' => 3, 'name' => 'ا�"�.شر�^بات', 'slug' => 'drinks', 'sort_order' => 3],
-            ['id' => 4, 'name' => 'ا�"ب�Sتزا', 'slug' => 'pizza', 'sort_order' => 4],
+            ['id' => 1, 'name' => 'المقبلات', 'slug' => 'appetizers', 'sort_order' => 1],
+            ['id' => 2, 'name' => 'الأطباق الرئيسية', 'slug' => 'main-dishes', 'sort_order' => 2],
+            ['id' => 3, 'name' => 'المشروبات', 'slug' => 'drinks', 'sort_order' => 3],
+            ['id' => 4, 'name' => 'البيتزا', 'slug' => 'pizza', 'sort_order' => 4],
         ];
 
         foreach ($categories as $category) {
@@ -447,10 +445,10 @@ final class RestaurantSeeder extends Seeder
         }
 
         $products = [
-            ['id' => 1, 'category_id' => 4, 'name' => 'ب�Sتزا �.ارجر�Sتا', 'description' => 'ب�Sتزا بجب�?ة �.�^زار�S�"ا', 'price' => 35, 'discounted_price' => 30, 'is_available' => true, 'stock_quantity' => 50],
-            ['id' => 2, 'category_id' => 2, 'name' => 'دجاج �.ش�^�S', 'description' => 'دجاج �.تب�" �^�.ش�^�S ع�"�? ا�"فح�.', 'price' => 40, 'discounted_price' => null, 'is_available' => true, 'stock_quantity' => 20],
-            ['id' => 3, 'category_id' => 1, 'name' => 'س�"طة خضار', 'description' => 'س�"طة طازجة �S�^�.�Sا�<', 'price' => 15, 'discounted_price' => null, 'is_available' => true, 'stock_quantity' => 30],
-            ['id' => 4, 'category_id' => 3, 'name' => 'ح�"�Sب بارد', 'description' => 'ح�"�Sب �fا�.�" ا�"دس�. �.برد', 'price' => 5, 'discounted_price' => null, 'is_available' => true, 'stock_quantity' => 100],
+            ['id' => 1, 'category_id' => 4, 'name' => 'بيتزا مارجريتا', 'description' => 'بيتزا بجبنة موزاريلا طازجة', 'price' => 35, 'discounted_price' => 30, 'is_available' => true, 'stock_quantity' => 50],
+            ['id' => 2, 'category_id' => 2, 'name' => 'دجاج مشوي', 'description' => 'دجاج متبل ومشوي على الفحم', 'price' => 40, 'discounted_price' => null, 'is_available' => true, 'stock_quantity' => 20],
+            ['id' => 3, 'category_id' => 1, 'name' => 'سلطة خضار', 'description' => 'سلطة طازجة يومياً', 'price' => 15, 'discounted_price' => null, 'is_available' => true, 'stock_quantity' => 30],
+            ['id' => 4, 'category_id' => 3, 'name' => 'حليب بارد', 'description' => 'حليب غني بالكالسيوم', 'price' => 5, 'discounted_price' => null, 'is_available' => true, 'stock_quantity' => 100],
         ];
 
         foreach ($products as $product) {
@@ -475,8 +473,8 @@ final class RestaurantSeeder extends Seeder
         }
 
         $offers = [
-            ['id' => 1, 'name' => 'عرض ا�"ب�Sتزا ا�"عائ�"�Sة', 'description' => '�^فر أ�fثر ع�?د ط�"ب حج�. ا�"عائ�"ة �.ع تش�f�S�"ة ا�"إضافات.', 'is_active' => true],
-            ['id' => 2, 'name' => 'خص�. 10% ع�"�? ا�"�.شر�^بات', 'description' => 'خص�. ف�^ر�S ع�"�? ج�.�Sع ا�"�.شر�^بات ا�"باردة �^ا�"ساخ�?ة.', 'is_active' => true],
+            ['id' => 1, 'name' => 'عرض البيتزا العائلية', 'description' => 'وفر أكثر عند طلب حجم العائلة مع تشكيلة الإضافات.', 'is_active' => true],
+            ['id' => 2, 'name' => 'خصم 10% على المشروبات', 'description' => 'خصم فوري على جميع المشروبات الباردة والساخنة.', 'is_active' => true],
         ];
 
         foreach ($offers as $offer) {
@@ -503,22 +501,22 @@ final class RestaurantSeeder extends Seeder
         $itemsBySlug = [
             'la-piazza-italian' => [
                 [
-                    'name' => 'طح�S�? ب�Sتزا �.�? �?�^ع �fاب�^ت�^',
+                    'name' => 'طحين بيتزا للمخابز',
                     'unit' => 'kg',
                     'quantity' => 120,
                     'minimum_limit' => 40,
                     'unit_cost' => 1.8,
                 ],
                 [
-                    'name' => 'جب�?ة �.�^زار�S�"ا طازجة',
+                    'name' => 'جبنة موزاريلا طازجة',
                     'unit' => 'kg',
                     'quantity' => 60,
                     'minimum_limit' => 20,
                     'unit_cost' => 4.5,
                 ],
                 [
-                    'name' => 'ص�"صة ط�.اط�. إ�Sطا�"�Sة �.ع�"بة',
-                    'unit' => 'ع�"بة',
+                    'name' => 'صلصة طماطم إيطالية معلبة',
+                    'unit' => 'علبة',
                     'quantity' => 80,
                     'minimum_limit' => 25,
                     'unit_cost' => 1.2,
@@ -526,22 +524,22 @@ final class RestaurantSeeder extends Seeder
             ],
             'golden-dragon-asian' => [
                 [
-                    'name' => 'أرز بس�.ت�S ط�^�S�" ا�"حبة',
+                    'name' => 'أرز بسمتي طويل الحبة',
                     'unit' => 'kg',
                     'quantity' => 90,
                     'minimum_limit' => 30,
                     'unit_cost' => 2.3,
                 ],
                 [
-                    'name' => 'ص�"صة ص�^�Sا دا�f�?ة',
-                    'unit' => '�"تر',
+                    'name' => 'صلصة صويا داكنة',
+                    'unit' => 'لتر',
                     'quantity' => 25,
                     'minimum_limit' => 8,
                     'unit_cost' => 3.1,
                 ],
                 [
-                    'name' => '�?�^د�"ز �,�.ح �"�"�^جبات ا�"سر�Sعة',
-                    'unit' => '�fرت�^�?ة',
+                    'name' => 'نودلز سريع للوجبات السريعة',
+                    'unit' => 'كرتونة',
                     'quantity' => 15,
                     'minimum_limit' => 5,
                     'unit_cost' => 12.0,
@@ -549,22 +547,22 @@ final class RestaurantSeeder extends Seeder
             ],
             'burger-haven' => [
                 [
-                    'name' => '�"ح�. برغر �.فر�^�. طازج',
+                    'name' => 'لحم برغر مفروم طازج',
                     'unit' => 'kg',
                     'quantity' => 70,
                     'minimum_limit' => 25,
                     'unit_cost' => 6.8,
                 ],
                 [
-                    'name' => 'خبز برغر س�"ا�Sدر',
-                    'unit' => 'ع�"بة',
+                    'name' => 'خبز برغر سلايدر',
+                    'unit' => 'علبة',
                     'quantity' => 40,
                     'minimum_limit' => 15,
                     'unit_cost' => 3.0,
                 ],
                 [
-                    'name' => 'بطاطس �.�,�"�Sة �.ج�.دة',
-                    'unit' => '�f�Sس',
+                    'name' => 'بطاطس مقلية مجمدة',
+                    'unit' => 'كيس',
                     'quantity' => 55,
                     'minimum_limit' => 18,
                     'unit_cost' => 2.6,
@@ -600,7 +598,7 @@ final class RestaurantSeeder extends Seeder
         if (! $managerRoleId) {
             $managerRoleId = DB::table('restaurant_roles')->insertGetId([
                 'restaurant_id' => $restaurant->id,
-                'name' => '�.د�Sر',
+                'name' => 'مدير',
                 'slug' => 'manager',
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -615,7 +613,7 @@ final class RestaurantSeeder extends Seeder
         if (! $cashierRoleId) {
             $cashierRoleId = DB::table('restaurant_roles')->insertGetId([
                 'restaurant_id' => $restaurant->id,
-                'name' => '�fاش�Sر',
+                'name' => 'كاشير',
                 'slug' => 'cashier',
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -625,7 +623,7 @@ final class RestaurantSeeder extends Seeder
         $employeeOne = User::firstOrCreate(
             ['email' => "employee.one+{$restaurant->id}@dllni.sy"],
             [
-                'name' => '�.�^ظف أ�^�"',
+                'name' => 'موظف أول',
                 'phone' => '+963944200001'.$restaurant->id,
                 'password' => bcrypt('password'),
                 'module_type' => UserModuleType::RestaurantSeller->value,
@@ -636,7 +634,7 @@ final class RestaurantSeeder extends Seeder
         $employeeTwo = User::firstOrCreate(
             ['email' => "employee.two+{$restaurant->id}@dllni.sy"],
             [
-                'name' => '�.�^ظف ثا�?�S',
+                'name' => 'موظف ثاني',
                 'phone' => '+963944200002'.$restaurant->id,
                 'password' => bcrypt('password'),
                 'module_type' => UserModuleType::RestaurantSeller->value,
@@ -711,16 +709,18 @@ final class RestaurantSeeder extends Seeder
             ]
         );
 
+        $activeOfferName = 'عرض الوجبات العائلية';
+
         $activeOfferId = DB::table('offers')->where([
             'restaurant_id' => $restaurant->id,
-            'name' => 'عرض ا�"�^جبات ا�"عائ�"�Sة',
+            'name' => $activeOfferName,
         ])->value('id');
 
         if (! $activeOfferId) {
             $activeOfferId = DB::table('offers')->insertGetId([
                 'restaurant_id' => $restaurant->id,
-                'name' => 'عرض ا�"�^جبات ا�"عائ�"�Sة',
-                'description' => 'تخف�Sض خاص ع�"�? �^جبات ا�"عائ�"ة �"فترة �.حد�^دة.',
+                'name' => $activeOfferName,
+                'description' => 'تخفيض خاص على وجبات العائلة لفترة محدودة.',
                 'discount_type' => 'percentage',
                 'discount_value' => 15,
                 'starts_at' => now()->subDay(),
@@ -734,10 +734,10 @@ final class RestaurantSeeder extends Seeder
         DB::table('offers')->updateOrInsert(
             [
                 'restaurant_id' => $restaurant->id,
-                'name' => 'عرض �?�?ا�Sة ا�"أسب�^ع',
+                'name' => 'عرض نهاية الأسبوع',
             ],
             [
-                'description' => '�^فر أ�fثر خ�"ا�" عط�"ة �?�?ا�Sة ا�"أسب�^ع ع�"�? أص�?اف �.ختارة.',
+                'description' => 'وفر أكثر خلال عطلة نهاية الأسبوع على أصناف مختارة.',
                 'discount_type' => 'percentage',
                 'discount_value' => 20,
                 'starts_at' => now()->addDays(2),
@@ -769,7 +769,7 @@ final class RestaurantSeeder extends Seeder
             ->update([
                 'is_available' => false,
                 'unavailable_until' => now()->endOfDay(),
-                'availability_note' => '�?فدت ا�"�f�.�Sة ا�"�S�^�.',
+                'availability_note' => 'نفدت الكمية اليوم.',
                 'updated_at' => now(),
             ]);
 
@@ -790,7 +790,7 @@ final class RestaurantSeeder extends Seeder
                         'quantity' => 2,
                         'unit_price' => 12,
                         'total_price' => 24,
-                        'special_instructions' => 'بد�^�? بص�"',
+                        'special_instructions' => 'بدون بصل',
                         'updated_at' => now(),
                         'created_at' => now(),
                     ]
@@ -813,7 +813,7 @@ final class RestaurantSeeder extends Seeder
             );
         }
 
-        $seedNotificationType = 'App\\Notifications\\RestaurantOwnerSeedNotification';
+        $seedNotificationType = 'App\Notifications\RestaurantOwnerSeedNotification';
         $exists = DB::table('notifications')
             ->where('type', $seedNotificationType)
             ->where('notifiable_type', $owner->getMorphClass())
@@ -828,8 +828,8 @@ final class RestaurantSeeder extends Seeder
                 'notifiable_id' => $owner->id,
                 'data' => json_encode([
                     'type' => 'new_offer',
-                    'title' => 'عرض جد�Sد �?شط',
-                    'body' => 'ت�. تفع�S�" عرض جد�Sد �"�?ذا ا�"�.طع�..',
+                    'title' => 'عرض جديد متاح',
+                    'body' => 'تم تفعيل عرض جديد لهذا المطعم.',
                 ], JSON_THROW_ON_ERROR),
                 'read_at' => null,
                 'created_at' => now(),
@@ -881,25 +881,25 @@ final class RestaurantSeeder extends Seeder
     {
         $groups = [
             [
-                'name' => 'إضافات اخت�Sار�Sة',
+                'name' => 'إضافات اختيارية',
                 'is_required' => false,
                 'min_selections' => 0,
                 'max_selections' => 3,
                 'modifiers' => [
-                    ['name' => 'جب�?ة إضاف�Sة', 'price' => 3, 'sort_order' => 1],
-                    ['name' => '�"ح�. إضاف�S', 'price' => 8, 'sort_order' => 2],
-                    ['name' => 'ص�^ص إضاف�S', 'price' => 2, 'sort_order' => 3],
+                    ['name' => 'جبنة إضافية', 'price' => 3, 'sort_order' => 1],
+                    ['name' => 'لحم إضافي', 'price' => 8, 'sort_order' => 2],
+                    ['name' => 'صوص إضافي', 'price' => 2, 'sort_order' => 3],
                 ],
             ],
             [
-                'name' => 'اخت�Sار ا�"ص�^ص',
+                'name' => 'اختيار الصوص',
                 'is_required' => false,
                 'min_selections' => 0,
                 'max_selections' => 2,
                 'modifiers' => [
-                    ['name' => 'ص�^ص بارب�f�S�^', 'price' => 0, 'sort_order' => 1],
-                    ['name' => 'ص�^ص را�?ش', 'price' => 0, 'sort_order' => 2],
-                    ['name' => 'ص�^ص حار', 'price' => 0, 'sort_order' => 3],
+                    ['name' => 'صوص باربيكيو', 'price' => 0, 'sort_order' => 1],
+                    ['name' => 'صوص رانش', 'price' => 0, 'sort_order' => 2],
+                    ['name' => 'صوص حار', 'price' => 0, 'sort_order' => 3],
                 ],
             ],
         ];
