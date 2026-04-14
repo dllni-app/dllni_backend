@@ -13,6 +13,8 @@ Compact **v1 table layout** (paths, field tables, errors): [`API_CONTRACT_V1_USE
 
 Shopping lists let the authenticated user save **named collections** of **catalog (master) products** (`masterProductId`). They are **not** tied to a single store until the user chooses **add to cart**, at which time each included line is resolved to a concrete **`sm_products`** row in the chosen **`storeId`** and appended to the user’s **supermarket cart** for that store.
 
+In addition, a shopping list can be configured with an optional **auto-order schedule**. When active, the backend will create and submit a supermarket order automatically based on the list's included items.
+
 ---
 
 ## Domain rules
@@ -22,6 +24,30 @@ Shopping lists let the authenticated user save **named collections** of **catalo
 - **Resolution on add-to-cart**: For each row with `isIncluded: true`, the server picks the **first available** `sm_products` row where `store_id = storeId`, `master_product_id` matches, and `is_available` is true. If no row exists for a given master product in that store, the request fails with **`422`** (see errors below).
 - **Quantities**: List line `quantity` is a decimal in API payloads; when adding to cart it is converted with `max(1, round(quantity))` as an integer line quantity on the cart.
 - **Cart result**: `POST …/add-to-cart` returns the **same cart payload shape** as `GET /supermarket/cart` (see orders/cart contract).
+- **Scheduling store binding**: Scheduled auto-order requires list `storeId` to be set. If schedule is active and `storeId` is missing, update/create fails with **`422`**.
+- **Schedule support (v1)**: `weekly`, `monthly`, `once`.
+- **Schedule run model**: Schedule runs at day precision (no time-of-day in payload). When due, backend runs processing and attempts to create an order.
+- **Scheduled order item source**: Only rows with `isIncluded: true` are used.
+- **Scheduled quantity conversion**: Decimal list quantity is converted with `max(1, round(quantity))`.
+- **Scheduled product mapping**: Mapping uses list `storeId` and each row `masterProductId` -> `sm_products.master_product_id` with `is_available = true`.
+- **Scheduled failure behavior**: If any included item cannot be mapped to an available store product, the whole scheduled run fails (no partial order), and the user receives an Arabic failure notification.
+- **Scheduled success notification**: On successful scheduled order creation, user receives Arabic notification (database + push when available).
+
+---
+
+## Schedule payload
+
+The schedule object is sent under `schedule` on create/update list endpoints.
+
+**Fields**
+
+- `schedule.isActive` (optional, boolean, default: `true` when schedule object is sent)
+- `schedule.frequencyType` (required with `schedule`, enum: `weekly | monthly | once`)
+- `schedule.dayOfWeek` (required when `frequencyType = weekly`, integer `0..6`)
+- `schedule.dayOfMonth` (required when `frequencyType = monthly`, integer `1..31`)
+- `schedule.runDate` (required when `frequencyType = once`, date)
+
+If `schedule` is omitted in update, existing schedule remains unchanged.
 
 ---
 
@@ -60,6 +86,8 @@ Returns all lists for the user, newest `updatedAt` first.
 - `name` (required, string, max: `255`)
 - `description` (optional, string|null)
 - `isActive` (optional, boolean, default: `true` if omitted)
+- `storeId` (optional, integer, must exist in `sm_stores`)
+- `schedule` (optional, object; see “Schedule payload”)
 
 **201 Response**
 
@@ -69,9 +97,19 @@ Returns the **full list detail** shape (same as “Show shopping list”), inclu
 {
   "data": {
     "id": 10,
+    "storeId": 20,
     "name": "Home essentials",
     "description": "Weekly basics",
     "isActive": true,
+    "schedule": {
+      "frequencyType": "weekly",
+      "dayOfWeek": 6,
+      "dayOfMonth": null,
+      "runDate": null,
+      "isActive": true,
+      "nextRunAt": "2026-04-18 00:00:00",
+      "lastRunAt": null
+    },
     "items": [],
     "createdAt": "2026-04-11 10:00:00",
     "updatedAt": "2026-04-11 10:00:00"
@@ -97,9 +135,19 @@ Items are ordered by `sortOrder`, then `id`.
 {
   "data": {
     "id": 10,
+    "storeId": 20,
     "name": "Home essentials",
     "description": "Weekly basics",
     "isActive": true,
+    "schedule": {
+      "frequencyType": "weekly",
+      "dayOfWeek": 6,
+      "dayOfMonth": null,
+      "runDate": null,
+      "isActive": true,
+      "nextRunAt": "2026-04-18 00:00:00",
+      "lastRunAt": "2026-04-11 00:00:00"
+    },
     "items": [
       {
         "id": 100,
@@ -139,6 +187,8 @@ Items are ordered by `sortOrder`, then `id`.
 - `name` (optional; if the key is sent, required string, max: `255`)
 - `description` (optional, string|null — may be sent to clear)
 - `isActive` (optional, boolean)
+- `storeId` (optional, integer|null, exists: `sm_stores,id`)
+- `schedule` (optional, object; see “Schedule payload”)
 
 **200 Response**
 
@@ -148,6 +198,13 @@ Full list detail (same shape as “Show shopping list”).
 
 - **`401`**, **`404`**
 - **`422`**: validation errors on body
+
+Common schedule validation examples:
+
+- `schedule.frequencyType = weekly` without `schedule.dayOfWeek`
+- `schedule.frequencyType = monthly` without `schedule.dayOfMonth`
+- `schedule.frequencyType = once` without `schedule.runDate`
+- active `schedule` with missing `storeId`
 
 ---
 
@@ -298,6 +355,17 @@ Typical `message` / `errors` shapes (Laravel validation):
 3. **`POST`** / **`PATCH`** / **`DELETE`** on list or items — edit.
 4. User picks a store → **`POST …/add-to-cart`** with `{ "storeId": … }`.
 5. **`GET /supermarket/cart`** — confirm cart; then checkout per [`API_CONTRACT_USER_ORDERS_AND_CART.md`](./API_CONTRACT_USER_ORDERS_AND_CART.md).
+
+---
+
+## Scheduled auto-order flow (optional)
+
+1. User sets list `storeId` and `schedule` via **`POST`** or **`PATCH`** list endpoint.
+2. Backend scheduler processes due schedules.
+3. Backend creates a supermarket order from included list items when all required products are available.
+4. User receives Arabic notification:
+  - success: order created and sent.
+  - failure: schedule run failed (for example unavailable mapped products).
 
 ---
 

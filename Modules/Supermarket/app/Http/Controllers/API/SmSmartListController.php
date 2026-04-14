@@ -30,19 +30,19 @@ final class SmSmartListController
     {
         $list = $this->service->store(SmSmartListData::from($request->validated()));
 
-        return SmSmartListResource::make($list->load(['user', 'items']));
+        return SmSmartListResource::make($list->load(['user', 'store', 'items', 'schedule']));
     }
 
     public function show(SmSmartList $smSmartList): SmSmartListResource
     {
-        return SmSmartListResource::make($smSmartList->load(['user', 'items']));
+        return SmSmartListResource::make($smSmartList->load(['user', 'store', 'items', 'schedule']));
     }
 
     public function update(SmSmartListRequest $request, SmSmartList $smSmartList): SmSmartListResource
     {
         $list = $this->service->update(SmSmartListData::from($request->validated()), $smSmartList);
 
-        return SmSmartListResource::make($list->load(['user', 'items']));
+        return SmSmartListResource::make($list->load(['user', 'store', 'items', 'schedule']));
     }
 
     public function destroy(SmSmartList $smSmartList): Response

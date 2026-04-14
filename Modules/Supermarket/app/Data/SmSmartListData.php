@@ -17,15 +17,24 @@ final class SmSmartListData extends Data
     public function __construct(
         #[Exists('users', 'id')]
         public ?int $userId,
+        #[Exists('sm_stores', 'id')]
+        public ?int $storeId,
         #[Max(255)]
         public ?string $name,
         public ?string $description,
         #[BooleanType]
         public ?bool $isActive,
+        public ?array $schedule,
     ) {}
 
     public function onlyModelAttributes(): array
     {
-        return array_filter($this->toArray(), fn ($value) => $value !== null);
+        return array_filter([
+            'user_id' => $this->userId,
+            'store_id' => $this->storeId,
+            'name' => $this->name,
+            'description' => $this->description,
+            'is_active' => $this->isActive,
+        ], static fn ($value) => $value !== null);
     }
 }
