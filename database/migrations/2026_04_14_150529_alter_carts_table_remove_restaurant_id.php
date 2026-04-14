@@ -21,28 +21,26 @@ return new class extends Migration
             )
         ');
 
-        Schema::disableForeignKeyConstraints();
-
         Schema::table('carts', function (Blueprint $table): void {
             $table->dropForeign(['restaurant_id']);
-            $table->dropUnique(['user_id', 'restaurant_id']);
-            $table->dropColumn('restaurant_id');
-            $table->unique('user_id');
         });
 
-        Schema::enableForeignKeyConstraints();
+        Schema::table('carts', function (Blueprint $table): void {
+            $table->unique('user_id');
+            $table->dropUnique(['user_id', 'restaurant_id']);
+            $table->dropColumn('restaurant_id');
+        });
     }
 
     public function down(): void
     {
-        Schema::disableForeignKeyConstraints();
-
         Schema::table('carts', function (Blueprint $table): void {
-            $table->dropUnique(['user_id']);
             $table->foreignId('restaurant_id')->nullable()->constrained()->cascadeOnDelete();
             $table->unique(['user_id', 'restaurant_id']);
         });
 
-        Schema::enableForeignKeyConstraints();
+        Schema::table('carts', function (Blueprint $table): void {
+            $table->dropUnique(['user_id']);
+        });
     }
 };
