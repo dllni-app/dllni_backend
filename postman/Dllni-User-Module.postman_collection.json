@@ -6819,14 +6819,14 @@
                                         ],
                                         "body": {
                                             "mode": "raw",
-                                            "raw": "{\n  \"name\": \"Weekly groceries\",\n  \"description\": \"Basics\",\n  \"isActive\": true\n}"
+                                            "raw": "{\n  \"name\": \"Weekly groceries\",\n  \"description\": \"Basics\",\n  \"isActive\": true,\n  \"storeId\": {{smStoreId}},\n  \"schedule\": {\n    \"frequencyType\": \"weekly\",\n    \"dayOfWeek\": 6,\n    \"isActive\": true\n  }\n}"
                                         },
                                         "url": {
                                             "raw": "{{baseUrl}}/api/v1/user/supermarket/shopping-lists",
                                             "host": ["{{baseUrl}}"],
                                             "path": ["api", "v1", "user", "supermarket", "shopping-lists"]
                                         },
-                                        "description": "POST …/shopping-lists — `name` required. 201 — list detail in `data`."
+                                        "description": "POST …/shopping-lists — `name` required. Optional: `storeId`, `schedule` (`weekly|monthly|once`). 201 — list detail in `data` with optional `schedule`."
                                     },
                                     "response": []
                                 },
@@ -6843,7 +6843,7 @@
                                             "host": ["{{baseUrl}}"],
                                             "path": ["api", "v1", "user", "supermarket", "shopping-lists", "{{smShoppingListId}}"]
                                         },
-                                        "description": "GET …/shopping-lists/{id} — full list + `items[]`."
+                                        "description": "GET …/shopping-lists/{id} — full list + `items[]` + optional `schedule` and `storeId`."
                                     },
                                     "response": []
                                 },
@@ -6856,13 +6856,13 @@
                                             { "key": "Authorization", "value": "Bearer {{token}}" },
                                             { "key": "Content-Type", "value": "application/json" }
                                         ],
-                                        "body": { "mode": "raw", "raw": "{\n  \"name\": \"Renamed\",\n  \"isActive\": true\n}" },
+                                        "body": { "mode": "raw", "raw": "{\n  \"name\": \"Renamed\",\n  \"isActive\": true,\n  \"storeId\": {{smStoreId}},\n  \"schedule\": {\n    \"frequencyType\": \"monthly\",\n    \"dayOfMonth\": 10,\n    \"isActive\": true\n  }\n}" },
                                         "url": {
                                             "raw": "{{baseUrl}}/api/v1/user/supermarket/shopping-lists/{{smShoppingListId}}",
                                             "host": ["{{baseUrl}}"],
                                             "path": ["api", "v1", "user", "supermarket", "shopping-lists", "{{smShoppingListId}}"]
                                         },
-                                        "description": "PATCH …/shopping-lists/{id}"
+                                        "description": "PATCH …/shopping-lists/{id} — partial update. Supports `storeId` and optional `schedule` payload."
                                     },
                                     "response": []
                                 },
@@ -6961,7 +6961,7 @@
                                     "response": []
                                 }
                             ],
-                            "description": "docs/API_CONTRACT_V1_USER_SUPERMARKET_SHOPPING_LISTS.md — smart lists; lines use masterProductId."
+                            "description": "docs/API_CONTRACT_V1_USER_SUPERMARKET_SHOPPING_LISTS.md — smart lists; lines use masterProductId. Supports optional list schedule (weekly/monthly/once) and store binding for auto-order."
                         },
 
                         {
@@ -7594,7 +7594,7 @@
                         },
                         {
                             "name": "Supermarket shopping lists",
-                            "description": "Saved lists + bulk add-to-cart. Contract: docs/API_CONTRACT_V1_USER_SUPERMARKET_SHOPPING_LISTS.md",
+                            "description": "Saved lists + bulk add-to-cart. Contract: docs/API_CONTRACT_V1_USER_SUPERMARKET_SHOPPING_LISTS.md. Supports optional schedule + store binding for auto-order.",
                             "item": [
                                 {
                                     "name": "List shopping lists",
@@ -7637,13 +7637,13 @@
                                             { "key": "Accept", "value": "application/json" },
                                             { "key": "Content-Type", "value": "application/json" }
                                         ],
-                                        "body": { "mode": "raw", "raw": "{\n  \"name\": \"List name\",\n  \"description\": null,\n  \"isActive\": true\n}" },
+                                        "body": { "mode": "raw", "raw": "{\n  \"name\": \"List name\",\n  \"description\": null,\n  \"isActive\": true,\n  \"storeId\": {{smStoreId}},\n  \"schedule\": {\n    \"frequencyType\": \"weekly\",\n    \"dayOfWeek\": 6,\n    \"isActive\": true\n  }\n}" },
                                         "url": {
                                             "raw": "{{baseUrl}}/api/v1/user/supermarket/shopping-lists",
                                             "host": ["{{baseUrl}}"],
                                             "path": ["api", "v1", "user", "supermarket", "shopping-lists"]
                                         },
-                                        "description": "POST …/shopping-lists — 201 list detail in `data`."
+                                        "description": "POST …/shopping-lists — 201 list detail in `data`. Optional: `storeId`, `schedule` (`weekly|monthly|once`)."
                                     }
                                 },
                                 {
@@ -7666,7 +7666,7 @@
                                             "host": ["{{baseUrl}}"],
                                             "path": ["api", "v1", "user", "supermarket", "shopping-lists", "{{smShoppingListId}}"]
                                         },
-                                        "description": "GET …/shopping-lists/{id}"
+                                        "description": "GET …/shopping-lists/{id} — includes optional `schedule` and `storeId`."
                                     }
                                 },
                                 {
@@ -7687,13 +7687,13 @@
                                             { "key": "Accept", "value": "application/json" },
                                             { "key": "Content-Type", "value": "application/json" }
                                         ],
-                                        "body": { "mode": "raw", "raw": "{\n  \"name\": \"Updated name\"\n}" },
+                                        "body": { "mode": "raw", "raw": "{\n  \"name\": \"Updated name\",\n  \"storeId\": {{smStoreId}},\n  \"schedule\": {\n    \"frequencyType\": \"once\",\n    \"runDate\": \"2026-04-20\",\n    \"isActive\": true\n  }\n}" },
                                         "url": {
                                             "raw": "{{baseUrl}}/api/v1/user/supermarket/shopping-lists/{{smShoppingListId}}",
                                             "host": ["{{baseUrl}}"],
                                             "path": ["api", "v1", "user", "supermarket", "shopping-lists", "{{smShoppingListId}}"]
                                         },
-                                        "description": "PATCH …/shopping-lists/{id}"
+                                        "description": "PATCH …/shopping-lists/{id} — partial update, including optional `schedule` and `storeId`."
                                     }
                                 },
                                 {
@@ -7771,6 +7771,33 @@
                                             "path": ["api", "v1", "user", "supermarket", "shopping-lists", "{{smShoppingListId}}", "items"]
                                         },
                                         "description": "POST …/items — masterProductId + quantity"
+                                    }
+                                },
+                                {
+                                    "name": "Search master products",
+                                    "request": {
+                                        "method": "GET",
+                                                                        "auth": {
+                                    "type": "bearer",
+                                    "bearer": [
+                                        {
+                                            "key": "token",
+                                            "value": "{{userToken}}",
+                                            "type": "string"
+                                        }
+                                    ]
+                                },
+                                        "header": [{ "key": "Accept", "value": "application/json" }],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/api/v1/user/supermarket/master-products/search?index=se&perPage=20",
+                                            "host": ["{{baseUrl}}"],
+                                            "path": ["api", "v1", "user", "supermarket", "master-products", "search"],
+                                            "query": [
+                                                { "key": "index", "value": "se" },
+                                                { "key": "perPage", "value": "20" }
+                                            ]
+                                        },
+                                        "description": "GET …/master-products/search — prefix search by `name` or `barcode` for shopping-list picker."
                                     }
                                 },
                                 {
