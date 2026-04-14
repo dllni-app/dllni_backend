@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Modules\User\Services;
 
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
+use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Models\Favorite;
 use Modules\Resturants\Models\Product;
 use Modules\User\Http\Requests\RestaurantHomeSuggestedProductsRequest;
@@ -18,12 +20,22 @@ final class UserRestaurantSuggestedProductsService
     public function suggestedForHome(RestaurantHomeSuggestedProductsRequest $request): Collection
     {
         $limit = $request->integer('limit', 15);
+        $since = CarbonImmutable::now()->subDays(30);
 
         $products = Product::query()
             ->select('products.*')
             ->join('restaurants', 'restaurants.id', '=', 'products.restaurant_id')
             ->where('products.is_available', true)
             ->where('restaurants.is_active', true)
+            ->withCount([
+                'orderItems as popular_orders_count' => fn ($q) => $q
+                    ->whereHas('order', fn ($orderQuery) => $orderQuery
+                        ->whereIn('status', [
+                            OrderStatus::Completed->value,
+                            OrderStatus::PickedUp->value,
+                        ])
+                        ->where('created_at', '>=', $since)),
+            ])
             ->with([
                 'media',
                 'category',

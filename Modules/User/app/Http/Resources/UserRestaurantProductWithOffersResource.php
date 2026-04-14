@@ -7,6 +7,7 @@ namespace Modules\User\Http\Resources;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Modules\Resturants\Models\Product;
+use Modules\User\Services\UserRestaurantProductPopularityService;
 
 /**
  * @mixin Product
@@ -35,6 +36,8 @@ final class UserRestaurantProductWithOffersResource extends JsonResource
                 ->all();
         }
 
+        $popularOrdersCount = (int) ($attributes['popular_orders_count'] ?? 0);
+
         return [
             'id' => $product->id,
             'name' => $product->name,
@@ -44,6 +47,8 @@ final class UserRestaurantProductWithOffersResource extends JsonResource
             'currency' => config('app.currency', 'IQD'),
             'isAvailable' => $product->is_available,
             'isFavorite' => (bool) ($attributes['isFavoritedByUser'] ?? false),
+            'isMostOrdered' => $popularOrdersCount >= UserRestaurantProductPopularityService::mostOrderedMinOrders(),
+            'popularOrdersCount' => $popularOrdersCount,
             'primaryImageUrl' => $product->getFirstMediaUrl('primary-image') ?: null,
             'restaurant' => $product->relationLoaded('restaurant') && $product->restaurant !== null ? [
                 'id' => $product->restaurant->id,

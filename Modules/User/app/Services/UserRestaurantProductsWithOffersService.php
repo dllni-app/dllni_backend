@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Modules\User\Services;
 
+use Carbon\CarbonImmutable;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Models\Product;
 
 final class UserRestaurantProductsWithOffersService
@@ -13,9 +15,20 @@ final class UserRestaurantProductsWithOffersService
         ?int $restaurantId = null,
         int $perPage = 15,
     ): LengthAwarePaginator {
+        $since = CarbonImmutable::now()->subDays(30);
+
         $query = Product::query()
             ->where('is_available', true)
             ->whereHas('restaurant', fn ($query) => $query->where('is_active', true))
+            ->withCount([
+                'orderItems as popular_orders_count' => fn ($q) => $q
+                    ->whereHas('order', fn ($orderQuery) => $orderQuery
+                        ->whereIn('status', [
+                            OrderStatus::Completed->value,
+                            OrderStatus::PickedUp->value,
+                        ])
+                        ->where('created_at', '>=', $since)),
+            ])
             ->with([
                 'offers' => function ($query) {
                     $query->where('is_active', true)
