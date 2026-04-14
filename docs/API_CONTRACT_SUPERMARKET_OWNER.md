@@ -237,6 +237,8 @@ This maps common supermarket owner app screens to backend endpoints.
 
 - **List products:** `GET /api/v1/store-owner/products`
 - **Create product:** `POST /api/v1/store-owner/products`
+- **Search master products by prefix (name/barcode):** `GET /api/v1/store-owner/master-products/search?index={text}`
+- **Create product from master product:** `POST /api/v1/store-owner/products/from-master`
 - **View one product:** `GET /api/v1/store-owner/products/{id}`
 - **Update product:** `PUT /api/v1/store-owner/products/{id}`
 - **Delete product:** `DELETE /api/v1/store-owner/products/{id}`
@@ -472,6 +474,83 @@ If stock is insufficient, API returns failure (business error message).
 | DELETE | `/api/v1/store-owner/products/{id}` | Delete product  |
 
 Payloads/responses follow the supermarket product API conventions in the module.
+
+### 8.1.1 Master product prefix search
+
+| Method | Path                                        | Description                                           |
+| ------ | ------------------------------------------- | ----------------------------------------------------- |
+| GET    | `/api/v1/store-owner/master-products/search` | Autocomplete master products by prefix on name/barcode |
+
+**Query params:**
+
+| Param   | Type    | Required | Description |
+| ------- | ------- | -------- | ----------- |
+| index   | string  | yes      | Prefix text typed by owner (e.g. `s`, `se`, `123`). |
+| perPage | integer | no       | Items per page (default 20, max 50). |
+| page    | integer | no       | Page number (default 1). |
+
+**Response (200):**
+
+```json
+{
+  "current_page": 1,
+  "data": [
+    {
+      "id": 11,
+      "masterProductId": 11,
+      "name": "Sesame Oil",
+      "barcode": "1234567890123"
+    }
+  ],
+  "per_page": 20,
+  "total": 1
+}
+```
+
+Search behavior:
+- Matches active master products only.
+- Prefix check is applied to both `name` and `barcode`.
+- Typing `s` returns names/barcodes starting with `s`; typing `se` narrows to values starting with `se`.
+
+### 8.1.2 Create product from master product
+
+| Method | Path                                      | Description                                        |
+| ------ | ----------------------------------------- | -------------------------------------------------- |
+| POST   | `/api/v1/store-owner/products/from-master` | Create store product linked to `master_product_id` |
+
+**Request body example:**
+
+```json
+{
+  "storeId": 1,
+  "categoryId": 4,
+  "masterProductId": 11,
+  "price": 3.75,
+  "stockQuantity": 25
+}
+```
+
+| Field            | Type    | Required | Description |
+| ---------------- | ------- | -------- | ----------- |
+| storeId          | integer | yes      | Owner-managed store id. |
+| categoryId       | integer | yes      | Product category id for this store. |
+| masterProductId  | integer | yes      | Existing active master product id. |
+| price            | number  | yes      | Product price. |
+| stockQuantity    | integer | yes      | Starting quantity in stock. |
+| lowStockThreshold| integer | no       | Low stock alert threshold (default 0). |
+| discountedPrice  | number  | no       | Optional discounted price. |
+| description      | string  | no       | Optional override description. |
+| expiresAt        | string  | no       | Optional expiration datetime. |
+| isAvailable      | boolean | no       | Optional availability flag (default true). |
+
+**Response (201):**
+
+Returns the created supermarket product resource, including:
+- `masterProductId`
+- `name` (copied from master product)
+- `barcode` (copied from master product)
+- `price`
+- `stockQuantity`
 
 ### 8.2 Low stock alerts
 

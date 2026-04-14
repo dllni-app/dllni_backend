@@ -38,6 +38,8 @@ use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerEmployeeStatus
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerEmployeeStoreController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerEmployeeUpdateController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerInventoryController;
+use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerMasterProductCreateController;
+use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerMasterProductSearchController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerOfferWeeklySummaryController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerPermissionsController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerStoreController;
@@ -95,6 +97,9 @@ Route::prefix('v1')->group(function () {
         Route::post('employees', StoreOwnerEmployeeStoreController::class)->name('employees.store');
         Route::patch('employees/{staff}', StoreOwnerEmployeeUpdateController::class)->name('employees.update');
         Route::patch('employees/{staff}/status', StoreOwnerEmployeeStatusController::class)->name('employees.status');
+
+        Route::get('master-products/search', StoreOwnerMasterProductSearchController::class)->name('master-products.search');
+        Route::post('products/from-master', StoreOwnerMasterProductCreateController::class)->name('products.from-master');
 
         // Order Management
         Route::post('orders/{order}/accept', [SmOrderStatusController::class, 'accept'])->name('orders.accept');
