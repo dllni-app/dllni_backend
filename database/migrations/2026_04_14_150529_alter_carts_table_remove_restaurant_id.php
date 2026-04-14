@@ -26,21 +26,21 @@ return new class extends Migration
         });
 
         Schema::table('carts', function (Blueprint $table): void {
+            $table->unique('user_id');
             $table->dropUnique(['user_id', 'restaurant_id']);
             $table->dropColumn('restaurant_id');
-            $table->unique('user_id');
         });
     }
 
     public function down(): void
     {
         Schema::table('carts', function (Blueprint $table): void {
-            $table->dropUnique(['user_id']);
+            $table->foreignId('restaurant_id')->nullable()->constrained()->cascadeOnDelete();
+            $table->unique(['user_id', 'restaurant_id']);
         });
 
         Schema::table('carts', function (Blueprint $table): void {
-            $table->foreignId('restaurant_id')->nullable()->constrained()->cascadeOnDelete();
-            $table->unique(['user_id', 'restaurant_id']);
+            $table->dropUnique(['user_id']);
         });
     }
 };

@@ -26,21 +26,21 @@ return new class extends Migration
         });
 
         Schema::table('sm_carts', function (Blueprint $table): void {
+            $table->unique('user_id');
             $table->dropUnique('sm_cart_user_store_uniq');
             $table->dropColumn('store_id');
-            $table->unique('user_id');
         });
     }
 
     public function down(): void
     {
         Schema::table('sm_carts', function (Blueprint $table): void {
-            $table->dropUnique(['user_id']);
+            $table->foreignId('store_id')->nullable()->constrained('sm_stores')->cascadeOnDelete();
+            $table->unique(['user_id', 'store_id'], 'sm_cart_user_store_uniq');
         });
 
         Schema::table('sm_carts', function (Blueprint $table): void {
-            $table->foreignId('store_id')->nullable()->constrained('sm_stores')->cascadeOnDelete();
-            $table->unique(['user_id', 'store_id'], 'sm_cart_user_store_uniq');
+            $table->dropUnique(['user_id']);
         });
     }
 };
