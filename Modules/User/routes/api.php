@@ -88,6 +88,7 @@ use Modules\User\Http\Controllers\API\UserSupermarketCartItemStoreController;
 use Modules\User\Http\Controllers\API\UserSupermarketCartItemUpdateController;
 use Modules\User\Http\Controllers\API\UserSupermarketCartShowController;
 use Modules\User\Http\Controllers\API\UserSupermarketCheckoutPreviewController;
+use Modules\User\Http\Controllers\API\UserSupermarketMasterProductSearchController;
 use Modules\User\Http\Controllers\API\UserSupermarketOrderStoreController;
 use Modules\User\Http\Controllers\API\UserSupermarketProductFavoriteDestroyController;
 use Modules\User\Http\Controllers\API\UserSupermarketProductFavoritesIndexController;
@@ -215,6 +216,7 @@ Route::prefix('v1/user')->group(function (): void {
         Route::post('supermarket/cart/items', UserSupermarketCartItemStoreController::class);
         Route::patch('supermarket/cart/items/{itemId}', UserSupermarketCartItemUpdateController::class);
         Route::delete('supermarket/cart/items/{itemId}', UserSupermarketCartItemDestroyController::class);
+        Route::get('supermarket/master-products/search', UserSupermarketMasterProductSearchController::class);
         Route::get('supermarket/shopping-lists', UserSupermarketShoppingListIndexController::class);
         Route::post('supermarket/shopping-lists', UserSupermarketShoppingListStoreController::class);
         Route::get('supermarket/shopping-lists/{shoppingList}', UserSupermarketShoppingListShowController::class)->whereNumber('shoppingList');
