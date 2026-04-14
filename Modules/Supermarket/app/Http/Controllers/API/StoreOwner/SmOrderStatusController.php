@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Supermarket\Http\Controllers\API\StoreOwner;
 
+use App\Services\ActivityLogService;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -15,7 +16,10 @@ use Modules\Supermarket\Services\SmOrderService;
 
 final class SmOrderStatusController
 {
-    public function __construct(private SmOrderService $orderService) {}
+    public function __construct(
+        private SmOrderService $orderService,
+        private ActivityLogService $activityLogService
+    ) {}
 
     /**
      * Accept an order.
@@ -26,6 +30,7 @@ final class SmOrderStatusController
     {
         try {
             $acceptedOrder = $this->orderService->acceptOrder($order);
+            $this->activityLogService->logSmOrderAccepted((int) $order->id, $order->order_number, (int) $order->store_id);
 
             return SmOrderResource::make($acceptedOrder->load([
                 'customer',
@@ -56,6 +61,7 @@ final class SmOrderStatusController
         try {
             $data = SmOrderRejectStatusData::from($request->validated());
             $rejectedOrder = $this->orderService->rejectOrder($order, $data);
+            $this->activityLogService->logSmOrderRejected((int) $order->id, $order->order_number, (int) $order->store_id);
 
             return SmOrderResource::make($rejectedOrder->load([
                 'customer',

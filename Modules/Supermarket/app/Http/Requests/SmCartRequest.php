@@ -17,8 +17,6 @@ final class SmCartRequest extends FormRequest
     public function rules(): array
     {
         $cartId = $this->route('sm_cart');
-        $userId = $this->input('userId');
-        $storeId = $this->input('storeId');
 
         return [
             'userId' => [
@@ -26,11 +24,8 @@ final class SmCartRequest extends FormRequest
                 'required',
                 'integer',
                 'exists:users,id',
-                Rule::unique('sm_carts', 'user_id')
-                    ->where(fn ($query) => $query->where('store_id', $storeId))
-                    ->ignore($cartId),
+                Rule::unique('sm_carts', 'user_id')->ignore($cartId),
             ],
-            'storeId' => 'sometimes|required|integer|exists:sm_stores,id',
         ];
     }
 }

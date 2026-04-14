@@ -18,7 +18,6 @@ final class SmCartFilterRequest extends FormRequest
         return [
             'perPage' => 'sometimes|integer|min:1|max:100',
             'filter.userId' => 'sometimes|integer|exists:users,id',
-            'filter.storeId' => 'sometimes|integer|exists:sm_stores,id',
             'sort' => 'sometimes|string|in:createdAt,-createdAt',
         ];
     }

@@ -5,15 +5,14 @@ declare(strict_types=1);
 namespace Modules\User\Http\Controllers\API;
 
 use Illuminate\Http\JsonResponse;
+use Modules\Resturants\Http\Resources\OrderResource;
 use Modules\User\Http\Requests\UserRestaurantOrderStoreRequest;
-use Modules\User\Services\UserOrderHubService;
 use Modules\User\Services\UserRestaurantCheckoutPipelineService;
 
 final class UserRestaurantOrderStoreController
 {
     public function __construct(
         private readonly UserRestaurantCheckoutPipelineService $checkout,
-        private readonly UserOrderHubService $orders,
     ) {}
 
     public function __invoke(UserRestaurantOrderStoreRequest $request): JsonResponse
@@ -28,7 +27,7 @@ final class UserRestaurantOrderStoreController
         );
 
         return response()->json([
-            'data' => $this->orders->show((int) $request->user()->id, 'restaurant', (int) $order->id),
+            'data' => OrderResource::make($order),
         ], 201);
     }
 }

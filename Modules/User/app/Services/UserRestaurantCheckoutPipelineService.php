@@ -32,7 +32,6 @@ final class UserRestaurantCheckoutPipelineService
         $cart = Cart::query()
             ->where('user_id', $userId)
             ->with(['items.product'])
-            ->latest()
             ->first();
 
         if (! $cart || $cart->items->isEmpty()) {
@@ -41,9 +40,19 @@ final class UserRestaurantCheckoutPipelineService
             ]);
         }
 
-        $merchantId = (int) $cart->restaurant_id;
         $subtotal = (float) $cart->items->sum(fn ($item): float => (float) ($item->total_price ?? 0));
-        $discount = $this->computeDiscount($merchantId, $couponCode, $subtotal);
+
+        $restaurantIds = $cart->items
+            ->pluck('product.restaurant_id')
+            ->filter()
+            ->unique();
+
+        $isSingleMerchant = $restaurantIds->count() === 1;
+
+        $discount = $isSingleMerchant
+            ? $this->computeDiscount((int) $restaurantIds->first(), $couponCode, $subtotal)
+            : 0.0;
+
         $serviceFee = 0.0;
         $tax = 0.0;
         $total = max(0.0, $subtotal - $discount) + $serviceFee + $tax;
@@ -61,15 +70,6 @@ final class UserRestaurantCheckoutPipelineService
                 'tax' => round($tax, 2),
                 'total' => round($total, 2),
             ],
-            'items' => $cart->items->map(fn ($item): array => [
-                'id' => $item->id,
-                'productId' => $item->product_id,
-                'name' => $item->product?->name,
-                'quantity' => $item->quantity,
-                'unitPrice' => (float) ($item->unit_price ?? 0),
-                'totalPrice' => (float) ($item->total_price ?? 0),
-                'note' => $item->special_instructions,
-            ])->values()->all(),
             'note' => $note,
         ];
     }
@@ -82,22 +82,8 @@ final class UserRestaurantCheckoutPipelineService
         ?string $couponCode,
         ?string $note,
     ): Order {
-        $cart = Cart::query()
-            ->where('user_id', $userId)
-            ->with(['items.product'])
-            ->latest()
-            ->first();
-
-        if (! $cart || $cart->items->isEmpty()) {
-            throw ValidationException::withMessages([
-                'cart' => ['Cart is empty.'],
-            ]);
-        }
-
-        $merchantId = (int) $cart->restaurant_id;
-        $order = $this->checkoutService->checkout(
+        $order = $this->checkoutService->checkoutAll(
             userId: $userId,
-            restaurantId: $merchantId,
             orderType: $fulfillmentType,
             pickupMode: $receiveMode === 'scheduled'
                 ? RestaurantPickupMode::ScheduledPickup->value
@@ -118,14 +104,14 @@ final class UserRestaurantCheckoutPipelineService
         return $order->fresh(['restaurant', 'orderItems.product', 'orderStatusLogs']);
     }
 
-    private function computeDiscount(int $merchantId, ?string $couponCode, float $subtotal): float
+    private function computeDiscount(int $restaurantId, ?string $couponCode, float $subtotal): float
     {
         if (! is_string($couponCode) || mb_trim($couponCode) === '') {
             return 0.0;
         }
 
         $coupon = PromoCode::query()
-            ->where('restaurant_id', $merchantId)
+            ->where('restaurant_id', $restaurantId)
             ->where('code', $couponCode)
             ->first();
 

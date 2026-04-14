@@ -33,7 +33,6 @@ final class RestaurantCartService
 
             $cart = Cart::firstOrCreate([
                 'user_id' => $userId,
-                'restaurant_id' => $product->restaurant_id,
             ]);
 
             $modifiers = $this->validatedModifiersForProduct($product, $modifierIds);

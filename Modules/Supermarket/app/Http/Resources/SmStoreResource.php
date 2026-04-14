@@ -63,7 +63,6 @@ final class SmStoreResource extends JsonResource
             'trustLogs' => SmStoreTrustLogResource::collection($this->whenLoaded('trustLogs')),
             'dailyStats' => SmStoreDailyStatResource::collection($this->whenLoaded('dailyStats')),
             'commissionRules' => SmCommissionRuleResource::collection($this->whenLoaded('commissionRules')),
-            'carts' => SmCartResource::collection($this->whenLoaded('carts')),
             'assistantQueries' => SmAssistantQueryResource::collection($this->whenLoaded('assistantQueries')),
             'recurringOrders' => SmRecurringOrderResource::collection($this->whenLoaded('recurringOrders')),
             'staff' => SmStoreStaffResource::collection($this->whenLoaded('staff')),

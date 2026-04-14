@@ -112,11 +112,6 @@ final class SmStore extends Model
         return $this->hasMany(SmCommissionRule::class, 'store_id');
     }
 
-    public function carts(): HasMany
-    {
-        return $this->hasMany(SmCart::class, 'store_id');
-    }
-
     public function assistantQueries(): HasMany
     {
         return $this->hasMany(SmAssistantQuery::class, 'store_id');

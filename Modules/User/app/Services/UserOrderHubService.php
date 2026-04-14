@@ -188,7 +188,6 @@ final class UserOrderHubService
             /** @var Order $order */
             $cart = Cart::query()->firstOrCreate([
                 'user_id' => $userId,
-                'restaurant_id' => $order->restaurant_id,
             ]);
 
             $count = 0;
@@ -228,7 +227,6 @@ final class UserOrderHubService
         /** @var SmOrder $order */
         $cart = SmCart::query()->firstOrCreate([
             'user_id' => $userId,
-            'store_id' => $order->store_id,
         ]);
 
         $count = 0;

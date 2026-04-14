@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Resturants\Http\Controllers\API\RestaurantOwner;
 
+use App\Services\ActivityLogService;
 use Illuminate\Http\JsonResponse;
 use Modules\Resturants\Http\Requests\RestaurantOwner\OwnerProductAvailabilityRequest;
 use Modules\Resturants\Http\Resources\ProductResource;
@@ -12,6 +13,8 @@ use Modules\Resturants\Support\RestaurantOwnerContext;
 
 final class RestaurantOwnerProductAvailabilityController
 {
+    public function __construct(private ActivityLogService $activityLogService) {}
+
     public function __invoke(
         OwnerProductAvailabilityRequest $request,
         Product $product,
@@ -41,6 +44,8 @@ final class RestaurantOwnerProductAvailabilityController
                 'availability_note' => $note,
             ]);
         }
+
+        $this->activityLogService->logProductAvailabilityChanged($product, (int) $product->restaurant_id, $mode);
 
         return response()->json([
             'data' => ProductResource::make($product->fresh())->resolve(),

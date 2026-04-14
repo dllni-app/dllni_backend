@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Supermarket\Services;
 
+use App\Services\ActivityLogService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -15,17 +16,18 @@ use Throwable;
 
 final class SmProductService
 {
-    /**
-     * @param  array<int, UploadedFile>  $images
-     */
+    public function __construct(private ActivityLogService $activityLogService) {}
+
     public function store(SmProductData $data, array $images = []): SmProduct
     {
-        return DB::transaction(static function () use ($data, $images) {
+        return DB::transaction(function () use ($data, $images) {
             $product = SmProduct::create($data->onlyModelAttributes());
 
             foreach ($images as $image) {
                 $product->addMedia($image)->toMediaCollection(SmProduct::IMAGE_COLLECTION);
             }
+
+            $this->activityLogService->logSmProductCreated($product, (int) $product->store_id);
 
             return $product;
         });
@@ -36,7 +38,8 @@ final class SmProductService
      */
     public function update(SmProductData $data, SmProduct $product, array $images = []): SmProduct
     {
-        return DB::transaction(static function () use ($data, $product, $images) {
+        return DB::transaction(function () use ($data, $product, $images) {
+            $oldAttributes = $product->getAttributes();
             tap($product)->update($data->onlyModelAttributes());
 
             if ($images !== []) {
@@ -46,6 +49,8 @@ final class SmProductService
                     $product->addMedia($image)->toMediaCollection(SmProduct::IMAGE_COLLECTION);
                 }
             }
+
+            $this->activityLogService->logSmProductUpdated($product, (int) $product->store_id, $oldAttributes);
 
             return $product;
         });

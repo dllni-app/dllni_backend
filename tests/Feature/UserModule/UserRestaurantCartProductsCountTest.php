@@ -9,7 +9,7 @@ use Modules\Resturants\Models\CartItem;
 use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
 
-it('returns total products count in authenticated user restaurant carts', function (): void {
+it('returns total products count across all merchants in the user restaurant cart', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
@@ -26,18 +26,12 @@ it('returns total products count in authenticated user restaurant carts', functi
         'is_available' => true,
     ]);
 
-    $cartA = Cart::query()->create([
+    $cart = Cart::query()->create([
         'user_id' => $user->id,
-        'restaurant_id' => $restaurantA->id,
-    ]);
-
-    $cartB = Cart::query()->create([
-        'user_id' => $user->id,
-        'restaurant_id' => $restaurantB->id,
     ]);
 
     CartItem::query()->create([
-        'cart_id' => $cartA->id,
+        'cart_id' => $cart->id,
         'product_id' => $productA->id,
         'substitute_product_id' => null,
         'quantity' => 2,
@@ -47,7 +41,7 @@ it('returns total products count in authenticated user restaurant carts', functi
     ]);
 
     CartItem::query()->create([
-        'cart_id' => $cartB->id,
+        'cart_id' => $cart->id,
         'product_id' => $productB->id,
         'substitute_product_id' => null,
         'quantity' => 3,

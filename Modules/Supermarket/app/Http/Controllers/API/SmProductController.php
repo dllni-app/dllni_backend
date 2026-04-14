@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Supermarket\Http\Controllers\API;
 
+use App\Services\ActivityLogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
@@ -19,7 +20,8 @@ use Modules\Supermarket\Services\SmProductService;
 final class SmProductController
 {
     public function __construct(
-        private SmProductService $service
+        private SmProductService $service,
+        private ActivityLogService $activityLogService
     ) {}
 
     public function index(SmProductFilterRequest $request): AnonymousResourceCollection
@@ -81,7 +83,10 @@ final class SmProductController
 
     public function destroy(SmProduct $smProduct): Response
     {
+        $productName = $smProduct->name;
+        $storeId = (int) $smProduct->store_id;
         $smProduct->delete();
+        $this->activityLogService->logSmProductDeleted($productName, $storeId);
 
         return response()->noContent();
     }

@@ -38,7 +38,6 @@ final class SmStoreShowController
                 'trustLogs',
                 'dailyStats',
                 'commissionRules',
-                'carts',
                 'assistantQueries',
                 'recurringOrders',
                 //  'staff.user',

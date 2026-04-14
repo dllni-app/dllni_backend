@@ -264,7 +264,6 @@ it('shows a supermarket store by id', function (): void {
                 'trustLogs',
                 'dailyStats',
                 'commissionRules',
-                'carts',
                 'assistantQueries',
                 'recurringOrders',
                 // 'staff',

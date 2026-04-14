@@ -16,7 +16,6 @@ trait SmCartFilterQuery
         return QueryBuilder::for(SmCart::class)
             ->allowedFilters([
                 AllowedFilter::exact('userId', 'user_id'),
-                AllowedFilter::exact('storeId', 'store_id'),
             ])
             ->allowedSorts([
                 AllowedSort::field('createdAt', 'created_at'),

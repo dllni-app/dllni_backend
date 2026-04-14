@@ -22,6 +22,7 @@ use Modules\Resturants\Http\Controllers\API\RestaurantController;
 use Modules\Resturants\Http\Controllers\API\RestaurantDocumentController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOperatingHoursController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOrderDisputeController;
+use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerActivityLogController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerCouponsIndexController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerCouponSummaryController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerDashboardPerformanceController;
@@ -42,7 +43,6 @@ use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerOrder
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerPermissionsController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerProductAvailabilityController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerPromoCodesController;
-use Modules\Resturants\Http\Controllers\API\RestaurantPenaltyController;
 use Modules\Resturants\Http\Controllers\API\RestaurantRecurringOrderController;
 use Modules\Resturants\Http\Controllers\API\RestaurantReputationLogController;
 use Modules\Resturants\Http\Controllers\API\RestaurantRoleController;
@@ -132,6 +132,8 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
         Route::get('notifications', RestaurantOwnerNotificationsController::class);
         Route::patch('notifications/read-all', RestaurantOwnerNotificationMarkReadAllController::class);
         Route::patch('notifications/{notification}/read', RestaurantOwnerNotificationMarkReadController::class);
+
+        Route::get('activity-logs', RestaurantOwnerActivityLogController::class);
     });
 
     Route::prefix('resturant-owner')->group(function () {

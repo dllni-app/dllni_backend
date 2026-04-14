@@ -18,17 +18,15 @@ final class UserRestaurantCartService
      */
     public function show(int $userId): array
     {
-        $query = Cart::query()
+        $cart = Cart::query()
             ->where('user_id', $userId)
-            ->with(['restaurant.media', 'items.product.media', 'items.modifiers']);
-
-        $cart = $query->latest()->first();
+            ->with(['items.product.restaurant.media', 'items.product.media', 'items.modifiers'])
+            ->first();
 
         if (! $cart) {
             return [
                 'id' => null,
-                'merchant' => null,
-                'items' => [],
+                'merchantGroups' => [],
                 'amounts' => [
                     'subtotal' => 0.0,
                     'total' => 0.0,
@@ -62,8 +60,7 @@ final class UserRestaurantCartService
                 ]);
             }
 
-            $merchantId = (int) $product->restaurant_id;
-            $cart = $this->resolveActiveCart($userId, $merchantId);
+            $cart = $this->resolveActiveCart($userId);
 
             $modifiers = $this->validatedModifiers($product, $modifierIds);
             $modifierTotal = (float) $modifiers->sum(fn (Modifier $modifier): float => (float) ($modifier->price ?? 0));
@@ -91,7 +88,7 @@ final class UserRestaurantCartService
             return [
                 'cartId' => $cart->id,
                 'itemId' => $item->id,
-                'cart' => $this->toPayload($cart->fresh(['restaurant.media', 'items.product.media', 'items.modifiers'])),
+                'cart' => $this->toPayload($cart->fresh(['items.product.restaurant.media', 'items.product.media', 'items.modifiers'])),
             ];
         });
     }
@@ -138,7 +135,7 @@ final class UserRestaurantCartService
                 );
             }
 
-            return $this->toPayload($item->cart->fresh(['restaurant.media', 'items.product.media', 'items.modifiers']));
+            return $this->toPayload($item->cart->fresh(['items.product.restaurant.media', 'items.product.media', 'items.modifiers']));
         });
     }
 
@@ -157,38 +154,25 @@ final class UserRestaurantCartService
             $cart = $item->cart;
             $item->delete();
 
-            return $this->toPayload($cart->fresh(['restaurant.media', 'items.product.media', 'items.modifiers']));
+            $freshCart = $cart->fresh(['items.product.restaurant.media', 'items.product.media', 'items.modifiers']);
+
+            if ($freshCart && $freshCart->items->isEmpty()) {
+                $freshCart->delete();
+
+                return [
+                    'id' => null,
+                    'merchantGroups' => [],
+                    'amounts' => ['subtotal' => 0.0, 'total' => 0.0],
+                ];
+            }
+
+            return $this->toPayload($freshCart ?? $cart);
         });
     }
 
-    private function resolveActiveCart(int $userId, int $restaurantId): Cart
+    private function resolveActiveCart(int $userId): Cart
     {
-        $activeCart = Cart::query()
-            ->where('user_id', $userId)
-            ->latest('id')
-            ->lockForUpdate()
-            ->first();
-
-        if (! $activeCart) {
-            return Cart::create([
-                'user_id' => $userId,
-                'restaurant_id' => $restaurantId,
-            ]);
-        }
-
-        Cart::query()
-            ->where('user_id', $userId)
-            ->where('id', '!=', $activeCart->id)
-            ->delete();
-
-        if ((int) $activeCart->restaurant_id !== $restaurantId) {
-            $activeCart->items()->delete();
-            $activeCart->update([
-                'restaurant_id' => $restaurantId,
-            ]);
-        }
-
-        return $activeCart->fresh() ?? $activeCart;
+        return Cart::firstOrCreate(['user_id' => $userId]);
     }
 
     /**
@@ -222,18 +206,20 @@ final class UserRestaurantCartService
      */
     private function toPayload(Cart $cart): array
     {
-        $items = $cart->items->map(function (CartItem $item): array {
-            $product = $item->product;
+        $groupedItems = $cart->items->groupBy(fn (CartItem $item): int => (int) $item->product?->restaurant_id);
 
-            return [
+        $merchantGroups = $groupedItems->map(function ($items, int $restaurantId): array {
+            $restaurant = $items->first()?->product?->restaurant;
+
+            $mappedItems = $items->map(fn (CartItem $item): array => [
                 'id' => $item->id,
                 'productId' => $item->product_id,
-                'name' => $product?->name,
-                'primaryImageUrl' => $product !== null
-                    ? ($product->getFirstMediaUrl('primary-image') ?: null)
+                'name' => $item->product?->name,
+                'primaryImageUrl' => $item->product !== null
+                    ? ($item->product->getFirstMediaUrl('primary-image') ?: null)
                     : null,
-                'images' => $product !== null
-                    ? $product->getMedia('images')->map(fn ($media) => $media->getUrl())->values()->all()
+                'images' => $item->product !== null
+                    ? $item->product->getMedia('images')->map(fn ($media) => $media->getUrl())->values()->all()
                     : [],
                 'quantity' => $item->quantity,
                 'unitPrice' => (float) ($item->unit_price ?? 0),
@@ -241,29 +227,37 @@ final class UserRestaurantCartService
                 'modifierIds' => $item->modifiers->pluck('id')->map(fn ($id) => (int) $id)->values()->all(),
                 'substituteProductId' => $item->substitute_product_id,
                 'note' => $item->special_instructions,
+            ])->values();
+
+            $subtotal = (float) $mappedItems->sum('totalPrice');
+
+            return [
+                'merchant' => [
+                    'id' => $restaurant?->id,
+                    'name' => $restaurant?->name,
+                    'primaryImageUrl' => $restaurant !== null
+                        ? ($restaurant->getFirstMediaUrl('primary-image') ?: null)
+                        : null,
+                    'bannerImageUrl' => $restaurant !== null
+                        ? ($restaurant->getFirstMediaUrl('banner-image') ?: null)
+                        : null,
+                ],
+                'items' => $mappedItems->all(),
+                'amounts' => [
+                    'subtotal' => round($subtotal, 2),
+                    'total' => round($subtotal, 2),
+                ],
             ];
         })->values();
 
-        $subtotal = (float) $items->sum('totalPrice');
-
-        $restaurant = $cart->restaurant;
+        $grandSubtotal = (float) $merchantGroups->sum(fn (array $group): float => $group['amounts']['subtotal']);
 
         return [
             'id' => $cart->id,
-            'merchant' => [
-                'id' => $restaurant?->id,
-                'name' => $restaurant?->name,
-                'primaryImageUrl' => $restaurant !== null
-                    ? ($restaurant->getFirstMediaUrl('primary-image') ?: null)
-                    : null,
-                'bannerImageUrl' => $restaurant !== null
-                    ? ($restaurant->getFirstMediaUrl('banner-image') ?: null)
-                    : null,
-            ],
-            'items' => $items->all(),
+            'merchantGroups' => $merchantGroups->all(),
             'amounts' => [
-                'subtotal' => round($subtotal, 2),
-                'total' => round($subtotal, 2),
+                'subtotal' => round($grandSubtotal, 2),
+                'total' => round($grandSubtotal, 2),
             ],
         ];
     }

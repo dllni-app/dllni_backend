@@ -90,7 +90,6 @@ it('reorders latest order products into cart', function (): void {
     $this->assertDatabaseHas('carts', [
         'id' => $response->json('cartId'),
         'user_id' => $user->id,
-        'restaurant_id' => $restaurant->id,
     ]);
 
     $this->assertDatabaseHas('cart_items', [

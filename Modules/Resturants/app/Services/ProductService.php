@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Resturants\Services;
 
+use App\Services\ActivityLogService;
 use Illuminate\Support\Facades\DB;
 use Modules\Resturants\Data\ProductData;
 use Modules\Resturants\Models\Product;
@@ -11,11 +12,14 @@ use Mrmarchone\LaravelAutoCrud\Helpers\MediaHelper;
 
 final class ProductService
 {
+    public function __construct(private ActivityLogService $activityLogService) {}
+
     public function store(ProductData $data): Product
     {
         return DB::transaction(function () use ($data) {
             $product = Product::create($data->onlyModelAttributes());
             $this->attachMedia($data, $product, false);
+            $this->activityLogService->logProductCreated($product, (int) $product->restaurant_id);
 
             return $product;
         });
@@ -24,8 +28,10 @@ final class ProductService
     public function update(ProductData $data, Product $product): Product
     {
         return DB::transaction(function () use ($data, $product) {
+            $oldAttributes = $product->getAttributes();
             tap($product)->update($data->onlyModelAttributes());
             $this->attachMedia($data, $product, true);
+            $this->activityLogService->logProductUpdated($product, (int) $product->restaurant_id, $oldAttributes);
 
             return $product;
         });

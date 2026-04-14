@@ -17,17 +17,15 @@ final class UserSupermarketCartService
      */
     public function show(int $userId): array
     {
-        $query = SmCart::query()
+        $cart = SmCart::query()
             ->where('user_id', $userId)
-            ->with(['store', 'items.product']);
-
-        $cart = $query->latest()->first();
+            ->with(['items.product.store'])
+            ->first();
 
         if (! $cart) {
             return [
                 'id' => null,
-                'merchant' => null,
-                'items' => [],
+                'merchantGroups' => [],
                 'amounts' => [
                     'subtotal' => 0.0,
                     'total' => 0.0,
@@ -52,8 +50,7 @@ final class UserSupermarketCartService
                 ]);
             }
 
-            $merchantId = (int) $product->store_id;
-            $cart = $this->resolveActiveCart($userId, $merchantId);
+            $cart = $this->resolveActiveCart($userId);
 
             $unitPrice = (float) ($product->discounted_price ?? $product->price ?? 0);
             SmCartItem::create([
@@ -63,7 +60,7 @@ final class UserSupermarketCartService
                 'unit_price' => $unitPrice,
             ]);
 
-            return $this->toPayload($cart->fresh(['store', 'items.product']));
+            return $this->toPayload($cart->fresh(['items.product.store']));
         });
     }
 
@@ -107,7 +104,7 @@ final class UserSupermarketCartService
                 }
             }
 
-            $cart = $this->resolveActiveCart($userId, $storeId);
+            $cart = $this->resolveActiveCart($userId);
 
             foreach ($mergedQuantities as $productId => $quantity) {
                 $product = $products->get($productId);
@@ -120,7 +117,7 @@ final class UserSupermarketCartService
                 ]);
             }
 
-            return $this->toPayload($cart->fresh(['store', 'items.product']));
+            return $this->toPayload($cart->fresh(['items.product.store']));
         });
     }
 
@@ -142,7 +139,7 @@ final class UserSupermarketCartService
                 'unit_price' => $unitPrice,
             ]);
 
-            return $this->toPayload($item->cart->fresh(['store', 'items.product']));
+            return $this->toPayload($item->cart->fresh(['items.product.store']));
         });
     }
 
@@ -161,38 +158,25 @@ final class UserSupermarketCartService
             $cart = $item->cart;
             $item->delete();
 
-            return $this->toPayload($cart->fresh(['store', 'items.product']));
+            $freshCart = $cart->fresh(['items.product.store']);
+
+            if ($freshCart && $freshCart->items->isEmpty()) {
+                $freshCart->delete();
+
+                return [
+                    'id' => null,
+                    'merchantGroups' => [],
+                    'amounts' => ['subtotal' => 0.0, 'total' => 0.0],
+                ];
+            }
+
+            return $this->toPayload($freshCart ?? $cart);
         });
     }
 
-    private function resolveActiveCart(int $userId, int $storeId): SmCart
+    private function resolveActiveCart(int $userId): SmCart
     {
-        $activeCart = SmCart::query()
-            ->where('user_id', $userId)
-            ->latest('id')
-            ->lockForUpdate()
-            ->first();
-
-        if (! $activeCart) {
-            return SmCart::create([
-                'user_id' => $userId,
-                'store_id' => $storeId,
-            ]);
-        }
-
-        SmCart::query()
-            ->where('user_id', $userId)
-            ->where('id', '!=', $activeCart->id)
-            ->delete();
-
-        if ((int) $activeCart->store_id !== $storeId) {
-            $activeCart->items()->delete();
-            $activeCart->update([
-                'store_id' => $storeId,
-            ]);
-        }
-
-        return $activeCart->fresh() ?? $activeCart;
+        return SmCart::firstOrCreate(['user_id' => $userId]);
     }
 
     /**
@@ -200,27 +184,43 @@ final class UserSupermarketCartService
      */
     private function toPayload(SmCart $cart): array
     {
-        $items = $cart->items->map(fn (SmCartItem $item): array => [
-            'id' => $item->id,
-            'productId' => $item->product_id,
-            'name' => $item->product?->name,
-            'quantity' => $item->quantity,
-            'unitPrice' => (float) ($item->unit_price ?? 0),
-            'totalPrice' => round((float) ($item->unit_price ?? 0) * (int) $item->quantity, 2),
-        ])->values();
+        $groupedItems = $cart->items->groupBy(fn (SmCartItem $item): int => (int) $item->product?->store_id);
 
-        $subtotal = (float) $items->sum('totalPrice');
+        $merchantGroups = $groupedItems->map(function ($items): array {
+            $store = $items->first()?->product?->store;
+
+            $mappedItems = $items->map(fn (SmCartItem $item): array => [
+                'id' => $item->id,
+                'productId' => $item->product_id,
+                'name' => $item->product?->name,
+                'quantity' => $item->quantity,
+                'unitPrice' => (float) ($item->unit_price ?? 0),
+                'totalPrice' => round((float) ($item->unit_price ?? 0) * (int) $item->quantity, 2),
+            ])->values();
+
+            $subtotal = (float) $mappedItems->sum('totalPrice');
+
+            return [
+                'merchant' => [
+                    'id' => $store?->id,
+                    'name' => $store?->name,
+                ],
+                'items' => $mappedItems->all(),
+                'amounts' => [
+                    'subtotal' => round($subtotal, 2),
+                    'total' => round($subtotal, 2),
+                ],
+            ];
+        })->values();
+
+        $grandSubtotal = (float) $merchantGroups->sum(fn (array $group): float => $group['amounts']['subtotal']);
 
         return [
             'id' => $cart->id,
-            'merchant' => [
-                'id' => $cart->store?->id,
-                'name' => $cart->store?->name,
-            ],
-            'items' => $items->all(),
+            'merchantGroups' => $merchantGroups->all(),
             'amounts' => [
-                'subtotal' => round($subtotal, 2),
-                'total' => round($subtotal, 2),
+                'subtotal' => round($grandSubtotal, 2),
+                'total' => round($grandSubtotal, 2),
             ],
         ];
     }

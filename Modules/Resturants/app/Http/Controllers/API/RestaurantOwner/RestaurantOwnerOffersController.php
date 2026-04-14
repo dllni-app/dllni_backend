@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Resturants\Http\Controllers\API\RestaurantOwner;
 
+use App\Services\ActivityLogService;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Modules\Resturants\Data\OfferData;
@@ -18,7 +19,8 @@ use Throwable;
 final class RestaurantOwnerOffersController
 {
     public function __construct(
-        private OfferService $offerService
+        private OfferService $offerService,
+        private ActivityLogService $activityLogService
     ) {}
 
     public function index(OfferFilterRequest $request, RestaurantOwnerContext $ownerContext): AnonymousResourceCollection
@@ -76,7 +78,10 @@ final class RestaurantOwnerOffersController
         $restaurant = $ownerContext->restaurant();
         abort_unless($ownerContext->modelBelongsToRestaurant($offer, (int) $restaurant->id), Response::HTTP_NOT_FOUND);
 
+        $offerName = $offer->name;
+        $restaurantId = (int) $offer->restaurant_id;
         $offer->delete();
+        $this->activityLogService->logOfferDeleted($offerName, $restaurantId);
 
         return response()->noContent();
     }

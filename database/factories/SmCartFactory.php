@@ -16,7 +16,6 @@ final class SmCartFactory extends Factory
     {
         return [
             'user_id' => User::factory(),
-            'store_id' => SmStoreFactory::new(),
         ];
     }
 }

@@ -8,7 +8,7 @@ use Database\Factories\SmProductFactory;
 use Database\Factories\SmStoreFactory;
 use Laravel\Sanctum\Sanctum;
 
-it('keeps a single active supermarket cart per user when store changes', function (): void {
+it('preserves items from multiple stores in the same supermarket cart', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
@@ -43,18 +43,20 @@ it('keeps a single active supermarket cart per user when store changes', functio
         'quantity' => 2,
     ])->assertCreated();
 
-    $secondAddResponse->assertJsonPath('data.id', $firstCartId);
-    $secondAddResponse->assertJsonPath('data.merchant.id', $secondStore->id);
+    // Same cart is reused
+    expect($secondAddResponse->json('data.id'))->toBe($firstCartId);
 
+    // Two merchant groups exist
+    expect($secondAddResponse->json('data.merchantGroups'))->toHaveCount(2);
+
+    // Only one cart in DB
     $this->assertDatabaseCount('sm_carts', 1);
-    $this->assertDatabaseHas('sm_carts', [
-        'id' => $firstCartId,
-        'user_id' => $user->id,
-        'store_id' => $secondStore->id,
-    ]);
-    $this->assertDatabaseMissing('sm_cart_items', [
+
+    // Both items exist
+    $this->assertDatabaseHas('sm_cart_items', [
         'cart_id' => $firstCartId,
         'product_id' => $firstProduct->id,
+        'quantity' => 1,
     ]);
     $this->assertDatabaseHas('sm_cart_items', [
         'cart_id' => $firstCartId,

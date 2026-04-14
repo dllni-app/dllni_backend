@@ -22,10 +22,10 @@ it('returns empty cart payload when user has no restaurant cart', function (): v
     $response = $this->getJson('/api/v1/user/restaurants/cart');
 
     $response->assertOk()->assertJsonPath('data.id', null);
-    expect($response->json('data.items'))->toBeArray()->toBeEmpty();
+    expect($response->json('data.merchantGroups'))->toBeArray()->toBeEmpty();
 });
 
-it('returns cart items for the authenticated user after adding to cart', function (): void {
+it('returns cart items grouped by merchant after adding to cart', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
@@ -48,10 +48,10 @@ it('returns cart items for the authenticated user after adding to cart', functio
     $response = $this->getJson('/api/v1/user/restaurants/cart');
 
     $response->assertOk()
-        ->assertJsonPath('data.merchant.id', $restaurant->id)
-        ->assertJsonPath('data.items.0.productId', $product->id)
-        ->assertJsonPath('data.items.0.quantity', 3)
-        ->assertJsonPath('data.items.0.name', $product->name);
+        ->assertJsonPath('data.merchantGroups.0.merchant.id', $restaurant->id)
+        ->assertJsonPath('data.merchantGroups.0.items.0.productId', $product->id)
+        ->assertJsonPath('data.merchantGroups.0.items.0.quantity', 3)
+        ->assertJsonPath('data.merchantGroups.0.items.0.name', $product->name);
 
     expect($response->json('data.id'))->toBeInt();
 });
@@ -88,11 +88,49 @@ it('includes merchant and line item image urls on restaurant cart', function ():
     $response = $this->getJson('/api/v1/user/restaurants/cart');
 
     $response->assertOk();
-    $response->assertJsonPath('data.merchant.id', $restaurant->id);
-    expect($response->json('data.merchant.primaryImageUrl'))->toBeString()->not->toBeEmpty();
-    expect($response->json('data.merchant.bannerImageUrl'))->toBeString()->not->toBeEmpty();
+    $response->assertJsonPath('data.merchantGroups.0.merchant.id', $restaurant->id);
+    expect($response->json('data.merchantGroups.0.merchant.primaryImageUrl'))->toBeString()->not->toBeEmpty();
+    expect($response->json('data.merchantGroups.0.merchant.bannerImageUrl'))->toBeString()->not->toBeEmpty();
 
-    expect($response->json('data.items.0.primaryImageUrl'))->toBeString()->not->toBeEmpty();
-    expect($response->json('data.items.0.images'))->toBeArray()->not->toBeEmpty();
-    $response->assertJsonPath('data.items.0.name', 'Cart dish');
+    expect($response->json('data.merchantGroups.0.items.0.primaryImageUrl'))->toBeString()->not->toBeEmpty();
+    expect($response->json('data.merchantGroups.0.items.0.images'))->toBeArray()->not->toBeEmpty();
+    $response->assertJsonPath('data.merchantGroups.0.items.0.name', 'Cart dish');
+});
+
+it('shows items from multiple restaurants in the same cart', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $restaurantA = Restaurant::factory()->create(['is_active' => true]);
+    $restaurantB = Restaurant::factory()->create(['is_active' => true]);
+
+    $productA = Product::factory()->create([
+        'restaurant_id' => $restaurantA->id,
+        'is_available' => true,
+        'price' => 10,
+    ]);
+    $productB = Product::factory()->create([
+        'restaurant_id' => $restaurantB->id,
+        'is_available' => true,
+        'price' => 20,
+    ]);
+
+    $this->postJson('/api/v1/user/restaurants/cart/items', [
+        'productId' => $productA->id,
+        'quantity' => 1,
+    ])->assertCreated();
+
+    $this->postJson('/api/v1/user/restaurants/cart/items', [
+        'productId' => $productB->id,
+        'quantity' => 2,
+    ])->assertCreated();
+
+    $response = $this->getJson('/api/v1/user/restaurants/cart');
+
+    $response->assertOk();
+    expect($response->json('data.merchantGroups'))->toHaveCount(2);
+    expect((float) $response->json('data.amounts.subtotal'))->toBe(50.0);
+
+    $this->assertDatabaseCount('carts', 1);
+    $this->assertDatabaseCount('cart_items', 2);
 });

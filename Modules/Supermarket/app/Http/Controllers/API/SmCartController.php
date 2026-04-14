@@ -30,19 +30,19 @@ final class SmCartController
     {
         $cart = $this->service->store(SmCartData::from($request->validated()));
 
-        return SmCartResource::make($cart->load(['user', 'store', 'items']));
+        return SmCartResource::make($cart->load(['user', 'items']));
     }
 
     public function show(SmCart $smCart): SmCartResource
     {
-        return SmCartResource::make($smCart->load(['user', 'store', 'items']));
+        return SmCartResource::make($smCart->load(['user', 'items']));
     }
 
     public function update(SmCartRequest $request, SmCart $smCart): SmCartResource
     {
         $cart = $this->service->update(SmCartData::from($request->validated()), $smCart);
 
-        return SmCartResource::make($cart->load(['user', 'store', 'items']));
+        return SmCartResource::make($cart->load(['user', 'items']));
     }
 
     public function destroy(SmCart $smCart): Response

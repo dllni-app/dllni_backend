@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Resturants\Http\Controllers\API;
 
+use App\Services\ActivityLogService;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Modules\Resturants\Data\ProductData;
@@ -19,7 +20,8 @@ final class ProductController
 {
     public function __construct(
         private ProductService $productService,
-        private RestaurantOwnerContext $ownerContext
+        private RestaurantOwnerContext $ownerContext,
+        private ActivityLogService $activityLogService
     ) {}
 
     public function index(ProductFilterRequest $request): AnonymousResourceCollection
@@ -87,7 +89,10 @@ final class ProductController
     public function destroy(Product $product): Response
     {
         $this->ownerContext->ensureOwnedProduct($product);
+        $productName = $product->name;
+        $restaurantId = (int) $product->restaurant_id;
         $product->delete();
+        $this->activityLogService->logProductDeleted($productName, $restaurantId);
 
         return response()->noContent();
     }

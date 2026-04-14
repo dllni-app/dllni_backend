@@ -17,20 +17,24 @@ use Modules\Resturants\Models\PromoCode;
 
 final class RestaurantCheckoutService
 {
-    public function checkout(
+    /**
+     * Creates a single Order containing all cart items.
+     * When items span multiple restaurants restaurant_id is set to null
+     * (merchant context is preserved at the item level via product_id).
+     * The cart is fully deleted after the order is placed.
+     */
+    public function checkoutAll(
         int $userId,
-        int $restaurantId,
         string $orderType,
         ?string $pickupMode = null,
         ?string $pickupScheduledFor = null,
         ?string $promoCode = null,
         ?string $specialInstructions = null,
     ): Order {
-        return DB::transaction(function () use ($userId, $restaurantId, $orderType, $pickupMode, $pickupScheduledFor, $promoCode, $specialInstructions) {
+        return DB::transaction(function () use ($userId, $orderType, $pickupMode, $pickupScheduledFor, $promoCode, $specialInstructions): Order {
             $cart = Cart::query()
                 ->where('user_id', $userId)
-                ->where('restaurant_id', $restaurantId)
-                ->with(['items', 'items.product'])
+                ->with(['items.product', 'items.modifiers'])
                 ->first();
 
             if (! $cart || $cart->items->isEmpty()) {
@@ -39,25 +43,23 @@ final class RestaurantCheckoutService
                 ]);
             }
 
-            $subtotal = (float) $cart->items->sum(fn ($item) => (float) ($item->total_price ?? 0));
+            $subtotal = (float) $cart->items->sum(fn ($item): float => (float) ($item->total_price ?? 0));
 
-            $promo = null;
-            $discountAmount = 0.0;
+            $restaurantIds = $cart->items
+                ->pluck('product.restaurant_id')
+                ->filter()
+                ->unique()
+                ->values();
 
-            if (is_string($promoCode) && $promoCode !== '') {
-                $promo = PromoCode::query()
-                    ->where('code', $promoCode)
-                    ->where('restaurant_id', $restaurantId)
-                    ->first();
+            $isSingleMerchant = $restaurantIds->count() === 1;
+            $restaurantId = $isSingleMerchant ? (int) $restaurantIds->first() : null;
 
-                if (! $promo || ! $this->promoIsValid($promo, $subtotal)) {
-                    throw ValidationException::withMessages([
-                        'promoCode' => ['Invalid promo code.'],
-                    ]);
-                }
-
-                $discountAmount = $this->calculateDiscount($promo, $subtotal);
-            }
+            [$discountAmount, $promoCodeId] = $this->resolveDiscount(
+                $restaurantId,
+                $promoCode,
+                $subtotal,
+                $isSingleMerchant,
+            );
 
             $taxAmount = 0.0;
             $serviceFee = 0.0;
@@ -66,7 +68,7 @@ final class RestaurantCheckoutService
             $order = Order::create([
                 'user_id' => $userId,
                 'restaurant_id' => $restaurantId,
-                'promo_code_id' => $promo?->id,
+                'promo_code_id' => $promoCodeId,
                 'order_number' => 'ORD-'.mb_strtoupper(Str::random(8)).'-'.random_int(1000, 9999),
                 'status' => OrderStatus::Pending->value,
                 'order_type' => $orderType,
@@ -94,7 +96,7 @@ final class RestaurantCheckoutService
                 $modifierRows = DB::table('cart_item_modifier')
                     ->where('cart_item_id', $cartItem->id)
                     ->get(['modifier_id', 'price'])
-                    ->map(fn ($row) => [
+                    ->map(fn ($row): array => [
                         'order_item_id' => $orderItem->id,
                         'modifier_id' => (int) $row->modifier_id,
                         'price' => (float) $row->price,
@@ -112,6 +114,27 @@ final class RestaurantCheckoutService
 
             return $order;
         });
+    }
+
+    /**
+     * @return array{float, int|null}
+     */
+    private function resolveDiscount(?int $restaurantId, ?string $promoCode, float $subtotal, bool $isSingleMerchant): array
+    {
+        if (! $isSingleMerchant || ! is_string($promoCode) || mb_trim($promoCode) === '' || $restaurantId === null) {
+            return [0.0, null];
+        }
+
+        $promo = PromoCode::query()
+            ->where('code', $promoCode)
+            ->where('restaurant_id', $restaurantId)
+            ->first();
+
+        if (! $promo || ! $this->promoIsValid($promo, $subtotal)) {
+            return [0.0, null];
+        }
+
+        return [$this->calculateDiscount($promo, $subtotal), $promo->id];
     }
 
     private function promoIsValid(PromoCode $promo, float $subtotal): bool
@@ -143,7 +166,7 @@ final class RestaurantCheckoutService
     {
         return match ($promo->discount_type) {
             DiscountType::Percentage => round($subtotal * ((float) $promo->discount_value / 100), 2),
-            DiscountType::FixedAmount => min((float) $promo->discount_value, $subtotal),
+            DiscountType::FixedAmount => round(min((float) $promo->discount_value, $subtotal), 2),
             default => 0.0,
         };
     }

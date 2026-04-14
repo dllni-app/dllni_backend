@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Supermarket\Http\Controllers\API\StoreOwner;
 
+use App\Services\ActivityLogService;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\JsonResponse;
@@ -23,7 +24,8 @@ use Modules\Supermarket\Services\SmInventoryService;
 final class StoreOwnerInventoryController
 {
     public function __construct(
-        private readonly SmInventoryService $inventoryService
+        private readonly SmInventoryService $inventoryService,
+        private readonly ActivityLogService $activityLogService
     ) {}
 
     /**
@@ -69,8 +71,10 @@ final class StoreOwnerInventoryController
             $data = SmStockUpdateData::from($request->validated());
 
             $userId = $request->user()?->id;
+            $quantityChange = $data->newQuantity - ($product->stock_quantity ?? 0);
 
             $updatedProduct = $this->inventoryService->updateStock($product, $data, $userId);
+            $this->activityLogService->logSmStockUpdated($updatedProduct, (int) $product->store_id, $quantityChange);
 
             return response()->json([
                 'success' => true,
@@ -109,6 +113,8 @@ final class StoreOwnerInventoryController
             $userId = $request->user()?->id;
 
             $auditResults = $this->inventoryService->performAudit($data, $storeId, $userId);
+            $auditedItemsCount = count($data->items ?? []);
+            $this->activityLogService->logSmInventoryAudit($storeId, $auditedItemsCount);
 
             return response()->json([
                 'success' => true,
@@ -135,6 +141,7 @@ final class StoreOwnerInventoryController
             $data = SmProductExpirationData::from($request->validated());
 
             $result = $this->inventoryService->updateExpiration($product, $data);
+            $this->activityLogService->logSmExpirationUpdated($product, (int) $product->store_id);
 
             return response()->json([
                 'success' => true,

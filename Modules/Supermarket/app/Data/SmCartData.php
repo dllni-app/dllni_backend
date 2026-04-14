@@ -15,8 +15,6 @@ final class SmCartData extends Data
     public function __construct(
         #[Exists('users', 'id')]
         public ?int $userId,
-        #[Exists('sm_stores', 'id')]
-        public ?int $storeId,
     ) {}
 
     public function onlyModelAttributes(): array

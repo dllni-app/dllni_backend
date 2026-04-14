@@ -18,17 +18,11 @@ final class SmCart extends Model
 
     protected $fillable = [
         'user_id',
-        'store_id',
     ];
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
-    }
-
-    public function store(): BelongsTo
-    {
-        return $this->belongsTo(SmStore::class, 'store_id');
     }
 
     public function items(): HasMany

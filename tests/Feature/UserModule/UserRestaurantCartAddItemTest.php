@@ -58,7 +58,6 @@ it('adds a product to restaurant cart for authenticated user', function (): void
 
     $this->assertDatabaseHas('carts', [
         'user_id' => $user->id,
-        'restaurant_id' => $restaurant->id,
     ]);
 
     $this->assertDatabaseHas('cart_items', [
@@ -74,16 +73,12 @@ it('adds a product to restaurant cart for authenticated user', function (): void
     ]);
 });
 
-it('keeps a single active restaurant cart per user when merchant changes', function (): void {
+it('preserves items from all restaurants in the same cart', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
-    $firstRestaurant = Restaurant::factory()->create([
-        'is_active' => true,
-    ]);
-    $secondRestaurant = Restaurant::factory()->create([
-        'is_active' => true,
-    ]);
+    $firstRestaurant = Restaurant::factory()->create(['is_active' => true]);
+    $secondRestaurant = Restaurant::factory()->create(['is_active' => true]);
 
     $firstProduct = Product::factory()->create([
         'restaurant_id' => $firstRestaurant->id,
@@ -108,17 +103,17 @@ it('keeps a single active restaurant cart per user when merchant changes', funct
         'quantity' => 2,
     ])->assertCreated();
 
-    $secondAddResponse->assertJsonPath('cartId', $firstCartId);
+    // Same cart is reused
+    expect($secondAddResponse->json('cartId'))->toBe($firstCartId);
 
+    // Only one cart exists
     $this->assertDatabaseCount('carts', 1);
-    $this->assertDatabaseHas('carts', [
-        'id' => $firstCartId,
-        'user_id' => $user->id,
-        'restaurant_id' => $secondRestaurant->id,
-    ]);
-    $this->assertDatabaseMissing('cart_items', [
+
+    // Both items are present
+    $this->assertDatabaseHas('cart_items', [
         'cart_id' => $firstCartId,
         'product_id' => $firstProduct->id,
+        'quantity' => 1,
     ]);
     $this->assertDatabaseHas('cart_items', [
         'cart_id' => $firstCartId,

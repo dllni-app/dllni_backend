@@ -32,6 +32,7 @@ use Modules\Supermarket\Http\Controllers\API\SmStoreDocumentController;
 use Modules\Supermarket\Http\Controllers\API\SmStoreHoursController;
 use Modules\Supermarket\Http\Controllers\API\SmStoreTrustLogController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\SmOrderStatusController;
+use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerActivityLogController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerDashboardController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerEmployeeIndexController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerEmployeeStatusController;
@@ -92,6 +93,7 @@ Route::prefix('v1')->group(function () {
         Route::get('dashboard', StoreOwnerDashboardController::class)->name('dashboard');
         Route::get('offers/weekly-summary', StoreOwnerOfferWeeklySummaryController::class)->name('offers.weekly-summary');
         Route::get('permissions', StoreOwnerPermissionsController::class)->name('permissions');
+        Route::get('activity-logs', StoreOwnerActivityLogController::class)->name('activity-logs');
 
         Route::get('employees', StoreOwnerEmployeeIndexController::class)->name('employees.index');
         Route::post('employees', StoreOwnerEmployeeStoreController::class)->name('employees.store');

@@ -20,8 +20,6 @@ final class SmCartResource extends JsonResource
             'id' => $this->id,
             'userId' => $this->user_id,
             'user' => UserResource::make($this->whenLoaded('user')),
-            'storeId' => $this->store_id,
-            'store' => SmStoreResource::make($this->whenLoaded('store')),
             'items' => SmCartItemResource::collection($this->whenLoaded('items')),
             'createdAt' => $this->created_at?->toDateTimeString(),
             'updatedAt' => $this->updated_at?->toDateTimeString(),
