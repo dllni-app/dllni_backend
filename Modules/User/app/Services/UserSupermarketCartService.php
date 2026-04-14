@@ -53,10 +53,7 @@ final class UserSupermarketCartService
             }
 
             $merchantId = (int) $product->store_id;
-            $cart = SmCart::query()->firstOrCreate([
-                'user_id' => $userId,
-                'store_id' => $merchantId,
-            ]);
+            $cart = $this->resolveActiveCart($userId, $merchantId);
 
             $unitPrice = (float) ($product->discounted_price ?? $product->price ?? 0);
             SmCartItem::create([
@@ -110,10 +107,7 @@ final class UserSupermarketCartService
                 }
             }
 
-            $cart = SmCart::query()->firstOrCreate([
-                'user_id' => $userId,
-                'store_id' => $storeId,
-            ]);
+            $cart = $this->resolveActiveCart($userId, $storeId);
 
             foreach ($mergedQuantities as $productId => $quantity) {
                 $product = $products->get($productId);
@@ -169,6 +163,36 @@ final class UserSupermarketCartService
 
             return $this->toPayload($cart->fresh(['store', 'items.product']));
         });
+    }
+
+    private function resolveActiveCart(int $userId, int $storeId): SmCart
+    {
+        $activeCart = SmCart::query()
+            ->where('user_id', $userId)
+            ->latest('id')
+            ->lockForUpdate()
+            ->first();
+
+        if (! $activeCart) {
+            return SmCart::create([
+                'user_id' => $userId,
+                'store_id' => $storeId,
+            ]);
+        }
+
+        SmCart::query()
+            ->where('user_id', $userId)
+            ->where('id', '!=', $activeCart->id)
+            ->delete();
+
+        if ((int) $activeCart->store_id !== $storeId) {
+            $activeCart->items()->delete();
+            $activeCart->update([
+                'store_id' => $storeId,
+            ]);
+        }
+
+        return $activeCart->fresh() ?? $activeCart;
     }
 
     /**

@@ -63,10 +63,7 @@ final class UserRestaurantCartService
             }
 
             $merchantId = (int) $product->restaurant_id;
-            $cart = Cart::query()->firstOrCreate([
-                'user_id' => $userId,
-                'restaurant_id' => $merchantId,
-            ]);
+            $cart = $this->resolveActiveCart($userId, $merchantId);
 
             $modifiers = $this->validatedModifiers($product, $modifierIds);
             $modifierTotal = (float) $modifiers->sum(fn (Modifier $modifier): float => (float) ($modifier->price ?? 0));
@@ -162,6 +159,36 @@ final class UserRestaurantCartService
 
             return $this->toPayload($cart->fresh(['restaurant.media', 'items.product.media', 'items.modifiers']));
         });
+    }
+
+    private function resolveActiveCart(int $userId, int $restaurantId): Cart
+    {
+        $activeCart = Cart::query()
+            ->where('user_id', $userId)
+            ->latest('id')
+            ->lockForUpdate()
+            ->first();
+
+        if (! $activeCart) {
+            return Cart::create([
+                'user_id' => $userId,
+                'restaurant_id' => $restaurantId,
+            ]);
+        }
+
+        Cart::query()
+            ->where('user_id', $userId)
+            ->where('id', '!=', $activeCart->id)
+            ->delete();
+
+        if ((int) $activeCart->restaurant_id !== $restaurantId) {
+            $activeCart->items()->delete();
+            $activeCart->update([
+                'restaurant_id' => $restaurantId,
+            ]);
+        }
+
+        return $activeCart->fresh() ?? $activeCart;
     }
 
     /**
