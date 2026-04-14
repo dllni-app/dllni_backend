@@ -50,6 +50,7 @@ use Modules\User\Http\Controllers\API\UserCouponAvailabilityCheckController;
 use Modules\User\Http\Controllers\API\UserMarketingOfferShowController;
 use Modules\User\Http\Controllers\API\UserMarketingOffersIndexController;
 use Modules\User\Http\Controllers\API\UserNotificationsIndexController;
+use Modules\User\Http\Controllers\API\UserNotificationsMarkAllAsReadController;
 use Modules\User\Http\Controllers\API\UserNotificationsMarkAsReadController;
 use Modules\User\Http\Controllers\API\UserOrderCancelController;
 use Modules\User\Http\Controllers\API\UserOrderReorderController;
@@ -157,6 +158,7 @@ Route::prefix('v1/user')->group(function (): void {
         Route::put('account/password', UserAccountPasswordController::class);
 
         Route::get('notifications', UserNotificationsIndexController::class);
+        Route::patch('notifications/read-all', UserNotificationsMarkAllAsReadController::class);
         Route::patch('notifications/{id}/read', UserNotificationsMarkAsReadController::class);
 
         Route::get('addresses', UserAddressIndexController::class);

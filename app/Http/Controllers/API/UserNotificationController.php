@@ -32,4 +32,11 @@ final class UserNotificationController
 
         return response()->noContent();
     }
+
+    public function markAllAsRead(): Response
+    {
+        auth()->user()->unreadNotifications->markAsRead();
+
+        return response()->noContent();
+    }
 }

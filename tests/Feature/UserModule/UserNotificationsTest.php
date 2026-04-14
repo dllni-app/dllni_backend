@@ -89,6 +89,106 @@ it('requires authentication to mark a notification as read', function (): void {
         ->assertUnauthorized();
 });
 
+it('marks all notifications as read', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $databaseType = 'Illuminate\\Notifications\\DatabaseNotification';
+
+    $user->notifications()->create([
+        'id' => (string) Str::uuid(),
+        'type' => $databaseType,
+        'data' => ['title' => 'Unread A', 'body' => ''],
+        'read_at' => null,
+    ]);
+    $user->notifications()->create([
+        'id' => (string) Str::uuid(),
+        'type' => $databaseType,
+        'data' => ['title' => 'Unread B', 'body' => ''],
+        'read_at' => null,
+    ]);
+
+    $this->patchJson('/api/v1/user/notifications/read-all')
+        ->assertNoContent();
+
+    expect($user->fresh()->unreadNotifications()->count())->toBe(0);
+});
+
+it('requires authentication to mark all notifications as read', function (): void {
+    $this->patchJson('/api/v1/user/notifications/read-all')
+        ->assertUnauthorized();
+});
+
 it('requires authentication', function (): void {
     $this->getJson('/api/v1/user/notifications')->assertUnauthorized();
+});
+
+it('returns notification module for cleaning notifications', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $user->notifications()->create([
+        'id' => (string) Str::uuid(),
+        'type' => 'App\\Notifications\\Cleaning\\NewOrderRequestNotification',
+        'data' => [
+            'type' => 'new_order',
+            'title' => 'Order update',
+            'body' => 'Your order is ready.',
+        ],
+        'read_at' => null,
+    ]);
+
+    $response = $this->getJson('/api/v1/user/notifications');
+
+    $response->assertOk();
+    expect($response->json('data.0.module'))->toBe('cleaning');
+    expect($response->json('data.0.icon'))->toBe(url('/images/notifications/cleaning.svg'));
+});
+
+it('returns notification module from payload override', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $user->notifications()->create([
+        'id' => (string) Str::uuid(),
+        'type' => 'Illuminate\\Notifications\\DatabaseNotification',
+        'data' => [
+            'module' => 'supermarket',
+            'type' => 'order_update',
+            'title' => 'Order update',
+            'body' => 'Your order is being prepared.',
+        ],
+        'read_at' => null,
+    ]);
+
+    $response = $this->getJson('/api/v1/user/notifications');
+
+    $response->assertOk();
+    expect($response->json('data.0.module'))->toBe('supermarket');
+    expect($response->json('data.0.icon'))->toBe(url('/images/notifications/supermarket.svg'));
+});
+
+it('returns payload icon when provided', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $iconUrl = 'https://cdn.example.com/icons/custom-notification.png';
+
+    $user->notifications()->create([
+        'id' => (string) Str::uuid(),
+        'type' => 'Illuminate\\Notifications\\DatabaseNotification',
+        'data' => [
+            'module' => 'restaurant',
+            'type' => 'order_update',
+            'icon' => $iconUrl,
+            'title' => 'Order update',
+            'body' => 'Order moved to preparing.',
+        ],
+        'read_at' => null,
+    ]);
+
+    $response = $this->getJson('/api/v1/user/notifications');
+
+    $response->assertOk();
+    expect($response->json('data.0.icon'))->toBe($iconUrl);
 });
