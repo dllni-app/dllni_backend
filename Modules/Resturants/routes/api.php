@@ -43,6 +43,7 @@ use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerOrder
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerPermissionsController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerProductAvailabilityController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerPromoCodesController;
+use Modules\Resturants\Http\Controllers\API\RestaurantPenaltyController;
 use Modules\Resturants\Http\Controllers\API\RestaurantRecurringOrderController;
 use Modules\Resturants\Http\Controllers\API\RestaurantReputationLogController;
 use Modules\Resturants\Http\Controllers\API\RestaurantRoleController;

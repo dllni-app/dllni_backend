@@ -10,7 +10,6 @@ use App\Models\Worker;
 use Carbon\CarbonInterface;
 use Database\Seeders\Support\SeederMedia;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Str;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
@@ -67,7 +66,7 @@ final class UserAppScenarioSeeder extends Seeder
         );
 
         $this->seedAddresses($user);
-        $this->seedNotifications($user);
+        $this->call(UserNotificationsSeeder::class);
     }
 
     private function seedAddresses(User $user): void
@@ -109,69 +108,6 @@ final class UserAppScenarioSeeder extends Seeder
                 'is_default' => false,
             ]
         );
-    }
-
-    private function seedNotifications(User $user): void
-    {
-        $databaseType = 'Illuminate\\Notifications\\DatabaseNotification';
-
-        $user->notifications()
-            ->where('data->seedTag', 'user-app-scenario')
-            ->delete();
-
-        $notifications = [
-            [
-                'type' => 'order',
-                'title' => 'تم قبول الطلب',
-                'body' => 'وافق المطعم على طلبك وبدأ التحضير.',
-                'bookingId' => 101,
-                'read_at' => null,
-            ],
-            [
-                'type' => 'order',
-                'title' => 'طلبك جاهز للاستلام',
-                'body' => 'طلب المطعم أصبح جاهزاً للاستلام الآن.',
-                'bookingId' => 101,
-                'read_at' => null,
-            ],
-            [
-                'type' => 'promo',
-                'title' => 'عرض جديد متاح',
-                'body' => 'استخدم كود AHLAN15 في عملية الدفع القادمة.',
-                'read_at' => null,
-            ],
-            [
-                'type' => 'promo',
-                'title' => 'عرض سريع قريب منك',
-                'body' => 'يوجد خصم لفترة محدودة في سوبرماركت قريب منك.',
-                'read_at' => now()->subMinutes(5),
-            ],
-            [
-                'type' => 'delivery',
-                'title' => 'الطلب في الطريق',
-                'body' => 'السائق يقترب من عنوانك المحفوظ.',
-                'timeWarningId' => 11,
-                'read_at' => now()->subMinutes(20),
-            ],
-            [
-                'type' => 'account',
-                'title' => 'تذكير أمني',
-                'body' => 'يرجى مراجعة إعدادات الأمان في حسابك.',
-                'read_at' => now()->subHours(2),
-            ],
-        ];
-
-        foreach ($notifications as $payload) {
-            $readAt = $payload['read_at'];
-            unset($payload['read_at']);
-
-            $user->notifications()->create([
-                'id' => (string) Str::uuid(),
-                'type' => $databaseType,
-                'data' => [...$payload, 'seedTag' => 'user-app-scenario'],
-                'read_at' => $readAt,
-            ]);
-        }
     }
 
     private function seedRestaurantScenario(User $user): void
@@ -329,7 +265,7 @@ final class UserAppScenarioSeeder extends Seeder
     {
         $stores = SmStore::query()
             ->where('is_active', true)
-            ->where(fn ($query) => $query
+            ->where(fn($query) => $query
                 ->whereNull('suspension_until')
                 ->orWhere('suspension_until', '<=', now()))
             ->orderBy('id')
@@ -417,7 +353,7 @@ final class UserAppScenarioSeeder extends Seeder
     {
         $store = SmStore::query()
             ->where('is_active', true)
-            ->where(fn ($query) => $query
+            ->where(fn($query) => $query
                 ->whereNull('suspension_until')
                 ->orWhere('suspension_until', '<=', now()))
             ->orderBy('id')
