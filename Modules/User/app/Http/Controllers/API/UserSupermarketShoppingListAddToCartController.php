@@ -22,7 +22,7 @@ final class UserSupermarketShoppingListAddToCartController
             'data' => $this->shoppingLists->addListToCart(
                 userId: (int) $request->user()->id,
                 listId: $shoppingList,
-                storeId: (int) $validated['storeId'],
+                storeId: isset($validated['storeId']) ? (int) $validated['storeId'] : null,
             ),
         ], 201);
     }

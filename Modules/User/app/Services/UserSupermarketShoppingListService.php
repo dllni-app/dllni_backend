@@ -10,6 +10,7 @@ use Illuminate\Validation\ValidationException;
 use Modules\Supermarket\Models\SmProduct;
 use Modules\Supermarket\Models\SmSmartList;
 use Modules\Supermarket\Models\SmSmartListItem;
+use Modules\Supermarket\Models\SmSmartListSchedule;
 
 final class UserSupermarketShoppingListService
 {
@@ -24,6 +25,7 @@ final class UserSupermarketShoppingListService
     {
         return SmSmartList::query()
             ->where('user_id', $userId)
+            ->with('schedule')
             ->withCount('items')
             ->orderByDesc('updated_at')
             ->get()
@@ -40,6 +42,7 @@ final class UserSupermarketShoppingListService
         $list = $this->findOwnedList($userId, $listId);
 
         return $this->listDetail($list->load([
+            'schedule',
             'items' => fn ($q) => $q->orderBy('sort_order')->orderBy('id'),
             'items.masterProduct',
         ]));
@@ -57,7 +60,7 @@ final class UserSupermarketShoppingListService
             'is_active' => $isActive,
         ]);
 
-        return $this->listDetail($list->loadCount('items'));
+        return $this->listDetail($list->load(['schedule'])->loadCount('items'));
     }
 
     /**
@@ -82,6 +85,7 @@ final class UserSupermarketShoppingListService
         }
 
         return $this->listDetail($list->fresh()->load([
+            'schedule',
             'items' => fn ($q) => $q->orderBy('sort_order')->orderBy('id'),
             'items.masterProduct',
         ]));
@@ -118,6 +122,7 @@ final class UserSupermarketShoppingListService
         ]);
 
         return $this->listDetail($list->fresh()->load([
+            'schedule',
             'items' => fn ($q) => $q->orderBy('sort_order')->orderBy('id'),
             'items.masterProduct',
         ]));
@@ -156,6 +161,7 @@ final class UserSupermarketShoppingListService
         }
 
         return $this->listDetail($list->fresh()->load([
+            'schedule',
             'items' => fn ($q) => $q->orderBy('sort_order')->orderBy('id'),
             'items.masterProduct',
         ]));
@@ -174,10 +180,19 @@ final class UserSupermarketShoppingListService
     /**
      * @return array<string, mixed>
      */
-    public function addListToCart(int $userId, int $listId, int $storeId): array
+    public function addListToCart(int $userId, int $listId, ?int $storeId): array
     {
         return DB::transaction(function () use ($userId, $listId, $storeId): array {
             $list = $this->findOwnedList($userId, $listId);
+
+            $effectiveStoreId = $storeId ?? $list->store_id;
+
+            if ($effectiveStoreId === null) {
+                throw ValidationException::withMessages([
+                    'storeId' => ['Store id is required when the shopping list has no linked store.'],
+                ]);
+            }
+
             $list->load([
                 'items' => fn ($q) => $q->orderBy('sort_order')->orderBy('id'),
             ]);
@@ -189,7 +204,7 @@ final class UserSupermarketShoppingListService
                 }
 
                 $product = SmProduct::query()
-                    ->where('store_id', $storeId)
+                    ->where('store_id', $effectiveStoreId)
                     ->where('master_product_id', $row->master_product_id)
                     ->where('is_available', true)
                     ->orderBy('id')
@@ -215,7 +230,7 @@ final class UserSupermarketShoppingListService
                 ]);
             }
 
-            return $this->carts->addLinesForStore($userId, $storeId, $lines);
+            return $this->carts->addLinesForStore($userId, $effectiveStoreId, $lines);
         });
     }
 
@@ -237,6 +252,7 @@ final class UserSupermarketShoppingListService
             'name' => $list->name,
             'description' => $list->description,
             'isActive' => (bool) $list->is_active,
+            'schedule' => $this->schedulePayload($list),
             'itemsCount' => (int) ($list->items_count ?? $list->items()->count()),
             'createdAt' => $list->created_at?->toDateTimeString(),
             'updatedAt' => $list->updated_at?->toDateTimeString(),
@@ -254,12 +270,39 @@ final class UserSupermarketShoppingListService
 
         return [
             'id' => $list->id,
+            'storeId' => $list->store_id,
             'name' => $list->name,
             'description' => $list->description,
             'isActive' => (bool) $list->is_active,
+            'schedule' => $this->schedulePayload($list),
             'items' => $items->map(fn (SmSmartListItem $item): array => $this->itemPayload($item))->values()->all(),
             'createdAt' => $list->created_at?->toDateTimeString(),
             'updatedAt' => $list->updated_at?->toDateTimeString(),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function schedulePayload(SmSmartList $list): ?array
+    {
+        /** @var SmSmartListSchedule|null $schedule */
+        $schedule = $list->relationLoaded('schedule')
+            ? $list->schedule
+            : $list->schedule()->first();
+
+        if ($schedule === null) {
+            return null;
+        }
+
+        return [
+            'frequencyType' => $schedule->frequency_type,
+            'dayOfWeek' => $schedule->day_of_week,
+            'dayOfMonth' => $schedule->day_of_month,
+            'runDate' => $schedule->run_date?->toDateString(),
+            'isActive' => (bool) $schedule->is_active,
+            'nextRunAt' => $schedule->next_run_at?->toDateTimeString(),
+            'lastRunAt' => $schedule->last_run_at?->toDateTimeString(),
         ];
     }
 
