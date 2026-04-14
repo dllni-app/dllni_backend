@@ -64,14 +64,14 @@ final class RestaurantOwnerDashboardService
 
         $avgPrepMinutes = $this->averageMinutes(
             $fulfillmentOrders->filter(fn (Order $order) => $order->accepted_at && $order->ready_for_pickup_at),
-            fn (Order $order): int => $order->accepted_at->diffInMinutes($order->ready_for_pickup_at)
+            fn (Order $order): float => $order->accepted_at->diffInMinutes($order->ready_for_pickup_at)
         );
 
         $avgReadyToPickupMinutes = $this->averageMinutes(
             $fulfillmentOrders->filter(
                 fn (Order $order) => $order->ready_for_pickup_at && ($order->picked_up_at || $order->completed_at)
             ),
-            fn (Order $order): int => $order->ready_for_pickup_at->diffInMinutes($order->picked_up_at ?? $order->completed_at)
+            fn (Order $order): float => $order->ready_for_pickup_at->diffInMinutes($order->picked_up_at ?? $order->completed_at)
         );
 
         $measurableOrders = $fulfillmentOrders->filter(fn (Order $order) => $order->accepted_at && $order->estimated_preparation_minutes);

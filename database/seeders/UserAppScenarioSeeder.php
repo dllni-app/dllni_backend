@@ -75,16 +75,16 @@ final class UserAppScenarioSeeder extends Seeder
         UserAddress::query()->updateOrCreate(
             [
                 'user_id' => $user->id,
-                'label' => 'ا�"�.�?ز�"',
+                'label' => 'المنزل',
             ],
             [
                 'mobile' => '+963944000222',
-                'city' => 'ح�"ب',
-                'neighborhood' => 'ا�"ح�.دا�?�Sة',
-                'street' => 'شارع ا�"�,دس',
+                'city' => 'حلب',
+                'neighborhood' => 'الحمدانية',
+                'street' => 'شارع القدس',
                 'building' => '12',
                 'floor' => '3',
-                'directions' => 'بجا�?ب ا�"ص�Sد�"�Sة�O ا�"�.دخ�" ا�"خ�"ف�S.',
+                'directions' => 'بجانب الصيدلية، المدخل الخلفي.',
                 'latitude' => 36.1795,
                 'longitude' => 37.1082,
                 'is_default' => true,
@@ -94,16 +94,16 @@ final class UserAppScenarioSeeder extends Seeder
         UserAddress::query()->updateOrCreate(
             [
                 'user_id' => $user->id,
-                'label' => 'ا�"ع�.�"',
+                'label' => 'العمل',
             ],
             [
                 'mobile' => '+963944000223',
-                'city' => 'ح�"ب',
-                'neighborhood' => 'ا�"فر�,ا�?',
-                'street' => 'شارع عبد ا�"�,ادر ا�"صا�"ح',
+                'city' => 'حلب',
+                'neighborhood' => 'الفراتي',
+                'street' => 'شارع عبد القادر الصالح',
                 'building' => '7',
                 'floor' => '1',
-                'directions' => '�.�,اب�" ا�"ب�?�f�O ا�"د�^ر ا�"أ�^�".',
+                'directions' => 'مقابل البوابة الدور الأول.',
                 'latitude' => 36.2021,
                 'longitude' => 37.1343,
                 'is_default' => false,

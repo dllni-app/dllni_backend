@@ -84,7 +84,7 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
                 'open_disputes_count' => 0,
                 'is_active' => true,
                 'is_suspended' => false,
-                'home_address' => 'ح�"ب - ا�"ح�.دا�?�Sة - شارع ا�"�,دس',
+                'home_address' => 'حلب - الحمدانية - شارع القدس',
                 'home_latitude' => 36.1795,
                 'home_longitude' => 37.1082,
                 'default_working_hours' => [
@@ -100,7 +100,7 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
         );
 
         WorkerZone::firstOrCreate(
-            ['worker_id' => $worker->id, 'name' => 'ح�"ب - �?طا�, ا�"ح�.دا�?�Sة'],
+            ['worker_id' => $worker->id, 'name' => 'حلب - قطاع الحمدانية'],
             [
                 'polygon' => [
                     ['lat' => 36.1670, 'lng' => 37.0950],
@@ -166,7 +166,7 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
                 'name' => 'Seller Restaurant',
                 'slug' => $slug,
                 'description' => 'Restaurant owned by seller user for API testing.',
-                'address' => 'ح�"ب - ا�"فر�,ا�? - شارع ا�"�,صر ا�"ب�"د�S',
+                'address' => 'حلب - الفرقان - شارع القصر البلدي',
                 'latitude' => 36.2021,
                 'longitude' => 37.1343,
                 'phone' => '+963 21 555 0000',
@@ -186,18 +186,18 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
         $restaurant->forceFill([
             'name' => 'Seller Restaurant',
             'slug' => $slug,
-            'description' => '�.طع�. ح�"ب�S �.ت�^سط�S �S�,د�. ا�"�.شا�^�S ا�"طازجة �^ا�"أ�f�"ات ا�"شر�,�Sة �^ا�"عر�^ض ا�"�S�^�.�Sة.',
-            'address' => 'ح�"ب - ح�S ا�"فر�,ا�? - شارع عبد ا�"�,ادر ا�"صا�"ح',
-            'city' => 'ح�"ب',
-            'district' => 'ا�"فر�,ا�?',
-            'location_details' => '�,رب د�^ار ا�"صخرة - ا�"طاب�, ا�"أرض�S',
+            'description' => 'مطعم حلبي متوسطي يقدم المشاوي الطازجة والأكلات الشرقية والعروض اليومية.',
+            'address' => 'حلب - حي الفرقان - شارع عبد القادر الصالح',
+            'city' => 'حلب',
+            'district' => 'الفرقان',
+            'location_details' => 'قرب دوار الصخرة - الطابق الأرضي',
             'latitude' => 36.2021,
             'longitude' => 37.1343,
             'phone' => '+963 21 555 0000',
             'whatsapp_number' => self::RestaurantSellerPhone,
             'email' => 'seller@restaurant.dllni.sy',
             'instagram_username' => 'sellerrestaurantaleppo',
-            'facebook_page_name' => '�.طع�. ا�"بائع - ح�"ب',
+            'facebook_page_name' => 'مطعم البائع - حلب',
             'average_rating' => 4.4,
             'total_reviews' => 128,
             'estimated_preparation_time' => 25,
@@ -227,8 +227,8 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
 
         // Ensure cuisine types exist
         $cuisineTypes = [
-            ['name' => 'إ�Sطا�"�S', 'slug' => 'italian'],
-            ['name' => '�.ت�^سط�S', 'slug' => 'mediterranean'],
+            ['name' => 'إيطالي', 'slug' => 'italian'],
+            ['name' => 'متوسطي', 'slug' => 'mediterranean'],
         ];
 
         $cuisineIds = [];
@@ -248,11 +248,11 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
         // Add categories and products
         $categories = [
             [
-                'name' => 'ا�"أطبا�, ا�"رئ�Sس�Sة',
+                'name' => 'الأطباق الرئيسية',
                 'products' => [
                     [
-                        'name' => 'دجاج �.ش�^�S ع�"�? ا�"فح�.',
-                        'description' => '�?صف دجاجة �.ش�^�Sة ع�"�? ا�"فح�. �.ع ص�^ص ا�"ث�^�. �^شرائح ا�"بطاطا.',
+                        'name' => 'دجاج مشوي على الفحم',
+                        'description' => 'نصف دجاجة مشوية على الفحم مع صوص الثوم وشرائح البطاطا.',
                         'price' => 12.99,
                         'discounted_price' => 11.49,
                         'stock_quantity' => 60,
@@ -260,8 +260,8 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
                         'preparation_time' => 20,
                     ],
                     [
-                        'name' => 'ست�S�f �"ح�. ب�,ر�S',
-                        'description' => '�,طعة ست�S�f طر�Sة �.ع ص�^ص ا�"فطر �^خضار �.�^س�.�Sة.',
+                        'name' => 'ستيك لحم بقري',
+                        'description' => 'قطعة ستيك طرية مع صوص الفطر وخضار موسمية.',
                         'price' => 15.99,
                         'discounted_price' => 14.49,
                         'stock_quantity' => 35,
@@ -269,8 +269,8 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
                         'preparation_time' => 25,
                     ],
                     [
-                        'name' => 'باستا �fارب�^�?ارا',
-                        'description' => 'باستا �fر�S�.�Sة �.ع ب�S�f�^�? ب�,ر�S �^جب�? بار�.�Sزا�? �^ف�"ف�" أس�^د.',
+                        'name' => 'باستا كاربونارا',
+                        'description' => 'باستا كريمية مع بيكون بقري وجبن بارميزان وفلفل أسود.',
                         'price' => 11.99,
                         'discounted_price' => null,
                         'stock_quantity' => 42,
@@ -280,11 +280,11 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
                 ],
             ],
             [
-                'name' => 'ا�"�.�,ب�"ات',
+                'name' => 'المقبلات',
                 'products' => [
                     [
-                        'name' => 'س�"طة س�Sزر',
-                        'description' => 'خس ر�^�.ا�?�S �.ع بار�.�Sزا�? �^�,طع خبز �.ح�.صة �^ص�^ص س�Sزر خاص.',
+                        'name' => 'سلطة سيزر',
+                        'description' => 'خس روماني مع بارميزان وقطع خبز محمصة وصوص سيزر خاص.',
                         'price' => 8.99,
                         'discounted_price' => 7.99,
                         'stock_quantity' => 50,
@@ -292,8 +292,8 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
                         'preparation_time' => 10,
                     ],
                     [
-                        'name' => 'خبز با�"ث�^�.',
-                        'description' => 'شرائح خبز باغ�Sت �.ح�.صة بزبدة ا�"ث�^�. �^ا�"أعشاب.',
+                        'name' => 'خبز بالثوم',
+                        'description' => 'شرائح خبز باغيت محمصة بزبدة الثوم والأعشاب.',
                         'price' => 5.99,
                         'discounted_price' => null,
                         'stock_quantity' => 70,
@@ -301,8 +301,8 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
                         'preparation_time' => 8,
                     ],
                     [
-                        'name' => '�fا�"�S�.ار�S �.�,ر�.ش',
-                        'description' => 'ح�"�,ات �fا�"�S�.ار�S �.�,�"�Sة ت�,د�. �.ع ص�^ص ا�"�"�S�.�^�?.',
+                        'name' => 'كاليماري مقرمش',
+                        'description' => 'حلقات كاليماري مقلية تقدم مع صوص الليمون.',
                         'price' => 9.99,
                         'discounted_price' => 8.99,
                         'stock_quantity' => 28,
@@ -312,11 +312,11 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
                 ],
             ],
             [
-                'name' => 'ا�"ح�"�^�Sات',
+                'name' => 'الحلويات',
                 'products' => [
                     [
-                        'name' => '�f�S�f ش�^�f�^�"اتة',
-                        'description' => '�f�S�f إسف�?ج�S با�"ش�^�f�^�"اتة �.ع طب�,ات جا�?اش غ�?�S.',
+                        'name' => 'كيك شوكولاتة',
+                        'description' => 'كيك إسفنجي بالشوكولاتة مع طبقات جاناش غني.',
                         'price' => 7.99,
                         'discounted_price' => 6.99,
                         'stock_quantity' => 24,
@@ -324,8 +324,8 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
                         'preparation_time' => 7,
                     ],
                     [
-                        'name' => 'ت�Sرا�.�Sس�^',
-                        'description' => 'ح�"�^�? إ�Sطا�"�Sة �f�"اس�S�f�Sة ب�?�f�?ة ا�"�,�?�^ة.',
+                        'name' => 'تيراميسو',
+                        'description' => 'حلوى إيطالية كلاسيكية بنكهة القهوة.',
                         'price' => 8.99,
                         'discounted_price' => null,
                         'stock_quantity' => 22,
@@ -333,8 +333,8 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
                         'preparation_time' => 7,
                     ],
                     [
-                        'name' => 'آ�Sس �fر�S�. فا�?�S�"ا',
-                        'description' => 'س�f�^ب فا�?�S�"ا �.ع ص�^ص �fرا�.�S�".',
+                        'name' => 'آيس كريم فانيلا',
+                        'description' => 'سكوب فانيلا مع صوص كراميل.',
                         'price' => 5.50,
                         'discounted_price' => 4.99,
                         'stock_quantity' => 40,
@@ -379,7 +379,7 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
                         'discounted_price' => $productData['discounted_price'],
                         'is_available' => true,
                         'unavailable_until' => null,
-                        'availability_note' => '�.تاح �S�^�.�Sا حسب ت�^فر ا�"�f�.�Sة.',
+                        'availability_note' => 'متاح يومياً حسب توفر الكمية.',
                         'stock_quantity' => $productData['stock_quantity'],
                         'low_stock_threshold' => $productData['low_stock_threshold'],
                         'preparation_time' => $productData['preparation_time'],
@@ -393,7 +393,7 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
                     'discounted_price' => $productData['discounted_price'],
                     'is_available' => true,
                     'unavailable_until' => null,
-                    'availability_note' => '�.تاح �S�^�.�Sا حسب ت�^فر ا�"�f�.�Sة.',
+                    'availability_note' => 'متاح يومياً حسب توفر الكمية.',
                     'stock_quantity' => $productData['stock_quantity'],
                     'low_stock_threshold' => $productData['low_stock_threshold'],
                     'preparation_time' => $productData['preparation_time'],
@@ -439,10 +439,10 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
         $activeOffer = Offer::updateOrCreate(
             [
                 'restaurant_id' => $restaurant->id,
-                'name' => 'عرض �.شا�^�S أ�Sا�. ا�"أسب�^ع',
+                'name' => 'عرض مشاوي أيام الأسبوع',
             ],
             [
-                'description' => 'خص�. ع�"�? أطبا�, رئ�Sس�Sة �^�.�,ب�"ات �.ختارة �.�? ا�"أحد إ�"�? ا�"خ�.�Sس.',
+                'description' => 'خصم على أطباق رئيسية ومقبلات مختارة من الأحد إلى الخميس.',
                 'discount_type' => DiscountType::Percentage->value,
                 'discount_value' => 15,
                 'starts_at' => now()->subDays(5),
@@ -454,10 +454,10 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
         $dessertOffer = Offer::updateOrCreate(
             [
                 'restaurant_id' => $restaurant->id,
-                'name' => 'عرض ا�"ح�"�^�Sات',
+                'name' => 'عرض الحلويات',
             ],
             [
-                'description' => 'خص�. ثابت ع�"�? أص�?اف ح�"�^�Sات �.ختارة.',
+                'description' => 'خصم ثابت على أصناف حلويات مختارة.',
                 'discount_type' => DiscountType::FixedAmount->value,
                 'discount_value' => 1.50,
                 'starts_at' => now()->subDays(2),
@@ -467,9 +467,9 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
         );
 
         $activeOfferProductIds = collect([
-            $productsByName->get('دجاج �.ش�^�S ع�"�? ا�"فح�.')?->id,
-            $productsByName->get('ست�S�f �"ح�. ب�,ر�S')?->id,
-            $productsByName->get('�fا�"�S�.ار�S �.�,ر�.ش')?->id,
+            $productsByName->get('دجاج مشوي على الفحم')?->id,
+            $productsByName->get('ستيك لحم بقري')?->id,
+            $productsByName->get('كاليماري مقرمش')?->id,
         ])->filter()->values()->all();
 
         if ($activeOfferProductIds !== []) {
@@ -477,9 +477,9 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
         }
 
         $dessertOfferProductIds = collect([
-            $productsByName->get('�f�S�f ش�^�f�^�"اتة')?->id,
-            $productsByName->get('ت�Sرا�.�Sس�^')?->id,
-            $productsByName->get('آ�Sس �fر�S�. فا�?�S�"ا')?->id,
+            $productsByName->get('كيك شوكولاتة')?->id,
+            $productsByName->get('تيراميسو')?->id,
+            $productsByName->get('آيس كريم فانيلا')?->id,
         ])->filter()->values()->all();
 
         if ($dessertOfferProductIds !== []) {
@@ -519,17 +519,17 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
         $customers = [
             [
                 'email' => 'omar.customer@dllni.sy',
-                'name' => 'ع�.ر خا�"د',
+                'name' => 'عمر خالد',
                 'phone' => '+963944110001',
             ],
             [
                 'email' => 'lina.customer@dllni.sy',
-                'name' => '�"�S�?ا �?اصر',
+                'name' => 'لينا ناصر',
                 'phone' => '+963944110002',
             ],
             [
                 'email' => 'ahmad.customer@dllni.sy',
-                'name' => 'أح�.د �Sاس�S�?',
+                'name' => 'أحمد ياسين',
                 'phone' => '+963944110003',
             ],
         ];
@@ -571,15 +571,15 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
                 'preparing_at' => now()->subDays(4)->subMinutes(35),
                 'completed_at' => now()->subDays(4)->subMinutes(10),
                 'estimated_preparation_minutes' => 28,
-                'kitchen_notes' => 'إضافة ص�^ص ث�^�. جا�?ب�S.',
-                'special_instructions' => 'ا�"اتصا�" ع�?د ا�"�^ص�^�".',
+                'kitchen_notes' => 'إضافة صوص ثوم جانبي.',
+                'special_instructions' => 'الاتصال عند الوصول.',
                 'items' => [
-                    ['name' => 'دجاج �.ش�^�S ع�"�? ا�"فح�.', 'quantity' => 1],
-                    ['name' => 'س�"طة س�Sزر', 'quantity' => 1],
+                    ['name' => 'دجاج مشوي على الفحم', 'quantity' => 1],
+                    ['name' => 'سلطة سيزر', 'quantity' => 1],
                 ],
                 'review' => [
                     'rating' => 5,
-                    'comment' => 'ا�"أ�f�" طازج �^ا�"ت�^ص�S�" سر�Sع جدا �^ا�"تغ�"�Sف �.�.تاز.',
+                    'comment' => 'الأكل طازج والتوصيل سريع جداً والتغليف ممتاز.',
                 ],
             ],
             [
@@ -598,15 +598,15 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
                 'preparing_at' => now()->subDays(3)->subMinutes(55),
                 'completed_at' => now()->subDays(3)->subMinutes(20),
                 'estimated_preparation_minutes' => 35,
-                'kitchen_notes' => 'بد�^�? بص�" ف�S ا�"باستا.',
-                'special_instructions' => 'ا�"است�"ا�. �.�? ا�"�fا�^�?تر ا�"أ�.ا�.�S.',
+                'kitchen_notes' => 'بدون بصل في الباستا.',
+                'special_instructions' => 'الاستلام من الكاونتر الأمامي.',
                 'items' => [
-                    ['name' => 'باستا �fارب�^�?ارا', 'quantity' => 2],
-                    ['name' => 'خبز با�"ث�^�.', 'quantity' => 1],
+                    ['name' => 'باستا كاربونارا', 'quantity' => 2],
+                    ['name' => 'خبز بالثوم', 'quantity' => 1],
                 ],
                 'review' => [
                     'rating' => 4,
-                    'comment' => 'ا�"طع�. �.�.تاز �^ا�"�f�.�Sة ج�Sدة �^ا�"است�"ا�. �fا�? �.�?ظ�..',
+                    'comment' => 'الطعم ممتاز والكمية جيدة والاستلام كان منظماً.',
                 ],
             ],
             [
@@ -625,11 +625,11 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
                 'preparing_at' => now()->subMinutes(95),
                 'completed_at' => null,
                 'estimated_preparation_minutes' => 30,
-                'kitchen_notes' => 'ا�"تر�f�Sز ع�"�? ا�"ص�^ص ا�"حار.',
-                'special_instructions' => '�,رع ا�"جرس �.رة �^احدة.',
+                'kitchen_notes' => 'التركيز على الصوص الحار.',
+                'special_instructions' => 'قرع الجرس مرة واحدة.',
                 'items' => [
-                    ['name' => 'ست�S�f �"ح�. ب�,ر�S', 'quantity' => 1],
-                    ['name' => '�fا�"�S�.ار�S �.�,ر�.ش', 'quantity' => 1],
+                    ['name' => 'ستيك لحم بقري', 'quantity' => 1],
+                    ['name' => 'كاليماري مقرمش', 'quantity' => 1],
                 ],
                 'review' => null,
             ],
@@ -650,10 +650,10 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
                 'completed_at' => null,
                 'estimated_preparation_minutes' => null,
                 'kitchen_notes' => null,
-                'special_instructions' => '�Sرج�? إضافة أد�^ات طعا�..',
+                'special_instructions' => 'يرجى إضافة أدوات طعام.',
                 'items' => [
-                    ['name' => '�f�S�f ش�^�f�^�"اتة', 'quantity' => 1],
-                    ['name' => 'آ�Sس �fر�S�. فا�?�S�"ا', 'quantity' => 1],
+                    ['name' => 'كيك شوكولاتة', 'quantity' => 1],
+                    ['name' => 'آيس كريم فانيلا', 'quantity' => 1],
                 ],
                 'review' => null,
             ],
@@ -745,7 +745,7 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
                 'from_status' => null,
                 'to_status' => OrderStatus::Pending->value,
             ],
-            ['note' => 'ت�. إ�?شاء ا�"ط�"ب �.�? ا�"ع�.�S�".']
+            ['note' => 'تم إنشاء الطلب من العميل.']
         );
 
         if (in_array($order->status->value, [OrderStatus::Accepted->value, OrderStatus::Preparing->value, OrderStatus::ReadyForPickup->value, OrderStatus::PickedUp->value, OrderStatus::Completed->value], true)) {
@@ -755,7 +755,7 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
                     'from_status' => OrderStatus::Pending->value,
                     'to_status' => OrderStatus::Accepted->value,
                 ],
-                ['note' => 'ت�. �,ب�^�" ا�"ط�"ب �.�? ا�"�.طع�..']
+                ['note' => 'تم قبول الطلب من المطعم.']
             );
         }
 
@@ -766,7 +766,7 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
                     'from_status' => OrderStatus::Accepted->value,
                     'to_status' => OrderStatus::Preparing->value,
                 ],
-                ['note' => 'بدأ ا�"�.طبخ بتحض�Sر ا�"ط�"ب.']
+                ['note' => 'بدأ المطبخ بتحضير الطلب.']
             );
         }
 
@@ -777,7 +777,7 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
                     'from_status' => OrderStatus::Preparing->value,
                     'to_status' => OrderStatus::Completed->value,
                 ],
-                ['note' => 'ت�. تس�"�S�. ا�"ط�"ب ب�?جاح.']
+                ['note' => 'تم تسليم الطلب بنجاح.']
             );
         }
     }
@@ -826,9 +826,9 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
             'name' => 'Seller Supermarket',
             'slug' => 'seller-supermarket-'.mb_substr(hash('sha256', (string) $user->id), 0, 8),
             'description' => 'Supermarket owned by seller user for API testing.',
-            'address' => 'ح�"ب - ا�"سر�Sا�? ا�"جد�Sدة - شارع تشر�S�?',
-            'city' => 'ح�"ب',
-            'neighborhood' => 'ا�"سر�Sا�? ا�"جد�Sدة',
+            'address' => 'حلب - السريان الجديدة - شارع تشرين',
+            'city' => 'حلب',
+            'neighborhood' => 'السريان الجديدة',
             'latitude' => 36.2168,
             'longitude' => 37.1317,
             'phone' => '+963 21 555 0001',

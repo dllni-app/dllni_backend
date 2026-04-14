@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 use App\Models\User;
 use Laravel\Sanctum\Sanctum;
+use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Models\Category;
 use Modules\Resturants\Models\Offer;
+use Modules\Resturants\Models\Order;
+use Modules\Resturants\Models\OrderItem;
 use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
 
@@ -34,6 +37,8 @@ describe('Products with Active Offers Endpoint', function (): void {
                         'name',
                         'displayPrice',
                         'isFavorite',
+                        'isMostOrdered',
+                        'popularOrdersCount',
                         'activeOffers',
                     ],
                 ],
@@ -229,6 +234,42 @@ describe('Products with Active Offers Endpoint', function (): void {
 
         $response = $this->getJson('/api/v1/user/restaurants/products/with-offers?per_page=0');
         $response->assertUnprocessable();
+    });
+
+    it('marks product as most ordered when it has enough recent successful orders', function (): void {
+        $restaurant = Restaurant::factory()->create(['is_active' => true]);
+        $offer = Offer::factory()->create([
+            'restaurant_id' => $restaurant->id,
+            'is_active' => true,
+            'ends_at' => now()->addDays(5),
+        ]);
+
+        $product = Product::factory()->create([
+            'restaurant_id' => $restaurant->id,
+            'is_available' => true,
+        ]);
+        $product->offers()->attach($offer);
+
+        Order::factory()->count(5)->create([
+            'restaurant_id' => $restaurant->id,
+            'status' => OrderStatus::Completed,
+            'created_at' => now()->subDays(3),
+        ])->each(function (Order $order) use ($product): void {
+            OrderItem::create([
+                'order_id' => $order->id,
+                'product_id' => $product->id,
+                'quantity' => 1,
+                'unit_price' => $product->price,
+                'total_price' => $product->price,
+            ]);
+        });
+
+        $response = $this->getJson('/api/v1/user/restaurants/products/with-offers');
+
+        $response->assertOk();
+        expect($response->json('data.0.id'))->toBe($product->id);
+        expect($response->json('data.0.isMostOrdered'))->toBeTrue();
+        expect($response->json('data.0.popularOrdersCount'))->toBe(5);
     });
 });
 

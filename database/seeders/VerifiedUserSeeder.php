@@ -28,7 +28,7 @@ final class VerifiedUserSeeder extends Seeder
             'name' => 'مستخدم التطبيق',
             'phone' => '+963944000222',
             'email' => 'user@dllni.sy',
-            'password' => bcrypt('secret123'),
+            'password' => bcrypt('password'),
             'phone_verified_at' => now(),
             'email_verified_at' => now(),
         ])->save();

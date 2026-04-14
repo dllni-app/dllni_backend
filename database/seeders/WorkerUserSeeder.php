@@ -52,7 +52,7 @@ final class WorkerUserSeeder extends Seeder
                 'open_disputes_count' => 0,
                 'is_active' => true,
                 'is_suspended' => false,
-                'home_address' => 'ح�"ب - ا�"أشرف�Sة - شارع ا�"حدائ�,',
+                'home_address' => 'حلب - الأشرفية - شارع الحديقة',
                 'home_latitude' => 36.2308,
                 'home_longitude' => 37.1279,
                 'default_working_hours' => [
@@ -68,7 +68,7 @@ final class WorkerUserSeeder extends Seeder
         );
 
         WorkerZone::firstOrCreate(
-            ['worker_id' => $worker->id, 'name' => 'ح�"ب - ا�"أشرف�Sة'],
+            ['worker_id' => $worker->id, 'name' => 'حلب - الأشرفية'],
             [
                 'polygon' => [
                     ['lat' => 36.2190, 'lng' => 37.1140],

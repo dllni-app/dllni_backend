@@ -26,9 +26,9 @@ final class SmOrderResource extends Resource
 
     protected static ?string $navigationLabel = null;
 
-    protected static ?int $navigationSort = 8;
+    protected static ?int $navigationSort = 3;
 
-    protected static bool $shouldRegisterNavigation = false;
+    protected static bool $shouldRegisterNavigation = true;
 
     public static function getNavigationLabel(): string
     {

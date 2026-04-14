@@ -73,3 +73,56 @@ it('adds a product to restaurant cart for authenticated user', function (): void
         'price' => 2,
     ]);
 });
+
+it('keeps a single active restaurant cart per user when merchant changes', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $firstRestaurant = Restaurant::factory()->create([
+        'is_active' => true,
+    ]);
+    $secondRestaurant = Restaurant::factory()->create([
+        'is_active' => true,
+    ]);
+
+    $firstProduct = Product::factory()->create([
+        'restaurant_id' => $firstRestaurant->id,
+        'is_available' => true,
+        'price' => 21,
+    ]);
+    $secondProduct = Product::factory()->create([
+        'restaurant_id' => $secondRestaurant->id,
+        'is_available' => true,
+        'price' => 33,
+    ]);
+
+    $firstAddResponse = $this->postJson('/api/v1/user/restaurants/cart/items', [
+        'productId' => $firstProduct->id,
+        'quantity' => 1,
+    ])->assertCreated();
+
+    $firstCartId = (int) $firstAddResponse->json('cartId');
+
+    $secondAddResponse = $this->postJson('/api/v1/user/restaurants/cart/items', [
+        'productId' => $secondProduct->id,
+        'quantity' => 2,
+    ])->assertCreated();
+
+    $secondAddResponse->assertJsonPath('cartId', $firstCartId);
+
+    $this->assertDatabaseCount('carts', 1);
+    $this->assertDatabaseHas('carts', [
+        'id' => $firstCartId,
+        'user_id' => $user->id,
+        'restaurant_id' => $secondRestaurant->id,
+    ]);
+    $this->assertDatabaseMissing('cart_items', [
+        'cart_id' => $firstCartId,
+        'product_id' => $firstProduct->id,
+    ]);
+    $this->assertDatabaseHas('cart_items', [
+        'cart_id' => $firstCartId,
+        'product_id' => $secondProduct->id,
+        'quantity' => 2,
+    ]);
+});
