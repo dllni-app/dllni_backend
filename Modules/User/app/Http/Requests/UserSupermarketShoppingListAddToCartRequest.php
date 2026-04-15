@@ -15,8 +15,6 @@ final class UserSupermarketShoppingListAddToCartRequest extends FormRequest
 
     public function rules(): array
     {
-        return [
-            'storeId' => ['nullable', 'integer', 'exists:sm_stores,id'],
-        ];
+        return [];
     }
 }

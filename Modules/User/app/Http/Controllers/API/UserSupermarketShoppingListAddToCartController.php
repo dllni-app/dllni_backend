@@ -16,13 +16,11 @@ final class UserSupermarketShoppingListAddToCartController
 
     public function __invoke(UserSupermarketShoppingListAddToCartRequest $request, int $shoppingList): JsonResponse
     {
-        $validated = $request->validated();
-
         return response()->json([
             'data' => $this->shoppingLists->addListToCart(
                 userId: (int) $request->user()->id,
                 listId: $shoppingList,
-                storeId: isset($validated['storeId']) ? (int) $validated['storeId'] : null,
+                storeId: null,
             ),
         ], 201);
     }

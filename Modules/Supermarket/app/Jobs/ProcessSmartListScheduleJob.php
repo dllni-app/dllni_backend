@@ -13,6 +13,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
+use Illuminate\Support\Collection;
 use Modules\Supermarket\Enums\SmOrderStatus;
 use Modules\Supermarket\Enums\SmPickupMode;
 use Modules\Supermarket\Models\SmOrder;
@@ -159,24 +160,88 @@ final class ProcessSmartListScheduleJob implements ShouldQueue
             return null;
         }
 
-        $base = now()->startOfDay();
+        $periodStart = $this->earliestPeriodStartTime($schedule->periods ?? []);
 
-        if ($schedule->frequency_type === 'weekly' && $schedule->day_of_week !== null) {
-            $candidate = $base->copy()->addDay();
-
-            while ($candidate->dayOfWeek !== $schedule->day_of_week) {
-                $candidate->addDay();
-            }
-
-            return $candidate;
+        if ($periodStart === null) {
+            return null;
         }
 
-        if ($schedule->frequency_type === 'monthly' && $schedule->day_of_month !== null) {
-            $candidate = $base->copy()->addMonthNoOverflow();
-            $lastDay = (int) $candidate->copy()->endOfMonth()->day;
-            $candidate->day(min($schedule->day_of_month, $lastDay));
+        if ($schedule->frequency_type === 'weekly' && ! empty($schedule->week_days)) {
+            return $this->nextWeeklyRunAt((array) $schedule->week_days, $periodStart, now());
+        }
 
-            return $candidate;
+        if ($schedule->frequency_type === 'monthly' && ! empty($schedule->month_days)) {
+            return $this->nextMonthlyRunAt((array) $schedule->month_days, $periodStart, now());
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $periods
+     */
+    private function earliestPeriodStartTime(array $periods): ?string
+    {
+        $normalized = array_values(array_filter(
+            array_map(static function (array $period): ?string {
+                $fromTime = (string) ($period['fromTime'] ?? $period['from_time'] ?? '');
+
+                return $fromTime !== '' ? $fromTime : null;
+            }, $periods)
+        ));
+
+        if ($normalized === []) {
+            return null;
+        }
+
+        sort($normalized);
+
+        return $normalized[0];
+    }
+
+    /**
+     * @param  array<int, int>  $weekDays
+     */
+    private function nextWeeklyRunAt(array $weekDays, string $startTime, Carbon $now): ?Carbon
+    {
+        $selectedWeekDays = array_values(array_unique(array_map(static fn (int $day): int => max(0, min(6, $day)), $weekDays)));
+
+        for ($offset = 0; $offset <= 14; $offset++) {
+            $candidateDate = $now->copy()->startOfDay()->addDays($offset);
+
+            if (! in_array($candidateDate->dayOfWeek, $selectedWeekDays, true)) {
+                continue;
+            }
+
+            $candidate = Carbon::parse($candidateDate->toDateString().' '.$startTime);
+
+            if ($candidate->gt($now)) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<int, int>  $monthDays
+     */
+    private function nextMonthlyRunAt(array $monthDays, string $startTime, Carbon $now): ?Carbon
+    {
+        $selectedMonthDays = array_values(array_unique(array_map(static fn (int $day): int => max(1, min(31, $day)), $monthDays)));
+
+        for ($monthOffset = 0; $monthOffset <= 12; $monthOffset++) {
+            $month = $now->copy()->startOfMonth()->addMonthsNoOverflow($monthOffset);
+            $lastDay = (int) $month->copy()->endOfMonth()->day;
+
+            foreach ($selectedMonthDays as $day) {
+                $candidateDay = min($day, $lastDay);
+                $candidate = Carbon::parse($month->copy()->day($candidateDay)->toDateString().' '.$startTime);
+
+                if ($candidate->gt($now)) {
+                    return $candidate;
+                }
+            }
         }
 
         return null;

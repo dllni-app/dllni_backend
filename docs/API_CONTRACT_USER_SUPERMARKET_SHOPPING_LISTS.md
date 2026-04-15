@@ -11,7 +11,7 @@ Compact **v1 table layout** (paths, field tables, errors): [`API_CONTRACT_V1_USE
 
 ## Purpose
 
-Shopping lists let the authenticated user save **named collections** of **catalog (master) products** (`masterProductId`). They are **not** tied to a single store until the user chooses **add to cart**, at which time each included line is resolved to a concrete **`sm_products`** row in the chosen **`storeId`** and appended to the user’s **supermarket cart** for that store.
+Shopping lists let the authenticated user save **named collections** of **catalog (master) products** (`masterProductId`). When ready to order, the user sets the list's **`storeId`**, then calls **add to cart** to resolve each included line to a concrete **`sm_products`** row in that store and append it to the supermarket cart.
 
 In addition, a shopping list can be configured with an optional **auto-order schedule**. When active, the backend will create and submit a supermarket order automatically based on the list's included items.
 
@@ -21,12 +21,13 @@ In addition, a shopping list can be configured with an optional **auto-order sch
 
 - **Ownership**: `shoppingList` must belong to the current user. Otherwise the API responds with **`404`** (model not found).
 - **Line identity**: List rows reference **`master_products.id`**, not `sm_products.id`.
-- **Resolution on add-to-cart**: For each row with `isIncluded: true`, the server picks the **first available** `sm_products` row where `store_id = storeId`, `master_product_id` matches, and `is_available` is true. If no row exists for a given master product in that store, the request fails with **`422`** (see errors below).
+- **Store requirement for add-to-cart**: The list must have **`storeId`** set before calling add-to-cart.
+- **Resolution on add-to-cart**: For each row with `isIncluded: true`, the server picks the **first available** `sm_products` row where `store_id = list.storeId`, `master_product_id` matches, and `is_available` is true. If no row exists for a given master product in that store, the request fails with **`422`** (see errors below).
 - **Quantities**: List line `quantity` is a decimal in API payloads; when adding to cart it is converted with `max(1, round(quantity))` as an integer line quantity on the cart.
 - **Cart result**: `POST …/add-to-cart` returns the **same cart payload shape** as `GET /supermarket/cart` (see orders/cart contract).
 - **Scheduling store binding**: Scheduled auto-order requires list `storeId` to be set. If schedule is active and `storeId` is missing, update/create fails with **`422`**.
-- **Schedule support (v1)**: `weekly`, `monthly`, `once`.
-- **Schedule run model**: Schedule runs at day precision (no time-of-day in payload). When due, backend runs processing and attempts to create an order.
+- **Schedule support (v1)**: `weekly`, `monthly`.
+- **Schedule run model**: Schedule uses selected days plus one or more time periods. When due, backend runs processing and attempts to create an order.
 - **Scheduled order item source**: Only rows with `isIncluded: true` are used.
 - **Scheduled quantity conversion**: Decimal list quantity is converted with `max(1, round(quantity))`.
 - **Scheduled product mapping**: Mapping uses list `storeId` and each row `masterProductId` -> `sm_products.master_product_id` with `is_available = true`.
@@ -42,10 +43,13 @@ The schedule object is sent under `schedule` on create/update list endpoints.
 **Fields**
 
 - `schedule.isActive` (optional, boolean, default: `true` when schedule object is sent)
-- `schedule.frequencyType` (required with `schedule`, enum: `weekly | monthly | once`)
-- `schedule.dayOfWeek` (required when `frequencyType = weekly`, integer `0..6`)
-- `schedule.dayOfMonth` (required when `frequencyType = monthly`, integer `1..31`)
-- `schedule.runDate` (required when `frequencyType = once`, date)
+- `schedule.frequencyType` (required with `schedule`, enum: `weekly | monthly`)
+- `schedule.weekDays` (required when `frequencyType = weekly`, array of integers `0..6`)
+- `schedule.monthDays` (required when `frequencyType = monthly`, array of integers `1..31`)
+- `schedule.periods` (required with `schedule`, array of time windows)
+- `schedule.periods[].label` (optional, string)
+- `schedule.periods[].fromTime` (required, `HH:mm`)
+- `schedule.periods[].toTime` (required, `HH:mm`)
 
 If `schedule` is omitted in update, existing schedule remains unchanged.
 
@@ -103,9 +107,15 @@ Returns the **full list detail** shape (same as “Show shopping list”), inclu
     "isActive": true,
     "schedule": {
       "frequencyType": "weekly",
-      "dayOfWeek": 6,
-      "dayOfMonth": null,
-      "runDate": null,
+      "weekDays": [0, 6],
+      "monthDays": null,
+      "periods": [
+        {
+          "label": "الفترة الأولى",
+          "fromTime": "09:00",
+          "toTime": "11:00"
+        }
+      ],
       "isActive": true,
       "nextRunAt": "2026-04-18 00:00:00",
       "lastRunAt": null
@@ -141,9 +151,15 @@ Items are ordered by `sortOrder`, then `id`.
     "isActive": true,
     "schedule": {
       "frequencyType": "weekly",
-      "dayOfWeek": 6,
-      "dayOfMonth": null,
-      "runDate": null,
+      "weekDays": [0, 6],
+      "monthDays": null,
+      "periods": [
+        {
+          "label": "الفترة الأولى",
+          "fromTime": "09:00",
+          "toTime": "11:00"
+        }
+      ],
       "isActive": true,
       "nextRunAt": "2026-04-18 00:00:00",
       "lastRunAt": "2026-04-11 00:00:00"
@@ -201,9 +217,9 @@ Full list detail (same shape as “Show shopping list”).
 
 Common schedule validation examples:
 
-- `schedule.frequencyType = weekly` without `schedule.dayOfWeek`
-- `schedule.frequencyType = monthly` without `schedule.dayOfMonth`
-- `schedule.frequencyType = once` without `schedule.runDate`
+- `schedule.frequencyType = weekly` without `schedule.weekDays`
+- `schedule.frequencyType = monthly` without `schedule.monthDays`
+- missing `schedule.periods` or an empty periods list
 - active `schedule` with missing `storeId`
 
 ---
@@ -301,7 +317,7 @@ Empty body.
 
 `POST /supermarket/shopping-lists/{shoppingList}/add-to-cart`
 
-Resolves every **included** list line to a store product and appends lines to the user’s supermarket cart for **`storeId`**. Duplicate `productId` targets in one request are **merged by quantity** before insert.
+Resolves every **included** list line to a store product and appends lines to the user's supermarket cart using the list's linked `storeId`. The list must have `storeId` set before adding to cart. Duplicate `productId` targets in one request are **merged by quantity** before insert.
 
 **Path params**
 
@@ -309,7 +325,7 @@ Resolves every **included** list line to a store product and appends lines to th
 
 **Body**
 
-- `storeId` (required, integer, must exist in `sm_stores`)
+Empty `{}`. Uses the shopping list's linked `storeId`.
 
 **201 Response**
 
@@ -340,7 +356,7 @@ Full **supermarket cart** payload (same as `GET /supermarket/cart` after lines a
 Typical `message` / `errors` shapes (Laravel validation):
 
 - **`items`**: no rows had `isIncluded: true`, or every included row was skipped and nothing could be added (e.g. all excluded).
-- **`storeId`**: no available `sm_products` row in that store for at least one included master product (message may mention the failing `master_product_id`), or bulk cart validation failed (e.g. product not in store, not available).
+- **`storeId`**: the list has no `storeId` set, or no available `sm_products` row exists in that store for at least one included master product (message may mention the failing `master_product_id`).
 
 **Errors**
 
@@ -353,8 +369,9 @@ Typical `message` / `errors` shapes (Laravel validation):
 1. **`GET /supermarket/shopping-lists`** — home screen: show saved lists.
 2. **`GET /supermarket/shopping-lists/{id}`** — detail: lines, toggles, reorder UI.
 3. **`POST`** / **`PATCH`** / **`DELETE`** on list or items — edit.
-4. User picks a store → **`POST …/add-to-cart`** with `{ "storeId": … }`.
-5. **`GET /supermarket/cart`** — confirm cart; then checkout per [`API_CONTRACT_USER_ORDERS_AND_CART.md`](./API_CONTRACT_USER_ORDERS_AND_CART.md).
+4. User picks a store → **`PATCH /supermarket/shopping-lists/{id}`** to set `storeId`.
+5. **`POST …/add-to-cart`** with empty `{}` body to add to cart.
+6. **`GET /supermarket/cart`** — confirm cart; then checkout per [`API_CONTRACT_USER_ORDERS_AND_CART.md`](./API_CONTRACT_USER_ORDERS_AND_CART.md).
 
 ---
 

@@ -6819,14 +6819,14 @@
                                         ],
                                         "body": {
                                             "mode": "raw",
-                                            "raw": "{\n  \"name\": \"Weekly groceries\",\n  \"description\": \"Basics\",\n  \"isActive\": true,\n  \"storeId\": {{smStoreId}},\n  \"schedule\": {\n    \"frequencyType\": \"weekly\",\n    \"dayOfWeek\": 6,\n    \"isActive\": true\n  }\n}"
+                                            "raw": "{\n  \"name\": \"Weekly groceries\",\n  \"description\": \"Basics\",\n  \"isActive\": true,\n  \"storeId\": {{smStoreId}},\n  \"schedule\": {\n    \"frequencyType\": \"weekly\",\n    \"weekDays\": [6],\n    \"periods\": [\n      {\n        \"label\": \"Saturday morning\",\n        \"fromTime\": \"09:00\",\n        \"toTime\": \"11:00\"\n      }\n    ],\n    \"isActive\": true\n  }\n}"
                                         },
                                         "url": {
                                             "raw": "{{baseUrl}}/api/v1/user/supermarket/shopping-lists",
                                             "host": ["{{baseUrl}}"],
                                             "path": ["api", "v1", "user", "supermarket", "shopping-lists"]
                                         },
-                                        "description": "POST …/shopping-lists — `name` required. Optional: `storeId`, `schedule` (`weekly|monthly|once`). 201 — list detail in `data` with optional `schedule`."
+                                        "description": "POST …/shopping-lists — `name` required. Optional: `storeId`, `schedule` (`weekly|monthly|once`) with `weekDays`, `monthDays`, and `periods`. 201 — list detail in `data` with optional `schedule`."
                                     },
                                     "response": []
                                 },
@@ -6856,13 +6856,13 @@
                                             { "key": "Authorization", "value": "Bearer {{token}}" },
                                             { "key": "Content-Type", "value": "application/json" }
                                         ],
-                                        "body": { "mode": "raw", "raw": "{\n  \"name\": \"Renamed\",\n  \"isActive\": true,\n  \"storeId\": {{smStoreId}},\n  \"schedule\": {\n    \"frequencyType\": \"monthly\",\n    \"dayOfMonth\": 10,\n    \"isActive\": true\n  }\n}" },
+                                        "body": { "mode": "raw", "raw": "{\n  \"name\": \"Renamed\",\n  \"isActive\": true,\n  \"storeId\": {{smStoreId}},\n  \"schedule\": {\n    \"frequencyType\": \"monthly\",\n    \"monthDays\": [10],\n    \"periods\": [\n      {\n        \"label\": \"Monthly run\",\n        \"fromTime\": \"10:00\",\n        \"toTime\": \"12:00\"\n      }\n    ],\n    \"isActive\": true\n  }\n}" },
                                         "url": {
                                             "raw": "{{baseUrl}}/api/v1/user/supermarket/shopping-lists/{{smShoppingListId}}",
                                             "host": ["{{baseUrl}}"],
                                             "path": ["api", "v1", "user", "supermarket", "shopping-lists", "{{smShoppingListId}}"]
                                         },
-                                        "description": "PATCH …/shopping-lists/{id} — partial update. Supports `storeId` and optional `schedule` payload."
+                                        "description": "PATCH …/shopping-lists/{id} — partial update. Supports `storeId` and optional `schedule` payload with `weekDays`, `monthDays`, and `periods`."
                                     },
                                     "response": []
                                 },
@@ -7637,13 +7637,13 @@
                                             { "key": "Accept", "value": "application/json" },
                                             { "key": "Content-Type", "value": "application/json" }
                                         ],
-                                        "body": { "mode": "raw", "raw": "{\n  \"name\": \"List name\",\n  \"description\": null,\n  \"isActive\": true,\n  \"storeId\": {{smStoreId}},\n  \"schedule\": {\n    \"frequencyType\": \"weekly\",\n    \"dayOfWeek\": 6,\n    \"isActive\": true\n  }\n}" },
+                                        "body": { "mode": "raw", "raw": "{\n  \"name\": \"List name\",\n  \"description\": null,\n  \"isActive\": true,\n  \"storeId\": {{smStoreId}},\n  \"schedule\": {\n    \"frequencyType\": \"weekly\",\n    \"weekDays\": [6],\n    \"periods\": [\n      {\n        \"label\": \"Saturday morning\",\n        \"fromTime\": \"09:00\",\n        \"toTime\": \"11:00\"\n      }\n    ],\n    \"isActive\": true\n  }\n}" },
                                         "url": {
                                             "raw": "{{baseUrl}}/api/v1/user/supermarket/shopping-lists",
                                             "host": ["{{baseUrl}}"],
                                             "path": ["api", "v1", "user", "supermarket", "shopping-lists"]
                                         },
-                                        "description": "POST …/shopping-lists — 201 list detail in `data`. Optional: `storeId`, `schedule` (`weekly|monthly|once`)."
+                                        "description": "POST …/shopping-lists — 201 list detail in `data`. Optional: `storeId`, `schedule` (`weekly|monthly|once`) with `weekDays`, `monthDays`, and `periods`."
                                     }
                                 },
                                 {
@@ -7687,13 +7687,13 @@
                                             { "key": "Accept", "value": "application/json" },
                                             { "key": "Content-Type", "value": "application/json" }
                                         ],
-                                        "body": { "mode": "raw", "raw": "{\n  \"name\": \"Updated name\",\n  \"storeId\": {{smStoreId}},\n  \"schedule\": {\n    \"frequencyType\": \"once\",\n    \"runDate\": \"2026-04-20\",\n    \"isActive\": true\n  }\n}" },
+                                        "body": { "mode": "raw", "raw": "{\n  \"name\": \"Updated name\",\n  \"storeId\": {{smStoreId}},\n  \"schedule\": {\n    \"frequencyType\": \"weekly\",\n    \"weekDays\": [1, 4],\n    \"periods\": [\n      {\n        \"label\": \"Morning slot\",\n        \"fromTime\": \"08:00\",\n        \"toTime\": \"10:00\"\n      },\n      {\n        \"label\": \"Evening slot\",\n        \"fromTime\": \"18:00\",\n        \"toTime\": \"20:00\"\n      }\n    ],\n    \"isActive\": true\n  }\n}" },
                                         "url": {
                                             "raw": "{{baseUrl}}/api/v1/user/supermarket/shopping-lists/{{smShoppingListId}}",
                                             "host": ["{{baseUrl}}"],
                                             "path": ["api", "v1", "user", "supermarket", "shopping-lists", "{{smShoppingListId}}"]
                                         },
-                                        "description": "PATCH …/shopping-lists/{id} — partial update, including optional `schedule` and `storeId`."
+                                        "description": "PATCH …/shopping-lists/{id} — partial update, including optional `schedule` and `storeId`. Use `weekDays`, `monthDays`, and `periods` for UI-aligned schedules."
                                     }
                                 },
                                 {
@@ -7737,13 +7737,13 @@
                                             { "key": "Accept", "value": "application/json" },
                                             { "key": "Content-Type", "value": "application/json" }
                                         ],
-                                        "body": { "mode": "raw", "raw": "{\n  \"storeId\": {{smStoreId}}\n}" },
+                                        "body": { "mode": "raw", "raw": "{}" },
                                         "url": {
                                             "raw": "{{baseUrl}}/api/v1/user/supermarket/shopping-lists/{{smShoppingListId}}/add-to-cart",
                                             "host": ["{{baseUrl}}"],
                                             "path": ["api", "v1", "user", "supermarket", "shopping-lists", "{{smShoppingListId}}", "add-to-cart"]
                                         },
-                                        "description": "POST …/add-to-cart — body `storeId`. 201 cart in `data`."
+                                        "description": "POST …/add-to-cart — empty body `{}`. Uses the list's linked `storeId`. 201 cart in `data`."
                                     }
                                 },
                                 {
