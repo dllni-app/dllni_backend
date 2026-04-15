@@ -11,7 +11,7 @@ Compact **v1 table layout** (paths, field tables, errors): [`API_CONTRACT_V1_USE
 
 ## Purpose
 
-Shopping lists let the authenticated user save **named collections** of **catalog (master) products** (`masterProductId`). The list can be created without a store, then later linked to a store before add-to-cart so included lines can resolve to concrete **`sm_products`** rows in that store and append them to the supermarket cart.
+Shopping lists let the authenticated user save **named collections** of **catalog (master) products** (`masterProductId`). The backend resolves add-to-cart using the included items and their available products, so the client does not send a store identifier for shopping lists.
 
 In addition, a shopping list can be configured with an optional **auto-order schedule**. When active, the backend will create and submit a supermarket order automatically based on the list's included items.
 
@@ -21,15 +21,14 @@ In addition, a shopping list can be configured with an optional **auto-order sch
 
 - **Ownership**: `shoppingList` must belong to the current user. Otherwise the API responds with **`404`** (model not found).
 - **Line identity**: List rows reference **`master_products.id`**, not `sm_products.id`.
-- **Store requirement for add-to-cart**: The list must have **`storeId`** set before calling add-to-cart.
-- **Resolution on add-to-cart**: For each row with `isIncluded: true`, the server picks the **first available** `sm_products` row where `store_id = list.storeId`, `master_product_id` matches, and `is_available` is true. If no row exists for a given master product in that store, the request fails with **`422`** (see errors below).
+- **Resolution on add-to-cart**: The server resolves all included rows against a single available store inferred from the items. If the included items do not share a common store, or a product cannot be resolved, the request fails with **`422`**.
 - **Quantities**: List line `quantity` is a decimal in API payloads; when adding to cart it is converted with `max(1, round(quantity))` as an integer line quantity on the cart.
 - **Cart result**: `POST …/add-to-cart` returns the **same cart payload shape** as `GET /supermarket/cart` (see orders/cart contract).
 - **Schedule support (v1)**: `weekly`, `monthly`.
 - **Schedule run model**: Schedule uses selected days plus one or more time periods. When due, backend runs processing and attempts to create an order.
 - **Scheduled order item source**: Only rows with `isIncluded: true` are used.
 - **Scheduled quantity conversion**: Decimal list quantity is converted with `max(1, round(quantity))`.
-- **Scheduled product mapping**: Mapping uses list `storeId` and each row `masterProductId` -> `sm_products.master_product_id` with `is_available = true`.
+- **Scheduled product mapping**: Mapping uses the same item-to-product resolution rules as add-to-cart and requires all included items to resolve against one store.
 - **Scheduled failure behavior**: If any included item cannot be mapped to an available store product, the whole scheduled run fails (no partial order), and the user receives an Arabic failure notification.
 - **Scheduled success notification**: On successful scheduled order creation, user receives Arabic notification (database + push when available).
 
@@ -99,7 +98,6 @@ Returns the **full list detail** shape (same as “Show shopping list”), inclu
 {
   "data": {
     "id": 10,
-    "storeId": null,
     "name": "Home essentials",
     "description": "Weekly basics",
     "isActive": true,
@@ -143,7 +141,6 @@ Items are ordered by `sortOrder`, then `id`.
 {
   "data": {
     "id": 10,
-    "storeId": null,
     "name": "Home essentials",
     "description": "Weekly basics",
     "isActive": true,
@@ -201,8 +198,10 @@ Items are ordered by `sortOrder`, then `id`.
 - `name` (optional; if the key is sent, required string, max: `255`)
 - `description` (optional, string|null — may be sent to clear)
 - `isActive` (optional, boolean)
-- `storeId` (optional, integer|null, exists: `sm_stores,id`)
 - `schedule` (optional, object; see “Schedule payload”)
+Resolves every **included** list line to a store product and appends lines to the user's supermarket cart using a store inferred from the included items. Duplicate `productId` targets in one request are **merged by quantity** before insert.
+Empty `{}`.
+- **`items`**: the included items do not share a common store, or a master product cannot be resolved to an available product.
 
 **200 Response**
 
@@ -314,7 +313,7 @@ Empty body.
 
 `POST /supermarket/shopping-lists/{shoppingList}/add-to-cart`
 
-Resolves every **included** list line to a store product and appends lines to the user's supermarket cart using the list's linked `storeId`. The list must have `storeId` set before adding to cart. Duplicate `productId` targets in one request are **merged by quantity** before insert.
+Resolves every **included** list line to a store product and appends lines to the user's supermarket cart using a store inferred from the included items. Duplicate `productId` targets in one request are **merged by quantity** before insert.
 
 **Path params**
 
@@ -322,7 +321,7 @@ Resolves every **included** list line to a store product and appends lines to th
 
 **Body**
 
-Empty `{}`. The endpoint does not accept a `storeId`; it always uses the shopping list's linked store.
+Empty `{}`.
 
 **201 Response**
 
@@ -353,7 +352,7 @@ Full **supermarket cart** payload (same as `GET /supermarket/cart` after lines a
 Typical `message` / `errors` shapes (Laravel validation):
 
 - **`items`**: no rows had `isIncluded: true`, or every included row was skipped and nothing could be added (e.g. all excluded).
-- **`storeId`**: the list has no `storeId` set, or no available `sm_products` row exists in that store for at least one included master product (message may mention the failing `master_product_id`).
+- **`items`**: the included items do not share a common store, or a master product cannot be resolved to an available product.
 
 **Errors**
 
@@ -366,8 +365,7 @@ Typical `message` / `errors` shapes (Laravel validation):
 1. **`GET /supermarket/shopping-lists`** — home screen: show saved lists.
 2. **`GET /supermarket/shopping-lists/{id}`** — detail: lines, toggles, reorder UI.
 3. **`POST`** / **`PATCH`** / **`DELETE`** on list or items — edit.
-4. User picks a store → **`PATCH /supermarket/shopping-lists/{id}`** to set `storeId`.
-5. **`POST …/add-to-cart`** with empty `{}` body to add to cart.
+4. **`POST …/add-to-cart`** with empty `{}` body to add to cart.
 6. **`GET /supermarket/cart`** — confirm cart; then checkout per [`API_CONTRACT_USER_ORDERS_AND_CART.md`](./API_CONTRACT_USER_ORDERS_AND_CART.md).
 
 ---

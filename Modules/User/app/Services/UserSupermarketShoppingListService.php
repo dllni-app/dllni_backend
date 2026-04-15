@@ -58,12 +58,10 @@ final class UserSupermarketShoppingListService
         string $name,
         ?string $description,
         bool $isActive,
-        ?int $storeId = null,
         ?array $schedule = null,
     ): array {
         $list = SmSmartList::create([
             'user_id' => $userId,
-            'store_id' => $storeId,
             'name' => $name,
             'description' => $description,
             'is_active' => $isActive,
@@ -86,10 +84,6 @@ final class UserSupermarketShoppingListService
     {
         $list = $this->findOwnedList($userId, $listId);
         $data = [];
-
-        if (array_key_exists('storeId', $validated)) {
-            $data['store_id'] = $validated['storeId'];
-        }
 
         if (array_key_exists('name', $validated)) {
             $data['name'] = $validated['name'];
@@ -214,36 +208,65 @@ final class UserSupermarketShoppingListService
     {
         return DB::transaction(function () use ($userId, $listId): array {
             $list = $this->findOwnedList($userId, $listId);
-            $effectiveStoreId = $list->store_id;
-
-            if ($effectiveStoreId === null) {
-                throw ValidationException::withMessages([
-                    'storeId' => ['Store id is required when the shopping list has no linked store.'],
-                ]);
-            }
-
             $list->load([
                 'items' => fn ($query) => $query->orderBy('sort_order')->orderBy('id'),
             ]);
 
-            $lines = [];
+            $includedItems = $list->items
+                ->filter(fn (SmSmartListItem $item): bool => (bool) $item->is_included)
+                ->values();
 
-            foreach ($list->items as $row) {
-                if (! $row->is_included) {
-                    continue;
-                }
+            if ($includedItems->isEmpty()) {
+                throw ValidationException::withMessages([
+                    'items' => ['There are no included items to add to the cart.'],
+                ]);
+            }
 
-                $product = SmProduct::query()
-                    ->where('store_id', $effectiveStoreId)
+            $resolvedItems = $includedItems->map(function (SmSmartListItem $row): array {
+                $products = SmProduct::query()
                     ->where('master_product_id', $row->master_product_id)
                     ->where('is_available', true)
                     ->orderBy('id')
-                    ->first();
+                    ->get(['id', 'store_id']);
 
-                if (! $product) {
+                if ($products->isEmpty()) {
                     throw ValidationException::withMessages([
-                        'storeId' => [
-                            "No available product found in this store for master product id {$row->master_product_id}.",
+                        'items' => ["No available product found for master product id {$row->master_product_id}."],
+                    ]);
+                }
+
+                return [
+                    'row' => $row,
+                    'products' => $products,
+                ];
+            });
+
+            $candidateStoreIds = null;
+
+            foreach ($resolvedItems as $itemOptions) {
+                $storeIds = $itemOptions['products']->pluck('store_id')->unique()->values()->all();
+                $candidateStoreIds = $candidateStoreIds === null
+                    ? $storeIds
+                    : array_values(array_intersect($candidateStoreIds, $storeIds));
+            }
+
+            if ($candidateStoreIds === [] || $candidateStoreIds === null) {
+                throw ValidationException::withMessages([
+                    'items' => ['The included items do not share a common store.'],
+                ]);
+            }
+
+            $effectiveStoreId = (int) $candidateStoreIds[0];
+            $lines = [];
+
+            foreach ($resolvedItems as $itemOptions) {
+                $row = $itemOptions['row'];
+                $product = $itemOptions['products']->firstWhere('store_id', $effectiveStoreId);
+
+                if ($product === null) {
+                    throw ValidationException::withMessages([
+                        'items' => [
+                            "No available product found in the selected store for master product id {$row->master_product_id}.",
                         ],
                     ]);
                 }
@@ -300,7 +323,6 @@ final class UserSupermarketShoppingListService
 
         return [
             'id' => $list->id,
-            'storeId' => $list->store_id,
             'name' => $list->name,
             'description' => $list->description,
             'isActive' => (bool) $list->is_active,

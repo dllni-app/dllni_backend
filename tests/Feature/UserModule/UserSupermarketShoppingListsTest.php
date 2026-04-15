@@ -27,7 +27,8 @@ it('creates a shopping list and lists it for the authenticated user', function (
 
     $createResponse->assertCreated()
         ->assertJsonPath('data.name', 'Home list')
-        ->assertJsonPath('data.items', []);
+        ->assertJsonPath('data.items', [])
+        ->assertJsonMissingPath('data.storeId');
 
     $listId = (int) $createResponse->json('data.id');
 
@@ -75,7 +76,8 @@ it('returns shopping list schedules on create and show', function (): void {
     $showResponse->assertOk()
         ->assertJsonPath('data.schedule.frequencyType', 'weekly')
         ->assertJsonPath('data.schedule.weekDays', [1, 4])
-        ->assertJsonPath('data.schedule.periods.0.label', 'Morning');
+        ->assertJsonPath('data.schedule.periods.0.label', 'Morning')
+        ->assertJsonMissingPath('data.storeId');
 });
 
 it('returns 404 when accessing another users shopping list', function (): void {
@@ -114,10 +116,6 @@ it('adds list items to the supermarket cart for a store', function (): void {
     ]);
     $listId = (int) $listResponse->json('data.id');
 
-    $this->patchJson("/api/v1/user/supermarket/shopping-lists/{$listId}", [
-        'storeId' => $store->id,
-    ])->assertOk();
-
     $this->postJson("/api/v1/user/supermarket/shopping-lists/{$listId}/items", [
         'masterProductId' => $master->id,
         'quantity' => 2,
@@ -149,10 +147,6 @@ it('excludes items marked not included when adding to cart', function (): void {
     $listId = (int) $this->postJson('/api/v1/user/supermarket/shopping-lists', [
         'name' => 'Toggle list',
     ])->json('data.id');
-
-    $this->patchJson("/api/v1/user/supermarket/shopping-lists/{$listId}", [
-        'storeId' => $store->id,
-    ])->assertOk();
 
     $this->postJson("/api/v1/user/supermarket/shopping-lists/{$listId}/items", [
         'masterProductId' => $master->id,
