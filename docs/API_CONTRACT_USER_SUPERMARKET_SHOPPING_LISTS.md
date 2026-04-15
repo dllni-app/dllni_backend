@@ -11,7 +11,7 @@ Compact **v1 table layout** (paths, field tables, errors): [`API_CONTRACT_V1_USE
 
 ## Purpose
 
-Shopping lists let the authenticated user save **named collections** of **catalog (master) products** (`masterProductId`). When ready to order, the user sets the list's **`storeId`**, then calls **add to cart** to resolve each included line to a concrete **`sm_products`** row in that store and append it to the supermarket cart.
+Shopping lists let the authenticated user save **named collections** of **catalog (master) products** (`masterProductId`). The list can be created without a store, then later linked to a store before add-to-cart so included lines can resolve to concrete **`sm_products`** rows in that store and append them to the supermarket cart.
 
 In addition, a shopping list can be configured with an optional **auto-order schedule**. When active, the backend will create and submit a supermarket order automatically based on the list's included items.
 
@@ -25,7 +25,6 @@ In addition, a shopping list can be configured with an optional **auto-order sch
 - **Resolution on add-to-cart**: For each row with `isIncluded: true`, the server picks the **first available** `sm_products` row where `store_id = list.storeId`, `master_product_id` matches, and `is_available` is true. If no row exists for a given master product in that store, the request fails with **`422`** (see errors below).
 - **Quantities**: List line `quantity` is a decimal in API payloads; when adding to cart it is converted with `max(1, round(quantity))` as an integer line quantity on the cart.
 - **Cart result**: `POST …/add-to-cart` returns the **same cart payload shape** as `GET /supermarket/cart` (see orders/cart contract).
-- **Scheduling store binding**: Scheduled auto-order requires list `storeId` to be set. If schedule is active and `storeId` is missing, update/create fails with **`422`**.
 - **Schedule support (v1)**: `weekly`, `monthly`.
 - **Schedule run model**: Schedule uses selected days plus one or more time periods. When due, backend runs processing and attempts to create an order.
 - **Scheduled order item source**: Only rows with `isIncluded: true` are used.
@@ -90,7 +89,6 @@ Returns all lists for the user, newest `updatedAt` first.
 - `name` (required, string, max: `255`)
 - `description` (optional, string|null)
 - `isActive` (optional, boolean, default: `true` if omitted)
-- `storeId` (optional, integer, must exist in `sm_stores`)
 - `schedule` (optional, object; see “Schedule payload”)
 
 **201 Response**
@@ -101,7 +99,7 @@ Returns the **full list detail** shape (same as “Show shopping list”), inclu
 {
   "data": {
     "id": 10,
-    "storeId": 20,
+    "storeId": null,
     "name": "Home essentials",
     "description": "Weekly basics",
     "isActive": true,
@@ -145,7 +143,7 @@ Items are ordered by `sortOrder`, then `id`.
 {
   "data": {
     "id": 10,
-    "storeId": 20,
+    "storeId": null,
     "name": "Home essentials",
     "description": "Weekly basics",
     "isActive": true,
@@ -220,7 +218,6 @@ Common schedule validation examples:
 - `schedule.frequencyType = weekly` without `schedule.weekDays`
 - `schedule.frequencyType = monthly` without `schedule.monthDays`
 - missing `schedule.periods` or an empty periods list
-- active `schedule` with missing `storeId`
 
 ---
 
@@ -325,7 +322,7 @@ Resolves every **included** list line to a store product and appends lines to th
 
 **Body**
 
-Empty `{}`. Uses the shopping list's linked `storeId`.
+Empty `{}`. The endpoint does not accept a `storeId`; it always uses the shopping list's linked store.
 
 **201 Response**
 
@@ -377,7 +374,7 @@ Typical `message` / `errors` shapes (Laravel validation):
 
 ## Scheduled auto-order flow (optional)
 
-1. User sets list `storeId` and `schedule` via **`POST`** or **`PATCH`** list endpoint.
+1. User sets `schedule` via **`POST`** or **`PATCH`** list endpoint.
 2. Backend scheduler processes due schedules.
 3. Backend creates a supermarket order from included list items when all required products are available.
 4. User receives Arabic notification:

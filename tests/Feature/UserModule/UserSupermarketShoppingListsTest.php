@@ -39,6 +39,45 @@ it('creates a shopping list and lists it for the authenticated user', function (
         ->and($indexResponse->json('data.0.itemsCount'))->toBe(0);
 });
 
+it('returns shopping list schedules on create and show', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $createResponse = $this->postJson('/api/v1/user/supermarket/shopping-lists', [
+        'name' => 'Weekly groceries',
+        'description' => 'Basics',
+        'isActive' => true,
+        'schedule' => [
+            'isActive' => true,
+            'frequencyType' => 'weekly',
+            'weekDays' => [1, 4],
+            'periods' => [
+                [
+                    'label' => 'Morning',
+                    'fromTime' => '09:00',
+                    'toTime' => '11:00',
+                ],
+            ],
+        ],
+    ]);
+
+    $createResponse->assertCreated()
+        ->assertJsonPath('data.schedule.frequencyType', 'weekly')
+        ->assertJsonPath('data.schedule.weekDays', [1, 4])
+        ->assertJsonPath('data.schedule.monthDays', [])
+        ->assertJsonPath('data.schedule.periods.0.fromTime', '09:00')
+        ->assertJsonPath('data.schedule.periods.0.toTime', '11:00');
+
+    $listId = (int) $createResponse->json('data.id');
+
+    $showResponse = $this->getJson("/api/v1/user/supermarket/shopping-lists/{$listId}");
+
+    $showResponse->assertOk()
+        ->assertJsonPath('data.schedule.frequencyType', 'weekly')
+        ->assertJsonPath('data.schedule.weekDays', [1, 4])
+        ->assertJsonPath('data.schedule.periods.0.label', 'Morning');
+});
+
 it('returns 404 when accessing another users shopping list', function (): void {
     $owner = User::factory()->create();
     $other = User::factory()->create();
@@ -72,9 +111,12 @@ it('adds list items to the supermarket cart for a store', function (): void {
 
     $listResponse = $this->postJson('/api/v1/user/supermarket/shopping-lists', [
         'name' => 'Reorder list',
-        'storeId' => $store->id,
     ]);
     $listId = (int) $listResponse->json('data.id');
+
+    $this->patchJson("/api/v1/user/supermarket/shopping-lists/{$listId}", [
+        'storeId' => $store->id,
+    ])->assertOk();
 
     $this->postJson("/api/v1/user/supermarket/shopping-lists/{$listId}/items", [
         'masterProductId' => $master->id,
@@ -106,8 +148,11 @@ it('excludes items marked not included when adding to cart', function (): void {
 
     $listId = (int) $this->postJson('/api/v1/user/supermarket/shopping-lists', [
         'name' => 'Toggle list',
-        'storeId' => $store->id,
     ])->json('data.id');
+
+    $this->patchJson("/api/v1/user/supermarket/shopping-lists/{$listId}", [
+        'storeId' => $store->id,
+    ])->assertOk();
 
     $this->postJson("/api/v1/user/supermarket/shopping-lists/{$listId}/items", [
         'masterProductId' => $master->id,

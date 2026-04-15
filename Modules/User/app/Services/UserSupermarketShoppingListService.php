@@ -210,11 +210,11 @@ final class UserSupermarketShoppingListService
     /**
      * @return array<string, mixed>
      */
-    public function addListToCart(int $userId, int $listId, ?int $storeId): array
+    public function addListToCart(int $userId, int $listId): array
     {
-        return DB::transaction(function () use ($userId, $listId, $storeId): array {
+        return DB::transaction(function () use ($userId, $listId): array {
             $list = $this->findOwnedList($userId, $listId);
-            $effectiveStoreId = $storeId ?? $list->store_id;
+            $effectiveStoreId = $list->store_id;
 
             if ($effectiveStoreId === null) {
                 throw ValidationException::withMessages([
@@ -337,7 +337,7 @@ final class UserSupermarketShoppingListService
     }
 
     /**
-     * @param array<string, mixed>|null $schedule
+     * @param  array<string, mixed>|null  $schedule
      */
     private function upsertSchedule(SmSmartList $list, ?array $schedule): void
     {
@@ -350,12 +350,6 @@ final class UserSupermarketShoppingListService
         $weekDays = $this->normalizeIntegerList($schedule['week_days'] ?? $schedule['weekDays'] ?? null);
         $monthDays = $this->normalizeIntegerList($schedule['month_days'] ?? $schedule['monthDays'] ?? null);
         $periods = $this->normalizePeriods($schedule['periods'] ?? null);
-
-        if ($list->store_id === null && $isActive) {
-            throw ValidationException::withMessages([
-                'storeId' => ['A store is required when schedule is active.'],
-            ]);
-        }
 
         if ($frequencyType === 'weekly' && $weekDays === []) {
             throw ValidationException::withMessages([
@@ -393,7 +387,7 @@ final class UserSupermarketShoppingListService
     }
 
     /**
-     * @param array<int, mixed>|int|string|null $value
+     * @param  array<int, mixed>|int|string|null  $value
      * @return array<int, int>
      */
     private function normalizeIntegerList(array|int|string|null $value): array
@@ -408,7 +402,7 @@ final class UserSupermarketShoppingListService
     }
 
     /**
-     * @param array<int, array<string, mixed>>|null $periods
+     * @param  array<int, array<string, mixed>>|null  $periods
      * @return array<int, array{label?: string|null, fromTime: string, toTime: string}>
      */
     private function normalizePeriods(?array $periods): array
@@ -430,7 +424,7 @@ final class UserSupermarketShoppingListService
     }
 
     /**
-     * @param array<int, array{label?: string|null, fromTime: string, toTime: string}> $periods
+     * @param  array<int, array{label?: string|null, fromTime: string, toTime: string}>  $periods
      */
     private function calculateNextRunAt(?string $frequencyType, array $weekDays, array $monthDays, array $periods): ?Carbon
     {
@@ -457,7 +451,7 @@ final class UserSupermarketShoppingListService
     }
 
     /**
-     * @param array<int, array{label?: string|null, fromTime: string, toTime: string}> $periods
+     * @param  array<int, array{label?: string|null, fromTime: string, toTime: string}>  $periods
      */
     private function earliestPeriodStartTime(array $periods): ?string
     {
@@ -473,7 +467,7 @@ final class UserSupermarketShoppingListService
     }
 
     /**
-     * @param array<int, int> $weekDays
+     * @param  array<int, int>  $weekDays
      */
     private function nextWeeklyRunAt(array $weekDays, string $startTime, CarbonInterface $now): ?Carbon
     {
@@ -497,7 +491,7 @@ final class UserSupermarketShoppingListService
     }
 
     /**
-     * @param array<int, int> $monthDays
+     * @param  array<int, int>  $monthDays
      */
     private function nextMonthlyRunAt(array $monthDays, string $startTime, CarbonInterface $now): ?Carbon
     {

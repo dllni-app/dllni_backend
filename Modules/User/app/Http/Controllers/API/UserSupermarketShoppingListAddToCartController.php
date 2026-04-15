@@ -20,7 +20,6 @@ final class UserSupermarketShoppingListAddToCartController
             'data' => $this->shoppingLists->addListToCart(
                 userId: (int) $request->user()->id,
                 listId: $shoppingList,
-                storeId: null,
             ),
         ], 201);
     }
