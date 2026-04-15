@@ -19,6 +19,18 @@ final class UserSupermarketShoppingListUpdateRequest extends FormRequest
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'isActive' => ['sometimes', 'boolean'],
+            'storeId' => ['sometimes', 'nullable', 'integer', 'exists:sm_stores,id'],
+            'schedule' => ['sometimes', 'nullable', 'array'],
+            'schedule.isActive' => ['sometimes', 'boolean'],
+            'schedule.frequencyType' => ['required_with:schedule', 'string', 'in:weekly,monthly'],
+            'schedule.weekDays' => ['required_if:schedule.frequencyType,weekly', 'array', 'min:1'],
+            'schedule.weekDays.*' => ['integer', 'min:0', 'max:6'],
+            'schedule.monthDays' => ['required_if:schedule.frequencyType,monthly', 'array', 'min:1'],
+            'schedule.monthDays.*' => ['integer', 'min:1', 'max:31'],
+            'schedule.periods' => ['required_with:schedule', 'array', 'min:1'],
+            'schedule.periods.*.label' => ['nullable', 'string', 'max:255'],
+            'schedule.periods.*.fromTime' => ['required', 'string', 'date_format:H:i'],
+            'schedule.periods.*.toTime' => ['required', 'string', 'date_format:H:i'],
         ];
     }
 }

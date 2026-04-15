@@ -16,11 +16,13 @@ final class UserSupermarketShoppingListUpdateController
 
     public function __invoke(UserSupermarketShoppingListUpdateRequest $request, int $shoppingList): JsonResponse
     {
+        $validated = $request->validated();
+
         return response()->json([
             'data' => $this->shoppingLists->updateList(
                 userId: (int) $request->user()->id,
                 listId: $shoppingList,
-                validated: $request->validated(),
+                validated: $validated,
             ),
         ]);
     }

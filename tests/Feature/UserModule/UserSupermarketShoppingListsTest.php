@@ -72,6 +72,7 @@ it('adds list items to the supermarket cart for a store', function (): void {
 
     $listResponse = $this->postJson('/api/v1/user/supermarket/shopping-lists', [
         'name' => 'Reorder list',
+        'storeId' => $store->id,
     ]);
     $listId = (int) $listResponse->json('data.id');
 
@@ -80,9 +81,7 @@ it('adds list items to the supermarket cart for a store', function (): void {
         'quantity' => 2,
     ])->assertCreated();
 
-    $addToCartResponse = $this->postJson("/api/v1/user/supermarket/shopping-lists/{$listId}/add-to-cart", [
-        'storeId' => $store->id,
-    ]);
+    $addToCartResponse = $this->postJson("/api/v1/user/supermarket/shopping-lists/{$listId}/add-to-cart", []);
 
     $addToCartResponse->assertCreated()
         ->assertJsonPath('data.merchantGroups.0.merchant.id', $store->id);
@@ -107,6 +106,7 @@ it('excludes items marked not included when adding to cart', function (): void {
 
     $listId = (int) $this->postJson('/api/v1/user/supermarket/shopping-lists', [
         'name' => 'Toggle list',
+        'storeId' => $store->id,
     ])->json('data.id');
 
     $this->postJson("/api/v1/user/supermarket/shopping-lists/{$listId}/items", [
@@ -115,9 +115,8 @@ it('excludes items marked not included when adding to cart', function (): void {
         'isIncluded' => false,
     ])->assertCreated();
 
-    $this->postJson("/api/v1/user/supermarket/shopping-lists/{$listId}/add-to-cart", [
-        'storeId' => $store->id,
-    ])->assertUnprocessable();
+    $this->postJson("/api/v1/user/supermarket/shopping-lists/{$listId}/add-to-cart", [])
+        ->assertUnprocessable();
 });
 
 it('deletes a shopping list line item', function (): void {
