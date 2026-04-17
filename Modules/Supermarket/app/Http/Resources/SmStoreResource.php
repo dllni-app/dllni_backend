@@ -28,6 +28,9 @@ final class SmStoreResource extends JsonResource
             'owner' => UserResource::make($this->whenLoaded('owner')),
             'name' => $this->name,
             'slug' => $this->slug,
+            'score' => array_key_exists('semantic_score', $attributes)
+                ? (is_numeric($attributes['semantic_score']) ? (float) $attributes['semantic_score'] : null)
+                : null,
             'description' => $this->description,
             'address' => $this->address,
             'city' => $this->city,

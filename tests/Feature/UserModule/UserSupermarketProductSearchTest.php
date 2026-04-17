@@ -7,6 +7,7 @@ use Database\Factories\SmCategoryFactory;
 use Database\Factories\SmOfferFactory;
 use Database\Factories\SmOfferProductFactory;
 use Database\Factories\SmProductFactory;
+use Illuminate\Support\Facades\Http;
 use Laravel\Sanctum\Sanctum;
 use Modules\Resturants\Models\Favorite;
 use Modules\Supermarket\Models\SmModifier;
@@ -34,12 +35,15 @@ it('lists supermarket products with pagination', function (): void {
 });
 
 it('filters supermarket products by search query param', function (): void {
+    config()->set('services.dallelni_search.auth_token', 'dallelni-ai');
+    config()->set('services.dallelni_search.products_base_url', 'https://dallelni.karriya.ai/products');
+
     $store = SmStore::factory()->create([
         'is_active' => true,
         'suspension_until' => null,
     ]);
 
-    SmProductFactory::new()->create([
+    $breadProduct = SmProductFactory::new()->create([
         'store_id' => $store->id,
         'name' => 'Fresh Bread',
         'is_available' => true,
@@ -51,6 +55,18 @@ it('filters supermarket products by search query param', function (): void {
         'is_available' => true,
     ]);
 
+    Http::fake([
+        'https://dallelni.karriya.ai/products/search' => Http::response([
+            'query' => 'bread',
+            'results' => [
+                [
+                    'product_id' => $breadProduct->id,
+                    'score' => 0.94,
+                ],
+            ],
+        ]),
+    ]);
+
     $response = $this->getJson('/api/v1/user/supermarket/products/search?search=bread');
 
     $response->assertOk();
@@ -58,6 +74,12 @@ it('filters supermarket products by search query param', function (): void {
 
     expect($names)->toContain('Fresh Bread');
     expect($names)->not->toContain('Chocolate Milk');
+
+    Http::assertSent(function ($request): bool {
+        return $request->url() === 'https://dallelni.karriya.ai/products/search'
+            && $request->hasHeader('auth-token', 'dallelni-ai')
+            && ($request['query'] ?? null) === 'bread';
+    });
 });
 
 it('excludes products from unavailable inventory or inactive stores', function (): void {

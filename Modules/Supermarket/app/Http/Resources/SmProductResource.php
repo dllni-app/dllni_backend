@@ -30,6 +30,9 @@ final class SmProductResource extends JsonResource
             'masterProductId' => $this->master_product_id,
             'name' => $this->name,
             'barcode' => $this->barcode,
+            'score' => array_key_exists('semantic_score', $attributes)
+                ? (is_numeric($attributes['semantic_score']) ? (float) $attributes['semantic_score'] : null)
+                : null,
             'sourceType' => $this->source_type?->value,
             'description' => $this->description,
             'price' => $this->price,
