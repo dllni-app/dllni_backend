@@ -114,7 +114,7 @@ final class AppServiceProvider extends ServiceProvider
             }
 
             return false;
-        });
+        }, ['guards' => ['sanctum']]);
 
         Broadcast::routes(['middleware' => ['auth:sanctum']]);
     }

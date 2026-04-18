@@ -17,6 +17,8 @@ This guide explains how the Flutter app should integrate with the restaurant gro
 - Auth endpoint: `POST /broadcasting/auth` (private channel auth)
 - Channel: `private-vote.{voteId}`
 - Event name: `vote.updated`
+- Backend channel authorization is registered as `vote.{voteId}` with `guards: ['sanctum']`.
+  Laravel automatically maps `private-vote.{voteId}` from Pusher to that channel pattern.
 - Event payload shape:
 
 ```json
@@ -197,3 +199,5 @@ If updates are not realtime:
 3. Confirm auth token is sent to `/broadcasting/auth`.
 4. Confirm Pusher key/cluster values are correct in backend and Flutter.
 5. Confirm event name listener is exactly `vote.updated`.
+6. Confirm backend channel callback uses Sanctum guard options (`['guards' => ['sanctum']]`).
+  Without explicit channel guards, Laravel may resolve channel user via default `web` guard and return 403.
