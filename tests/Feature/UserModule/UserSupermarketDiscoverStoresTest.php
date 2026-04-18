@@ -8,6 +8,7 @@ use Database\Factories\SmCategoryFactory;
 use Database\Factories\SmOfferFactory;
 use Database\Factories\SmProductFactory;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Laravel\Sanctum\Sanctum;
 use Modules\Resturants\Models\Favorite;
 use Modules\Supermarket\Models\SmStore;
@@ -31,15 +32,32 @@ it('lists supermarket stores with pagination', function (): void {
 });
 
 it('filters supermarket stores by search query param', function (): void {
+    config()->set('services.dallelni_search.auth_token', 'dallelni-ai');
+    config()->set('services.dallelni_search.stores_base_url', 'https://dallelni.karriya.ai/sm-stores');
+
     // Arrange
-    SmStore::factory()->create([
+    $matchingStore = SmStore::factory()->create([
         'name' => 'Super Noor Market',
         'is_active' => true,
+        'suspension_until' => null,
     ]);
 
     SmStore::factory()->create([
         'name' => 'Another Store',
         'is_active' => true,
+        'suspension_until' => null,
+    ]);
+
+    Http::fake([
+        'https://dallelni.karriya.ai/sm-stores/search' => Http::response([
+            'query' => 'noor',
+            'results' => [
+                [
+                    'store_id' => $matchingStore->id,
+                    'score' => 0.91,
+                ],
+            ],
+        ]),
     ]);
 
     // Act
@@ -50,6 +68,12 @@ it('filters supermarket stores by search query param', function (): void {
     $names = collect($response->json('data'))->pluck('name')->all();
     expect($names)->toContain('Super Noor Market');
     expect($names)->not->toContain('Another Store');
+
+    Http::assertSent(function ($request): bool {
+        return $request->url() === 'https://dallelni.karriya.ai/sm-stores/search'
+            && $request->hasHeader('auth-token', 'dallelni-ai')
+            && ($request['query'] ?? null) === 'noor';
+    });
 });
 
 it('returns distanceKm when sorting by nearest with coordinates', function (): void {

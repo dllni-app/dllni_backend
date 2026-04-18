@@ -28,8 +28,15 @@ it('updates a smart list with schedule payload', function (): void {
         'storeId' => $store->id,
         'schedule' => [
             'frequencyType' => 'weekly',
-            'dayOfWeek' => 6,
+            'weekDays' => [6],
             'isActive' => true,
+            'periods' => [
+                [
+                    'label' => 'الفترة الأولى',
+                    'fromTime' => '09:00',
+                    'toTime' => '11:00',
+                ],
+            ],
         ],
     ];
 
@@ -40,12 +47,19 @@ it('updates a smart list with schedule payload', function (): void {
         'id' => $smartList->id,
         'store_id' => $store->id,
     ]);
-    $this->assertDatabaseHas('sm_smart_list_schedules', [
-        'smart_list_id' => $smartList->id,
-        'frequency_type' => 'weekly',
-        'day_of_week' => 6,
-        'is_active' => true,
-    ]);
+
+    $schedule = SmSmartListSchedule::query()->where('smart_list_id', $smartList->id)->firstOrFail();
+
+    expect($schedule->frequency_type)->toBe('weekly')
+        ->and($schedule->week_days)->toBe([6])
+        ->and($schedule->periods)->toBe([
+            [
+                'label' => 'الفترة الأولى',
+                'fromTime' => '09:00',
+                'toTime' => '11:00',
+            ],
+        ])
+        ->and($schedule->is_active)->toBeTrue();
 });
 
 it('creates scheduled order and sends arabic notification', function (): void {
@@ -87,7 +101,14 @@ it('creates scheduled order and sends arabic notification', function (): void {
     $schedule = SmSmartListSchedule::query()->create([
         'smart_list_id' => $smartList->id,
         'frequency_type' => 'weekly',
-        'day_of_week' => now()->dayOfWeek,
+        'week_days' => [now()->dayOfWeek],
+        'periods' => [
+            [
+                'label' => 'الفترة الأولى',
+                'fromTime' => now()->addMinute()->format('H:i'),
+                'toTime' => now()->addHour()->format('H:i'),
+            ],
+        ],
         'is_active' => true,
         'next_run_at' => now()->subMinute(),
     ]);

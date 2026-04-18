@@ -32,9 +32,9 @@ final class SmSmartListResource extends JsonResource
 
                 return [
                     'frequencyType' => $this->schedule->frequency_type,
-                    'dayOfWeek' => $this->schedule->day_of_week,
-                    'dayOfMonth' => $this->schedule->day_of_month,
-                    'runDate' => $this->schedule->run_date?->toDateString(),
+                    'weekDays' => $this->schedule->week_days,
+                    'monthDays' => $this->schedule->month_days,
+                    'periods' => $this->schedule->periods,
                     'isActive' => $this->schedule->is_active,
                     'nextRunAt' => $this->schedule->next_run_at?->toDateTimeString(),
                     'lastRunAt' => $this->schedule->last_run_at?->toDateTimeString(),

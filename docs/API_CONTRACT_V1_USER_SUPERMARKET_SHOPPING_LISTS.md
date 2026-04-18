@@ -22,7 +22,7 @@ Related: supermarket cart, checkout, and orders — [`API_CONTRACT_USER_ORDERS_A
 | --- | --- |
 | Ownership | Each list belongs to one user. Wrong id → **`404`** (`firstOrFail` on scoped query). |
 | Line target | Items reference **`master_products.id`** (`masterProductId`), not `sm_products.id`. |
-| Add to cart | For each line with `isIncluded: true`, the server loads the **first** matching `sm_products` row: same `storeId`, same `master_product_id`, `is_available = true`. Missing row → **`422`** on `storeId`. |
+| Add to cart | The list must have **`storeId`** set. For each line with `isIncluded: true`, the server loads the **first** matching `sm_products` row: same list `storeId`, same `master_product_id`, `is_available = true`. Missing row → **`422`** on `storeId`. |
 | Quantity in cart | List line `quantity` is numeric; when merging into cart: `max(1, round(quantity))` as **integer** cart quantity. |
 | Empty add-to-cart | No included lines (or all excluded) → **`422`** on `items`. |
 | Cart response | `POST …/add-to-cart` returns the **same** cart shape as `GET /api/v1/user/supermarket/cart`. |
@@ -249,9 +249,7 @@ The service only updates attributes for keys that were validated and passed thro
 
 ### Request body (JSON)
 
-| Field | Required | Type | Notes |
-| --- | --- | --- | --- |
-| `storeId` | Yes | integer | `exists:sm_stores,id` |
+Empty body `{}`. The endpoint uses the shopping list's linked `storeId`.
 
 ### Response `data`
 
@@ -282,7 +280,7 @@ Full **supermarket cart** payload — same structure as `GET /v1/user/supermarke
 | Status | Meaning |
 | --- | --- |
 | `422` | `items` — no included lines to add. |
-| `422` | `storeId` — at least one included master product has no available `sm_products` row in that store (message includes failing `master_product_id`). |
+| `422` | `storeId` — the list has no `storeId` set, or no available `sm_products` row exists in that store for one or more included master products. |
 | `401` | Unauthenticated. |
 | `404` | List not found / not owned. |
 
@@ -293,8 +291,9 @@ Full **supermarket cart** payload — same structure as `GET /v1/user/supermarke
 1. `GET /v1/user/supermarket/shopping-lists` — saved lists.
 2. `GET /v1/user/supermarket/shopping-lists/{id}` — edit screen with lines.
 3. `POST` / `PATCH` / `DELETE` on list or lines.
-4. User selects store → `POST …/add-to-cart` with `{ "storeId": <store> }`.
-5. `GET /v1/user/supermarket/cart` then checkout per orders/cart contract.
+4. User selects store → `PATCH …/shopping-lists/{id}` to set `storeId`.
+5. `POST …/add-to-cart` with empty `{}` body.
+6. `GET /v1/user/supermarket/cart` then checkout per orders/cart contract.
 
 ---
 

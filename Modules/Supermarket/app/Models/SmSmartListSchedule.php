@@ -14,9 +14,9 @@ final class SmSmartListSchedule extends Model
     protected $fillable = [
         'smart_list_id',
         'frequency_type',
-        'day_of_week',
-        'day_of_month',
-        'run_date',
+        'week_days',
+        'month_days',
+        'periods',
         'is_active',
         'next_run_at',
         'last_run_at',
@@ -30,7 +30,9 @@ final class SmSmartListSchedule extends Model
     protected function casts(): array
     {
         return [
-            'run_date' => 'date',
+            'week_days' => 'array',
+            'month_days' => 'array',
+            'periods' => 'array',
             'is_active' => 'boolean',
             'next_run_at' => 'datetime',
             'last_run_at' => 'datetime',

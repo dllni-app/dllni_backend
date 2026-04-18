@@ -27,7 +27,8 @@ it('creates a shopping list and lists it for the authenticated user', function (
 
     $createResponse->assertCreated()
         ->assertJsonPath('data.name', 'Home list')
-        ->assertJsonPath('data.items', []);
+        ->assertJsonPath('data.items', [])
+        ->assertJsonMissingPath('data.storeId');
 
     $listId = (int) $createResponse->json('data.id');
 
@@ -37,6 +38,46 @@ it('creates a shopping list and lists it for the authenticated user', function (
     expect($indexResponse->json('data'))->toHaveCount(1)
         ->and($indexResponse->json('data.0.id'))->toBe($listId)
         ->and($indexResponse->json('data.0.itemsCount'))->toBe(0);
+});
+
+it('returns shopping list schedules on create and show', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $createResponse = $this->postJson('/api/v1/user/supermarket/shopping-lists', [
+        'name' => 'Weekly groceries',
+        'description' => 'Basics',
+        'isActive' => true,
+        'schedule' => [
+            'isActive' => true,
+            'frequencyType' => 'weekly',
+            'weekDays' => [1, 4],
+            'periods' => [
+                [
+                    'label' => 'Morning',
+                    'fromTime' => '09:00',
+                    'toTime' => '11:00',
+                ],
+            ],
+        ],
+    ]);
+
+    $createResponse->assertCreated()
+        ->assertJsonPath('data.schedule.frequencyType', 'weekly')
+        ->assertJsonPath('data.schedule.weekDays', [1, 4])
+        ->assertJsonPath('data.schedule.monthDays', [])
+        ->assertJsonPath('data.schedule.periods.0.fromTime', '09:00')
+        ->assertJsonPath('data.schedule.periods.0.toTime', '11:00');
+
+    $listId = (int) $createResponse->json('data.id');
+
+    $showResponse = $this->getJson("/api/v1/user/supermarket/shopping-lists/{$listId}");
+
+    $showResponse->assertOk()
+        ->assertJsonPath('data.schedule.frequencyType', 'weekly')
+        ->assertJsonPath('data.schedule.weekDays', [1, 4])
+        ->assertJsonPath('data.schedule.periods.0.label', 'Morning')
+        ->assertJsonMissingPath('data.storeId');
 });
 
 it('returns 404 when accessing another users shopping list', function (): void {
@@ -80,9 +121,7 @@ it('adds list items to the supermarket cart for a store', function (): void {
         'quantity' => 2,
     ])->assertCreated();
 
-    $addToCartResponse = $this->postJson("/api/v1/user/supermarket/shopping-lists/{$listId}/add-to-cart", [
-        'storeId' => $store->id,
-    ]);
+    $addToCartResponse = $this->postJson("/api/v1/user/supermarket/shopping-lists/{$listId}/add-to-cart", []);
 
     $addToCartResponse->assertCreated()
         ->assertJsonPath('data.merchantGroups.0.merchant.id', $store->id);
@@ -115,9 +154,8 @@ it('excludes items marked not included when adding to cart', function (): void {
         'isIncluded' => false,
     ])->assertCreated();
 
-    $this->postJson("/api/v1/user/supermarket/shopping-lists/{$listId}/add-to-cart", [
-        'storeId' => $store->id,
-    ])->assertUnprocessable();
+    $this->postJson("/api/v1/user/supermarket/shopping-lists/{$listId}/add-to-cart", [])
+        ->assertUnprocessable();
 });
 
 it('deletes a shopping list line item', function (): void {
