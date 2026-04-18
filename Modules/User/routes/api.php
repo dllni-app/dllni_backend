@@ -59,6 +59,7 @@ use Modules\User\Http\Controllers\API\UserOrderShowController;
 use Modules\User\Http\Controllers\API\UserOrdersIndexController;
 use Modules\User\Http\Controllers\API\UserOrderSlotsController;
 use Modules\User\Http\Controllers\API\UserOrderTrackingController;
+use Modules\User\Http\Controllers\API\UserNormalizeProductTextController;
 use Modules\User\Http\Controllers\API\UserProductDetailsController;
 use Modules\User\Http\Controllers\API\UserProductFavoriteDestroyController;
 use Modules\User\Http\Controllers\API\UserProductFavoritesIndexController;
@@ -202,6 +203,8 @@ Route::prefix('v1/user')->group(function (): void {
         Route::post('orders/{section}/{orderId}/cancel', UserOrderCancelController::class);
         Route::post('orders/{section}/{orderId}/reorder', UserOrderReorderController::class);
         Route::patch('orders/{section}/{orderId}/schedule', UserOrderScheduleController::class);
+
+        Route::post('products/normalize-text', UserNormalizeProductTextController::class);
 
         Route::get('restaurants/cart', UserRestaurantCartShowController::class);
         Route::post('restaurants/cart/items', UserRestaurantCartItemStoreController::class);

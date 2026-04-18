@@ -168,26 +168,73 @@ final class GeminiProductService
         }
     }
 
+    /**
+     * @return array{items: array<int, string>, normalizedText: string|null}
+     */
+    public function normalizeProductListText(string $inputText, ?string $locale = null): array
+    {
+        $normalizedInput = $this->normalizeString($inputText);
+
+        if ($normalizedInput === null) {
+            return [
+                'items' => [],
+                'normalizedText' => null,
+            ];
+        }
+
+        $payload = $this->generateStructuredTextResponse(
+            prompt: $this->buildTextNormalizationPrompt($locale),
+            responseSchema: $this->normalizeTextResponseSchema(),
+            inputText: $normalizedInput,
+            operation: __FUNCTION__,
+        );
+
+        $items = [];
+
+        if (is_array($payload) && is_array($payload['items'] ?? null)) {
+            foreach ($payload['items'] as $item) {
+                $title = $this->normalizeString($item);
+
+                if ($title === null) {
+                    continue;
+                }
+
+                $items[] = $title;
+            }
+        }
+
+        if ($items === []) {
+            $items = $this->extractFallbackItemsFromText($normalizedInput);
+        }
+
+        $uniqueItems = array_values(array_unique($items));
+
+        return [
+            'items' => $uniqueItems,
+            'normalizedText' => $uniqueItems === [] ? null : implode(' , ', $uniqueItems),
+        ];
+    }
+
     private function buildProductPrompt(?string $locale): string
     {
         return 'You are a product catalog assistant. Analyze this product image and return a JSON object '
-            .'with exactly two fields: "title" and "description". '
-            .'The title should be short and suitable for use in a product list. '
-            .'The description should be a concise marketing description in '
-            .($locale === 'ar' ? 'Arabic' : 'the main language of the packaging')
-            .'. Do not include prices, sizes, or ingredients unless they are essential.';
+            . 'with exactly two fields: "title" and "description". '
+            . 'The title should be short and suitable for use in a product list. '
+            . 'The description should be a concise marketing description in '
+            . ($locale === 'ar' ? 'Arabic' : 'the main language of the packaging')
+            . '. Do not include prices, sizes, or ingredients unless they are essential.';
     }
 
     private function buildMenuPrompt(?string $locale): string
     {
         return 'You are digitizing a restaurant or supermarket menu from a photo. '
-            .'Identify individual products or dishes and return them as structured JSON. '
-            .'Return an object with a single field "items", which is an array of objects with '
-            .'"title" and "description" fields. '
-            .'Do not include prices, allergens, or categories. '
-            .'Write titles and descriptions in '
-            .($locale === 'ar' ? 'Arabic' : 'the main language of the menu')
-            .'.';
+            . 'Identify individual products or dishes and return them as structured JSON. '
+            . 'Return an object with a single field "items", which is an array of objects with '
+            . '"title" and "description" fields. '
+            . 'Do not include prices, allergens, or categories. '
+            . 'Write titles and descriptions in '
+            . ($locale === 'ar' ? 'Arabic' : 'the main language of the menu')
+            . '.';
     }
 
     private function buildImagePrompt(string $title, ?string $description): string
@@ -204,9 +251,23 @@ final class GeminiProductService
         }
 
         $promptLines[] = 'Use a clean studio background with soft lighting. '
-            .'Realistic style, no text, no watermarks, centered composition, and exact 1:1 aspect ratio.';
+            . 'Realistic style, no text, no watermarks, centered composition, and exact 1:1 aspect ratio.';
 
         return implode(' ', $promptLines);
+    }
+
+    private function buildTextNormalizationPrompt(?string $locale): string
+    {
+        return 'You normalize grocery and restaurant product text. '
+            . 'Given noisy free-form input, extract only product names and return canonical names as JSON. '
+            . 'Return one object with exactly one field: "items" (array of strings). '
+            . 'Remove quantities, units, numbers, and filler words. '
+            . 'Fix obvious misspellings when confidence is high. '
+            . 'Keep original language; for Arabic normalize variants to common market wording when possible. '
+            . 'Do not include duplicates and keep input order. '
+            . 'Output language should be '
+            . ($locale === 'en' ? 'English where source is English, otherwise source language' : 'source language, especially Arabic when input is Arabic')
+            . '.';
     }
 
     /**
@@ -246,6 +307,68 @@ final class GeminiProductService
             ],
             'required' => ['items'],
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function normalizeTextResponseSchema(): array
+    {
+        return [
+            'type' => 'OBJECT',
+            'properties' => [
+                'items' => [
+                    'type' => 'ARRAY',
+                    'items' => ['type' => 'STRING'],
+                ],
+            ],
+            'required' => ['items'],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function generateStructuredTextResponse(
+        string $prompt,
+        array $responseSchema,
+        string $inputText,
+        string $operation,
+    ): ?array {
+        try {
+            $model = (string) (config('gemini.text_model') ?: config('gemini.vision_model'));
+            $payload = [
+                'contents' => [[
+                    'parts' => [
+                        ['text' => $prompt],
+                        ['text' => $inputText],
+                    ],
+                ]],
+                'generationConfig' => [
+                    'response_mime_type' => 'application/json',
+                    'response_schema' => $responseSchema,
+                ],
+            ];
+
+            $response = $this->postGeminiGenerateContent($model, $payload);
+            $jsonText = $this->extractResponseTextFromDecoded($response);
+
+            if ($jsonText === null || $jsonText === '') {
+                return null;
+            }
+
+            try {
+                $payloadDecoded = json_decode($jsonText, true, 512, JSON_THROW_ON_ERROR);
+            } catch (JsonException) {
+                return null;
+            }
+
+            return is_array($payloadDecoded) ? $payloadDecoded : null;
+        } catch (Throwable $exception) {
+            $this->logFailure($operation, $exception);
+
+            return null;
+        }
     }
 
     /**
@@ -408,6 +531,35 @@ final class GeminiProductService
         return in_array($mime, $allowed, true) ? $mime : 'image/jpeg';
     }
 
+    /**
+     * @return array<int, string>
+     */
+    private function extractFallbackItemsFromText(string $inputText): array
+    {
+        $lines = preg_split('/[\r\n,;،]+/u', $inputText) ?: [];
+        $items = [];
+
+        foreach ($lines as $line) {
+            if (! is_string($line)) {
+                continue;
+            }
+
+            $clean = preg_replace('/\b\d+(?:[\.,]\d+)?\b/u', ' ', $line);
+            $clean = is_string($clean) ? $clean : $line;
+            $clean = preg_replace('/\b(kg|كيلو|كغ|غم|جرام|غرام|حبة|حبات|قطعة|علبة|pack|pcs?)\b/iu', ' ', $clean);
+            $clean = is_string($clean) ? $clean : $line;
+            $clean = $this->normalizeString($clean);
+
+            if ($clean === null) {
+                continue;
+            }
+
+            $items[] = $clean;
+        }
+
+        return $items;
+    }
+
     private function normalizeString(mixed $value): ?string
     {
         if (! is_string($value) && ! is_numeric($value)) {
@@ -451,7 +603,7 @@ final class GeminiProductService
 
         if ($response->failed()) {
             throw new GeminiApiException(
-                "Gemini API error [{$response->status()}]: ".$response->body(),
+                "Gemini API error [{$response->status()}]: " . $response->body(),
                 $response->status(),
             );
         }
