@@ -18,8 +18,8 @@ return new class extends Migration
             $table->timestamp('submitted_at')->nullable();
             $table->timestamps();
 
-            $table->unique(['group_order_id', 'user_id']);
-            $table->index(['group_order_id', 'status']);
+            $table->unique(['group_order_id', 'user_id'], 'rgop_group_user_uq');
+            $table->index(['group_order_id', 'status'], 'rgop_group_status_idx');
         });
     }
 

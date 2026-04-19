@@ -17,7 +17,7 @@ return new class extends Migration
             $table->decimal('price', 10, 2)->default(0);
             $table->timestamps();
 
-            $table->unique(['group_order_item_id', 'modifier_id']);
+            $table->unique(['group_order_item_id', 'modifier_id'], 'rgoim_item_modifier_uq');
         });
     }
 

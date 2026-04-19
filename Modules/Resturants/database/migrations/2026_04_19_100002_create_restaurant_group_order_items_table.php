@@ -22,7 +22,7 @@ return new class extends Migration
             $table->text('special_instructions')->nullable();
             $table->timestamps();
 
-            $table->index(['group_order_id', 'participant_id']);
+            $table->index(['group_order_id', 'participant_id'], 'rgoi_group_participant_idx');
         });
     }
 
