@@ -92,6 +92,7 @@ use Modules\User\Http\Controllers\API\UserRestaurantHomeLatestOrderedProductsCon
 use Modules\User\Http\Controllers\API\UserRestaurantHomeNearestRestaurantsController;
 use Modules\User\Http\Controllers\API\UserRestaurantHomeReorderLatestOrderProductsController;
 use Modules\User\Http\Controllers\API\UserRestaurantHomeSuggestedProductsController;
+use Modules\User\Http\Controllers\API\UserRestaurantMenuSectionsController;
 use Modules\User\Http\Controllers\API\UserRestaurantOrderStoreController;
 use Modules\User\Http\Controllers\API\UserRestaurantProductsSearchController;
 use Modules\User\Http\Controllers\API\UserRestaurantProductsByCategoryController;
@@ -157,6 +158,7 @@ Route::prefix('v1/user')->group(function (): void {
     Route::get('restaurants/votes/suggestions', RestaurantGroupVoteSuggestionsController::class);
     Route::get('restaurants/votes/{vote}', RestaurantGroupVoteShowController::class)->whereNumber('vote');
     Route::get('restaurants/coupons', UserRestaurantActiveCouponsController::class);
+    Route::get('restaurants/{restaurant}/menu-sections', UserRestaurantMenuSectionsController::class)->whereNumber('restaurant');
     Route::get('restaurants/{restaurant}', UserRestaurantDetailsController::class)->whereNumber('restaurant');
     Route::get('products/{product}', UserProductDetailsController::class);
 
