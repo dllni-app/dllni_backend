@@ -46,6 +46,394 @@ All endpoints are under `/api/v1/user`.
 11. `POST /restaurants/group-orders/{groupOrder}/place`
   - Organizer-only force place.
 
+### 3.1 Request Bodies and Response Examples
+
+All examples use `Content-Type: application/json` and authenticated bearer token.
+
+#### 1) Create Group Order
+
+`POST /api/v1/user/restaurants/group-orders`
+
+Request body:
+
+```json
+{
+  "restaurantId": 42,
+  "name": "Lunch Team Order",
+  "endsAt": "2026-04-19T14:30:00Z"
+}
+```
+
+Success response (201):
+
+```json
+{
+  "message": "Group order created successfully.",
+  "data": {
+    "groupOrder": {
+      "id": 901,
+      "status": "active",
+      "name": "Lunch Team Order",
+      "restaurantId": 42,
+      "restaurantName": "Green Bowl",
+      "shareToken": "grp_6f4f4a4fbf9e",
+      "endsAt": "2026-04-19T14:30:00Z",
+      "secondsRemaining": 3600,
+      "creatorUserId": 17,
+      "isCreator": true,
+      "placedOrderId": null,
+      "placedAt": null
+    }
+  }
+}
+```
+
+#### 2) Join Group Order
+
+`POST /api/v1/user/restaurants/group-orders/join`
+
+Request body:
+
+```json
+{
+  "shareToken": "grp_6f4f4a4fbf9e"
+}
+```
+
+Success response (200):
+
+```json
+{
+  "message": "Joined group order successfully.",
+  "data": {
+    "groupOrderId": 901,
+    "participantId": 334,
+    "status": "active"
+  }
+}
+```
+
+#### 3) List Active Group Orders
+
+`GET /api/v1/user/restaurants/group-orders/active`
+
+Request body: none
+
+Success response (200):
+
+```json
+{
+  "data": [
+    {
+      "groupOrder": {
+        "id": 901,
+        "status": "active",
+        "name": "Lunch Team Order",
+        "restaurantId": 42,
+        "restaurantName": "Green Bowl",
+        "shareToken": "grp_6f4f4a4fbf9e",
+        "endsAt": "2026-04-19T14:30:00Z",
+        "secondsRemaining": 3520,
+        "creatorUserId": 17,
+        "isCreator": true,
+        "placedOrderId": null,
+        "placedAt": null
+      },
+      "counts": {
+        "participants": 3,
+        "responded": 2,
+        "pending": 1,
+        "items": 6
+      },
+      "amounts": {
+        "subtotal": 44.5,
+        "deliveryFee": 3,
+        "total": 47.5
+      }
+    }
+  ]
+}
+```
+
+#### 4) Show Group Order Details (Source of Truth)
+
+`GET /api/v1/user/restaurants/group-orders/{groupOrder}`
+
+Request body: none
+
+Success response (200):
+
+```json
+{
+  "data": {
+    "groupOrder": {
+      "id": 901,
+      "status": "active",
+      "name": "Lunch Team Order",
+      "restaurantId": 42,
+      "restaurantName": "Green Bowl",
+      "shareToken": "grp_6f4f4a4fbf9e",
+      "endsAt": "2026-04-19T14:30:00Z",
+      "secondsRemaining": 3488,
+      "creatorUserId": 17,
+      "isCreator": false,
+      "placedOrderId": null,
+      "placedAt": null
+    },
+    "participants": [
+      {
+        "participantId": 334,
+        "userId": 22,
+        "name": "Sara",
+        "status": "submitted",
+        "hasResponded": true,
+        "submittedAt": "2026-04-19T13:45:11Z",
+        "subtotal": 14,
+        "itemsCount": 2,
+        "items": [
+          {
+            "id": 10001,
+            "productId": 300,
+            "productName": "Chicken Salad",
+            "quantity": 1,
+            "unitPrice": 10,
+            "lineTotal": 10,
+            "notes": "No onions",
+            "modifiers": [
+              {
+                "id": 9011,
+                "name": "Extra Avocado",
+                "price": 4
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "counts": {
+      "participants": 3,
+      "responded": 2,
+      "pending": 1,
+      "items": 6
+    },
+    "amounts": {
+      "subtotal": 44.5,
+      "deliveryFee": 3,
+      "total": 47.5
+    }
+  }
+}
+```
+
+#### 5) Add Item (Current Participant)
+
+`POST /api/v1/user/restaurants/group-orders/{groupOrder}/items`
+
+Request body:
+
+```json
+{
+  "productId": 300,
+  "quantity": 2,
+  "notes": "No spicy sauce",
+  "modifiers": [
+    {
+      "modifierId": 9011,
+      "quantity": 1
+    }
+  ]
+}
+```
+
+Success response (201):
+
+```json
+{
+  "message": "Item added successfully.",
+  "data": {
+    "itemId": 10045,
+    "participantId": 334,
+    "subtotal": 28,
+    "itemsCount": 3
+  }
+}
+```
+
+#### 6) Update Item (Current Participant)
+
+`PATCH /api/v1/user/restaurants/group-orders/{groupOrder}/items/{itemId}`
+
+Request body:
+
+```json
+{
+  "quantity": 1,
+  "notes": "Sauce on side",
+  "modifiers": [
+    {
+      "modifierId": 9011,
+      "quantity": 2
+    }
+  ]
+}
+```
+
+Success response (200):
+
+```json
+{
+  "message": "Item updated successfully.",
+  "data": {
+    "itemId": 10045,
+    "participantId": 334,
+    "subtotal": 24,
+    "itemsCount": 3
+  }
+}
+```
+
+#### 7) Delete Item (Current Participant)
+
+`DELETE /api/v1/user/restaurants/group-orders/{groupOrder}/items/{itemId}`
+
+Request body: none
+
+Success response (200):
+
+```json
+{
+  "message": "Item deleted successfully.",
+  "data": {
+    "itemId": 10045,
+    "participantId": 334,
+    "subtotal": 14,
+    "itemsCount": 2
+  }
+}
+```
+
+#### 8) Submit Participant
+
+`POST /api/v1/user/restaurants/group-orders/{groupOrder}/submit`
+
+Request body: none
+
+Success response (200):
+
+```json
+{
+  "message": "Participant submitted successfully.",
+  "data": {
+    "participantId": 334,
+    "status": "submitted",
+    "submittedAt": "2026-04-19T13:45:11Z"
+  }
+}
+```
+
+#### 9) Unsubmit Participant
+
+`POST /api/v1/user/restaurants/group-orders/{groupOrder}/unsubmit`
+
+Request body: none
+
+Success response (200):
+
+```json
+{
+  "message": "Participant returned to editable state.",
+  "data": {
+    "participantId": 334,
+    "status": "active",
+    "submittedAt": null
+  }
+}
+```
+
+#### 10) Cancel Group Order (Organizer)
+
+`POST /api/v1/user/restaurants/group-orders/{groupOrder}/cancel`
+
+Request body:
+
+```json
+{
+  "reason": "Restaurant closed unexpectedly"
+}
+```
+
+Success response (200):
+
+```json
+{
+  "message": "Group order cancelled successfully.",
+  "data": {
+    "groupOrderId": 901,
+    "status": "cancelled",
+    "cancelledAt": "2026-04-19T14:00:00Z"
+  }
+}
+```
+
+#### 11) Force Place Group Order (Organizer)
+
+`POST /api/v1/user/restaurants/group-orders/{groupOrder}/place`
+
+Request body: none
+
+Success response (200):
+
+```json
+{
+  "message": "Group order placed successfully.",
+  "data": {
+    "groupOrderId": 901,
+    "status": "placed",
+    "placedOrderId": 7788,
+    "placedAt": "2026-04-19T14:02:18Z"
+  }
+}
+```
+
+### 3.2 Error Response Examples
+
+Validation error (422):
+
+```json
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "productId": [
+      "The selected product id is invalid for this restaurant."
+    ]
+  }
+}
+```
+
+Unauthorized (401):
+
+```json
+{
+  "message": "Unauthenticated."
+}
+```
+
+Business rule violation (422):
+
+```json
+{
+  "message": "You cannot submit without at least one item."
+}
+```
+
+Not found (404):
+
+```json
+{
+  "message": "Group order not found."
+}
+```
+
 ## 4) Realtime Contract
 
 1. Auth endpoint: `POST /broadcasting/auth`

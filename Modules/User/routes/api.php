@@ -93,6 +93,7 @@ use Modules\User\Http\Controllers\API\UserRestaurantHomeNearestRestaurantsContro
 use Modules\User\Http\Controllers\API\UserRestaurantHomeReorderLatestOrderProductsController;
 use Modules\User\Http\Controllers\API\UserRestaurantHomeSuggestedProductsController;
 use Modules\User\Http\Controllers\API\UserRestaurantOrderStoreController;
+use Modules\User\Http\Controllers\API\UserRestaurantProductsSearchController;
 use Modules\User\Http\Controllers\API\UserRestaurantProductsByCategoryController;
 use Modules\User\Http\Controllers\API\UserRestaurantProductsWithOffersController;
 use Modules\User\Http\Controllers\API\UserSupermarketCartItemDestroyController;
@@ -149,6 +150,7 @@ Route::prefix('v1/user')->group(function (): void {
     });
 
     Route::get('restaurants/products/with-offers', UserRestaurantProductsWithOffersController::class);
+    Route::get('restaurants/products/search', UserRestaurantProductsSearchController::class);
     Route::get('restaurants/products/by-category/{category}', UserRestaurantProductsByCategoryController::class);
 
     Route::get('restaurants/discover', DiscoverRestaurantsController::class);
