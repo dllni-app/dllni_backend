@@ -51,13 +51,16 @@ final class UserRestaurantProductsSearchService
         );
     }
 
-    private function searchWithSemanticResults(?int $restaurantId, int $categoryId, string $text, int $perPage, int $page, array $query): ?LengthAwarePaginator
+    private function searchWithSemanticResults(?int $restaurantId, ?int $categoryId, string $text, int $perPage, int $page, array $query): ?LengthAwarePaginator
     {
         $payload = [
             'query' => $text,
-            'category_id' => (string) $categoryId,
             'top_k' => max($perPage * $page, $perPage),
         ];
+
+        if ($categoryId !== null) {
+            $payload['category_id'] = (string) $categoryId;
+        }
 
         if ($restaurantId !== null) {
             $payload['restaurant_id'] = (string) $restaurantId;
@@ -97,7 +100,7 @@ final class UserRestaurantProductsSearchService
         return $this->paginateCollection($ordered, $perPage, $page, $query);
     }
 
-    private function fallbackSearch(?int $restaurantId, int $categoryId, ?string $text, int $perPage, int $page, array $query): LengthAwarePaginator
+    private function fallbackSearch(?int $restaurantId, ?int $categoryId, ?string $text, int $perPage, int $page, array $query): LengthAwarePaginator
     {
         $productsQuery = $this->baseQuery($restaurantId, $categoryId);
 
@@ -125,13 +128,12 @@ final class UserRestaurantProductsSearchService
             ->appends($query);
     }
 
-    private function baseQuery(?int $restaurantId, int $categoryId)
+    private function baseQuery(?int $restaurantId, ?int $categoryId)
     {
         $since = CarbonImmutable::now()->subDays(30);
 
         $query = Product::query()
             ->where('is_available', true)
-            ->where('category_id', $categoryId)
             ->whereHas('restaurant', fn($restaurantQuery) => $restaurantQuery->where('is_active', true))
             ->withCount([
                 'orderItems as popular_orders_count' => fn($orderItemQuery) => $orderItemQuery
@@ -154,6 +156,10 @@ final class UserRestaurantProductsSearchService
                 'category' => fn($categoryQuery) => $categoryQuery->select(['id', 'name']),
                 'media',
             ]);
+
+        if ($categoryId !== null) {
+            $query->where('category_id', $categoryId);
+        }
 
         if ($restaurantId !== null) {
             $query->where('restaurant_id', $restaurantId);

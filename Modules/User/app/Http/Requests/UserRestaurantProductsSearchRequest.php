@@ -20,7 +20,7 @@ final class UserRestaurantProductsSearchRequest extends FormRequest
     {
         return [
             'restaurantId' => ['sometimes', 'nullable', 'integer', 'exists:restaurants,id'],
-            'categoryId' => ['required', 'integer', 'exists:categories,id'],
+            'categoryId' => ['sometimes', 'nullable', 'integer', 'exists:categories,id'],
             'text' => ['sometimes', 'nullable', 'string', 'max:255'],
             'perPage' => ['sometimes', 'integer', 'min:1', 'max:100'],
             'page' => ['sometimes', 'integer', 'min:1'],
@@ -44,9 +44,11 @@ final class UserRestaurantProductsSearchRequest extends FormRequest
         return $restaurantId === null ? null : (int) $restaurantId;
     }
 
-    public function getCategoryId(): int
+    public function getCategoryId(): ?int
     {
-        return (int) $this->input('categoryId');
+        $categoryId = $this->input('categoryId');
+
+        return $categoryId === null ? null : (int) $categoryId;
     }
 
     public function getText(): ?string
