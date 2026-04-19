@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Enums\OrderType;
 use Modules\Resturants\Enums\RestaurantPickupMode;
+use Modules\Resturants\Models\RestaurantGroupOrder;
 use Modules\Resturants\Traits\FilterQueries\OrderFilterQuery;
 
 final class Order extends Model
@@ -92,6 +93,11 @@ final class Order extends Model
     public function orderStatusLogs(): HasMany
     {
         return $this->hasMany(OrderStatusLog::class)->orderBy('created_at')->orderBy('id');
+    }
+
+    public function placedFromGroupOrders(): HasMany
+    {
+        return $this->hasMany(RestaurantGroupOrder::class, 'placed_order_id');
     }
 
     public function disputes(): HasMany

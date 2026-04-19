@@ -18,6 +18,17 @@ use Modules\User\Http\Controllers\API\RestaurantGroupVoteMyActiveController;
 use Modules\User\Http\Controllers\API\RestaurantGroupVoteShowController;
 use Modules\User\Http\Controllers\API\RestaurantGroupVoteStoreController;
 use Modules\User\Http\Controllers\API\RestaurantGroupVoteSuggestionsController;
+use Modules\User\Http\Controllers\API\RestaurantGroupOrderCancelController;
+use Modules\User\Http\Controllers\API\RestaurantGroupOrderItemDestroyController;
+use Modules\User\Http\Controllers\API\RestaurantGroupOrderItemStoreController;
+use Modules\User\Http\Controllers\API\RestaurantGroupOrderItemUpdateController;
+use Modules\User\Http\Controllers\API\RestaurantGroupOrderJoinController;
+use Modules\User\Http\Controllers\API\RestaurantGroupOrderMyActiveController;
+use Modules\User\Http\Controllers\API\RestaurantGroupOrderPlaceController;
+use Modules\User\Http\Controllers\API\RestaurantGroupOrderShowController;
+use Modules\User\Http\Controllers\API\RestaurantGroupOrderStoreController;
+use Modules\User\Http\Controllers\API\RestaurantGroupOrderSubmitController;
+use Modules\User\Http\Controllers\API\RestaurantGroupOrderUnsubmitController;
 use Modules\User\Http\Controllers\API\RestaurantLuckBoxOptionsController;
 use Modules\User\Http\Controllers\API\RestaurantLuckBoxSuggestController;
 use Modules\User\Http\Controllers\API\SmHomeFeaturedOffersController;
@@ -151,6 +162,8 @@ Route::prefix('v1/user')->group(function (): void {
     Route::get('offers/{marketingOffer}', UserMarketingOfferShowController::class);
 
     Route::middleware(['auth:sanctum'])->group(function (): void {
+
+        Route::post('products/normalize-text', UserNormalizeProductTextController::class);
         Route::get('me', MeController::class);
 
         Route::post('coupons/check', UserCouponAvailabilityCheckController::class);
@@ -204,8 +217,6 @@ Route::prefix('v1/user')->group(function (): void {
         Route::post('orders/{section}/{orderId}/reorder', UserOrderReorderController::class);
         Route::patch('orders/{section}/{orderId}/schedule', UserOrderScheduleController::class);
 
-        Route::post('products/normalize-text', UserNormalizeProductTextController::class);
-
         Route::get('restaurants/cart', UserRestaurantCartShowController::class);
         Route::post('restaurants/cart/items', UserRestaurantCartItemStoreController::class);
         Route::patch('restaurants/cart/items/{itemId}', UserRestaurantCartItemUpdateController::class);
@@ -243,5 +254,17 @@ Route::prefix('v1/user')->group(function (): void {
         Route::post('restaurants/votes/{vote}/invite', RestaurantGroupVoteInviteUsersController::class)->whereNumber('vote');
         Route::post('restaurants/votes/{vote}/ballots', RestaurantGroupVoteCastBallotController::class)->whereNumber('vote');
         Route::post('restaurants/votes/{vote}/end', RestaurantGroupVoteEndController::class)->whereNumber('vote');
+
+        Route::post('restaurants/group-orders', RestaurantGroupOrderStoreController::class);
+        Route::post('restaurants/group-orders/join', RestaurantGroupOrderJoinController::class);
+        Route::get('restaurants/group-orders/active', RestaurantGroupOrderMyActiveController::class);
+        Route::get('restaurants/group-orders/{groupOrder}', RestaurantGroupOrderShowController::class)->whereNumber('groupOrder');
+        Route::post('restaurants/group-orders/{groupOrder}/items', RestaurantGroupOrderItemStoreController::class)->whereNumber('groupOrder');
+        Route::patch('restaurants/group-orders/{groupOrder}/items/{itemId}', RestaurantGroupOrderItemUpdateController::class)->whereNumber(['groupOrder', 'itemId']);
+        Route::delete('restaurants/group-orders/{groupOrder}/items/{itemId}', RestaurantGroupOrderItemDestroyController::class)->whereNumber(['groupOrder', 'itemId']);
+        Route::post('restaurants/group-orders/{groupOrder}/submit', RestaurantGroupOrderSubmitController::class)->whereNumber('groupOrder');
+        Route::post('restaurants/group-orders/{groupOrder}/unsubmit', RestaurantGroupOrderUnsubmitController::class)->whereNumber('groupOrder');
+        Route::post('restaurants/group-orders/{groupOrder}/cancel', RestaurantGroupOrderCancelController::class)->whereNumber('groupOrder');
+        Route::post('restaurants/group-orders/{groupOrder}/place', RestaurantGroupOrderPlaceController::class)->whereNumber('groupOrder');
     });
 });

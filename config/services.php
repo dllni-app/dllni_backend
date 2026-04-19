@@ -40,6 +40,7 @@ return [
     'dallelni_search' => [
         'auth_token' => env('DALLELNI_SEARCH_AUTH_TOKEN', env('AUTH_TOKEN', '')),
         'products_base_url' => env('DALLELNI_PRODUCTS_SEARCH_BASE_URL', 'https://dallelni.karriya.ai/products'),
+        'restaurant_products_base_url' => env('DALLELNI_RESTAURANT_PRODUCTS_SEARCH_BASE_URL', env('DALLELNI_PRODUCTS_SEARCH_BASE_URL', 'https://dallelni.karriya.ai/products')),
         'stores_base_url' => env('DALLELNI_SM_STORES_SEARCH_BASE_URL', 'https://dallelni.karriya.ai/sm-stores'),
         'timeout' => env('DALLELNI_SEARCH_TIMEOUT', 10),
     ],

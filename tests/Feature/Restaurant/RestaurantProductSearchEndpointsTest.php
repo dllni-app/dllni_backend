@@ -5,12 +5,16 @@ declare(strict_types=1);
 use App\Enums\UserModuleType;
 use App\Models\User;
 use Laravel\Sanctum\Sanctum;
+use Illuminate\Support\Facades\Http;
 use Modules\Resturants\Models\Category;
 use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
 
 function actingAsRestaurantSellerWithRestaurant(): array
 {
+    config()->set('services.dallelni_search.auth_token', '');
+    config()->set('services.dallelni_search.restaurant_products_base_url', '');
+
     $owner = User::factory()->create([
         'module_type' => UserModuleType::RestaurantSeller->value,
     ]);
@@ -292,4 +296,106 @@ it('returns paginated response with requested page and perPage', function () {
     expect($response->json('meta.per_page'))->toBe(1);
     expect($response->json('meta.current_page'))->toBe(2);
     expect($response->json('data'))->toHaveCount(1);
+});
+
+it('uses semantic search ordering when semantic service succeeds', function () {
+    [, $restaurant] = actingAsRestaurantSellerWithRestaurant();
+    $category = Category::factory()->create(['restaurant_id' => $restaurant->id]);
+
+    $first = Product::factory()->create([
+        'restaurant_id' => $restaurant->id,
+        'category_id' => $category->id,
+        'name' => 'Burger First',
+        'is_available' => true,
+    ]);
+
+    $second = Product::factory()->create([
+        'restaurant_id' => $restaurant->id,
+        'category_id' => $category->id,
+        'name' => 'Burger Second',
+        'is_available' => true,
+    ]);
+
+    config()->set('services.dallelni_search.auth_token', 'test-token');
+    config()->set('services.dallelni_search.restaurant_products_base_url', 'https://ai.example/restaurant-products');
+
+    Http::fake([
+        'https://ai.example/restaurant-products/search' => Http::response([
+            'results' => [
+                ['id' => $second->id, 'score' => 0.98],
+                ['id' => $first->id, 'score' => 0.74],
+            ],
+        ], 200),
+    ]);
+
+    $response = $this->getJson('/api/v1/restaurant/search/products?filter[search]=burger');
+
+    $response->assertOk();
+    expect(collect($response->json('data'))->pluck('id')->all())->toBe([$second->id, $first->id]);
+
+    Http::assertSent(function ($request) use ($restaurant): bool {
+        return $request->url() === 'https://ai.example/restaurant-products/search'
+            && data_get($request->data(), 'query') === 'burger'
+            && data_get($request->data(), 'restaurant_id') === (string) $restaurant->id;
+    });
+});
+
+it('returns empty semantic result without fallback noise', function () {
+    [, $restaurant] = actingAsRestaurantSellerWithRestaurant();
+    $category = Category::factory()->create(['restaurant_id' => $restaurant->id]);
+
+    Product::factory()->create([
+        'restaurant_id' => $restaurant->id,
+        'category_id' => $category->id,
+        'name' => 'Burger Existing',
+        'is_available' => true,
+    ]);
+
+    config()->set('services.dallelni_search.auth_token', 'test-token');
+    config()->set('services.dallelni_search.restaurant_products_base_url', 'https://ai.example/restaurant-products');
+
+    Http::fake([
+        'https://ai.example/restaurant-products/search' => Http::response([
+            'results' => [],
+        ], 200),
+    ]);
+
+    $response = $this->getJson('/api/v1/restaurant/search/products?filter[search]=burger');
+
+    $response->assertOk();
+    expect($response->json('data'))->toBe([]);
+    expect($response->json('meta.total'))->toBe(0);
+});
+
+it('falls back to local search when semantic service fails', function () {
+    [, $restaurant] = actingAsRestaurantSellerWithRestaurant();
+    $category = Category::factory()->create(['restaurant_id' => $restaurant->id]);
+
+    $burger = Product::factory()->create([
+        'restaurant_id' => $restaurant->id,
+        'category_id' => $category->id,
+        'name' => 'Burger Local Fallback',
+        'is_available' => true,
+    ]);
+
+    Product::factory()->create([
+        'restaurant_id' => $restaurant->id,
+        'category_id' => $category->id,
+        'name' => 'Pasta Not Match',
+        'is_available' => true,
+    ]);
+
+    config()->set('services.dallelni_search.auth_token', 'test-token');
+    config()->set('services.dallelni_search.restaurant_products_base_url', 'https://ai.example/restaurant-products');
+
+    Http::fake([
+        'https://ai.example/restaurant-products/search' => Http::response([
+            'message' => 'error',
+        ], 500),
+    ]);
+
+    $response = $this->getJson('/api/v1/restaurant/search/products?filter[search]=burger');
+
+    $response->assertOk();
+    expect(collect($response->json('data'))->pluck('id')->all())->toContain($burger->id);
 });
