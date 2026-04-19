@@ -71,36 +71,70 @@ it('searches active master products by barcode prefix', function (): void {
     expect($barcodes)->not->toContain('4441230000001');
 });
 
-it('creates store product from master product and links master_product_id', function (): void {
-    $masterProduct = MasterProductFactory::new()->create([
+it('creates store products from master products and links master_product_id', function (): void {
+    $firstMasterProduct = MasterProductFactory::new()->create([
         'name' => 'Sparkling Water',
         'barcode' => '1234567890123',
         'description' => 'Natural sparkling water',
         'is_active' => true,
     ]);
 
+    $secondMasterProduct = MasterProductFactory::new()->create([
+        'name' => 'Mineral Water',
+        'barcode' => '1234567890999',
+        'description' => 'Natural mineral water',
+        'is_active' => true,
+    ]);
+
     $response = $this->postJson('/api/v1/store-owner/products/from-master', [
         'storeId' => $this->store->id,
-        'categoryId' => $this->category->id,
-        'masterProductId' => $masterProduct->id,
-        'price' => 3.75,
-        'stockQuantity' => 25,
+        'products' => [
+            [
+                'categoryId' => $this->category->id,
+                'masterProductId' => $firstMasterProduct->id,
+                'title' => 'Sparkling Water Premium',
+                'price' => 3.75,
+                'stockQuantity' => 25,
+            ],
+            [
+                'categoryId' => $this->category->id,
+                'masterProductId' => $secondMasterProduct->id,
+                'title' => 'Mineral Water Large',
+                'price' => 4.25,
+                'stockQuantity' => 40,
+            ],
+        ],
     ]);
 
     $response->assertCreated();
-    $response->assertJsonPath('data.masterProductId', $masterProduct->id);
-    $response->assertJsonPath('data.name', 'Sparkling Water');
-    $response->assertJsonPath('data.barcode', '1234567890123');
-    $response->assertJsonPath('data.stockQuantity', 25);
+    $response->assertJsonCount(2, 'data');
+    $response->assertJsonPath('data.0.masterProductId', $firstMasterProduct->id);
+    $response->assertJsonPath('data.0.name', 'Sparkling Water Premium');
+    $response->assertJsonPath('data.0.barcode', '1234567890123');
+    $response->assertJsonPath('data.0.stockQuantity', 25);
+    $response->assertJsonPath('data.1.masterProductId', $secondMasterProduct->id);
+    $response->assertJsonPath('data.1.name', 'Mineral Water Large');
+    $response->assertJsonPath('data.1.barcode', '1234567890999');
+    $response->assertJsonPath('data.1.stockQuantity', 40);
 
     $this->assertDatabaseHas('sm_products', [
         'store_id' => $this->store->id,
         'category_id' => $this->category->id,
-        'master_product_id' => $masterProduct->id,
-        'name' => 'Sparkling Water',
+        'master_product_id' => $firstMasterProduct->id,
+        'name' => 'Sparkling Water Premium',
         'barcode' => '1234567890123',
         'price' => '3.75',
         'stock_quantity' => 25,
+    ]);
+
+    $this->assertDatabaseHas('sm_products', [
+        'store_id' => $this->store->id,
+        'category_id' => $this->category->id,
+        'master_product_id' => $secondMasterProduct->id,
+        'name' => 'Mineral Water Large',
+        'barcode' => '1234567890999',
+        'price' => '4.25',
+        'stock_quantity' => 40,
     ]);
 });
 
@@ -121,10 +155,15 @@ it('forbids creating product in another owner store', function (): void {
 
     $response = $this->postJson('/api/v1/store-owner/products/from-master', [
         'storeId' => $anotherStore->id,
-        'categoryId' => $foreignCategory->id,
-        'masterProductId' => $masterProduct->id,
-        'price' => 9.50,
-        'stockQuantity' => 10,
+        'products' => [
+            [
+                'categoryId' => $foreignCategory->id,
+                'masterProductId' => $masterProduct->id,
+                'title' => 'Foreign Product',
+                'price' => 9.50,
+                'stockQuantity' => 10,
+            ],
+        ],
     ]);
 
     $response->assertForbidden();
