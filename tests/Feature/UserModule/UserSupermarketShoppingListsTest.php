@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Models\User;
 use Database\Factories\MasterProductFactory;
 use Database\Factories\SmProductFactory;
+use Database\Seeders\MasterProductSeeder;
 use Laravel\Sanctum\Sanctum;
 use Modules\Supermarket\Models\SmSmartList;
 use Modules\Supermarket\Models\SmStore;
@@ -217,4 +218,26 @@ it('searches active master products for shopping list picker by name and barcode
     expect($barcodeMatches)->toContain('5559999999999');
     expect($barcodeMatches)->not->toContain('4440000000001');
     expect($barcodeMatches)->not->toContain('5551111111111');
+});
+
+it('returns seeded arabic bread master products for the shopping list picker', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $this->seed(MasterProductSeeder::class);
+
+    $response = $this->getJson('/api/v1/user/supermarket/master-products/search?index=خبز&page=1&perPage=10');
+
+    $response->assertOk();
+    $response->assertJsonPath('meta.total', 6);
+
+    $names = collect($response->json('data'))->pluck('name')->all();
+
+    expect($names)->toContain('خبز عربي أبيض');
+    expect($names)->toContain('خبز قمح كامل');
+    expect($names)->toContain('خبز توست أبيض');
+
+    $masterProduct = \App\Models\MasterProduct::query()->where('name', 'خبز عربي أبيض')->firstOrFail();
+
+    expect($masterProduct->getFirstMedia(\App\Models\MasterProduct::IMAGE_COLLECTION))->not->toBeNull();
 });

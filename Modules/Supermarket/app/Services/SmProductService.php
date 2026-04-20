@@ -4,19 +4,106 @@ declare(strict_types=1);
 
 namespace Modules\Supermarket\Services;
 
+use Carbon\CarbonImmutable;
+use App\Models\MasterProduct;
+use App\Models\User;
 use App\Services\ActivityLogService;
+use Illuminate\Support\Collection;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Modules\Supermarket\Data\SmProductData;
 use Modules\Supermarket\Enums\SmProductSource;
+use Modules\Supermarket\Models\SmCategory;
 use Modules\Supermarket\Models\SmProduct;
+use Modules\Supermarket\Models\SmStore;
 use Rap2hpoutre\FastExcel\FastExcel;
 use Throwable;
 
 final class SmProductService
 {
     public function __construct(private ActivityLogService $activityLogService) {}
+
+    /**
+     * @param  array<int, int>  $masterProductIds
+     * @return Collection<int, SmProduct>
+     */
+    public function bulkCreateFromMasterProductIdsForOwner(array $masterProductIds, User $owner): Collection
+    {
+        $store = SmStore::query()
+            ->where('owner_user_id', $owner->id)
+            ->orderBy('id')
+            ->first();
+
+        if (! $store) {
+            throw ValidationException::withMessages([
+                'store' => ['No store found for the authenticated store owner.'],
+            ]);
+        }
+
+        $category = SmCategory::query()
+            ->where('store_id', $store->id)
+            ->orderBy('id')
+            ->first();
+
+        if (! $category) {
+            throw ValidationException::withMessages([
+                'category' => ['Cannot create products because the selected store has no categories.'],
+            ]);
+        }
+
+        $requestedMasterProductIds = collect($masterProductIds)
+            ->map(fn (mixed $id): int => (int) $id)
+            ->unique()
+            ->values();
+
+        $activeMasterProducts = MasterProduct::query()
+            ->where('is_active', true)
+            ->whereIn('id', $requestedMasterProductIds)
+            ->get()
+            ->keyBy('id');
+
+        $missingOrInactiveMasterProductIds = $requestedMasterProductIds
+            ->reject(fn (int $id): bool => $activeMasterProducts->has($id))
+            ->values();
+
+        if ($missingOrInactiveMasterProductIds->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'masterProductIds' => ['One or more requested master products are missing or inactive.'],
+            ]);
+        }
+
+        $defaultExpiresAt = CarbonImmutable::now()->addYear()->toDateTimeString();
+
+        return DB::transaction(function () use ($activeMasterProducts, $requestedMasterProductIds, $store, $category, $defaultExpiresAt): Collection {
+            $products = collect();
+
+            foreach ($requestedMasterProductIds as $masterProductId) {
+                $masterProduct = $activeMasterProducts->get($masterProductId);
+
+                $product = SmProduct::query()->create([
+                    'store_id' => $store->id,
+                    'category_id' => $category->id,
+                    'master_product_id' => $masterProduct->id,
+                    'name' => $masterProduct->name,
+                    'barcode' => $masterProduct->barcode ?? '',
+                    'source_type' => SmProductSource::CatalogSearch->value,
+                    'description' => $masterProduct->description ?? '',
+                    'price' => 0,
+                    'discounted_price' => 0,
+                    'stock_quantity' => 0,
+                    'low_stock_threshold' => 0,
+                    'expires_at' => $defaultExpiresAt,
+                    'is_available' => true,
+                ]);
+
+                $this->activityLogService->logSmProductCreated($product, (int) $store->id);
+                $products->push($product);
+            }
+
+            return $products->load('store', 'category', 'media', 'offerProducts.offer');
+        });
+    }
 
     public function store(SmProductData $data, array $images = []): SmProduct
     {

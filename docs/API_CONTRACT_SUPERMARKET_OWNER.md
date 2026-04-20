@@ -512,7 +512,7 @@ Search behavior:
 - Prefix check is applied to both `name` and `barcode`.
 - Typing `s` returns names/barcodes starting with `s`; typing `se` narrows to values starting with `se`.
 
-### 8.1.2 Create product from master product
+### 8.1.2 Create products from master products
 
 | Method | Path                                      | Description                                        |
 | ------ | ----------------------------------------- | -------------------------------------------------- |
@@ -522,54 +522,35 @@ Search behavior:
 
 ```json
 {
-  "storeId": 1,
-  "products": [
-    {
-      "categoryId": 4,
-      "masterProductId": 11,
-      "title": "Sesame Oil Premium",
-      "price": 3.75,
-      "stockQuantity": 25,
-      "lowStockThreshold": 5,
-      "discountedPrice": 3.25,
-      "description": "Optional override description",
-      "expiresAt": "2026-12-31",
-      "isAvailable": true
-    },
-    {
-      "categoryId": 4,
-      "masterProductId": 12,
-      "title": "Olive Oil 1L",
-      "price": 6.5,
-      "stockQuantity": 14
-    }
-  ]
+  "masterProductIds": [11, 12]
 }
 ```
 
 | Field            | Type    | Required | Description |
 | ---------------- | ------- | -------- | ----------- |
-| storeId          | integer | yes      | Owner-managed store id. |
-| products         | array   | yes      | One or more products to create in one request. |
-| products[].categoryId       | integer | yes      | Product category id for this store. |
-| products[].masterProductId  | integer | yes      | Existing active master product id. |
-| products[].title            | string  | yes      | Product title used as created product name (max 255). |
-| products[].price            | number  | yes      | Product price. |
-| products[].stockQuantity    | integer | yes      | Starting quantity in stock. |
-| products[].lowStockThreshold| integer | no       | Low stock alert threshold (default 0). |
-| products[].discountedPrice  | number  | no       | Optional discounted price (must be <= `products[].price`). |
-| products[].description      | string  | no       | Optional override description. |
-| products[].expiresAt        | string  | no       | Optional expiration date/datetime. |
-| products[].isAvailable      | boolean | no       | Optional availability flag (default true). |
+| masterProductIds | integer[] | yes    | Master product ids to create for the authenticated owner context. Must be distinct and non-empty. |
 
 **Response (201):**
 
 Returns a collection of created supermarket product resources under `data[]`, each including:
 - `masterProductId`
-- `name` (copied from `products[].title`)
-- `barcode` (copied from master product)
-- `price`
-- `stockQuantity`
+- `name` (copied from master product name)
+- `barcode` (copied from master product, fallback `""`)
+- `description` (copied from master product, fallback `""`)
+- `sourceType` (`CatalogSearch`)
+- `price` (`0`)
+- `discountedPrice` (`0`)
+- `stockQuantity` (`0`)
+- `lowStockThreshold` (`0`)
+- `expiresAt` (non-null backend default timestamp)
+- `isAvailable` (`true`)
+
+Server-side behavior for this endpoint:
+- `storeId` is not accepted from client. Store is resolved as the first owner store ordered by `id`.
+- Category is resolved as the first category in that store ordered by `id`.
+- If the owner has no store, request fails with `422`.
+- If the selected store has no categories, request fails with `422`.
+- Requested master products must exist and be active; otherwise request fails with `422`.
 
 ### 8.2 Low stock alerts
 

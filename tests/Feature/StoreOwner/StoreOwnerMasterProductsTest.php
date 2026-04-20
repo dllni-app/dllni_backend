@@ -7,6 +7,7 @@ use App\Models\User;
 use Database\Factories\MasterProductFactory;
 use Database\Factories\SmCategoryFactory;
 use Database\Factories\SmStoreFactory;
+use Database\Seeders\MasterProductSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 
@@ -71,6 +72,25 @@ it('searches active master products by barcode prefix', function (): void {
     expect($barcodes)->not->toContain('4441230000001');
 });
 
+it('returns seeded arabic bread master products on store-owner search', function (): void {
+    $this->seed(MasterProductSeeder::class);
+
+    $response = $this->getJson('/api/v1/store-owner/master-products/search?index=خبز&page=1&perPage=10');
+
+    $response->assertOk();
+    $response->assertJsonPath('meta.total', 6);
+
+    $names = collect($response->json('data'))->pluck('name')->all();
+
+    expect($names)->toContain('خبز عربي أبيض');
+    expect($names)->toContain('خبز قمح كامل');
+    expect($names)->toContain('خبز توست أبيض');
+
+    $masterProduct = \App\Models\MasterProduct::query()->where('name', 'خبز عربي أبيض')->firstOrFail();
+
+    expect($masterProduct->getFirstMedia(\App\Models\MasterProduct::IMAGE_COLLECTION))->not->toBeNull();
+});
+
 it('creates store products from master products and links master_product_id', function (): void {
     $firstMasterProduct = MasterProductFactory::new()->create([
         'name' => 'Sparkling Water',
@@ -87,84 +107,147 @@ it('creates store products from master products and links master_product_id', fu
     ]);
 
     $response = $this->postJson('/api/v1/store-owner/products/from-master', [
-        'storeId' => $this->store->id,
-        'products' => [
-            [
-                'categoryId' => $this->category->id,
-                'masterProductId' => $firstMasterProduct->id,
-                'title' => 'Sparkling Water Premium',
-                'price' => 3.75,
-                'stockQuantity' => 25,
-            ],
-            [
-                'categoryId' => $this->category->id,
-                'masterProductId' => $secondMasterProduct->id,
-                'title' => 'Mineral Water Large',
-                'price' => 4.25,
-                'stockQuantity' => 40,
-            ],
-        ],
+        'masterProductIds' => [$firstMasterProduct->id, $secondMasterProduct->id],
     ]);
 
     $response->assertCreated();
     $response->assertJsonCount(2, 'data');
     $response->assertJsonPath('data.0.masterProductId', $firstMasterProduct->id);
-    $response->assertJsonPath('data.0.name', 'Sparkling Water Premium');
+    $response->assertJsonPath('data.0.name', 'Sparkling Water');
     $response->assertJsonPath('data.0.barcode', '1234567890123');
-    $response->assertJsonPath('data.0.stockQuantity', 25);
+    $response->assertJsonPath('data.0.stockQuantity', 0);
+    $response->assertJsonPath('data.0.price', 0);
+    $response->assertJsonPath('data.0.discountedPrice', 0);
+    $response->assertJsonPath('data.0.lowStockThreshold', 0);
+    $response->assertJsonPath('data.0.isAvailable', true);
     $response->assertJsonPath('data.1.masterProductId', $secondMasterProduct->id);
-    $response->assertJsonPath('data.1.name', 'Mineral Water Large');
+    $response->assertJsonPath('data.1.name', 'Mineral Water');
     $response->assertJsonPath('data.1.barcode', '1234567890999');
-    $response->assertJsonPath('data.1.stockQuantity', 40);
+    $response->assertJsonPath('data.1.stockQuantity', 0);
 
     $this->assertDatabaseHas('sm_products', [
         'store_id' => $this->store->id,
         'category_id' => $this->category->id,
         'master_product_id' => $firstMasterProduct->id,
-        'name' => 'Sparkling Water Premium',
+        'name' => 'Sparkling Water',
         'barcode' => '1234567890123',
-        'price' => '3.75',
-        'stock_quantity' => 25,
+        'price' => '0.00',
+        'discounted_price' => '0.00',
+        'stock_quantity' => 0,
+        'low_stock_threshold' => 0,
+        'is_available' => true,
     ]);
 
     $this->assertDatabaseHas('sm_products', [
         'store_id' => $this->store->id,
         'category_id' => $this->category->id,
         'master_product_id' => $secondMasterProduct->id,
-        'name' => 'Mineral Water Large',
+        'name' => 'Mineral Water',
         'barcode' => '1234567890999',
-        'price' => '4.25',
-        'stock_quantity' => 40,
+        'price' => '0.00',
+        'discounted_price' => '0.00',
+        'stock_quantity' => 0,
+        'low_stock_threshold' => 0,
+        'is_available' => true,
     ]);
 });
 
-it('forbids creating product in another owner store', function (): void {
-    $anotherOwner = User::factory()->create([
-        'module_type' => UserModuleType::SupermarketSeller->value,
-    ]);
-
-    $anotherStore = SmStoreFactory::new()->create([
-        'owner_user_id' => $anotherOwner->id,
-    ]);
-
-    $foreignCategory = SmCategoryFactory::new()->create([
-        'store_id' => $anotherStore->id,
-    ]);
-
+it('fails when owner has no store', function (): void {
+    \Modules\Supermarket\Models\SmStore::query()->where('id', $this->store->id)->delete();
     $masterProduct = MasterProductFactory::new()->create(['is_active' => true]);
 
     $response = $this->postJson('/api/v1/store-owner/products/from-master', [
-        'storeId' => $anotherStore->id,
-        'products' => [
-            [
-                'categoryId' => $foreignCategory->id,
-                'masterProductId' => $masterProduct->id,
-                'title' => 'Foreign Product',
-                'price' => 9.50,
-                'stockQuantity' => 10,
-            ],
-        ],
+        'masterProductIds' => [$masterProduct->id],
     ]);
 
-    $response->assertForbidden();
+    $response->assertStatus(422);
+    $response->assertJsonValidationErrors(['store']);
+});
+
+it('creates product from single master product id and fills defaults', function (): void {
+    $masterProduct = MasterProductFactory::new()->create([
+        'name' => 'Greek Yogurt',
+        'barcode' => '9991112223334',
+        'description' => 'High protein yogurt',
+        'is_active' => true,
+    ]);
+
+    $response = $this->postJson('/api/v1/store-owner/products/from-master', [
+        'masterProductIds' => [$masterProduct->id],
+    ]);
+
+    $response->assertCreated();
+    $response->assertJsonCount(1, 'data');
+    $response->assertJsonPath('data.0.masterProductId', $masterProduct->id);
+    $response->assertJsonPath('data.0.name', 'Greek Yogurt');
+    $response->assertJsonPath('data.0.barcode', '9991112223334');
+    $response->assertJsonPath('data.0.description', 'High protein yogurt');
+    $response->assertJsonPath('data.0.stockQuantity', 0);
+    $response->assertJsonPath('data.0.price', 0);
+    $response->assertJsonPath('data.0.discountedPrice', 0);
+    $response->assertJsonPath('data.0.categoryId', $this->category->id);
+    $response->assertJsonPath('data.0.storeId', $this->store->id);
+    expect($response->json('data.0.expiresAt'))->not->toBeNull();
+
+    $this->assertDatabaseHas('sm_products', [
+        'store_id' => $this->store->id,
+        'category_id' => $this->category->id,
+        'master_product_id' => $masterProduct->id,
+        'name' => 'Greek Yogurt',
+        'barcode' => '9991112223334',
+        'description' => 'High protein yogurt',
+        'price' => '0.00',
+        'discounted_price' => '0.00',
+        'stock_quantity' => 0,
+        'low_stock_threshold' => 0,
+        'is_available' => true,
+    ]);
+});
+
+it('validates master product ids input contract', function (): void {
+    $masterProduct = MasterProductFactory::new()->create(['is_active' => true]);
+
+    $emptyResponse = $this->postJson('/api/v1/store-owner/products/from-master', [
+        'masterProductIds' => [],
+    ]);
+
+    $emptyResponse->assertStatus(422);
+    $emptyResponse->assertJsonValidationErrors(['masterProductIds']);
+
+    $duplicateResponse = $this->postJson('/api/v1/store-owner/products/from-master', [
+        'masterProductIds' => [$masterProduct->id, $masterProduct->id],
+    ]);
+
+    $duplicateResponse->assertStatus(422);
+    $duplicateResponse->assertJsonValidationErrors(['masterProductIds.1']);
+
+    $invalidResponse = $this->postJson('/api/v1/store-owner/products/from-master', [
+        'masterProductIds' => [999999],
+    ]);
+
+    $invalidResponse->assertStatus(422);
+    $invalidResponse->assertJsonValidationErrors(['masterProductIds.0']);
+});
+
+it('fails when selected owner store has no categories', function (): void {
+    \Modules\Supermarket\Models\SmCategory::query()->where('id', $this->category->id)->delete();
+    $masterProduct = MasterProductFactory::new()->create(['is_active' => true]);
+
+    $response = $this->postJson('/api/v1/store-owner/products/from-master', [
+        'masterProductIds' => [$masterProduct->id],
+    ]);
+
+    $response->assertStatus(422);
+    $response->assertJsonValidationErrors(['category']);
+});
+
+it('fails when requested master product is inactive', function (): void {
+    $inactiveMasterProduct = MasterProductFactory::new()->create(['is_active' => false]);
+
+    $response = $this->postJson('/api/v1/store-owner/products/from-master', [
+        'masterProductIds' => [$inactiveMasterProduct->id],
+    ]);
+
+    $response->assertStatus(422);
+    $response->assertJsonValidationErrors(['masterProductIds']);
 });
