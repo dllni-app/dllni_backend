@@ -238,7 +238,7 @@ This maps common supermarket owner app screens to backend endpoints.
 - **List products:** `GET /api/v1/store-owner/products`
 - **Create product:** `POST /api/v1/store-owner/products`
 - **Search master products by prefix (name/barcode):** `GET /api/v1/store-owner/master-products/search?index={text}`
-- **Create product from master product:** `POST /api/v1/store-owner/products/from-master`
+- **Create products from master products (bulk):** `POST /api/v1/store-owner/products/from-master`
 - **View one product:** `GET /api/v1/store-owner/products/{id}`
 - **Update product:** `PUT /api/v1/store-owner/products/{id}`
 - **Delete product:** `DELETE /api/v1/store-owner/products/{id}`
@@ -516,38 +516,57 @@ Search behavior:
 
 | Method | Path                                      | Description                                        |
 | ------ | ----------------------------------------- | -------------------------------------------------- |
-| POST   | `/api/v1/store-owner/products/from-master` | Create store product linked to `master_product_id` |
+| POST   | `/api/v1/store-owner/products/from-master` | Bulk create store products linked to `master_product_id` |
 
 **Request body example:**
 
 ```json
 {
   "storeId": 1,
-  "categoryId": 4,
-  "masterProductId": 11,
-  "price": 3.75,
-  "stockQuantity": 25
+  "products": [
+    {
+      "categoryId": 4,
+      "masterProductId": 11,
+      "title": "Sesame Oil Premium",
+      "price": 3.75,
+      "stockQuantity": 25,
+      "lowStockThreshold": 5,
+      "discountedPrice": 3.25,
+      "description": "Optional override description",
+      "expiresAt": "2026-12-31",
+      "isAvailable": true
+    },
+    {
+      "categoryId": 4,
+      "masterProductId": 12,
+      "title": "Olive Oil 1L",
+      "price": 6.5,
+      "stockQuantity": 14
+    }
+  ]
 }
 ```
 
 | Field            | Type    | Required | Description |
 | ---------------- | ------- | -------- | ----------- |
 | storeId          | integer | yes      | Owner-managed store id. |
-| categoryId       | integer | yes      | Product category id for this store. |
-| masterProductId  | integer | yes      | Existing active master product id. |
-| price            | number  | yes      | Product price. |
-| stockQuantity    | integer | yes      | Starting quantity in stock. |
-| lowStockThreshold| integer | no       | Low stock alert threshold (default 0). |
-| discountedPrice  | number  | no       | Optional discounted price. |
-| description      | string  | no       | Optional override description. |
-| expiresAt        | string  | no       | Optional expiration datetime. |
-| isAvailable      | boolean | no       | Optional availability flag (default true). |
+| products         | array   | yes      | One or more products to create in one request. |
+| products[].categoryId       | integer | yes      | Product category id for this store. |
+| products[].masterProductId  | integer | yes      | Existing active master product id. |
+| products[].title            | string  | yes      | Product title used as created product name (max 255). |
+| products[].price            | number  | yes      | Product price. |
+| products[].stockQuantity    | integer | yes      | Starting quantity in stock. |
+| products[].lowStockThreshold| integer | no       | Low stock alert threshold (default 0). |
+| products[].discountedPrice  | number  | no       | Optional discounted price (must be <= `products[].price`). |
+| products[].description      | string  | no       | Optional override description. |
+| products[].expiresAt        | string  | no       | Optional expiration date/datetime. |
+| products[].isAvailable      | boolean | no       | Optional availability flag (default true). |
 
 **Response (201):**
 
-Returns the created supermarket product resource, including:
+Returns a collection of created supermarket product resources under `data[]`, each including:
 - `masterProductId`
-- `name` (copied from master product)
+- `name` (copied from `products[].title`)
 - `barcode` (copied from master product)
 - `price`
 - `stockQuantity`

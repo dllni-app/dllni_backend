@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace Modules\Supermarket\Http\Controllers\API\StoreOwner;
 
 use App\Models\MasterProduct;
-use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Response;
 use Illuminate\Validation\ValidationException;
 use Modules\Supermarket\Data\SmProductData;
 use Modules\Supermarket\Enums\SmProductSource;
@@ -21,49 +22,83 @@ final class StoreOwnerMasterProductCreateController
         StoreOwnerMasterProductCreateRequest $request,
         StoreOwnerContextService $context,
         SmProductService $service
-    ): JsonResource {
+    ): JsonResponse {
         $validated = $request->validated();
         $context->owner();
 
         $store = $context->store((int) $validated['storeId']);
+        $payloadProducts = $validated['products'];
 
-        $category = SmCategory::query()
-            ->where('id', (int) $validated['categoryId'])
+        $categoryIds = collect($payloadProducts)
+            ->pluck('categoryId')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->unique()
+            ->values();
+
+        $categories = SmCategory::query()
             ->where('store_id', $store->id)
-            ->first();
+            ->whereIn('id', $categoryIds)
+            ->get()
+            ->keyBy('id');
 
-        if (! $category) {
+        $missingCategoryIds = $categoryIds
+            ->reject(fn (int $id): bool => $categories->has($id))
+            ->values()
+            ->all();
+
+        if ($missingCategoryIds !== []) {
             throw ValidationException::withMessages([
-                'categoryId' => ['The selected category is invalid for this store.'],
+                'products' => ['One or more categories are invalid for this store.'],
             ]);
         }
 
-        $masterProduct = MasterProduct::query()
+        $masterProductIds = collect($payloadProducts)
+            ->pluck('masterProductId')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->unique()
+            ->values();
+
+        $masterProducts = MasterProduct::query()
             ->where('is_active', true)
-            ->find((int) $validated['masterProductId']);
+            ->whereIn('id', $masterProductIds)
+            ->get()
+            ->keyBy('id');
 
-        if (! $masterProduct) {
+        $missingMasterProductIds = $masterProductIds
+            ->reject(fn (int $id): bool => $masterProducts->has($id))
+            ->values()
+            ->all();
+
+        if ($missingMasterProductIds !== []) {
             throw ValidationException::withMessages([
-                'masterProductId' => ['The selected master product is invalid.'],
+                'products' => ['One or more master products are invalid.'],
             ]);
         }
 
-        $product = $service->store(SmProductData::from([
-            'storeId' => $store->id,
-            'categoryId' => $category->id,
-            'masterProductId' => $masterProduct->id,
-            'name' => $masterProduct->name,
-            'barcode' => $masterProduct->barcode,
-            'sourceType' => SmProductSource::CatalogSearch->value,
-            'description' => $validated['description'] ?? $masterProduct->description,
-            'price' => (float) $validated['price'],
-            'discountedPrice' => isset($validated['discountedPrice']) ? (float) $validated['discountedPrice'] : null,
-            'stockQuantity' => (int) $validated['stockQuantity'],
-            'lowStockThreshold' => isset($validated['lowStockThreshold']) ? (int) $validated['lowStockThreshold'] : 0,
-            'expiresAt' => $validated['expiresAt'] ?? null,
-            'isAvailable' => (bool) ($validated['isAvailable'] ?? true),
-        ]));
+        $createdProducts = collect($payloadProducts)
+            ->map(function (array $payloadProduct) use ($categories, $masterProducts, $service, $store) {
+                $category = $categories->get((int) $payloadProduct['categoryId']);
+                $masterProduct = $masterProducts->get((int) $payloadProduct['masterProductId']);
 
-        return SmProductResource::make($product->load('store', 'category', 'media', 'offerProducts.offer'));
+                return $service->store(SmProductData::from([
+                    'storeId' => $store->id,
+                    'categoryId' => $category->id,
+                    'masterProductId' => $masterProduct->id,
+                    'name' => $payloadProduct['title'],
+                    'barcode' => $masterProduct->barcode,
+                    'sourceType' => SmProductSource::CatalogSearch->value,
+                    'description' => $payloadProduct['description'] ?? $masterProduct->description,
+                    'price' => (float) $payloadProduct['price'],
+                    'discountedPrice' => isset($payloadProduct['discountedPrice']) ? (float) $payloadProduct['discountedPrice'] : null,
+                    'stockQuantity' => (int) $payloadProduct['stockQuantity'],
+                    'lowStockThreshold' => isset($payloadProduct['lowStockThreshold']) ? (int) $payloadProduct['lowStockThreshold'] : 0,
+                    'expiresAt' => $payloadProduct['expiresAt'] ?? null,
+                    'isAvailable' => (bool) ($payloadProduct['isAvailable'] ?? true),
+                ]))->load('store', 'category', 'media', 'offerProducts.offer');
+            });
+
+        return SmProductResource::collection($createdProducts)
+            ->response()
+            ->setStatusCode(Response::HTTP_CREATED);
     }
 }
