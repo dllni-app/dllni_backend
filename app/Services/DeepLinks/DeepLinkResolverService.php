@@ -56,7 +56,7 @@ final class DeepLinkResolverService
     /**
      * @return array<string, mixed>
      */
-    public function resolvePath(string $path, ?int $c u rrentUserId = null): array
+    public function resolvePath(string $path, ?int $currentUserId = null): array
     {
         $cleanPath = '/'.trim($path, '/');
         $parts = array_values(array_filter(explode('/', trim($cleanPath, '/'))));
