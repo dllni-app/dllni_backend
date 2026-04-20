@@ -89,7 +89,7 @@ Route::prefix('v1')->group(function () {
     Route::apiResource('sm-smart-list-items', SmSmartListItemController::class)->only(['index', 'show'])->names('sm-smart-list-items');
 
     // Store Owner Routes
-    Route::prefix('store-owner')->name('store-owner.')->group(function () {
+    Route::middleware('auth:sanctum')->prefix('store-owner')->name('store-owner.')->group(function () {
         Route::get('dashboard', StoreOwnerDashboardController::class)->name('dashboard');
         Route::get('offers/weekly-summary', StoreOwnerOfferWeeklySummaryController::class)->name('offers.weekly-summary');
         Route::get('permissions', StoreOwnerPermissionsController::class)->name('permissions');

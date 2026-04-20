@@ -356,6 +356,55 @@
                     "response": []
                 },
                 {
+                    "name": "Create products from master (bulk)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"storeId\": {{storeId}},\n  \"products\": [\n    {\n      \"categoryId\": 4,\n      \"masterProductId\": 11,\n      \"title\": \"Sesame Oil Premium\",\n      \"price\": 3.75,\n      \"stockQuantity\": 25,\n      \"lowStockThreshold\": 5,\n      \"discountedPrice\": 3.25,\n      \"description\": \"Optional override description\",\n      \"expiresAt\": \"2026-12-31\",\n      \"isAvailable\": true\n    },\n    {\n      \"categoryId\": 4,\n      \"masterProductId\": 12,\n      \"title\": \"Olive Oil 1L\",\n      \"price\": 6.5,\n      \"stockQuantity\": 14\n    }\n  ]\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/api/v1/store-owner/products/from-master",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "store-owner",
+                                "products",
+                                "from-master"
+                            ]
+                        },
+                        "description": "Bulk create store products from active master products.\n\nRequest props:\n- storeId: integer (required)\n- products: array (required, min 1)\n- products[].categoryId: integer (required)\n- products[].masterProductId: integer (required)\n- products[].title: string (required)\n- products[].price: number (required)\n- products[].stockQuantity: integer (required)\n- products[].lowStockThreshold: integer (optional)\n- products[].discountedPrice: number (optional, <= price)\n- products[].description: string (optional)\n- products[].expiresAt: date/datetime (optional)\n- products[].isAvailable: boolean (optional)"
+                    },
+                    "response": [
+                        {
+                            "name": "201 Created - products created",
+                            "status": "Created",
+                            "code": 201,
+                            "_postman_previewlanguage": "json",
+                            "header": [],
+                            "cookie": [],
+                            "body": "{\n  \"data\": [\n    {\n      \"id\": 101,\n      \"storeId\": 1,\n      \"categoryId\": 4,\n      \"masterProductId\": 11,\n      \"name\": \"Sesame Oil Premium\",\n      \"barcode\": \"1234567890123\",\n      \"price\": 3.75,\n      \"stockQuantity\": 25\n    },\n    {\n      \"id\": 102,\n      \"storeId\": 1,\n      \"categoryId\": 4,\n      \"masterProductId\": 12,\n      \"name\": \"Olive Oil 1L\",\n      \"barcode\": \"1234567890999\",\n      \"price\": 6.5,\n      \"stockQuantity\": 14\n    }\n  ]\n}"
+                        }
+                    ]
+                },
+                {
                     "name": "Low stock alerts",
                     "request": {
                         "method": "GET",
