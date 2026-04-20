@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\User\Http\Controllers\API;
 
+use App\Services\DeepLinks\CanonicalDeepLinkGenerator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Collection;
 use Modules\Resturants\Http\Resources\CategoryResource;
@@ -19,6 +20,14 @@ use Modules\User\Http\Requests\RestaurantDetailsRequest;
 
 final class UserRestaurantDetailsController
 {
+    private CanonicalDeepLinkGenerator $deepLinkGenerator;
+
+    public function __construct(
+        CanonicalDeepLinkGenerator $deepLinkGenerator,
+    ) {
+        $this->deepLinkGenerator = $deepLinkGenerator;
+    }
+
     public function __invoke(RestaurantDetailsRequest $request, int $restaurant): JsonResponse
     {
         $model = Restaurant::query()->findOrFail($restaurant);
@@ -49,7 +58,7 @@ final class UserRestaurantDetailsController
 
         $categories = $model->categories()
             ->orderBy('sort_order')
-            ->with(['products' => fn ($q) => $q
+            ->with(['products' => fn($q) => $q
                 ->where('is_available', true)
                 ->with('media')
                 ->orderByDesc('is_featured')
@@ -69,9 +78,9 @@ final class UserRestaurantDetailsController
             ->selectRaw('rating, count(*) as aggregate')
             ->groupBy('rating')
             ->get()
-            ->map(fn ($row) => ['rating' => (int) $row->rating, 'aggregate' => (int) $row->aggregate]);
+            ->map(fn($row) => ['rating' => (int) $row->rating, 'aggregate' => (int) $row->aggregate]);
 
-        $ratingsByValue = $ratingCounts->keyBy('rating')->map(fn ($row) => $row['aggregate']);
+        $ratingsByValue = $ratingCounts->keyBy('rating')->map(fn($row) => $row['aggregate']);
         $totalReviews = (int) $ratingCounts->sum('aggregate');
 
         $averageRating = (float) (Review::query()
@@ -80,6 +89,7 @@ final class UserRestaurantDetailsController
 
         return response()->json([
             'restaurant' => RestaurantResource::make($model),
+            'shareUrl' => $this->deepLinkGenerator->restaurant((string) $model->slug),
             'offers' => OfferResource::collection($offers),
             'popularProducts' => ProductResource::collection($popularProducts),
             'categories' => CategoryResource::collection($categories),

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\User\Http\Controllers\API;
 
+use App\Services\DeepLinks\CanonicalDeepLinkGenerator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Modules\Resturants\Http\Resources\ProductResource;
@@ -12,6 +13,14 @@ use Modules\Resturants\Models\Product;
 
 final class UserProductDetailsController
 {
+    private CanonicalDeepLinkGenerator $deepLinkGenerator;
+
+    public function __construct(
+        CanonicalDeepLinkGenerator $deepLinkGenerator,
+    ) {
+        $this->deepLinkGenerator = $deepLinkGenerator;
+    }
+
     public function __invoke(Request $request, int $product): JsonResponse
     {
         $model = Product::query()
@@ -40,10 +49,11 @@ final class UserProductDetailsController
 
         return response()->json([
             'product' => ProductResource::make($model),
+            'shareUrl' => $this->deepLinkGenerator->product((int) $model->id),
             'modifierGroups' => $model->modifierGroups
                 ->sortBy('id')
                 ->values()
-                ->map(fn ($group) => [
+                ->map(fn($group) => [
                     'id' => $group->id,
                     'restaurantId' => $group->restaurant_id,
                     'name' => $group->name,
@@ -53,7 +63,7 @@ final class UserProductDetailsController
                     'modifiers' => $group->modifiers
                         ->sortBy('sort_order')
                         ->values()
-                        ->map(fn ($modifier) => [
+                        ->map(fn($modifier) => [
                             'id' => $modifier->id,
                             'modifierGroupId' => $modifier->modifier_group_id,
                             'name' => $modifier->name,

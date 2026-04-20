@@ -5,9 +5,11 @@ declare(strict_types=1);
 use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\CancellationPolicyController;
 use App\Http\Controllers\API\DisputeController;
+use App\Http\Controllers\DeepLinks\ResolveDeepLinkController;
 use App\Http\Controllers\API\ServiceAddonController;
 use App\Http\Controllers\API\SosAlertController;
 use App\Http\Controllers\API\SystemAlertController;
+use App\Http\Controllers\DeepLinks\TrackDeepLinkEventController;
 use App\Http\Controllers\API\TravelCostConfigController;
 use App\Http\Controllers\API\UserAuthController;
 use App\Http\Controllers\API\UserController;
@@ -28,6 +30,11 @@ Route::prefix('dashboard')->group(function (): void {
 });
 
 Route::apiResource('users', UserController::class);
+
+Route::prefix('v1/deep-links')->group(function (): void {
+    Route::post('resolve', ResolveDeepLinkController::class);
+    Route::post('events', TrackDeepLinkEventController::class);
+});
 
 Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     Route::get('notifications', [UserNotificationController::class, 'index'])->name('notifications.index');

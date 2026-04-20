@@ -15,9 +15,26 @@ final class VerifiedUserSeeder extends Seeder
     {
         Model::unguard();
 
+        $this->seedVerifiedUser(
+            name: 'مستخدم التطبيق',
+            phone: '+963944000222',
+            email: 'user@dllni.sy',
+            imageUrl: 'https://images.unsplash.com/photo-1545167622-3a6ac756afa4?auto=format&fit=crop&w=600&q=80'
+        );
+
+        $this->seedVerifiedUser(
+            name: 'مستخدم التطبيق 2',
+            phone: '+963944000223',
+            email: 'user2@dllni.sy',
+            imageUrl: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=600&q=80'
+        );
+    }
+
+    private function seedVerifiedUser(string $name, string $phone, string $email, string $imageUrl): void
+    {
         $user = User::query()
-            ->where('phone', '+963944000222')
-            ->orWhere('email', 'user@dllni.sy')
+            ->where('phone', $phone)
+            ->orWhere('email', $email)
             ->first();
 
         if ($user === null) {
@@ -25,9 +42,9 @@ final class VerifiedUserSeeder extends Seeder
         }
 
         $user->forceFill([
-            'name' => 'مستخدم التطبيق',
-            'phone' => '+963944000222',
-            'email' => 'user@dllni.sy',
+            'name' => $name,
+            'phone' => $phone,
+            'email' => $email,
             'password' => bcrypt('password'),
             'phone_verified_at' => now(),
             'email_verified_at' => now(),
@@ -36,7 +53,7 @@ final class VerifiedUserSeeder extends Seeder
         SeederMedia::ensureSingleMedia(
             $user,
             'primary-image',
-            'https://images.unsplash.com/photo-1545167622-3a6ac756afa4?auto=format&fit=crop&w=600&q=80',
+            $imageUrl,
             "user-{$user->id}-primary"
         );
     }

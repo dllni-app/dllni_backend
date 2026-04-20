@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\User\Services;
 
+use App\Services\DeepLinks\CanonicalDeepLinkGenerator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -24,6 +25,14 @@ use Modules\User\Events\RestaurantGroupOrderUpdated;
 
 final class RestaurantGroupOrderService
 {
+    private CanonicalDeepLinkGenerator $deepLinkGenerator;
+
+    public function __construct(
+        CanonicalDeepLinkGenerator $deepLinkGenerator,
+    ) {
+        $this->deepLinkGenerator = $deepLinkGenerator;
+    }
+
     public function create(
         int $organizerUserId,
         int $restaurantId,
@@ -455,6 +464,7 @@ final class RestaurantGroupOrderService
                 'restaurantId' => $groupOrder->restaurant_id,
                 'restaurantName' => $groupOrder->restaurant?->name,
                 'shareToken' => $groupOrder->share_token,
+                'shareUrl' => $this->deepLinkGenerator->groupOrder((string) $groupOrder->share_token),
                 'deliveryFeeStrategy' => $groupOrder->delivery_fee_strategy,
                 'endsAt' => $groupOrder->ends_at->toIso8601String(),
                 'secondsRemaining' => $secondsRemaining,
