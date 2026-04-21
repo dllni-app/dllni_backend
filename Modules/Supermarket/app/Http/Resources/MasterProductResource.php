@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Supermarket\Http\Resources;
 
+use App\Http\Resources\MediaResource;
 use App\Models\MasterProduct;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -23,6 +24,8 @@ final class MasterProductResource extends JsonResource
             'brand' => $this->brand,
             'description' => $this->description,
             'isActive' => (bool) $this->is_active,
+            'primaryImage' => MediaResource::make($this->getFirstMedia())?->toArray($request),
+
         ];
     }
 }

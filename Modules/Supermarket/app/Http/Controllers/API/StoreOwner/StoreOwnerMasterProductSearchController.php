@@ -30,7 +30,7 @@ final class StoreOwnerMasterProductSearchController
             ->orderBy('name')
             ->paginate($perPage);
 
-        return MasterProductResource::collection($masterProducts)
+        return MasterProductResource::collection($masterProducts->load('media'))
             ->response()
             ->setStatusCode(200);
     }
