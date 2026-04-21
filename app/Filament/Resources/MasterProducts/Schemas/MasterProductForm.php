@@ -25,11 +25,6 @@ final class MasterProductForm
                     ->label(__('supermarket_admin.form.master_product_name'))
                     ->required()
                     ->maxLength(255),
-                TextInput::make('barcode')
-                    ->label(__('supermarket_admin.form.master_product_barcode'))
-                    ->required()
-                    ->maxLength(255)
-                    ->unique(ignoreRecord: true),
                 Select::make('unit')
                     ->label(__('supermarket_admin.form.master_product_unit'))
                     ->options($unitOptions)

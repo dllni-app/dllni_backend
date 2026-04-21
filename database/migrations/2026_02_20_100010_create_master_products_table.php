@@ -13,7 +13,6 @@ return new class extends Migration
         Schema::create('master_products', function (Blueprint $table): void {
             $table->id();
             $table->string('name');
-            $table->string('barcode')->unique();
             $table->string('unit');
             $table->string('brand')->nullable();
             $table->text('description')->nullable();

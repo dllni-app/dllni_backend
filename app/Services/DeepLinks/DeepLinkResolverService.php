@@ -14,6 +14,7 @@ use Modules\Resturants\Models\RestaurantGroupOrder;
 use Modules\Resturants\Models\RestaurantGroupOrderParticipant;
 use Modules\Resturants\Models\RestaurantGroupVote;
 use Modules\Supermarket\Models\SmProduct;
+use Modules\Supermarket\Models\SmStore;
 
 final class DeepLinkResolverService
 {
@@ -36,7 +37,7 @@ final class DeepLinkResolverService
         $shouldCache = $currentUserId === null;
 
         if ($shouldCache) {
-            $cacheKey = 'deep_link:resolve:'.sha1($path);
+            $cacheKey = 'deep_link:resolve:' . sha1($path);
             $cached = Cache::get($cacheKey);
             if (is_array($cached)) {
                 return $cached;
@@ -58,7 +59,7 @@ final class DeepLinkResolverService
      */
     public function resolvePath(string $path, ?int $currentUserId = null): array
     {
-        $cleanPath = '/'.mb_trim($path, '/');
+        $cleanPath = '/' . mb_trim($path, '/');
         $parts = array_values(array_filter(explode('/', mb_trim($cleanPath, '/'))));
 
         if (count($parts) < 2) {
@@ -71,6 +72,7 @@ final class DeepLinkResolverService
         return match ($type) {
             'product' => $this->resolveProduct($identifier),
             'restaurant' => $this->resolveRestaurant($identifier),
+            'store' => $this->resolveStore($identifier),
             'vote' => $this->resolveVote($identifier),
             'group-order' => $this->resolveGroupOrder($identifier, $currentUserId),
             default => $this->invalid('not_found', $type, null, null),
@@ -96,10 +98,34 @@ final class DeepLinkResolverService
                 parse_str((string) $parts['query'], $query);
             }
 
-            return [$path, $query];
+            return [$this->normalizePath($path), $query];
         }
 
-        return [str_starts_with($trimmed, '/') ? $trimmed : '/'.$trimmed, []];
+        $path = str_starts_with($trimmed, '/') ? $trimmed : '/' . $trimmed;
+
+        return [$this->normalizePath($path), []];
+    }
+
+    private function normalizePath(string $path): string
+    {
+        $normalized = '/' . mb_trim($path, '/');
+
+        $maps = [
+            '#^/api/v1/user/products/([^/]+)$#' => '/product/$1',
+            '#^/api/v1/user/supermarket/products/([^/]+)$#' => '/product/$1',
+            '#^/api/v1/user/supermarket/stores/([^/]+)$#' => '/store/$1',
+            '#^/api/v1/user/restaurants/([^/]+)$#' => '/restaurant/$1',
+            '#^/api/v1/user/restaurants/votes/([^/]+)$#' => '/vote/$1',
+            '#^/api/v1/user/restaurants/group-orders/([^/]+)$#' => '/group-order/$1',
+        ];
+
+        foreach ($maps as $pattern => $replacement) {
+            if (preg_match($pattern, $normalized) === 1) {
+                return (string) preg_replace($pattern, $replacement, $normalized);
+            }
+        }
+
+        return $normalized;
     }
 
     /**
@@ -112,9 +138,9 @@ final class DeepLinkResolverService
             $smProduct = SmProduct::query()
                 ->whereKey((int) $identifier)
                 ->where('is_available', true)
-                ->whereHas('store', fn ($q) => $q
+                ->whereHas('store', fn($q) => $q
                     ->where('is_active', true)
-                    ->where(fn ($sq) => $sq->whereNull('suspension_until')->orWhere('suspension_until', '<=', now())))
+                    ->where(fn($sq) => $sq->whereNull('suspension_until')->orWhere('suspension_until', '<=', now())))
                 ->first();
         }
 
@@ -136,9 +162,9 @@ final class DeepLinkResolverService
             $restaurantProduct = RestaurantProduct::query()
                 ->whereKey((int) $identifier)
                 ->where('is_available', true)
-                ->whereHas('restaurant', fn ($q) => $q
+                ->whereHas('restaurant', fn($q) => $q
                     ->where('is_active', true)
-                    ->where(fn ($sq) => $sq->whereNull('suspension_until')->orWhere('suspension_until', '<=', now())))
+                    ->where(fn($sq) => $sq->whereNull('suspension_until')->orWhere('suspension_until', '<=', now())))
                 ->first();
         }
 
@@ -164,7 +190,7 @@ final class DeepLinkResolverService
     private function resolveRestaurant(string $identifier): array
     {
         $restaurant = Restaurant::query()
-            ->when(ctype_digit($identifier), fn ($q) => $q->whereKey((int) $identifier), fn ($q) => $q->where('slug', $identifier))
+            ->when(ctype_digit($identifier), fn($q) => $q->whereKey((int) $identifier), fn($q) => $q->where('slug', $identifier))
             ->first();
 
         if ($restaurant === null) {
@@ -185,6 +211,39 @@ final class DeepLinkResolverService
             'status' => 'ok',
             'requires_auth' => false,
             'canonical_url' => $this->urlGenerator->restaurant((string) $restaurant->slug),
+            'fallback_url' => (string) config('deep_links.web_landing_url'),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function resolveStore(string $identifier): array
+    {
+        if (! ctype_digit($identifier)) {
+            return $this->invalid('not_found', 'store', null, $identifier);
+        }
+
+        $store = SmStore::query()->find((int) $identifier);
+        if ($store === null) {
+            return $this->invalid('not_found', 'store', null, $identifier);
+        }
+
+        $visible = (bool) $store->is_active
+            && ($store->suspension_until === null || $store->suspension_until->lte(now()));
+
+        if (! $visible) {
+            return $this->invalid('forbidden', 'store', (int) $store->id, (string) ($store->slug ?? null));
+        }
+
+        return [
+            'type' => 'store',
+            'target' => 'supermarket_store',
+            'id' => (int) $store->id,
+            'slug' => (string) ($store->slug ?? ''),
+            'status' => 'ok',
+            'requires_auth' => false,
+            'canonical_url' => $this->urlGenerator->store((int) $store->id),
             'fallback_url' => (string) config('deep_links.web_landing_url'),
         ];
     }
@@ -228,15 +287,17 @@ final class DeepLinkResolverService
     private function resolveGroupOrder(string $identifier, ?int $currentUserId): array
     {
         $groupOrder = RestaurantGroupOrder::query()
-            ->when(ctype_digit($identifier), fn ($q) => $q->whereKey((int) $identifier), fn ($q) => $q->where('share_token', $identifier))
+            ->when(ctype_digit($identifier), fn($q) => $q->whereKey((int) $identifier), fn($q) => $q->where('share_token', $identifier))
             ->first();
 
         if ($groupOrder === null) {
             return $this->invalid('not_found', 'group-order', null, $identifier);
         }
 
-        if (in_array($groupOrder->status, [RestaurantGroupOrderStatus::Expired, RestaurantGroupOrderStatus::Cancelled], true)
-            || now()->greaterThan($groupOrder->ends_at)) {
+        if (
+            in_array($groupOrder->status, [RestaurantGroupOrderStatus::Expired, RestaurantGroupOrderStatus::Cancelled], true)
+            || now()->greaterThan($groupOrder->ends_at)
+        ) {
             return $this->invalid('expired', 'group-order', (int) $groupOrder->id, (string) $groupOrder->share_token);
         }
 
@@ -247,9 +308,9 @@ final class DeepLinkResolverService
 
             $allowed = (int) $groupOrder->user_id === $currentUserId
                 || RestaurantGroupOrderParticipant::query()
-                    ->where('group_order_id', $groupOrder->id)
-                    ->where('user_id', $currentUserId)
-                    ->exists();
+                ->where('group_order_id', $groupOrder->id)
+                ->where('user_id', $currentUserId)
+                ->exists();
 
             if (! $allowed) {
                 return $this->invalid('forbidden', 'group-order', (int) $groupOrder->id, (string) $groupOrder->share_token);

@@ -12,6 +12,7 @@ use Modules\Resturants\Models\Restaurant;
 use Modules\Resturants\Models\RestaurantGroupOrder;
 use Modules\Resturants\Models\RestaurantGroupOrderParticipant;
 use Modules\Resturants\Models\RestaurantGroupVote;
+use Modules\Supermarket\Models\SmStore;
 use function Pest\Laravel\get;
 use function Pest\Laravel\postJson;
 
@@ -192,4 +193,45 @@ it('resolves short link code to target resource metadata', function (): void {
         ->assertJsonPath('id', $restaurant->id)
         ->assertJsonPath('slug', $restaurant->slug)
         ->assertJsonPath('status', 'ok');
+});
+
+it('resolves API-shaped product links', function (): void {
+    $restaurant = Restaurant::factory()->create(['is_active' => true]);
+    $product = Product::factory()->create([
+        'restaurant_id' => $restaurant->id,
+        'is_available' => true,
+    ]);
+
+    $response = postJson('/api/v1/deep-links/resolve', [
+        'url' => 'https://dllni.mustafafares.com/api/v1/user/products/' . $product->id,
+    ]);
+
+    $response->assertOk()
+        ->assertJsonPath('type', 'product')
+        ->assertJsonPath('id', $product->id)
+        ->assertJsonPath('status', 'ok')
+        ->assertJsonPath('canonical_url', 'https://app.dllni.com/product/' . $product->id);
+});
+
+it('resolves API-shaped supermarket store links', function (): void {
+    $owner = User::factory()->create();
+
+    $store = SmStore::query()->create([
+        'owner_user_id' => $owner->id,
+        'name' => 'Deep Link Store',
+        'slug' => 'deep-link-store',
+        'is_active' => true,
+        'suspension_until' => null,
+    ]);
+
+    $response = postJson('/api/v1/deep-links/resolve', [
+        'url' => 'https://dllni.mustafafares.com/api/v1/user/supermarket/stores/' . $store->id,
+    ]);
+
+    $response->assertOk()
+        ->assertJsonPath('type', 'store')
+        ->assertJsonPath('target', 'supermarket_store')
+        ->assertJsonPath('id', $store->id)
+        ->assertJsonPath('status', 'ok')
+        ->assertJsonPath('canonical_url', 'https://app.dllni.com/store/' . $store->id);
 });

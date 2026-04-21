@@ -42,7 +42,7 @@ final class AiDevelopmentDataSeeder extends Seeder
         ];
         $packSizes = ['250غ', '500غ', '750غ', '1كغ', '2كغ', '1لتر', '2لتر', '6حبات', '12حبة'];
 
-        DB::table('master_products')->where('barcode', 'like', '880%')->delete();
+        DB::table('master_products')->where('description', 'like', 'منتج واقعي لبيانات التطوير:%')->delete();
 
         $rows = [];
         $packSizesCount = count($packSizes);
@@ -51,7 +51,6 @@ final class AiDevelopmentDataSeeder extends Seeder
             $size = $packSizes[($i - 1) % $packSizesCount];
             $rows[] = [
                 'name' => sprintf('%s %s', $template['name'], $size),
-                'barcode' => sprintf('880%010d', $i),
                 'unit' => $template['unit']->value,
                 'brand' => $template['brand'],
                 'description' => sprintf('منتج واقعي لبيانات التطوير: %s من علامة %s.', $template['name'], $template['brand']),
@@ -65,8 +64,8 @@ final class AiDevelopmentDataSeeder extends Seeder
         }
 
         $products = DB::table('master_products')
-            ->where('barcode', 'like', '880%')
-            ->select('id', 'barcode')
+            ->where('description', 'like', 'منتج واقعي لبيانات التطوير:%')
+            ->select('id')
             ->orderBy('id')
             ->get();
 
@@ -110,7 +109,7 @@ final class AiDevelopmentDataSeeder extends Seeder
         }
 
         $recipeNames = ['كبسة دجاج', 'مقلوبة باذنجان', 'بيتزا خضار', 'شوربة عدس', 'فتوش', 'تبولة', 'مكرونة بالصلصة'];
-        $units = array_map(static fn (MasterProductUnit $unit): string => $unit->value, MasterProductUnit::cases());
+        $units = array_map(static fn(MasterProductUnit $unit): string => $unit->value, MasterProductUnit::cases());
 
         DB::table('recipes')->where('slug', 'like', 'ai-real-recipe-%')->delete();
 

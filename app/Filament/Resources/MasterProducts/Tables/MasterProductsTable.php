@@ -28,10 +28,6 @@ final class MasterProductsTable
                     ->label(__('supermarket_admin.form.master_product_name'))
                     ->searchable()
                     ->sortable(),
-                TextColumn::make('barcode')
-                    ->label(__('supermarket_admin.form.master_product_barcode'))
-                    ->searchable()
-                    ->sortable(),
                 TextColumn::make('unit')
                     ->label(__('supermarket_admin.form.master_product_unit'))
                     ->badge()

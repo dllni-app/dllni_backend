@@ -15,5 +15,22 @@ return [
     // Safe fallback for invalid/unknown links.
     'invalid_fallback_url' => env('DEEP_LINK_INVALID_FALLBACK_URL', 'https://app.dllni.com/not-found'),
 
+    // Android App Links settings used at /.well-known/assetlinks.json.
+    'android_app_package_name' => env('DEEP_LINK_ANDROID_PACKAGE_NAME', ''),
+    'android_sha256_cert_fingerprints' => array_values(array_filter(array_map(
+        static fn(string $value): string => trim($value),
+        explode(',', (string) env('DEEP_LINK_ANDROID_SHA256_CERT_FINGERPRINTS', '')),
+    ))),
+
+    // iOS Universal Links settings used at /.well-known/apple-app-site-association.
+    'ios_app_ids' => array_values(array_filter(array_map(
+        static fn(string $value): string => trim($value),
+        explode(',', (string) env('DEEP_LINK_IOS_APP_IDS', '')),
+    ))),
+    'ios_paths' => array_values(array_filter(array_map(
+        static fn(string $value): string => trim($value),
+        explode(',', (string) env('DEEP_LINK_IOS_PATHS', '/product/*,/restaurant/*,/vote/*,/group-order/*,/api/v1/user/products/*,/api/v1/user/supermarket/products/*,/api/v1/user/restaurants/*,/api/v1/user/restaurants/votes/*,/api/v1/user/restaurants/group-orders/*,/api/v1/user/supermarket/stores/*')),
+    ))),
+
     'resolver_cache_ttl_seconds' => (int) env('DEEP_LINK_RESOLVER_CACHE_TTL_SECONDS', 300),
 ];

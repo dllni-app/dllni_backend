@@ -17,8 +17,6 @@ final class MasterProductInfolist
             ->components([
                 TextEntry::make('name')
                     ->label(__('supermarket_admin.form.master_product_name')),
-                TextEntry::make('barcode')
-                    ->label(__('supermarket_admin.form.master_product_barcode')),
                 TextEntry::make('unit')
                     ->label(__('supermarket_admin.form.master_product_unit'))
                     ->formatStateUsing(fn (?MasterProductUnit $state): string => $state

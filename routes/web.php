@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\DeepLinks\OpenDeepLinkController;
 use App\Http\Controllers\DeepLinks\ShortLinkRedirectController;
@@ -13,6 +14,46 @@ Route::get('/reset-password/{token}', function (string $token, Illuminate\Http\R
     return redirect()->to(config('app.frontend_url', url('/')) . '/reset-password?token=' . $token . '&email=' . urlencode($request->query('email', '')));
 })->name('password.reset');
 
+Route::get('/.well-known/assetlinks.json', function (): JsonResponse {
+    $packageName = (string) config('deep_links.android_app_package_name', '');
+    $fingerprints = array_values((array) config('deep_links.android_sha256_cert_fingerprints', []));
+
+    if ($packageName === '' || $fingerprints === []) {
+        return response()->json([]);
+    }
+
+    return response()->json([
+        [
+            'relation' => ['delegate_permission/common.handle_all_urls'],
+            'target' => [
+                'namespace' => 'android_app',
+                'package_name' => $packageName,
+                'sha256_cert_fingerprints' => $fingerprints,
+            ],
+        ],
+    ]);
+});
+
+Route::get('/.well-known/apple-app-site-association', function (): JsonResponse {
+    $appIds = array_values((array) config('deep_links.ios_app_ids', []));
+    $paths = array_values((array) config('deep_links.ios_paths', []));
+
+    $details = [];
+    if ($appIds !== []) {
+        $details[] = [
+            'appIDs' => $appIds,
+            'paths' => $paths,
+        ];
+    }
+
+    return response()->json([
+        'applinks' => [
+            'apps' => [],
+            'details' => $details,
+        ],
+    ]);
+});
+
 Route::get('/product/{identifier}', OpenDeepLinkController::class)
     ->where('identifier', '[A-Za-z0-9\-_.]+')
     ->defaults('type', 'product')
@@ -22,6 +63,11 @@ Route::get('/restaurant/{identifier}', OpenDeepLinkController::class)
     ->where('identifier', '[A-Za-z0-9\-_.]+')
     ->defaults('type', 'restaurant')
     ->name('deep-links.restaurant');
+
+Route::get('/store/{identifier}', OpenDeepLinkController::class)
+    ->where('identifier', '[A-Za-z0-9\-_.]+')
+    ->defaults('type', 'store')
+    ->name('deep-links.store');
 
 Route::get('/vote/{identifier}', OpenDeepLinkController::class)
     ->where('identifier', '[A-Za-z0-9\-_.]+')

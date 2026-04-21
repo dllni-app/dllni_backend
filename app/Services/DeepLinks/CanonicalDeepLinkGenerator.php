@@ -28,6 +28,11 @@ final class CanonicalDeepLinkGenerator
         return $this->build('group-order', (string) $idOrSlug);
     }
 
+    public function store(int|string $idOrSlug): string
+    {
+        return $this->build('store', (string) $idOrSlug);
+    }
+
     private function build(string $resourceType, string $identifier): string
     {
         $host = (string) config('deep_links.canonical_host', 'app.dllni.com');

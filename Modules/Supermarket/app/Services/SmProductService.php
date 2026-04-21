@@ -86,7 +86,7 @@ final class SmProductService
                     'category_id' => $category->id,
                     'master_product_id' => $masterProduct->id,
                     'name' => $masterProduct->name,
-                    'barcode' => $masterProduct->barcode ?? '',
+                    'barcode' => null,
                     'source_type' => SmProductSource::CatalogSearch->value,
                     'description' => $masterProduct->description ?? '',
                     'price' => 0,

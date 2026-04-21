@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
+use Modules\Supermarket\Models\SmStore;
+use App\Models\User;
 use function Pest\Laravel\get;
+use function Pest\Laravel\getJson;
 
 it('redirects canonical restaurant links to configured landing url', function (): void {
     config()->set('deep_links.web_landing_url', 'https://app.dllni.com/open');
@@ -45,4 +48,43 @@ it('redirects canonical product links', function (): void {
 
     $response->assertRedirect();
     expect($response->headers->get('Location'))->toContain('deep_link=https%3A%2F%2Fapp.dllni.com%2Fproduct%2F' . $product->id);
+});
+
+it('redirects browser requests on API product links to canonical web link', function (): void {
+    $restaurant = Restaurant::factory()->create(['is_active' => true]);
+    $product = Product::factory()->create([
+        'restaurant_id' => $restaurant->id,
+        'is_available' => true,
+    ]);
+
+    $response = get('/api/v1/user/products/' . $product->id);
+
+    $response->assertRedirect('/product/' . $product->id);
+});
+
+it('keeps JSON response for API clients on product links', function (): void {
+    $restaurant = Restaurant::factory()->create(['is_active' => true]);
+    $product = Product::factory()->create([
+        'restaurant_id' => $restaurant->id,
+        'is_available' => true,
+    ]);
+
+    getJson('/api/v1/user/products/' . $product->id)
+        ->assertOk()
+        ->assertHeader('content-type', fn(string $value): bool => str_contains($value, 'application/json'));
+});
+
+it('redirects browser requests on API supermarket store links to canonical web link', function (): void {
+    $owner = User::factory()->create();
+    $store = SmStore::query()->create([
+        'owner_user_id' => $owner->id,
+        'name' => 'Browser Redirect Store',
+        'slug' => 'browser-redirect-store',
+        'is_active' => true,
+        'suspension_until' => null,
+    ]);
+
+    $response = get('/api/v1/user/supermarket/stores/' . $store->id);
+
+    $response->assertRedirect('/store/' . $store->id);
 });

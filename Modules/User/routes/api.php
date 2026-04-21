@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Middleware\RedirectBrowserDeepLinkApiRequests;
 use Modules\User\Http\Controllers\API\DiscoverRestaurantsController;
 use Modules\User\Http\Controllers\API\LoginController;
 use Modules\User\Http\Controllers\API\LoginVerifyController;
@@ -138,10 +139,12 @@ Route::prefix('v1/user')->group(function (): void {
 
     Route::get('supermarket/stores', SmStoresIndexController::class);
     Route::get('supermarket/products/search', SmProductsSearchController::class);
-    Route::get('supermarket/stores/{store}', SmStoreShowController::class);
+    Route::get('supermarket/stores/{store}', SmStoreShowController::class)
+        ->middleware(RedirectBrowserDeepLinkApiRequests::class);
     Route::get('supermarket/products/{product}/similar', SmProductSimilarSearchController::class);
     Route::get('supermarket/products/{product}/compare', SmProductSimilarSearchController::class);
-    Route::get('supermarket/products/{product}', SmProductShowController::class);
+    Route::get('supermarket/products/{product}', SmProductShowController::class)
+        ->middleware(RedirectBrowserDeepLinkApiRequests::class);
 
     Route::prefix('restaurants/home')->group(function (): void {
         Route::get('categories', UserRestaurantHomeCategoriesController::class);
@@ -156,11 +159,16 @@ Route::prefix('v1/user')->group(function (): void {
 
     Route::get('restaurants/discover', DiscoverRestaurantsController::class);
     Route::get('restaurants/votes/suggestions', RestaurantGroupVoteSuggestionsController::class);
-    Route::get('restaurants/votes/{vote}', RestaurantGroupVoteShowController::class)->whereNumber('vote');
+    Route::get('restaurants/votes/{vote}', RestaurantGroupVoteShowController::class)
+        ->whereNumber('vote')
+        ->middleware(RedirectBrowserDeepLinkApiRequests::class);
     Route::get('restaurants/coupons', UserRestaurantActiveCouponsController::class);
     Route::get('restaurants/{restaurant}/menu-sections', UserRestaurantMenuSectionsController::class)->whereNumber('restaurant');
-    Route::get('restaurants/{restaurant}', UserRestaurantDetailsController::class)->whereNumber('restaurant');
-    Route::get('products/{product}', UserProductDetailsController::class);
+    Route::get('restaurants/{restaurant}', UserRestaurantDetailsController::class)
+        ->whereNumber('restaurant')
+        ->middleware(RedirectBrowserDeepLinkApiRequests::class);
+    Route::get('products/{product}', UserProductDetailsController::class)
+        ->middleware(RedirectBrowserDeepLinkApiRequests::class);
 
     Route::get('offers', UserMarketingOffersIndexController::class);
     Route::get('offers/{marketingOffer}', UserMarketingOfferShowController::class);
@@ -262,7 +270,9 @@ Route::prefix('v1/user')->group(function (): void {
         Route::post('restaurants/group-orders', RestaurantGroupOrderStoreController::class);
         Route::post('restaurants/group-orders/join', RestaurantGroupOrderJoinController::class);
         Route::get('restaurants/group-orders/active', RestaurantGroupOrderMyActiveController::class);
-        Route::get('restaurants/group-orders/{groupOrder}', RestaurantGroupOrderShowController::class)->whereNumber('groupOrder');
+        Route::get('restaurants/group-orders/{groupOrder}', RestaurantGroupOrderShowController::class)
+            ->whereNumber('groupOrder')
+            ->middleware(RedirectBrowserDeepLinkApiRequests::class);
         Route::post('restaurants/group-orders/{groupOrder}/items', RestaurantGroupOrderItemStoreController::class)->whereNumber('groupOrder');
         Route::patch('restaurants/group-orders/{groupOrder}/items/{itemId}', RestaurantGroupOrderItemUpdateController::class)->whereNumber(['groupOrder', 'itemId']);
         Route::delete('restaurants/group-orders/{groupOrder}/items/{itemId}', RestaurantGroupOrderItemDestroyController::class)->whereNumber(['groupOrder', 'itemId']);

@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace Modules\Supermarket\Http\Controllers\API\StoreOwner;
 
 use App\Models\MasterProduct;
-use Illuminate\Http\JsonResponse;
 use Modules\Supermarket\Http\Requests\StoreOwnerMasterProductSearchRequest;
+use Modules\Supermarket\Http\Resources\MasterProductResource;
 use Modules\Supermarket\Services\StoreOwnerContextService;
 use Mrmarchone\LaravelAutoCrud\Helpers\SearchTermEscaper;
 
 final class StoreOwnerMasterProductSearchController
 {
-    public function __invoke(StoreOwnerMasterProductSearchRequest $request, StoreOwnerContextService $context): JsonResponse
+    public function __invoke(StoreOwnerMasterProductSearchRequest $request, StoreOwnerContextService $context)
     {
         $context->owner();
 
@@ -24,19 +24,14 @@ final class StoreOwnerMasterProductSearchController
         $masterProducts = MasterProduct::query()
             ->where('is_active', true)
             ->where(function ($query) use ($escapedIndex): void {
-                $query->whereRaw("name LIKE ? ESCAPE '!'", ["{$escapedIndex}%"])
-                    ->orWhereRaw("barcode LIKE ? ESCAPE '!'", ["{$escapedIndex}%"]);
+                $query->whereRaw("name LIKE ? ESCAPE '!'", ["{$escapedIndex}%"]);
             })
             ->orderByRaw("CASE WHEN name LIKE ? ESCAPE '!' THEN 0 ELSE 1 END", ["{$escapedIndex}%"])
             ->orderBy('name')
-            ->paginate($perPage)
-            ->through(static fn (MasterProduct $masterProduct): array => [
-                'id' => $masterProduct->id,
-                'masterProductId' => $masterProduct->id,
-                'name' => $masterProduct->name,
-                'barcode' => $masterProduct->barcode,
-            ]);
+            ->paginate($perPage);
 
-        return response()->json($masterProducts);
+        return MasterProductResource::collection($masterProducts)
+            ->response()
+            ->setStatusCode(200);
     }
 }

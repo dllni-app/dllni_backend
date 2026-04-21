@@ -15,7 +15,6 @@ final class MasterProductFactory extends Factory
     {
         return [
             'name' => fake()->words(2, true),
-            'barcode' => fake()->ean13(),
             'unit' => fake()->randomElement(['piece', 'gram', 'kilogram', 'milliliter', 'liter', 'pack']),
             'brand' => fake()->optional()->company(),
             'description' => fake()->optional()->sentence(),

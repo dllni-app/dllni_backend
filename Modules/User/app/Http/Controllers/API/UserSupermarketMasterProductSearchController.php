@@ -21,17 +21,15 @@ final class UserSupermarketMasterProductSearchController
         $masterProducts = MasterProduct::query()
             ->where('is_active', true)
             ->where(function ($query) use ($escapedIndex): void {
-                $query->whereRaw("name LIKE ? ESCAPE '!'", ["{$escapedIndex}%"])
-                    ->orWhereRaw("barcode LIKE ? ESCAPE '!'", ["{$escapedIndex}%"]);
+                $query->whereRaw("name LIKE ? ESCAPE '!'", ["{$escapedIndex}%"]);
             })
             ->orderByRaw("CASE WHEN name LIKE ? ESCAPE '!' THEN 0 ELSE 1 END", ["{$escapedIndex}%"])
             ->orderBy('name')
             ->paginate($perPage)
-            ->through(static fn (MasterProduct $masterProduct): array => [
+            ->through(static fn(MasterProduct $masterProduct): array => [
                 'id' => $masterProduct->id,
                 'masterProductId' => $masterProduct->id,
                 'name' => $masterProduct->name,
-                'barcode' => $masterProduct->barcode,
             ]);
 
         return response()->json($masterProducts);

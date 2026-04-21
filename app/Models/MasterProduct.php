@@ -19,7 +19,6 @@ final class MasterProduct extends Model implements HasMedia
 
     protected $fillable = [
         'name',
-        'barcode',
         'unit',
         'brand',
         'description',

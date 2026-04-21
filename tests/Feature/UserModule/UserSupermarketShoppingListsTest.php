@@ -181,14 +181,14 @@ it('deletes a shopping list line item', function (): void {
         ->assertJsonPath('data.items', []);
 });
 
-it('searches active master products for shopping list picker by name and barcode prefix', function (): void {
+it('searches active master products for shopping list picker by name prefix', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
-    MasterProductFactory::new()->create(['name' => 'Sesame Oil', 'barcode' => '5550000000001', 'is_active' => true]);
-    MasterProductFactory::new()->create(['name' => 'Soap', 'barcode' => '4440000000001', 'is_active' => true]);
-    MasterProductFactory::new()->create(['name' => 'Tea', 'barcode' => '5559999999999', 'is_active' => true]);
-    MasterProductFactory::new()->create(['name' => 'Sealant', 'barcode' => '5551111111111', 'is_active' => false]);
+    MasterProductFactory::new()->create(['name' => 'Sesame Oil', 'is_active' => true]);
+    MasterProductFactory::new()->create(['name' => 'Soap', 'is_active' => true]);
+    MasterProductFactory::new()->create(['name' => 'Tea', 'is_active' => true]);
+    MasterProductFactory::new()->create(['name' => 'Sealant', 'is_active' => false]);
 
     $nameResponse = $this->getJson('/api/v1/user/supermarket/master-products/search?index=se');
 
@@ -199,7 +199,6 @@ it('searches active master products for shopping list picker by name and barcode
                 'id',
                 'masterProductId',
                 'name',
-                'barcode',
             ],
         ],
     ]);
@@ -209,15 +208,6 @@ it('searches active master products for shopping list picker by name and barcode
     expect($names)->not->toContain('Soap');
     expect($names)->not->toContain('Tea');
     expect($names)->not->toContain('Sealant');
-
-    $barcodeResponse = $this->getJson('/api/v1/user/supermarket/master-products/search?index=555');
-
-    $barcodeResponse->assertOk();
-    $barcodeMatches = collect($barcodeResponse->json('data'))->pluck('barcode')->all();
-    expect($barcodeMatches)->toContain('5550000000001');
-    expect($barcodeMatches)->toContain('5559999999999');
-    expect($barcodeMatches)->not->toContain('4440000000001');
-    expect($barcodeMatches)->not->toContain('5551111111111');
 });
 
 it('returns seeded arabic bread master products for the shopping list picker', function (): void {

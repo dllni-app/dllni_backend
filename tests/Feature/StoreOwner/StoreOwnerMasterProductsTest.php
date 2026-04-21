@@ -30,10 +30,10 @@ beforeEach(function (): void {
 });
 
 it('searches active master products by name prefix', function (): void {
-    MasterProductFactory::new()->create(['name' => 'Soap', 'barcode' => '7890000000001', 'is_active' => true]);
-    MasterProductFactory::new()->create(['name' => 'Sesame Oil', 'barcode' => '7890000000002', 'is_active' => true]);
-    MasterProductFactory::new()->create(['name' => 'Tea', 'barcode' => '7890000000003', 'is_active' => true]);
-    MasterProductFactory::new()->create(['name' => 'Sealant', 'barcode' => '7890000000004', 'is_active' => false]);
+    MasterProductFactory::new()->create(['name' => 'Soap', 'is_active' => true]);
+    MasterProductFactory::new()->create(['name' => 'Sesame Oil', 'is_active' => true]);
+    MasterProductFactory::new()->create(['name' => 'Tea', 'is_active' => true]);
+    MasterProductFactory::new()->create(['name' => 'Sealant', 'is_active' => false]);
 
     $response = $this->getJson('/api/v1/store-owner/master-products/search?index=se');
 
@@ -52,24 +52,23 @@ it('searches active master products by name prefix', function (): void {
                 'id',
                 'masterProductId',
                 'name',
-                'barcode',
             ],
         ],
     ]);
 });
 
-it('searches active master products by barcode prefix', function (): void {
-    MasterProductFactory::new()->create(['name' => 'Orange Juice', 'barcode' => '5551230000001', 'is_active' => true]);
-    MasterProductFactory::new()->create(['name' => 'Apple Juice', 'barcode' => '4441230000001', 'is_active' => true]);
+it('does not match inactive products when searching by prefix', function (): void {
+    MasterProductFactory::new()->create(['name' => 'Orange Juice', 'is_active' => true]);
+    MasterProductFactory::new()->create(['name' => 'Orange Jam', 'is_active' => false]);
 
-    $response = $this->getJson('/api/v1/store-owner/master-products/search?index=555');
+    $response = $this->getJson('/api/v1/store-owner/master-products/search?index=orange');
 
     $response->assertOk();
 
-    $barcodes = collect($response->json('data'))->pluck('barcode')->all();
+    $names = collect($response->json('data'))->pluck('name')->all();
 
-    expect($barcodes)->toContain('5551230000001');
-    expect($barcodes)->not->toContain('4441230000001');
+    expect($names)->toContain('Orange Juice');
+    expect($names)->not->toContain('Orange Jam');
 });
 
 it('returns seeded arabic bread master products on store-owner search', function (): void {
@@ -94,14 +93,12 @@ it('returns seeded arabic bread master products on store-owner search', function
 it('creates store products from master products and links master_product_id', function (): void {
     $firstMasterProduct = MasterProductFactory::new()->create([
         'name' => 'Sparkling Water',
-        'barcode' => '1234567890123',
         'description' => 'Natural sparkling water',
         'is_active' => true,
     ]);
 
     $secondMasterProduct = MasterProductFactory::new()->create([
         'name' => 'Mineral Water',
-        'barcode' => '1234567890999',
         'description' => 'Natural mineral water',
         'is_active' => true,
     ]);
@@ -120,9 +117,10 @@ it('creates store products from master products and links master_product_id', fu
     $response->assertJsonPath('data.0.discountedPrice', 0);
     $response->assertJsonPath('data.0.lowStockThreshold', 0);
     $response->assertJsonPath('data.0.isAvailable', true);
+    $response->assertJsonPath('data.0.barcode', null);
     $response->assertJsonPath('data.1.masterProductId', $secondMasterProduct->id);
     $response->assertJsonPath('data.1.name', 'Mineral Water');
-    $response->assertJsonPath('data.1.barcode', '1234567890999');
+    $response->assertJsonPath('data.1.barcode', null);
     $response->assertJsonPath('data.1.stockQuantity', 0);
 
     $this->assertDatabaseHas('sm_products', [
@@ -130,7 +128,7 @@ it('creates store products from master products and links master_product_id', fu
         'category_id' => $this->category->id,
         'master_product_id' => $firstMasterProduct->id,
         'name' => 'Sparkling Water',
-        'barcode' => '1234567890123',
+        'barcode' => null,
         'price' => '0.00',
         'discounted_price' => '0.00',
         'stock_quantity' => 0,
@@ -143,7 +141,7 @@ it('creates store products from master products and links master_product_id', fu
         'category_id' => $this->category->id,
         'master_product_id' => $secondMasterProduct->id,
         'name' => 'Mineral Water',
-        'barcode' => '1234567890999',
+        'barcode' => null,
         'price' => '0.00',
         'discounted_price' => '0.00',
         'stock_quantity' => 0,
@@ -167,7 +165,6 @@ it('fails when owner has no store', function (): void {
 it('creates product from single master product id and fills defaults', function (): void {
     $masterProduct = MasterProductFactory::new()->create([
         'name' => 'Greek Yogurt',
-        'barcode' => '9991112223334',
         'description' => 'High protein yogurt',
         'is_active' => true,
     ]);
@@ -180,7 +177,7 @@ it('creates product from single master product id and fills defaults', function 
     $response->assertJsonCount(1, 'data');
     $response->assertJsonPath('data.0.masterProductId', $masterProduct->id);
     $response->assertJsonPath('data.0.name', 'Greek Yogurt');
-    $response->assertJsonPath('data.0.barcode', '9991112223334');
+    $response->assertJsonPath('data.0.barcode', null);
     $response->assertJsonPath('data.0.description', 'High protein yogurt');
     $response->assertJsonPath('data.0.stockQuantity', 0);
     $response->assertJsonPath('data.0.price', 0);
@@ -194,7 +191,7 @@ it('creates product from single master product id and fills defaults', function 
         'category_id' => $this->category->id,
         'master_product_id' => $masterProduct->id,
         'name' => 'Greek Yogurt',
-        'barcode' => '9991112223334',
+        'barcode' => null,
         'description' => 'High protein yogurt',
         'price' => '0.00',
         'discounted_price' => '0.00',
