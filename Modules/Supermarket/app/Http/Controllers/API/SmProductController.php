@@ -73,7 +73,7 @@ final class SmProductController
         $result = $this->service->importFromSpreadsheet(
             $request->file('file'),
             (int) $request->integer('storeId'),
-            (int) $request->integer('categoryId')
+            $request->filled('categoryId') ? (int) $request->integer('categoryId') : null
         );
 
         return response()->json($result, Response::HTTP_CREATED);
@@ -123,7 +123,7 @@ final class SmProductController
 
         return array_values(array_filter(
             $galleryImages,
-            static fn (mixed $file): bool => $file instanceof UploadedFile
+            static fn(mixed $file): bool => $file instanceof UploadedFile
         ));
     }
 
@@ -185,7 +185,7 @@ final class SmProductController
             return $this->paginateCollection(collect(), $perPage, $page, $request->query());
         }
 
-        $ids = array_values(array_unique(array_map(static fn (array $row): int => (int) $row['id'], $results)));
+        $ids = array_values(array_unique(array_map(static fn(array $row): int => (int) $row['id'], $results)));
 
         $products = SmProduct::query()
             ->whereIn('id', $ids)
@@ -205,7 +205,7 @@ final class SmProductController
 
                 return $product;
             })
-            ->filter(fn ($item): bool => $item instanceof SmProduct)
+            ->filter(fn($item): bool => $item instanceof SmProduct)
             ->values();
 
         return $this->paginateCollection($ordered, $perPage, $page, $request->query());

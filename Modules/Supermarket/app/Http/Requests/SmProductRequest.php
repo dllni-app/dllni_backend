@@ -17,7 +17,7 @@ final class SmProductRequest extends FormRequest
     {
         return [
             'storeId' => 'sometimes|required|integer|exists:sm_stores,id',
-            'categoryId' => 'sometimes|required|integer|exists:sm_categories,id',
+            'categoryId' => 'nullable|integer|exists:sm_categories,id',
             'masterProductId' => 'nullable|integer|exists:master_products,id',
             'name' => 'sometimes|required|string|max:255',
             'barcode' => 'nullable|string|max:255',

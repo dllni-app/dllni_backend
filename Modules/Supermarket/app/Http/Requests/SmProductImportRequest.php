@@ -17,7 +17,7 @@ final class SmProductImportRequest extends FormRequest
     {
         return [
             'storeId' => 'required|integer|exists:sm_stores,id',
-            'categoryId' => 'required|integer|exists:sm_categories,id',
+            'categoryId' => 'nullable|integer|exists:sm_categories,id',
             'file' => 'required|file|mimes:csv,txt,xlsx,xls|max:10240',
         ];
     }

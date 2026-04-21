@@ -547,9 +547,9 @@ Returns a collection of created supermarket product resources under `data[]`, ea
 
 Server-side behavior for this endpoint:
 - `storeId` is not accepted from client. Store is resolved as the first owner store ordered by `id`.
-- Category is resolved as the first category in that store ordered by `id`.
+- Category is derived from each selected `masterProductId`.
+- If no matching derived category exists in the owner store, backend creates one automatically using slug `master-product-{masterProductId}`.
 - If the owner has no store, request fails with `422`.
-- If the selected store has no categories, request fails with `422`.
 - Requested master products must exist and be active; otherwise request fails with `422`.
 
 ### 8.2 Low stock alerts

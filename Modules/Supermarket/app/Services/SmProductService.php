@@ -41,19 +41,8 @@ final class SmProductService
             ]);
         }
 
-        $category = SmCategory::query()
-            ->where('store_id', $store->id)
-            ->orderBy('id')
-            ->first();
-
-        if (! $category) {
-            throw ValidationException::withMessages([
-                'category' => ['Cannot create products because the selected store has no categories.'],
-            ]);
-        }
-
         $requestedMasterProductIds = collect($masterProductIds)
-            ->map(fn (mixed $id): int => (int) $id)
+            ->map(fn(mixed $id): int => (int) $id)
             ->unique()
             ->values();
 
@@ -64,7 +53,7 @@ final class SmProductService
             ->keyBy('id');
 
         $missingOrInactiveMasterProductIds = $requestedMasterProductIds
-            ->reject(fn (int $id): bool => $activeMasterProducts->has($id))
+            ->reject(fn(int $id): bool => $activeMasterProducts->has($id))
             ->values();
 
         if ($missingOrInactiveMasterProductIds->isNotEmpty()) {
@@ -75,15 +64,16 @@ final class SmProductService
 
         $defaultExpiresAt = CarbonImmutable::now()->addYear()->toDateTimeString();
 
-        return DB::transaction(function () use ($activeMasterProducts, $requestedMasterProductIds, $store, $category, $defaultExpiresAt): Collection {
+        return DB::transaction(function () use ($activeMasterProducts, $requestedMasterProductIds, $store, $defaultExpiresAt): Collection {
             $products = collect();
 
             foreach ($requestedMasterProductIds as $masterProductId) {
                 $masterProduct = $activeMasterProducts->get($masterProductId);
+                $categoryId = $this->resolveCategoryIdFromMasterProduct($store, $masterProduct);
 
                 $product = SmProduct::query()->create([
                     'store_id' => $store->id,
-                    'category_id' => $category->id,
+                    'category_id' => $categoryId,
                     'master_product_id' => $masterProduct->id,
                     'name' => $masterProduct->name,
                     'barcode' => null,
@@ -105,10 +95,49 @@ final class SmProductService
         });
     }
 
+    private function resolveCategoryIdFromMasterProduct(SmStore $store, MasterProduct $masterProduct): int
+    {
+        $category = SmCategory::query()->firstOrCreate(
+            [
+                'store_id' => $store->id,
+                'slug' => 'master-product-' . $masterProduct->id,
+            ],
+            [
+                'name' => $masterProduct->name,
+                'description' => null,
+                'sort_order' => 0,
+                'image_path' => null,
+                'is_active' => true,
+            ]
+        );
+
+        return (int) $category->id;
+    }
+
     public function store(SmProductData $data, array $images = []): SmProduct
     {
         return DB::transaction(function () use ($data, $images) {
-            $product = SmProduct::create($data->onlyModelAttributes());
+            $attributes = $data->onlyModelAttributes();
+
+            if (isset($attributes['master_product_id'])) {
+                if (! isset($attributes['store_id'])) {
+                    throw ValidationException::withMessages([
+                        'storeId' => ['Store is required when creating from a master product.'],
+                    ]);
+                }
+
+                $masterProduct = $this->findMasterProductOrFail((int) $attributes['master_product_id']);
+                $attributes['category_id'] = $this->resolveCategoryIdFromMasterProduct(
+                    $this->findStoreOrFail((int) $attributes['store_id']),
+                    $masterProduct
+                );
+            } elseif (! isset($attributes['category_id']) && isset($attributes['store_id'])) {
+                $attributes['category_id'] = $this->resolveDefaultCategoryIdForStore(
+                    $this->findStoreOrFail((int) $attributes['store_id'])
+                );
+            }
+
+            $product = SmProduct::create($attributes);
 
             foreach ($images as $image) {
                 $product->addMedia($image)->toMediaCollection(SmProduct::IMAGE_COLLECTION);
@@ -127,7 +156,19 @@ final class SmProductService
     {
         return DB::transaction(function () use ($data, $product, $images) {
             $oldAttributes = $product->getAttributes();
-            tap($product)->update($data->onlyModelAttributes());
+            $attributes = $data->onlyModelAttributes();
+
+            if (isset($attributes['master_product_id'])) {
+                $storeId = (int) ($attributes['store_id'] ?? $product->store_id);
+                $masterProduct = $this->findMasterProductOrFail((int) $attributes['master_product_id']);
+
+                $attributes['category_id'] = $this->resolveCategoryIdFromMasterProduct(
+                    $this->findStoreOrFail($storeId),
+                    $masterProduct
+                );
+            }
+
+            tap($product)->update($attributes);
 
             if ($images !== []) {
                 $product->clearMediaCollection(SmProduct::IMAGE_COLLECTION);
@@ -143,7 +184,7 @@ final class SmProductService
         });
     }
 
-    public function importFromSpreadsheet(UploadedFile $file, int $storeId, int $categoryId): array
+    public function importFromSpreadsheet(UploadedFile $file, int $storeId, ?int $categoryId = null): array
     {
         $importPath = $this->buildImportPath($file);
 
@@ -161,18 +202,19 @@ final class SmProductService
             ]);
         }
 
-        $rows = $rawRows->map(fn (array $row): array => $this->normalizeRow($row));
+        $rows = $rawRows->map(fn(array $row): array => $this->normalizeRow($row));
         $missingColumns = $this->missingRequiredColumns($rows->first());
 
         if ($missingColumns !== []) {
             throw ValidationException::withMessages([
-                'file' => ['Missing required column(s): '.implode(', ', $missingColumns).'.'],
+                'file' => ['Missing required column(s): ' . implode(', ', $missingColumns) . '.'],
             ]);
         }
 
         return DB::transaction(function () use ($rows, $storeId, $categoryId): array {
             $importedCount = 0;
             $failedRows = [];
+            $resolvedCategoryId = $categoryId ?? $this->resolveDefaultCategoryIdForStore($this->findStoreOrFail($storeId));
 
             foreach ($rows as $index => $row) {
                 $name = mb_trim((string) ($row['name'] ?? ''));
@@ -185,7 +227,7 @@ final class SmProductService
 
                 $product = SmProduct::query()->create([
                     'store_id' => $storeId,
-                    'category_id' => $categoryId,
+                    'category_id' => $resolvedCategoryId,
                     'name' => $name,
                     'description' => mb_trim((string) ($row['description'] ?? '')) ?: null,
                     'source_type' => SmProductSource::BulkImport->value,
@@ -251,7 +293,7 @@ final class SmProductService
             ]);
         }
 
-        $importPath = $tempPath.'.'.$extension;
+        $importPath = $tempPath . '.' . $extension;
 
         if (! copy($file->getRealPath(), $importPath)) {
             @unlink($tempPath);
@@ -264,5 +306,50 @@ final class SmProductService
         @unlink($tempPath);
 
         return $importPath;
+    }
+
+    private function findMasterProductOrFail(int $masterProductId): MasterProduct
+    {
+        $masterProduct = MasterProduct::query()->find($masterProductId);
+
+        if (! $masterProduct) {
+            throw ValidationException::withMessages([
+                'masterProductId' => ['Selected master product does not exist.'],
+            ]);
+        }
+
+        return $masterProduct;
+    }
+
+    private function findStoreOrFail(int $storeId): SmStore
+    {
+        $store = SmStore::query()->find($storeId);
+
+        if (! $store) {
+            throw ValidationException::withMessages([
+                'storeId' => ['Selected store does not exist.'],
+            ]);
+        }
+
+        return $store;
+    }
+
+    private function resolveDefaultCategoryIdForStore(SmStore $store): int
+    {
+        $category = SmCategory::query()->firstOrCreate(
+            [
+                'store_id' => $store->id,
+                'slug' => 'default-products',
+            ],
+            [
+                'name' => 'Default Products',
+                'description' => null,
+                'sort_order' => 0,
+                'image_path' => null,
+                'is_active' => true,
+            ]
+        );
+
+        return (int) $category->id;
     }
 }

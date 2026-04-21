@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\User;
+use Database\Factories\MasterProductFactory;
 use Database\Factories\SmCategoryFactory;
 use Database\Factories\SmProductFactory;
 use Database\Factories\SmStoreFactory;
@@ -54,6 +55,38 @@ it('creates a product', function (): void {
     $this->assertDatabaseHas('sm_products', [
         'name' => 'Test Product',
         'store_id' => $store->id,
+    ]);
+});
+
+it('derives category from master product on create when masterProductId is provided', function (): void {
+    $store = SmStoreFactory::new()->create();
+    $masterProduct = MasterProductFactory::new()->create([
+        'name' => 'Olive Oil',
+    ]);
+
+    $payload = [
+        'storeId' => $store->id,
+        'masterProductId' => $masterProduct->id,
+        'name' => 'Olive Oil',
+        'sourceType' => 'catalog_search',
+        'price' => 9.99,
+        'stockQuantity' => 100,
+        'lowStockThreshold' => 10,
+    ];
+
+    $response = $this->postJson('/api/v1/sm-products', $payload);
+
+    $response->assertCreated();
+    $this->assertDatabaseHas('sm_categories', [
+        'store_id' => $store->id,
+        'slug' => 'master-product-' . $masterProduct->id,
+        'name' => 'Olive Oil',
+    ]);
+
+    $this->assertDatabaseHas('sm_products', [
+        'store_id' => $store->id,
+        'master_product_id' => $masterProduct->id,
+        'name' => 'Olive Oil',
     ]);
 });
 
@@ -191,6 +224,43 @@ CSV;
     $this->assertDatabaseHas('sm_products', [
         'store_id' => $store->id,
         'category_id' => $category->id,
+        'name' => 'Apple',
+        'source_type' => 'bulk_import',
+    ]);
+});
+
+it('imports products without categoryId by creating default store category', function (): void {
+    if (! class_exists(Rap2hpoutre\FastExcel\FastExcel::class)) {
+        $this->markTestSkipped('FastExcel is not installed.');
+    }
+
+    $store = SmStoreFactory::new()->create();
+
+    $csv = <<<'CSV'
+name,description,image
+Apple,Fresh and crispy,
+CSV;
+
+    $response = $this->post('/api/v1/sm-products/import', [
+        'storeId' => $store->id,
+        'file' => UploadedFile::fake()->createWithContent('products.csv', $csv),
+    ], [
+        'Accept' => 'application/json',
+    ]);
+
+    $response->assertCreated()
+        ->assertJsonPath('totalRows', 1)
+        ->assertJsonPath('importedCount', 1)
+        ->assertJsonPath('failedRows', []);
+
+    $this->assertDatabaseHas('sm_categories', [
+        'store_id' => $store->id,
+        'slug' => 'default-products',
+        'name' => 'Default Products',
+    ]);
+
+    $this->assertDatabaseHas('sm_products', [
+        'store_id' => $store->id,
         'name' => 'Apple',
         'source_type' => 'bulk_import',
     ]);
