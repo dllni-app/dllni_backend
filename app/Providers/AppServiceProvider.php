@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Models\Dispute;
+use App\Models\MasterProduct;
 use App\Models\User;
 use App\Models\Worker;
 use Illuminate\Database\Eloquent\Model;
@@ -125,6 +126,7 @@ final class AppServiceProvider extends ServiceProvider
             'user' => User::class,
             'worker' => Worker::class,
             'dispute' => Dispute::class,
+            'master_product' => MasterProduct::class,
             'category' => Category::class,
             'offer' => Offer::class,
             'product' => Product::class,
