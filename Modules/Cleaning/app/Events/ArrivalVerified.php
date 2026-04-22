@@ -9,17 +9,15 @@ use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-final class CleaningBookingTrackingUpdated implements ShouldBroadcast
+final class ArrivalVerified implements ShouldBroadcast
 {
     use Dispatchable;
     use SerializesModels;
 
-    /**
-     * @param  array<string, mixed>  $tracking
-     */
     public function __construct(
         public int $cleaningBookingId,
-        public array $tracking,
+        public ?int $workerId,
+        public string $arrivedAt,
     ) {}
 
     /**
@@ -27,14 +25,20 @@ final class CleaningBookingTrackingUpdated implements ShouldBroadcast
      */
     public function broadcastOn(): array
     {
-        return [
+        $channels = [
             new PrivateChannel('cleaning-booking.' . $this->cleaningBookingId),
         ];
+
+        if ($this->workerId !== null) {
+            $channels[] = new PrivateChannel('cleaning-worker.' . $this->workerId);
+        }
+
+        return $channels;
     }
 
     public function broadcastAs(): string
     {
-        return 'CleaningBookingTrackingUpdated';
+        return 'ArrivalVerified';
     }
 
     /**
@@ -43,7 +47,10 @@ final class CleaningBookingTrackingUpdated implements ShouldBroadcast
     public function broadcastWith(): array
     {
         return [
-            'tracking' => $this->tracking,
+            'cleaningBookingId' => $this->cleaningBookingId,
+            'workerId' => $this->workerId,
+            'arrivedAt' => $this->arrivedAt,
+            'version' => 1,
         ];
     }
 }

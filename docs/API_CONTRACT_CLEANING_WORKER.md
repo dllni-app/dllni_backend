@@ -290,11 +290,15 @@ Only the **customer** and the **assigned worker** (and admins, if implemented) a
 
 | Channel (private)                | Events (broadcast by server)     | When |
 |----------------------------------|----------------------------------|------|
-| `private-cleaning-booking.{id}`  | `CleaningBookingTrackingUpdated` | Booking tracking state changes (status/timestamps) on accept, reject, start-travel, arrive, start-work, complete, cancel. |
+| `private-cleaning-booking.{id}`  | `CleaningBookingTrackingUpdated` | Booking tracking state changes (status/timestamps) on accept, reject, start-travel, arrive, start-work, complete, cancel, and customer gate actions. |
 | `private-cleaning-booking.{id}`  | `WorkerLocationUpdated`          | Worker sends location via `POST …/location` (after start-travel). |
 | `private-cleaning-booking.{id}`  | `WorkerArrived`                  | Worker taps "I have arrived" via `POST …/arrive`. |
+| `private-cleaning-booking.{id}`  | `cleaning_order.awaiting_start_verification` | After `POST …/arrive`; customer should enter the security code from `GET …/security-code`. |
+| `private-cleaning-booking.{id}`  | `cleaning_order.awaiting_customer_completion` | After worker `POST …/complete`; customer confirms / rejects / extends on user API. |
+| `private-cleaning-booking.{id}`  | `ArrivalVerified` | After customer confirms the 4-digit start code (`POST /api/v1/user/cleaning/orders/{id}/start-verification/confirm`). Also on `private-cleaning-worker.{workerId}`. |
+| `private-cleaning-booking.{id}`  | `CompletionDecisionMade` | After customer completion confirm / reject / extend-time. Also on `private-cleaning-worker.{workerId}`. |
 
-- **CleaningBookingTrackingUpdated** payload: `{ "tracking": { "cleaningBookingId", "status", "workerId", "startedTravelAt", "arrivedAt", "workStartedAt", "workFinishedAt", "cancelledAt", "updatedAt" } }`.
+- **CleaningBookingTrackingUpdated** payload: `{ "tracking": { "cleaningBookingId", "status", "workerId", "startedTravelAt", "arrivedAt", "workStartedAt", "workFinishedAt", "customerConfirmedAt", "cancelledAt", "updatedAt" } }`.
 - **WorkerLocationUpdated** payload: `{ "latitude", "longitude", "workerId", "updatedAt" }` (ISO datetime).
 - **WorkerArrived** payload: `{ "cleaningBookingId", "arrivedAt" }` (ISO datetime).
 
@@ -367,13 +371,13 @@ Use these when initializing the Pusher client in the worker or customer app. Aut
 
 **Request body:** None
 
-**Response (200):** Updated booking resource (includes `arrivedAt` set to current time; status remains `worker_assigned`). Server broadcasts `WorkerArrived` on the booking's private channel so the customer app can show "Worker has arrived" and prompt for security code / confirm start.
+**Response (200):** Updated booking resource with `arrivedAt` set to current time and status **`awaiting_start_verification`**. Server broadcasts `WorkerArrived`, **`cleaning_order.awaiting_start_verification`**, and `CleaningBookingTrackingUpdated` so the customer app can prompt for the **4-digit** security code (see §3.18 and [API_CONTRACT_USER_CLEANING_REALTIME_GATES.md](API_CONTRACT_USER_CLEANING_REALTIME_GATES.md)).
 
 **Errors:**
 - `403` – User has no worker, or booking is not assigned to worker
-- `422` – Worker has not started travel, or booking not in `worker_assigned`
+- `422` – Worker has not started travel, or booking not in `worker_assigned` / `awaiting_start_verification` as allowed by the server
 
-**Valid when:** Status `worker_assigned` and `startedTravelAt` is set. After this, worker shows security code and waits for customer to confirm; then worker calls **Start work** (§3.10).
+**Valid when:** Status `worker_assigned` (after start-travel) or, where the server allows, recovery from `awaiting_start_verification`; `startedTravelAt` must be set. After arrival, the **recommended** flow is: worker `GET …/security-code` → customer confirms code on the **user** API → booking becomes `in_progress` without requiring worker **Start work** (§3.10). **Legacy:** worker may still call **Start work** from `worker_assigned` without arrival/code (backward compatibility).
 
 ---
 
@@ -381,7 +385,7 @@ Use these when initializing the Pusher client in the worker or customer app. Aut
 
 | Method | Path                                             | Description                    |
 | ------ | ------------------------------------------------ | ------------------------------ |
-| POST   | `/api/v1/cleaning-bookings/{id}/start-work`      | Worker starts the job on site  |
+| POST   | `/api/v1/cleaning-bookings/{id}/start-work`      | Worker starts the job on site (legacy path) or transitions after start verification |
 
 **Path params:** `id` – cleaning booking ID
 
@@ -391,9 +395,12 @@ Use these when initializing the Pusher client in the worker or customer app. Aut
 
 **Errors:**
 - `403` – User has no worker, or booking is not assigned to worker
-- `422` – Booking must be assigned to start work
+- `422` – Invalid status for start work, or (when status is `awaiting_start_verification`) customer has not yet verified the security code (`consumed_at` on code row)
 
-**Valid from status:** `worker_assigned` only.
+**Valid from status:**
+
+- **`worker_assigned` (legacy):** Moves to `in_progress` **without** requiring arrival or customer code. Prefer migrating apps to the arrival + customer verification flow.
+- **`awaiting_start_verification`:** Allowed only after the **customer** has successfully confirmed the 4-digit code (code row consumed). In the current backend, the customer confirm endpoint **already** sets `in_progress`, so this branch is rarely needed; avoid calling start-work if the booking is already `in_progress`.
 
 ---
 
@@ -401,13 +408,13 @@ Use these when initializing the Pusher client in the worker or customer app. Aut
 
 | Method | Path                                       | Description                    |
 | ------ | ------------------------------------------ | ------------------------------ |
-| POST   | `/api/v1/cleaning-bookings/{id}/complete`   | Worker marks work as finished  |
+| POST   | `/api/v1/cleaning-bookings/{id}/complete`   | Worker marks on-site work as finished  |
 
 **Path params:** `id` – cleaning booking ID
 
 **Request body:** None
 
-**Response (200):** Updated booking resource (status `completed`, `workFinishedAt` set). Server also broadcasts `CleaningBookingTrackingUpdated`.
+**Response (200):** Updated booking resource with status **`awaiting_customer_completion`** and `workFinishedAt` set. Server broadcasts **`cleaning_order.awaiting_customer_completion`** and `CleaningBookingTrackingUpdated`. The customer must then confirm, reject, or request extension (see [API_CONTRACT_USER_CLEANING_REALTIME_GATES.md](API_CONTRACT_USER_CLEANING_REALTIME_GATES.md)) before the booking becomes `completed`.
 
 **Errors:**
 - `403` – User has no worker, or booking is not assigned to worker
@@ -664,7 +671,7 @@ Content-Type: application/json
 
 | Method | Path                                             | Description                    |
 | ------ | ------------------------------------------------ | ------------------------------ |
-| GET    | `/api/v1/cleaning-bookings/{id}/security-code`  | Get 5-digit code to show customer to confirm service start |
+| GET    | `/api/v1/cleaning-bookings/{id}/security-code`  | Issue or rotate a **4-digit** numeric code for the customer to type into the user app |
 
 **Path params:** `id` – cleaning booking ID
 
@@ -672,19 +679,28 @@ Content-Type: application/json
 
 ```json
 {
+  "message": "Security code generated successfully.",
   "data": {
-    "securityCode": "35910"
+    "securityCode": "0123",
+    "expiresAt": "2026-04-22T12:00:00+00:00"
   }
 }
 ```
 
-The code is generated on first request and stored; subsequent calls return the same code. Worker shows this code to the customer; customer enters it in their app to confirm service start.
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| securityCode | string | Exactly **4** digits (`0000`–`9999`), zero-padded. Shown once to the worker for the customer to enter. |
+| expiresAt | string | ISO 8601 expiry (typically **10 minutes** from generation). |
+
+Each successful GET **regenerates** the code (new plaintext for the worker, new hash + expiry in `booking_security_codes`). The server stores only a **hash** (HMAC-SHA256 with `APP_KEY`) plus attempt/TTL metadata; the customer app never receives the plaintext code from this endpoint.
+
+Worker shows this code to the customer; customer submits it to **`POST /api/v1/user/cleaning/orders/{order}/start-verification/confirm`** (see [API_CONTRACT_USER_CLEANING_REALTIME_GATES.md](API_CONTRACT_USER_CLEANING_REALTIME_GATES.md)).
 
 **Errors:**
 - `403` – User has no worker, or booking is not assigned to worker
-- `422` – Booking must be in status `worker_assigned` or `in_progress`
+- `422` – Booking not in a status that allows issuing a code
 
-**Valid statuses:** `worker_assigned`, `in_progress` only.
+**Valid statuses:** `worker_assigned`, **`awaiting_start_verification`** (e.g. after arrive, before customer confirms).
 
 ---
 

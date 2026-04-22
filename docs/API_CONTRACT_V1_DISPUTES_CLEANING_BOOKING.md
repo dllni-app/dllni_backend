@@ -144,6 +144,7 @@ Same body rules as create (`DisputeRequest`). For `PATCH`, send only fields you 
 ## Relation to user cleaning orders
 
 - List/show user orders: `GET /api/v1/user/cleaning/orders`, `GET /api/v1/user/cleaning/orders/{order}`.
+- Customer realtime gates (start code, completion confirm/reject/extend): [API_CONTRACT_USER_CLEANING_REALTIME_GATES.md](API_CONTRACT_USER_CLEANING_REALTIME_GATES.md).
 - Order payload can include `disputes` when the relation is loaded—useful to display existing tickets.
 - **Opening a new dispute** uses **`POST /api/v1/disputes`** with `bookingId` + `bookingType: "cleaning_booking"`, not a nested URL under `/user/cleaning/`.
 
