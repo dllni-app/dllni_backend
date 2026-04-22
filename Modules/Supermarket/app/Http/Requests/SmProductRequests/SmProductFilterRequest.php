@@ -5,12 +5,32 @@ declare(strict_types=1);
 namespace Modules\Supermarket\Http\Requests\SmProductRequests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Modules\Supermarket\Services\StoreOwnerContextService;
 
 final class SmProductFilterRequest extends FormRequest
 {
     public function authorize(): bool
     {
         return true;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if (! $this->routeIs('store-owner.products.index')) {
+            return;
+        }
+
+        $storeId = app(StoreOwnerContextService::class)->ownedStore()->id;
+        $filter = $this->input('filter', []);
+        if (! is_array($filter)) {
+            $filter = [];
+        }
+        $filter['storeId'] = $storeId;
+
+        $this->merge([
+            'filter' => $filter,
+            'store_id' => $storeId,
+        ]);
     }
 
     public function rules(): array

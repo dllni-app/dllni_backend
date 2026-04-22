@@ -13,12 +13,14 @@ use Modules\Supermarket\Http\Requests\SmOrderRejectStatusRequest;
 use Modules\Supermarket\Http\Resources\SmOrderResource;
 use Modules\Supermarket\Models\SmOrder;
 use Modules\Supermarket\Services\SmOrderService;
+use Modules\Supermarket\Services\StoreOwnerContextService;
 
 final class SmOrderStatusController
 {
     public function __construct(
         private SmOrderService $orderService,
-        private ActivityLogService $activityLogService
+        private ActivityLogService $activityLogService,
+        private StoreOwnerContextService $context
     ) {}
 
     /**
@@ -28,6 +30,8 @@ final class SmOrderStatusController
      */
     public function accept(SmOrder $order): JsonResponse|JsonResource
     {
+        $this->context->store((int) $order->store_id);
+
         try {
             $acceptedOrder = $this->orderService->acceptOrder($order);
             $this->activityLogService->logSmOrderAccepted((int) $order->id, $order->order_number, (int) $order->store_id);
@@ -50,6 +54,33 @@ final class SmOrderStatusController
     }
 
     /**
+     * Hand order to courier (ready_for_pickup → picked_up).
+     */
+    public function courierHandover(SmOrder $order): JsonResponse|JsonResource
+    {
+        $this->context->store((int) $order->store_id);
+
+        try {
+            $updated = $this->orderService->handOverToCourier($order, $this->context->owner()->id);
+
+            return SmOrderResource::make($updated->load([
+                'customer',
+                'store',
+                'coupon',
+                'items.product',
+                'statusLogs',
+                'disputes',
+            ]))->additional([
+                'message' => 'Order handed to courier successfully.',
+            ]);
+        } catch (Exception $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    /**
      * Reject an order with reason and type.
      *
      * Business logic is delegated to SmOrderService::rejectOrder()
@@ -58,6 +89,8 @@ final class SmOrderStatusController
      */
     public function reject(SmOrderRejectStatusRequest $request, SmOrder $order): JsonResponse|JsonResource
     {
+        $this->context->store((int) $order->store_id);
+
         try {
             $data = SmOrderRejectStatusData::from($request->validated());
             $rejectedOrder = $this->orderService->rejectOrder($order, $data);

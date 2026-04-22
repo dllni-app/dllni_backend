@@ -23,7 +23,7 @@ it('retrieves activity logs for store owner', function () {
         'properties' => ['store_id' => $this->store->id],
     ]);
 
-    $response = $this->getJson("/api/v1/store-owner/activity-logs?storeId={$this->store->id}");
+    $response = $this->getJson('/api/v1/store-owner/activity-logs');
 
     $response->assertSuccessful();
     expect($response->json('data'))->toHaveCount(1);
@@ -46,7 +46,7 @@ it('filters activity logs by log name', function () {
         'properties' => ['store_id' => $this->store->id],
     ]);
 
-    $response = $this->getJson("/api/v1/store-owner/activity-logs?storeId={$this->store->id}&logName=products");
+    $response = $this->getJson('/api/v1/store-owner/activity-logs?logName=products');
 
     $response->assertSuccessful();
     $logs = $response->json('data');
@@ -65,7 +65,7 @@ it('paginates activity logs with custom per page', function () {
         ]);
     }
 
-    $response = $this->getJson("/api/v1/store-owner/activity-logs?storeId={$this->store->id}&perPage=10");
+    $response = $this->getJson('/api/v1/store-owner/activity-logs?perPage=10');
 
     $response->assertSuccessful();
     $logs = $response->json('data');
@@ -82,7 +82,7 @@ it('returns activity log with causer information', function () {
         'properties' => ['store_id' => $this->store->id],
     ]);
 
-    $response = $this->getJson("/api/v1/store-owner/activity-logs?storeId={$this->store->id}");
+    $response = $this->getJson('/api/v1/store-owner/activity-logs');
 
     $response->assertSuccessful();
     $data = $response->json('data.0');
@@ -91,31 +91,32 @@ it('returns activity log with causer information', function () {
     expect($data['causer']['name'])->toBe($this->user->name);
 });
 
-it('validates store id parameter', function () {
+it('returns successful empty listing without optional filters', function () {
     $response = $this->getJson('/api/v1/store-owner/activity-logs');
 
-    $response->assertUnprocessable();
+    $response->assertSuccessful();
+    expect($response->json('data'))->toBeArray();
 });
 
 it('validates log name parameter', function () {
-    $response = $this->getJson("/api/v1/store-owner/activity-logs?storeId={$this->store->id}&logName=invalid");
+    $response = $this->getJson('/api/v1/store-owner/activity-logs?logName=invalid');
 
     $response->assertUnprocessable();
 });
 
 it('returns no activity logs for empty store', function () {
-    $response = $this->getJson("/api/v1/store-owner/activity-logs?storeId={$this->store->id}");
+    $response = $this->getJson('/api/v1/store-owner/activity-logs');
 
     $response->assertSuccessful();
     $logs = $response->json('data');
     expect($logs)->toHaveCount(0);
 });
 
-it('authorizes store owner access', function () {
-    $anotherUser = User::factory()->create(['module_type' => UserModuleType::SupermarketSeller]);
-    $anotherStore = SmStore::factory()->create(['owner_user_id' => $anotherUser->id]);
+it('rejects users who are not supermarket sellers', function () {
+    $customer = User::factory()->create(['module_type' => null]);
+    Sanctum::actingAs($customer);
 
-    $response = $this->getJson("/api/v1/store-owner/activity-logs?storeId={$anotherStore->id}");
+    $response = $this->getJson('/api/v1/store-owner/activity-logs');
 
     $response->assertForbidden();
 });

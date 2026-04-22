@@ -6,19 +6,17 @@ namespace Modules\Supermarket\Http\Controllers\API\StoreOwner;
 
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Modules\Supermarket\Models\SmOffer;
+use Modules\Supermarket\Services\StoreOwnerContextService;
 
 final class StoreOwnerOfferWeeklySummaryController
 {
-    public function __invoke(Request $request): JsonResponse
-    {
-        $request->validate([
-            'storeId' => ['required', 'integer', 'exists:sm_stores,id'],
-        ]);
+    public function __construct(private StoreOwnerContextService $context) {}
 
-        $storeId = (int) $request->input('storeId');
+    public function __invoke(): JsonResponse
+    {
+        $storeId = $this->context->ownedStore()->id;
         $weekStart = now()->startOfWeek(Carbon::SATURDAY)->startOfDay();
         $weekEnd = $weekStart->copy()->addDays(6)->endOfDay();
         $now = now();

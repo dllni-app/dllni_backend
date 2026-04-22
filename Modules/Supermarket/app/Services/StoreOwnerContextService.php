@@ -44,6 +44,27 @@ final class StoreOwnerContextService
         return $store;
     }
 
+    /**
+     * Default store for the authenticated supermarket seller (lowest id), matching bulk master-product flows.
+     *
+     * @throws AuthorizationException
+     */
+    public function ownedStore(): SmStore
+    {
+        $owner = $this->owner();
+
+        $store = SmStore::query()
+            ->where('owner_user_id', $owner->id)
+            ->orderBy('id')
+            ->first();
+
+        if (! $store) {
+            throw new AuthorizationException('No store found for the authenticated store owner.');
+        }
+
+        return $store;
+    }
+
     /** @throws AuthorizationException */
     public function ensureOwnedStaff(SmStoreStaff $staff): void
     {

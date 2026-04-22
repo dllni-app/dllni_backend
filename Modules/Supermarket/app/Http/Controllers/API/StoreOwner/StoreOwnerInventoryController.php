@@ -20,26 +20,22 @@ use Modules\Supermarket\Http\Requests\SmStockUpdateRequest;
 use Modules\Supermarket\Models\SmOrder;
 use Modules\Supermarket\Models\SmProduct;
 use Modules\Supermarket\Services\SmInventoryService;
+use Modules\Supermarket\Services\StoreOwnerContextService;
 
 final class StoreOwnerInventoryController
 {
     public function __construct(
         private readonly SmInventoryService $inventoryService,
-        private readonly ActivityLogService $activityLogService
+        private readonly ActivityLogService $activityLogService,
+        private readonly StoreOwnerContextService $context
     ) {}
 
     /**
      * Get low stock products for the store.
-     *
-     * GET /api/v1/store-owner/products/low-stock?store_id={id}
      */
     public function lowStock(Request $request): JsonResponse
     {
-        $request->validate([
-            'store_id' => ['required', 'integer', 'exists:sm_stores,id'],
-        ]);
-
-        $storeId = (int) $request->input('store_id');
+        $storeId = $this->context->ownedStore()->id;
 
         try {
             $lowStockProducts = $this->inventoryService->getLowStockProducts($storeId);
@@ -61,19 +57,45 @@ final class StoreOwnerInventoryController
     }
 
     /**
+     * Total on-hand inventory value and related counts for the store dashboard.
+     */
+    public function inventorySummary(Request $request): JsonResponse
+    {
+        $storeId = $this->context->ownedStore()->id;
+
+        try {
+            $summary = $this->inventoryService->getInventorySummary($storeId);
+
+            return response()->json([
+                'success' => true,
+                'data' => $summary,
+            ]);
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve inventory summary.',
+                'error' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    /**
      * Manually update product stock.
      *
      * PUT /api/v1/store-owner/products/{product}/stock
      */
     public function updateStock(SmStockUpdateRequest $request, SmProduct $product): JsonResponse
     {
+        $this->context->store((int) $product->store_id);
+
         try {
             $data = SmStockUpdateData::from($request->validated());
 
             $userId = $request->user()?->id;
-            $quantityChange = $data->newQuantity - ($product->stock_quantity ?? 0);
+            $previousStock = (int) ($product->stock_quantity ?? 0);
 
             $updatedProduct = $this->inventoryService->updateStock($product, $data, $userId);
+            $quantityChange = (int) $updatedProduct->stock_quantity - $previousStock;
             $this->activityLogService->logSmStockUpdated($updatedProduct, (int) $product->store_id, $quantityChange);
 
             return response()->json([
@@ -103,13 +125,10 @@ final class StoreOwnerInventoryController
      */
     public function audit(SmInventoryAuditRequest $request): JsonResponse
     {
-        $request->validate([
-            'store_id' => ['required', 'integer', 'exists:sm_stores,id'],
-        ]);
+        $storeId = $this->context->ownedStore()->id;
 
         try {
             $data = SmInventoryAuditData::from($request->validated());
-            $storeId = (int) $request->input('store_id');
             $userId = $request->user()?->id;
 
             $auditResults = $this->inventoryService->performAudit($data, $storeId, $userId);
@@ -137,6 +156,8 @@ final class StoreOwnerInventoryController
      */
     public function updateExpiration(SmProductExpirationRequest $request, SmProduct $product): JsonResponse
     {
+        $this->context->store((int) $product->store_id);
+
         try {
             $data = SmProductExpirationData::from($request->validated());
 
@@ -164,6 +185,8 @@ final class StoreOwnerInventoryController
      */
     public function processReturn(SmOrderReturnRequest $request, SmOrder $order): JsonResponse
     {
+        $this->context->store((int) $order->store_id);
+
         try {
             $data = SmOrderReturnData::from($request->validated());
             $userId = $request->user()?->id;
@@ -186,19 +209,16 @@ final class StoreOwnerInventoryController
 
     /**
      * Get lost opportunities report.
-     *
-     * GET /api/v1/store-owner/reports/lost-opportunities?store_id={id}&start_date={date}&end_date={date}
      */
     public function lostOpportunities(Request $request): JsonResponse
     {
         $request->validate([
-            'store_id' => ['required', 'integer', 'exists:sm_stores,id'],
             'start_date' => ['nullable', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
         ]);
 
         try {
-            $storeId = (int) $request->input('store_id');
+            $storeId = $this->context->ownedStore()->id;
             $startDate = $request->filled('start_date') ? Carbon::parse($request->input('start_date')) : null;
             $endDate = $request->filled('end_date') ? Carbon::parse($request->input('end_date')) : null;
 

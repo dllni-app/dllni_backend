@@ -181,7 +181,7 @@ For authentication details, see [API_CONTRACT_AUTH.md](API_CONTRACT_AUTH.md).
 
 - Use the exact casing returned by each endpoint.
 - In this module, both `camelCase` and `snake_case` appear depending on endpoint family.
-  - Example: `storeId` in dashboard, `store_id` in inventory reports.
+  - **Store-owner routes:** the owning store is not chosen via query/body; it is resolved server-side from the authenticated seller (see §3).
 
 ### 2.4 Single-resource responses
 
@@ -194,14 +194,13 @@ For authentication details, see [API_CONTRACT_AUTH.md](API_CONTRACT_AUTH.md).
 
 ## 3. Store scoping and ownership
 
-All `/store-owner/*` endpoints are owner-scoped by authenticated user permissions.
+All `/store-owner/*` endpoints require `Authorization: Bearer {token}` for a user whose `module_type` is **supermarket seller**.
 
-- Some endpoints require explicit store identifier in query/body:
-  - `storeId` (dashboard)
-  - `storeId` (employees list/create)
-  - `store_id` (inventory/report endpoints)
-- Owner app should use only stores the authenticated owner is allowed to manage.
-- Backend must reject unauthorized cross-store access with `403`.
+**Default store (no `storeId` / `store_id` in query or body):** the backend resolves the store as the row in `sm_stores` where `owner_user_id` equals the authenticated user’s id, using the **lowest** `sm_stores.id` when more than one exists. All list/create/report flows that used to accept a store id now use this default automatically.
+
+- Do **not** send `storeId`, `store_id`, or `filter[storeId]` to pick a store; values may be ignored or merged server-side.
+- If the seller has **no** store: endpoints that need a store respond with **403** (e.g. message: no store for this owner).
+- Operations on a **specific** resource (order, product, employee) still use path ids; the backend checks that the resource belongs to a store owned by the authenticated seller (**403** if not).
 
 **Base path for this contract:** `/api/v1/store-owner`
 
@@ -214,29 +213,31 @@ This maps common supermarket owner app screens to backend endpoints.
 ### 4.1 Home dashboard (today KPIs + order queues)
 
 - **Top KPI cards (today):**
-  - `GET /api/v1/store-owner/dashboard?storeId={id}`
+  - `GET /api/v1/store-owner/dashboard`
   - Use `totalOrders`, `completedOrders`, `newOrders`, `pendingOrders`, `totalSales`.
 - **New orders list + quick actions:**
   - Use existing order list endpoint in app state (if available in broader module).
   - Action endpoints:
     - `POST /api/v1/store-owner/orders/{order}/accept`
     - `POST /api/v1/store-owner/orders/{order}/reject`
+    - `POST /api/v1/store-owner/orders/{order}/courier-handover`
 
-### 4.2 Orders management (accept / reject / return)
+### 4.2 Orders management (accept / reject / courier handover / return)
 
 - **Accept order:** `POST /api/v1/store-owner/orders/{order}/accept`
 - **Reject order:** `POST /api/v1/store-owner/orders/{order}/reject`
+- **Hand order to courier (تسليم مندوب):** `POST /api/v1/store-owner/orders/{order}/courier-handover`
 - **Return processing:** `POST /api/v1/store-owner/orders/{order}/return`
 
 ### 4.3 Store profile screens
 
-- **Store details:** `GET /api/v1/store-owner/stores/{store}`
-- **Edit store profile:** `PUT /api/v1/store-owner/stores/{store}`
+- **Store details:** `GET /api/v1/store-owner/store`
+- **Edit store profile:** `PUT /api/v1/store-owner/store`
 
 ### 4.4 Products screens
 
-- **List products:** `GET /api/v1/store-owner/products`
-- **Create product:** `POST /api/v1/store-owner/products`
+- **List products:** `GET /api/v1/store-owner/products` (filtered to the default owner store; do not rely on client-supplied `storeId`)
+- **Create product:** `POST /api/v1/store-owner/products` (`storeId` is set server-side from the default owner store)
 - **Search master products by prefix (name/barcode):** `GET /api/v1/store-owner/master-products/search?index={text}`
 - **Create products from master products (bulk):** `POST /api/v1/store-owner/products/from-master`
 - **View one product:** `GET /api/v1/store-owner/products/{id}`
@@ -251,13 +252,14 @@ This maps common supermarket owner app screens to backend endpoints.
 
 ### 4.5 Inventory screens
 
-- **Low stock alerts:** `GET /api/v1/store-owner/products/low-stock?store_id={id}`
+- **Inventory summary (total value, SKU count, low-stock count):** `GET /api/v1/store-owner/inventory/summary`
+- **Low stock alerts:** `GET /api/v1/store-owner/products/low-stock`
 - **Inventory audit:** `POST /api/v1/store-owner/inventory/audit`
-- **Lost opportunities report:** `GET /api/v1/store-owner/reports/lost-opportunities?store_id={id}`
+- **Lost opportunities report:** `GET /api/v1/store-owner/reports/lost-opportunities` (optional `start_date`, `end_date` query params)
 
 ### 4.6 Employees and permissions screens
 
-- **List employees for one store:** `GET /api/v1/store-owner/employees?storeId={id}`
+- **List employees for the default store:** `GET /api/v1/store-owner/employees`
 - **Add new employee:** `POST /api/v1/store-owner/employees`
 - **Update employee profile and permissions:** `PATCH /api/v1/store-owner/employees/{staff}`
 - **Toggle employee active status:** `PATCH /api/v1/store-owner/employees/{staff}/status`
@@ -274,13 +276,11 @@ Send those ids back in `permissionIds[]` during create/update.
 
 | Method | Path                            | Description                      |
 | ------ | ------------------------------- | -------------------------------- |
-| GET    | `/api/v1/store-owner/dashboard` | Today metrics for one store      |
+| GET    | `/api/v1/store-owner/dashboard` | Today metrics for the default owner store |
 
-**Query params:**
+**Query params:** none (store is resolved from the authenticated seller; see §3).
 
-| Param   | Type    | Required | Description                    |
-| ------- | ------- | -------- | ------------------------------ |
-| storeId | integer | yes      | Store id (`sm_stores.id`).     |
+**Errors:** **403** if the seller has no store.
 
 **Response (200):**
 
@@ -348,7 +348,29 @@ Send those ids back in `permissionIds[]` during create/update.
 
 - Returns updated order resource with status set to `cancelled` and cancellation fields.
 
-### 6.3 Process order return
+### 6.3 Courier handover (hand to delivery rep)
+
+| Method | Path                                              | Description |
+| ------ | ------------------------------------------------- | ----------- |
+| POST   | `/api/v1/store-owner/orders/{order}/courier-handover` | Move order from `ready_for_pickup` to `picked_up` |
+
+**Path params:**
+
+- `order` – order id.
+
+**Request body:** none.
+
+**Response (200):**
+
+- Returns updated `SmOrder` resource with `status` set to `picked_up` and `pickedUpAt` set to the server time.
+- If the order is **already** `picked_up`, the API returns **200** with the current order (idempotent; no duplicate status log).
+
+**Errors:**
+
+- **400** – order is not in `ready_for_pickup` (and not already `picked_up`); body `{ "message": "..." }`.
+- **403** – order does not belong to the authenticated seller’s store.
+
+### 6.4 Process order return
 
 | Method | Path                                      | Description                    |
 | ------ | ----------------------------------------- | ------------------------------ |
@@ -390,7 +412,7 @@ Send those ids back in `permissionIds[]` during create/update.
 }
 ```
 
-### 6.4 Automatic stock deduction on accept
+### 6.5 Automatic stock deduction on accept
 
 No separate endpoint is required.
 
@@ -408,9 +430,9 @@ If stock is insufficient, API returns failure (business error message).
 
 ### 7.1 Get store details
 
-| Method | Path                                 | Description               |
-| ------ | ------------------------------------ | ------------------------- |
-| GET    | `/api/v1/store-owner/stores/{store}` | Retrieve store details    |
+| Method | Path                            | Description               |
+| ------ | ------------------------------- | ------------------------- |
+| GET    | `/api/v1/store-owner/store`     | Retrieve default owner store details |
 
 **Response (200):**
 
@@ -439,9 +461,9 @@ If stock is insufficient, API returns failure (business error message).
 
 ### 7.2 Update store
 
-| Method | Path                                 | Description         |
-| ------ | ------------------------------------ | ------------------- |
-| PUT    | `/api/v1/store-owner/stores/{store}` | Update store data   |
+| Method | Path                            | Description         |
+| ------ | ------------------------------- | ------------------- |
+| PUT    | `/api/v1/store-owner/store`     | Update default owner store data |
 
 **Request body example:**
 
@@ -459,6 +481,8 @@ If stock is insufficient, API returns failure (business error message).
 
 **Response (200):** Updated store resource.
 
+**Errors:** **403** if the seller has no default store.
+
 ---
 
 ## 8. Products, inventory, and employee management
@@ -474,6 +498,8 @@ If stock is insufficient, API returns failure (business error message).
 | DELETE | `/api/v1/store-owner/products/{id}` | Delete product  |
 
 Payloads/responses follow the supermarket product API conventions in the module.
+
+**Store-owner scoping:** `GET /store-owner/products` applies the default owner store filter server-side. `POST` sets `storeId` from that default store. `GET`/`PUT`/`DELETE` on `{id}` require that the product belongs to a store owned by the seller (**403** otherwise).
 
 ### 8.1.1 Master product prefix search
 
@@ -535,7 +561,7 @@ Search behavior:
 Returns a collection of created supermarket product resources under `data[]`, each including:
 - `masterProductId`
 - `name` (copied from master product name)
-- `barcode` (copied from master product, fallback `""`)
+- `barcode` (currently `null` until set on the store product)
 - `description` (copied from master product, fallback `""`)
 - `sourceType` (`CatalogSearch`)
 - `price` (`0`)
@@ -549,20 +575,57 @@ Server-side behavior for this endpoint:
 - `storeId` is not accepted from client. Store is resolved as the first owner store ordered by `id`.
 - Category is derived from each selected `masterProductId`.
 - If no matching derived category exists in the owner store, backend creates one automatically using slug `master-product-{masterProductId}`.
-- If the owner has no store, request fails with `422`.
+- If the owner has no store, request fails with **403**.
 - Requested master products must exist and be active; otherwise request fails with `422`.
 
-### 8.2 Low stock alerts
+### 8.2 Inventory summary (total stock value)
+
+| Method | Path                                      | Description                                      |
+| ------ | ----------------------------------------- | ------------------------------------------------ |
+| GET    | `/api/v1/store-owner/inventory/summary`   | Total retail value of on-hand stock + counts   |
+
+**Purpose:**  
+Supports inventory dashboard KPIs such as **قيمة المخزون** (total inventory value). The backend sums, for every product in the store, `stock_quantity × effective_unit_price`, where `effective_unit_price` is `discounted_price` when set, otherwise `price` (same rule as product listings).
+
+**Query params:** none (store scope from auth; see §3).
+
+**Response (200):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "inventoryValue": 14980.0,
+    "productSkus": 42,
+    "lowStockCount": 2
+  }
+}
+```
+
+| Field           | Type   | Description |
+| --------------- | ------ | ----------- |
+| inventoryValue  | number | Sum of `stock_quantity * COALESCE(discounted_price, price)` for all products in the store. Rounded to 2 decimal places. No currency code is returned; the client should display the store’s currency (e.g. ل.س) as configured in the app. |
+| productSkus     | number | Count of product rows for that store (all rows, including zero stock). |
+| lowStockCount   | number | Count of products where `stock_quantity <= low_stock_threshold` and `is_available` is true (aligned with the low-stock list endpoint). |
+
+**Errors:**
+
+| HTTP | Condition |
+| ---- | --------- |
+| 403  | Seller has no store, or not a supermarket seller. |
+| 400  | Rare server-side failure; body includes `success: false`, `message`, optional `error`. |
+
+**Auth:** Same as other store-owner routes: `Authorization: Bearer {token}`.
+
+---
+
+### 8.3 Low stock alerts
 
 | Method | Path                                     | Description                     |
 | ------ | ---------------------------------------- | ------------------------------- |
 | GET    | `/api/v1/store-owner/products/low-stock` | Products below stock threshold  |
 
-**Query params:**
-
-| Param    | Type    | Required | Description |
-| -------- | ------- | -------- | ----------- |
-| store_id | integer | yes      | Store id.   |
+**Query params:** none (store scope from auth; see §3).
 
 **Response (200):**
 
@@ -585,7 +648,7 @@ Server-side behavior for this endpoint:
 }
 ```
 
-### 8.3 Manual stock update
+### 8.4 Manual stock update
 
 | Method | Path                                        | Description                        |
 | ------ | ------------------------------------------- | ---------------------------------- |
@@ -605,7 +668,7 @@ Server-side behavior for this endpoint:
 | quantity  | number | yes      | Quantity value used by selected operation. |
 | operation | string | yes      | `SET`, `INCREMENT`, or `DECREMENT`.      |
 
-### 8.4 Inventory audit
+### 8.5 Inventory audit
 
 | Method | Path                                  | Description                         |
 | ------ | ------------------------------------- | ----------------------------------- |
@@ -615,7 +678,6 @@ Server-side behavior for this endpoint:
 
 ```json
 {
-  "store_id": 1,
   "products": [
     {
       "product_id": 1,
@@ -625,7 +687,9 @@ Server-side behavior for this endpoint:
 }
 ```
 
-### 8.5 Update product expiration
+Store scope for the audit is the default owner store (see §3). Products must belong to that store.
+
+### 8.6 Update product expiration
 
 | Method | Path                                             | Description                          |
 | ------ | ------------------------------------------------ | ------------------------------------ |
@@ -641,7 +705,7 @@ Server-side behavior for this endpoint:
 
 If product expires soon (within 7 days), response includes `suggested_discount` object.
 
-### 8.6 Lost opportunities report
+### 8.7 Lost opportunities report
 
 | Method | Path                                           | Description                                   |
 | ------ | ---------------------------------------------- | --------------------------------------------- |
@@ -651,11 +715,12 @@ If product expires soon (within 7 days), response includes `suggested_discount` 
 
 | Param      | Type    | Required | Description                  |
 | ---------- | ------- | -------- | ---------------------------- |
-| store_id   | integer | yes      | Store id.                    |
 | start_date | date    | no       | Start date (`Y-m-d`).        |
 | end_date   | date    | no       | End date (`Y-m-d`).          |
 
-### 8.7 Permission catalog for employee management
+Store scope is the default owner store (see §3).
+
+### 8.8 Permission catalog for employee management
 
 | Method | Path                               | Description                                 |
 | ------ | ---------------------------------- | ------------------------------------------- |
@@ -695,7 +760,7 @@ The current catalog is intended for employee-facing store operations and include
 - `coupons.*`
 - `reports.view`
 
-### 8.8 Employee management
+### 8.9 Employee management
 
 Employees are store-linked users managed by the store owner. Each employee item returns:
 
@@ -707,17 +772,13 @@ Employees are store-linked users managed by the store owner. Each employee item 
 - `permissionIds`: numeric permission ids currently assigned to that employee
 - `effectivePermissions`: permission names currently assigned to that employee
 
-### 8.8.1 List employees
+### 8.9.1 List employees
 
 | Method | Path                            | Description                 |
 | ------ | ------------------------------- | --------------------------- |
-| GET    | `/api/v1/store-owner/employees` | List employees for a store  |
+| GET    | `/api/v1/store-owner/employees` | List employees for the default owner store |
 
-**Query params:**
-
-| Param   | Type    | Required | Description                |
-| ------- | ------- | -------- | -------------------------- |
-| storeId | integer | yes      | Store id (`sm_stores.id`). |
+**Query params:** none.
 
 **Response (200):**
 
@@ -746,7 +807,7 @@ Employees are store-linked users managed by the store owner. Each employee item 
 }
 ```
 
-### 8.8.2 Create or link employee
+### 8.9.2 Create or link employee
 
 | Method | Path                            | Description                            |
 | ------ | ------------------------------- | -------------------------------------- |
@@ -756,7 +817,6 @@ Employees are store-linked users managed by the store owner. Each employee item 
 
 ```json
 {
-  "storeId": 1,
   "name": "Store Employee",
   "email": "store.employee@example.com",
   "phone": "+963955000111",
@@ -767,12 +827,13 @@ Employees are store-linked users managed by the store owner. Each employee item 
 
 | Field         | Type          | Required | Description |
 | ------------- | ------------- | -------- | ----------- |
-| storeId       | integer       | yes      | Store id owned by the authenticated owner. |
 | name          | string        | yes      | Employee display name. |
 | email         | string/null   | no       | Employee email. |
 | phone         | string/null   | no       | Employee phone. |
 | permissionIds | integer[]     | no       | Permission ids selected from `/store-owner/permissions`. |
 | isActive      | boolean       | no       | Defaults to `true` when omitted. |
+
+The employee is created for the **default** owner store (see §3). Do not send `storeId`.
 
 At least one of `email` or `phone` is recommended so the owner can identify/link the employee account later.
 
@@ -800,7 +861,7 @@ At least one of `email` or `phone` is recommended so the owner can identify/link
 }
 ```
 
-### 8.8.3 Update employee profile and permissions
+### 8.9.3 Update employee profile and permissions
 
 | Method | Path                                    | Description                           |
 | ------ | --------------------------------------- | ------------------------------------- |
@@ -830,7 +891,7 @@ Returns the same employee object shape as create/list plus:
 }
 ```
 
-### 8.8.4 Toggle employee status
+### 8.9.4 Toggle employee status
 
 | Method | Path                                           | Description                    |
 | ------ | ---------------------------------------------- | ------------------------------ |
@@ -865,7 +926,8 @@ Returns the same employee object shape plus:
 | `pending`          | New, awaiting acceptance.  |
 | `accepted`         | Accepted by store.         |
 | `preparing`        | Store is preparing order.  |
-| `ready_for_pickup` | Ready for customer pickup. |
+| `ready_for_pickup` | Ready for customer pickup or packaging. |
+| `picked_up`        | Handed to courier / out for delivery.     |
 | `completed`        | Completed / picked up.     |
 | `cancelled`        | Cancelled order.           |
 
@@ -892,7 +954,7 @@ Returns the same employee object shape plus:
 ### 10.1 Get owner dashboard (today)
 
 ```http
-GET https://dllni.mustafafares.com/api/v1/store-owner/dashboard?storeId=1
+GET https://dllni.mustafafares.com/api/v1/store-owner/dashboard
 Authorization: Bearer {token}
 ```
 
@@ -909,7 +971,14 @@ Content-Type: application/json
 }
 ```
 
-### 10.3 Update stock
+### 10.3 Courier handover
+
+```http
+POST https://dllni.mustafafares.com/api/v1/store-owner/orders/123/courier-handover
+Authorization: Bearer {token}
+```
+
+### 10.4 Update stock
 
 ```http
 PUT https://dllni.mustafafares.com/api/v1/store-owner/products/1/stock
@@ -922,7 +991,7 @@ Content-Type: application/json
 }
 ```
 
-### 10.4 Process return
+### 10.5 Process return
 
 ```http
 POST https://dllni.mustafafares.com/api/v1/store-owner/orders/123/return
@@ -940,7 +1009,7 @@ Content-Type: application/json
 }
 ```
 
-### 10.5 Create employee
+### 10.6 Create employee
 
 ```http
 POST https://dllni.mustafafares.com/api/v1/store-owner/employees
@@ -948,7 +1017,6 @@ Authorization: Bearer {token}
 Content-Type: application/json
 
 {
-  "storeId": 1,
   "name": "Store Employee",
   "email": "store.employee@example.com",
   "phone": "+963955000111",
@@ -957,7 +1025,7 @@ Content-Type: application/json
 }
 ```
 
-### 10.6 Update employee status
+### 10.7 Update employee status
 
 ```http
 PATCH https://dllni.mustafafares.com/api/v1/store-owner/employees/7/status
@@ -997,14 +1065,14 @@ Content-Type: application/json
 }
 ```
 
-- **422 Unprocessable Entity:** Validation/state errors.
+- **422 Unprocessable Entity:** Validation/state errors (field-specific `errors` object).
 
 ```json
 {
   "message": "The given data was invalid.",
   "errors": {
-    "storeId": [
-      "The store id field is required."
+    "masterProductIds": [
+      "One or more requested master products are missing or inactive."
     ]
   }
 }

@@ -20,8 +20,8 @@ final class SmOrderStatusLogFilterRequest extends FormRequest
             'search' => 'sometimes|string|max:255',
             'filter.orderId' => 'sometimes|integer|exists:sm_orders,id',
             'filter.changedByUserId' => 'sometimes|integer|exists:users,id',
-            'filter.fromStatus' => 'sometimes|string|in:pending,accepted,preparing,ready_for_pickup,completed,cancelled',
-            'filter.toStatus' => 'sometimes|string|in:pending,accepted,preparing,ready_for_pickup,completed,cancelled',
+            'filter.fromStatus' => 'sometimes|string|in:pending,accepted,preparing,ready_for_pickup,picked_up,completed,cancelled',
+            'filter.toStatus' => 'sometimes|string|in:pending,accepted,preparing,ready_for_pickup,picked_up,completed,cancelled',
             'filter.search' => 'sometimes|string|max:255',
             'sort' => 'sometimes|string|in:createdAt,-createdAt',
         ];

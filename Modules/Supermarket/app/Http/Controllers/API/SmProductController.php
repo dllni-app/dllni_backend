@@ -19,6 +19,7 @@ use Modules\Supermarket\Http\Resources\SmProductResource;
 use Modules\Supermarket\Models\SmProduct;
 use Modules\Supermarket\Services\SmProductService;
 use Modules\Supermarket\Services\SmSemanticProductSearchService;
+use Modules\Supermarket\Services\StoreOwnerContextService;
 
 final class SmProductController
 {
@@ -26,6 +27,7 @@ final class SmProductController
         private SmProductService $service,
         private ActivityLogService $activityLogService,
         private SmSemanticProductSearchService $semanticSearchService,
+        private StoreOwnerContextService $storeOwnerContext,
     ) {}
 
     public function index(SmProductFilterRequest $request): AnonymousResourceCollection
@@ -81,11 +83,15 @@ final class SmProductController
 
     public function show(SmProduct $smProduct): SmProductResource
     {
+        $this->assertStoreOwnerProductBelongsToOwner($smProduct);
+
         return SmProductResource::make($smProduct->load('store', 'category', 'media', 'offerProducts.offer'));
     }
 
     public function update(SmProductRequest $request, SmProduct $smProduct): SmProductResource
     {
+        $this->assertStoreOwnerProductBelongsToOwner($smProduct);
+
         $product = $this->service->update(
             SmProductData::from($request->validated()),
             $smProduct,
@@ -97,6 +103,8 @@ final class SmProductController
 
     public function destroy(SmProduct $smProduct): Response
     {
+        $this->assertStoreOwnerProductBelongsToOwner($smProduct);
+
         $productName = $smProduct->name;
         $storeId = (int) $smProduct->store_id;
         $smProduct->delete();
@@ -108,6 +116,13 @@ final class SmProductController
     /**
      * @return array<int, UploadedFile>
      */
+    private function assertStoreOwnerProductBelongsToOwner(SmProduct $smProduct): void
+    {
+        if (request()->routeIs('store-owner.products.*')) {
+            $this->storeOwnerContext->store((int) $smProduct->store_id);
+        }
+    }
+
     private function extractImages(SmProductRequest $request): array
     {
         $primaryImage = $request->file('image');

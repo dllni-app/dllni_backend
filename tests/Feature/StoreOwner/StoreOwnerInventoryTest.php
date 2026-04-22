@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+use App\Enums\UserModuleType;
+use App\Models\User;
+use Database\Factories\SmCategoryFactory;
 use Database\Factories\SmOrderFactory;
 use Database\Factories\SmOrderItemFactory;
 use Database\Factories\SmProductFactory;
@@ -9,6 +12,7 @@ use Database\Factories\SmStoreFactory;
 use Database\Factories\UserFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
+use Laravel\Sanctum\Sanctum;
 use Modules\Supermarket\Enums\SmInventoryLogType;
 use Modules\Supermarket\Events\ReturnProcessed;
 use Modules\Supermarket\Events\StockUpdated;
@@ -18,9 +22,16 @@ use function Pest\Laravel\assertDatabaseHas;
 
 uses(RefreshDatabase::class);
 
+beforeEach(function (): void {
+    $this->seller = User::factory()->create([
+        'module_type' => UserModuleType::SupermarketSeller->value,
+    ]);
+    Sanctum::actingAs($this->seller);
+});
+
 describe('Low Stock Alerts', function (): void {
     it('returns products with low stock', function (): void {
-        $store = SmStoreFactory::new()->create();
+        $store = SmStoreFactory::new()->create(['owner_user_id' => $this->seller->id]);
 
         // Products with low stock
         $lowStockProduct1 = SmProductFactory::new()->create([
@@ -46,7 +57,7 @@ describe('Low Stock Alerts', function (): void {
             'low_stock_threshold' => 10,
         ]);
 
-        $response = $this->getJson("/api/v1/store-owner/products/low-stock?store_id={$store->id}");
+        $response = $this->getJson('/api/v1/store-owner/products/low-stock');
 
         $response->assertSuccessful()
             ->assertJson([
@@ -59,16 +70,74 @@ describe('Low Stock Alerts', function (): void {
             ->assertJsonPath('data.products.1.product_name', 'Low Stock Product 1');
     });
 
-    it('requires store_id parameter', function (): void {
+    it('returns forbidden when seller has no store', function (): void {
+        $otherSeller = User::factory()->create([
+            'module_type' => UserModuleType::SupermarketSeller->value,
+        ]);
+        Sanctum::actingAs($otherSeller);
+
         $response = $this->getJson('/api/v1/store-owner/products/low-stock');
 
-        $response->assertStatus(422);
+        $response->assertForbidden();
+    });
+});
+
+describe('Inventory summary', function (): void {
+    it('returns inventory value and counts for a store', function (): void {
+        $store = SmStoreFactory::new()->create(['owner_user_id' => $this->seller->id]);
+
+        SmProductFactory::new()->create([
+            'store_id' => $store->id,
+            'price' => 10,
+            'discounted_price' => null,
+            'stock_quantity' => 5,
+            'low_stock_threshold' => 20,
+            'is_available' => true,
+        ]);
+
+        SmProductFactory::new()->create([
+            'store_id' => $store->id,
+            'price' => 100,
+            'discounted_price' => 80,
+            'stock_quantity' => 2,
+            'low_stock_threshold' => 1,
+            'is_available' => true,
+        ]);
+
+        $response = $this->getJson('/api/v1/store-owner/inventory/summary');
+
+        $response->assertSuccessful()
+            ->assertJson([
+                'success' => true,
+                'data' => [
+                    'inventoryValue' => 210.0,
+                    'productSkus' => 2,
+                    'lowStockCount' => 1,
+                ],
+            ]);
+    });
+
+    it('returns forbidden for inventory summary when seller has no store', function (): void {
+        $otherSeller = User::factory()->create([
+            'module_type' => UserModuleType::SupermarketSeller->value,
+        ]);
+        Sanctum::actingAs($otherSeller);
+
+        $response = $this->getJson('/api/v1/store-owner/inventory/summary');
+
+        $response->assertForbidden();
     });
 });
 
 describe('Manual Stock Update', function (): void {
     it('allows setting stock to specific value', function (): void {
-        $product = SmProductFactory::new()->create(['stock_quantity' => 50]);
+        $store = SmStoreFactory::new()->create(['owner_user_id' => $this->seller->id]);
+        $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+        $product = SmProductFactory::new()->create([
+            'store_id' => $store->id,
+            'category_id' => $category->id,
+            'stock_quantity' => 50,
+        ]);
 
         $response = $this->putJson("/api/v1/store-owner/products/{$product->id}/stock", [
             'quantity' => 100,
@@ -95,7 +164,13 @@ describe('Manual Stock Update', function (): void {
     });
 
     it('allows incrementing stock', function (): void {
-        $product = SmProductFactory::new()->create(['stock_quantity' => 50]);
+        $store = SmStoreFactory::new()->create(['owner_user_id' => $this->seller->id]);
+        $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+        $product = SmProductFactory::new()->create([
+            'store_id' => $store->id,
+            'category_id' => $category->id,
+            'stock_quantity' => 50,
+        ]);
 
         $response = $this->putJson("/api/v1/store-owner/products/{$product->id}/stock", [
             'quantity' => 25,
@@ -108,7 +183,13 @@ describe('Manual Stock Update', function (): void {
     });
 
     it('allows decrementing stock', function (): void {
-        $product = SmProductFactory::new()->create(['stock_quantity' => 50]);
+        $store = SmStoreFactory::new()->create(['owner_user_id' => $this->seller->id]);
+        $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+        $product = SmProductFactory::new()->create([
+            'store_id' => $store->id,
+            'category_id' => $category->id,
+            'stock_quantity' => 50,
+        ]);
 
         $response = $this->putJson("/api/v1/store-owner/products/{$product->id}/stock", [
             'quantity' => 10,
@@ -121,7 +202,13 @@ describe('Manual Stock Update', function (): void {
     });
 
     it('prevents negative stock', function (): void {
-        $product = SmProductFactory::new()->create(['stock_quantity' => 10]);
+        $store = SmStoreFactory::new()->create(['owner_user_id' => $this->seller->id]);
+        $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+        $product = SmProductFactory::new()->create([
+            'store_id' => $store->id,
+            'category_id' => $category->id,
+            'stock_quantity' => 10,
+        ]);
 
         $response = $this->putJson("/api/v1/store-owner/products/{$product->id}/stock", [
             'quantity' => 20,
@@ -140,7 +227,13 @@ describe('Manual Stock Update', function (): void {
     it('dispatches StockUpdated event', function (): void {
         Event::fake([StockUpdated::class]);
 
-        $product = SmProductFactory::new()->create(['stock_quantity' => 50]);
+        $store = SmStoreFactory::new()->create(['owner_user_id' => $this->seller->id]);
+        $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+        $product = SmProductFactory::new()->create([
+            'store_id' => $store->id,
+            'category_id' => $category->id,
+            'stock_quantity' => 50,
+        ]);
 
         $this->putJson("/api/v1/store-owner/products/{$product->id}/stock", [
             'quantity' => 100,
@@ -157,14 +250,13 @@ describe('Manual Stock Update', function (): void {
 
 describe('Inventory Audit', function (): void {
     it('performs audit with matching stock', function (): void {
-        $store = SmStoreFactory::new()->create();
+        $store = SmStoreFactory::new()->create(['owner_user_id' => $this->seller->id]);
         $product = SmProductFactory::new()->create([
             'store_id' => $store->id,
             'stock_quantity' => 50,
         ]);
 
         $response = $this->postJson('/api/v1/store-owner/inventory/audit', [
-            'store_id' => $store->id,
             'products' => [
                 [
                     'product_id' => $product->id,
@@ -185,7 +277,7 @@ describe('Inventory Audit', function (): void {
     });
 
     it('corrects discrepancies found during audit', function (): void {
-        $store = SmStoreFactory::new()->create();
+        $store = SmStoreFactory::new()->create(['owner_user_id' => $this->seller->id]);
         $product1 = SmProductFactory::new()->create([
             'store_id' => $store->id,
             'name' => 'Product 1',
@@ -198,7 +290,6 @@ describe('Inventory Audit', function (): void {
         ]);
 
         $response = $this->postJson('/api/v1/store-owner/inventory/audit', [
-            'store_id' => $store->id,
             'products' => [
                 [
                     'product_id' => $product1->id,
@@ -235,7 +326,13 @@ describe('Inventory Audit', function (): void {
 
 describe('Product Expiration Management', function (): void {
     it('updates expiration date', function (): void {
-        $product = SmProductFactory::new()->create(['price' => 100]);
+        $store = SmStoreFactory::new()->create(['owner_user_id' => $this->seller->id]);
+        $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+        $product = SmProductFactory::new()->create([
+            'store_id' => $store->id,
+            'category_id' => $category->id,
+            'price' => 100,
+        ]);
         $futureDate = now()->addDays(30);
 
         $response = $this->putJson("/api/v1/store-owner/products/{$product->id}/expiration", [
@@ -256,7 +353,13 @@ describe('Product Expiration Management', function (): void {
     });
 
     it('suggests discount for expiring soon products', function (): void {
-        $product = SmProductFactory::new()->create(['price' => 100]);
+        $store = SmStoreFactory::new()->create(['owner_user_id' => $this->seller->id]);
+        $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+        $product = SmProductFactory::new()->create([
+            'store_id' => $store->id,
+            'category_id' => $category->id,
+            'price' => 100,
+        ]);
         $expiringDate = now()->addDays(5); // Within 7 days
 
         $response = $this->putJson("/api/v1/store-owner/products/{$product->id}/expiration", [
@@ -281,7 +384,12 @@ describe('Product Expiration Management', function (): void {
     });
 
     it('rejects past expiration dates', function (): void {
-        $product = SmProductFactory::new()->create();
+        $store = SmStoreFactory::new()->create(['owner_user_id' => $this->seller->id]);
+        $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+        $product = SmProductFactory::new()->create([
+            'store_id' => $store->id,
+            'category_id' => $category->id,
+        ]);
         $pastDate = now()->subDays(1);
 
         $response = $this->putJson("/api/v1/store-owner/products/{$product->id}/expiration", [
@@ -294,13 +402,19 @@ describe('Product Expiration Management', function (): void {
 
 describe('Order Returns', function (): void {
     it('processes return and increases stock', function (): void {
-        $order = SmOrderFactory::new()->create();
+        $store = SmStoreFactory::new()->create(['owner_user_id' => $this->seller->id]);
+        $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+        $product = SmProductFactory::new()->create([
+            'store_id' => $store->id,
+            'category_id' => $category->id,
+            'stock_quantity' => 20,
+        ]);
+        $order = SmOrderFactory::new()->create(['store_id' => $store->id]);
         $orderItem = SmOrderItemFactory::new()->create([
             'order_id' => $order->id,
+            'product_id' => $product->id,
             'quantity' => 5,
         ]);
-
-        $product = $orderItem->product;
         $initialStock = $product->stock_quantity;
 
         $response = $this->postJson("/api/v1/store-owner/orders/{$order->id}/return", [
@@ -340,9 +454,17 @@ describe('Order Returns', function (): void {
     it('dispatches ReturnProcessed event', function (): void {
         Event::fake([ReturnProcessed::class]);
 
-        $order = SmOrderFactory::new()->create();
+        $store = SmStoreFactory::new()->create(['owner_user_id' => $this->seller->id]);
+        $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+        $product = SmProductFactory::new()->create([
+            'store_id' => $store->id,
+            'category_id' => $category->id,
+            'stock_quantity' => 20,
+        ]);
+        $order = SmOrderFactory::new()->create(['store_id' => $store->id]);
         $orderItem = SmOrderItemFactory::new()->create([
             'order_id' => $order->id,
+            'product_id' => $product->id,
             'quantity' => 5,
         ]);
 
@@ -360,9 +482,16 @@ describe('Order Returns', function (): void {
     });
 
     it('prevents returning more than ordered', function (): void {
-        $order = SmOrderFactory::new()->create();
+        $store = SmStoreFactory::new()->create(['owner_user_id' => $this->seller->id]);
+        $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+        $product = SmProductFactory::new()->create([
+            'store_id' => $store->id,
+            'category_id' => $category->id,
+        ]);
+        $order = SmOrderFactory::new()->create(['store_id' => $store->id]);
         $orderItem = SmOrderItemFactory::new()->create([
             'order_id' => $order->id,
+            'product_id' => $product->id,
             'quantity' => 3,
         ]);
 
@@ -385,7 +514,7 @@ describe('Order Returns', function (): void {
 
 describe('Lost Opportunities Tracking', function (): void {
     it('retrieves lost opportunities report', function (): void {
-        $store = SmStoreFactory::new()->create();
+        $store = SmStoreFactory::new()->create(['owner_user_id' => $this->seller->id]);
         $product = SmProductFactory::new()->create(['store_id' => $store->id]);
         $customer = UserFactory::new()->create();
 
@@ -405,7 +534,7 @@ describe('Lost Opportunities Tracking', function (): void {
             'available_stock' => 5,
         ]);
 
-        $response = $this->getJson("/api/v1/store-owner/reports/lost-opportunities?store_id={$store->id}");
+        $response = $this->getJson('/api/v1/store-owner/reports/lost-opportunities');
 
         $response->assertSuccessful()
             ->assertJson([
@@ -423,7 +552,7 @@ describe('Lost Opportunities Tracking', function (): void {
     });
 
     it('filters by date range', function (): void {
-        $store = SmStoreFactory::new()->create();
+        $store = SmStoreFactory::new()->create(['owner_user_id' => $this->seller->id]);
         $product = SmProductFactory::new()->create(['store_id' => $store->id]);
 
         $oldOpportunity = SmLostOpportunity::create([
@@ -446,7 +575,7 @@ describe('Lost Opportunities Tracking', function (): void {
         $endDate = now()->toDateString();
 
         $response = $this->getJson(
-            "/api/v1/store-owner/reports/lost-opportunities?store_id={$store->id}&start_date={$startDate}&end_date={$endDate}"
+            "/api/v1/store-owner/reports/lost-opportunities?start_date={$startDate}&end_date={$endDate}"
         );
 
         $response->assertSuccessful()
@@ -461,9 +590,19 @@ describe('Lost Opportunities Tracking', function (): void {
 
 describe('Automatic Stock Deduction on Order Accept', function (): void {
     it('deducts stock when order is accepted', function (): void {
-        $order = SmOrderFactory::new()->create(['status' => 'pending']);
-        $product1 = SmProductFactory::new()->create(['stock_quantity' => 100]);
-        $product2 = SmProductFactory::new()->create(['stock_quantity' => 50]);
+        $store = SmStoreFactory::new()->create(['owner_user_id' => $this->seller->id]);
+        $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+        $order = SmOrderFactory::new()->create(['store_id' => $store->id, 'status' => 'pending']);
+        $product1 = SmProductFactory::new()->create([
+            'store_id' => $store->id,
+            'category_id' => $category->id,
+            'stock_quantity' => 100,
+        ]);
+        $product2 = SmProductFactory::new()->create([
+            'store_id' => $store->id,
+            'category_id' => $category->id,
+            'stock_quantity' => 50,
+        ]);
 
         SmOrderItemFactory::new()->create([
             'order_id' => $order->id,
@@ -492,8 +631,14 @@ describe('Automatic Stock Deduction on Order Accept', function (): void {
     });
 
     it('prevents accepting order with insufficient stock', function (): void {
-        $order = SmOrderFactory::new()->create(['status' => 'pending']);
-        $product = SmProductFactory::new()->create(['stock_quantity' => 5]);
+        $store = SmStoreFactory::new()->create(['owner_user_id' => $this->seller->id]);
+        $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+        $order = SmOrderFactory::new()->create(['store_id' => $store->id, 'status' => 'pending']);
+        $product = SmProductFactory::new()->create([
+            'store_id' => $store->id,
+            'category_id' => $category->id,
+            'stock_quantity' => 5,
+        ]);
 
         SmOrderItemFactory::new()->create([
             'order_id' => $order->id,

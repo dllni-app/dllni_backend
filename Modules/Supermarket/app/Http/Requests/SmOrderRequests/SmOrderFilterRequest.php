@@ -20,7 +20,7 @@ final class SmOrderFilterRequest extends FormRequest
             'search' => 'sometimes|string|max:255',
             'filter.customerId' => 'sometimes|integer|exists:users,id',
             'filter.storeId' => 'sometimes|integer|exists:sm_stores,id',
-            'filter.status' => 'sometimes|string|in:pending,accepted,preparing,ready_for_pickup,completed,cancelled',
+            'filter.status' => 'sometimes|string|in:pending,accepted,preparing,ready_for_pickup,picked_up,completed,cancelled',
             'filter.pickupMode' => 'sometimes|string|in:immediate_pickup,scheduled_pickup',
             'filter.orderNumber' => 'sometimes|string|max:255',
             'filter.search' => 'sometimes|string|max:255',

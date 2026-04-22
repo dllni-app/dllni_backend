@@ -28,7 +28,7 @@ final class SmOrderData extends Data
         public ?int $cancellationPolicyId,
         #[Max(255)]
         public ?string $orderNumber,
-        #[In(['pending', 'accepted', 'preparing', 'ready_for_pickup', 'completed', 'cancelled'])]
+        #[In(['pending', 'accepted', 'preparing', 'ready_for_pickup', 'picked_up', 'completed', 'cancelled'])]
         public ?string $status,
         #[In(['immediate_pickup', 'scheduled_pickup'])]
         public ?string $pickupMode,

@@ -17,13 +17,11 @@ final class StoreOwnerActivityLogController
     public function __invoke(Request $request): AnonymousResourceCollection
     {
         $request->validate([
-            'storeId' => 'required|integer|exists:sm_stores,id',
             'logName' => 'nullable|string|in:products,offers,orders,inventory,system',
             'perPage' => 'nullable|integer|min:1|max:100',
         ]);
 
-        $storeId = (int) $request->get('storeId');
-        $this->contextService->store($storeId);
+        $storeId = $this->contextService->ownedStore()->id;
 
         $perPage = (int) $request->get('perPage', 15);
         $logName = $request->get('logName');

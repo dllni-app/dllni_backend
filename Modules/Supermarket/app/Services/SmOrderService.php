@@ -14,6 +14,7 @@ use Modules\Supermarket\Data\SmOrderRejectStatusData;
 use Modules\Supermarket\Enums\RejectionType;
 use Modules\Supermarket\Enums\SmOrderStatus;
 use Modules\Supermarket\Models\SmOrder;
+use Modules\Supermarket\Models\SmOrderStatusLog;
 use Modules\Supermarket\Models\SmStore;
 use Modules\Supermarket\Notifications\OrderRejectedNotification;
 use Modules\Supermarket\Notifications\StoreTrustWarningNotification;
@@ -169,6 +170,43 @@ final class SmOrderService
             // Update order status
             $order->update([
                 'status' => SmOrderStatus::Accepted,
+            ]);
+
+            return $order->refresh();
+        });
+    }
+
+    /**
+     * Hand order to courier after it is ready (ready_for_pickup → picked_up).
+     *
+     * Idempotent: if already picked_up, returns the order without a new log entry.
+     *
+     * @throws Exception if order is not ready_for_pickup (and not already picked_up)
+     */
+    public function handOverToCourier(SmOrder $order, ?int $actorUserId): SmOrder
+    {
+        return DB::transaction(function () use ($order, $actorUserId): SmOrder {
+            if ($order->status === SmOrderStatus::PickedUp) {
+                return $order->refresh();
+            }
+
+            if ($order->status !== SmOrderStatus::ReadyForPickup) {
+                throw new Exception(
+                    "Cannot hand over order {$order->order_number}. Order must be in ready_for_pickup status, currently in {$order->status->value}"
+                );
+            }
+
+            $order->update([
+                'status' => SmOrderStatus::PickedUp,
+                'picked_up_at' => now(),
+            ]);
+
+            SmOrderStatusLog::query()->create([
+                'order_id' => $order->id,
+                'from_status' => SmOrderStatus::ReadyForPickup->value,
+                'to_status' => SmOrderStatus::PickedUp->value,
+                'notes' => 'Handed to courier.',
+                'changed_by_user_id' => $actorUserId,
             ]);
 
             return $order->refresh();

@@ -19,7 +19,7 @@ final class StoreOwnerEmployeeStoreController
     ): JsonResponse {
         $validated = $request->validated();
 
-        $store = $context->store((int) $validated['storeId']);
+        $store = $context->ownedStore();
 
         $staff = $employeeService->createOrLink(
             $store,

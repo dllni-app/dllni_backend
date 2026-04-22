@@ -228,6 +228,7 @@ return [
             'accepted' => 'مقبول',
             'preparing' => 'قيد التحضير',
             'ready_for_pickup' => 'جاهز للاستلام',
+            'picked_up' => 'مع المندوب',
             'completed' => 'مكتمل',
             'cancelled' => 'ملغي',
         ],

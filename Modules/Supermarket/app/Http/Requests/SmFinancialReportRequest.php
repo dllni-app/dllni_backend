@@ -19,7 +19,7 @@ final class SmFinancialReportRequest extends FormRequest
             'startDate' => 'required|date',
             'endDate' => 'required|date|after_or_equal:startDate',
             'storeId' => 'nullable|integer|exists:sm_stores,id',
-            'status' => 'nullable|string|in:pending,accepted,ready_for_pickup,completed,cancelled',
+            'status' => 'nullable|string|in:pending,accepted,ready_for_pickup,picked_up,completed,cancelled',
         ];
     }
 }

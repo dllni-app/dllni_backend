@@ -30,7 +30,7 @@ final class SmOrderRequest extends FormRequest
                 'max:255',
                 Rule::unique('sm_orders', 'order_number')->ignore($orderId),
             ],
-            'status' => 'sometimes|required|string|in:pending,accepted,preparing,ready_for_pickup,completed,cancelled',
+            'status' => 'sometimes|required|string|in:pending,accepted,preparing,ready_for_pickup,picked_up,completed,cancelled',
             'pickupMode' => 'sometimes|required|string|in:immediate_pickup,scheduled_pickup',
             'pickupScheduledFor' => 'nullable|date',
             'readyForPickupAt' => 'nullable|date',
