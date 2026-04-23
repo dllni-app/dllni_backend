@@ -109,6 +109,7 @@ Route::prefix('v1')->group(function () {
         Route::post('orders/{order}/return', [StoreOwnerInventoryController::class, 'processReturn'])->name('orders.return');
 
         // Inventory Management - Specific routes before wildcards
+        Route::get('inventory/summary', [StoreOwnerInventoryController::class, 'summary'])->name('inventory.summary');
         Route::get('products/low-stock', [StoreOwnerInventoryController::class, 'lowStock'])->name('products.low-stock');
         Route::put('products/{product}/stock', [StoreOwnerInventoryController::class, 'updateStock'])->name('products.update-stock');
         Route::put('products/{product}/expiration', [StoreOwnerInventoryController::class, 'updateExpiration'])->name('products.update-expiration');

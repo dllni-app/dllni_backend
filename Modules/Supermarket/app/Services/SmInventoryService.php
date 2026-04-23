@@ -90,6 +90,35 @@ final class SmInventoryService
     }
 
     /**
+     * Get inventory summary metrics for store owner dashboard.
+     *
+     * inventoryValue = SUM(stock_quantity * COALESCE(discounted_price, price))
+     */
+    public function getInventorySummary(int $storeId): array
+    {
+        $inventoryValue = (float) SmProduct::query()
+            ->where('store_id', $storeId)
+            ->selectRaw('COALESCE(SUM(stock_quantity * COALESCE(discounted_price, price)), 0) as total')
+            ->value('total');
+
+        $productSkus = SmProduct::query()
+            ->where('store_id', $storeId)
+            ->count();
+
+        $lowStockCount = SmProduct::query()
+            ->where('store_id', $storeId)
+            ->where('is_available', true)
+            ->whereColumn('stock_quantity', '<=', 'low_stock_threshold')
+            ->count();
+
+        return [
+            'inventoryValue' => round($inventoryValue, 2),
+            'productSkus' => $productSkus,
+            'lowStockCount' => $lowStockCount,
+        ];
+    }
+
+    /**
      * Manually update product stock.
      */
     public function updateStock(SmProduct $product, SmStockUpdateData $data, ?int $userId = null): SmProduct
