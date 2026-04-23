@@ -58,7 +58,6 @@ Route::prefix('v1')->middleware(['auth:sanctum', InjectStoreIdFromOwnerContext::
     Route::apiResource('sm-carts', SmCartController::class)->names('sm-carts');
     Route::apiResource('sm-cart-items', SmCartItemController::class)->names('sm-cart-items');
     Route::apiResource('sm-stores', SmStoreController::class)->names('sm-stores');
-    Route::apiResource('sm-store-hours', SmStoreHoursController::class)->names('sm-store-hours');
     Route::apiResource('sm-store-documents', SmStoreDocumentController::class)->names('sm-store-documents');
     Route::apiResource('sm-store-daily-stats', SmStoreDailyStatController::class)->only(['index', 'show'])->names('sm-store-daily-stats');
     Route::apiResource('sm-store-trust-logs', SmStoreTrustLogController::class)->only(['index', 'show'])->names('sm-store-trust-logs');
@@ -123,5 +122,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', InjectStoreIdFromOwnerContext::
         // Store Management (scoped to authenticated owner's default store)
         Route::get('store', [StoreOwnerStoreController::class, 'show'])->name('stores.show');
         Route::put('store', [StoreOwnerStoreController::class, 'update'])->name('stores.update');
+        Route::get('store/operating-hours', [SmStoreHoursController::class, 'show']);
+        Route::put('store/operating-hours', [SmStoreHoursController::class, 'update']);
     });
 });

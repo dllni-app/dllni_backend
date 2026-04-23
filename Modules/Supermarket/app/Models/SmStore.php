@@ -42,6 +42,7 @@ final class SmStore extends Model
         'warning_count',
         'is_active',
         'is_featured',
+        'is_temporarily_closed',
         'suspension_until',
     ];
 
@@ -145,6 +146,7 @@ final class SmStore extends Model
             'average_rating' => 'decimal:2',
             'is_active' => 'boolean',
             'is_featured' => 'boolean',
+            'is_temporarily_closed' => 'boolean',
             'suspension_until' => 'datetime',
         ];
     }

@@ -13,22 +13,22 @@ final class SmStoreHoursSeeder extends Seeder
     {
         $stores = SmStore::all();
         $schedule = [
-            ['opens_at' => '08:00', 'closes_at' => '22:00'],
-            ['opens_at' => '08:00', 'closes_at' => '22:00'],
-            ['opens_at' => '08:00', 'closes_at' => '22:00'],
-            ['opens_at' => '08:00', 'closes_at' => '22:00'],
-            ['opens_at' => '08:00', 'closes_at' => '23:00'],
-            ['opens_at' => '09:00', 'closes_at' => '23:00'],
-            ['opens_at' => '10:00', 'closes_at' => '21:00'],
+            ['day_of_week' => 'monday', 'open_time' => '08:00', 'close_time' => '22:00'],
+            ['day_of_week' => 'tuesday', 'open_time' => '08:00', 'close_time' => '22:00'],
+            ['day_of_week' => 'wednesday', 'open_time' => '08:00', 'close_time' => '22:00'],
+            ['day_of_week' => 'thursday', 'open_time' => '08:00', 'close_time' => '22:00'],
+            ['day_of_week' => 'friday', 'open_time' => '08:00', 'close_time' => '23:00'],
+            ['day_of_week' => 'saturday', 'open_time' => '09:00', 'close_time' => '23:00'],
+            ['day_of_week' => 'sunday', 'open_time' => '10:00', 'close_time' => '21:00'],
         ];
 
         foreach ($stores as $store) {
-            for ($dayOfWeek = 0; $dayOfWeek <= 6; $dayOfWeek++) {
+            foreach ($schedule as $daySchedule) {
                 $store->storeHours()->firstOrCreate(
-                    ['store_id' => $store->id, 'day_of_week' => $dayOfWeek],
+                    ['store_id' => $store->id, 'day_of_week' => $daySchedule['day_of_week']],
                     [
-                        'opens_at' => $schedule[$dayOfWeek]['opens_at'],
-                        'closes_at' => $schedule[$dayOfWeek]['closes_at'],
+                        'open_time' => $daySchedule['open_time'],
+                        'close_time' => $daySchedule['close_time'],
                         'is_closed' => false,
                     ]
                 );
