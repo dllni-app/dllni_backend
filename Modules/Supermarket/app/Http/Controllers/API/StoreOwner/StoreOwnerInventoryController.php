@@ -7,6 +7,7 @@ namespace Modules\Supermarket\Http\Controllers\API\StoreOwner;
 use App\Services\ActivityLogService;
 use Carbon\Carbon;
 use Exception;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -99,15 +100,23 @@ final class StoreOwnerInventoryController
      */
     public function inventorySummary(Request $request): JsonResponse
     {
-        $storeId = $this->context->ownedStore()->id;
-
         try {
+            $storeId = $this->context->ownedStore()->id;
             $summary = $this->inventoryService->getInventorySummary($storeId);
 
             return response()->json([
                 'success' => true,
                 'data' => $summary,
             ]);
+        } catch (AuthorizationException $e) {
+            $message = str_contains($e->getMessage(), 'No store found')
+                ? 'No store found for this owner.'
+                : $e->getMessage();
+
+            return response()->json([
+                'success' => false,
+                'message' => $message,
+            ], 403);
         } catch (Exception $e) {
             return response()->json([
                 'success' => false,
