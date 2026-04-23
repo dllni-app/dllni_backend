@@ -90,30 +90,28 @@ final class SmInventoryService
     }
 
     /**
-     * Get inventory summary metrics for store owner dashboard.
+     * Aggregate inventory metrics for a store (retail value uses the same unit price as listings: discounted price when set, otherwise base price).
      *
-     * inventoryValue = SUM(stock_quantity * COALESCE(discounted_price, price))
+     * @return array{inventoryValue: float, productSkus: int, lowStockCount: int}
      */
     public function getInventorySummary(int $storeId): array
     {
-        $inventoryValue = (float) SmProduct::query()
+        $aggregate = SmProduct::query()
             ->where('store_id', $storeId)
-            ->selectRaw('COALESCE(SUM(stock_quantity * COALESCE(discounted_price, price)), 0) as total')
-            ->value('total');
-
-        $productSkus = SmProduct::query()
-            ->where('store_id', $storeId)
-            ->count();
+            ->selectRaw(
+                'COALESCE(SUM(stock_quantity * COALESCE(discounted_price, price)), 0) as inventory_value, COUNT(*) as product_skus'
+            )
+            ->first();
 
         $lowStockCount = SmProduct::query()
             ->where('store_id', $storeId)
-            ->where('is_available', true)
             ->whereColumn('stock_quantity', '<=', 'low_stock_threshold')
+            ->where('is_available', true)
             ->count();
 
         return [
-            'inventoryValue' => round($inventoryValue, 2),
-            'productSkus' => $productSkus,
+            'inventoryValue' => round((float) ($aggregate->inventory_value ?? 0), 2),
+            'productSkus' => (int) ($aggregate->product_skus ?? 0),
             'lowStockCount' => $lowStockCount,
         ];
     }

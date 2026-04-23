@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Supermarket\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Modules\Supermarket\Enums\DayOfWeek;
 
 final class SmStoreHoursRequest extends FormRequest
 {
@@ -15,12 +16,16 @@ final class SmStoreHoursRequest extends FormRequest
 
     public function rules(): array
     {
+        $days = implode(',', array_column(DayOfWeek::cases(), 'value'));
+
         return [
-            'storeId' => 'sometimes|required|integer|exists:sm_stores,id',
-            'dayOfWeek' => 'sometimes|required|integer|min:0|max:6',
-            'opensAt' => 'nullable|string',
-            'closesAt' => 'nullable|string',
-            'isClosed' => 'sometimes|boolean',
+            'isTemporarilyClosed' => 'sometimes|boolean',
+            'dailyHours' => 'sometimes|array',
+            'dailyHours.*.dayOfWeek' => "required_with:dailyHours|string|in:{$days}",
+            'dailyHours.*.isEnabled' => 'sometimes|boolean',
+            'dailyHours.*.timeSlots' => 'sometimes|array',
+            'dailyHours.*.timeSlots.*.startTime' => 'required_with:dailyHours.*.timeSlots|string',
+            'dailyHours.*.timeSlots.*.endTime' => 'required_with:dailyHours.*.timeSlots|string',
         ];
     }
 }

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Notifications\Cleaning;
 
 use App\Models\Dispute;
-use DevKandil\NotiFire\Enums\MessagePriority;
+use App\Notifications\Core\NotificationPayloadBuilder;
 use DevKandil\NotiFire\FcmMessage;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -14,17 +14,20 @@ use Illuminate\Notifications\Notification;
 final class DisputeOpenedNotification extends Notification implements ShouldQueue
 {
     use Queueable;
+    private const string CanonicalType = 'cleaning.booking.dispute_opened';
 
     public function __construct(
         private readonly Dispute $dispute
-    ) {}
+    ) {
+        $this->onQueue('notifications');
+    }
 
     /**
      * @return array<int, string>
      */
     public function via(object $notifiable): array
     {
-        return ['database', 'fcm'];
+        return $this->payloadBuilder()->resolveChannels(self::CanonicalType, $notifiable);
     }
 
     /**
@@ -34,29 +37,30 @@ final class DisputeOpenedNotification extends Notification implements ShouldQueu
     {
         $booking = $this->dispute->booking;
 
-        return [
-            'type' => 'dispute_opened',
-            'title' => 'نزاع مفتوح',
-            'body' => 'تم فتح نزاع على إحدى حجوزاتك. يرجى الرد على الشكوى.',
-            'bookingId' => $booking ? (int) $booking->getKey() : null,
-            'disputeId' => $this->dispute->id,
-        ];
+        return $this->payloadBuilder()->makeDatabasePayload(
+            canonicalType: self::CanonicalType,
+            extraData: array_filter([
+                'bookingId' => $booking ? (int) $booking->getKey() : null,
+                'disputeId' => (int) $this->dispute->id,
+            ], fn (mixed $value): bool => $value !== null),
+        );
     }
 
     public function toFcm(object $notifiable): FcmMessage
     {
         $booking = $this->dispute->booking;
-        $bookingId = $booking ? (int) $booking->getKey() : null;
 
-        return FcmMessage::create(
-            'نزاع مفتوح',
-            'تم فتح نزاع على إحدى حجوزاتك. يرجى الرد على الشكوى.',
-        )
-            ->priority(MessagePriority::HIGH)
-            ->data(array_filter([
-                'type' => 'dispute_opened',
-                'bookingId' => $bookingId,
+        return $this->payloadBuilder()->makeFcmMessage(
+            canonicalType: self::CanonicalType,
+            extraData: array_filter([
+                'bookingId' => $booking ? (int) $booking->getKey() : null,
                 'disputeId' => $this->dispute->id,
-            ], fn ($v) => $v !== null));
+            ], fn (mixed $value): bool => $value !== null),
+        );
+    }
+
+    private function payloadBuilder(): NotificationPayloadBuilder
+    {
+        return app(NotificationPayloadBuilder::class);
     }
 }

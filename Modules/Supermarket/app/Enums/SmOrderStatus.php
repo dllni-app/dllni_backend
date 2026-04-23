@@ -10,6 +10,7 @@ enum SmOrderStatus: string
     case Accepted = 'accepted';
     case Preparing = 'preparing';
     case ReadyForPickup = 'ready_for_pickup';
+    case PickedUp = 'picked_up';
     case Completed = 'completed';
     case Cancelled = 'cancelled';
 }

@@ -226,6 +226,7 @@ return [
             'accepted' => 'Accepted',
             'preparing' => 'Preparing',
             'ready_for_pickup' => 'Ready for pickup',
+            'picked_up' => 'With courier',
             'completed' => 'Completed',
             'cancelled' => 'Cancelled',
         ],

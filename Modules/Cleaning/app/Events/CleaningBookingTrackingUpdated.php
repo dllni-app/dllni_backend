@@ -28,7 +28,7 @@ final class CleaningBookingTrackingUpdated implements ShouldBroadcast
     public function broadcastOn(): array
     {
         return [
-            new PrivateChannel('cleaning-booking.'.$this->cleaningBookingId),
+            new PrivateChannel('cleaning-booking.' . $this->cleaningBookingId),
         ];
     }
 

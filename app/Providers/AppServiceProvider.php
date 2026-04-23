@@ -8,10 +8,13 @@ use App\Models\Dispute;
 use App\Models\MasterProduct;
 use App\Models\User;
 use App\Models\Worker;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Resturants\Models\Category;
@@ -69,6 +72,13 @@ final class AppServiceProvider extends ServiceProvider
         // "cleaning_admin.overview.title" resolve properly.
         $this->app->useLangPath(base_path('lang'));
 
+        RateLimiter::for('cleaning-start-verification', function (Request $request): Limit {
+            $userId = $request->user()?->id ?? 'guest';
+            $orderId = (string) $request->route('order');
+
+            return Limit::perMinute(5)->by($userId . '|' . $orderId);
+        });
+
         $this->bootModelsDefaults();
         $this->bootMorphMap();
         $this->bootBroadcastChannels();
@@ -115,6 +125,10 @@ final class AppServiceProvider extends ServiceProvider
             }
 
             return false;
+        }, ['guards' => ['sanctum']]);
+
+        Broadcast::channel('cleaning-worker.{workerId}', function (User $user, int $workerId): bool {
+            return (int) ($user->worker?->id ?? 0) === $workerId;
         }, ['guards' => ['sanctum']]);
 
         Broadcast::routes(['middleware' => ['auth:sanctum']]);

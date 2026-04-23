@@ -5,20 +5,18 @@ declare(strict_types=1);
 namespace Modules\Supermarket\Http\Controllers\API\StoreOwner;
 
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Modules\Supermarket\Enums\SmOrderStatus;
 use Modules\Supermarket\Models\SmOrder;
+use Modules\Supermarket\Services\StoreOwnerContextService;
 
 final class StoreOwnerDashboardController
 {
-    public function __invoke(Request $request): JsonResponse
-    {
-        $request->validate([
-            'storeId' => 'required|exists:sm_stores,id',
-        ]);
+    public function __construct(private StoreOwnerContextService $context) {}
 
-        $storeId = (int) $request->input('storeId');
+    public function __invoke(): JsonResponse
+    {
+        $storeId = $this->context->ownedStore()->id;
         $today = Carbon::today();
 
         // Base query for today's orders

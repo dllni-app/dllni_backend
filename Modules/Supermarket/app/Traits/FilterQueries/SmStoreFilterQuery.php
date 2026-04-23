@@ -120,9 +120,9 @@ trait SmStoreFilterQuery
         return $query->whereHas('storeHours', fn ($hours) => $hours
             ->where('day_of_week', $dayOfWeek)
             ->where('is_closed', false)
-            ->whereNotNull('opens_at')
-            ->whereNotNull('closes_at')
-            ->where('opens_at', '<=', $time)
-            ->where('closes_at', '>=', $time));
+            ->whereNotNull('open_time')
+            ->whereNotNull('close_time')
+            ->where('open_time', '<=', $time)
+            ->where('close_time', '>=', $time));
     }
 }

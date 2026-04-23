@@ -2,12 +2,15 @@
 
 declare(strict_types=1);
 
+use App\Enums\UserModuleType;
 use App\Models\User;
 use Database\Factories\SmStoreFactory;
 use Laravel\Sanctum\Sanctum;
 
 beforeEach(function (): void {
-    $this->user = User::factory()->create();
+    $this->user = User::factory()->create([
+        'module_type' => UserModuleType::SupermarketSeller->value,
+    ]);
     Sanctum::actingAs($this->user);
 
     // Create a store owned by the authenticated user
@@ -19,7 +22,7 @@ beforeEach(function (): void {
 });
 
 it('retrieves store details', function (): void {
-    $response = $this->getJson("/api/v1/store-owner/stores/{$this->store->id}");
+    $response = $this->getJson('/api/v1/store-owner/store');
 
     $response->assertOk();
     expect($response->json('data.id'))->toBe($this->store->id);
@@ -38,7 +41,7 @@ it('updates store successfully', function (): void {
         'phone' => '+1234567890',
     ];
 
-    $response = $this->putJson("/api/v1/store-owner/stores/{$this->store->id}", $payload);
+    $response = $this->putJson('/api/v1/store-owner/store', $payload);
 
     $response->assertOk();
     expect($response->json('data.name'))->toBe('Updated Store Name');
@@ -65,7 +68,7 @@ it('validates store name is required when updating', function (): void {
         'description' => 'Some description',
     ];
 
-    $response = $this->putJson("/api/v1/store-owner/stores/{$this->store->id}", $payload);
+    $response = $this->putJson('/api/v1/store-owner/store', $payload);
 
     $response->assertStatus(422);
 });
@@ -75,7 +78,7 @@ it('returns updated store with loaded relationships', function (): void {
         'name' => 'New Store Name',
     ];
 
-    $response = $this->putJson("/api/v1/store-owner/stores/{$this->store->id}", $payload);
+    $response = $this->putJson('/api/v1/store-owner/store', $payload);
 
     $response->assertOk();
     expect($response->json('data'))->toHaveKeys([
@@ -92,10 +95,15 @@ it('returns updated store with loaded relationships', function (): void {
     ]);
 });
 
-it('returns 404 for non-existent store', function (): void {
-    $response = $this->getJson('/api/v1/store-owner/stores/99999');
+it('returns forbidden when seller has no store', function (): void {
+    $sellerWithoutStore = User::factory()->create([
+        'module_type' => UserModuleType::SupermarketSeller->value,
+    ]);
+    Sanctum::actingAs($sellerWithoutStore);
 
-    $response->assertNotFound();
+    $response = $this->getJson('/api/v1/store-owner/store');
+
+    $response->assertForbidden();
 });
 
 it('handles partial updates', function (): void {
@@ -103,7 +111,7 @@ it('handles partial updates', function (): void {
         'description' => 'Only updating description',
     ];
 
-    $response = $this->putJson("/api/v1/store-owner/stores/{$this->store->id}", $payload);
+    $response = $this->putJson('/api/v1/store-owner/store', $payload);
 
     $response->assertOk();
     expect($response->json('data.description'))->toBe('Only updating description');

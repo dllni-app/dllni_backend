@@ -5,12 +5,22 @@ declare(strict_types=1);
 namespace Modules\Supermarket\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Modules\Supermarket\Services\StoreOwnerContextService;
 
 final class SmProductRequest extends FormRequest
 {
     public function authorize(): bool
     {
         return true;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if ($this->routeIs('store-owner.products.store')) {
+            $this->merge([
+                'storeId' => app(StoreOwnerContextService::class)->ownedStore()->id,
+            ]);
+        }
     }
 
     public function rules(): array

@@ -6,8 +6,8 @@ namespace Modules\Supermarket\Services;
 
 use Carbon\CarbonImmutable;
 use App\Models\MasterProduct;
-use App\Models\User;
 use App\Services\ActivityLogService;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -28,19 +28,8 @@ final class SmProductService
      * @param  array<int, int>  $masterProductIds
      * @return Collection<int, SmProduct>
      */
-    public function bulkCreateFromMasterProductIdsForOwner(array $masterProductIds, User $owner): Collection
+    public function bulkCreateFromMasterProductIdsForStore(array $masterProductIds, SmStore $store): Collection
     {
-        $store = SmStore::query()
-            ->where('owner_user_id', $owner->id)
-            ->orderBy('id')
-            ->first();
-
-        if (! $store) {
-            throw ValidationException::withMessages([
-                'store' => ['No store found for the authenticated store owner.'],
-            ]);
-        }
-
         $requestedMasterProductIds = collect($masterProductIds)
             ->map(fn(mixed $id): int => (int) $id)
             ->unique()
@@ -65,7 +54,7 @@ final class SmProductService
         $defaultExpiresAt = CarbonImmutable::now()->addYear()->toDateTimeString();
 
         return DB::transaction(function () use ($activeMasterProducts, $requestedMasterProductIds, $store, $defaultExpiresAt): Collection {
-            $products = collect();
+            $products = new EloquentCollection;
 
             foreach ($requestedMasterProductIds as $masterProductId) {
                 $masterProduct = $activeMasterProducts->get($masterProductId);

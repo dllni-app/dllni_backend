@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\UserModuleType;
 use App\Models\User;
 use Database\Factories\SmOrderFactory;
 use Database\Factories\SmStoreFactory;
@@ -9,7 +10,9 @@ use Laravel\Sanctum\Sanctum;
 use Modules\Supermarket\Enums\SmOrderStatus;
 
 beforeEach(function (): void {
-    $this->user = User::factory()->create();
+    $this->user = User::factory()->create([
+        'module_type' => UserModuleType::SupermarketSeller->value,
+    ]);
     Sanctum::actingAs($this->user);
 
     // Create a store owned by the authenticated user
@@ -32,7 +35,7 @@ it('retrieves dashboard data for a store', function (): void {
         'created_at' => now(),
     ]);
 
-    $response = $this->getJson("/api/v1/store-owner/dashboard?storeId={$this->store->id}");
+    $response = $this->getJson('/api/v1/store-owner/dashboard');
 
     $response->assertOk();
     expect($response->json('data.totalOrders'))->toBe(8);
@@ -40,17 +43,15 @@ it('retrieves dashboard data for a store', function (): void {
     expect($response->json('data.newOrders'))->toBe(5);
 });
 
-it('requires storeId parameter', function (): void {
+it('returns forbidden when seller has no store', function (): void {
+    $sellerWithoutStore = User::factory()->create([
+        'module_type' => UserModuleType::SupermarketSeller->value,
+    ]);
+    Sanctum::actingAs($sellerWithoutStore);
+
     $response = $this->getJson('/api/v1/store-owner/dashboard');
 
-    $response->assertStatus(422);
-    expect($response->json('errors.storeId'))->not->toBeNull();
-});
-
-it('validates storeId exists', function (): void {
-    $response = $this->getJson('/api/v1/store-owner/dashboard?storeId=99999');
-
-    $response->assertStatus(422);
+    $response->assertForbidden();
 });
 
 it('counts pending orders correctly', function (): void {
@@ -85,7 +86,7 @@ it('counts pending orders correctly', function (): void {
         'created_at' => now(),
     ]);
 
-    $response = $this->getJson("/api/v1/store-owner/dashboard?storeId={$this->store->id}");
+    $response = $this->getJson('/api/v1/store-owner/dashboard');
 
     $response->assertOk();
     // Pending orders = not completed and not cancelled = 3 (Pending, Accepted, Preparing)
@@ -114,7 +115,7 @@ it('calculates total sales from completed orders only', function (): void {
         'created_at' => now(),
     ]);
 
-    $response = $this->getJson("/api/v1/store-owner/dashboard?storeId={$this->store->id}");
+    $response = $this->getJson('/api/v1/store-owner/dashboard');
 
     $response->assertOk();
     expect($response->json('data.totalSales'))->toBe(150.75);
@@ -137,7 +138,7 @@ it('calculates positive percentage when sales increase from yesterday', function
         'created_at' => now(),
     ]);
 
-    $response = $this->getJson("/api/v1/store-owner/dashboard?storeId={$this->store->id}");
+    $response = $this->getJson('/api/v1/store-owner/dashboard');
 
     $response->assertOk();
     // (150 - 100) / 100 * 100 = 50%
@@ -161,7 +162,7 @@ it('calculates negative percentage when sales decrease from yesterday', function
         'created_at' => now(),
     ]);
 
-    $response = $this->getJson("/api/v1/store-owner/dashboard?storeId={$this->store->id}");
+    $response = $this->getJson('/api/v1/store-owner/dashboard');
 
     $response->assertOk();
     // (150 - 200) / 200 * 100 = -25%
@@ -179,7 +180,7 @@ it('returns zero percentage when yesterday had no sales', function (): void {
         'created_at' => now(),
     ]);
 
-    $response = $this->getJson("/api/v1/store-owner/dashboard?storeId={$this->store->id}");
+    $response = $this->getJson('/api/v1/store-owner/dashboard');
 
     $response->assertOk();
     // When yesterday = 0, should return 0 to avoid division by zero
@@ -203,7 +204,7 @@ it('returns zero percentage when sales are equal to yesterday', function (): voi
         'created_at' => now(),
     ]);
 
-    $response = $this->getJson("/api/v1/store-owner/dashboard?storeId={$this->store->id}");
+    $response = $this->getJson('/api/v1/store-owner/dashboard');
 
     $response->assertOk();
     // (100 - 100) / 100 * 100 = 0%
@@ -241,7 +242,7 @@ it('only includes completed orders in sales percentage calculation', function ()
         'created_at' => now(),
     ]);
 
-    $response = $this->getJson("/api/v1/store-owner/dashboard?storeId={$this->store->id}");
+    $response = $this->getJson('/api/v1/store-owner/dashboard');
 
     $response->assertOk();
     // (120 - 100) / 100 * 100 = 20%
@@ -265,7 +266,7 @@ it('calculates percentage with decimal precision', function (): void {
         'created_at' => now(),
     ]);
 
-    $response = $this->getJson("/api/v1/store-owner/dashboard?storeId={$this->store->id}");
+    $response = $this->getJson('/api/v1/store-owner/dashboard');
 
     $response->assertOk();
     // (135.79 - 123.45) / 123.45 * 100 ≈ 10.00%

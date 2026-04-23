@@ -16,6 +16,9 @@ final class MasterProductResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $primaryMedia = $this->getFirstMedia(MasterProduct::IMAGE_COLLECTION)
+            ?? $this->getFirstMedia();
+
         return [
             'id' => $this->id,
             'masterProductId' => $this->id,
@@ -24,7 +27,9 @@ final class MasterProductResource extends JsonResource
             'brand' => $this->brand,
             'description' => $this->description,
             'isActive' => (bool) $this->is_active,
-            'primaryImage' => MediaResource::make($this->getFirstMedia())?->toArray($request),
+            'primaryImage' => $primaryMedia !== null
+                ? MediaResource::make($primaryMedia)->toArray($request)
+                : null,
 
         ];
     }

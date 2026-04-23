@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Notifications\Cleaning;
 
-use DevKandil\NotiFire\Enums\MessagePriority;
+use App\Notifications\Core\NotificationPayloadBuilder;
 use DevKandil\NotiFire\FcmMessage;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -14,17 +14,20 @@ use Modules\Cleaning\Models\CleaningTimeWarning;
 final class ExtensionRequestNotification extends Notification implements ShouldQueue
 {
     use Queueable;
+    private const string CanonicalType = 'cleaning.booking.extension_request';
 
     public function __construct(
         private readonly CleaningTimeWarning $timeWarning
-    ) {}
+    ) {
+        $this->onQueue('notifications');
+    }
 
     /**
      * @return array<int, string>
      */
     public function via(object $notifiable): array
     {
-        return ['database', 'fcm'];
+        return $this->payloadBuilder()->resolveChannels(self::CanonicalType, $notifiable);
     }
 
     /**
@@ -34,29 +37,30 @@ final class ExtensionRequestNotification extends Notification implements ShouldQ
     {
         $booking = $this->timeWarning->booking;
 
-        return [
-            'type' => 'extension_request',
-            'title' => 'طلب تمديد وقت',
-            'body' => 'العميل يطلب تمديد وقت الحجز. قم بقبول أو رفض الطلب.',
-            'bookingId' => $booking ? (int) $booking->getKey() : null,
-            'timeWarningId' => $this->timeWarning->id,
-        ];
+        return $this->payloadBuilder()->makeDatabasePayload(
+            canonicalType: self::CanonicalType,
+            extraData: array_filter([
+                'bookingId' => $booking ? (int) $booking->getKey() : null,
+                'timeWarningId' => (int) $this->timeWarning->id,
+            ], fn (mixed $value): bool => $value !== null),
+        );
     }
 
     public function toFcm(object $notifiable): FcmMessage
     {
         $booking = $this->timeWarning->booking;
-        $bookingId = $booking ? (int) $booking->getKey() : null;
 
-        return FcmMessage::create(
-            'طلب تمديد وقت',
-            'العميل يطلب تمديد وقت الحجز. قم بقبول أو رفض الطلب.',
-        )
-            ->priority(MessagePriority::HIGH)
-            ->data(array_filter([
-                'type' => 'extension_request',
-                'bookingId' => $bookingId,
+        return $this->payloadBuilder()->makeFcmMessage(
+            canonicalType: self::CanonicalType,
+            extraData: array_filter([
+                'bookingId' => $booking ? (int) $booking->getKey() : null,
                 'timeWarningId' => $this->timeWarning->id,
-            ], fn ($v) => $v !== null));
+            ], fn (mixed $value): bool => $value !== null),
+        );
+    }
+
+    private function payloadBuilder(): NotificationPayloadBuilder
+    {
+        return app(NotificationPayloadBuilder::class);
     }
 }

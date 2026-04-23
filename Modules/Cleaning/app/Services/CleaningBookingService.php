@@ -4,18 +4,25 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Services;
 
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use Modules\Cleaning\Data\CleaningBookingData;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
+use Modules\Cleaning\Events\CleaningOrderAwaitingCustomerCompletion;
+use Modules\Cleaning\Events\CleaningOrderAwaitingStartVerification;
 use Modules\Cleaning\Events\WorkerArrived;
 use Modules\Cleaning\Events\WorkerLocationUpdated;
 use Modules\Cleaning\Models\CleaningBooking;
 
 final class CleaningBookingService
 {
+    private const SECURITY_CODE_TTL_MINUTES = 10;
+
+    private const SECURITY_CODE_LENGTH = 4;
+
     public function store(CleaningBookingData $data): CleaningBooking
     {
         return DB::transaction(static function () use ($data) {
@@ -102,6 +109,43 @@ final class CleaningBookingService
         return $updated;
     }
 
+    /**
+     * @return array{securityCode: string, expiresAt: string}
+     */
+    public function issueSecurityCode(CleaningBooking $booking): array
+    {
+        return DB::transaction(function () use ($booking): array {
+            if (! in_array($booking->status, [CleaningBookingStatus::WorkerAssigned, CleaningBookingStatus::AwaitingStartVerification], true)) {
+                throw new InvalidArgumentException('Security code is only available for bookings ready to start.');
+            }
+
+            $securityCode = mb_str_pad((string) random_int(0, 9999), self::SECURITY_CODE_LENGTH, '0', STR_PAD_LEFT);
+            $expiresAt = now()->addMinutes(self::SECURITY_CODE_TTL_MINUTES);
+
+            DB::table('booking_security_codes')->updateOrInsert(
+                [
+                    'booking_id' => $booking->id,
+                    'booking_type' => $booking->getMorphClass(),
+                ],
+                [
+                    'code' => $this->securityCodeHash($securityCode),
+                    'code_hash' => $this->securityCodeHash($securityCode),
+                    'attempts' => 0,
+                    'expires_at' => $expiresAt,
+                    'consumed_at' => null,
+                    'last_attempt_at' => null,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]
+            );
+
+            return [
+                'securityCode' => $securityCode,
+                'expiresAt' => $expiresAt->toIso8601String(),
+            ];
+        });
+    }
+
     public function updateLocation(CleaningBooking $booking, float $latitude, float $longitude): void
     {
         if ($booking->status !== CleaningBookingStatus::WorkerAssigned || $booking->started_travel_at === null) {
@@ -119,20 +163,28 @@ final class CleaningBookingService
     public function arrive(CleaningBooking $booking): CleaningBooking
     {
         $updated = DB::transaction(function () use ($booking) {
-            if ($booking->status !== CleaningBookingStatus::WorkerAssigned) {
+            if (! in_array($booking->status, [CleaningBookingStatus::WorkerAssigned, CleaningBookingStatus::AwaitingStartVerification], true)) {
                 throw new InvalidArgumentException('Booking must be in worker_assigned status to mark arrival.');
             }
             if ($booking->started_travel_at === null) {
                 throw new InvalidArgumentException('Worker must have started travel before marking arrival.');
             }
 
-            $booking->update(['arrived_at' => now()]);
-            $booking->refresh();
+            $booking->update([
+                'status' => CleaningBookingStatus::AwaitingStartVerification,
+                'arrived_at' => now(),
+            ]);
 
             return $booking->fresh();
         });
 
         WorkerArrived::dispatch($updated->id, (string) $updated->arrived_at?->toIso8601String());
+        CleaningOrderAwaitingStartVerification::dispatch(
+            $updated->id,
+            $updated->worker_id,
+            (string) $updated->status?->value,
+            $this->activeSecurityCodeExpiresAt($updated)?->toIso8601String(),
+        );
         $this->dispatchTrackingUpdate($updated);
 
         return $updated;
@@ -141,6 +193,25 @@ final class CleaningBookingService
     public function startWork(CleaningBooking $booking): CleaningBooking
     {
         $updated = DB::transaction(static function () use ($booking) {
+            if ($booking->status === CleaningBookingStatus::AwaitingStartVerification) {
+                $securityCode = DB::table('booking_security_codes')
+                    ->where('booking_id', $booking->id)
+                    ->where('booking_type', $booking->getMorphClass())
+                    ->orderByDesc('id')
+                    ->first();
+
+                if (! $securityCode || $securityCode->consumed_at === null) {
+                    throw new InvalidArgumentException('Customer must verify the security code before work can start.');
+                }
+
+                $booking->update([
+                    'status' => CleaningBookingStatus::InProgress,
+                    'work_started_at' => now(),
+                ]);
+
+                return $booking->fresh();
+            }
+
             if ($booking->status !== CleaningBookingStatus::WorkerAssigned) {
                 throw new InvalidArgumentException('Booking must be assigned to start work.');
             }
@@ -162,17 +233,23 @@ final class CleaningBookingService
     {
         $updated = DB::transaction(static function () use ($booking) {
             if ($booking->status !== CleaningBookingStatus::InProgress) {
-                throw new InvalidArgumentException('Booking must be in progress to complete.');
+                throw new InvalidArgumentException('Booking must be in progress to mark completion.');
             }
 
             $booking->update([
-                'status' => CleaningBookingStatus::Completed,
+                'status' => CleaningBookingStatus::AwaitingCustomerCompletion,
                 'work_finished_at' => now(),
             ]);
 
             return $booking->fresh();
         });
 
+        CleaningOrderAwaitingCustomerCompletion::dispatch(
+            $updated->id,
+            $updated->worker_id,
+            (string) $updated->status?->value,
+            now()->addMinutes(30)->toIso8601String(),
+        );
         $this->dispatchTrackingUpdate($updated);
 
         return $updated;
@@ -214,8 +291,29 @@ final class CleaningBookingService
             'arrivedAt' => $booking->arrived_at?->toIso8601String(),
             'workStartedAt' => $booking->work_started_at?->toIso8601String(),
             'workFinishedAt' => $booking->work_finished_at?->toIso8601String(),
+            'customerConfirmedAt' => $booking->customer_confirmed_at?->toIso8601String(),
             'cancelledAt' => $booking->cancelled_at?->toIso8601String(),
             'updatedAt' => now()->toIso8601String(),
         ]);
+    }
+
+    private function activeSecurityCodeExpiresAt(CleaningBooking $booking): ?\Carbon\CarbonInterface
+    {
+        $record = DB::table('booking_security_codes')
+            ->where('booking_id', $booking->id)
+            ->where('booking_type', $booking->getMorphClass())
+            ->orderByDesc('id')
+            ->first();
+
+        if (! $record || $record->expires_at === null) {
+            return null;
+        }
+
+        return Carbon::parse($record->expires_at);
+    }
+
+    private function securityCodeHash(string $code): string
+    {
+        return hash_hmac('sha256', $code, (string) config('app.key'));
     }
 }

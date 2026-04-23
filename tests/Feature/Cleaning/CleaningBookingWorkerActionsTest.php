@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 use App\Models\User;
 use App\Models\Worker;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
+use Modules\Cleaning\Events\CleaningOrderAwaitingCustomerCompletion;
+use Modules\Cleaning\Events\CleaningOrderAwaitingStartVerification;
 use Modules\Cleaning\Events\WorkerArrived;
 use Modules\Cleaning\Events\WorkerLocationUpdated;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
@@ -157,7 +160,7 @@ it('starts travel for a cleaning booking (sets started_travel_at, status stays w
 });
 
 it('completes a cleaning booking', function () {
-    Event::fake([CleaningBookingTrackingUpdated::class]);
+    Event::fake([CleaningBookingTrackingUpdated::class, CleaningOrderAwaitingCustomerCompletion::class]);
 
     $workerUser = User::factory()->create(['email' => 'worker-complete@example.com']);
     $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
@@ -172,16 +175,16 @@ it('completes a cleaning booking', function () {
     $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/complete");
 
     $response->assertOk();
-    expect($response->json('data.status'))->toBe('completed');
+    expect($response->json('data.status'))->toBe('awaiting_customer_completion');
     $this->assertDatabaseHas('cleaning_bookings', [
         'id' => $booking->id,
-        'status' => CleaningBookingStatus::Completed->value,
+        'status' => CleaningBookingStatus::AwaitingCustomerCompletion->value,
     ]);
     expect($response->json('data.workFinishedAt'))->not->toBeNull();
 
     Event::assertDispatched(CleaningBookingTrackingUpdated::class, function (CleaningBookingTrackingUpdated $event) use ($booking): bool {
         return $event->cleaningBookingId === $booking->id
-            && $event->tracking['status'] === CleaningBookingStatus::Completed->value
+            && $event->tracking['status'] === CleaningBookingStatus::AwaitingCustomerCompletion->value
             && $event->tracking['workFinishedAt'] !== null;
     });
 });
@@ -435,13 +438,20 @@ it('returns security code for assigned booking', function () {
     $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/security-code");
 
     $response->assertOk();
-    expect($response->json('data.securityCode'))->toBeString()->toHaveLength(5);
-    expect($response->json('data.securityCode'))->toMatch('/^\d{5}$/');
-    $booking->refresh();
-    expect($booking->security_code)->toBe($response->json('data.securityCode'));
+    expect($response->json('data.securityCode'))->toBeString()->toHaveLength(4);
+    expect($response->json('data.securityCode'))->toMatch('/^\d{4}$/');
+
+    $record = DB::table('booking_security_codes')
+        ->where('booking_id', $booking->id)
+        ->where('booking_type', $booking->getMorphClass())
+        ->first();
+
+    expect($record)->not->toBeNull();
+    expect($record->code_hash)->toBe(hash_hmac('sha256', $response->json('data.securityCode'), (string) config('app.key')));
+    expect($record->code)->toBe($record->code_hash);
 });
 
-it('returns same security code on second request', function () {
+it('returns a valid security code on a second request', function () {
     $workerUser = User::factory()->create(['email' => 'worker-security2@example.com']);
     $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
@@ -450,13 +460,13 @@ it('returns same security code on second request', function () {
         'worker_id' => $worker->id,
         'billing_policy_id' => $this->billingPolicy->id,
         'status' => CleaningBookingStatus::WorkerAssigned,
-        'security_code' => '12345',
     ]);
 
     $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/security-code");
 
     $response->assertOk();
-    expect($response->json('data.securityCode'))->toBe('12345');
+    expect($response->json('data.securityCode'))->toMatch('/^\d{4}$/');
+    expect($response->json('data.expiresAt'))->not->toBeNull();
 });
 
 it('returns 422 for security code when booking is pending', function () {
@@ -542,7 +552,7 @@ it('returns 422 when update location before start travel', function () {
 });
 
 it('marks worker arrived and broadcasts', function () {
-    Event::fake([WorkerArrived::class]);
+    Event::fake([WorkerArrived::class, CleaningOrderAwaitingStartVerification::class]);
 
     $workerUser = User::factory()->create(['email' => 'worker-arrive@example.com']);
     $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
@@ -558,11 +568,11 @@ it('marks worker arrived and broadcasts', function () {
     $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/arrive");
 
     $response->assertOk();
-    expect($response->json('data.status'))->toBe('worker_assigned');
+    expect($response->json('data.status'))->toBe('awaiting_start_verification');
     expect($response->json('data.arrivedAt'))->not->toBeNull();
     $this->assertDatabaseHas('cleaning_bookings', [
         'id' => $booking->id,
-        'status' => CleaningBookingStatus::WorkerAssigned->value,
+        'status' => CleaningBookingStatus::AwaitingStartVerification->value,
     ]);
     $booking->refresh();
     expect($booking->arrived_at)->not->toBeNull();

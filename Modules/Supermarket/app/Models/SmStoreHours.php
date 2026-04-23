@@ -6,6 +6,7 @@ namespace Modules\Supermarket\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Modules\Supermarket\Enums\DayOfWeek;
 use Modules\Supermarket\Traits\FilterQueries\SmStoreHoursFilterQuery;
 
 final class SmStoreHours extends Model
@@ -17,8 +18,8 @@ final class SmStoreHours extends Model
     protected $fillable = [
         'store_id',
         'day_of_week',
-        'opens_at',
-        'closes_at',
+        'open_time',
+        'close_time',
         'is_closed',
     ];
 
@@ -30,6 +31,7 @@ final class SmStoreHours extends Model
     protected function casts(): array
     {
         return [
+            'day_of_week' => DayOfWeek::class,
             'is_closed' => 'boolean',
         ];
     }

@@ -44,10 +44,10 @@ use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerMasterProductS
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerOfferWeeklySummaryController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerPermissionsController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerStoreController;
+use Modules\Supermarket\Http\Middleware\InjectStoreIdFromOwnerContext;
 
-Route::prefix('v1')->group(function () {
-    // Dashboard and reports are system-admin only.
-    Route::middleware(['auth:sanctum', 'dashboard.admin'])->group(function () {
+Route::prefix('v1')->middleware(['auth:sanctum', InjectStoreIdFromOwnerContext::class])->group(function () {
+    Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('sm-dashboard', [SmDashboardController::class, 'index'])->name('dashboard');
         Route::get('sm-reports/financial', [SmFinancialReportController::class, 'index'])->name('reports.financial');
         Route::get('sm-reports/performance', [SmPerformanceAnalyticsController::class, 'index'])->name('reports.performance');
@@ -57,7 +57,6 @@ Route::prefix('v1')->group(function () {
     Route::apiResource('sm-carts', SmCartController::class)->names('sm-carts');
     Route::apiResource('sm-cart-items', SmCartItemController::class)->names('sm-cart-items');
     Route::apiResource('sm-stores', SmStoreController::class)->names('sm-stores');
-    Route::apiResource('sm-store-hours', SmStoreHoursController::class)->names('sm-store-hours');
     Route::apiResource('sm-store-documents', SmStoreDocumentController::class)->names('sm-store-documents');
     Route::apiResource('sm-store-daily-stats', SmStoreDailyStatController::class)->only(['index', 'show'])->names('sm-store-daily-stats');
     Route::apiResource('sm-store-trust-logs', SmStoreTrustLogController::class)->only(['index', 'show'])->names('sm-store-trust-logs');
@@ -106,10 +105,11 @@ Route::prefix('v1')->group(function () {
         // Order Management
         Route::post('orders/{order}/accept', [SmOrderStatusController::class, 'accept'])->name('orders.accept');
         Route::post('orders/{order}/reject', [SmOrderStatusController::class, 'reject'])->name('orders.reject');
+        Route::post('orders/{order}/courier-handover', [SmOrderStatusController::class, 'courierHandover'])->name('orders.courier-handover');
         Route::post('orders/{order}/return', [StoreOwnerInventoryController::class, 'processReturn'])->name('orders.return');
 
         // Inventory Management - Specific routes before wildcards
-        Route::get('inventory/summary', [StoreOwnerInventoryController::class, 'summary'])->name('inventory.summary');
+        Route::get('inventory/summary', [StoreOwnerInventoryController::class, 'inventorySummary'])->name('inventory.summary');
         Route::get('products/low-stock', [StoreOwnerInventoryController::class, 'lowStock'])->name('products.low-stock');
         Route::put('products/{product}/stock', [StoreOwnerInventoryController::class, 'updateStock'])->name('products.update-stock');
         Route::put('products/{product}/expiration', [StoreOwnerInventoryController::class, 'updateExpiration'])->name('products.update-expiration');
@@ -119,8 +119,10 @@ Route::prefix('v1')->group(function () {
         // Product CRUD
         Route::apiResource('products', SmProductController::class)->names('products');
 
-        // Store Management
-        Route::get('stores/{store}', [StoreOwnerStoreController::class, 'show'])->name('stores.show');
-        Route::put('stores/{store}', [StoreOwnerStoreController::class, 'update'])->name('stores.update');
+        // Store Management (scoped to authenticated owner's default store)
+        Route::get('store', [StoreOwnerStoreController::class, 'show'])->name('stores.show');
+        Route::put('store', [StoreOwnerStoreController::class, 'update'])->name('stores.update');
+        Route::get('store/operating-hours', [SmStoreHoursController::class, 'show']);
+        Route::put('store/operating-hours', [SmStoreHoursController::class, 'update']);
     });
 });

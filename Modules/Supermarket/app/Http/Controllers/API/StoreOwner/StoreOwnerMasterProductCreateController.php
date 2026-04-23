@@ -19,11 +19,11 @@ final class StoreOwnerMasterProductCreateController
         SmProductService $service
     ): JsonResponse {
         $validated = $request->validated();
-        $owner = $context->owner();
+        $store = $context->ownedStore();
 
-        $createdProducts = $service->bulkCreateFromMasterProductIdsForOwner(
+        $createdProducts = $service->bulkCreateFromMasterProductIdsForStore(
             masterProductIds: $validated['masterProductIds'],
-            owner: $owner
+            store: $store
         );
 
         return SmProductResource::collection($createdProducts)

@@ -865,6 +865,8 @@ Employees are now created as restaurant-linked users with direct permissions on 
 
 These power the in-app notification center for the restaurant owner app. They combine **user notifications** (order events, offers) and **system alerts** (maintenance, announcements).
 
+Shared canonical notification types and templates are documented in [API_CONTRACT_NOTIFICATIONS_UNIFIED.md](API_CONTRACT_NOTIFICATIONS_UNIFIED.md).
+
 ### 9.1 List notifications
 
 | Method | Path                                          | Description                                    |
@@ -930,10 +932,17 @@ These power the in-app notification center for the restaurant owner app. They co
 | ------------------ | ------- | ----------- |
 | id                 | string  | Notification id with prefix: `user:{uuid}` or `system:{id}`. |
 | source             | string  | `user_notification` or `system_alert`. |
+| module             | string  | Module source such as `restaurant`, `supermarket`, `cleaning`. |
 | category           | string  | See §10.3 `OwnerNotificationCategory`. |
+| type               | string \| null | Legacy notification type for compatibility. |
+| canonicalType / canonical_type | string \| null | Canonical namespaced notification key. |
+| priority           | string | `high` or `normal`. |
+| icon               | string \| null | Notification icon URL when available. |
 | title, body        | string  | Localized title/body. |
-| meta               | object  | Payload for deep-linking (e.g. `orderId`, `offerId`). |
-| createdAt          | string  | ISO datetime. |
+| data               | object  | Normalized payload for deep linking. |
+| meta               | object  | Backward-compatible payload wrapper. |
+| readAt / read_at   | string \| null | Read timestamp, null when unread. |
+| createdAt / created_at | string  | ISO datetime creation timestamp. |
 | isRead             | boolean | True when user has read/acknowledged it. |
 | meta.unreadTotal   | number  | Total unread notifications (for badge). |
 | meta.tabCounts     | object  | Count per tab. |

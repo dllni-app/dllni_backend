@@ -28,9 +28,15 @@ final class SmStoreShowController
                 'highestDiscountOffer',
                 'storeHours',
                 'categories',
-                'products.category',
-                'products.media',
-                'products.offerProducts.offer',
+                'products' => fn ($query) => $query
+                    ->where('is_available', true)
+                    ->latest('id')
+                    ->limit(5)
+                    ->with([
+                        'category',
+                        'media',
+                        'offerProducts.offer',
+                    ]),
                 'offers',
                 'coupons',
                 'orders',

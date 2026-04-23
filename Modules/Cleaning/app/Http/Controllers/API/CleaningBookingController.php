@@ -7,6 +7,7 @@ namespace Modules\Cleaning\Http\Controllers\API;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 use Modules\Cleaning\Data\CleaningBookingData;
@@ -71,23 +72,26 @@ final class CleaningBookingController
 
         if (! in_array($cleaning_booking->status, [
             CleaningBookingStatus::WorkerAssigned,
-            CleaningBookingStatus::InProgress,
+            CleaningBookingStatus::AwaitingStartVerification,
         ], true)) {
             throw ValidationException::withMessages([
-                'status' => ['Security code is only available for assigned or in-progress bookings.'],
+                'status' => ['Security code is only available for bookings ready to start.'],
             ]);
         }
 
-        if (empty($cleaning_booking->security_code)) {
-            $cleaning_booking->update([
-                'security_code' => mb_str_pad((string) random_int(0, 99_999), 5, '0', STR_PAD_LEFT),
+        try {
+            $generated = $this->cleaningBookingService->issueSecurityCode($cleaning_booking);
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages([
+                'status' => [$e->getMessage()],
             ]);
-            $cleaning_booking->refresh();
         }
 
         return response()->json([
+            'message' => __('Security code generated successfully.'),
             'data' => [
-                'securityCode' => $cleaning_booking->security_code,
+                'securityCode' => $generated['securityCode'],
+                'expiresAt' => $generated['expiresAt'],
             ],
         ]);
     }
@@ -243,7 +247,7 @@ final class CleaningBookingController
 
     private function ensureWorkerCanActOnBooking(CleaningBooking $booking, bool $requireOwnership = true): void
     {
-        $worker = auth()->user()?->worker;
+        $worker = Auth::user()?->worker;
 
         if (! $worker) {
             abort(403, 'User must have an associated worker.');

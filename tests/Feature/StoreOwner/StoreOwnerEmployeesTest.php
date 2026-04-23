@@ -54,7 +54,6 @@ it('creates employee and syncs selected permissions', function (): void {
     $profileImage = UploadedFile::fake()->image('employee.jpg');
 
     $response = $this->post('/api/v1/store-owner/employees', [
-        'storeId' => $this->store->id,
         'name' => 'Store Employee',
         'email' => 'store.employee@example.com',
         'phone' => '+963955000111',
@@ -81,7 +80,7 @@ it('creates employee and syncs selected permissions', function (): void {
         'is_active' => true,
     ]);
 
-    $listResponse = $this->getJson("/api/v1/store-owner/employees?storeId={$this->store->id}");
+    $listResponse = $this->getJson('/api/v1/store-owner/employees');
 
     $listResponse->assertOk();
     expect(collect($listResponse->json('data.employees'))->pluck('user.email')->all())

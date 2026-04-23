@@ -19,6 +19,7 @@ use Modules\Supermarket\Http\Resources\SmProductResource;
 use Modules\Supermarket\Models\SmProduct;
 use Modules\Supermarket\Services\SmProductService;
 use Modules\Supermarket\Services\SmSemanticProductSearchService;
+use Modules\Supermarket\Services\StoreOwnerContextService;
 
 final class SmProductController
 {
@@ -26,6 +27,7 @@ final class SmProductController
         private SmProductService $service,
         private ActivityLogService $activityLogService,
         private SmSemanticProductSearchService $semanticSearchService,
+        private StoreOwnerContextService $storeOwnerContext,
     ) {}
 
     public function index(SmProductFilterRequest $request): AnonymousResourceCollection
@@ -79,35 +81,45 @@ final class SmProductController
         return response()->json($result, Response::HTTP_CREATED);
     }
 
-    public function show(SmProduct $smProduct): SmProductResource
+    public function show(SmProduct $product): SmProductResource
     {
-        return SmProductResource::make($smProduct->load('store', 'category', 'media', 'offerProducts.offer'));
-    }
-
-    public function update(SmProductRequest $request, SmProduct $smProduct): SmProductResource
-    {
-        $product = $this->service->update(
-            SmProductData::from($request->validated()),
-            $smProduct,
-            $this->extractImages($request)
-        );
+        $this->assertStoreOwnerProductBelongsToOwner($product);
 
         return SmProductResource::make($product->load('store', 'category', 'media', 'offerProducts.offer'));
     }
 
-    public function destroy(SmProduct $smProduct): Response
+    public function update(SmProductRequest $request, SmProduct $product): SmProductResource
     {
-        $productName = $smProduct->name;
-        $storeId = (int) $smProduct->store_id;
-        $smProduct->delete();
+        $this->assertStoreOwnerProductBelongsToOwner($product);
+
+        $updatedProduct = $this->service->update(
+            SmProductData::from($request->validated()),
+            $product,
+            $this->extractImages($request)
+        );
+
+        return SmProductResource::make($updatedProduct->load('store', 'category', 'media', 'offerProducts.offer'));
+    }
+
+    public function destroy(SmProduct $product): Response
+    {
+        $this->assertStoreOwnerProductBelongsToOwner($product);
+
+        $productName = $product->name;
+        $storeId = (int) $product->store_id;
+        $product->delete();
         $this->activityLogService->logSmProductDeleted($productName, $storeId);
 
         return response()->noContent();
     }
 
-    /**
-     * @return array<int, UploadedFile>
-     */
+    private function assertStoreOwnerProductBelongsToOwner(SmProduct $product): void
+    {
+        if (request()->routeIs('store-owner.products.*')) {
+            $this->storeOwnerContext->store((int) $product->store_id);
+        }
+    }
+
     private function extractImages(SmProductRequest $request): array
     {
         $primaryImage = $request->file('image');

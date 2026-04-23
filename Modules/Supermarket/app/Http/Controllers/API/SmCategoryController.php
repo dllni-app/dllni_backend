@@ -23,7 +23,7 @@ final class SmCategoryController
     {
         $categories = SmCategory::getQuery()
             ->withCount('products')
-            ->paginate($request->get('perPage', 20));
+            ->get();
 
         return SmCategoryResource::collection($categories);
     }

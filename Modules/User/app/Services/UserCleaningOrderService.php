@@ -4,18 +4,24 @@ declare(strict_types=1);
 
 namespace Modules\User\Services;
 
+use Carbon\Carbon;
 use App\Models\CancellationPolicy;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Modules\Cleaning\Events\ArrivalVerified;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
+use Modules\Cleaning\Events\CompletionDecisionMade;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 final class UserCleaningOrderService
 {
+    private const MAX_SECURITY_CODE_ATTEMPTS = 5;
+
     public function __construct(
         private UserCleaningOrderEstimationService $estimationService,
     ) {}
@@ -183,18 +189,170 @@ final class UserCleaningOrderService
         ]);
 
         $updated = $booking->fresh();
+        $this->dispatchTrackingUpdate($updated);
 
-        CleaningBookingTrackingUpdated::dispatch($updated->id, [
-            'cleaningBookingId' => $updated->id,
-            'status' => $updated->status?->value,
-            'workerId' => $updated->worker_id,
-            'startedTravelAt' => $updated->started_travel_at?->toIso8601String(),
-            'arrivedAt' => $updated->arrived_at?->toIso8601String(),
-            'workStartedAt' => $updated->work_started_at?->toIso8601String(),
-            'workFinishedAt' => $updated->work_finished_at?->toIso8601String(),
-            'cancelledAt' => $updated->cancelled_at?->toIso8601String(),
-            'updatedAt' => now()->toIso8601String(),
+        return $updated;
+    }
+
+    public function confirmStartVerification(CleaningBooking $booking, string $code): CleaningBooking
+    {
+        if ($booking->status !== CleaningBookingStatus::AwaitingStartVerification) {
+            throw ValidationException::withMessages([
+                'status' => ['Order is not waiting for start verification.'],
+            ]);
+        }
+
+        return DB::transaction(function () use ($booking, $code): CleaningBooking {
+            $record = DB::table('booking_security_codes')
+                ->where('booking_id', $booking->id)
+                ->where('booking_type', $booking->getMorphClass())
+                ->orderByDesc('id')
+                ->lockForUpdate()
+                ->first();
+
+            if (! $record) {
+                throw ValidationException::withMessages([
+                    'code' => ['Security code is not available for this order.'],
+                ]);
+            }
+
+            if (($record->consumed_at ?? null) !== null) {
+                return $booking->fresh();
+            }
+
+            if (now()->greaterThan(Carbon::parse((string) $record->expires_at))) {
+                throw ValidationException::withMessages([
+                    'code' => ['Security code has expired.'],
+                ]);
+            }
+
+            if ((int) ($record->attempts ?? 0) >= self::MAX_SECURITY_CODE_ATTEMPTS) {
+                throw new HttpException(429, 'Too many failed verification attempts. Please try again later.');
+            }
+
+            $providedHash = hash_hmac('sha256', $code, (string) config('app.key'));
+            $expectedHash = (string) ($record->code_hash ?? '');
+            $legacyCode = (string) ($record->code ?? '');
+
+            $isMatch = $expectedHash !== ''
+                ? hash_equals($expectedHash, $providedHash)
+                : hash_equals($legacyCode, $code);
+
+            if (! $isMatch) {
+                DB::table('booking_security_codes')
+                    ->where('id', $record->id)
+                    ->update([
+                        'attempts' => ((int) $record->attempts) + 1,
+                        'last_attempt_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+
+                throw ValidationException::withMessages([
+                    'code' => ['Invalid security code.'],
+                ]);
+            }
+
+            DB::table('booking_security_codes')
+                ->where('id', $record->id)
+                ->update([
+                    'attempts' => ((int) $record->attempts) + 1,
+                    'consumed_at' => now(),
+                    'last_attempt_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+            $booking->update([
+                'status' => CleaningBookingStatus::InProgress,
+                'work_started_at' => now(),
+                'customer_confirmed_at' => now(),
+            ]);
+
+            $updated = $booking->fresh();
+
+            $this->dispatchTrackingUpdate($updated);
+            ArrivalVerified::dispatch(
+                $updated->id,
+                $updated->worker_id,
+                (string) $updated->arrived_at?->toIso8601String(),
+            );
+
+            return $updated;
+        });
+    }
+
+    public function confirmCompletion(CleaningBooking $booking): CleaningBooking
+    {
+        if ($booking->status !== CleaningBookingStatus::AwaitingCustomerCompletion) {
+            throw ValidationException::withMessages([
+                'status' => ['Order is not waiting for completion confirmation.'],
+            ]);
+        }
+
+        $booking->update([
+            'status' => CleaningBookingStatus::Completed,
+            'customer_confirmed_at' => now(),
         ]);
+
+        $updated = $booking->fresh();
+        $this->dispatchTrackingUpdate($updated);
+        CompletionDecisionMade::dispatch(
+            $updated->id,
+            $updated->worker_id,
+            'approved',
+            null,
+            now()->toIso8601String(),
+        );
+
+        return $updated;
+    }
+
+    public function rejectCompletion(CleaningBooking $booking): CleaningBooking
+    {
+        if ($booking->status !== CleaningBookingStatus::AwaitingCustomerCompletion) {
+            throw ValidationException::withMessages([
+                'status' => ['Order is not waiting for completion confirmation.'],
+            ]);
+        }
+
+        $booking->update([
+            'status' => CleaningBookingStatus::InProgress,
+            'work_finished_at' => null,
+        ]);
+
+        $updated = $booking->fresh();
+        $this->dispatchTrackingUpdate($updated);
+        CompletionDecisionMade::dispatch(
+            $updated->id,
+            $updated->worker_id,
+            'rejected',
+            null,
+            now()->toIso8601String(),
+        );
+
+        return $updated;
+    }
+
+    public function requestCompletionExtension(CleaningBooking $booking): CleaningBooking
+    {
+        if ($booking->status !== CleaningBookingStatus::AwaitingCustomerCompletion) {
+            throw ValidationException::withMessages([
+                'status' => ['Order is not waiting for completion confirmation.'],
+            ]);
+        }
+
+        $booking->update([
+            'status' => CleaningBookingStatus::TimeExtensionRequested,
+        ]);
+
+        $updated = $booking->fresh();
+        $this->dispatchTrackingUpdate($updated);
+        CompletionDecisionMade::dispatch(
+            $updated->id,
+            $updated->worker_id,
+            'extension_requested',
+            null,
+            now()->toIso8601String(),
+        );
 
         return $updated;
     }
@@ -223,9 +381,25 @@ final class UserCleaningOrderService
     private function generateBookingNumber(): string
     {
         do {
-            $bookingNumber = 'CLN-USER-'.Str::upper(Str::random(8));
+            $bookingNumber = 'CLN-USER-' . Str::upper(Str::random(8));
         } while (CleaningBooking::query()->where('booking_number', $bookingNumber)->exists());
 
         return $bookingNumber;
+    }
+
+    private function dispatchTrackingUpdate(CleaningBooking $booking): void
+    {
+        CleaningBookingTrackingUpdated::dispatch($booking->id, [
+            'cleaningBookingId' => $booking->id,
+            'status' => $booking->status?->value,
+            'workerId' => $booking->worker_id,
+            'startedTravelAt' => $booking->started_travel_at?->toIso8601String(),
+            'arrivedAt' => $booking->arrived_at?->toIso8601String(),
+            'workStartedAt' => $booking->work_started_at?->toIso8601String(),
+            'workFinishedAt' => $booking->work_finished_at?->toIso8601String(),
+            'customerConfirmedAt' => $booking->customer_confirmed_at?->toIso8601String(),
+            'cancelledAt' => $booking->cancelled_at?->toIso8601String(),
+            'updatedAt' => now()->toIso8601String(),
+        ]);
     }
 }

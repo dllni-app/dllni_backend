@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\UserModuleType;
 use App\Models\User;
 use Carbon\Carbon;
 use Database\Factories\SmCategoryFactory;
@@ -22,7 +23,9 @@ afterEach(function (): void {
 it('returns weekly offers summary with active scheduled used and ended counts', function (): void {
     Carbon::setTestNow(Carbon::create(2026, 3, 18, 12, 0, 0));
 
-    $owner = User::factory()->create();
+    $owner = User::factory()->create([
+        'module_type' => UserModuleType::SupermarketSeller->value,
+    ]);
     Sanctum::actingAs($owner);
 
     $store = SmStoreFactory::new()->create([
@@ -133,7 +136,7 @@ it('returns weekly offers summary with active scheduled used and ended counts', 
         'product_id' => $productC->id,
     ]);
 
-    $response = getJson("/api/v1/store-owner/offers/weekly-summary?storeId={$store->id}");
+    $response = getJson('/api/v1/store-owner/offers/weekly-summary');
 
     $response->assertOk();
 
@@ -158,14 +161,15 @@ it('returns weekly offers summary with active scheduled used and ended counts', 
     $response->assertJsonPath('data.totals.endedOffers', 1);
 });
 
-it('requires storeId query parameter', function (): void {
+it('returns forbidden when seller has no store', function (): void {
     Carbon::setTestNow(Carbon::create(2026, 3, 18, 12, 0, 0));
 
-    $owner = User::factory()->create();
+    $owner = User::factory()->create([
+        'module_type' => UserModuleType::SupermarketSeller->value,
+    ]);
     Sanctum::actingAs($owner);
 
     $response = getJson('/api/v1/store-owner/offers/weekly-summary');
 
-    $response->assertStatus(422);
-    expect($response->json('errors.storeId'))->not->toBeNull();
+    $response->assertForbidden();
 });

@@ -8,7 +8,10 @@ enum CleaningBookingStatus: string
 {
     case Pending = 'pending';
     case WorkerAssigned = 'worker_assigned';
+    case AwaitingStartVerification = 'awaiting_start_verification';
     case InProgress = 'in_progress';
+    case AwaitingCustomerCompletion = 'awaiting_customer_completion';
+    case TimeExtensionRequested = 'time_extension_requested';
     case Completed = 'completed';
     case Cancelled = 'cancelled';
 

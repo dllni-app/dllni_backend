@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 use App\Models\User;
 use App\Models\Worker;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Events\ServiceExtensionRequested;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningTimeWarning;
@@ -248,4 +251,34 @@ it('lists pending extension requests for current worker', function () {
     expect($response->json('data'))->toBeArray();
     $ids = array_column($response->json('data'), 'id');
     expect($ids)->toContain($pendingWarning->id);
+});
+
+it('dispatches ServiceExtensionRequested when a time warning is created', function () {
+    Event::fake([ServiceExtensionRequested::class]);
+    Queue::fake();
+
+    $workerUser = User::factory()->create(['email' => 'worker-ext-realtime@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'status' => CleaningBookingStatus::InProgress,
+    ]);
+
+    $warning = CleaningTimeWarning::create([
+        'booking_id' => $booking->id,
+        'booking_type' => 'cleaning_booking',
+        'worker_response' => null,
+        'worker_responded_at' => null,
+        'sent_at' => now(),
+        'additional_minutes' => 40,
+    ]);
+
+    Event::assertDispatched(ServiceExtensionRequested::class, function (ServiceExtensionRequested $event) use ($booking, $worker, $warning): bool {
+        return $event->warningId === $warning->id
+            && $event->cleaningBookingId === $booking->id
+            && $event->workerId === $worker->id
+            && $event->requestedMinutes === 40;
+    });
 });
