@@ -22,6 +22,8 @@ This contract covers the user app notifications feed and read state actions:
 
 Notification items are formatted by `UserNotificationResource`.
 
+For canonical type registry, template variables, and cross-module notification standards, see [API_CONTRACT_NOTIFICATIONS_UNIFIED.md](API_CONTRACT_NOTIFICATIONS_UNIFIED.md).
+
 ---
 
 ## Notification item schema (`data[]`)
@@ -32,11 +34,16 @@ Notification items are formatted by `UserNotificationResource`.
 | `module` | string \| null | `restaurant`, `supermarket`, `cleaning`, or `null` if unknown. |
 | `icon` | string (URL) \| null | If payload contains `data.icon`, it is returned as-is; otherwise backend generates module default icon URL. |
 | `type` | string \| null | Notification domain type (e.g. `new_order`, `order_update`). |
+| `canonicalType` / `canonical_type` | string \| null | Canonical namespaced type for new clients (e.g. `cleaning.booking.new_order_request`). |
+| `category` | string | `orders`, `offers`, `system` (best-effort for legacy notifications). |
+| `priority` | string | `high` or `normal`. |
 | `title` | string | Human-readable title. |
 | `body` | string | Human-readable message body. |
-| `data` | object | Optional deep-link payload keys only when present: `bookingId`, `timeWarningId`, `disputeId`. |
+| `data` | object | Deep-link payload object (keys vary by type). |
 | `readAt` | string (ISO-8601) \| null | `null` means unread. |
+| `read_at` | string (ISO-8601) \| null | Snake-case alias for compatibility. |
 | `createdAt` | string (ISO-8601) | Creation timestamp. |
+| `created_at` | string (ISO-8601) | Snake-case alias for compatibility. |
 
 ### Module resolution rules
 

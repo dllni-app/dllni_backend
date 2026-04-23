@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Notifications\Cleaning;
 
-use DevKandil\NotiFire\Enums\MessagePriority;
+use App\Notifications\Core\NotificationPayloadBuilder;
 use DevKandil\NotiFire\FcmMessage;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -14,17 +14,20 @@ use Modules\Cleaning\Models\CleaningBooking;
 final class NewOrderRequestNotification extends Notification implements ShouldQueue
 {
     use Queueable;
+    private const string CanonicalType = 'cleaning.booking.new_order_request';
 
     public function __construct(
         private readonly CleaningBooking $booking
-    ) {}
+    ) {
+        $this->onQueue('notifications');
+    }
 
     /**
      * @return array<int, string>
      */
     public function via(object $notifiable): array
     {
-        return ['database', 'fcm'];
+        return $this->payloadBuilder()->resolveChannels(self::CanonicalType, $notifiable);
     }
 
     /**
@@ -32,24 +35,32 @@ final class NewOrderRequestNotification extends Notification implements ShouldQu
      */
     public function toArray(object $notifiable): array
     {
-        return [
-            'type' => 'new_order',
-            'title' => 'طلب جديد',
-            'body' => "طلب تنظيف جديد: {$this->booking->booking_number}. قم بقبوله أو رفضه خلال الوقت المحدد.",
-            'bookingId' => $this->booking->id,
-        ];
+        return $this->payloadBuilder()->makeDatabasePayload(
+            canonicalType: self::CanonicalType,
+            templateContext: [
+                'booking_number' => (string) $this->booking->booking_number,
+            ],
+            extraData: [
+                'bookingId' => (int) $this->booking->id,
+            ],
+        );
     }
 
     public function toFcm(object $notifiable): FcmMessage
     {
-        return FcmMessage::create(
-            'طلب جديد',
-            "طلب تنظيف جديد: {$this->booking->booking_number}. قم بقبوله أو رفضه خلال الوقت المحدد.",
-        )
-            ->priority(MessagePriority::HIGH)
-            ->data([
-                'type' => 'new_order',
-                'bookingId' => $this->booking->id,
-            ]);
+        return $this->payloadBuilder()->makeFcmMessage(
+            canonicalType: self::CanonicalType,
+            templateContext: [
+                'booking_number' => (string) $this->booking->booking_number,
+            ],
+            extraData: [
+                'bookingId' => (int) $this->booking->id,
+            ],
+        );
+    }
+
+    private function payloadBuilder(): NotificationPayloadBuilder
+    {
+        return app(NotificationPayloadBuilder::class);
     }
 }

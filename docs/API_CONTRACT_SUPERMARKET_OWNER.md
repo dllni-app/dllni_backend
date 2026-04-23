@@ -138,6 +138,7 @@ On the Flutter side, treat `data.items[]` as **draft items**:
 
 For supermarket admin/reporting scope, see [API_CONTRACT_SUPERMARKET_ADMIN.md](API_CONTRACT_SUPERMARKET_ADMIN.md).  
 For authentication details, see [API_CONTRACT_AUTH.md](API_CONTRACT_AUTH.md).
+For shared notification type/template rules, see [API_CONTRACT_NOTIFICATIONS_UNIFIED.md](API_CONTRACT_NOTIFICATIONS_UNIFIED.md).
 
 ---
 

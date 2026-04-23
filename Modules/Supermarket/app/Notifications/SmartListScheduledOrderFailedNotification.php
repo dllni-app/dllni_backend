@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Supermarket\Notifications;
 
-use DevKandil\NotiFire\Enums\MessagePriority;
+use App\Notifications\Core\NotificationPayloadBuilder;
 use DevKandil\NotiFire\FcmMessage;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -13,37 +13,52 @@ use Illuminate\Notifications\Notification;
 final class SmartListScheduledOrderFailedNotification extends Notification implements ShouldQueue
 {
     use Queueable;
+    private const string CanonicalType = 'supermarket.smart_list.scheduled_order_failed';
 
     public function __construct(
         private readonly string $smartListName,
         private readonly string $reason,
-    ) {}
+    ) {
+        $this->onQueue('notifications');
+    }
 
     public function via(object $notifiable): array
     {
-        return ['database', 'fcm'];
+        return $this->payloadBuilder()->resolveChannels(self::CanonicalType, $notifiable);
     }
 
     public function toArray(object $notifiable): array
     {
-        return [
-            'type' => 'smart_list_scheduled_order_failed',
-            'title' => 'فشل تنفيذ الطلب المجدول',
-            'body' => "تعذر إرسال طلب القائمة {$this->smartListName}. السبب: {$this->reason}",
-            'reason' => $this->reason,
-        ];
+        return $this->payloadBuilder()->makeDatabasePayload(
+            canonicalType: self::CanonicalType,
+            templateContext: [
+                'smart_list_name' => $this->smartListName,
+                'reason' => $this->reason,
+            ],
+            extraData: [
+                'reason' => $this->reason,
+                'smartListName' => $this->smartListName,
+            ],
+        );
     }
 
     public function toFcm(object $notifiable): FcmMessage
     {
-        return FcmMessage::create(
-            'فشل تنفيذ الطلب المجدول',
-            "تعذر إرسال طلب القائمة {$this->smartListName}. السبب: {$this->reason}",
-        )
-            ->priority(MessagePriority::HIGH)
-            ->data([
-                'type' => 'smart_list_scheduled_order_failed',
+        return $this->payloadBuilder()->makeFcmMessage(
+            canonicalType: self::CanonicalType,
+            templateContext: [
+                'smart_list_name' => $this->smartListName,
                 'reason' => $this->reason,
-            ]);
+            ],
+            extraData: [
+                'reason' => $this->reason,
+                'smartListName' => $this->smartListName,
+            ],
+        );
+    }
+
+    private function payloadBuilder(): NotificationPayloadBuilder
+    {
+        return app(NotificationPayloadBuilder::class);
     }
 }

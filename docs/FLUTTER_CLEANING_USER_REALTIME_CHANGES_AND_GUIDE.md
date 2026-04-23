@@ -1,14 +1,14 @@
-# Cleaning user module – realtime backend changes & Flutter implementation guide
+# Cleaning user module – realtime Flutter implementation guide (contract companion)
 
 **Audience:** Flutter developers (customer / user app)  
-**Scope:** What the backend added for **private Pusher** channels, **new broadcast events**, and how to wire them in Flutter. HTTP details for start-verification and completion gates stay aligned with the API contract.
+**Scope:** Contract-oriented Flutter implementation for **private Pusher** channels, **broadcast events**, and customer-side realtime state handling for cleaning orders. HTTP details stay aligned with the API contract.
 
 **Read next (reference):**
 
 - [API_CONTRACT_USER_CLEANING_REALTIME_GATES.md](API_CONTRACT_USER_CLEANING_REALTIME_GATES.md) – full HTTP contract and event table  
 - [FLUTTER_IMPLEMENTATION_CLEANING_REALTIME_GATES.md](FLUTTER_IMPLEMENTATION_CLEANING_REALTIME_GATES.md) – longer Flutter checklist, state diagram, QA scenarios  
 
-This document is the **short changelog + implementation spine** for the realtime layer.
+This document is the **implementation spine**; the API contract now includes a dedicated Flutter realtime section that should be treated as authoritative for endpoint + event naming.
 
 ---
 

@@ -5,7 +5,7 @@
 **Prefix:** `/api/v1/user/...`  
 **Auth:** Laravel Sanctum – `Authorization: Bearer {token}` on all routes below.
 
-This document covers **customer-only** HTTP actions that pair with worker lifecycle steps and **private Pusher** events on the booking channel. For worker endpoints (travel, arrive, security code, complete, etc.), see [API_CONTRACT_CLEANING_WORKER.md](API_CONTRACT_CLEANING_WORKER.md). General cleaning order CRUD remains on `GET|POST|PATCH /api/v1/user/cleaning/orders` as documented in [CLEANING_ORDER_FLOW_CHANGES_SUMMARY.md](CLEANING_ORDER_FLOW_CHANGES_SUMMARY.md).
+This document covers **customer-only** HTTP actions that pair with worker lifecycle steps and **private Pusher** events on the booking channel. For worker endpoints (travel, arrive, security code, complete, etc.), 
 
 ---
 
@@ -142,6 +142,7 @@ String values on booking `status` (camelCase in JSON per API resources):
 | `cleaning_order.awaiting_customer_completion` | After worker **complete** | cleaningBookingId, workerId, status (`awaiting_customer_completion`), expiresAt (server-chosen completion window hint) |
 | `ArrivalVerified` | After customer **start-verification confirm** | cleaningBookingId, workerId, arrivedAt, version |
 | `CompletionDecisionMade` | After customer completion **confirm** / **reject** / **extend-time** | cleaningBookingId, workerId, decision (`approved` \| `rejected` \| `extension_requested`), message, decidedAt, version |
+| `ServiceExtensionRequested` | When backend creates a cleaning time warning row for the booking | warningId, cleaningBookingId, workerId, requestedMinutes, version |
 
 `ArrivalVerified` and `CompletionDecisionMade` are also sent on **`private-cleaning-worker.{workerId}`** when `workerId` is set, so the worker app can refresh without relying only on the booking channel.
 
@@ -151,3 +152,103 @@ String values on booking `status` (camelCase in JSON per API resources):
 
 - The **plaintext 4-digit code** is only returned to the **worker** (`GET …/security-code`). The customer app should **never** display a stored code from the API; they type what the worker shows.
 - Wrong codes increment server-side attempts; after repeated failures the API may return **429** on confirm.
+
+---
+
+## 6. Flutter realtime implementation contract (customer app)
+
+Use this as the implementation baseline for order details screens and multi-device sync.
+
+### 6.1 Realtime channel setup
+
+1. Build channel name: `private-cleaning-booking.{bookingId}`.
+2. Authenticate private channel via `POST /broadcasting/auth` with user Sanctum token.
+3. Subscribe only after:
+   - booking id exists,
+   - token exists,
+   - screen is active.
+4. Unsubscribe when leaving order details to avoid duplicate handlers.
+
+### 6.2 Event handling contract
+
+On `private-cleaning-booking.{bookingId}`, bind:
+
+- `CleaningBookingTrackingUpdated`
+- `WorkerLocationUpdated`
+- `WorkerArrived`
+- `cleaning_order.awaiting_start_verification`
+- `cleaning_order.awaiting_customer_completion`
+- `ArrivalVerified`
+- `CompletionDecisionMade`
+- `ServiceExtensionRequested`
+
+Client behavior:
+
+- `WorkerLocationUpdated`: patch map position directly from payload.
+- Any other event above: refetch `GET /api/v1/user/cleaning/orders/{bookingId}` and replace current order state.
+- After successful action POSTs (`start-verification/confirm`, completion actions), use response `data` immediately; optional refetch for parity.
+
+### 6.3 Payload DTOs (wire shape)
+
+```json
+{
+  "cleaningBookingId": 123,
+  "workerId": 45,
+  "arrivedAt": "2026-04-22T10:15:00+00:00",
+  "version": 1
+}
+```
+
+`ArrivalVerified`
+
+```json
+{
+  "cleaningBookingId": 123,
+  "workerId": 45,
+  "decision": "approved",
+  "message": null,
+  "decidedAt": "2026-04-22T11:00:00+00:00",
+  "version": 1
+}
+```
+
+`CompletionDecisionMade` (`decision`: `approved` | `rejected` | `extension_requested`)
+
+```json
+{
+  "warningId": 789,
+  "cleaningBookingId": 123,
+  "workerId": 45,
+  "requestedMinutes": 30,
+  "version": 1
+}
+```
+
+`ServiceExtensionRequested` (`requestedMinutes` may be `null`)
+
+### 6.4 Dart-style reference snippet
+
+```dart
+final channel = pusher.subscribe('private-cleaning-booking.$bookingId');
+
+void handleCleaningEvent(String eventName, Map<String, dynamic> payload) {
+  switch (eventName) {
+    case 'WorkerLocationUpdated':
+      updateMapFrom(payload);
+      return;
+    case 'ArrivalVerified':
+    case 'CompletionDecisionMade':
+    case 'ServiceExtensionRequested':
+    case 'CleaningBookingTrackingUpdated':
+    case 'WorkerArrived':
+    case 'cleaning_order.awaiting_start_verification':
+    case 'cleaning_order.awaiting_customer_completion':
+      refetchOrder(bookingId);
+      return;
+    default:
+      return;
+  }
+}
+```
+
+For a longer Flutter checklist and QA scenarios, see [FLUTTER_CLEANING_USER_REALTIME_CHANGES_AND_GUIDE.md](FLUTTER_CLEANING_USER_REALTIME_CHANGES_AND_GUIDE.md).

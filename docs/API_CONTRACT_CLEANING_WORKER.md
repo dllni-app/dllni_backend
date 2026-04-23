@@ -781,6 +781,8 @@ Used for the "نزاعات" tab in the transaction log and the "Dispute details"
 
 The backend uses **devkandil/notifire** (Laravel FCM) to send push notifications to the worker app. Only **necessary** notifications are sent (new order, extension request, dispute). The worker app must register the device FCM token and handle notification payloads for deep linking.
 
+For canonical notification taxonomy, bilingual templates, and normalized payload shape, see [API_CONTRACT_NOTIFICATIONS_UNIFIED.md](API_CONTRACT_NOTIFICATIONS_UNIFIED.md).
+
 ### 4.1 FCM token registration
 
 | Method | Path                | Description                          |

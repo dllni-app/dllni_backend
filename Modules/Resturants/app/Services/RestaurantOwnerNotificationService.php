@@ -7,6 +7,7 @@ namespace Modules\Resturants\Services;
 use App\Enums\SystemAlertStatus;
 use App\Models\SystemAlert;
 use App\Models\User;
+use App\Notifications\Core\NotificationFeedNormalizer;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Collection;
@@ -15,6 +16,10 @@ use Modules\Resturants\Models\Restaurant;
 
 final class RestaurantOwnerNotificationService
 {
+    public function __construct(
+        private readonly NotificationFeedNormalizer $feedNormalizer,
+    ) {}
+
     public function feed(
         User $owner,
         Restaurant $restaurant,
@@ -132,19 +137,29 @@ final class RestaurantOwnerNotificationService
 
     private function mapUserNotification(DatabaseNotification $notification): array
     {
-        $data = (array) ($notification->data ?? []);
+        $normalized = $this->feedNormalizer->normalize($notification);
 
         return [
             'id' => 'user:'.$notification->id,
             'source' => 'user_notification',
-            'category' => $this->resolveCategory($data),
-            'title' => (string) ($data['title'] ?? ''),
-            'body' => (string) ($data['body'] ?? ''),
+            'module' => $normalized['module'],
+            'category' => $normalized['category'],
+            'type' => $normalized['type'],
+            'canonicalType' => $normalized['canonicalType'],
+            'canonical_type' => $normalized['canonical_type'],
+            'priority' => $normalized['priority'],
+            'icon' => $normalized['icon'],
+            'title' => $normalized['title'],
+            'body' => $normalized['body'],
+            'data' => $normalized['data'],
+            'readAt' => $normalized['readAt'],
+            'read_at' => $normalized['read_at'],
             'meta' => [
-                'type' => $data['type'] ?? null,
-                'data' => $data,
+                'type' => $normalized['type'],
+                'data' => $normalized['data'],
             ],
-            'createdAt' => $notification->created_at?->toIso8601String(),
+            'createdAt' => $normalized['createdAt'],
+            'created_at' => $normalized['created_at'],
             'isRead' => $notification->read_at !== null,
         ];
     }
@@ -157,9 +172,25 @@ final class RestaurantOwnerNotificationService
         return [
             'id' => 'system:'.$alert->id,
             'source' => 'system_alert',
+            'module' => 'restaurant',
             'category' => 'system',
+            'type' => 'restaurant_system_alert',
+            'canonicalType' => 'restaurant.owner.system_announcement',
+            'canonical_type' => 'restaurant.owner.system_announcement',
+            'priority' => 'high',
+            'icon' => url('/images/notifications/restaurant.svg'),
             'title' => 'System alert',
             'body' => $orderNumber ? 'Order '.$orderNumber.' requires attention.' : 'A system alert requires attention.',
+            'data' => [
+                'alertType' => $alert->alert_type?->value ?? $alert->alert_type,
+                'severity' => $alert->severity?->value ?? $alert->severity,
+                'status' => $alert->status?->value ?? $alert->status,
+                'payload' => $alert->payload,
+                'orderId' => $order?->id,
+                'orderNumber' => $orderNumber,
+            ],
+            'readAt' => $alert->status === SystemAlertStatus::New ? null : $alert->updated_at?->toIso8601String(),
+            'read_at' => $alert->status === SystemAlertStatus::New ? null : $alert->updated_at?->toIso8601String(),
             'meta' => [
                 'alertType' => $alert->alert_type?->value ?? $alert->alert_type,
                 'severity' => $alert->severity?->value ?? $alert->severity,
@@ -169,6 +200,7 @@ final class RestaurantOwnerNotificationService
                 'orderNumber' => $orderNumber,
             ],
             'createdAt' => $alert->created_at?->toIso8601String(),
+            'created_at' => $alert->created_at?->toIso8601String(),
             'isRead' => $alert->status !== SystemAlertStatus::New,
         ];
     }
