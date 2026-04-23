@@ -81,45 +81,42 @@ final class SmProductController
         return response()->json($result, Response::HTTP_CREATED);
     }
 
-    public function show(SmProduct $smProduct): SmProductResource
+    public function show(SmProduct $product): SmProductResource
     {
-        $this->assertStoreOwnerProductBelongsToOwner($smProduct);
-
-        return SmProductResource::make($smProduct->load('store', 'category', 'media', 'offerProducts.offer'));
-    }
-
-    public function update(SmProductRequest $request, SmProduct $smProduct): SmProductResource
-    {
-        $this->assertStoreOwnerProductBelongsToOwner($smProduct);
-
-        $product = $this->service->update(
-            SmProductData::from($request->validated()),
-            $smProduct,
-            $this->extractImages($request)
-        );
+        $this->assertStoreOwnerProductBelongsToOwner($product);
 
         return SmProductResource::make($product->load('store', 'category', 'media', 'offerProducts.offer'));
     }
 
-    public function destroy(SmProduct $smProduct): Response
+    public function update(SmProductRequest $request, SmProduct $product): SmProductResource
     {
-        $this->assertStoreOwnerProductBelongsToOwner($smProduct);
+        $this->assertStoreOwnerProductBelongsToOwner($product);
 
-        $productName = $smProduct->name;
-        $storeId = (int) $smProduct->store_id;
-        $smProduct->delete();
+        $updatedProduct = $this->service->update(
+            SmProductData::from($request->validated()),
+            $product,
+            $this->extractImages($request)
+        );
+
+        return SmProductResource::make($updatedProduct->load('store', 'category', 'media', 'offerProducts.offer'));
+    }
+
+    public function destroy(SmProduct $product): Response
+    {
+        $this->assertStoreOwnerProductBelongsToOwner($product);
+
+        $productName = $product->name;
+        $storeId = (int) $product->store_id;
+        $product->delete();
         $this->activityLogService->logSmProductDeleted($productName, $storeId);
 
         return response()->noContent();
     }
 
-    /**
-     * @return array<int, UploadedFile>
-     */
-    private function assertStoreOwnerProductBelongsToOwner(SmProduct $smProduct): void
+    private function assertStoreOwnerProductBelongsToOwner(SmProduct $product): void
     {
         if (request()->routeIs('store-owner.products.*')) {
-            $this->storeOwnerContext->store((int) $smProduct->store_id);
+            $this->storeOwnerContext->store((int) $product->store_id);
         }
     }
 
