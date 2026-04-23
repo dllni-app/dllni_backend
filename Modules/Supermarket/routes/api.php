@@ -53,7 +53,6 @@ Route::prefix('v1')->middleware(['auth:sanctum', InjectStoreIdFromOwnerContext::
         Route::get('sm-reports/performance', [SmPerformanceAnalyticsController::class, 'index'])->name('reports.performance');
     });
 
-       Route::get('inventory/summary', [StoreOwnerInventoryController::class, 'inventorySummary'])->name('inventory.summary');
     Route::apiResource('sm-assistant-queries', SmAssistantQueryController::class)->only(['index', 'show'])->names('sm-assistant-queries');
     Route::apiResource('sm-carts', SmCartController::class)->names('sm-carts');
     Route::apiResource('sm-cart-items', SmCartItemController::class)->names('sm-cart-items');
@@ -110,6 +109,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', InjectStoreIdFromOwnerContext::
         Route::post('orders/{order}/return', [StoreOwnerInventoryController::class, 'processReturn'])->name('orders.return');
 
         // Inventory Management - Specific routes before wildcards
+        Route::get('inventory/summary', [StoreOwnerInventoryController::class, 'inventorySummary'])->name('inventory.summary');
         Route::get('products/low-stock', [StoreOwnerInventoryController::class, 'lowStock'])->name('products.low-stock');
         Route::put('products/{product}/stock', [StoreOwnerInventoryController::class, 'updateStock'])->name('products.update-stock');
         Route::put('products/{product}/expiration', [StoreOwnerInventoryController::class, 'updateExpiration'])->name('products.update-expiration');
