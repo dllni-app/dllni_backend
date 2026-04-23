@@ -14,6 +14,11 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // This backend is API-first and has no named "login" web route.
+        // Override Laravel's default guest redirect to avoid Route [login] errors
+        // for unauthenticated API requests (they should return 401 instead).
+        $middleware->redirectGuestsTo(fn () => null);
+
         $middleware->alias([
             'dashboard.admin' => App\Http\Middleware\EnsureDashboardAdmin::class,
         ]);
