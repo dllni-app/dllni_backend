@@ -7,8 +7,10 @@ namespace Modules\Supermarket\Http\Controllers\API\StoreOwner;
 use App\Services\ActivityLogService;
 use Carbon\Carbon;
 use Exception;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Modules\Supermarket\Data\SmInventoryAuditData;
 use Modules\Supermarket\Data\SmOrderReturnData;
 use Modules\Supermarket\Data\SmProductExpirationData;
@@ -29,6 +31,43 @@ final class StoreOwnerInventoryController
         private readonly ActivityLogService $activityLogService,
         private readonly StoreOwnerContextService $context
     ) {}
+
+    /**
+     * Get inventory summary for the authenticated owner's default store.
+     *
+     * GET /api/v1/store-owner/inventory/summary
+     */
+    public function summary(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $storeId = DB::table('sm_stores')
+            ->where('owner_user_id', $user?->id)
+            ->orderBy('id')
+            ->value('id');
+
+        if (! $storeId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No store found for this owner.',
+            ], 403);
+        }
+
+        try {
+            $summary = $this->inventoryService->getInventorySummary((int) $storeId);
+
+            return response()->json([
+                'success' => true,
+                'data' => $summary,
+            ]);
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve inventory summary.',
+                'error' => $e->getMessage(),
+            ], 400);
+        }
+    }
 
     /**
      * Get low stock products for the store.
@@ -61,15 +100,23 @@ final class StoreOwnerInventoryController
      */
     public function inventorySummary(Request $request): JsonResponse
     {
-        $storeId = $this->context->ownedStore()->id;
-
         try {
+            $storeId = $this->context->ownedStore()->id;
             $summary = $this->inventoryService->getInventorySummary($storeId);
 
             return response()->json([
                 'success' => true,
                 'data' => $summary,
             ]);
+        } catch (AuthorizationException $e) {
+            $message = str_contains($e->getMessage(), 'No store found')
+                ? 'No store found for this owner.'
+                : $e->getMessage();
+
+            return response()->json([
+                'success' => false,
+                'message' => $message,
+            ], 403);
         } catch (Exception $e) {
             return response()->json([
                 'success' => false,

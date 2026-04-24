@@ -141,12 +141,14 @@ final class ActivityLogService
         );
     }
 
-    public function logSmProductDeleted(string $productName, int $storeId): void
+    public function logSmProductDeleted(?string $productName, int $storeId): void
     {
+        $name = trim((string) $productName);
+
         Activity::causedBy(Auth::user())
             ->inLog('products')
             ->withProperties(['store_id' => $storeId])
-            ->log("حذف المنتج ({$productName})");
+            ->log('حذف المنتج' . ($name !== '' ? " ({$name})" : ''));
     }
 
     public function logSmOfferCreated(SmOffer $offer, int $storeId): void
@@ -173,12 +175,14 @@ final class ActivityLogService
         );
     }
 
-    public function logSmOfferDeleted(string $offerName, int $storeId): void
+    public function logSmOfferDeleted(?string $offerName, int $storeId): void
     {
+        $name = trim((string) $offerName);
+
         Activity::causedBy(Auth::user())
             ->inLog('offers')
             ->withProperties(['store_id' => $storeId])
-            ->log("حذف العرض ({$offerName})");
+            ->log('حذف العرض' . ($name !== '' ? " ({$name})" : ''));
     }
 
     public function logSmOrderAccepted(int $orderId, string $orderNumber, int $storeId): void

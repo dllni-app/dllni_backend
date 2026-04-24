@@ -105,7 +105,7 @@ final class SmProductController
     {
         $this->assertStoreOwnerProductBelongsToOwner($product);
 
-        $productName = $product->name;
+        $productName = $product->name ?? $product->getAttribute('name');
         $storeId = (int) $product->store_id;
         $product->delete();
         $this->activityLogService->logSmProductDeleted($productName, $storeId);
