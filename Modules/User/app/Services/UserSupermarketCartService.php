@@ -25,6 +25,8 @@ final class UserSupermarketCartService
         if (! $cart) {
             return [
                 'id' => null,
+                'merchant' => null,
+                'items' => [],
                 'merchantGroups' => [],
                 'amounts' => [
                     'subtotal' => 0.0,
@@ -165,6 +167,8 @@ final class UserSupermarketCartService
 
                 return [
                     'id' => null,
+                    'merchant' => null,
+                    'items' => [],
                     'merchantGroups' => [],
                     'amounts' => ['subtotal' => 0.0, 'total' => 0.0],
                 ];
@@ -213,10 +217,21 @@ final class UserSupermarketCartService
             ];
         })->values();
 
+        $legacyItems = $merchantGroups
+            ->flatMap(fn (array $group) => $group['items'])
+            ->values();
+
+        $legacyMerchant = null;
+        if ($merchantGroups->count() === 1) {
+            $legacyMerchant = $merchantGroups->first()['merchant'] ?? null;
+        }
+
         $grandSubtotal = (float) $merchantGroups->sum(fn (array $group): float => $group['amounts']['subtotal']);
 
         return [
             'id' => $cart->id,
+            'merchant' => $legacyMerchant,
+            'items' => $legacyItems->all(),
             'merchantGroups' => $merchantGroups->all(),
             'amounts' => [
                 'subtotal' => round($grandSubtotal, 2),

@@ -22,6 +22,8 @@ it('returns empty cart payload when user has no restaurant cart', function (): v
     $response = $this->getJson('/api/v1/user/restaurants/cart');
 
     $response->assertOk()->assertJsonPath('data.id', null);
+    $response->assertJsonPath('data.merchant', null);
+    expect($response->json('data.items'))->toBeArray()->toBeEmpty();
     expect($response->json('data.merchantGroups'))->toBeArray()->toBeEmpty();
 });
 
@@ -48,6 +50,9 @@ it('returns cart items grouped by merchant after adding to cart', function (): v
     $response = $this->getJson('/api/v1/user/restaurants/cart');
 
     $response->assertOk()
+        ->assertJsonPath('data.merchant.id', $restaurant->id)
+        ->assertJsonPath('data.items.0.productId', $product->id)
+        ->assertJsonPath('data.items.0.quantity', 3)
         ->assertJsonPath('data.merchantGroups.0.merchant.id', $restaurant->id)
         ->assertJsonPath('data.merchantGroups.0.items.0.productId', $product->id)
         ->assertJsonPath('data.merchantGroups.0.items.0.quantity', 3)
@@ -128,6 +133,8 @@ it('shows items from multiple restaurants in the same cart', function (): void {
     $response = $this->getJson('/api/v1/user/restaurants/cart');
 
     $response->assertOk();
+    $response->assertJsonPath('data.merchant', null);
+    expect($response->json('data.items'))->toHaveCount(2);
     expect($response->json('data.merchantGroups'))->toHaveCount(2);
     expect((float) $response->json('data.amounts.subtotal'))->toBe(50.0);
 

@@ -29,7 +29,7 @@ return [
     ))),
     'ios_paths' => array_values(array_filter(array_map(
         static fn(string $value): string => trim($value),
-        explode(',', (string) env('DEEP_LINK_IOS_PATHS', '/product/*,/restaurant/*,/vote/*,/group-order/*,/api/v1/user/products/*,/api/v1/user/supermarket/products/*,/api/v1/user/restaurants/*,/api/v1/user/restaurants/votes/*,/api/v1/user/restaurants/group-orders/*,/api/v1/user/supermarket/stores/*')),
+        explode(',', (string) env('DEEP_LINK_IOS_PATHS', '/product/*,/restaurant/*,/store/*,/vote/*,/group-order/*,/s/*,/v1/user/products/*,/v1/user/supermarket/products/*,/v1/user/restaurants/*,/api/v1/user/restaurants/votes/*,/api/v1/user/restaurants/group-orders/*,/api/v1/user/supermarket/stores/*')),
     ))),
 
     'resolver_cache_ttl_seconds' => (int) env('DEEP_LINK_RESOLVER_CACHE_TTL_SECONDS', 300),

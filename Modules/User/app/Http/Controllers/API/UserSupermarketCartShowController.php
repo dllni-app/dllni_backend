@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\User\Http\Controllers\API;
 
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Modules\User\Services\UserSupermarketCartService;
 
 final class UserSupermarketCartShowController
@@ -13,11 +14,11 @@ final class UserSupermarketCartShowController
         private readonly UserSupermarketCartService $carts,
     ) {}
 
-    public function __invoke(): JsonResponse
+    public function __invoke(Request $request): JsonResponse
     {
         return response()->json([
             'data' => $this->carts->show(
-                userId: (int) auth()->id(),
+                userId: (int) $request->user()->id,
             ),
         ]);
     }

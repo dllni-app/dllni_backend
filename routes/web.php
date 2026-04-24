@@ -14,6 +14,11 @@ Route::get('/reset-password/{token}', function (string $token, Illuminate\Http\R
     return redirect()->to(config('app.frontend_url', url('/')) . '/reset-password?token=' . $token . '&email=' . urlencode($request->query('email', '')));
 })->name('password.reset');
 
+Route::view('/legal/user-app', 'user-app')->name('legal.user-app');
+Route::view('/legal/merchant-app', 'merchant-app')->name('legal.merchant-app');
+Route::view('/legal/delivery-app', 'delivery-app')->name('legal.delivery-app');
+Route::view('/legal/cleaning-worker-app', 'cleaning-worker-app')->name('legal.cleaning-worker-app');
+
 Route::get('/.well-known/assetlinks.json', function (): JsonResponse {
     $packageName = (string) config('deep_links.android_app_package_name', '');
     $fingerprints = array_values((array) config('deep_links.android_sha256_cert_fingerprints', []));
@@ -79,6 +84,6 @@ Route::get('/group-order/{identifier}', OpenDeepLinkController::class)
     ->defaults('type', 'group-order')
     ->name('deep-links.group-order');
 
-Route::get('/s/{code}', ShortLinkRedirectController::class)
+Route::get(' ', ShortLinkRedirectController::class)
     ->where('code', '[A-Za-z0-9\-]+')
     ->name('deep-links.short');
