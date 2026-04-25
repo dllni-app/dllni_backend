@@ -60,30 +60,30 @@ Route::get('/.well-known/apple-app-site-association', function (): JsonResponse 
 });
 
 Route::get('/product/{identifier}', OpenDeepLinkController::class)
-    ->where('identifier', '[A-Za-z0-9\-_.]+')
+    ->where('identifier', '[A-Za-z0-9\-_.~%]+')
     ->defaults('type', 'product')
     ->name('deep-links.product');
 
 Route::get('/restaurant/{identifier}', OpenDeepLinkController::class)
-    ->where('identifier', '[A-Za-z0-9\-_.]+')
+    ->where('identifier', '[A-Za-z0-9\-_.~%]+')
     ->defaults('type', 'restaurant')
     ->name('deep-links.restaurant');
 
 Route::get('/store/{identifier}', OpenDeepLinkController::class)
-    ->where('identifier', '[A-Za-z0-9\-_.]+')
+    ->where('identifier', '[A-Za-z0-9\-_.~%]+')
     ->defaults('type', 'store')
     ->name('deep-links.store');
 
 Route::get('/vote/{identifier}', OpenDeepLinkController::class)
-    ->where('identifier', '[A-Za-z0-9\-_.]+')
+    ->where('identifier', '[A-Za-z0-9\-_.~%]+')
     ->defaults('type', 'vote')
     ->name('deep-links.vote');
 
 Route::get('/group-order/{identifier}', OpenDeepLinkController::class)
-    ->where('identifier', '[A-Za-z0-9\-_.]+')
+    ->where('identifier', '[A-Za-z0-9\-_.~%]+')
     ->defaults('type', 'group-order')
     ->name('deep-links.group-order');
 
-Route::get(' ', ShortLinkRedirectController::class)
-    ->where('code', '[A-Za-z0-9\-]+')
+Route::get('/s/{code}', ShortLinkRedirectController::class)
+    ->where('code', '[A-Za-z0-9\-_]+')
     ->name('deep-links.short');
