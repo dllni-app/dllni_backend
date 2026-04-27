@@ -43,15 +43,31 @@ final class StoreOwnerDashboardPerformanceService
             ->values()
             ->all();
 
-        $discountedOrdersQuery = (clone $ordersQuery)->where(function ($query): void {
-            $query->whereNotNull('coupon_id')
-                ->orWhere('discount_amount', '>', 0);
-        });
+        $ordersUsedOffersQuery = (clone $ordersQuery)
+            ->where('status', '!=', SmOrderStatus::Cancelled->value)
+            ->whereExists(function ($query): void {
+                $query->selectRaw('1')
+                    ->from('sm_order_items')
+                    ->join('sm_offer_products', 'sm_offer_products.product_id', '=', 'sm_order_items.product_id')
+                    ->join('sm_offers', function ($join): void {
+                        $join->on('sm_offers.id', '=', 'sm_offer_products.offer_id')
+                            ->on('sm_offers.store_id', '=', 'sm_orders.store_id');
+                    })
+                    ->whereColumn('sm_order_items.order_id', 'sm_orders.id')
+                    ->where(function ($validity): void {
+                        $validity->whereNull('sm_offers.starts_at')
+                            ->orWhereColumn('sm_offers.starts_at', '<=', 'sm_orders.created_at');
+                    })
+                    ->where(function ($validity): void {
+                        $validity->whereNull('sm_offers.ends_at')
+                            ->orWhereColumn('sm_offers.ends_at', '>=', 'sm_orders.created_at');
+                    });
+            });
 
-        $discountedOrdersCount = (clone $discountedOrdersQuery)->count();
-        $discountedRevenue = (float) (clone $discountedOrdersQuery)->sum('total_amount');
-        $totalSavings = (float) (clone $discountedOrdersQuery)->sum('discount_amount');
-        $conversionRate = $totalOrders > 0 ? round(($discountedOrdersCount / $totalOrders) * 100, 2) : 0.0;
+        $ordersUsedOffers = (clone $ordersUsedOffersQuery)->count();
+        $offersRevenue = (float) (clone $ordersUsedOffersQuery)->sum('total_amount');
+        $totalSavings = (float) (clone $ordersUsedOffersQuery)->sum('discount_amount');
+        $utilizationRate = $totalOrders > 0 ? round(($ordersUsedOffers / $totalOrders) * 100, 2) : 0.0;
 
         $offerOrderPerformance = DB::table('sm_orders')
             ->join('sm_order_items', 'sm_order_items.order_id', '=', 'sm_orders.id')
@@ -116,9 +132,14 @@ final class StoreOwnerDashboardPerformanceService
             ],
             'topProducts' => $topProducts,
             'offersImpact' => [
-                'discountedOrdersCount' => $discountedOrdersCount,
-                'conversionRatePercent' => $conversionRate,
-                'discountedRevenue' => $discountedRevenue,
+                // Primary keys expected by the owner performance cards.
+                'ordersUsedOffers' => $ordersUsedOffers,
+                'utilizationRatePercent' => $utilizationRate,
+                'offersRevenue' => $offersRevenue,
+                // Backward-compatible aliases for older clients.
+                'discountedOrdersCount' => $ordersUsedOffers,
+                'conversionRatePercent' => $utilizationRate,
+                'discountedRevenue' => $offersRevenue,
                 'totalSavings' => $totalSavings,
             ],
             'bestOfferPerformance' => $bestOffer ? [

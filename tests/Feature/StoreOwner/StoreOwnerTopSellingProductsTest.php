@@ -177,10 +177,13 @@ it('returns top selling products block for the authenticated owner store', funct
     $response->assertJsonPath('topProducts.0.quantity', 5);
     $response->assertJsonPath('topProducts.0.revenue', 100);
 
-    $response->assertJsonPath('offersImpact.discountedOrdersCount', 1);
-    $response->assertJsonPath('offersImpact.conversionRatePercent', 33.33);
-    $response->assertJsonPath('offersImpact.discountedRevenue', 100);
+    $response->assertJsonPath('offersImpact.discountedOrdersCount', 2);
+    $response->assertJsonPath('offersImpact.conversionRatePercent', 66.67);
+    $response->assertJsonPath('offersImpact.discountedRevenue', 160);
     $response->assertJsonPath('offersImpact.totalSavings', 10);
+    $response->assertJsonPath('offersImpact.ordersUsedOffers', 2);
+    $response->assertJsonPath('offersImpact.utilizationRatePercent', 66.67);
+    $response->assertJsonPath('offersImpact.offersRevenue', 160);
 
     $response->assertJsonPath('bestOfferPerformance.offerId', $offerA->id);
     $response->assertJsonPath('bestOfferPerformance.name', 'Family 25');

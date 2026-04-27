@@ -216,6 +216,10 @@ This maps common supermarket owner app screens to backend endpoints.
 - **Top KPI cards (today):**
   - `GET /api/v1/store-owner/dashboard`
   - Use `totalOrders`, `completedOrders`, `newOrders`, `pendingOrders`, `totalSales`.
+- **Performance block (most sold products + offers impact):**
+  - `GET /api/v1/store-owner/dashboard/top-selling-products?range={today|week|month|year|custom&from=&to=}`
+  - Use `topProducts`, `offersImpact`, `bestOfferPerformance`.
+  - Full contract: [API_CONTRACT_SUPERMARKET_OWNER_TOP_SELLING_PRODUCTS.md](API_CONTRACT_SUPERMARKET_OWNER_TOP_SELLING_PRODUCTS.md)
 - **New orders list + quick actions:**
   - Use existing order list endpoint in app state (if available in broader module).
   - Action endpoints:
@@ -305,6 +309,32 @@ Send those ids back in `permissionIds[]` during create/update.
 | newOrders       | number | Orders with status `pending` created today.              |
 | pendingOrders   | number | Non-completed and non-cancelled orders created today.    |
 | totalSales      | number | Sum of completed orders total amount for today.          |
+
+---
+
+### 5.2 Get top-selling products + offers impact
+
+| Method | Path                                                 | Description                                                   |
+| ------ | ---------------------------------------------------- | ------------------------------------------------------------- |
+| GET    | `/api/v1/store-owner/dashboard/top-selling-products` | Performance block by selected period for owner default store |
+
+**Query params:**
+
+| Name | Type | Required | Allowed Values | Notes |
+|---|---|---:|---|---|
+| `range` | string | No | `today`, `week`, `month`, `year`, `custom` | Default is `today` |
+| `from` | date (`Y-m-d`) | If `range=custom` | Any valid date | Inclusive start date |
+| `to` | date (`Y-m-d`) | If `range=custom` | Any valid date and `>= from` | Inclusive end date |
+
+**Response fields:**
+- `range`: `{ key, from, to }`
+- `supermarket`: `{ id, name }` from authenticated owner store
+- `topProducts[]`: `{ productId, name, quantity, revenue }`
+- `offersImpact`: `{ ordersUsedOffers, utilizationRatePercent, offersRevenue, totalSavings }`
+- `bestOfferPerformance`: nullable object with offer performance metrics
+
+For full response examples and field definitions, see:
+[API_CONTRACT_SUPERMARKET_OWNER_TOP_SELLING_PRODUCTS.md](API_CONTRACT_SUPERMARKET_OWNER_TOP_SELLING_PRODUCTS.md)
 
 ---
 
