@@ -10,7 +10,7 @@ use function Pest\Laravel\get;
 use function Pest\Laravel\getJson;
 
 it('redirects canonical restaurant links to configured landing url', function (): void {
-    config()->set('deep_links.web_landing_url', 'https://app.dllni.com/open');
+    config()->set('deep_links.web_landing_url', 'https://dllni.mustafafares.com/open');
 
     Restaurant::factory()->create([
         'slug' => 'my-restaurant',
@@ -20,23 +20,23 @@ it('redirects canonical restaurant links to configured landing url', function ()
     $response = get('/restaurant/my-restaurant?source=whatsapp&campaign=launch');
 
     $response->assertRedirect();
-    expect($response->headers->get('Location'))->toContain('https://app.dllni.com/open?');
-    expect($response->headers->get('Location'))->toContain('deep_link=https%3A%2F%2Fapp.dllni.com%2Frestaurant%2Fmy-restaurant');
+    expect($response->headers->get('Location'))->toContain('https://dllni.mustafafares.com/open?');
+    expect($response->headers->get('Location'))->toContain('deep_link=https%3A%2F%2Fdllni.mustafafares.com%2Frestaurant%2Fmy-restaurant');
     expect($response->headers->get('Location'))->toContain('source=whatsapp');
     expect($response->headers->get('Location'))->toContain('campaign=launch');
 });
 
 it('redirects invalid canonical links to safe fallback page', function (): void {
-    config()->set('deep_links.invalid_fallback_url', 'https://app.dllni.com/not-found');
+    config()->set('deep_links.invalid_fallback_url', 'https://dllni.mustafafares.com/not-found');
 
     $response = get('/vote/999999');
 
     $response->assertRedirect();
-    expect($response->headers->get('Location'))->toContain('https://app.dllni.com/not-found');
+    expect($response->headers->get('Location'))->toContain('https://dllni.mustafafares.com/not-found');
 });
 
 it('redirects canonical product links', function (): void {
-    config()->set('deep_links.web_landing_url', 'https://app.dllni.com/open');
+    config()->set('deep_links.web_landing_url', 'https://dllni.mustafafares.com/open');
 
     $restaurant = Restaurant::factory()->create(['is_active' => true]);
     $product = Product::factory()->create([
@@ -47,7 +47,7 @@ it('redirects canonical product links', function (): void {
     $response = get('/product/' . $product->id);
 
     $response->assertRedirect();
-    expect($response->headers->get('Location'))->toContain('deep_link=https%3A%2F%2Fapp.dllni.com%2Fproduct%2F' . $product->id);
+    expect($response->headers->get('Location'))->toContain('deep_link=https%3A%2F%2Fdllni.mustafafares.com%2Fproduct%2F' . $product->id);
 });
 
 it('redirects browser requests on API product links to canonical web link', function (): void {
@@ -69,9 +69,9 @@ it('keeps JSON response for API clients on product links', function (): void {
         'is_available' => true,
     ]);
 
-    getJson('/api/v1/user/products/' . $product->id)
-        ->assertOk()
-        ->assertHeader('content-type', fn(string $value): bool => str_contains($value, 'application/json'));
+    $response = getJson('/api/v1/user/products/' . $product->id);
+    $response->assertOk();
+    expect((string) $response->headers->get('content-type'))->toContain('application/json');
 });
 
 it('redirects browser requests on API supermarket store links to canonical web link', function (): void {

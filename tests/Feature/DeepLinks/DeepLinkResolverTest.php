@@ -24,7 +24,7 @@ it('resolves a restaurant slug deep link', function (): void {
     ]);
 
     $response = postJson('/api/v1/deep-links/resolve', [
-        'url' => 'https://app.dllni.com/restaurant/al-atrash?source=whatsapp',
+        'url' => 'https://dllni.mustafafares.com/restaurant/al-atrash?source=whatsapp',
     ]);
 
     $response->assertOk()
@@ -64,7 +64,7 @@ it('resolves product id and returns canonical format', function (): void {
         ->assertJsonPath('type', 'product')
         ->assertJsonPath('id', $product->id)
         ->assertJsonPath('status', 'ok')
-        ->assertJsonPath('canonical_url', 'https://app.dllni.com/product/' . $product->id);
+        ->assertJsonPath('canonical_url', 'https://dllni.mustafafares.com/product/' . $product->id);
 });
 
 it('returns expired for ended vote', function (): void {
@@ -153,7 +153,7 @@ it('resolves tokenized group order links without auth', function (): void {
 it('tracks deep link events endpoint', function (): void {
     $response = postJson('/api/v1/deep-links/events', [
         'action' => 'click',
-        'url' => 'https://app.dllni.com/restaurant/non-existing',
+        'url' => 'https://dllni.mustafafares.com/restaurant/non-existing',
         'source' => 'whatsapp',
         'medium' => 'social',
         'campaign' => 'spring',
@@ -165,11 +165,11 @@ it('tracks deep link events endpoint', function (): void {
 it('redirects short links to target when active', function (): void {
     DeepLinkShortUrl::query()->create([
         'code' => 'go123',
-        'target_url' => 'https://app.dllni.com/product/99',
+        'target_url' => 'https://dllni.mustafafares.com/product/99',
         'is_active' => true,
     ]);
 
-    get('/s/go123')->assertRedirect('https://app.dllni.com/product/99');
+    get('/s/go123')->assertRedirect('https://dllni.mustafafares.com/product/99');
 });
 
 it('resolves short link code to target resource metadata', function (): void {
@@ -180,12 +180,12 @@ it('resolves short link code to target resource metadata', function (): void {
 
     DeepLinkShortUrl::query()->create([
         'code' => 'go-resolve-1',
-        'target_url' => 'https://app.dllni.com/restaurant/' . $restaurant->slug,
+        'target_url' => 'https://dllni.mustafafares.com/restaurant/' . $restaurant->slug,
         'is_active' => true,
     ]);
 
     $response = postJson('/api/v1/deep-links/resolve', [
-        'url' => 'https://app.dllni.com/s/go-resolve-1',
+        'url' => 'https://dllni.mustafafares.com/s/go-resolve-1',
     ]);
 
     $response->assertOk()
@@ -210,7 +210,7 @@ it('resolves API-shaped product links', function (): void {
         ->assertJsonPath('type', 'product')
         ->assertJsonPath('id', $product->id)
         ->assertJsonPath('status', 'ok')
-        ->assertJsonPath('canonical_url', 'https://app.dllni.com/product/' . $product->id);
+        ->assertJsonPath('canonical_url', 'https://dllni.mustafafares.com/product/' . $product->id);
 });
 
 it('resolves API-shaped supermarket store links', function (): void {
@@ -233,5 +233,5 @@ it('resolves API-shaped supermarket store links', function (): void {
         ->assertJsonPath('target', 'supermarket_store')
         ->assertJsonPath('id', $store->id)
         ->assertJsonPath('status', 'ok')
-        ->assertJsonPath('canonical_url', 'https://app.dllni.com/store/' . $store->id);
+        ->assertJsonPath('canonical_url', 'https://dllni.mustafafares.com/store/' . $store->id);
 });

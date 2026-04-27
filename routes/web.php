@@ -19,15 +19,18 @@ Route::view('/legal/merchant-app', 'merchant-app')->name('legal.merchant-app');
 Route::view('/legal/delivery-app', 'delivery-app')->name('legal.delivery-app');
 Route::view('/legal/cleaning-worker-app', 'cleaning-worker-app')->name('legal.cleaning-worker-app');
 
-Route::get('/.well-known/assetlinks.json', function (): JsonResponse {
+/**
+ * Build Android Digital Asset Links payload.
+ */
+$assetLinksPayload = static function (): array {
     $packageName = (string) config('deep_links.android_app_package_name', '');
     $fingerprints = array_values((array) config('deep_links.android_sha256_cert_fingerprints', []));
 
     if ($packageName === '' || $fingerprints === []) {
-        return response()->json([]);
+        return [];
     }
 
-    return response()->json([
+    return [
         [
             'relation' => ['delegate_permission/common.handle_all_urls'],
             'target' => [
@@ -36,28 +39,38 @@ Route::get('/.well-known/assetlinks.json', function (): JsonResponse {
                 'sha256_cert_fingerprints' => $fingerprints,
             ],
         ],
-    ]);
-});
+    ];
+};
 
-Route::get('/.well-known/apple-app-site-association', function (): JsonResponse {
+/**
+ * Build Apple App Site Association payload.
+ */
+$appleAssociationPayload = static function (): array {
     $appIds = array_values((array) config('deep_links.ios_app_ids', []));
     $paths = array_values((array) config('deep_links.ios_paths', []));
 
     $details = [];
     if ($appIds !== []) {
         $details[] = [
+            'appID' => (string) $appIds[0],
             'appIDs' => $appIds,
             'paths' => $paths,
         ];
     }
 
-    return response()->json([
+    return [
         'applinks' => [
             'apps' => [],
             'details' => $details,
         ],
-    ]);
-});
+    ];
+};
+
+Route::get('/.well-known/assetlinks.json', fn (): JsonResponse => response()->json($assetLinksPayload()));
+Route::get('/assetlinks.json', fn (): JsonResponse => response()->json($assetLinksPayload()));
+
+Route::get('/.well-known/apple-app-site-association', fn (): JsonResponse => response()->json($appleAssociationPayload()));
+Route::get('/apple-app-site-association', fn (): JsonResponse => response()->json($appleAssociationPayload()));
 
 Route::get('/product/{identifier}', OpenDeepLinkController::class)
     ->where('identifier', '[A-Za-z0-9\-_.~%]+')

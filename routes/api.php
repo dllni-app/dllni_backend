@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\CancellationPolicyController;
 use App\Http\Controllers\API\DisputeController;
+use App\Http\Controllers\DeepLinks\OpenDeepLinkController;
 use App\Http\Controllers\DeepLinks\ResolveDeepLinkController;
 use App\Http\Controllers\API\ServiceAddonController;
 use App\Http\Controllers\API\SosAlertController;
@@ -34,6 +35,10 @@ Route::apiResource('users', UserController::class);
 Route::prefix('v1/deep-links')->group(function (): void {
     Route::post('resolve', ResolveDeepLinkController::class);
     Route::post('events', TrackDeepLinkEventController::class);
+    Route::get('{type}/{identifier}', OpenDeepLinkController::class)
+        ->whereIn('type', ['product', 'restaurant', 'store', 'vote', 'group-order'])
+        ->where('identifier', '[A-Za-z0-9\-_.~%]+')
+        ->name('api.deep-links.open');
 });
 
 Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {

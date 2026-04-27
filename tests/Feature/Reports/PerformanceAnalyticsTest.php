@@ -2,23 +2,28 @@
 
 declare(strict_types=1);
 
+use App\Enums\UserModuleType;
 use App\Models\User;
 use Carbon\Carbon;
 use Database\Factories\SmOrderFactory;
 use Database\Factories\SmStoreFactory;
 use Laravel\Sanctum\Sanctum;
-use Spatie\Permission\Models\Role;
 
 beforeEach(function (): void {
-    $guardName = (string) config('auth.defaults.guard', 'web');
-    Role::findOrCreate('admin', $guardName);
+    $owner = User::factory()->create([
+        'module_type' => UserModuleType::SupermarketSeller,
+    ]);
+    $store = SmStoreFactory::new()->create([
+        'owner_user_id' => $owner->id,
+    ]);
 
-    $user = User::factory()->create();
-    $user->assignRole('admin');
-    Sanctum::actingAs($user);
+    Sanctum::actingAs($owner);
+
+    $this->owner = $owner;
+    $this->store = $store;
 });
 
-it('forbids non-admin users from performance analytics endpoint', function (): void {
+it('forbids non-supermarket-seller users from performance analytics endpoint', function (): void {
     Sanctum::actingAs(User::factory()->create());
 
     $this->getJson('/api/v1/sm-reports/performance?startDate=' . Carbon::today()->toDateString() . '&endDate=' . Carbon::today()->toDateString())
@@ -26,11 +31,10 @@ it('forbids non-admin users from performance analytics endpoint', function (): v
 });
 
 it('returns performance analytics with valid data', function (): void {
-    $store = SmStoreFactory::new()->create();
     SmOrderFactory::new()
         ->count(5)
         ->create([
-            'store_id' => $store->id,
+            'store_id' => $this->store->id,
             'status' => 'completed',
         ]);
 
@@ -52,10 +56,9 @@ it('returns performance analytics with valid data', function (): void {
 });
 
 it('filters performance analytics by store', function (): void {
-    $store = SmStoreFactory::new()->create();
-    SmOrderFactory::new()->create(['store_id' => $store->id, 'status' => 'completed']);
+    SmOrderFactory::new()->create(['store_id' => $this->store->id, 'status' => 'completed']);
 
-    $response = $this->getJson('/api/v1/sm-reports/performance?startDate=' . Carbon::today()->toDateString() . '&endDate=' . Carbon::today()->toDateString() . '&storeId=' . $store->id);
+    $response = $this->getJson('/api/v1/sm-reports/performance?startDate=' . Carbon::today()->toDateString() . '&endDate=' . Carbon::today()->toDateString() . '&storeId=' . $this->store->id);
 
     $response->assertOk();
 });

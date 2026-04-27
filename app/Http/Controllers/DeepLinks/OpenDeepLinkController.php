@@ -23,12 +23,15 @@ final class OpenDeepLinkController
         $this->analytics = $analytics;
     }
 
-    public function __invoke(Request $request, string $type, string $identifier): RedirectResponse
+    public function __invoke(Request $request, ?string $type = null, ?string $identifier = null): RedirectResponse
     {
+        $resolvedType = (string) ($request->route('type') ?? $type ?? '');
+        $resolvedIdentifier = (string) ($request->route('identifier') ?? $identifier ?? '');
+
         $currentUserId = $request->user() !== null ? (int) $request->user()->getAuthIdentifier() : null;
 
         $resolved = $this->resolver->resolvePath(
-            path: sprintf('/%s/%s', $type, $identifier),
+            path: sprintf('/%s/%s', $resolvedType, $resolvedIdentifier),
             currentUserId: $currentUserId,
         );
 

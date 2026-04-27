@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\DeepLinks;
 
+use App\Models\DeepLinkShortUrl;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
 use Modules\Resturants\Enums\RestaurantGroupOrderStatus;
@@ -98,12 +99,16 @@ final class DeepLinkResolverService
                 parse_str((string) $parts['query'], $query);
             }
 
-            return [$this->normalizePath($path), $query];
+            [$expandedPath, $expandedQuery] = $this->expandShortPath($this->normalizePath($path));
+
+            return [$expandedPath, array_merge($expandedQuery, $query)];
         }
 
         $path = str_starts_with($trimmed, '/') ? $trimmed : '/' . $trimmed;
 
-        return [$this->normalizePath($path), []];
+        [$expandedPath, $expandedQuery] = $this->expandShortPath($this->normalizePath($path));
+
+        return [$expandedPath, $expandedQuery];
     }
 
     private function normalizePath(string $path): string
@@ -126,6 +131,41 @@ final class DeepLinkResolverService
         }
 
         return $normalized;
+    }
+
+    /**
+     * @return array{0:string,1:array<string,mixed>}
+     */
+    private function expandShortPath(string $path): array
+    {
+        if (preg_match('#^/s/([A-Za-z0-9\-_]+)$#', $path, $matches) !== 1) {
+            return [$path, []];
+        }
+
+        $code = (string) $matches[1];
+
+        $short = DeepLinkShortUrl::query()->where('code', $code)->first();
+        if ($short === null || ! $short->is_active) {
+            return [$path, []];
+        }
+
+        if ($short->expires_at !== null && now()->greaterThan($short->expires_at)) {
+            return [$path, []];
+        }
+
+        if ($short->max_clicks !== null && $short->clicks >= $short->max_clicks) {
+            return [$path, []];
+        }
+
+        $targetParts = parse_url((string) $short->target_url);
+        $targetPath = (string) ($targetParts['path'] ?? '/');
+        $targetQuery = [];
+
+        if (isset($targetParts['query'])) {
+            parse_str((string) $targetParts['query'], $targetQuery);
+        }
+
+        return [$this->normalizePath($targetPath), $targetQuery];
     }
 
     /**
@@ -303,7 +343,7 @@ final class DeepLinkResolverService
 
         if (ctype_digit($identifier)) {
             if ($currentUserId === null) {
-                return $this->invalid('forbidden', 'group-order', (int) $groupOrder->id, (string) $groupOrder->share_token);
+                return $this->invalid('forbidden', 'group-order', (int) $groupOrder->id, (string) $groupOrder->share_token, true);
             }
 
             $allowed = (int) $groupOrder->user_id === $currentUserId
@@ -313,7 +353,7 @@ final class DeepLinkResolverService
                 ->exists();
 
             if (! $allowed) {
-                return $this->invalid('forbidden', 'group-order', (int) $groupOrder->id, (string) $groupOrder->share_token);
+                return $this->invalid('forbidden', 'group-order', (int) $groupOrder->id, (string) $groupOrder->share_token, true);
             }
         }
 
@@ -331,14 +371,14 @@ final class DeepLinkResolverService
     /**
      * @return array<string, mixed>
      */
-    private function invalid(string $status, string $type, ?int $id, ?string $slug): array
+    private function invalid(string $status, string $type, ?int $id, ?string $slug, bool $requiresAuth = false): array
     {
         return [
             'type' => $type,
             'id' => $id,
             'slug' => $slug,
             'status' => $status,
-            'requires_auth' => false,
+            'requires_auth' => $requiresAuth,
             'fallback_url' => (string) config('deep_links.invalid_fallback_url'),
         ];
     }
