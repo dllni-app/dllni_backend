@@ -44,6 +44,7 @@ use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerMasterProductS
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerOfferWeeklySummaryController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerPermissionsController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerStoreController;
+use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerTopSellingProductsController;
 use Modules\Supermarket\Http\Middleware\InjectStoreIdFromOwnerContext;
 
 Route::prefix('v1')->middleware(['auth:sanctum', InjectStoreIdFromOwnerContext::class])->group(function () {
@@ -90,6 +91,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', InjectStoreIdFromOwnerContext::
     // Store Owner Routes
     Route::middleware('auth:sanctum')->prefix('store-owner')->name('store-owner.')->group(function () {
         Route::get('dashboard', StoreOwnerDashboardController::class)->name('dashboard');
+        Route::get('dashboard/top-selling-products', StoreOwnerTopSellingProductsController::class)->name('dashboard.top-selling-products');
         Route::get('offers/weekly-summary', StoreOwnerOfferWeeklySummaryController::class)->name('offers.weekly-summary');
         Route::get('permissions', StoreOwnerPermissionsController::class)->name('permissions');
         Route::get('activity-logs', StoreOwnerActivityLogController::class)->name('activity-logs');
