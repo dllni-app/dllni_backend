@@ -12,12 +12,15 @@ use Modules\Resturants\Models\Order;
 use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
 use Modules\Resturants\Models\RestaurantStaff;
+use Modules\Supermarket\Models\SmStore;
 
 final class RestaurantOwnerContext
 {
     private ?User $resolvedOwner = null;
 
     private ?Restaurant $resolvedRestaurant = null;
+
+    private ?SmStore $resolvedSupermarket = null;
 
     /** @throws AuthorizationException */
     public function owner(): User
@@ -61,6 +64,29 @@ final class RestaurantOwnerContext
     public function restaurantId(): int
     {
         return (int) $this->restaurant()->id;
+    }
+
+    /** @throws AuthorizationException */
+    public function supermarket(): SmStore
+    {
+        if ($this->resolvedSupermarket !== null) {
+            return $this->resolvedSupermarket;
+        }
+
+        $owner = $this->owner();
+        $supermarket = $owner->smStores()->orderBy('id')->first();
+
+        if (! $supermarket) {
+            throw new AuthorizationException('No supermarket found for this owner.');
+        }
+
+        return $this->resolvedSupermarket = $supermarket;
+    }
+
+    /** @throws AuthorizationException */
+    public function supermarketId(): int
+    {
+        return (int) $this->supermarket()->id;
     }
 
     /** @throws AuthorizationException */

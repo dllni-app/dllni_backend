@@ -111,6 +111,10 @@ final class SmSmartListService
             return null;
         }
 
+        if ($frequencyType === 'once') {
+            return $this->nextOneTimeRunAt($startTime, $now);
+        }
+
         if ($frequencyType === 'weekly' && $weekDays !== []) {
             return $this->nextWeeklyRunAt($weekDays, $startTime, $now);
         }
@@ -120,6 +124,17 @@ final class SmSmartListService
         }
 
         return null;
+    }
+
+    private function nextOneTimeRunAt(string $startTime, CarbonInterface $now): ?Carbon
+    {
+        $todayCandidate = Carbon::parse($now->toDateString().' '.$startTime);
+
+        if ($todayCandidate->gt($now)) {
+            return $todayCandidate;
+        }
+
+        return Carbon::parse($now->copy()->addDay()->toDateString().' '.$startTime);
     }
 
     /**

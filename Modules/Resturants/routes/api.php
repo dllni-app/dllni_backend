@@ -43,6 +43,7 @@ use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerOrder
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerPermissionsController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerProductAvailabilityController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerPromoCodesController;
+use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerTopSellingProductsController;
 use Modules\Resturants\Http\Controllers\API\RestaurantPenaltyController;
 use Modules\Resturants\Http\Controllers\API\RestaurantRecurringOrderController;
 use Modules\Resturants\Http\Controllers\API\RestaurantReputationLogController;
@@ -104,6 +105,7 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
         Route::put('restaurant/operating-hours', [RestaurantOperatingHoursController::class, 'update']);
 
         Route::get('dashboard/performance', RestaurantOwnerDashboardPerformanceController::class);
+        Route::get('dashboard/top-selling-products', RestaurantOwnerTopSellingProductsController::class);
         Route::apiResource('restaurant-roles', RestaurantRoleController::class);
 
         Route::get('orders/{order}', RestaurantOwnerOrderShowController::class);

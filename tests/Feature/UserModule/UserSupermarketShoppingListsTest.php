@@ -81,6 +81,41 @@ it('returns shopping list schedules on create and show', function (): void {
         ->assertJsonMissingPath('data.storeId');
 });
 
+it('accepts once frequency type for shopping list schedule', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $fromTime = now()->addMinutes(10)->format('H:i');
+    $toTime = now()->addHour()->format('H:i');
+
+    $response = $this->postJson('/api/v1/user/supermarket/shopping-lists', [
+        'name' => 'One time groceries',
+        'description' => 'Run one time',
+        'isActive' => true,
+        'schedule' => [
+            'isActive' => true,
+            'frequencyType' => 'once',
+            'periods' => [
+                [
+                    'label' => 'One slot',
+                    'fromTime' => $fromTime,
+                    'toTime' => $toTime,
+                ],
+            ],
+        ],
+    ]);
+
+    $response->assertCreated()
+        ->assertJsonPath('data.schedule.frequencyType', 'once')
+        ->assertJsonPath('data.schedule.weekDays', [])
+        ->assertJsonPath('data.schedule.monthDays', [])
+        ->assertJsonPath('data.schedule.periods.0.fromTime', $fromTime)
+        ->assertJsonPath('data.schedule.periods.0.toTime', $toTime)
+        ->assertJsonPath('data.schedule.isActive', true);
+
+    expect($response->json('data.schedule.nextRunAt'))->not->toBeNull();
+});
+
 it('returns 404 when accessing another users shopping list', function (): void {
     $owner = User::factory()->create();
     $other = User::factory()->create();
