@@ -32,19 +32,27 @@ final class SmProductController
 
     public function index(SmProductFilterRequest $request): AnonymousResourceCollection
     {
+        $ownedStoreId = $this->resolveOwnedStoreIdForOwnerRoutes();
+
         $query = $this->resolveSemanticQuery($request);
 
         if ($query !== null) {
-            $semanticPaginator = $this->semanticSearch($request, $query);
+            $semanticPaginator = $this->semanticSearch($request, $query, $ownedStoreId);
 
             if ($semanticPaginator !== null) {
                 return SmProductResource::collection($semanticPaginator);
             }
         }
 
-        $products = SmProduct::getQuery()
+        $productsQuery = SmProduct::getQuery()
             ->with('store', 'category', 'media', 'offerProducts.offer')
-            ->paginate($request->get('perPage', 20));
+        ;
+
+        if ($ownedStoreId !== null) {
+            $productsQuery->where('store_id', $ownedStoreId);
+        }
+
+        $products = $productsQuery->paginate($request->get('perPage', 20));
 
         return SmProductResource::collection($products);
     }
@@ -152,7 +160,7 @@ final class SmProductController
         return $trimmed !== '' ? $trimmed : null;
     }
 
-    private function semanticSearch(SmProductFilterRequest $request, string $query): ?LengthAwarePaginator
+    private function semanticSearch(SmProductFilterRequest $request, string $query, ?int $ownedStoreId = null): ?LengthAwarePaginator
     {
         $perPage = $request->integer('perPage', 20);
         $page = max(1, $request->integer('page', 1));
@@ -162,9 +170,13 @@ final class SmProductController
             'top_k' => $request->integer('top_k', max($perPage * $page, $perPage)),
         ];
 
-        $storeId = $request->input('store_id', $request->input('filter.storeId'));
-        if (is_numeric($storeId)) {
-            $payload['store_id'] = (string) $storeId;
+        if ($ownedStoreId !== null) {
+            $payload['store_id'] = (string) $ownedStoreId;
+        } else {
+            $storeId = $request->input('store_id', $request->input('filter.storeId'));
+            if (is_numeric($storeId)) {
+                $payload['store_id'] = (string) $storeId;
+            }
         }
 
         $categoryId = $request->input('category_id', $request->input('filter.categoryId'));
@@ -242,5 +254,14 @@ final class SmProductController
                 'query' => $query,
             ]
         );
+    }
+
+    private function resolveOwnedStoreIdForOwnerRoutes(): ?int
+    {
+        if (! request()->routeIs('store-owner.products.*')) {
+            return null;
+        }
+
+        return (int) $this->storeOwnerContext->ownedStore()->id;
     }
 }
