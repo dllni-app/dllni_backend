@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\Exceptions\HttpResponseException;
 
 final class TrackDeepLinkEventRequest extends FormRequest
 {
@@ -27,5 +29,13 @@ final class TrackDeepLinkEventRequest extends FormRequest
             'sharer_id' => ['nullable', 'integer', 'min:1'],
             'platform' => ['nullable', 'string', 'max:50'],
         ];
+    }
+
+    protected function failedValidation(Validator $validator): void
+    {
+        throw new HttpResponseException(response()->json([
+            'message' => 'The given data was invalid.',
+            'errors' => $validator->errors(),
+        ], 422));
     }
 }

@@ -21,6 +21,14 @@ it('returns supermarket nearby stores without authentication', function (): void
     $response->assertOk()->assertJsonStructure(['stores']);
 });
 
+it('returns restaurant homepage featured offers without authentication', function (): void {
+    // Act
+    $response = $this->getJson('/api/v1/user/restaurants/home/featured-offers');
+
+    // Assert
+    $response->assertOk()->assertJsonStructure(['offers']);
+});
+
 it('returns supermarket browse stores without authentication', function (): void {
     // Act
     $response = $this->getJson('/api/v1/user/supermarket/stores');

@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\DeepLinks\OpenDeepLinkLandingController;
 use App\Http\Controllers\DeepLinks\OpenDeepLinkController;
 use App\Http\Controllers\DeepLinks\ShortLinkRedirectController;
 
@@ -71,6 +72,8 @@ Route::get('/assetlinks.json', fn (): JsonResponse => response()->json($assetLin
 
 Route::get('/.well-known/apple-app-site-association', fn (): JsonResponse => response()->json($appleAssociationPayload()));
 Route::get('/apple-app-site-association', fn (): JsonResponse => response()->json($appleAssociationPayload()));
+
+Route::get('/open', OpenDeepLinkLandingController::class)->name('deep-links.open');
 
 Route::get('/product/{identifier}', OpenDeepLinkController::class)
     ->where('identifier', '[A-Za-z0-9\-_.~%]+')

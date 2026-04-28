@@ -173,52 +173,62 @@ final class DeepLinkResolverService
      */
     private function resolveProduct(string $identifier): array
     {
-        $smProduct = null;
         if (ctype_digit($identifier)) {
             $smProduct = SmProduct::query()
                 ->whereKey((int) $identifier)
-                ->where('is_available', true)
-                ->whereHas('store', fn($q) => $q
-                    ->where('is_active', true)
-                    ->where(fn($sq) => $sq->whereNull('suspension_until')->orWhere('suspension_until', '<=', now())))
+                ->with('store:id,is_active,suspension_until')
                 ->first();
-        }
 
-        if ($smProduct !== null) {
-            return [
-                'type' => 'product',
-                'target' => 'supermarket_product',
-                'id' => (int) $smProduct->id,
-                'slug' => null,
-                'status' => 'ok',
-                'requires_auth' => false,
-                'canonical_url' => $this->urlGenerator->product((int) $smProduct->id),
-                'fallback_url' => (string) config('deep_links.web_landing_url'),
-            ];
-        }
+            if ($smProduct !== null) {
+                $store = $smProduct->store;
+                $isVisible = (bool) $smProduct->is_available
+                    && $store !== null
+                    && (bool) $store->is_active
+                    && ($store->suspension_until === null || $store->suspension_until->lte(now()));
 
-        $restaurantProduct = null;
-        if (ctype_digit($identifier)) {
+                if (! $isVisible) {
+                    return $this->invalid('forbidden', 'product', (int) $smProduct->id, null);
+                }
+
+                return [
+                    'type' => 'product',
+                    'target' => 'supermarket_product',
+                    'id' => (int) $smProduct->id,
+                    'slug' => null,
+                    'status' => 'ok',
+                    'requires_auth' => false,
+                    'canonical_url' => $this->urlGenerator->product((int) $smProduct->id),
+                    'fallback_url' => (string) config('deep_links.web_landing_url'),
+                ];
+            }
+
             $restaurantProduct = RestaurantProduct::query()
                 ->whereKey((int) $identifier)
-                ->where('is_available', true)
-                ->whereHas('restaurant', fn($q) => $q
-                    ->where('is_active', true)
-                    ->where(fn($sq) => $sq->whereNull('suspension_until')->orWhere('suspension_until', '<=', now())))
+                ->with('restaurant:id,is_active,suspension_until')
                 ->first();
-        }
 
-        if ($restaurantProduct !== null) {
-            return [
-                'type' => 'product',
-                'target' => 'restaurant_product',
-                'id' => (int) $restaurantProduct->id,
-                'slug' => null,
-                'status' => 'ok',
-                'requires_auth' => false,
-                'canonical_url' => $this->urlGenerator->product((int) $restaurantProduct->id),
-                'fallback_url' => (string) config('deep_links.web_landing_url'),
-            ];
+            if ($restaurantProduct !== null) {
+                $restaurant = $restaurantProduct->restaurant;
+                $isVisible = (bool) $restaurantProduct->is_available
+                    && $restaurant !== null
+                    && (bool) $restaurant->is_active
+                    && ($restaurant->suspension_until === null || $restaurant->suspension_until->lte(now()));
+
+                if (! $isVisible) {
+                    return $this->invalid('forbidden', 'product', (int) $restaurantProduct->id, null);
+                }
+
+                return [
+                    'type' => 'product',
+                    'target' => 'restaurant_product',
+                    'id' => (int) $restaurantProduct->id,
+                    'slug' => null,
+                    'status' => 'ok',
+                    'requires_auth' => false,
+                    'canonical_url' => $this->urlGenerator->product((int) $restaurantProduct->id),
+                    'fallback_url' => (string) config('deep_links.web_landing_url'),
+                ];
+            }
         }
 
         return $this->invalid('not_found', 'product', null, null);

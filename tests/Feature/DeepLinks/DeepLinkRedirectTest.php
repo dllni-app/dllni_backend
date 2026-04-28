@@ -35,6 +35,32 @@ it('redirects invalid canonical links to safe fallback page', function (): void 
     expect($response->headers->get('Location'))->toContain('https://dllni.mustafafares.com/not-found');
 });
 
+it('handles /open landing links and redirects to configured landing url', function (): void {
+    config()->set('deep_links.web_landing_url', 'https://dllni.mustafafares.com/open-app');
+    config()->set('deep_links.canonical_host', 'dllni.mustafafares.com');
+
+    Restaurant::factory()->create([
+        'slug' => 'open-restaurant',
+        'is_active' => true,
+    ]);
+
+    $response = get('/open?deep_link=' . urlencode('https://dllni.mustafafares.com/restaurant/open-restaurant') . '&source=whatsapp');
+
+    $response->assertRedirect();
+    expect($response->headers->get('Location'))->toContain('https://dllni.mustafafares.com/open-app?')
+        ->and($response->headers->get('Location'))->toContain('deep_link=https%3A%2F%2Fdllni.mustafafares.com%2Frestaurant%2Fopen-restaurant')
+        ->and($response->headers->get('Location'))->toContain('source=whatsapp');
+});
+
+it('redirects /open to invalid fallback when deep link cannot be resolved', function (): void {
+    config()->set('deep_links.invalid_fallback_url', 'https://dllni.mustafafares.com/not-found');
+
+    $response = get('/open?deep_link=' . urlencode('https://dllni.mustafafares.com/restaurant/unknown-slug'));
+
+    $response->assertRedirect();
+    expect($response->headers->get('Location'))->toContain('https://dllni.mustafafares.com/not-found?reason=not_found');
+});
+
 it('redirects canonical product links', function (): void {
     config()->set('deep_links.web_landing_url', 'https://dllni.mustafafares.com/open');
 

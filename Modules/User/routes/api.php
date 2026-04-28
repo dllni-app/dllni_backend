@@ -93,6 +93,7 @@ use Modules\User\Http\Controllers\API\UserRestaurantFavoritesIndexController;
 use Modules\User\Http\Controllers\API\UserRestaurantFavoriteStoreController;
 use Modules\User\Http\Controllers\API\UserRestaurantHomeCategoriesController;
 use Modules\User\Http\Controllers\API\UserRestaurantHomeExclusiveOffersController;
+use Modules\User\Http\Controllers\API\UserRestaurantHomeFeaturedOffersController;
 use Modules\User\Http\Controllers\API\UserRestaurantHomeLatestOrderedProductsController;
 use Modules\User\Http\Controllers\API\UserRestaurantHomeNearestRestaurantsController;
 use Modules\User\Http\Controllers\API\UserRestaurantHomeReorderLatestOrderProductsController;
@@ -152,6 +153,7 @@ Route::prefix('v1/user')->group(function (): void {
 
     Route::prefix('restaurants/home')->group(function (): void {
         Route::get('categories', UserRestaurantHomeCategoriesController::class);
+        Route::get('featured-offers', UserRestaurantHomeFeaturedOffersController::class);
         Route::get('exclusive-offers', UserRestaurantHomeExclusiveOffersController::class);
         Route::get('nearest-restaurants', UserRestaurantHomeNearestRestaurantsController::class);
         Route::get('suggested-products', UserRestaurantHomeSuggestedProductsController::class);

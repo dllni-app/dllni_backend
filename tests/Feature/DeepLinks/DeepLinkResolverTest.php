@@ -14,6 +14,7 @@ use Modules\Resturants\Models\RestaurantGroupOrderParticipant;
 use Modules\Resturants\Models\RestaurantGroupVote;
 use Modules\Supermarket\Models\SmStore;
 use function Pest\Laravel\get;
+use function Pest\Laravel\post;
 use function Pest\Laravel\postJson;
 
 it('resolves a restaurant slug deep link', function (): void {
@@ -162,6 +163,16 @@ it('tracks deep link events endpoint', function (): void {
     $response->assertOk()->assertJsonPath('status', 'ok');
 });
 
+it('returns json validation errors for deep link endpoints without redirect', function (): void {
+    $resolveResponse = post('/api/v1/deep-links/resolve', []);
+    $resolveResponse->assertStatus(422);
+    expect((string) $resolveResponse->headers->get('content-type'))->toContain('application/json');
+
+    $eventsResponse = post('/api/v1/deep-links/events', []);
+    $eventsResponse->assertStatus(422);
+    expect((string) $eventsResponse->headers->get('content-type'))->toContain('application/json');
+});
+
 it('redirects short links to target when active', function (): void {
     DeepLinkShortUrl::query()->create([
         'code' => 'go123',
@@ -234,4 +245,23 @@ it('resolves API-shaped supermarket store links', function (): void {
         ->assertJsonPath('id', $store->id)
         ->assertJsonPath('status', 'ok')
         ->assertJsonPath('canonical_url', 'https://dllni.mustafafares.com/store/' . $store->id);
+});
+
+it('returns forbidden when product exists but is not visible', function (): void {
+    $restaurant = Restaurant::factory()->create([
+        'is_active' => false,
+    ]);
+
+    $product = Product::factory()->create([
+        'restaurant_id' => $restaurant->id,
+        'is_available' => true,
+    ]);
+
+    postJson('/api/v1/deep-links/resolve', [
+        'url' => 'https://dllni.mustafafares.com/product/' . $product->id,
+    ])
+        ->assertOk()
+        ->assertJsonPath('type', 'product')
+        ->assertJsonPath('id', $product->id)
+        ->assertJsonPath('status', 'forbidden');
 });
