@@ -3,17 +3,17 @@
 declare(strict_types=1);
 
 return [
-    'canonical_host' => env('DEEP_LINK_CANONICAL_HOST', 'app.dllni.com'),
+    'canonical_host' => env('DEEP_LINK_CANONICAL_HOST', 'alnadha.net'),
     'canonical_scheme' => env('DEEP_LINK_CANONICAL_SCHEME', 'https'),
 
     // Web fallback when the app is not installed or universal links are not available.
-    'web_landing_url' => env('DEEP_LINK_WEB_LANDING_URL', 'https://app.dllni.com/open'),
+    'web_landing_url' => env('DEEP_LINK_WEB_LANDING_URL', 'https://alnadha.net/open'),
 
     // Optional store fallback used by client-side landing if needed.
-    'store_landing_url' => env('DEEP_LINK_STORE_LANDING_URL', 'https://app.dllni.com/get-app'),
+    'store_landing_url' => env('DEEP_LINK_STORE_LANDING_URL', 'https://alnadha.net/get-app'),
 
     // Safe fallback for invalid/unknown links.
-    'invalid_fallback_url' => env('DEEP_LINK_INVALID_FALLBACK_URL', 'https://app.dllni.com/not-found'),
+    'invalid_fallback_url' => env('DEEP_LINK_INVALID_FALLBACK_URL', 'https://alnadha.net/not-found'),
 
     // Android App Links settings used at /.well-known/assetlinks.json.
     'android_app_package_name' => env('DEEP_LINK_ANDROID_PACKAGE_NAME', ''),
