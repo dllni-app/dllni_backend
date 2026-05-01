@@ -16,10 +16,6 @@ final class SmProductFilterRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        if (! $this->routeIs('store-owner.products.index')) {
-            return;
-        }
-
         $storeId = app(StoreOwnerContextService::class)->ownedStore()->id;
         $filter = $this->input('filter', []);
         if (! is_array($filter)) {

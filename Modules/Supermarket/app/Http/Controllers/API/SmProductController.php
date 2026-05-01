@@ -123,9 +123,7 @@ final class SmProductController
 
     private function assertStoreOwnerProductBelongsToOwner(SmProduct $product): void
     {
-        if (request()->routeIs('store-owner.products.*')) {
-            $this->storeOwnerContext->store((int) $product->store_id);
-        }
+        $this->storeOwnerContext->store((int) $product->store_id);
     }
 
     private function extractImages(SmProductRequest $request): array
@@ -258,10 +256,6 @@ final class SmProductController
 
     private function resolveOwnedStoreIdForOwnerRoutes(): ?int
     {
-        if (! request()->routeIs('store-owner.products.*')) {
-            return null;
-        }
-
         return (int) $this->storeOwnerContext->ownedStore()->id;
     }
 }

@@ -16,11 +16,9 @@ final class SmProductRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        if ($this->routeIs('store-owner.products.store')) {
-            $this->merge([
-                'storeId' => app(StoreOwnerContextService::class)->ownedStore()->id,
-            ]);
-        }
+        $this->merge([
+            'storeId' => app(StoreOwnerContextService::class)->ownedStore()->id,
+         ]);
     }
 
     public function rules(): array
