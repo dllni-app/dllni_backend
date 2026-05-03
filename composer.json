@@ -9,7 +9,7 @@
         "php": "^8.4.0",
         "dedoc/scramble": "^0.13.14",
         "devkandil/notifire": "^1.2.4",
-        "filament/filament": "5.2.4",
+        "filament/filament": "5.3.5",
         "laravel/framework": "^12.54.1",
         "laravel/sanctum": "^4.3.1",
         "mustafafares/laravel-auto-crud": "^5.0.1",

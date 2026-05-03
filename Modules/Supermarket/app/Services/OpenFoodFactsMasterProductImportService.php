@@ -265,12 +265,6 @@ final class OpenFoodFactsMasterProductImportService
                 ->get($imageUrl);
 
             if (! $response->successful()) {
-                Log::warning('OpenFoodFacts image import failed: non-success HTTP status.', [
-                    'barcode' => $barcode,
-                    'image_url' => $imageUrl,
-                    'status' => $response->status(),
-                ]);
-
                 return false;
             }
 
@@ -279,12 +273,6 @@ final class OpenFoodFactsMasterProductImportService
             $allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
 
             if (! in_array($mimeType, $allowedMimeTypes, true)) {
-                Log::warning('OpenFoodFacts image import failed: unsupported mime type.', [
-                    'barcode' => $barcode,
-                    'image_url' => $imageUrl,
-                    'mime_type' => $mimeType,
-                ]);
-
                 return false;
             }
 
@@ -292,13 +280,6 @@ final class OpenFoodFactsMasterProductImportService
             $bytes = mb_strlen($body, '8bit');
 
             if ($bytes <= 0 || $bytes > $maxBytes) {
-                Log::warning('OpenFoodFacts image import failed: invalid size.', [
-                    'barcode' => $barcode,
-                    'image_url' => $imageUrl,
-                    'bytes' => $bytes,
-                    'max_bytes' => $maxBytes,
-                ]);
-
                 return false;
             }
 
@@ -310,22 +291,11 @@ final class OpenFoodFactsMasterProductImportService
             };
 
             if ($extension === null) {
-                Log::warning('OpenFoodFacts image import failed: extension could not be resolved.', [
-                    'barcode' => $barcode,
-                    'image_url' => $imageUrl,
-                    'mime_type' => $mimeType,
-                ]);
-
                 return false;
             }
 
             $tempPath = tempnam(sys_get_temp_dir(), 'off-image-');
             if ($tempPath === false) {
-                Log::warning('OpenFoodFacts image import failed: unable to create temp file.', [
-                    'barcode' => $barcode,
-                    'image_url' => $imageUrl,
-                ]);
-
                 return false;
             }
 
@@ -334,11 +304,6 @@ final class OpenFoodFactsMasterProductImportService
 
             if (file_put_contents($imagePath, $body) === false) {
                 @unlink($imagePath);
-                Log::warning('OpenFoodFacts image import failed: unable to write temp image.', [
-                    'barcode' => $barcode,
-                    'image_url' => $imageUrl,
-                    'temp_path' => $imagePath,
-                ]);
 
                 return false;
             }
