@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Enums\UserModuleType;
 use App\Models\User;
+use App\Models\Worker;
 use Database\Seeders\AdminUserSeeder;
 use Database\Seeders\DashboardPermissionsSeeder;
 use Database\Seeders\Permissions\RestaurantOwnerEmployeePermissionsSeeder;
@@ -115,6 +116,24 @@ it('user: logs in with phone and password and returns user and token', function 
         ]);
     expect($response->json('user.phone'))->toBe('+962791234567');
     expect($response->json('token'))->toBeString();
+});
+
+it('user: cleaning worker login includes workerId for realtime channels', function (): void {
+    $user = User::factory()->create([
+        'phone' => '+962799900000',
+        'password' => bcrypt('secret'),
+        'module_type' => UserModuleType::CleaningWorker->value,
+    ]);
+    $worker = Worker::factory()->create(['user_id' => $user->id]);
+
+    $response = $this->postJson('/api/login', [
+        'phone' => '+962799900000',
+        'password' => 'secret',
+    ]);
+
+    $response->assertOk()
+        ->assertJsonPath('user.id', $user->id)
+        ->assertJsonPath('user.workerId', $worker->id);
 });
 
 it('user: returns validation error when login credentials are invalid', function (): void {

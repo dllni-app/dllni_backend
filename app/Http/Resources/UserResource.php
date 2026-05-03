@@ -27,6 +27,10 @@ final class UserResource extends JsonResource
             'phone' => $this->phone,
             'phoneVerifiedAt' => $this->phone_verified_at,
             'moduleType' => $this->module_type?->value,
+            'workerId' => $this->when(
+                $this->relationLoaded('worker'),
+                fn () => $this->worker?->id
+            ),
             'emailVerifiedAt' => $this->email_verified_at,
             'primaryImage' => MediaResource::make($this->whenLoaded('media', fn () => $this->getFirstMedia('primary-image'))),
             'images' => MediaResource::collection($this->whenLoaded('media', fn () => $this->getMedia('images'))),

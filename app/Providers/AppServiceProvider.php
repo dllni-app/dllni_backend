@@ -20,6 +20,8 @@ use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Resturants\Models\Category;
 use Modules\Resturants\Models\Offer;
 use Modules\Resturants\Models\Order;
+use Modules\Resturants\Models\RestaurantGroupOrder;
+use Modules\Resturants\Models\RestaurantGroupOrderParticipant;
 use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
 use Modules\Resturants\Models\RestaurantOrderDispute;
@@ -109,6 +111,26 @@ final class AppServiceProvider extends ServiceProvider
 
     private function bootBroadcastChannels(): void
     {
+        Broadcast::channel('vote.{voteId}', function (User $user, int $voteId): bool {
+            return (int) $user->id !== 0;
+        }, ['guards' => ['sanctum']]);
+
+        Broadcast::channel('group-order.{groupOrderId}', function (User $user, int $groupOrderId): bool {
+            $isOrganizer = RestaurantGroupOrder::query()
+                ->whereKey($groupOrderId)
+                ->where('user_id', $user->id)
+                ->exists();
+
+            if ($isOrganizer) {
+                return true;
+            }
+
+            return RestaurantGroupOrderParticipant::query()
+                ->where('group_order_id', $groupOrderId)
+                ->where('user_id', $user->id)
+                ->exists();
+        }, ['guards' => ['sanctum']]);
+
         Broadcast::channel('cleaning-booking.{bookingId}', function (User $user, int $bookingId): bool {
             $booking = CleaningBooking::query()->find($bookingId);
 
