@@ -18,6 +18,7 @@ final class UserNormalizeProductTextController
     {
         $normalized = $this->gemini->normalizeProductListText(
             inputText: (string) $request->validated('text'),
+            module: (string) $request->validated('module'),
             locale: $request->validated('locale'),
         );
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Supermarket\Http\Resources;
 
 use App\Http\Resources\MediaResource;
+use App\Models\MasterProduct;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Modules\Supermarket\Models\SmProduct;
@@ -20,6 +21,25 @@ final class SmProductResource extends JsonResource
         $hasDiscount = $this->discounted_price !== null;
         $finalPrice = $this->discounted_price ?? $this->price;
         $originalPrice = $hasDiscount ? $this->price : null;
+
+        $storePrimaryMedia = $this->relationLoaded('media')
+            ? $this->getFirstMedia(SmProduct::IMAGE_COLLECTION)
+            : null;
+        $storePrimaryImageUrl = $this->relationLoaded('media')
+            ? ($this->getFirstMediaUrl(SmProduct::IMAGE_COLLECTION) ?: null)
+            : null;
+
+        $masterFallbackMedia = null;
+        $masterFallbackImageUrl = null;
+
+        if ($storePrimaryMedia === null && $this->relationLoaded('masterProduct') && $this->masterProduct !== null && $this->masterProduct->relationLoaded('media')) {
+            $masterFallbackMedia = $this->masterProduct->getFirstMedia(MasterProduct::IMAGE_COLLECTION)
+                ?? $this->masterProduct->getFirstMedia();
+            $masterFallbackImageUrl = $masterFallbackMedia?->getFullUrl();
+        }
+
+        $primaryMedia = $storePrimaryMedia ?? $masterFallbackMedia;
+        $primaryImageUrl = $storePrimaryImageUrl ?? $masterFallbackImageUrl;
 
         return [
             'id' => $this->id,
@@ -69,9 +89,9 @@ final class SmProductResource extends JsonResource
                         ->all(),
                 ])
                 ->all()),
-            'image' => MediaResource::make($this->whenLoaded('media', fn () => $this->getFirstMedia(SmProduct::IMAGE_COLLECTION))),
-            'imageUrl' => $this->whenLoaded('media', fn () => $this->getFirstMediaUrl(SmProduct::IMAGE_COLLECTION) ?: null),
-            'primaryImage' => $this->whenLoaded('media', fn () => $this->getFirstMediaUrl(SmProduct::IMAGE_COLLECTION) ?: null),
+            'image' => $primaryMedia !== null ? MediaResource::make($primaryMedia) : null,
+            'imageUrl' => $primaryImageUrl,
+            'primaryImage' => $primaryImageUrl,
             'images' => $this->whenLoaded('media', fn () => MediaResource::collection($this->getMedia(SmProduct::IMAGE_COLLECTION))),
             'imageUrls' => $this->whenLoaded('media', fn () => $this->getMedia(SmProduct::IMAGE_COLLECTION)
                 ->map(fn ($media): string => $media->getFullUrl())

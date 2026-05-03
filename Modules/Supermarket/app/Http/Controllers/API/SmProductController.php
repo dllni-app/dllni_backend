@@ -45,7 +45,7 @@ final class SmProductController
         }
 
         $productsQuery = SmProduct::getQuery()
-            ->with('store', 'category', 'media', 'offerProducts.offer')
+            ->with('store', 'category', 'media', 'offerProducts.offer', 'masterProduct.media')
         ;
 
         if ($ownedStoreId !== null) {
@@ -75,7 +75,7 @@ final class SmProductController
             $this->extractImages($request)
         );
 
-        return SmProductResource::make($product->load('store', 'category', 'media', 'offerProducts.offer'));
+        return SmProductResource::make($product->load('store', 'category', 'media', 'offerProducts.offer', 'masterProduct.media'));
     }
 
     public function import(SmProductImportRequest $request): JsonResponse
@@ -93,7 +93,7 @@ final class SmProductController
     {
         $this->assertStoreOwnerProductBelongsToOwner($product);
 
-        return SmProductResource::make($product->load('store', 'category', 'media', 'offerProducts.offer'));
+        return SmProductResource::make($product->load('store', 'category', 'media', 'offerProducts.offer', 'masterProduct.media'));
     }
 
     public function update(SmProductRequest $request, SmProduct $product): SmProductResource
@@ -106,7 +106,7 @@ final class SmProductController
             $this->extractImages($request)
         );
 
-        return SmProductResource::make($updatedProduct->load('store', 'category', 'media', 'offerProducts.offer'));
+        return SmProductResource::make($updatedProduct->load('store', 'category', 'media', 'offerProducts.offer', 'masterProduct.media'));
     }
 
     public function destroy(SmProduct $product): Response
@@ -211,7 +211,7 @@ final class SmProductController
 
         $products = SmProduct::query()
             ->whereIn('id', $ids)
-            ->with('store', 'category', 'media', 'offerProducts.offer')
+            ->with('store', 'category', 'media', 'offerProducts.offer', 'masterProduct.media')
             ->get()
             ->keyBy('id');
 

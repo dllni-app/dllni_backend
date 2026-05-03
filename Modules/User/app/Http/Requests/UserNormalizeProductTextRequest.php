@@ -18,6 +18,7 @@ final class UserNormalizeProductTextRequest extends FormRequest
     {
         return [
             'text' => ['required', 'string', 'min:1', 'max:5000', 'regex:/.*\\S.*/'],
+            'module' => ['required', 'string', Rule::in(['resturant', 'supermarket'])],
             'locale' => ['sometimes', 'nullable', 'string', Rule::in(['ar', 'en'])],
         ];
     }

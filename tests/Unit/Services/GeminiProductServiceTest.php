@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Http;
 beforeEach(function (): void {
     Config::set('gemini.api_key', 'test-api-key');
     Config::set('gemini.vision_model', 'gemini-test-vision');
+    Config::set('gemini.text_model', 'gemini-test-text');
     Config::set('gemini.image_gen_model', 'gemini-test-image');
 });
 
@@ -37,8 +38,12 @@ it('extracts product details from an uploaded image', function (): void {
 
     Http::assertSent(function ($request): bool {
         $data = $request->data();
+        $url = $request->url();
 
-        return ($data['contents'][0]['parts'][1]['inline_data']['mime_type'] ?? null) === 'image/png';
+        return ($data['contents'][0]['parts'][1]['inline_data']['mime_type'] ?? null) === 'image/png'
+            && $request->hasHeader('x-goog-api-key', 'test-api-key')
+            && ! str_contains($url, '?key=')
+            && ! str_contains($url, '&key=');
     });
 });
 
@@ -97,6 +102,77 @@ it('returns the first inline image part from image generation responses', functi
 
     expect($service->generateProductImage('Orange Juice', 'Cold pressed'))
         ->toBe('encoded-image-data');
+
+    Http::assertSent(function ($request): bool {
+        $url = $request->url();
+
+        return $request->hasHeader('x-goog-api-key', 'test-api-key')
+            && ! str_contains($url, '?key=')
+            && ! str_contains($url, '&key=');
+    });
+});
+
+it('uses restaurant module instructions when normalizing product text', function (): void {
+    Http::fake([
+        'https://generativelanguage.googleapis.com/*' => Http::response([
+            'candidates' => [[
+                'content' => [
+                    'parts' => [[
+                        'text' => '{"items":["Grilled chicken"]}',
+                    ]],
+                ],
+            ]],
+        ], 200),
+    ]);
+
+    $service = app(GeminiProductService::class);
+
+    expect($service->normalizeProductListText('I want grilled chicken', 'en', 'resturant'))
+        ->toBe([
+            'items' => ['Grilled chicken'],
+            'normalizedText' => 'Grilled chicken',
+        ]);
+
+    Http::assertSent(function ($request): bool {
+        $data = $request->data();
+        $prompt = $data['contents'][0]['parts'][0]['text'] ?? '';
+
+        return $request->url() === 'https://generativelanguage.googleapis.com/v1beta/models/gemini-test-text:generateContent'
+            && is_string($prompt)
+            && str_contains($prompt, 'Restaurant module')
+            && str_contains($prompt, 'Grilled chicken" should remain "Grilled chicken');
+    });
+});
+
+it('uses supermarket module instructions when normalizing product text', function (): void {
+    Http::fake([
+        'https://generativelanguage.googleapis.com/*' => Http::response([
+            'candidates' => [[
+                'content' => [
+                    'parts' => [[
+                        'text' => '{"items":["Chicken","Grilling spices","Cooking oil"]}',
+                    ]],
+                ],
+            ]],
+        ], 200),
+    ]);
+
+    $service = app(GeminiProductService::class);
+
+    expect($service->normalizeProductListText('I want grilled chicken', 'en', 'supermarket'))
+        ->toBe([
+            'items' => ['Chicken', 'Grilling spices', 'Cooking oil'],
+            'normalizedText' => 'Chicken , Grilling spices , Cooking oil',
+        ]);
+
+    Http::assertSent(function ($request): bool {
+        $data = $request->data();
+        $prompt = $data['contents'][0]['parts'][0]['text'] ?? '';
+
+        return is_string($prompt)
+            && str_contains($prompt, 'Supermarket module')
+            && str_contains($prompt, 'expand it into the ingredients and preparation-kit products');
+    });
 });
 
 it('returns safe fallbacks when gemini throws', function (): void {

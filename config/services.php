@@ -45,4 +45,14 @@ return [
         'timeout' => env('DALLELNI_SEARCH_TIMEOUT', 10),
     ],
 
+    'openfoodfacts' => [
+        'products_jsonl_url' => env('OPENFOODFACTS_PRODUCTS_JSONL_URL', 'https://static.openfoodfacts.org/data/openfoodfacts-products.jsonl.gz'),
+        'user_agent' => env('OPENFOODFACTS_USER_AGENT', 'DllniBackend/1.0 (contact: backend@dllni.local)'),
+        'timeout' => (int) env('OPENFOODFACTS_TIMEOUT', 120),
+        'retry_times' => (int) env('OPENFOODFACTS_RETRY_TIMES', 3),
+        'retry_sleep' => (int) env('OPENFOODFACTS_RETRY_SLEEP', 500),
+        'image_max_bytes' => (int) env('OPENFOODFACTS_IMAGE_MAX_BYTES', 5 * 1024 * 1024),
+        'image_sleep_ms' => (int) env('OPENFOODFACTS_IMAGE_SLEEP_MS', 100),
+    ],
+
 ];

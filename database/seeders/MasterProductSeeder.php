@@ -49,6 +49,7 @@ final class MasterProductSeeder extends Seeder
                 ['id' => $data['id']],
                 [
                     'name' => $data['name'],
+                    'barcode' => $data['barcode'],
                     'unit' => $data['unit']->value,
                     'brand' => $data['brand'],
                     'description' => $data['description'],

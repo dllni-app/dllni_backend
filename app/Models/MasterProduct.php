@@ -19,10 +19,16 @@ final class MasterProduct extends Model implements HasMedia
 
     protected $fillable = [
         'name',
+        'barcode',
         'unit',
         'brand',
         'description',
         'is_active',
+        'openfoodfacts_url',
+        'openfoodfacts_last_modified_at',
+        'openfoodfacts_imported_at',
+        'openfoodfacts_payload_hash',
+        'openfoodfacts_countries_tags',
     ];
 
     public function aliases(): HasMany
@@ -49,6 +55,9 @@ final class MasterProduct extends Model implements HasMedia
         return [
             'unit' => MasterProductUnit::class,
             'is_active' => 'boolean',
+            'openfoodfacts_last_modified_at' => 'datetime',
+            'openfoodfacts_imported_at' => 'datetime',
+            'openfoodfacts_countries_tags' => 'array',
         ];
     }
 }

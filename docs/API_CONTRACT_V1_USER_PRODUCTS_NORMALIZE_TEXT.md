@@ -29,6 +29,7 @@ Route is registered in `Modules/User/routes/api.php` inside the authenticated us
 Behavior:
 - Accepts noisy text (multi-line or sentence style).
 - Uses Gemini to extract and normalize product names.
+- Uses `module` to choose restaurant dish normalization or supermarket shopping-kit normalization.
 - Removes quantities/units/noise words when possible.
 - Returns:
   - `items`: normalized product names array.
@@ -41,6 +42,7 @@ Behavior:
 | Field | Required | Type | Notes |
 | --- | --- | --- | --- |
 | `text` | Yes | string | Non-empty, max `5000` chars. |
+| `module` | Yes | string | Allowed: `resturant`, `supermarket`. `resturant` returns prepared dishes/menu items; `supermarket` returns grocery products and expands prepared dishes into ingredients/preparation-kit products. |
 | `locale` | No | string \| null | Allowed: `ar`, `en`. If omitted, backend infers from input context/model behavior. |
 
 ### Example request
@@ -48,6 +50,7 @@ Behavior:
 ```json
 {
   "text": "شلونك موعلم بدي كيلو قشوان\n2 كيلو لحمة\n3 فروج نيء كيلو\nفاصولي",
+  "module": "supermarket",
   "locale": "ar"
 }
 ```
@@ -88,6 +91,7 @@ Possible validation cases:
 - `text` missing.
 - `text` empty/whitespace.
 - `text` exceeds `5000` characters.
+- `module` missing or not in allowed values (`resturant`, `supermarket`).
 - `locale` not in allowed values (`ar`, `en`).
 
 Example:
@@ -123,6 +127,7 @@ curl -X POST "{baseUrl}/api/v1/user/products/normalize-text" \
   -H "Content-Type: application/json" \
   -d '{
     "text": "شلونك موعلم بدي كيلو قشوان\n2 كيلو لحمة\n3 فروج نيء كيلو\nفاصولي",
+    "module": "supermarket",
     "locale": "ar"
   }'
 ```

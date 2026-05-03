@@ -24,9 +24,26 @@ final class StoreOwnerMasterProductSearchController
         $masterProducts = MasterProduct::query()
             ->where('is_active', true)
             ->where(function ($query) use ($escapedIndex): void {
-                $query->whereRaw("name LIKE ? ESCAPE '!'", ["{$escapedIndex}%"]);
+                $query->whereRaw("name LIKE ? ESCAPE '!'", ["{$escapedIndex}%"])
+                    ->orWhereRaw("barcode LIKE ? ESCAPE '!'", ["{$escapedIndex}%"])
+                    ->orWhereHas('aliases', function ($aliasQuery) use ($escapedIndex): void {
+                        $aliasQuery->whereRaw("alias LIKE ? ESCAPE '!'", ["{$escapedIndex}%"]);
+                    });
             })
-            ->orderByRaw("CASE WHEN name LIKE ? ESCAPE '!' THEN 0 ELSE 1 END", ["{$escapedIndex}%"])
+            ->orderByRaw(
+                "CASE
+                    WHEN name LIKE ? ESCAPE '!' THEN 0
+                    WHEN barcode LIKE ? ESCAPE '!' THEN 1
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM master_product_aliases
+                        WHERE master_product_aliases.master_product_id = master_products.id
+                          AND master_product_aliases.alias LIKE ? ESCAPE '!'
+                    ) THEN 2
+                    ELSE 3
+                 END",
+                ["{$escapedIndex}%", "{$escapedIndex}%", "{$escapedIndex}%"]
+            )
             ->orderBy('name')
             ->paginate($perPage);
 

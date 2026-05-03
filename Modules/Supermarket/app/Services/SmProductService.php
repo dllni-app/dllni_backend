@@ -65,7 +65,7 @@ final class SmProductService
                     'category_id' => $categoryId,
                     'master_product_id' => $masterProduct->id,
                     'name' => $masterProduct->name,
-                    'barcode' => null,
+                    'barcode' => $masterProduct->barcode,
                     'source_type' => SmProductSource::CatalogSearch->value,
                     'description' => $masterProduct->description ?? '',
                     'price' => 0,
@@ -80,7 +80,7 @@ final class SmProductService
                 $products->push($product);
             }
 
-            return $products->load('store', 'category', 'media', 'offerProducts.offer');
+            return $products->load('store', 'category', 'media', 'offerProducts.offer', 'masterProduct.media');
         });
     }
 

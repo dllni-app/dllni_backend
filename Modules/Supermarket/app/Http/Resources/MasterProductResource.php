@@ -23,10 +23,12 @@ final class MasterProductResource extends JsonResource
             'id' => $this->id,
             'masterProductId' => $this->id,
             'name' => $this->name,
+            'barcode' => $this->barcode,
             'unit' => $this->unit?->value ?? (string) $this->unit,
             'brand' => $this->brand,
             'description' => $this->description,
             'isActive' => (bool) $this->is_active,
+            'openfoodfactsUrl' => $this->openfoodfacts_url,
             'primaryImage' => $primaryMedia !== null
                 ? MediaResource::make($primaryMedia)->toArray($request)
                 : null,

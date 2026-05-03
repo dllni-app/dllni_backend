@@ -171,7 +171,7 @@ final class GeminiProductService
     /**
      * @return array{items: array<int, string>, normalizedText: string|null}
      */
-    public function normalizeProductListText(string $inputText, ?string $locale = null): array
+    public function normalizeProductListText(string $inputText, ?string $locale = null, string $module = 'supermarket'): array
     {
         $normalizedInput = $this->normalizeString($inputText);
 
@@ -183,7 +183,7 @@ final class GeminiProductService
         }
 
         $payload = $this->generateStructuredTextResponse(
-            prompt: $this->buildTextNormalizationPrompt($locale),
+            prompt: $this->buildTextNormalizationPrompt($locale, $module),
             responseSchema: $this->normalizeTextResponseSchema(),
             inputText: $normalizedInput,
             operation: __FUNCTION__,
@@ -256,9 +256,14 @@ final class GeminiProductService
         return implode(' ', $promptLines);
     }
 
-    private function buildTextNormalizationPrompt(?string $locale): string
+    private function buildTextNormalizationPrompt(?string $locale, string $module): string
     {
+        $moduleInstruction = $module === 'resturant'
+            ? 'Restaurant module: return prepared dishes or menu items exactly as a customer would order them. For example, "Grilled chicken" should remain "Grilled chicken". '
+            : 'Supermarket module: return purchasable grocery products. When the input names a prepared dish or meal, expand it into the ingredients and preparation-kit products needed to make it instead of returning the dish name. For example, "Grilled chicken" should become items such as chicken, grilling spices, cooking oil, and relevant preparation products. ';
+
         return 'You normalize grocery and restaurant product text. '
+            . $moduleInstruction
             . 'Given noisy free-form input, extract only product names and return canonical names as JSON. '
             . 'Return one object with exactly one field: "items" (array of strings). '
             . 'Remove quantities, units, numbers, and filler words. '
@@ -589,7 +594,7 @@ final class GeminiProductService
     {
         $baseUrl = mb_rtrim((string) config('gemini.base_url'), '/');
         $apiKey = (string) config('gemini.api_key');
-        $url = "{$baseUrl}/models/{$model}:generateContent?key={$apiKey}";
+        $url = "{$baseUrl}/models/{$model}:generateContent";
 
         $response = Http::timeout((int) config('gemini.timeout'))
             ->retry(
@@ -598,7 +603,10 @@ final class GeminiProductService
                 when: null,
                 throw: false,
             )
-            ->withHeaders(['Content-Type' => 'application/json'])
+            ->withHeaders([
+                'Content-Type' => 'application/json',
+                'x-goog-api-key' => $apiKey,
+            ])
             ->post($url, $payload);
 
         if ($response->failed()) {
