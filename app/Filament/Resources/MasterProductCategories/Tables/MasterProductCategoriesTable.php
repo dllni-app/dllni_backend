@@ -2,9 +2,8 @@
 
 declare(strict_types=1);
 
-namespace App\Filament\Resources\MasterProducts\Tables;
+namespace App\Filament\Resources\MasterProductCategories\Tables;
 
-use App\Enums\MasterProductUnit;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -14,36 +13,28 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
-final class MasterProductsTable
+final class MasterProductCategoriesTable
 {
     public static function configure(Table $table): Table
     {
-        $unitOptions = collect(MasterProductUnit::cases())->mapWithKeys(
-            fn(MasterProductUnit $unit): array => [$unit->value => __('supermarket_admin.enums.master_product_unit.' . $unit->value)]
-        )->all();
-
         return $table
             ->columns([
-                TextColumn::make('category.name')
-                    ->label(__('supermarket_admin.form.master_product_category'))
-                    ->searchable()
-                    ->sortable()
-                    ->placeholder('—'),
                 TextColumn::make('name')
-                    ->label(__('supermarket_admin.form.master_product_name'))
+                    ->label(__('supermarket_admin.form.master_category_name'))
                     ->searchable()
                     ->sortable(),
-                TextColumn::make('unit')
-                    ->label(__('supermarket_admin.form.master_product_unit'))
-                    ->badge()
-                    ->formatStateUsing(fn(?MasterProductUnit $state): string => $state
-                        ? __('supermarket_admin.enums.master_product_unit.' . $state->value)
-                        : '—')
-                    ->sortable(),
-                TextColumn::make('brand')
-                    ->label(__('supermarket_admin.form.master_product_brand'))
+                TextColumn::make('slug')
+                    ->label(__('supermarket_admin.form.master_category_slug'))
                     ->searchable()
-                    ->placeholder('—'),
+                    ->sortable(),
+                TextColumn::make('sort_order')
+                    ->label(__('supermarket_admin.form.sort_order'))
+                    ->numeric()
+                    ->sortable(),
+                TextColumn::make('master_products_count')
+                    ->label(__('supermarket_admin.infolist.master_products_count'))
+                    ->counts('masterProducts')
+                    ->sortable(),
                 IconColumn::make('is_active')
                     ->label(__('supermarket_admin.form.is_active'))
                     ->boolean(),
@@ -59,14 +50,6 @@ final class MasterProductsTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                SelectFilter::make('category_id')
-                    ->label(__('supermarket_admin.form.master_product_category'))
-                    ->relationship('category', 'name')
-                    ->searchable()
-                    ->preload(),
-                SelectFilter::make('unit')
-                    ->label(__('supermarket_admin.form.master_product_unit'))
-                    ->options($unitOptions),
                 SelectFilter::make('is_active')
                     ->label(__('supermarket_admin.form.is_active'))
                     ->options([

@@ -30,7 +30,7 @@ final class MasterProductResource extends Resource
 
     protected static ?string $navigationLabel = null;
 
-    protected static ?int $navigationSort = 6;
+    protected static ?int $navigationSort = 7;
 
     protected static bool $shouldRegisterNavigation = true;
 

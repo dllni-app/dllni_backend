@@ -16,11 +16,18 @@ final class MasterProductForm
     public static function configure(Schema $schema): Schema
     {
         $unitOptions = collect(MasterProductUnit::cases())->mapWithKeys(
-            fn (MasterProductUnit $unit): array => [$unit->value => __('supermarket_admin.enums.master_product_unit.'.$unit->value)]
+            fn(MasterProductUnit $unit): array => [$unit->value => __('supermarket_admin.enums.master_product_unit.' . $unit->value)]
         )->all();
 
         return $schema
             ->components([
+                Select::make('category_id')
+                    ->label(__('supermarket_admin.form.master_product_category'))
+                    ->relationship('category', 'name', fn($query) => $query->orderBy('sort_order')->orderBy('name'))
+                    ->searchable()
+                    ->preload()
+                    ->nullable()
+                    ->helperText(__('supermarket_admin.form.master_product_category_help')),
                 TextInput::make('name')
                     ->label(__('supermarket_admin.form.master_product_name'))
                     ->required()

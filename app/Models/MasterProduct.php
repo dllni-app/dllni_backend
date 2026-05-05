@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Enums\MasterProductUnit;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
@@ -19,6 +20,7 @@ final class MasterProduct extends Model implements HasMedia
 
     protected $fillable = [
         'name',
+        'category_id',
         'barcode',
         'unit',
         'brand',
@@ -34,6 +36,11 @@ final class MasterProduct extends Model implements HasMedia
     public function aliases(): HasMany
     {
         return $this->hasMany(MasterProductAlias::class);
+    }
+
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(MasterProductCategory::class, 'category_id');
     }
 
     public function registerMediaCollections(): void

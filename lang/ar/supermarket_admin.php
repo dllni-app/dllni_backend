@@ -22,6 +22,7 @@ return [
         'disputes' => 'إدارة النزاعات',
         'daily_stats' => 'الإحصائيات اليومية',
         'categories' => 'تصنيفات المتاجر',
+        'master_product_categories' => 'تصنيفات المنتجات المرجعية',
         'master_products' => 'المنتجات المرجعية (الكتالوج)',
     ],
     'metrics' => [
@@ -123,6 +124,7 @@ return [
         'read_only' => 'قراءة فقط',
     ],
     'categories' => 'تصنيفات المتاجر',
+    'master_product_categories' => 'تصنيفات المنتجات المرجعية',
     'master_products' => 'المنتجات المرجعية',
     'stores' => 'المتاجر',
     'store_documents' => 'وثائق المتجر',
@@ -165,9 +167,14 @@ return [
         'image_path' => 'مسار الصورة',
         'image_path_help' => 'رابط أو مسار نسبي للصورة (اختياري).',
         'master_product_name' => 'اسم المنتج',
+        'master_product_category' => 'التصنيف المرجعي',
+        'master_product_category_help' => 'تصنيف اختياري يُستخدم عند ربط المنتجات المرجعية بتصنيفات المتجر.',
         'master_product_barcode' => 'الباركود',
         'master_product_unit' => 'الوحدة',
         'master_product_brand' => 'العلامة التجارية',
+        'master_category_name' => 'اسم التصنيف المرجعي',
+        'master_category_slug' => 'المعرّف المرجعي (slug)',
+        'master_category_description_help' => 'اكتب وصفا يوضح نوع المنتجات التي تنتمي لهذا التصنيف.',
     ],
     'notifications' => [
         'document_approved' => 'تم قبول الوثيقة',
@@ -202,6 +209,7 @@ return [
         'unique_customers' => 'العملاء الفريدون',
         'new_customers' => 'العملاء الجدد',
         'date' => 'التاريخ',
+        'master_products_count' => 'عدد المنتجات المرجعية المرتبطة',
     ],
     'tooltips' => [
         'stores' => 'تفعيل/تعطيل المتجر، إيقاف مؤقت، تمييز، عرض التقييم ونقاط الثقة.',
@@ -214,6 +222,7 @@ return [
         'disputes' => 'عرض النزاعات والرسائل واتخاذ القرار.',
         'daily_stats' => 'عرض الإحصائيات اليومية لكل متجر.',
         'categories' => 'إدارة تصنيفات المنتجات لكل متجر.',
+        'master_product_categories' => 'إدارة التصنيفات المشتركة للكتالوج المرجعي.',
         'master_products' => 'الكتالوج المركزي للمنتجات (الباركود والوحدة).',
     ],
     'enums' => [
@@ -287,6 +296,12 @@ return [
             'view' => 'تفاصيل التصنيف والترتيب والحالة.',
             'create' => 'إضافة تصنيف جديد لمتجر.',
             'edit' => 'تعديل التصنيف أو الترتيب أو الحالة.',
+        ],
+        'master_product_categories' => [
+            'list' => 'إنشاء وتعديل التصنيفات المشتركة للمنتجات المرجعية.',
+            'view' => 'تفاصيل التصنيف المرجعي والمنتجات المرتبطة.',
+            'create' => 'إضافة تصنيف جديد للمنتجات المرجعية.',
+            'edit' => 'تعديل بيانات التصنيف المرجعي أو حالته.',
         ],
         'master_products' => [
             'list' => 'الكتالوج المركزي: الباركود، الوحدة، والعلامة.',

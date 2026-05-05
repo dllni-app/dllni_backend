@@ -54,6 +54,13 @@ use Modules\Resturants\Http\Controllers\API\ReviewController;
 use Modules\Resturants\Http\Controllers\ResturantsController;
 
 Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
+
+    Route::prefix('products/ai')->group(function () {
+            Route::post('extract-from-image', [AppProductAiController::class, 'extractFromImage'])->name('sm-products.ai.extract-from-image');
+            Route::post('extract-from-menu', [AppProductAiController::class, 'extractFromMenu'])->name('sm-products.ai.extract-from-menu');
+            Route::post('generate-image', [AppProductAiController::class, 'generateImage'])->name('sm-products.ai.generate-image');
+    });
+
     Route::apiResource('restaurants', RestaurantController::class);
 
     Route::apiResource('inventory-items', InventoryItemController::class);

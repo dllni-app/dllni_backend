@@ -37,6 +37,7 @@ final class SmProductService
 
         $activeMasterProducts = MasterProduct::query()
             ->where('is_active', true)
+            ->with('category')
             ->whereIn('id', $requestedMasterProductIds)
             ->get()
             ->keyBy('id');
@@ -92,7 +93,7 @@ final class SmProductService
                 'slug' => 'master-product-' . $masterProduct->id,
             ],
             [
-                'name' => $masterProduct->name,
+                'name' => $masterProduct->category?->name ?? $masterProduct->name,
                 'description' => null,
                 'sort_order' => 0,
                 'image_path' => null,

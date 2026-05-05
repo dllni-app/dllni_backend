@@ -160,8 +160,8 @@ it('filters supermarket stores by openNow', function (): void {
         SmStoreHours::create([
             'store_id' => $openStore->id,
             'day_of_week' => mb_strtolower(now()->englishDayOfWeek),
-            'opens_at' => '08:00:00',
-            'closes_at' => '22:00:00',
+            'open_time' => '08:00:00',
+            'close_time' => '22:00:00',
             'is_closed' => false,
         ]);
 
@@ -174,8 +174,8 @@ it('filters supermarket stores by openNow', function (): void {
         SmStoreHours::create([
             'store_id' => $closedStore->id,
             'day_of_week' => mb_strtolower(now()->englishDayOfWeek),
-            'opens_at' => '00:00:00',
-            'closes_at' => '01:00:00',
+            'open_time' => '00:00:00',
+            'close_time' => '01:00:00',
             'is_closed' => false,
         ]);
 

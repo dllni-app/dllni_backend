@@ -22,6 +22,7 @@ return [
         'disputes' => 'Dispute Management',
         'daily_stats' => 'Daily Statistics',
         'categories' => 'Store categories',
+        'master_product_categories' => 'Master product categories',
         'master_products' => 'Master product catalog',
     ],
     'metrics' => [
@@ -123,6 +124,7 @@ return [
         'read_only' => 'Read-only',
     ],
     'categories' => 'Store categories',
+    'master_product_categories' => 'Master product categories',
     'master_products' => 'Master products',
     'stores' => 'Stores',
     'store_documents' => 'Store Documents',
@@ -163,9 +165,14 @@ return [
         'image_path' => 'Image path',
         'image_path_help' => 'Optional URL or relative path to an image.',
         'master_product_name' => 'Product name',
+        'master_product_category' => 'Master category',
+        'master_product_category_help' => 'Optional category used when mapping master products into store categories.',
         'master_product_barcode' => 'Barcode',
         'master_product_unit' => 'Unit',
         'master_product_brand' => 'Brand',
+        'master_category_name' => 'Master category name',
+        'master_category_slug' => 'Master category slug',
+        'master_category_description_help' => 'Use this description to explain what products belong to this category.',
     ],
     'notifications' => [
         'document_approved' => 'Document approved',
@@ -200,6 +207,7 @@ return [
         'unique_customers' => 'Unique customers',
         'new_customers' => 'New customers',
         'date' => 'Date',
+        'master_products_count' => 'Linked master products',
     ],
     'tooltips' => [
         'stores' => 'Enable/disable store, suspend, feature, view rating and trust.',
@@ -212,6 +220,7 @@ return [
         'disputes' => 'View disputes, messages and take decisions.',
         'daily_stats' => 'View daily statistics per store.',
         'categories' => 'Manage product categories per store.',
+        'master_product_categories' => 'Manage shared categories for the master product catalog.',
         'master_products' => 'Central catalog: barcode, unit and brand.',
     ],
     'enums' => [
@@ -285,6 +294,12 @@ return [
             'view' => 'Category details, sort order and status.',
             'create' => 'Add a new category to a store.',
             'edit' => 'Edit category, sort order or status.',
+        ],
+        'master_product_categories' => [
+            'list' => 'Create and edit shared categories for the master product catalog.',
+            'view' => 'Master category details and linked products.',
+            'create' => 'Add a new master product category.',
+            'edit' => 'Edit master category details or status.',
         ],
         'master_products' => [
             'list' => 'Central catalog: barcode, unit and brand.',
