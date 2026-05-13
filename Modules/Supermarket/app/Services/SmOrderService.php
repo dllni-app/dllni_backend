@@ -97,16 +97,21 @@ final class SmOrderService
      *
      * @return array<string, array<string, int>>
      */
-    public function getWeeklyOrderCountsByStatus(): array
+    public function getWeeklyOrderCountsByStatus(?int $storeId = null): array
     {
         // Week starts on Saturday
         $startOfWeek = now()->startOfWeek(Carbon::SATURDAY);
         $endOfWeek = $startOfWeek->copy()->addDays(6)->endOfDay();
 
-        $orders = SmOrder::query()
+        $ordersQuery = SmOrder::query()
             ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
-            ->whereIn('status', [SmOrderStatus::Pending, SmOrderStatus::Preparing, SmOrderStatus::Completed])
-            ->get(['created_at', 'status']);
+            ->whereIn('status', [SmOrderStatus::Pending, SmOrderStatus::Preparing, SmOrderStatus::Completed]);
+
+        if ($storeId !== null && $storeId > 0) {
+            $ordersQuery->where('store_id', $storeId);
+        }
+
+        $orders = $ordersQuery->get(['created_at', 'status']);
 
         $daysOfWeek = [
             0 => 'saturday',

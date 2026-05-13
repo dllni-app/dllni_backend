@@ -151,6 +151,42 @@ it('resolves tokenized group order links without auth', function (): void {
         ->assertJsonPath('status', 'ok');
 });
 
+it('joins authenticated user as participant when resolving tokenized group order link', function (): void {
+    $organizer = User::factory()->create();
+    $invitee = User::factory()->create();
+    $restaurant = Restaurant::factory()->create(['is_active' => true]);
+
+    $groupOrder = RestaurantGroupOrder::query()->create([
+        'user_id' => $organizer->id,
+        'restaurant_id' => $restaurant->id,
+        'share_token' => 'aabbccddeeff00112233445566778899',
+        'status' => RestaurantGroupOrderStatus::Active,
+        'ends_at' => now()->addMinutes(25),
+    ]);
+
+    RestaurantGroupOrderParticipant::query()->create([
+        'group_order_id' => $groupOrder->id,
+        'user_id' => $organizer->id,
+        'status' => 'joined',
+    ]);
+
+    Sanctum::actingAs($invitee);
+
+    postJson('/api/v1/deep-links/resolve', [
+        'url' => '/group-order/' . $groupOrder->share_token,
+    ])
+        ->assertOk()
+        ->assertJsonPath('status', 'ok')
+        ->assertJsonPath('id', $groupOrder->id);
+
+    expect(
+        RestaurantGroupOrderParticipant::query()
+            ->where('group_order_id', $groupOrder->id)
+            ->where('user_id', $invitee->id)
+            ->exists()
+    )->toBeTrue();
+});
+
 it('tracks deep link events endpoint', function (): void {
     $response = postJson('/api/v1/deep-links/events', [
         'action' => 'click',

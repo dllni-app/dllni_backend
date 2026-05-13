@@ -7,6 +7,8 @@ namespace App\Services\DeepLinks;
 use App\Models\DeepLinkShortUrl;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Modules\Resturants\Enums\RestaurantGroupOrderStatus;
 use Modules\Resturants\Enums\RestaurantGroupVoteStatus;
 use Modules\Resturants\Models\Product as RestaurantProduct;
@@ -16,15 +18,20 @@ use Modules\Resturants\Models\RestaurantGroupOrderParticipant;
 use Modules\Resturants\Models\RestaurantGroupVote;
 use Modules\Supermarket\Models\SmProduct;
 use Modules\Supermarket\Models\SmStore;
+use Modules\User\Services\RestaurantGroupOrderService;
 
 final class DeepLinkResolverService
 {
     private CanonicalDeepLinkGenerator $urlGenerator;
 
+    private RestaurantGroupOrderService $restaurantGroupOrderService;
+
     public function __construct(
         CanonicalDeepLinkGenerator $urlGenerator,
+        RestaurantGroupOrderService $restaurantGroupOrderService,
     ) {
         $this->urlGenerator = $urlGenerator;
+        $this->restaurantGroupOrderService = $restaurantGroupOrderService;
     }
 
     /**
@@ -364,6 +371,14 @@ final class DeepLinkResolverService
 
             if (! $allowed) {
                 return $this->invalid('forbidden', 'group-order', (int) $groupOrder->id, (string) $groupOrder->share_token, true);
+            }
+        }
+
+        if (! ctype_digit($identifier) && $currentUserId !== null) {
+            try {
+                $this->restaurantGroupOrderService->joinByToken(Str::lower($identifier), $currentUserId);
+            } catch (ValidationException) {
+                return $this->invalid('expired', 'group-order', (int) $groupOrder->id, (string) $groupOrder->share_token);
             }
         }
 

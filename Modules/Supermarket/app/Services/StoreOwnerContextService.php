@@ -98,10 +98,28 @@ final class StoreOwnerContextService
             return null;
         }
 
-        if ($user->module_type !== UserModuleType::SupermarketSeller) {
+        if ($this->moduleTypeValue($user) !== UserModuleType::SupermarketSeller->value) {
             throw new AuthorizationException('This endpoint is for supermarket sellers only.');
         }
 
         return $this->resolvedOwner = $user;
+    }
+
+    private function moduleTypeValue(User $user): ?string
+    {
+        $attributes = $user->getAttributes();
+        $moduleType = $attributes['module_type'] ?? null;
+
+        if ($moduleType === null && ! array_key_exists('module_type', $attributes)) {
+            $moduleType = User::query()
+                ->whereKey($user->getKey())
+                ->value('module_type');
+        }
+
+        if ($moduleType instanceof UserModuleType) {
+            return $moduleType->value;
+        }
+
+        return $moduleType !== null ? (string) $moduleType : null;
     }
 }

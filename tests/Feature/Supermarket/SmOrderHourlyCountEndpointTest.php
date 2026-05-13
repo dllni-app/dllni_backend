@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use App\Enums\UserModuleType;
+use App\Models\User;
+use Laravel\Sanctum\Sanctum;
 
 use function Pest\Laravel\getJson;
 
@@ -11,37 +14,39 @@ it('returns order counts grouped by day and status for the week starting on satu
     // Set test date to Wednesday, March 4, 2026
     Carbon::setTestNow(Carbon::create(2026, 3, 4, 15, 30, 0));
 
-    $ownerId = DB::table('users')->insertGetId([
-        'name' => 'Owner User',
-        'email' => 'owner@example.com',
-        'password' => 'password',
-        'created_at' => now(),
-        'updated_at' => now(),
+    $owner = User::factory()->create([
+        'module_type' => UserModuleType::SupermarketSeller->value,
     ]);
+    Sanctum::actingAs($owner);
 
-    $customerId = DB::table('users')->insertGetId([
-        'name' => 'Customer User',
-        'email' => 'customer@example.com',
-        'password' => 'password',
-        'created_at' => now(),
-        'updated_at' => now(),
-    ]);
+    $customerId = User::factory()->create()->id;
 
     $storeId = DB::table('sm_stores')->insertGetId([
-        'owner_user_id' => $ownerId,
+        'owner_user_id' => $owner->id,
         'name' => 'Test Store',
         'slug' => 'test-store',
         'created_at' => now(),
         'updated_at' => now(),
     ]);
 
+    $otherOwner = User::factory()->create([
+        'module_type' => UserModuleType::SupermarketSeller->value,
+    ]);
+    $otherStoreId = DB::table('sm_stores')->insertGetId([
+        'owner_user_id' => $otherOwner->id,
+        'name' => 'Other Store',
+        'slug' => 'other-store',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
     $orderNumber = 1;
-    $insertOrders = static function (int $count, string $status, DateTimeInterface $createdAt) use (&$orderNumber, $customerId, $storeId): void {
+    $insertOrders = static function (int $count, string $status, DateTimeInterface $createdAt, ?int $targetStoreId = null) use (&$orderNumber, $customerId, $storeId): void {
         $rows = [];
         for ($i = 0; $i < $count; $i++) {
             $rows[] = [
                 'customer_id' => $customerId,
-                'store_id' => $storeId,
+                'store_id' => $targetStoreId ?? $storeId,
                 'order_number' => 'ORD-'.mb_str_pad((string) $orderNumber++, 6, '0', STR_PAD_LEFT),
                 'status' => $status,
                 'pickup_mode' => 'immediate_pickup',
@@ -88,6 +93,9 @@ it('returns order counts grouped by day and status for the week starting on satu
 
     // Orders outside the week (should not be counted)
     $insertOrders(5, 'pending', $saturday->copy()->subWeek());
+
+    // Orders from another store in the same week should not leak into this owner's chart.
+    $insertOrders(4, 'pending', $saturday->copy()->addHours(15), $otherStoreId);
 
     $response = getJson('/api/v1/sm-orders/hourly-count');
 

@@ -6,6 +6,7 @@ namespace Modules\Supermarket\Http\Controllers\API;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Modules\Supermarket\Data\SmOrderData;
 use Modules\Supermarket\Http\Requests\SmOrderRequest;
@@ -22,15 +23,17 @@ final class SmOrderController
 
     public function index(SmOrderFilterRequest $request): AnonymousResourceCollection
     {
-        $orders = SmOrder::getQuery()->paginate($request->get('perPage', 20));
+        $orders = SmOrder::getQuery()
+            ->where('store_id', $request->integer('store_id'))
+            ->paginate($request->get('perPage', 20));
 
         return SmOrderResource::collection($orders->load(['items']));
     }
 
-    public function hourlyCount(): JsonResponse
+    public function hourlyCount(Request $request): JsonResponse
     {
         return response()->json([
-            'data' => $this->service->getWeeklyOrderCountsByStatus(),
+            'data' => $this->service->getWeeklyOrderCountsByStatus($request->integer('store_id')),
         ]);
     }
 

@@ -3,17 +3,27 @@
 declare(strict_types=1);
 
 use App\Models\User;
+use App\Enums\UserModuleType;
 use Database\Factories\SmOrderFactory;
 use Database\Factories\SmStoreFactory;
 use Laravel\Sanctum\Sanctum;
 
 beforeEach(function (): void {
-    $user = User::factory()->create();
-    Sanctum::actingAs($user);
+    $this->owner = User::factory()->create([
+        'module_type' => UserModuleType::SupermarketSeller->value,
+    ]);
+    Sanctum::actingAs($this->owner);
+
+    $this->store = SmStoreFactory::new()->create([
+        'owner_user_id' => $this->owner->id,
+    ]);
 });
 
 it('lists orders', function (): void {
-    SmOrderFactory::new()->count(3)->create();
+    SmOrderFactory::new()->count(3)->create([
+        'store_id' => $this->store->id,
+    ]);
+    SmOrderFactory::new()->count(2)->create();
 
     $response = $this->getJson('/api/v1/sm-orders?perPage=10');
 
@@ -23,11 +33,11 @@ it('lists orders', function (): void {
 
 it('creates an order', function (): void {
     $customer = User::factory()->create();
-    $store = SmStoreFactory::new()->create();
+    $otherStore = SmStoreFactory::new()->create();
 
     $payload = [
         'customerId' => $customer->id,
-        'storeId' => $store->id,
+        'storeId' => $otherStore->id,
         'orderNumber' => 'ORD-1001',
         'status' => 'pending',
         'pickupMode' => 'immediate_pickup',
@@ -40,11 +50,17 @@ it('creates an order', function (): void {
     $response = $this->postJson('/api/v1/sm-orders', $payload);
 
     $response->assertCreated();
-    $this->assertDatabaseHas('sm_orders', ['order_number' => 'ORD-1001']);
+    $this->assertDatabaseHas('sm_orders', [
+        'order_number' => 'ORD-1001',
+        'store_id' => $this->store->id,
+    ]);
 });
 
 it('updates an order', function (): void {
-    $order = SmOrderFactory::new()->create(['status' => 'pending']);
+    $order = SmOrderFactory::new()->create([
+        'store_id' => $this->store->id,
+        'status' => 'pending',
+    ]);
 
     $payload = [
         'status' => 'accepted',
@@ -57,7 +73,9 @@ it('updates an order', function (): void {
 });
 
 it('deletes an order', function (): void {
-    $order = SmOrderFactory::new()->create();
+    $order = SmOrderFactory::new()->create([
+        'store_id' => $this->store->id,
+    ]);
 
     $response = $this->deleteJson("/api/v1/sm-orders/{$order->id}");
 

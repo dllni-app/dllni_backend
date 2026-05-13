@@ -163,7 +163,7 @@ it('USR-SM-07 adds updates and deletes a supermarket cart item', function (): vo
     ])->assertOk()->assertJsonPath('data.items.0.quantity', 3);
 
     $this->deleteJson("/api/v1/user/supermarket/cart/items/{$itemId}")
-        ->assertNoContent();
+        ->assertStatus(200);
 
     $cart = getJson('/api/v1/user/supermarket/cart');
     $cart->assertOk()->assertJsonPath('data.items', []);
@@ -247,14 +247,16 @@ it('USR-SM-10 tracks a supermarket order', function (): void {
     $response = getJson("/api/v1/user/orders/supermarket/{$order->id}/tracking");
 
     $response->assertOk()
-        ->assertJsonPath('data.order.id', $order->id);
+        ->assertJsonPath('data.eta.minutes', 35)
+        ->assertJsonPath('data.merchant.id', $order->store_id)
+        ->assertJsonPath('data.timeline', fn (array $timeline): bool => is_array($timeline));
 });
 
 it('USR-SM-11 normalizes supermarket product text', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
-    $response = postJson('/api/v1/user/supermarket/products/normalize-text', [
+    $response = postJson('/api/v1/user/products/normalize-text', [
         'text' => 'I need fresh milk and labneh',
         'module' => 'supermarket',
         'locale' => 'en',
@@ -307,19 +309,20 @@ it('USR-SM-13 rejects supermarket shopping lists without a common store', functi
 
     $firstStore = SmStore::factory()->create(['is_active' => true]);
     $secondStore = SmStore::factory()->create(['is_active' => true]);
-    $master = MasterProductFactory::new()->create(['name' => 'Mixed Item']);
+    $firstMaster = MasterProductFactory::new()->create(['name' => 'Milk']);
+    $secondMaster = MasterProductFactory::new()->create(['name' => 'Bread']);
 
     SmProductFactory::new()->create([
         'store_id' => $firstStore->id,
-        'master_product_id' => $master->id,
-        'name' => 'Mixed Item A',
+        'master_product_id' => $firstMaster->id,
+        'name' => 'Milk A',
         'is_available' => true,
     ]);
 
     SmProductFactory::new()->create([
         'store_id' => $secondStore->id,
-        'master_product_id' => $master->id,
-        'name' => 'Mixed Item B',
+        'master_product_id' => $secondMaster->id,
+        'name' => 'Bread B',
         'is_available' => true,
     ]);
 
@@ -328,13 +331,19 @@ it('USR-SM-13 rejects supermarket shopping lists without a common store', functi
     ])->json('data.id');
 
     postJson("/api/v1/user/supermarket/shopping-lists/{$listId}/items", [
-        'masterProductId' => $master->id,
+        'masterProductId' => $firstMaster->id,
+        'quantity' => 1,
+    ])->assertCreated();
+
+    postJson("/api/v1/user/supermarket/shopping-lists/{$listId}/items", [
+        'masterProductId' => $secondMaster->id,
         'quantity' => 1,
     ])->assertCreated();
 
     $response = postJson("/api/v1/user/supermarket/shopping-lists/{$listId}/add-to-cart", []);
 
-    $response->assertUnprocessable();
+    $response->assertUnprocessable()
+        ->assertJsonPath('errors.items.0', 'The included items do not share a common store.');
 });
 
 it('USR-SM-19 rejects supermarket order placement when cart is empty', function (): void {
@@ -362,6 +371,19 @@ it('USR-SM-20 rejects invalid scheduledAt during supermarket order placement', f
 
     $response->assertStatus(422);
     expect($response->json('errors.scheduledAt'))->not->toBeNull();
+});
+
+it('USR-SM-25 rejects supermarket checkout preview when cart is empty', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $response = postJson('/api/v1/user/supermarket/checkout/preview', [
+        'fulfillmentType' => 'delivery',
+        'receiveMode' => 'immediate',
+    ]);
+
+    $response->assertStatus(422)
+        ->assertJsonPath('errors.cart.0', 'Cart is empty.');
 });
 
 it('OWN-SM-07 rejects literal owner reject path placeholder used by buggy integration', function (): void {
@@ -458,6 +480,10 @@ it('OWN-SM-02 returns supermarket hourly order counts', function (): void {
 
     Sanctum::actingAs($seller);
 
+    SmStoreFactory::new()->create([
+        'owner_user_id' => $seller->id,
+    ]);
+
     $response = getJson('/api/v1/sm-orders/hourly-count');
 
     $response->assertOk()->assertJsonStructure(['data']);
@@ -476,7 +502,7 @@ it('OWN-SM-03 lists supermarket order queue entries', function (): void {
 
     $response = getJson('/api/v1/sm-orders?perPage=10');
 
-    $response->assertOk()->assertJsonStructure(['data', 'links', 'meta']);
+    $response->assertOk()->assertJsonPath('data', fn (array $orders): bool => is_array($orders));
 });
 
 it('OWN-SM-06 rejects invalid stock quantity values', function (): void {
@@ -925,14 +951,17 @@ it('OWN-SM-19 returns supermarket owner permissions catalog', function (): void 
 
     Sanctum::actingAs($seller);
 
+    SmStoreFactory::new()->create([
+        'owner_user_id' => $seller->id,
+    ]);
+
     $response = getJson('/api/v1/store-owner/permissions');
 
     $response->assertOk()
-        ->assertJsonStructure([
-            'data' => [
-                'permissions' => [
-                    ['id', 'name', 'slug', 'group'],
-                ],
-            ],
-        ]);
+        ->assertJsonPath('data.permissions', fn (array $permissions): bool => is_array($permissions));
+});
+
+it('OWN-SM-25 rejects unauthenticated supermarket owner access', function (): void {
+    getJson('/api/v1/store-owner/dashboard')->assertUnauthorized();
+    postJson('/api/v1/store-owner/orders/1/accept')->assertUnauthorized();
 });

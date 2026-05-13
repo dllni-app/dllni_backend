@@ -5,7 +5,9 @@
         "build": "vite build",
         "dev": "vite",
         "lint": "prettier --write resources/",
-        "test:lint": "prettier --check resources/"
+        "test:lint": "prettier --check resources/",
+        "test:playwright:cleaning": "playwright test -c playwright.config.ts",
+        "test:playwright:supermarket": "playwright test -c playwright.supermarket.config.ts"
     },
     "devDependencies": {
         "@playwright/test": "^1.59.1",

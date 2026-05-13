@@ -22,6 +22,7 @@ final class StoreOwnerMasterProductSearchController
         $escapedIndex = SearchTermEscaper::escape($index);
 
         $masterProducts = MasterProduct::query()
+            ->with('media')
             ->where('is_active', true)
             ->where(function ($query) use ($escapedIndex): void {
                 $query->whereRaw("name LIKE ? ESCAPE '!'", ["{$escapedIndex}%"])
@@ -47,7 +48,7 @@ final class StoreOwnerMasterProductSearchController
             ->orderBy('name')
             ->paginate($perPage);
 
-        return MasterProductResource::collection($masterProducts->load('media'))
+        return MasterProductResource::collection($masterProducts)
             ->response()
             ->setStatusCode(200);
     }
