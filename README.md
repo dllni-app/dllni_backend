@@ -1,162 +1,206 @@
-## Laravel Starter Kit
+# Dllni Backend
 
-is an ultra-strict, type-safe [Laravel](https://laravel.com) skeleton engineered for developers who refuse to compromise on code quality. This opinionated starter kit enforces rigorous development standards through meticulous tooling configuration and architectural decisions that prioritize type safety, immutability, and fail-fast principles.
+Flow-first backend guide for developers joining the Dllni project.
 
-## Why This Starter Kit?
+This repository is the backend only (`Dllni_backend`). Mobile and owner apps live in sibling repositories.
 
-Modern PHP has evolved into a mature, type-safe language, yet many Laravel projects still operate with loose conventions and optional typing. This starter kit changes that paradigm by enforcing:
+## Stack and Scope
 
-- **100% Type Coverage**: Every method, property, and parameter is explicitly typed
-- **Zero Tolerance for Code Smells**: Rector and PHPStan at maximum strictness catch issues before they become bugs
-- **Immutable-First Architecture**: Data structures favor immutability to prevent unexpected mutations
-- **Fail-Fast Philosophy**: Errors are caught at compile-time, not runtime
-- **Automated Code Quality**: Pre-configured tools ensure consistent, pristine code across your entire team
-- **Just Better Laravel Defaults**: Thanks to **[Essentials](https://github.com/nunomaduro/essentials)** / strict models, auto eager loading, immutable dates, and more...
+- PHP 8.4
+- Laravel 12
+- Laravel Sanctum token authentication
+- `nwidart/laravel-modules` modular monolith structure
+- MySQL (default)
+- Queue + scheduler for async processing
+- Vite for admin/frontend assets
 
-This isn't just another Laravel boilerplate—it's a statement that PHP applications can and should be built with the same rigor as strongly-typed languages like Rust or TypeScript.
+Core domains served by this backend:
 
-## Getting Started
+- User app APIs (`/api/v1/user/...`)
+- Restaurant management and owner APIs
+- Supermarket management and owner APIs
+- Cleaning services and worker APIs
+- Shared services (auth, notifications, deep links, disputes, workers, alerts)
 
-> **Requires [PHP 8.4+](https://php.net/releases/)**.
+## Domain Map
 
-Create your type-safe Laravel application using :
+| Domain | Main Module | Primary Route Entry | Notes |
+| --- | --- | --- | --- |
+| User app | `Modules/User` | `Modules/User/routes/api.php` (`/api/v1/user/...`) | Public + authenticated user flows, carts, orders, group votes/orders |
+| Restaurants | `Modules/Resturants` | `Modules/Resturants/routes/api.php` (`/api/v1/...`) | Restaurant owner operations, products, offers, analytics |
+| Supermarket | `Modules/Supermarket` | `Modules/Supermarket/routes/api.php` (`/api/v1/...`) | Store owner, inventory, orders, smart lists, reports |
+| Cleaning | `Modules/Cleaning` | `Modules/Cleaning/routes/api.php` (`/api/v1/...`) | Cleaning bookings, worker profile, billing policies |
+| Shared platform | `app/` + `routes/api.php` | `routes/api.php` | Auth, deep links, disputes, notifications, workers |
 
-```bash
-git clone https://github.com/Kawarem-Co/laravel-starter-kit
+## Project Flow Diagram
+
+```mermaid
+flowchart LR
+    A["Mobile / Owner / Dashboard Clients"] --> B["Route Entry<br/>routes/api.php<br/>Modules/*/routes/api.php"]
+    B --> C["Middleware Layer<br/>auth:sanctum + domain guards"]
+    C --> D["Controllers<br/>app/ or Modules/*/app/Http/Controllers"]
+    D --> E["Services / Actions / Policies"]
+    E --> F[("MySQL")]
+    E --> G["Jobs / Queue"]
+    E --> H["Broadcast + Notifications"]
+    G --> F
+    H --> A
 ```
 
-### Initial Setup
+## Request Lifecycle (How to Trace Any Endpoint)
 
-Navigate to your project and complete the setup:
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Route as Route Definition
+    participant MW as Middleware
+    participant Controller
+    participant Service as Service/Action
+    participant DB as MySQL
+    participant Queue as Queue Job (optional)
+
+    Client->>Route: HTTP request
+    Route->>MW: Apply auth/guards
+    MW->>Controller: Dispatch action
+    Controller->>Service: Execute business logic
+    Service->>DB: Read/Write data
+    Service-->>Queue: Dispatch async work (optional)
+    Service-->>Controller: Result DTO/model/resource data
+    Controller-->>Client: JSON response
+```
+
+## Async and Scheduled Flows
+
+```mermaid
+flowchart TB
+    S["Laravel Scheduler<br/>php artisan schedule:work"] --> C1["restaurant:generate-system-alerts<br/>every 5 minutes"]
+    S --> C2["supermarket:process-smart-list-schedules<br/>every 5 minutes"]
+    S --> C3["restaurants:process-group-orders<br/>every minute"]
+    C1 --> Q["Queue / Jobs"]
+    C2 --> Q
+    C3 --> Q
+    Q --> DB[("MySQL")]
+    Q --> N["Notifications / Events"]
+```
+
+These schedules are defined in `routes/console.php`.
+
+## Where to Edit (Code Navigation)
+
+Start here based on the change type:
+
+- Shared API behavior: `routes/api.php`, `app/Http/Controllers`, `app/Services`
+- User flows: `Modules/User/app/*`
+- Restaurant flows: `Modules/Resturants/app/*`
+- Supermarket flows: `Modules/Supermarket/app/*`
+- Cleaning flows: `Modules/Cleaning/app/*`
+- Scheduled/command behavior: `routes/console.php` and `app/Console/Commands`
+- Database schema: `database/migrations` and `Modules/*/database/migrations`
+- Feature tests: `tests/Feature` + module test locations
+
+Practical endpoint tracing pattern:
+
+1. Find route in `routes/api.php` or `Modules/*/routes/api.php`.
+2. Open mapped controller.
+3. Follow service/action class calls.
+4. Check model, policy, and request validation.
+5. Confirm response resource/transformer.
+
+## Local Setup (Backend Only)
+
+From `Dllni_backend`:
 
 ```bash
-cd example-app
+composer install
+cp .env.example .env
+php artisan key:generate
+php artisan migrate
+npm install
+```
 
-# Setup project
-composer setup
+Minimum `.env` values:
 
-# Start the development server
+- `APP_URL`
+- `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`
+- `QUEUE_CONNECTION` (default is `database`)
+- `BROADCAST_CONNECTION` and `PUSHER_*` for realtime flows
+
+Run development stack:
+
+```bash
 composer dev
 ```
 
-### Verify Installation
+`composer dev` runs:
 
-Run the test suite to ensure everything is configured correctly:
+- Laravel API server
+- Queue listener
+- Laravel Pail logs
+- Vite dev server
+
+Backend default URL: `http://127.0.0.1:8000`
+
+If you need scheduler-driven behavior locally, run:
 
 ```bash
+php artisan schedule:work
+```
+
+## New Developer Onboarding Checklist
+
+1. Boot the project with the setup commands above.
+2. Run `php artisan route:list` and inspect route prefixes for your target domain.
+3. Read one domain contract from `docs/` and trace one endpoint route -> controller -> service -> model.
+4. Run quality/test commands before pushing:
+   - `composer test`
+   - `composer lint`
+5. For realtime or scheduled features, run both queue listener and scheduler locally.
+
+## Documentation for New Developers
+
+Use this docs map to get productive quickly:
+
+### Foundation
+
+- `docs/API_CONTRACT_AUTH.md` - authentication and token contracts
+- `docs/API_CONTRACT_V1_DEEP_LINKS.md` - deep link resolution/open tracking
+- `docs/API_CONTRACT_V1_USER_NOTIFICATIONS.md` - unified notification APIs
+
+### User App
+
+- `docs/API_CONTRACT_USER_ORDERS_AND_CART.md` - user ordering and cart flows
+- `docs/API_CONTRACT_RESTAURANTS.md` - user-facing restaurant APIs
+- `docs/API_CONTRACT_USER_SUPERMARKET_SHOPPING_LISTS.md` - shopping list flows
+- `docs/FLUTTER_RESTAURANT_GROUP_ORDERING_API_CONTRACT.md` - full group-ordering contract for Flutter
+
+### Restaurant Owner
+
+- `docs/API_CONTRACT_RESTAURANT_OWNER_APP.md`
+- `docs/API_CONTRACT_RESTAURANTS_DASHBOARD.md`
+
+### Supermarket Owner
+
+- `docs/API_CONTRACT_SUPERMARKET_OWNER.md`
+- `docs/API_CONTRACT_SUPERMARKET_ADMIN.md`
+
+### Cleaning
+
+- `docs/API_CONTRACT_CLEANING_WORKER.md`
+- `docs/API_CONTRACT_CLEANING_DASHBOARD.md`
+- `docs/API_CONTRACT_USER_CLEANING_REALTIME_GATES.md`
+
+### QA and Flow Verification
+
+- `docs/CLEANING_ENDPOINT_FLOWS_AND_PLAYWRIGHT_QA_PLAN.md`
+- `docs/PLAYWRIGHT_QA_RESTAURANT_FLOWS_USER_OWNER_APPS.md`
+- `docs/FLUTTER_SUPERMARKET_ENDPOINT_FLOWS_AND_PLAYWRIGHT_QA.md`
+
+## Useful Commands
+
+```bash
+php artisan route:list
+php artisan test
 composer test
+composer lint
+npm run build
 ```
-
-You should see 100% test coverage and all quality checks passing.
-
-## Available Tooling
-
-### Development
-- `composer dev` - Starts Laravel server, queue worker, log monitoring, and Vite dev server concurrently
-
-### Code Quality
-- `composer lint` - Runs Rector (refactoring), Pint (PHP formatting), and Prettier (JS/TS formatting)
-- `composer test:lint` - Dry-run mode for CI/CD pipelines
-
-### Testing
-- `composer test:type-coverage` - Ensures 100% type coverage with Pest
-- `composer test:types` - Runs PHPStan at level 9 (maximum strictness)
-- `composer test:unit` - Runs Pest tests with 100% code coverage requirement
-- `composer test` - Runs the complete test suite (type coverage, unit tests, linting, static analysis)
-
-### Maintenance
-- `composer update:requirements` - Updates all PHP and NPM dependencies to latest versions
-
-## Auto-CRUD Generation
-
-This project includes an auto-CRUD generation system that can automatically create controllers, services, requests, resources, and filter builders for your models.
-
-### Basic Usage
-
-```bash
-php artisan auto-crud:generate --model=User
-```
-
-### Available Options
-
-- `--service` or `-S` - Generate with service layer (no repository pattern)
-- `--filter` or `-F` - Generate filter builder and filter request for advanced filtering
-- `--pattern=spatie-data` or `-P=spatie-data` - Use Spatie Laravel Data pattern (requires FormRequest + Data class)
-- `--type=api` or `-T=api` - Generate API controller (default: api)
-- `--type=web` or `-T=web` - Generate web controller
-- `--type=both` or `-T=both` - Generate both API and web controllers
-- `--overwrite` or `-O` - Overwrite existing files
-- `--model=ModelName` or `-M=ModelName` - Specify model(s) to generate CRUD for
-- `--model-path=path` or `-MP=path` - Set custom models path
-
-### Examples
-
-**Generate CRUD with service layer and Spatie Data pattern:**
-```bash
-php artisan auto-crud:generate --service --pattern=spatie-data --model=User
-```
-
-**Generate CRUD with filter builder:**
-```bash
-php artisan auto-crud:generate --service --pattern=spatie-data --filter --model=User
-```
-
-**Generate with all options:**
-```bash
-php artisan auto-crud:generate --service --pattern=spatie-data --filter --model=User --overwrite
-```
-
-### Generated Files
-
-When using `--service --pattern=spatie-data --filter`, the command generates:
-
-1. **UserService** (`app/Services/UserService.php`)
-   - Contains `store()` and `update()` methods only
-   - Uses `DB::transaction()` for data safety
-   - Handles media uploads automatically if model uses `HasMediaConversions` trait
-   - Accepts `UserData` objects instead of arrays
-
-2. **UserRequest** (`app/Http/Requests/UserRequest.php`)
-   - FormRequest for validation
-   - Properties in camelCase
-   - Includes media validation rules automatically
-
-3. **UserFilterRequest** (`app/Http/Requests/UserFilterRequest.php`) - *when using `--filter`*
-   - Validation for `search` and `perPage` parameters
-
-4. **UserFilterBuilder** (`app/FilterBuilders/UserFilterBuilder.php`) - *when using `--filter`*
-   - Extends `BaseFilterBuilder`
-   - Includes `textSearch()` method if model has searchable properties
-   - Used in controller's `index()` method
-
-5. **UserData** (`app/Data/UserData.php`)
-   - Spatie Laravel Data class
-   - Includes `HasModelAttributes` trait
-   - Automatically includes media properties if model uses media trait
-
-6. **UserResource** (`app/Http/Resources/UserResource.php`)
-   - API Resource for responses
-   - Includes `@mixin` PHPDoc tag
-   - Always includes `id`, `createdAt`, `updatedAt`
-   - Automatically handles media collections
-   - Properties in camelCase
-
-7. **UserController** (`app/Http/Controllers/API/UserController.php`)
-   - No base controller extension
-   - No try-catch blocks (Laravel handles exceptions)
-   - Uses Resources for responses
-   - Index method uses FilterBuilder when `--filter` is enabled
-   - Loads media relations automatically
-   - Destroy returns `response()->noContent()` (204 status)
-
-### Features
-
-- **Automatic Media Detection**: Detects media fields from model traits and generates appropriate code
-- **Type Safety**: Uses Data classes with proper type hints
-- **Transaction Safety**: All store/update operations wrapped in DB transactions
-- **CamelCase Properties**: All request and resource properties use camelCase
-- **Media Support**: Automatically handles single and multiple file uploads
-- **Filter Support**: Advanced filtering with search and pagination
-
-## License
-**Laravel Starter Kit** was created by **[Mustafa Fares](https://www.linkedin.com/in/mustafa-fares/)** Forking from **[Nuno Maduro](https://x.com/enunomaduro)** Package.
