@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Services;
 
+use App\Support\Broadcast\BroadcastAfterResponse;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -157,7 +158,7 @@ final class CleaningBookingService
             throw new InvalidArgumentException('Only the assigned worker can update location.');
         }
 
-        WorkerLocationUpdated::dispatch($booking->id, $latitude, $longitude, $worker->id);
+        BroadcastAfterResponse::send(new WorkerLocationUpdated($booking->id, $latitude, $longitude, $worker->id));
     }
 
     public function arrive(CleaningBooking $booking): CleaningBooking
@@ -178,13 +179,14 @@ final class CleaningBookingService
             return $booking->fresh();
         });
 
-        WorkerArrived::dispatch($updated->id, (string) $updated->arrived_at?->toIso8601String());
-        CleaningOrderAwaitingStartVerification::dispatch(
+        BroadcastAfterResponse::send(new WorkerArrived($updated->id, (string) $updated->arrived_at?->toIso8601String()));
+        BroadcastAfterResponse::send(new CleaningOrderAwaitingStartVerification(
             $updated->id,
+            $updated->customer_id,
             $updated->worker_id,
             (string) $updated->status?->value,
             $this->activeSecurityCodeExpiresAt($updated)?->toIso8601String(),
-        );
+        ));
         $this->dispatchTrackingUpdate($updated);
 
         return $updated;
@@ -244,12 +246,12 @@ final class CleaningBookingService
             return $booking->fresh();
         });
 
-        CleaningOrderAwaitingCustomerCompletion::dispatch(
+        BroadcastAfterResponse::send(new CleaningOrderAwaitingCustomerCompletion(
             $updated->id,
             $updated->worker_id,
             (string) $updated->status?->value,
             now()->addMinutes(30)->toIso8601String(),
-        );
+        ));
         $this->dispatchTrackingUpdate($updated);
 
         return $updated;
@@ -283,7 +285,7 @@ final class CleaningBookingService
 
     private function dispatchTrackingUpdate(CleaningBooking $booking): void
     {
-        CleaningBookingTrackingUpdated::dispatch($booking->id, [
+        BroadcastAfterResponse::send(new CleaningBookingTrackingUpdated($booking->id, [
             'cleaningBookingId' => $booking->id,
             'status' => $booking->status?->value,
             'workerId' => $booking->worker_id,
@@ -294,7 +296,7 @@ final class CleaningBookingService
             'customerConfirmedAt' => $booking->customer_confirmed_at?->toIso8601String(),
             'cancelledAt' => $booking->cancelled_at?->toIso8601String(),
             'updatedAt' => now()->toIso8601String(),
-        ]);
+        ]));
     }
 
     private function activeSecurityCodeExpiresAt(CleaningBooking $booking): ?\Carbon\CarbonInterface

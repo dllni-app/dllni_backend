@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Events;
 
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-final class ArrivalVerified implements ShouldBroadcast
+final class ArrivalVerified implements ShouldBroadcastNow
 {
     use Dispatchable;
     use SerializesModels;

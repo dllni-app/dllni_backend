@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Events;
 
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-final class WorkerArrived implements ShouldBroadcast
+final class WorkerArrived implements ShouldBroadcastNow
 {
     use Dispatchable;
     use SerializesModels;

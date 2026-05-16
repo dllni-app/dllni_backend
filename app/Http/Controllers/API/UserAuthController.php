@@ -27,7 +27,6 @@ final class UserAuthController
         }
 
         $user->loadMissing('worker');
-        $user->tokens()->where('name', 'user-api')->delete();
         $token = $user->createToken('user-api')->plainTextToken;
 
         $payload = [

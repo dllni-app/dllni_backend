@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Http\Requests\CleaningBookingRequests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+use Modules\Cleaning\Enums\CleaningBookingStatus;
 
 final class CleaningBookingFilterRequest extends FormRequest
 {
@@ -15,9 +17,14 @@ final class CleaningBookingFilterRequest extends FormRequest
 
     public function rules(): array
     {
+        $statuses = array_map(
+            static fn (CleaningBookingStatus $status): string => $status->value,
+            CleaningBookingStatus::cases()
+        );
+
         return [
             'perPage' => 'sometimes|integer|min:1|max:100',
-            'filter.status' => 'sometimes|string|in:pending,worker_assigned,in_progress,completed,cancelled',
+            'filter.status' => ['sometimes', 'string', Rule::in($statuses)],
             'filter.scheduledDateFrom' => 'sometimes|date',
             'filter.scheduledDateTo' => 'sometimes|date|after_or_equal:filter.scheduledDateFrom',
             'filter.scheduledDate' => 'sometimes|date',

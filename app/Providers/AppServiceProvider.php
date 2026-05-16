@@ -153,6 +153,10 @@ final class AppServiceProvider extends ServiceProvider
             return (int) ($user->worker?->id ?? 0) === $workerId;
         }, ['guards' => ['sanctum']]);
 
+        Broadcast::channel('cleaning-customer.{customerId}', function (User $user, int $customerId): bool {
+            return (int) $user->id === $customerId;
+        }, ['guards' => ['sanctum']]);
+
         Broadcast::routes(['middleware' => ['auth:sanctum']]);
     }
 

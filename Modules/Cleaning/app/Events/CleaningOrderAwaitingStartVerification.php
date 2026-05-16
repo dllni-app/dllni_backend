@@ -5,17 +5,18 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Events;
 
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-final class CleaningOrderAwaitingStartVerification implements ShouldBroadcast
+final class CleaningOrderAwaitingStartVerification implements ShouldBroadcastNow
 {
     use Dispatchable;
     use SerializesModels;
 
     public function __construct(
         public int $cleaningBookingId,
+        public int $customerId,
         public ?int $workerId,
         public string $status,
         public ?string $expiresAt = null,
@@ -28,6 +29,7 @@ final class CleaningOrderAwaitingStartVerification implements ShouldBroadcast
     {
         return [
             new PrivateChannel('cleaning-booking.'.$this->cleaningBookingId),
+            new PrivateChannel('cleaning-customer.'.$this->customerId),
         ];
     }
 
@@ -43,6 +45,7 @@ final class CleaningOrderAwaitingStartVerification implements ShouldBroadcast
     {
         return [
             'cleaningBookingId' => $this->cleaningBookingId,
+            'customerId' => $this->customerId,
             'workerId' => $this->workerId,
             'status' => $this->status,
             'expiresAt' => $this->expiresAt,

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\User\Services;
 
+use App\Support\Broadcast\BroadcastAfterResponse;
 use App\Services\DeepLinks\CanonicalDeepLinkGenerator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -679,6 +680,6 @@ final class RestaurantGroupOrderService
     private function dispatchUpdate(RestaurantGroupOrder $groupOrder): void
     {
         $payload = $this->publicPayload($groupOrder, (int) $groupOrder->user_id);
-        RestaurantGroupOrderUpdated::dispatch($groupOrder, $payload['groupOrder']);
+        BroadcastAfterResponse::send(new RestaurantGroupOrderUpdated($groupOrder, $payload));
     }
 }

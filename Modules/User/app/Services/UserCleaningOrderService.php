@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\User\Services;
 
 use Carbon\Carbon;
+use App\Support\Broadcast\BroadcastAfterResponse;
 use App\Models\CancellationPolicy;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -270,11 +271,11 @@ final class UserCleaningOrderService
             $updated = $booking->fresh();
 
             $this->dispatchTrackingUpdate($updated);
-            ArrivalVerified::dispatch(
+            BroadcastAfterResponse::send(new ArrivalVerified(
                 $updated->id,
                 $updated->worker_id,
                 (string) $updated->arrived_at?->toIso8601String(),
-            );
+            ));
 
             return $updated;
         });
@@ -295,13 +296,13 @@ final class UserCleaningOrderService
 
         $updated = $booking->fresh();
         $this->dispatchTrackingUpdate($updated);
-        CompletionDecisionMade::dispatch(
+        BroadcastAfterResponse::send(new CompletionDecisionMade(
             $updated->id,
             $updated->worker_id,
             'approved',
             null,
             now()->toIso8601String(),
-        );
+        ));
 
         return $updated;
     }
@@ -321,13 +322,13 @@ final class UserCleaningOrderService
 
         $updated = $booking->fresh();
         $this->dispatchTrackingUpdate($updated);
-        CompletionDecisionMade::dispatch(
+        BroadcastAfterResponse::send(new CompletionDecisionMade(
             $updated->id,
             $updated->worker_id,
             'rejected',
             null,
             now()->toIso8601String(),
-        );
+        ));
 
         return $updated;
     }
@@ -346,13 +347,13 @@ final class UserCleaningOrderService
 
         $updated = $booking->fresh();
         $this->dispatchTrackingUpdate($updated);
-        CompletionDecisionMade::dispatch(
+        BroadcastAfterResponse::send(new CompletionDecisionMade(
             $updated->id,
             $updated->worker_id,
             'extension_requested',
             null,
             now()->toIso8601String(),
-        );
+        ));
 
         return $updated;
     }
@@ -389,7 +390,7 @@ final class UserCleaningOrderService
 
     private function dispatchTrackingUpdate(CleaningBooking $booking): void
     {
-        CleaningBookingTrackingUpdated::dispatch($booking->id, [
+        BroadcastAfterResponse::send(new CleaningBookingTrackingUpdated($booking->id, [
             'cleaningBookingId' => $booking->id,
             'status' => $booking->status?->value,
             'workerId' => $booking->worker_id,
@@ -400,6 +401,6 @@ final class UserCleaningOrderService
             'customerConfirmedAt' => $booking->customer_confirmed_at?->toIso8601String(),
             'cancelledAt' => $booking->cancelled_at?->toIso8601String(),
             'updatedAt' => now()->toIso8601String(),
-        ]);
+        ]));
     }
 }

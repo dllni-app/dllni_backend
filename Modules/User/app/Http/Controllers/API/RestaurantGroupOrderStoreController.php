@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\User\Http\Controllers\API;
 
+use App\Support\Broadcast\BroadcastAfterResponse;
 use Illuminate\Http\JsonResponse;
 use Modules\User\Events\RestaurantGroupOrderUpdated;
 use Modules\User\Http\Requests\RestaurantGroupOrderStoreRequest;
@@ -27,7 +28,7 @@ final class RestaurantGroupOrderStoreController
         );
 
         $payload = $this->service->publicPayload($groupOrder, $userId);
-        RestaurantGroupOrderUpdated::dispatch($groupOrder, $payload['groupOrder']);
+        BroadcastAfterResponse::send(new RestaurantGroupOrderUpdated($groupOrder, $payload));
 
         return response()->json([
             'message' => 'Group order created.',

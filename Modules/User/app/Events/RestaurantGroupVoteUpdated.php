@@ -5,21 +5,21 @@ declare(strict_types=1);
 namespace Modules\User\Events;
 
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 use Modules\Resturants\Models\RestaurantGroupVote;
 
-final class RestaurantGroupVoteUpdated implements ShouldBroadcast
+final class RestaurantGroupVoteUpdated implements ShouldBroadcastNow
 {
     use Dispatchable, SerializesModels;
 
     /**
-     * @param  array<string, mixed>  $votePayload
+     * @param  array<string, mixed>  $publicPayload  Full payload from {@see \Modules\User\Services\RestaurantGroupVoteService::publicPayload} (vote, options, voters, invitedUsers, winner).
      */
     public function __construct(
         public RestaurantGroupVote $vote,
-        public array $votePayload,
+        public array $publicPayload,
     ) {}
 
     public function broadcastOn(): array
@@ -39,8 +39,6 @@ final class RestaurantGroupVoteUpdated implements ShouldBroadcast
      */
     public function broadcastWith(): array
     {
-        return [
-            'vote' => $this->votePayload,
-        ];
+        return $this->publicPayload;
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\User\Http\Controllers\API;
 
+use App\Support\Broadcast\BroadcastAfterResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Modules\Resturants\Models\RestaurantGroupOrder;
@@ -29,7 +30,7 @@ final class RestaurantGroupOrderUnsubmitController
 
         $model->refresh();
         $payload = $this->service->publicPayload($model, $userId);
-        RestaurantGroupOrderUpdated::dispatch($model, $payload['groupOrder']);
+        BroadcastAfterResponse::send(new RestaurantGroupOrderUpdated($model, $payload));
 
         return response()->json([
             'message' => 'Participation reverted to editing.',

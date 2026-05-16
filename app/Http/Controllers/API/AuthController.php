@@ -26,7 +26,6 @@ final class AuthController
             ]);
         }
 
-        $user->tokens()->where('name', 'api')->delete();
         $token = $user->createToken('api')->plainTextToken;
         $permissions = $user->getAllPermissions()->pluck('name')->values()->all();
 
