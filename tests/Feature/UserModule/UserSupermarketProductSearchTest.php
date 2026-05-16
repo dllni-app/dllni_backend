@@ -82,6 +82,115 @@ it('filters supermarket products by search query param', function (): void {
     });
 });
 
+it('falls back to lexical search when semantic results are not textually relevant', function (): void {
+    config()->set('services.dallelni_search.auth_token', 'dallelni-ai');
+    config()->set('services.dallelni_search.products_base_url', 'https://dallelni.karriya.ai/products');
+
+    $store = SmStore::factory()->create([
+        'is_active' => true,
+        'suspension_until' => null,
+    ]);
+
+    SmProductFactory::new()->create([
+        'store_id' => $store->id,
+        'name' => 'Fresh Bread',
+        'is_available' => true,
+    ]);
+
+    $milkProduct = SmProductFactory::new()->create([
+        'store_id' => $store->id,
+        'name' => 'Chocolate Milk',
+        'is_available' => true,
+    ]);
+
+    Http::fake([
+        'https://dallelni.karriya.ai/products/search' => Http::response([
+            'query' => 'bread',
+            'results' => [
+                [
+                    'product_id' => $milkProduct->id,
+                    'score' => 0.84,
+                ],
+            ],
+        ]),
+    ]);
+
+    $response = $this->getJson('/api/v1/user/supermarket/products/search?search=bread');
+
+    $response->assertOk();
+    $names = collect($response->json('data'))->pluck('name')->all();
+
+    expect($names)->toContain('Fresh Bread');
+    expect($names)->not->toContain('Chocolate Milk');
+});
+
+it('falls back to lexical search when semantic search returns empty', function (): void {
+    config()->set('services.dallelni_search.auth_token', 'dallelni-ai');
+    config()->set('services.dallelni_search.products_base_url', 'https://dallelni.karriya.ai/products');
+
+    $store = SmStore::factory()->create([
+        'is_active' => true,
+        'suspension_until' => null,
+    ]);
+
+    SmProductFactory::new()->create([
+        'store_id' => $store->id,
+        'name' => 'Fresh Bread',
+        'is_available' => true,
+    ]);
+
+    Http::fake([
+        'https://dallelni.karriya.ai/products/search' => Http::response([
+            'query' => 'bread',
+            'results' => [],
+        ]),
+    ]);
+
+    $response = $this->getJson('/api/v1/user/supermarket/products/search?search=bread');
+
+    $response->assertOk();
+    $names = collect($response->json('data'))->pluck('name')->all();
+
+    expect($names)->toContain('Fresh Bread');
+});
+
+it('uses query param for fallback lexical search when search param is missing', function (): void {
+    config()->set('services.dallelni_search.auth_token', 'dallelni-ai');
+    config()->set('services.dallelni_search.products_base_url', 'https://dallelni.karriya.ai/products');
+
+    $store = SmStore::factory()->create([
+        'is_active' => true,
+        'suspension_until' => null,
+    ]);
+
+    SmProductFactory::new()->create([
+        'store_id' => $store->id,
+        'name' => 'Fresh Bread',
+        'is_available' => true,
+    ]);
+
+    SmProductFactory::new()->create([
+        'store_id' => $store->id,
+        'name' => 'Chocolate Milk',
+        'is_available' => true,
+    ]);
+
+    Http::fake([
+        'https://dallelni.karriya.ai/products/search' => Http::response([
+            'query' => 'bread',
+            'results' => [],
+        ]),
+    ]);
+
+    $response = $this->getJson('/api/v1/user/supermarket/products/search?query=bread');
+
+    $response->assertOk();
+    $names = collect($response->json('data'))->pluck('name')->all();
+
+    expect($names)->toContain('Fresh Bread');
+    expect($names)->not->toContain('Chocolate Milk');
+});
+
 it('excludes products from unavailable inventory or inactive stores', function (): void {
     $activeStore = SmStore::factory()->create([
         'is_active' => true,

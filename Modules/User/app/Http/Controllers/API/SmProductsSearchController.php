@@ -15,6 +15,8 @@ use Modules\User\Http\Requests\DiscoverSupermarketProductsRequest;
 
 final class SmProductsSearchController
 {
+    private const float SEMANTIC_STRONG_SCORE_THRESHOLD = 0.9;
+
     public function __construct(
         private readonly SmSemanticProductSearchService $semanticSearchService,
     ) {}
@@ -31,10 +33,10 @@ final class SmProductsSearchController
             }
         }
 
-        return $this->fallbackSearch($request);
+        return $this->fallbackSearch($request, $query);
     }
 
-    private function fallbackSearch(DiscoverSupermarketProductsRequest $request): AnonymousResourceCollection
+    private function fallbackSearch(DiscoverSupermarketProductsRequest $request, ?string $resolvedQuery = null): AnonymousResourceCollection
     {
         $now = CarbonImmutable::now();
 
@@ -48,6 +50,10 @@ final class SmProductsSearchController
             ->with(['media', 'store']);
 
         $search = $request->validated('search');
+        if ((! is_string($search) || $search === '') && is_string($resolvedQuery) && $resolvedQuery !== '') {
+            $search = $resolvedQuery;
+        }
+
         if (is_string($search) && $search !== '') {
             $query->search($search);
         }
@@ -114,7 +120,7 @@ final class SmProductsSearchController
         }
 
         if ($results === []) {
-            return $this->paginateCollection(collect(), $perPage, $page, $request->query());
+            return null;
         }
 
         $ids = array_values(array_unique(array_map(static fn (array $row): int => (int) $row['id'], $results)));
@@ -147,7 +153,83 @@ final class SmProductsSearchController
             ->filter(fn ($item): bool => $item instanceof SmProduct)
             ->values();
 
-        return $this->paginateCollection($ordered, $perPage, $page, $request->query());
+        $filtered = $this->filterSemanticResultsByTextSignal($ordered, $query);
+        if ($filtered->isEmpty()) {
+            return null;
+        }
+
+        return $this->paginateCollection($filtered, $perPage, $page, $request->query());
+    }
+
+    /**
+     * @param  Collection<int, SmProduct>  $items
+     */
+    private function filterSemanticResultsByTextSignal(Collection $items, string $query): Collection
+    {
+        $tokens = $this->extractSearchTokens($query);
+
+        if ($tokens === []) {
+            return $items;
+        }
+
+        return $items
+            ->filter(function (SmProduct $product) use ($tokens): bool {
+                $score = $product->getAttribute('semantic_score');
+                $numericScore = is_numeric($score) ? (float) $score : 0.0;
+
+                if ($numericScore >= self::SEMANTIC_STRONG_SCORE_THRESHOLD) {
+                    return true;
+                }
+
+                $searchableText = $this->normalizeArabicText(
+                    implode(' ', array_filter([
+                        (string) $product->name,
+                        (string) ($product->description ?? ''),
+                    ]))
+                );
+
+                foreach ($tokens as $token) {
+                    if (mb_strpos($searchableText, $token) !== false) {
+                        return true;
+                    }
+                }
+
+                return false;
+            })
+            ->values();
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function extractSearchTokens(string $query): array
+    {
+        $normalized = $this->normalizeArabicText($query);
+        $parts = preg_split('/\s+/u', $normalized) ?: [];
+
+        $tokens = [];
+        foreach ($parts as $part) {
+            $token = mb_trim($part);
+            if ($token === '' || mb_strlen($token) < 2) {
+                continue;
+            }
+
+            $tokens[] = $token;
+        }
+
+        return array_values(array_unique($tokens));
+    }
+
+    private function normalizeArabicText(string $text): string
+    {
+        $text = mb_strtolower($text);
+        $text = preg_replace('/[\p{Mn}\x{064B}-\x{065F}\x{0670}]/u', '', $text) ?? $text;
+        $text = str_replace(['أ', 'إ', 'آ'], 'ا', $text);
+        $text = str_replace('ة', 'ه', $text);
+        $text = str_replace('ى', 'ي', $text);
+        $text = preg_replace('/[^\p{Arabic}\p{L}\p{N}\s]+/u', ' ', $text) ?? $text;
+
+        return mb_trim(preg_replace('/\s+/u', ' ', $text) ?? $text);
     }
 
     /**
