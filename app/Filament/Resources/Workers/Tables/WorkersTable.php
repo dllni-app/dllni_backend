@@ -25,6 +25,9 @@ final class WorkersTable
                     ->label(__('cleaning_admin.workers.fields.name'))
                     ->description(__('cleaning_admin.column_descriptions.first_name'))
                     ->searchable(),
+                TextColumn::make('gender')
+                    ->label('Gender')
+                    ->searchable(),
                 TextColumn::make('user.phone')
                     ->label(__('cleaning_admin.workers.fields.phone'))
                     ->description(__('cleaning_admin.column_descriptions.phone')),

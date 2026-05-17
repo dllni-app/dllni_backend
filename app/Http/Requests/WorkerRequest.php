@@ -22,6 +22,7 @@ final class WorkerRequest extends FormRequest
         $rules = [
             'userId' => 'required|exists:users,id',
             'firstName' => 'nullable|string|max:255',
+            'gender' => 'nullable|string|in:male,female',
             'bio' => 'nullable|string',
             'averageRating' => 'nullable|numeric',
             'totalCompletedJobs' => 'nullable|integer|min:0',

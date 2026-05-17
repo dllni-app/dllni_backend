@@ -18,6 +18,7 @@ final class WorkerData extends Data
     public function __construct(
         public ?int $userId,
         public ?string $firstName,
+        public ?string $gender,
         public ?string $bio,
         public ?float $averageRating,
         public ?int $totalCompletedJobs,

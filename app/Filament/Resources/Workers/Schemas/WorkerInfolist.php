@@ -31,6 +31,7 @@ final class WorkerInfolist
                                 Group::make()
                                     ->schema([
                                         TextEntry::make('first_name')->label(__('cleaning_admin.workers.fields.name')),
+                                        TextEntry::make('gender')->label('Gender'),
                                         TextEntry::make('user.phone')->label(__('cleaning_admin.workers.fields.phone')),
                                         TextEntry::make('average_rating')->label(__('cleaning_admin.workers.fields.average_rating'))->suffix(' / 5'),
                                         TextEntry::make('total_completed_jobs')->label(__('cleaning_admin.workers.fields.total_completed_jobs')),

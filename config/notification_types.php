@@ -62,6 +62,40 @@ return [
                 ],
             ],
         ],
+        'cleaning.booking.created' => [
+            'legacy_type' => 'cleaning_booking_created',
+            'module' => 'cleaning',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'تم إنشاء طلب تنظيف',
+                    'body' => 'تم إنشاء طلب التنظيف رقم :booking_number.',
+                ],
+                'en' => [
+                    'title' => 'Cleaning order created',
+                    'body' => 'Cleaning booking :booking_number has been created.',
+                ],
+            ],
+        ],
+        'cleaning.booking.updated' => [
+            'legacy_type' => 'cleaning_booking_updated',
+            'module' => 'cleaning',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'تم تحديث طلب التنظيف',
+                    'body' => 'تم تحديث طلب التنظيف رقم :booking_number إلى الحالة :status.',
+                ],
+                'en' => [
+                    'title' => 'Cleaning order updated',
+                    'body' => 'Cleaning booking :booking_number was updated to status :status.',
+                ],
+            ],
+        ],
         'supermarket.smart_list.scheduled_order_sent' => [
             'legacy_type' => 'smart_list_scheduled_order_sent',
             'module' => 'supermarket',

@@ -23,6 +23,7 @@ final class Worker extends Model implements HasMedia
     protected $fillable = [
         'user_id',
         'first_name',
+        'gender',
         'bio',
         'average_rating',
         'total_completed_jobs',

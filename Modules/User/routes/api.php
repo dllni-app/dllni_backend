@@ -54,6 +54,7 @@ use Modules\User\Http\Controllers\API\UserCleaningOrderCancelController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderCompletionConfirmController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderCompletionExtendTimeController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderCompletionRejectController;
+use Modules\User\Http\Controllers\API\UserCleaningOrderReviewController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderEstimatePriceController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderEstimateSizeController;
 use Modules\User\Http\Controllers\API\UserCleaningOrdersController;
@@ -231,6 +232,7 @@ Route::prefix('v1/user')->group(function (): void {
         Route::post('cleaning/orders/{order}/completion/confirm', UserCleaningOrderCompletionConfirmController::class);
         Route::post('cleaning/orders/{order}/completion/reject', UserCleaningOrderCompletionRejectController::class);
         Route::post('cleaning/orders/{order}/completion/extend-time', UserCleaningOrderCompletionExtendTimeController::class);
+        Route::post('cleaning/orders/{order}/review', UserCleaningOrderReviewController::class);
 
         Route::get('orders', UserOrdersIndexController::class);
         Route::get('orders/slots', UserOrderSlotsController::class);

@@ -17,6 +17,12 @@ final class WorkerForm
             ->components([
                 Select::make('user_id')->relationship('user', 'name')->searchable()->required(),
                 TextInput::make('first_name')->required(),
+                Select::make('gender')
+                    ->options([
+                        'male' => 'Male',
+                        'female' => 'Female',
+                    ])
+                    ->nullable(),
                 TextInput::make('bio'),
                 TextInput::make('trust_score')->numeric()->default(0),
                 TextInput::make('average_rating')->numeric()->default(0),

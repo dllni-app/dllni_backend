@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\CancellationPolicy;
+use App\Models\BookingReview;
 use App\Models\User;
 use App\Models\Worker;
 use Illuminate\Support\Carbon;
@@ -485,4 +486,43 @@ it('cancels pending cleaning order and rejects cancelling completed order', func
     postJson("/api/v1/user/cleaning/orders/{$completedOrder->id}/cancel", [
         'reason' => 'Too late',
     ])->assertUnprocessable();
+});
+
+it('submits cleaning order review for completed order', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $order = CleaningBooking::factory()->create([
+        'customer_id' => $user->id,
+        'status' => CleaningBookingStatus::Completed->value,
+    ]);
+
+    postJson("/api/v1/user/cleaning/orders/{$order->id}/review", [
+        'rating' => 5,
+        'comment' => 'Great service and on-time delivery.',
+    ])->assertOk()
+        ->assertJsonPath('data.ok', true);
+
+    expect(BookingReview::query()
+        ->where('booking_id', $order->id)
+        ->where('booking_type', $order->getMorphClass())
+        ->where('customer_id', $user->id)
+        ->where('rating', 5)
+        ->exists())->toBeTrue();
+});
+
+it('rejects cleaning order review for non-completed order', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $order = CleaningBooking::factory()->create([
+        'customer_id' => $user->id,
+        'status' => CleaningBookingStatus::InProgress->value,
+    ]);
+
+    postJson("/api/v1/user/cleaning/orders/{$order->id}/review", [
+        'rating' => 4,
+        'comment' => 'Good work.',
+    ])->assertUnprocessable()
+        ->assertJsonValidationErrors(['status']);
 });

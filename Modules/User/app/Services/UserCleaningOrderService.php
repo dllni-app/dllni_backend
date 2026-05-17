@@ -6,6 +6,7 @@ namespace Modules\User\Services;
 
 use Carbon\Carbon;
 use App\Support\Broadcast\BroadcastAfterResponse;
+use App\Models\BookingReview;
 use App\Models\CancellationPolicy;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -356,6 +357,33 @@ final class UserCleaningOrderService
         ));
 
         return $updated;
+    }
+
+    /**
+     * @param array{rating:int,comment?:string|null} $validated
+     */
+    public function submitReview(CleaningBooking $booking, array $validated): BookingReview
+    {
+        if ($booking->status !== CleaningBookingStatus::Completed) {
+            throw ValidationException::withMessages([
+                'status' => ['Review can only be submitted for completed orders.'],
+            ]);
+        }
+
+        /** @var BookingReview $review */
+        $review = BookingReview::query()->updateOrCreate(
+            [
+                'booking_id' => $booking->id,
+                'booking_type' => $booking->getMorphClass(),
+                'customer_id' => $booking->customer_id,
+            ],
+            [
+                'rating' => (int) $validated['rating'],
+                'comment' => $validated['comment'] ?? null,
+            ]
+        );
+
+        return $review;
     }
 
     private function defaultCancellationPolicyId(): ?int
