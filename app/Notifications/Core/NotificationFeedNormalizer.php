@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Notifications\Core;
 
+use InvalidArgumentException;
 use Illuminate\Notifications\DatabaseNotification;
 
 final class NotificationFeedNormalizer
@@ -43,7 +44,7 @@ final class NotificationFeedNormalizer
             ? $data['canonical_type']
             : $this->registry->canonicalFromLegacy($legacyType);
 
-        $definition = $canonicalType !== null ? $this->registry->definition($canonicalType) : null;
+        $definition = $this->resolveDefinition($canonicalType);
 
         $module = $this->resolveModule($data, $definition, $notificationClass);
         $icon = $this->resolveIcon($data, $module);
@@ -65,6 +66,22 @@ final class NotificationFeedNormalizer
             'body' => $body,
             'data' => $normalizedData,
         ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function resolveDefinition(?string $canonicalType): ?array
+    {
+        if ($canonicalType === null || $canonicalType === '') {
+            return null;
+        }
+
+        try {
+            return $this->registry->definition($canonicalType);
+        } catch (InvalidArgumentException) {
+            return null;
+        }
     }
 
     /**
