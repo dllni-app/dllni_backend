@@ -13,7 +13,8 @@ final class NotificationTypeRegistry
      */
     public function definition(string $canonicalType): array
     {
-        $definition = config("notification_types.types.{$canonicalType}");
+        $types = config('notification_types.types', []);
+        $definition = is_array($types) ? ($types[$canonicalType] ?? null) : null;
 
         if (! is_array($definition)) {
             throw new InvalidArgumentException("Notification type [{$canonicalType}] is not configured.");
