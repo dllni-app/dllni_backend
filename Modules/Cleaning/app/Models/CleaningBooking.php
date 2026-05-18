@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use App\Enums\GenderPreference;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Observers\CleaningBookingObserver;
 use Modules\Cleaning\Traits\FilterQueries\CleaningBookingFilterQuery;
@@ -37,6 +38,7 @@ final class CleaningBooking extends Model
         'customer_id',
         'worker_id',
         'preferred_worker_id',
+        'gender_preference',
         'cancellation_policy_id',
         'billing_policy_id',
         'booking_number',
@@ -146,6 +148,7 @@ final class CleaningBooking extends Model
     {
         return [
             'status' => CleaningBookingStatus::class,
+            'gender_preference' => GenderPreference::class,
             'property_details' => 'array',
             'estimated_sqm' => 'decimal:2',
             'estimated_hours' => 'decimal:2',

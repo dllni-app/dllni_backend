@@ -23,6 +23,7 @@ final class CleaningBookingResource extends JsonResource
             'customerId' => $this->customer_id,
             'workerId' => $this->worker_id,
             'preferredWorkerId' => $this->preferred_worker_id,
+            'genderPreference' => $this->gender_preference?->value ?? $this->gender_preference,
             'cancellationPolicyId' => $this->cancellation_policy_id,
             'billingPolicyId' => $this->billing_policy_id,
             'bookingNumber' => $this->booking_number,

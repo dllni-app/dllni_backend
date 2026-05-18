@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
+use App\Enums\GenderPreference;
 use App\Models\Worker;
 use App\Notifications\Cleaning\NewOrderRequestNotification;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -30,6 +31,11 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
             ->where(function ($q) {
                 $q->whereNull('is_suspended')->orWhere('is_suspended', false);
             })
+            ->when(
+                $booking->gender_preference instanceof GenderPreference
+                    && $booking->gender_preference !== GenderPreference::Any,
+                fn ($query) => $query->where('gender', $booking->gender_preference->value)
+            )
             ->whereNotIn('id', $booking->rejections()->pluck('worker_id'))
             ->whereHas('zones')
             ->with('user')

@@ -19,6 +19,7 @@ final class CleaningBookingRequest extends FormRequest
             'customerId' => 'required|exists:users,id',
             'workerId' => 'nullable|exists:workers,id',
             'preferredWorkerId' => 'nullable|exists:workers,id',
+            'genderPreference' => 'nullable|string|in:any,male,female',
             'cancellationPolicyId' => 'nullable|exists:cancellation_policies,id',
             'billingPolicyId' => 'nullable|exists:cleaning_billing_policies,id',
             'bookingNumber' => 'nullable|string|max:255|unique:cleaning_bookings,booking_number,'.$this->route('cleaning_booking')?->id,

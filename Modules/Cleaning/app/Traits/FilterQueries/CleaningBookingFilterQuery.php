@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Traits\FilterQueries;
 
+use App\Enums\GenderPreference;
 use Illuminate\Database\Eloquent\Builder;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
@@ -67,6 +68,12 @@ trait CleaningBookingFilterQuery
                 ->orWhere(function (Builder $pending) use ($worker): void {
                     $pending->where('status', CleaningBookingStatus::Pending)
                         ->whereNull('worker_id')
+                        ->where(function (Builder $genderQuery) use ($worker): void {
+                            $genderQuery
+                                ->whereNull('gender_preference')
+                                ->orWhere('gender_preference', GenderPreference::Any->value)
+                                ->orWhere('gender_preference', $worker->gender);
+                        })
                         ->whereDoesntHave('rejections', fn (Builder $rejections) => $rejections->where('worker_id', $worker->id));
                 });
         });

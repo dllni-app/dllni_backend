@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Http\Controllers\API;
 
+use App\Enums\GenderPreference;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -90,6 +91,12 @@ final class WorkerHomepageController
             ->where('status', CleaningBookingStatus::Pending)
             ->whereDate('scheduled_date', '>=', $today)
             ->where(fn ($q) => $q->whereNull('worker_id')->orWhere('worker_id', $worker->id))
+            ->where(function ($genderQuery) use ($worker): void {
+                $genderQuery
+                    ->whereNull('gender_preference')
+                    ->orWhere('gender_preference', GenderPreference::Any->value)
+                    ->orWhere('gender_preference', $worker->gender);
+            })
             ->whereDoesntHave('rejections', fn ($q) => $q->where('worker_id', $worker->id))
             ->count();
 

@@ -26,6 +26,13 @@ final class UserAuthController
             ]);
         }
 
+        $fcmToken = $request->validated('fcmToken');
+        if (is_string($fcmToken) && $fcmToken !== '') {
+            $user->forceFill([
+                'fcm_token' => $fcmToken,
+            ])->save();
+        }
+
         $user->loadMissing('worker');
         $token = $user->createToken('user-api')->plainTextToken;
 

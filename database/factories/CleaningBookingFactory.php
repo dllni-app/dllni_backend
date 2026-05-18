@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Enums\GenderPreference;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
@@ -28,6 +29,7 @@ final class CleaningBookingFactory extends Factory
             'customer_id' => User::factory(),
             'worker_id' => null,
             'preferred_worker_id' => null,
+            'gender_preference' => fake()->randomElement(GenderPreference::class)->value,
             'cancellation_policy_id' => null,
             'billing_policy_id' => null,
             'booking_number' => 'CLN-'.mb_strtoupper(Str::random(6)).'-'.fake()->unique()->randomNumber(4),

@@ -21,6 +21,38 @@ final class LoginRequest extends FormRequest
         return [
             'phone' => 'required|string|max:32|exists:users,phone',
             'password' => 'required|string|max:255',
+            'fcmToken' => ['nullable', 'string', 'min:16', 'max:4096'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $aliases = [
+            'fcmToken',
+            'fcm_token',
+            'deviceToken',
+            'device_token',
+            'pushToken',
+            'push_token',
+            'token',
+        ];
+
+        $token = null;
+        foreach ($aliases as $key) {
+            if (! $this->exists($key)) {
+                continue;
+            }
+
+            $token = $this->input($key);
+            break;
+        }
+
+        if (is_string($token)) {
+            $token = trim($token);
+        }
+
+        $this->merge([
+            'fcmToken' => $token,
+        ]);
     }
 }

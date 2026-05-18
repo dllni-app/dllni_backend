@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Services;
 
+use App\Enums\GenderPreference;
 use App\Jobs\NotifyEligibleWorkersNewOrderJob;
 use App\Support\Broadcast\BroadcastAfterResponse;
 use Carbon\Carbon;
@@ -34,7 +35,10 @@ final class CleaningBookingService
     public function store(CleaningBookingData $data): CleaningBooking
     {
         return DB::transaction(static function () use ($data) {
-            $booking = CleaningBooking::create($data->onlyModelAttributes());
+            $attributes = $data->onlyModelAttributes();
+            $attributes['gender_preference'] = $attributes['gender_preference'] ?? GenderPreference::Any->value;
+
+            $booking = CleaningBooking::create($attributes);
 
             return $booking;
         });
@@ -43,7 +47,12 @@ final class CleaningBookingService
     public function update(CleaningBookingData $data, CleaningBooking $booking): CleaningBooking
     {
         return DB::transaction(static function () use ($data, $booking) {
-            tap($booking)->update($data->onlyModelAttributes());
+            $attributes = $data->onlyModelAttributes();
+            if (array_key_exists('gender_preference', $attributes) && $attributes['gender_preference'] === null) {
+                $attributes['gender_preference'] = GenderPreference::Any->value;
+            }
+
+            tap($booking)->update($attributes);
 
             return $booking;
         });
@@ -59,8 +68,17 @@ final class CleaningBookingService
             }
 
             $workerId = Auth::user()?->worker?->id;
+            $worker = Auth::user()?->worker;
             if ($booking->worker_id !== null && $booking->worker_id !== $workerId) {
                 throw new InvalidArgumentException('Booking is assigned to another worker.');
+            }
+            if (
+                $booking->gender_preference instanceof GenderPreference
+                && $booking->gender_preference !== GenderPreference::Any
+                && $worker
+                && $worker->gender !== $booking->gender_preference->value
+            ) {
+                throw new InvalidArgumentException('Booking gender preference does not match worker profile.');
             }
 
             $booking->update([
