@@ -128,7 +128,7 @@ final class CleaningWorkerRealDataSeeder extends Seeder
                 ]
             );
 
-            $bookingNumber = 'CLN-REAL-'.str_pad((string) ($idx + 1), 4, '0', STR_PAD_LEFT);
+            $bookingNumber = 'CLN-REAL-' . str_pad((string) ($idx + 1), 4, '0', STR_PAD_LEFT);
             if (! CleaningBooking::where('booking_number', $bookingNumber)->exists()) {
                 CleaningBooking::create([
                     'customer_id' => $customer->id,
