@@ -29,6 +29,7 @@ final class UserNotificationResource extends JsonResource
             'priority' => $normalized['priority'],
             'title' => $normalized['title'],
             'body' => $normalized['body'],
+            'message' => $normalized['message'],
             'data' => $normalized['data'],
             'readAt' => $normalized['readAt'],
             'read_at' => $normalized['read_at'],

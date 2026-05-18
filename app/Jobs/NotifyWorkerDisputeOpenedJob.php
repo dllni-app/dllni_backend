@@ -31,7 +31,7 @@ final class NotifyWorkerDisputeOpenedJob implements ShouldQueue
         }
 
         $worker = $booking->worker;
-        if (! $worker?->user?->fcm_token) {
+        if (! $worker?->user) {
             return;
         }
 

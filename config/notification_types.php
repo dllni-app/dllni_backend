@@ -96,6 +96,123 @@ return [
                 ],
             ],
         ],
+        'cleaning.booking.worker_assigned' => [
+            'legacy_type' => 'worker_assigned',
+            'module' => 'cleaning',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'en' => [
+                    'title' => 'Worker assigned',
+                    'body' => 'A worker has been assigned to booking :booking_number.',
+                ],
+            ],
+        ],
+        'cleaning.booking.worker_started_travel' => [
+            'legacy_type' => 'worker_started_travel',
+            'module' => 'cleaning',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'en' => [
+                    'title' => 'Worker is on the way',
+                    'body' => 'The worker started travel for booking :booking_number.',
+                ],
+            ],
+        ],
+        'cleaning.booking.worker_arrived' => [
+            'legacy_type' => 'worker_arrived',
+            'module' => 'cleaning',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'en' => [
+                    'title' => 'Worker arrived',
+                    'body' => 'The worker arrived for booking :booking_number.',
+                ],
+            ],
+        ],
+        'cleaning.booking.start_verified' => [
+            'legacy_type' => 'start_verified',
+            'module' => 'cleaning',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'en' => [
+                    'title' => 'Arrival verified',
+                    'body' => 'Customer verified start for booking :booking_number.',
+                ],
+            ],
+        ],
+        'cleaning.booking.completion_requested' => [
+            'legacy_type' => 'completion_requested',
+            'module' => 'cleaning',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'en' => [
+                    'title' => 'Completion requested',
+                    'body' => 'Worker requested completion confirmation for booking :booking_number.',
+                ],
+            ],
+        ],
+        'cleaning.booking.completion_approved' => [
+            'legacy_type' => 'completion_approved',
+            'module' => 'cleaning',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'en' => [
+                    'title' => 'Completion approved',
+                    'body' => 'Customer approved completion for booking :booking_number.',
+                ],
+            ],
+        ],
+        'cleaning.booking.completion_rejected' => [
+            'legacy_type' => 'completion_rejected',
+            'module' => 'cleaning',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'en' => [
+                    'title' => 'Completion rejected',
+                    'body' => 'Customer rejected completion for booking :booking_number.',
+                ],
+            ],
+        ],
+        'cleaning.booking.time_extension_requested' => [
+            'legacy_type' => 'time_extension_requested',
+            'module' => 'cleaning',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'en' => [
+                    'title' => 'Time extension requested',
+                    'body' => 'Customer requested more time for booking :booking_number.',
+                ],
+            ],
+        ],
+        'cleaning.booking.order_cancelled' => [
+            'legacy_type' => 'order_cancelled',
+            'module' => 'cleaning',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'en' => [
+                    'title' => 'Order cancelled',
+                    'body' => 'Cleaning booking :booking_number was cancelled.',
+                ],
+            ],
+        ],
         'supermarket.smart_list.scheduled_order_sent' => [
             'legacy_type' => 'smart_list_scheduled_order_sent',
             'module' => 'supermarket',

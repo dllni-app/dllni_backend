@@ -21,6 +21,9 @@ final class BookingLifecycleNotification extends Notification implements ShouldQ
         private readonly string $actorRole,
         private readonly string $targetRole,
         private readonly ?string $fromStatus = null,
+        private readonly ?string $action = null,
+        private readonly ?string $deepLinkTarget = null,
+        private readonly ?string $occurredAt = null,
     ) {
         $this->onQueue('notifications');
     }
@@ -63,6 +66,7 @@ final class BookingLifecycleNotification extends Notification implements ShouldQ
             'booking_number' => (string) $this->booking->booking_number,
             'status' => (string) $this->booking->status->value,
             'from_status' => $this->fromStatus,
+            'action' => $this->action,
             'actor_role' => $this->actorRole,
             'target_role' => $this->targetRole,
         ];
@@ -73,12 +77,22 @@ final class BookingLifecycleNotification extends Notification implements ShouldQ
      */
     private function extraData(): array
     {
+        $resolvedAction = $this->action ?? str_replace('cleaning.booking.', '', $this->canonicalType);
+        $resolvedDeepLinkTarget = $this->deepLinkTarget ?? ($this->targetRole === 'worker'
+            ? 'cleaning_booking_details'
+            : 'cleaning_order_details');
+
         return array_filter([
             'bookingId' => (int) $this->booking->id,
+            'orderId' => (int) $this->booking->id,
             'status' => (string) $this->booking->status->value,
+            'action' => $resolvedAction,
+            'deep_link_target' => $resolvedDeepLinkTarget,
+            'occurred_at' => $this->occurredAt ?? now()->toIso8601String(),
             'fromStatus' => $this->fromStatus,
             'actorRole' => $this->actorRole,
             'targetRole' => $this->targetRole,
+            'bookingNumber' => (string) $this->booking->booking_number,
         ], fn (mixed $value): bool => $value !== null);
     }
 

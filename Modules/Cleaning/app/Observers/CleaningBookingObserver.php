@@ -55,6 +55,8 @@ final class CleaningBookingObserver
                 'from_status' => $fromStatusValue,
                 'to_status' => $booking->status->value,
             ]);
+
+            return;
         }
 
         $this->notifyLifecycleUpdated($booking, $fromStatusValue);

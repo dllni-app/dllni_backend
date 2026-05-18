@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\API\RegisterFcmTokenController;
 use App\Http\Middleware\RedirectBrowserDeepLinkApiRequests;
 use Modules\User\Http\Controllers\API\DiscoverRestaurantsController;
 use Modules\User\Http\Controllers\API\LoginController;
@@ -194,6 +195,7 @@ Route::prefix('v1/user')->group(function (): void {
         Route::get('notifications', UserNotificationsIndexController::class);
         Route::patch('notifications/read-all', UserNotificationsMarkAllAsReadController::class);
         Route::patch('notifications/{id}/read', UserNotificationsMarkAsReadController::class);
+        Route::put('notifications/token', RegisterFcmTokenController::class);
 
         Route::get('addresses', UserAddressIndexController::class);
         Route::post('addresses', UserAddressStoreController::class);

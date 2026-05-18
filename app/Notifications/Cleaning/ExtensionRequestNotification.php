@@ -41,6 +41,11 @@ final class ExtensionRequestNotification extends Notification implements ShouldQ
             canonicalType: self::CanonicalType,
             extraData: array_filter([
                 'bookingId' => $booking ? (int) $booking->getKey() : null,
+                'orderId' => $booking ? (int) $booking->getKey() : null,
+                'status' => $booking?->status?->value,
+                'action' => 'extension_request',
+                'deep_link_target' => 'cleaning_booking_details',
+                'occurred_at' => $this->timeWarning->created_at?->toIso8601String() ?? now()->toIso8601String(),
                 'timeWarningId' => (int) $this->timeWarning->id,
             ], fn (mixed $value): bool => $value !== null),
         );
@@ -54,6 +59,11 @@ final class ExtensionRequestNotification extends Notification implements ShouldQ
             canonicalType: self::CanonicalType,
             extraData: array_filter([
                 'bookingId' => $booking ? (int) $booking->getKey() : null,
+                'orderId' => $booking ? (int) $booking->getKey() : null,
+                'status' => $booking?->status?->value,
+                'action' => 'extension_request',
+                'deep_link_target' => 'cleaning_booking_details',
+                'occurred_at' => $this->timeWarning->created_at?->toIso8601String() ?? now()->toIso8601String(),
                 'timeWarningId' => $this->timeWarning->id,
             ], fn (mixed $value): bool => $value !== null),
         );

@@ -42,6 +42,11 @@ final class NewOrderRequestNotification extends Notification implements ShouldQu
             ],
             extraData: [
                 'bookingId' => (int) $this->booking->id,
+                'orderId' => (int) $this->booking->id,
+                'status' => (string) $this->booking->status->value,
+                'action' => 'new_order_request',
+                'deep_link_target' => 'cleaning_booking_details',
+                'occurred_at' => $this->booking->created_at?->toIso8601String() ?? now()->toIso8601String(),
             ],
         );
     }
@@ -55,6 +60,11 @@ final class NewOrderRequestNotification extends Notification implements ShouldQu
             ],
             extraData: [
                 'bookingId' => (int) $this->booking->id,
+                'orderId' => (int) $this->booking->id,
+                'status' => (string) $this->booking->status->value,
+                'action' => 'new_order_request',
+                'deep_link_target' => 'cleaning_booking_details',
+                'occurred_at' => $this->booking->created_at?->toIso8601String() ?? now()->toIso8601String(),
             ],
         );
     }

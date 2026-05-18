@@ -132,6 +132,11 @@ final class CleaningBooking extends Model
         return $this->morphMany(BookingReview::class, 'booking', 'booking_type', 'booking_id');
     }
 
+    public function rejections(): HasMany
+    {
+        return $this->hasMany(CleaningBookingWorkerRejection::class, 'cleaning_booking_id');
+    }
+
     public function ratings(): MorphMany
     {
         return $this->morphMany(WorkerCustomerRating::class, 'booking', 'booking_type', 'booking_id');

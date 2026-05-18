@@ -18,6 +18,7 @@ use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
 use Modules\Cleaning\Events\CompletionDecisionMade;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Services\CleaningLifecycleNotificationService;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 final class UserCleaningOrderService
@@ -26,6 +27,7 @@ final class UserCleaningOrderService
 
     public function __construct(
         private UserCleaningOrderEstimationService $estimationService,
+        private CleaningLifecycleNotificationService $lifecycleNotifications,
     ) {}
 
     public function store(User $user, array $validated): CleaningBooking
@@ -178,6 +180,8 @@ final class UserCleaningOrderService
 
     public function cancel(CleaningBooking $booking, ?string $reason = null): CleaningBooking
     {
+        $fromStatus = (string) $booking->status->value;
+
         if (! in_array($booking->status, [CleaningBookingStatus::Pending, CleaningBookingStatus::WorkerAssigned], true)) {
             throw ValidationException::withMessages([
                 'order' => ['Order cannot be cancelled in current status.'],
@@ -192,6 +196,14 @@ final class UserCleaningOrderService
 
         $updated = $booking->fresh();
         $this->dispatchTrackingUpdate($updated);
+        $this->lifecycleNotifications->notifyWorker(
+            booking: $updated,
+            canonicalType: 'cleaning.booking.order_cancelled',
+            action: 'customer_cancelled',
+            actorRole: 'customer',
+            fromStatus: $fromStatus,
+            occurredAt: $updated->cancelled_at?->toIso8601String() ?? $updated->updated_at?->toIso8601String(),
+        );
 
         return $updated;
     }
@@ -277,6 +289,14 @@ final class UserCleaningOrderService
                 $updated->worker_id,
                 (string) $updated->arrived_at?->toIso8601String(),
             ));
+            $this->lifecycleNotifications->notifyWorker(
+                booking: $updated,
+                canonicalType: 'cleaning.booking.start_verified',
+                action: 'start_verified',
+                actorRole: 'customer',
+                fromStatus: CleaningBookingStatus::AwaitingStartVerification->value,
+                occurredAt: $updated->customer_confirmed_at?->toIso8601String() ?? $updated->updated_at?->toIso8601String(),
+            );
 
             return $updated;
         });
@@ -284,6 +304,8 @@ final class UserCleaningOrderService
 
     public function confirmCompletion(CleaningBooking $booking): CleaningBooking
     {
+        $fromStatus = (string) $booking->status->value;
+
         if ($booking->status !== CleaningBookingStatus::AwaitingCustomerCompletion) {
             throw ValidationException::withMessages([
                 'status' => ['Order is not waiting for completion confirmation.'],
@@ -304,12 +326,22 @@ final class UserCleaningOrderService
             null,
             now()->toIso8601String(),
         ));
+        $this->lifecycleNotifications->notifyWorker(
+            booking: $updated,
+            canonicalType: 'cleaning.booking.completion_approved',
+            action: 'completion_approved',
+            actorRole: 'customer',
+            fromStatus: $fromStatus,
+            occurredAt: $updated->customer_confirmed_at?->toIso8601String() ?? $updated->updated_at?->toIso8601String(),
+        );
 
         return $updated;
     }
 
     public function rejectCompletion(CleaningBooking $booking): CleaningBooking
     {
+        $fromStatus = (string) $booking->status->value;
+
         if ($booking->status !== CleaningBookingStatus::AwaitingCustomerCompletion) {
             throw ValidationException::withMessages([
                 'status' => ['Order is not waiting for completion confirmation.'],
@@ -330,12 +362,22 @@ final class UserCleaningOrderService
             null,
             now()->toIso8601String(),
         ));
+        $this->lifecycleNotifications->notifyWorker(
+            booking: $updated,
+            canonicalType: 'cleaning.booking.completion_rejected',
+            action: 'completion_rejected',
+            actorRole: 'customer',
+            fromStatus: $fromStatus,
+            occurredAt: $updated->updated_at?->toIso8601String(),
+        );
 
         return $updated;
     }
 
     public function requestCompletionExtension(CleaningBooking $booking): CleaningBooking
     {
+        $fromStatus = (string) $booking->status->value;
+
         if ($booking->status !== CleaningBookingStatus::AwaitingCustomerCompletion) {
             throw ValidationException::withMessages([
                 'status' => ['Order is not waiting for completion confirmation.'],
@@ -355,6 +397,14 @@ final class UserCleaningOrderService
             null,
             now()->toIso8601String(),
         ));
+        $this->lifecycleNotifications->notifyWorker(
+            booking: $updated,
+            canonicalType: 'cleaning.booking.time_extension_requested',
+            action: 'time_extension_requested',
+            actorRole: 'customer',
+            fromStatus: $fromStatus,
+            occurredAt: $updated->updated_at?->toIso8601String(),
+        );
 
         return $updated;
     }

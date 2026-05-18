@@ -90,6 +90,7 @@ final class WorkerHomepageController
             ->where('status', CleaningBookingStatus::Pending)
             ->whereDate('scheduled_date', '>=', $today)
             ->where(fn ($q) => $q->whereNull('worker_id')->orWhere('worker_id', $worker->id))
+            ->whereDoesntHave('rejections', fn ($q) => $q->where('worker_id', $worker->id))
             ->count();
 
         $pendingExtensionRequestsCount = CleaningTimeWarning::query()

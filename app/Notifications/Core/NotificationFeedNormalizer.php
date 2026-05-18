@@ -52,6 +52,7 @@ final class NotificationFeedNormalizer
         $priority = (string) ($data['priority'] ?? ($definition['priority'] ?? 'normal'));
         $title = (string) ($data['title'] ?? '');
         $body = (string) ($data['body'] ?? '');
+        $message = (string) ($data['message'] ?? $body);
         $normalizedData = $this->extractData($data);
 
         return [
@@ -64,6 +65,7 @@ final class NotificationFeedNormalizer
             'priority' => $priority,
             'title' => $title,
             'body' => $body,
+            'message' => $message,
             'data' => $normalizedData,
         ];
     }
@@ -176,6 +178,7 @@ final class NotificationFeedNormalizer
             'priority',
             'title',
             'body',
+            'message',
         ];
 
         $normalized = [];

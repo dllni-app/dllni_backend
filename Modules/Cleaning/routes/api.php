@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\API\UserNotificationController;
+use App\Http\Controllers\API\RegisterFcmTokenController;
 use Illuminate\Support\Facades\Route;
 use Modules\Cleaning\Http\Controllers\API\CleaningBillingPolicyController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingController;
@@ -46,7 +47,9 @@ Route::prefix('v1')->group(function () {
             Route::get('working-hours', [WorkerWorkingHoursController::class, 'show']);
             Route::put('working-hours', [WorkerWorkingHoursController::class, 'update']);
             Route::get('notifications', [UserNotificationController::class, 'index']);
+            Route::patch('notifications/read-all', [UserNotificationController::class, 'markAllAsRead']);
             Route::patch('notifications/{id}/read', [UserNotificationController::class, 'markAsRead']);
+            Route::put('notifications/token', RegisterFcmTokenController::class);
             Route::get('transactions', WorkerTransactionsController::class);
             Route::get('status', [WorkerAccountStatusController::class, 'show']);
             Route::patch('status', [WorkerAccountStatusController::class, 'update']);

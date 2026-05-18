@@ -27,7 +27,7 @@ final class CleaningWorkerRealDataSeeder extends Seeder
         $user = User::firstOrCreate(
             ['email' => self::WorkerEmail],
             [
-                'name' => 'Cleaning Worker Real',
+                'name' => 'Cleaning Worker 2',
                 'phone' => self::WorkerPhone,
                 'password' => bcrypt(self::Password),
                 'email_verified_at' => now(),

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\User;
+use App\Models\Worker;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
@@ -191,4 +192,49 @@ it('returns payload icon when provided', function (): void {
 
     $response->assertOk();
     expect($response->json('data.0.icon'))->toBe($iconUrl);
+});
+
+it('registers fcm token for user notifications endpoint using alias keys', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $response = $this->putJson('/api/v1/user/notifications/token', [
+        'device_token' => 'fcm_test_token_1234567890',
+    ]);
+
+    $response->assertOk();
+    expect($response->json('data.tokenRegistered'))->toBeTrue();
+    expect($user->fresh()->fcm_token)->toBe('fcm_test_token_1234567890');
+});
+
+it('registers fcm token for cleaning worker notifications endpoint', function (): void {
+    $workerUser = User::factory()->create();
+    Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $response = $this->putJson('/api/v1/cleaning/worker/account/notifications/token', [
+        'fcmToken' => 'worker_fcm_token_1234567890',
+    ]);
+
+    $response->assertOk();
+    expect($response->json('data.tokenRegistered'))->toBeTrue();
+    expect($workerUser->fresh()->fcm_token)->toBe('worker_fcm_token_1234567890');
+});
+
+it('marks all worker notification feed items as read', function (): void {
+    $workerUser = User::factory()->create();
+    Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $workerUser->notifications()->create([
+        'id' => (string) Str::uuid(),
+        'type' => 'Illuminate\\Notifications\\DatabaseNotification',
+        'data' => ['title' => 'Unread', 'body' => ''],
+        'read_at' => null,
+    ]);
+
+    $this->patchJson('/api/v1/cleaning/worker/account/notifications/read-all')
+        ->assertNoContent();
+
+    expect($workerUser->fresh()->unreadNotifications()->count())->toBe(0);
 });

@@ -30,13 +30,14 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
             ->where(function ($q) {
                 $q->whereNull('is_suspended')->orWhere('is_suspended', false);
             })
+            ->whereNotIn('id', $booking->rejections()->pluck('worker_id'))
             ->whereHas('zones')
             ->with('user')
             ->limit(50)
             ->get();
 
         foreach ($workers as $worker) {
-            if ($worker->user?->fcm_token) {
+            if ($worker->user) {
                 $worker->user->notify(new NewOrderRequestNotification($booking));
             }
         }

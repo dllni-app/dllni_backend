@@ -41,6 +41,7 @@ final class NotificationPayloadBuilder
             'icon' => $iconUrl,
             'title' => $copy['title'],
             'body' => $copy['body'],
+            'message' => $copy['body'],
             'data' => $extraData,
             ...$extraData,
         ];

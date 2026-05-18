@@ -64,9 +64,10 @@ trait CleaningBookingFilterQuery
 
         return $query->where(function (Builder $q) use ($worker): void {
             $q->where('worker_id', $worker->id)
-                ->orWhere(function (Builder $pending): void {
+                ->orWhere(function (Builder $pending) use ($worker): void {
                     $pending->where('status', CleaningBookingStatus::Pending)
-                        ->whereNull('worker_id');
+                        ->whereNull('worker_id')
+                        ->whereDoesntHave('rejections', fn (Builder $rejections) => $rejections->where('worker_id', $worker->id));
                 });
         });
     }

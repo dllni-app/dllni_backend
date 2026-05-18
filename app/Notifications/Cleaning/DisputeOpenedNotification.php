@@ -41,6 +41,11 @@ final class DisputeOpenedNotification extends Notification implements ShouldQueu
             canonicalType: self::CanonicalType,
             extraData: array_filter([
                 'bookingId' => $booking ? (int) $booking->getKey() : null,
+                'orderId' => $booking ? (int) $booking->getKey() : null,
+                'status' => $booking?->status?->value,
+                'action' => 'dispute_opened',
+                'deep_link_target' => 'cleaning_booking_details',
+                'occurred_at' => $this->dispute->created_at?->toIso8601String() ?? now()->toIso8601String(),
                 'disputeId' => (int) $this->dispute->id,
             ], fn (mixed $value): bool => $value !== null),
         );
@@ -54,6 +59,11 @@ final class DisputeOpenedNotification extends Notification implements ShouldQueu
             canonicalType: self::CanonicalType,
             extraData: array_filter([
                 'bookingId' => $booking ? (int) $booking->getKey() : null,
+                'orderId' => $booking ? (int) $booking->getKey() : null,
+                'status' => $booking?->status?->value,
+                'action' => 'dispute_opened',
+                'deep_link_target' => 'cleaning_booking_details',
+                'occurred_at' => $this->dispute->created_at?->toIso8601String() ?? now()->toIso8601String(),
                 'disputeId' => $this->dispute->id,
             ], fn (mixed $value): bool => $value !== null),
         );
