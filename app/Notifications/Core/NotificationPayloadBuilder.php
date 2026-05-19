@@ -32,9 +32,12 @@ final class NotificationPayloadBuilder
         $iconUrl = $this->resolveIconUrl($module);
         $legacyType = (string) ($definition['legacy_type'] ?? $canonicalType);
 
+        $normalizedExtraData = $this->normalizeExtraData($extraData);
+
         return [
             'type' => $legacyType,
             'canonical_type' => $canonicalType,
+            'canonicalType' => $canonicalType,
             'module' => $module,
             'category' => (string) ($definition['category'] ?? 'system'),
             'priority' => (string) ($definition['priority'] ?? 'normal'),
@@ -42,8 +45,8 @@ final class NotificationPayloadBuilder
             'title' => $copy['title'],
             'body' => $copy['body'],
             'message' => $copy['body'],
-            'data' => $extraData,
-            ...$extraData,
+            'data' => $normalizedExtraData,
+            ...$normalizedExtraData,
         ];
     }
 
@@ -116,6 +119,7 @@ final class NotificationPayloadBuilder
         $data = [
             'type' => $payload['type'] ?? null,
             'canonical_type' => $payload['canonical_type'] ?? null,
+            'canonicalType' => $payload['canonicalType'] ?? null,
             'module' => $payload['module'] ?? null,
             'category' => $payload['category'] ?? null,
             'priority' => $payload['priority'] ?? null,
@@ -127,6 +131,44 @@ final class NotificationPayloadBuilder
             [...$data, ...$extra],
             fn (mixed $value): bool => is_scalar($value) || $value === null
         );
+    }
+
+    /**
+     * @param  array<string, mixed>  $extraData
+     * @return array<string, mixed>
+     */
+    private function normalizeExtraData(array $extraData): array
+    {
+        $normalized = $extraData;
+
+        $deepLinkTarget = null;
+        if (is_string($normalized['deep_link_target'] ?? null) && $normalized['deep_link_target'] !== '') {
+            $deepLinkTarget = $normalized['deep_link_target'];
+        } elseif (is_string($normalized['deepLinkTarget'] ?? null) && $normalized['deepLinkTarget'] !== '') {
+            $deepLinkTarget = $normalized['deepLinkTarget'];
+        }
+
+        if (is_string($deepLinkTarget) && $deepLinkTarget !== '') {
+            $normalized['deep_link_target'] = $deepLinkTarget;
+            $normalized['deepLinkTarget'] = $deepLinkTarget;
+        }
+
+        if (! isset($normalized['args']) && is_string($deepLinkTarget) && $deepLinkTarget !== '') {
+            $routeArgs = ['route' => $deepLinkTarget];
+
+            foreach (['bookingId', 'orderId', 'timeWarningId', 'disputeId', 'action', 'status'] as $key) {
+                if (array_key_exists($key, $normalized)) {
+                    $routeArgs[$key] = $normalized[$key];
+                }
+            }
+
+            $encoded = json_encode($routeArgs, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if (is_string($encoded)) {
+                $normalized['args'] = $encoded;
+            }
+        }
+
+        return $normalized;
     }
 
     private function resolveIconUrl(?string $module): ?string

@@ -191,6 +191,42 @@ final class NotificationFeedNormalizer
             $normalized[$key] = $value;
         }
 
-        return $normalized;
+        return $this->normalizeRoutingData($normalized);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function normalizeRoutingData(array $data): array
+    {
+        $deepLinkTarget = null;
+        if (is_string($data['deep_link_target'] ?? null) && $data['deep_link_target'] !== '') {
+            $deepLinkTarget = $data['deep_link_target'];
+        } elseif (is_string($data['deepLinkTarget'] ?? null) && $data['deepLinkTarget'] !== '') {
+            $deepLinkTarget = $data['deepLinkTarget'];
+        }
+
+        if (is_string($deepLinkTarget) && $deepLinkTarget !== '') {
+            $data['deep_link_target'] = $deepLinkTarget;
+            $data['deepLinkTarget'] = $deepLinkTarget;
+        }
+
+        if (! isset($data['args']) && is_string($deepLinkTarget) && $deepLinkTarget !== '') {
+            $routeArgs = ['route' => $deepLinkTarget];
+
+            foreach (['bookingId', 'orderId', 'timeWarningId', 'disputeId', 'action', 'status'] as $key) {
+                if (array_key_exists($key, $data)) {
+                    $routeArgs[$key] = $data[$key];
+                }
+            }
+
+            $encoded = json_encode($routeArgs, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if (is_string($encoded)) {
+                $data['args'] = $encoded;
+            }
+        }
+
+        return $data;
     }
 }

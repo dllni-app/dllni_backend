@@ -46,6 +46,16 @@ it('sends worker-started-travel canonical notification to customer with standard
     expect($notification->data['status'])->toBe(CleaningBookingStatus::WorkerAssigned->value);
     expect($notification->data['action'])->toBe('worker_started_travel');
     expect($notification->data['deep_link_target'])->toBe('cleaning_order_details');
+    expect($notification->data['deepLinkTarget'])->toBe('cleaning_order_details');
+    expect($notification->data['canonicalType'])->toBe('cleaning.booking.worker_started_travel');
+    expect($notification->data['args'])->toBeJson();
+    expect(json_decode((string) $notification->data['args'], true))->toMatchArray([
+        'route' => 'cleaning_order_details',
+        'bookingId' => $booking->id,
+        'orderId' => $booking->id,
+        'action' => 'worker_started_travel',
+        'status' => CleaningBookingStatus::WorkerAssigned->value,
+    ]);
     expect($notification->data['occurred_at'])->toBeString();
     expect($notification->data['title'])->toBeString();
     expect($notification->data['message'])->toBeString();
@@ -80,6 +90,16 @@ it('sends completion-approved canonical notification to worker with standard key
     expect($notification->data['status'])->toBe(CleaningBookingStatus::Completed->value);
     expect($notification->data['action'])->toBe('completion_approved');
     expect($notification->data['deep_link_target'])->toBe('cleaning_booking_details');
+    expect($notification->data['deepLinkTarget'])->toBe('cleaning_booking_details');
+    expect($notification->data['canonicalType'])->toBe('cleaning.booking.completion_approved');
+    expect($notification->data['args'])->toBeJson();
+    expect(json_decode((string) $notification->data['args'], true))->toMatchArray([
+        'route' => 'cleaning_booking_details',
+        'bookingId' => $booking->id,
+        'orderId' => $booking->id,
+        'action' => 'completion_approved',
+        'status' => CleaningBookingStatus::Completed->value,
+    ]);
     expect($notification->data['occurred_at'])->toBeString();
     expect($notification->data['title'])->toBeString();
     expect($notification->data['message'])->toBeString();

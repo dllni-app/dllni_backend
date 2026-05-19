@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\API\AuthController;
+use App\Http\Controllers\API\AppDownloadController;
 use App\Http\Controllers\API\CancellationPolicyController;
 use App\Http\Controllers\API\DisputeController;
 use App\Http\Controllers\DeepLinks\OpenDeepLinkController;
@@ -39,6 +40,10 @@ Route::prefix('v1/deep-links')->group(function (): void {
         ->whereIn('type', ['product', 'restaurant', 'store', 'vote', 'group-order'])
         ->where('identifier', '[A-Za-z0-9\-_.~%]+')
         ->name('api.deep-links.open');
+});
+
+Route::prefix('v1/apps')->group(function (): void {
+    Route::get('download', AppDownloadController::class);
 });
 
 Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {

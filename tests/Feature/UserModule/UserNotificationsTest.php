@@ -194,6 +194,42 @@ it('returns payload icon when provided', function (): void {
     expect($response->json('data.0.icon'))->toBe($iconUrl);
 });
 
+it('normalizes notification routing data for get notifications response', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $user->notifications()->create([
+        'id' => (string) Str::uuid(),
+        'type' => 'Illuminate\\Notifications\\DatabaseNotification',
+        'data' => [
+            'type' => 'worker_started_travel',
+            'canonical_type' => 'cleaning.booking.worker_started_travel',
+            'title' => 'Worker is on the way',
+            'body' => 'The worker started travel for booking CB-1001.',
+            'bookingId' => 1001,
+            'orderId' => 1001,
+            'action' => 'worker_started_travel',
+            'status' => 'worker_assigned',
+            'deep_link_target' => 'cleaning_order_details',
+        ],
+        'read_at' => null,
+    ]);
+
+    $response = $this->getJson('/api/v1/user/notifications');
+
+    $response->assertOk();
+    expect($response->json('data.0.data.deep_link_target'))->toBe('cleaning_order_details');
+    expect($response->json('data.0.data.deepLinkTarget'))->toBe('cleaning_order_details');
+    expect($response->json('data.0.data.args'))->toBeJson();
+    expect(json_decode((string) $response->json('data.0.data.args'), true))->toMatchArray([
+        'route' => 'cleaning_order_details',
+        'bookingId' => 1001,
+        'orderId' => 1001,
+        'action' => 'worker_started_travel',
+        'status' => 'worker_assigned',
+    ]);
+});
+
 it('registers fcm token for user notifications endpoint using alias keys', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
