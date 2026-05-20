@@ -19,7 +19,6 @@ final class DisputeOpenedNotification extends Notification implements ShouldQueu
     public function __construct(
         private readonly Dispute $dispute
     ) {
-        $this->onQueue('notifications');
         $this->afterCommit();
     }
 

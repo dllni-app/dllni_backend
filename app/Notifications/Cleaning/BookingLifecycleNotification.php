@@ -25,7 +25,6 @@ final class BookingLifecycleNotification extends Notification implements ShouldQ
         private readonly ?string $deepLinkTarget = null,
         private readonly ?string $occurredAt = null,
     ) {
-        $this->onQueue('notifications');
         $this->afterCommit();
     }
 

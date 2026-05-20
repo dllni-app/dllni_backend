@@ -19,7 +19,6 @@ final class NewOrderRequestNotification extends Notification implements ShouldQu
     public function __construct(
         private readonly CleaningBooking $booking
     ) {
-        $this->onQueue('notifications');
         $this->afterCommit();
     }
 

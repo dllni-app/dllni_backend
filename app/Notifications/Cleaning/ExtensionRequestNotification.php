@@ -19,7 +19,6 @@ final class ExtensionRequestNotification extends Notification implements ShouldQ
     public function __construct(
         private readonly CleaningTimeWarning $timeWarning
     ) {
-        $this->onQueue('notifications');
         $this->afterCommit();
     }
 
