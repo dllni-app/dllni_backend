@@ -20,6 +20,7 @@ final class NewOrderRequestNotification extends Notification implements ShouldQu
         private readonly CleaningBooking $booking
     ) {
         $this->onQueue('notifications');
+        $this->afterCommit();
     }
 
     /**

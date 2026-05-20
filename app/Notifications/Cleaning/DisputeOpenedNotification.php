@@ -20,6 +20,7 @@ final class DisputeOpenedNotification extends Notification implements ShouldQueu
         private readonly Dispute $dispute
     ) {
         $this->onQueue('notifications');
+        $this->afterCommit();
     }
 
     /**

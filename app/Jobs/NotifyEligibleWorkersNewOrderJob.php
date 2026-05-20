@@ -17,7 +17,12 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
 
     public function __construct(
         private readonly int $cleaningBookingId
-    ) {}
+    ) {
+        // This job is dispatched from model observers that may run inside
+        // active DB transactions. Delay queue push until commit so the booking
+        // is visible to the worker process.
+        $this->afterCommit();
+    }
 
     public function handle(): void
     {

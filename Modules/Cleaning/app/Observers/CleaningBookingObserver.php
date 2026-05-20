@@ -29,7 +29,7 @@ final class CleaningBookingObserver
             return;
         }
 
-        NotifyEligibleWorkersNewOrderJob::dispatch($booking->id);
+        NotifyEligibleWorkersNewOrderJob::dispatch($booking->id)->afterCommit();
         $this->notifyLifecycleCreated($booking);
     }
 

@@ -17,10 +17,13 @@ final class UserNotificationsSeeder extends Seeder
     public function run(): void
     {
         $this->seedAdminNotifications();
-        $this->seedCleaningWorkerNotifications();
-        $this->seedRestaurantSellerNotifications();
-        $this->seedSupermarketSellerNotifications();
-        $this->seedAppUserNotifications();
+        $this->clearSeededNotificationsForUsers([
+            '+963944100001',
+            '+963944100002',
+            '+963944100003',
+            '+963944000222',
+            'user@dllni.sy',
+        ]);
     }
 
     private function seedAdminNotifications(): void
@@ -167,6 +170,27 @@ final class UserNotificationsSeeder extends Seeder
                 'read_at' => now()->subHours(2),
             ],
         ]);
+    }
+
+    /**
+     * @param  array<int, string>  $identifiers
+     */
+    private function clearSeededNotificationsForUsers(array $identifiers): void
+    {
+        foreach ($identifiers as $identifier) {
+            $user = User::query()
+                ->where('email', $identifier)
+                ->orWhere('phone', $identifier)
+                ->first();
+
+            if ($user === null) {
+                continue;
+            }
+
+            $user->notifications()
+                ->where('data->seedTag', self::SeedTag)
+                ->delete();
+        }
     }
 
     /**
