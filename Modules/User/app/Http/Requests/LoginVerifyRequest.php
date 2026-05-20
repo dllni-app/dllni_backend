@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Modules\User\Http\Requests;
 
+use App\Http\Requests\Concerns\ResolvesFcmToken;
 use Illuminate\Foundation\Http\FormRequest;
 
 final class LoginVerifyRequest extends FormRequest
 {
+    use ResolvesFcmToken;
+
     public function authorize(): bool
     {
         return true;
@@ -28,32 +31,8 @@ final class LoginVerifyRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        $aliases = [
-            'fcmToken',
-            'fcm_token',
-            'deviceToken',
-            'device_token',
-            'pushToken',
-            'push_token',
-            'token',
-        ];
-
-        $token = null;
-        foreach ($aliases as $key) {
-            if (! $this->exists($key)) {
-                continue;
-            }
-
-            $token = $this->input($key);
-            break;
-        }
-
-        if (is_string($token)) {
-            $token = trim($token);
-        }
-
         $this->merge([
-            'fcmToken' => $token,
+            'fcmToken' => $this->resolveFcmToken(),
         ]);
     }
 }

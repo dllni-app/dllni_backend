@@ -243,6 +243,32 @@ it('registers fcm token for user notifications endpoint using alias keys', funct
     expect($user->fresh()->fcm_token)->toBe('fcm_test_token_1234567890');
 });
 
+it('syncs fcm token from request header on authenticated requests', function (): void {
+    $user = User::factory()->create([
+        'fcm_token' => null,
+    ]);
+    Sanctum::actingAs($user);
+
+    $response = $this->withHeader('fcm-token', 'header_sync_fcm_token_1234567890')
+        ->getJson('/api/v1/user/notifications');
+
+    $response->assertOk();
+    expect($user->fresh()->fcm_token)->toBe('header_sync_fcm_token_1234567890');
+});
+
+it('registers fcm token for user notifications endpoint using fcm-token header', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $response = $this->withHeaders([
+        'fcm-token' => 'fcm_header_token_1234567890',
+    ])->putJson('/api/v1/user/notifications/token', []);
+
+    $response->assertOk();
+    expect($response->json('data.tokenRegistered'))->toBeTrue();
+    expect($user->fresh()->fcm_token)->toBe('fcm_header_token_1234567890');
+});
+
 it('registers fcm token for cleaning worker notifications endpoint', function (): void {
     $workerUser = User::factory()->create();
     Worker::factory()->create(['user_id' => $workerUser->id]);
