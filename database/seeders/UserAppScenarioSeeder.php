@@ -378,7 +378,6 @@ final class UserAppScenarioSeeder extends Seeder
         $cart = SmCart::query()->updateOrCreate(
             [
                 'user_id' => $user->id,
-                'store_id' => $store->id,
             ],
             []
         );
