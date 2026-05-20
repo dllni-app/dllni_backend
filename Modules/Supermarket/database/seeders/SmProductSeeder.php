@@ -22,6 +22,7 @@ final class SmProductSeeder extends Seeder
                 'supermarket-al-sultan',
                 'supermarket-al-noor',
             ])
+            ->orWhere('slug', 'like', 'seller-supermarket-%')
             ->get()
             ->keyBy('slug');
 
@@ -39,7 +40,7 @@ final class SmProductSeeder extends Seeder
         $masterCursor = 0;
 
         $seededProductIds = [];
-        $storeBlueprints = $this->productBlueprints();
+        $storeBlueprints = $this->productBlueprints($stores->keys()->all());
 
         foreach ($storeBlueprints as $storeSlug => $categoryBlueprints) {
             $store = $stores->get($storeSlug);
@@ -105,9 +106,9 @@ final class SmProductSeeder extends Seeder
     /**
      * @return array<string, array<string, array<int, array<string, mixed>>>>
      */
-    private function productBlueprints(): array
+    private function productBlueprints(array $storeSlugs): array
     {
-        return [
+        $blueprints = [
             'supermarket-al-atrash' => [
                 'bakery' => [
                     ['name' => 'خبز عربي أبيض', 'price' => 2.5, 'stock_quantity' => 240],
@@ -214,6 +215,53 @@ final class SmProductSeeder extends Seeder
                 ],
             ],
         ];
+
+        foreach ($storeSlugs as $storeSlug) {
+            if (! str_starts_with($storeSlug, 'seller-supermarket-')) {
+                continue;
+            }
+
+            $blueprints[$storeSlug] = [
+                'syrian-essentials' => [
+                    ['name' => 'رز قصير الحبة 1 كغ', 'price' => 18000, 'stock_quantity' => 130],
+                    ['name' => 'برغل ناعم 1 كغ', 'price' => 12000, 'stock_quantity' => 110],
+                    ['name' => 'عدس أحمر 1 كغ', 'price' => 15000, 'stock_quantity' => 95],
+                    ['name' => 'سكر أبيض 1 كغ', 'price' => 9500, 'stock_quantity' => 180],
+                    ['name' => 'زيت دوار الشمس 1.8 لتر', 'price' => 34000, 'stock_quantity' => 85, 'discounted_price' => 31500],
+                    ['name' => 'معجون طماطم 660 غ', 'price' => 8000, 'stock_quantity' => 125],
+                ],
+                'syrian-dairy' => [
+                    ['name' => 'لبنة بلدية 500 غ', 'price' => 19000, 'stock_quantity' => 75, 'expires_in_days' => 6],
+                    ['name' => 'جبنة شلل 500 غ', 'price' => 28000, 'stock_quantity' => 60, 'expires_in_days' => 8],
+                    ['name' => 'حليب كامل الدسم 1 لتر', 'price' => 10000, 'stock_quantity' => 120, 'expires_in_days' => 7],
+                    ['name' => 'لبن رائب 1 لتر', 'price' => 11500, 'stock_quantity' => 95, 'expires_in_days' => 5],
+                    ['name' => 'جبنة قشقوان 300 غ', 'price' => 26000, 'stock_quantity' => 45, 'expires_in_days' => 10],
+                ],
+                'syrian-drinks' => [
+                    ['name' => 'متة 500 غ', 'price' => 23000, 'stock_quantity' => 90],
+                    ['name' => 'شاي سيلاني 400 غ', 'price' => 17000, 'stock_quantity' => 100],
+                    ['name' => 'عصير تمر هندي 1 لتر', 'price' => 9500, 'stock_quantity' => 85],
+                    ['name' => 'مياه معدنية 1.5 لتر', 'price' => 4000, 'stock_quantity' => 220],
+                    ['name' => 'شراب توت الشام 750 مل', 'price' => 13500, 'stock_quantity' => 70],
+                ],
+                'syrian-snacks' => [
+                    ['name' => 'بسكويت شاي سادة 12 قطعة', 'price' => 6500, 'stock_quantity' => 140],
+                    ['name' => 'شوكولا محشية بندق 90 غ', 'price' => 8500, 'stock_quantity' => 105],
+                    ['name' => 'بزر دوار الشمس محمص 250 غ', 'price' => 14000, 'stock_quantity' => 65],
+                    ['name' => 'راحة حلقوم بالفستق 400 غ', 'price' => 21000, 'stock_quantity' => 55, 'discounted_price' => 19500],
+                    ['name' => 'رقائق بطاطا حارة 160 غ', 'price' => 7000, 'stock_quantity' => 120],
+                ],
+                'syrian-cleaning' => [
+                    ['name' => 'سائل جلي ليمون 1 لتر', 'price' => 9500, 'stock_quantity' => 100],
+                    ['name' => 'مسحوق غسيل 2.5 كغ', 'price' => 36000, 'stock_quantity' => 50],
+                    ['name' => 'كلور معطر 2 لتر', 'price' => 11500, 'stock_quantity' => 80],
+                    ['name' => 'أكياس قمامة متوسطة 50 كيس', 'price' => 10000, 'stock_quantity' => 90],
+                    ['name' => 'مناديل ورقية 10 عبوات', 'price' => 18500, 'stock_quantity' => 70],
+                ],
+            ];
+        }
+
+        return $blueprints;
     }
 
     /**

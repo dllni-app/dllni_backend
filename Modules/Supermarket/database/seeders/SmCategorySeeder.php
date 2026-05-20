@@ -18,6 +18,7 @@ final class SmCategorySeeder extends Seeder
                 'supermarket-al-sultan',
                 'supermarket-al-noor',
             ])
+            ->orWhere('slug', 'like', 'seller-supermarket-%')
             ->get()
             ->keyBy('slug');
 
@@ -52,6 +53,23 @@ final class SmCategorySeeder extends Seeder
                 ],
             ],
         ];
+
+        $sellerStores = $storeMap
+            ->filter(static fn (SmStore $store): bool => str_starts_with($store->slug, 'seller-supermarket-'))
+            ->values();
+
+        foreach ($sellerStores as $store) {
+            $categories[] = [
+                'store' => $store->slug,
+                'items' => [
+                    ['name' => 'مواد غذائية أساسية', 'slug' => 'syrian-essentials', 'sort_order' => 1],
+                    ['name' => 'ألبان وأجبان', 'slug' => 'syrian-dairy', 'sort_order' => 2],
+                    ['name' => 'مشروبات', 'slug' => 'syrian-drinks', 'sort_order' => 3],
+                    ['name' => 'حلويات وتسالي', 'slug' => 'syrian-snacks', 'sort_order' => 4],
+                    ['name' => 'منظفات منزلية', 'slug' => 'syrian-cleaning', 'sort_order' => 5],
+                ],
+            ];
+        }
 
         foreach ($categories as $group) {
             $store = $storeMap->get($group['store']);
