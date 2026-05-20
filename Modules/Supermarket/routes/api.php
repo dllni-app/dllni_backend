@@ -35,6 +35,7 @@ use Modules\Supermarket\Http\Controllers\API\StoreOwner\SmOrderStatusController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerActivityLogController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerDashboardController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerEmployeeIndexController;
+use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerEmployeePasswordUpdateController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerEmployeeStatusController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerEmployeeStoreController;
 use Modules\Supermarket\Http\Controllers\API\StoreOwner\StoreOwnerEmployeeUpdateController;
@@ -99,6 +100,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', InjectStoreIdFromOwnerContext::
         Route::get('employees', StoreOwnerEmployeeIndexController::class)->name('employees.index');
         Route::post('employees', StoreOwnerEmployeeStoreController::class)->name('employees.store');
         Route::patch('employees/{staff}', StoreOwnerEmployeeUpdateController::class)->name('employees.update');
+        Route::patch('employees/{staff}/password', StoreOwnerEmployeePasswordUpdateController::class)->name('employees.password');
         Route::patch('employees/{staff}/status', StoreOwnerEmployeeStatusController::class)->name('employees.status');
 
         Route::get('master-products/search', StoreOwnerMasterProductSearchController::class)->name('master-products.search');

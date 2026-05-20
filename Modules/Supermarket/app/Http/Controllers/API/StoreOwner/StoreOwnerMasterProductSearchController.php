@@ -17,7 +17,7 @@ final class StoreOwnerMasterProductSearchController
         $context->owner();
 
         $validated = $request->validated();
-        $index = mb_trim((string) $validated['index']);
+        $index = mb_trim((string) ($validated['index'] ?? ''));
         $perPage = (int) ($validated['perPage'] ?? 20);
         $escapedIndex = SearchTermEscaper::escape($index);
 
