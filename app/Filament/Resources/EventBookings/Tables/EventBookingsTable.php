@@ -25,7 +25,7 @@ final class EventBookingsTable
                 TextColumn::make('customer.name')->label('العميل')->searchable(),
                 TextColumn::make('scheduled_date')->label('التاريخ')->date()->sortable(),
                 TextColumn::make('scheduled_time')->label('الوقت'),
-                TextColumn::make('total_price')->label('المجموع')->money('SAR')->sortable(),
+                TextColumn::make('total_price')->label('المجموع')->money(config('app.currency', 'SYP'))->sortable(),
             ])
             ->filters([
                 Filter::make('has_dispute')

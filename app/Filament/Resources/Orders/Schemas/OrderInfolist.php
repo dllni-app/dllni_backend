@@ -27,9 +27,9 @@ final class OrderInfolist
                                 return $value ? __('restaurant_admin.enums.order_status.'.$value) : '—';
                             }),
                         TextEntry::make('order_type')->label('نوع الطلب')->formatStateUsing(fn ($state) => $state?->value ?? $state ?? '—'),
-                        TextEntry::make('total_amount')->label('المجموع')->money('SAR'),
-                        TextEntry::make('subtotal')->label('المجموع الفرعي')->money('SAR')->placeholder('—'),
-                        TextEntry::make('discount_amount')->label('الخصم')->money('SAR')->placeholder('—'),
+                        TextEntry::make('total_amount')->label('المجموع')->money(config('app.currency', 'SYP')),
+                        TextEntry::make('subtotal')->label('المجموع الفرعي')->money(config('app.currency', 'SYP'))->placeholder('—'),
+                        TextEntry::make('discount_amount')->label('الخصم')->money(config('app.currency', 'SYP'))->placeholder('—'),
                         TextEntry::make('special_instructions')->label('تعليمات خاصة')->placeholder('—'),
                     ])
                     ->columns(3),
@@ -47,7 +47,7 @@ final class OrderInfolist
                 Section::make('سياسة الإلغاء')
                     ->schema([
                         TextEntry::make('cancellationPolicy.name')->label('السياسة')->placeholder('—'),
-                        TextEntry::make('cancellation_fee_amount')->label('رسوم الإلغاء')->money('SAR')->placeholder('—'),
+                        TextEntry::make('cancellation_fee_amount')->label('رسوم الإلغاء')->money(config('app.currency', 'SYP'))->placeholder('—'),
                     ])
                     ->columns(2)
                     ->collapsible(),

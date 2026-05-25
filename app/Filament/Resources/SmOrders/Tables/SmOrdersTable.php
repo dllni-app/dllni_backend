@@ -31,8 +31,8 @@ final class SmOrdersTable
                 TextColumn::make('pickup_scheduled_for')->label(__('supermarket_admin.infolist.pickup_scheduled'))->dateTime('Y-m-d H:i')->placeholder('—')->sortable(),
                 TextColumn::make('ready_for_pickup_at')->label(__('supermarket_admin.infolist.ready_at'))->dateTime('Y-m-d H:i')->placeholder('—')->sortable(),
                 TextColumn::make('picked_up_at')->label(__('supermarket_admin.infolist.picked_up_at'))->dateTime('Y-m-d H:i')->placeholder('—')->sortable(),
-                TextColumn::make('total_amount')->label(__('supermarket_admin.infolist.total_amount'))->money(config('app.currency', 'IQD'))->sortable(),
-                TextColumn::make('cancellation_fee_amount')->label(__('supermarket_admin.infolist.cancellation_fee'))->money(config('app.currency', 'IQD'))->placeholder('—')->sortable(),
+                TextColumn::make('total_amount')->label(__('supermarket_admin.infolist.total_amount'))->money(config('app.currency', 'SYP'))->sortable(),
+                TextColumn::make('cancellation_fee_amount')->label(__('supermarket_admin.infolist.cancellation_fee'))->money(config('app.currency', 'SYP'))->placeholder('—')->sortable(),
             ])
             ->modifyQueryUsing(fn ($query) => $query->with(['customer', 'store']))
             ->filters([

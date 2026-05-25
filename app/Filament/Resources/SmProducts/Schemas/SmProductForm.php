@@ -27,8 +27,8 @@ final class SmProductForm
                     ->options($sourceOptions)
                     ->required()
                     ->native(false),
-                TextInput::make('price')->label(__('supermarket_admin.form.price'))->numeric()->required()->minValue(0)->prefix(config('app.currency', 'IQD')),
-                TextInput::make('discounted_price')->label(__('supermarket_admin.form.discounted_price'))->numeric()->minValue(0)->prefix(config('app.currency', 'IQD')),
+                TextInput::make('price')->label(__('supermarket_admin.form.price'))->numeric()->required()->minValue(0)->prefix(config('app.currency', 'SYP')),
+                TextInput::make('discounted_price')->label(__('supermarket_admin.form.discounted_price'))->numeric()->minValue(0)->prefix(config('app.currency', 'SYP')),
                 TextInput::make('stock_quantity')->label(__('supermarket_admin.form.stock_quantity'))->numeric()->required()->minValue(0)->default(0),
                 TextInput::make('low_stock_threshold')->label(__('supermarket_admin.form.low_stock_threshold'))->numeric()->minValue(0)->default(0),
                 DateTimePicker::make('expires_at')->label(__('supermarket_admin.form.expires_at'))->nullable(),

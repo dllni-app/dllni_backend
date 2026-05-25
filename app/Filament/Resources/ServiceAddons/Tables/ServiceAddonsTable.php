@@ -19,7 +19,7 @@ final class ServiceAddonsTable
                 TextColumn::make('name')->label('الاسم')->searchable(),
                 TextColumn::make('slug')->label('المعرّف')->searchable(),
                 TextColumn::make('pricing_type')->label('نوع التسعير')->badge()->formatStateUsing(fn ($state) => $state?->label()),
-                TextColumn::make('price_value')->label('السعر')->money('SAR'),
+                TextColumn::make('price_value')->label('السعر')->money(config('app.currency', 'SYP')),
                 IconColumn::make('is_active')->label('نشط')->boolean(),
             ])
             ->recordActions([

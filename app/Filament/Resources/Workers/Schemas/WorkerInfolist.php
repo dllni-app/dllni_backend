@@ -8,15 +8,15 @@ use Filament\Infolists\Components\Grid;
 use Filament\Infolists\Components\Group;
 use Filament\Infolists\Components\ImageEntry;
 use Filament\Infolists\Components\RepeatableEntry;
-use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 
 final class WorkerInfolist
 {
     public static function configure(Schema $schema): Schema
     {
-        $yesNo = fn ($state) => $state ? __('cleaning_admin.boolean.yes') : __('cleaning_admin.boolean.no');
+        $yesNo = fn($state) => $state ? __('cleaning_admin.boolean.yes') : __('cleaning_admin.boolean.no');
 
         return $schema
             ->components([
@@ -26,16 +26,16 @@ final class WorkerInfolist
                             ->schema([
                                 ImageEntry::make('photo')
                                     ->label('')
-                                    ->getStateUsing(fn ($record) => $record->getFirstMediaUrl('avatar') ?: null)
-                                    ->defaultImageUrl(fn () => 'https://ui-avatars.com/api/?name=W&background=random'),
+                                    ->getStateUsing(fn($record) => $record->getFirstMediaUrl('avatar') ?: null)
+                                    ->defaultImageUrl(fn() => 'https://ui-avatars.com/api/?name=W&background=random'),
                                 Group::make()
                                     ->schema([
                                         TextEntry::make('first_name')->label(__('cleaning_admin.workers.fields.name')),
-                                        TextEntry::make('gender')->label('Gender'),
+                                        TextEntry::make('gender')->label(__('cleaning_admin.workers.fields.gender')),
                                         TextEntry::make('user.phone')->label(__('cleaning_admin.workers.fields.phone')),
-                                        TextEntry::make('home_address')->label('Home Address')->placeholder('-'),
-                                        TextEntry::make('home_latitude')->label('Home Latitude')->placeholder('-'),
-                                        TextEntry::make('home_longitude')->label('Home Longitude')->placeholder('-'),
+                                        TextEntry::make('home_address')->label(__('cleaning_admin.workers.fields.home_address'))->placeholder('-'),
+                                        TextEntry::make('home_latitude')->label(__('cleaning_admin.workers.fields.home_latitude'))->placeholder('-'),
+                                        TextEntry::make('home_longitude')->label(__('cleaning_admin.workers.fields.home_longitude'))->placeholder('-'),
                                         TextEntry::make('average_rating')->label(__('cleaning_admin.workers.fields.average_rating'))->suffix(' / 5'),
                                         TextEntry::make('total_completed_jobs')->label(__('cleaning_admin.workers.fields.total_completed_jobs')),
                                         Group::make()

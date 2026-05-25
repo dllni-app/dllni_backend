@@ -19,7 +19,7 @@ final class SmStoreDailyStatInfolist
                         TextEntry::make('store.name')->label(__('supermarket_admin.infolist.name'))->placeholder('—'),
                         TextEntry::make('date')->label(__('supermarket_admin.infolist.date'))->date('Y-m-d'),
                         TextEntry::make('orders_count')->label(__('supermarket_admin.infolist.orders_count')),
-                        TextEntry::make('orders_revenue')->label(__('supermarket_admin.infolist.orders_revenue'))->money(config('app.currency', 'IQD')),
+                        TextEntry::make('orders_revenue')->label(__('supermarket_admin.infolist.orders_revenue'))->money(config('app.currency', 'SYP')),
                         TextEntry::make('unique_customers')->label(__('supermarket_admin.infolist.unique_customers')),
                         TextEntry::make('new_customers')->label(__('supermarket_admin.infolist.new_customers')),
                     ])

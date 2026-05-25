@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningBookings\Schemas;
 
-use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 
 final class CleaningBookingInfolist
@@ -33,13 +33,13 @@ final class CleaningBookingInfolist
                     ->columns(2),
                 Section::make(__('cleaning_admin.booking.sections.pricing'))
                     ->schema([
-                        TextEntry::make('base_price')->label(__('cleaning_admin.booking.fields.base_price'))->money('SAR'),
-                        TextEntry::make('addons_total')->label(__('cleaning_admin.booking.fields.addons_total'))->money('SAR'),
-                        TextEntry::make('travel_fee')->label(__('cleaning_admin.booking.fields.travel_fee'))->money('SAR'),
+                        TextEntry::make('base_price')->label(__('cleaning_admin.booking.fields.base_price'))->money(config('app.currency', 'SYP')),
+                        TextEntry::make('addons_total')->label(__('cleaning_admin.booking.fields.addons_total'))->money(config('app.currency', 'SYP')),
+                        TextEntry::make('travel_fee')->label(__('cleaning_admin.booking.fields.travel_fee'))->money(config('app.currency', 'SYP')),
                         TextEntry::make('travel_distance_km')->label('Travel distance (km)')->placeholder('-'),
-                        TextEntry::make('admin_margin_amount')->label('Admin margin')->money('SAR'),
+                        TextEntry::make('admin_margin_amount')->label('Admin margin')->money(config('app.currency', 'SYP')),
                         TextEntry::make('is_pricing_final')->label('Pricing finalized')->formatStateUsing($yesNo),
-                        TextEntry::make('total_price')->label(__('cleaning_admin.booking.fields.total_price'))->money('SAR'),
+                        TextEntry::make('total_price')->label(__('cleaning_admin.booking.fields.total_price'))->money(config('app.currency', 'SYP')),
                     ])
                     ->columns(2),
                 Section::make(__('cleaning_admin.booking.sections.execution_times'))

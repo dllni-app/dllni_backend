@@ -15,6 +15,7 @@ use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\HtmlString;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 
@@ -25,48 +26,66 @@ final class CleaningBookingsTable
         return $table
             ->columns([
                 TextColumn::make('booking_number')
-                    ->label(__('cleaning_admin.booking.fields.booking_number'))
-                    ->description(__('cleaning_admin.column_descriptions.booking_number'))
+                    ->label(self::headerLabel(
+                        __('cleaning_admin.booking.fields.booking_number'),
+                        __('cleaning_admin.column_descriptions.booking_number'),
+                    ))
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('status')
-                    ->label(__('cleaning_admin.booking.fields.status'))
-                    ->description(__('cleaning_admin.column_descriptions.status'))
+                    ->label(self::headerLabel(
+                        __('cleaning_admin.booking.fields.status'),
+                        __('cleaning_admin.column_descriptions.status'),
+                    ))
                     ->badge()
                     ->formatStateUsing(fn($state) => $state?->label()),
                 TextColumn::make('customer.name')
-                    ->label(__('cleaning_admin.booking.fields.customer'))
-                    ->description(__('cleaning_admin.column_descriptions.customer'))
+                    ->label(self::headerLabel(
+                        __('cleaning_admin.booking.fields.customer'),
+                        __('cleaning_admin.column_descriptions.customer'),
+                    ))
                     ->searchable(),
                 TextColumn::make('worker.first_name')
-                    ->label(__('cleaning_admin.booking.fields.worker'))
-                    ->description(__('cleaning_admin.column_descriptions.worker'))
+                    ->label(self::headerLabel(
+                        __('cleaning_admin.booking.fields.worker'),
+                        __('cleaning_admin.column_descriptions.worker'),
+                    ))
                     ->placeholder('—'),
                 TextColumn::make('number_of_workers')
-                    ->label(__('cleaning_admin.booking.fields.number_of_workers'))
-                    ->description(__('cleaning_admin.column_descriptions.number_of_workers'))
+                    ->label(self::headerLabel(
+                        __('cleaning_admin.booking.fields.number_of_workers'),
+                        __('cleaning_admin.column_descriptions.number_of_workers'),
+                    ))
                     ->sortable(),
                 TextColumn::make('scheduled_date')
-                    ->label(__('cleaning_admin.booking.fields.scheduled_date'))
-                    ->description(__('cleaning_admin.column_descriptions.scheduled_date'))
+                    ->label(self::headerLabel(
+                        __('cleaning_admin.booking.fields.scheduled_date'),
+                        __('cleaning_admin.column_descriptions.scheduled_date'),
+                    ))
                     ->date()
                     ->sortable(),
                 TextColumn::make('scheduled_time')
-                    ->label(__('cleaning_admin.booking.fields.scheduled_time'))
-                    ->description(__('cleaning_admin.column_descriptions.scheduled_time')),
+                    ->label(self::headerLabel(
+                        __('cleaning_admin.booking.fields.scheduled_time'),
+                        __('cleaning_admin.column_descriptions.scheduled_time'),
+                    )),
                 TextColumn::make('total_price')
-                    ->label(__('cleaning_admin.booking.fields.total_price'))
-                    ->description(__('cleaning_admin.column_descriptions.total_price'))
-                    ->money('SAR')
+                    ->label(self::headerLabel(
+                        __('cleaning_admin.booking.fields.total_price'),
+                        __('cleaning_admin.column_descriptions.total_price'),
+                    ))
+                    ->money(config('app.currency', 'SYP'))
                     ->sortable(),
                 TextColumn::make('is_pricing_final')
                     ->label('Pricing')
                     ->badge()
-                    ->formatStateUsing(fn ($state): string => $state ? 'Final' : 'Provisional'),
+                    ->formatStateUsing(fn($state): string => $state ? 'Final' : 'Provisional'),
                 TextColumn::make('disputes_count')
                     ->counts('disputes')
-                    ->label(__('cleaning_admin.booking.fields.disputes_count'))
-                    ->description(__('cleaning_admin.column_descriptions.disputes_count')),
+                    ->label(self::headerLabel(
+                        __('cleaning_admin.booking.fields.disputes_count'),
+                        __('cleaning_admin.column_descriptions.disputes_count'),
+                    )),
             ])
             ->filters([
                 SelectFilter::make('status')
@@ -142,5 +161,15 @@ final class CleaningBookingsTable
                 EditAction::make(),
                 ViewAction::make(),
             ]);
+    }
+
+    private static function headerLabel(string $label, string $description): HtmlString
+    {
+        return new HtmlString(
+            '<span style="display:flex;flex-direction:column;line-height:1.2;">'
+                . '<span style="display:block;font-weight:600;color:inherit;">' . e($label) . '</span>'
+                . '<span style="display:block;margin-top:2px;font-size:11px;font-weight:400;color:#9ca3af;">' . e($description) . '</span>'
+                . '</span>',
+        );
     }
 }

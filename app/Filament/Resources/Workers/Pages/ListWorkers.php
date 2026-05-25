@@ -20,7 +20,9 @@ final class ListWorkers extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make()->label(__('cleaning_admin.workers.add')),
+            CreateAction::make()
+                ->label(__('cleaning_admin.workers.add'))
+                ->modal(),
         ];
     }
 }

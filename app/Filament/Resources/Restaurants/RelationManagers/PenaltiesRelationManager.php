@@ -29,7 +29,7 @@ final class PenaltiesRelationManager extends RelationManager
                     ->label('نوع العقوبة')
                     ->formatStateUsing(fn (string $state) => $penaltyTypeLabels[$state] ?? $state)
                     ->badge(),
-                TextColumn::make('amount')->label('المبلغ')->money('SAR')->placeholder('—'),
+                TextColumn::make('amount')->label('المبلغ')->money(config('app.currency', 'SYP'))->placeholder('—'),
                 TextColumn::make('reason')->label('السبب')->limit(60)->placeholder('—'),
                 TextColumn::make('resolved_at')->label('تاريخ الحل')->dateTime('Y-m-d H:i')->placeholder('—'),
                 TextColumn::make('created_at')->label('التاريخ')->dateTime('Y-m-d H:i'),

@@ -21,7 +21,7 @@ final class SmStoreDailyStatsTable
                 TextColumn::make('store.name')->label(__('supermarket_admin.stores'))->searchable()->sortable()->placeholder('—'),
                 TextColumn::make('date')->label(__('supermarket_admin.infolist.date'))->date('Y-m-d')->sortable(),
                 TextColumn::make('orders_count')->label(__('supermarket_admin.infolist.orders_count'))->sortable(),
-                TextColumn::make('orders_revenue')->label(__('supermarket_admin.infolist.orders_revenue'))->money(config('app.currency', 'IQD'))->sortable(),
+                TextColumn::make('orders_revenue')->label(__('supermarket_admin.infolist.orders_revenue'))->money(config('app.currency', 'SYP'))->sortable(),
                 TextColumn::make('unique_customers')->label(__('supermarket_admin.infolist.unique_customers'))->sortable(),
                 TextColumn::make('new_customers')->label(__('supermarket_admin.infolist.new_customers'))->sortable(),
             ])

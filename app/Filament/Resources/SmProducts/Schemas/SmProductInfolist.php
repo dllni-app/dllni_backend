@@ -28,8 +28,8 @@ final class SmProductInfolist
                         TextEntry::make('source_type')
                             ->label(__('supermarket_admin.form.product_source'))
                             ->formatStateUsing(fn ($state) => $state ? __('supermarket_admin.enums.product_source.'.$state->value) : '—'),
-                        TextEntry::make('price')->label(__('supermarket_admin.form.price'))->money(config('app.currency', 'IQD')),
-                        TextEntry::make('discounted_price')->label(__('supermarket_admin.form.discounted_price'))->money(config('app.currency', 'IQD'))->placeholder('—'),
+                        TextEntry::make('price')->label(__('supermarket_admin.form.price'))->money(config('app.currency', 'SYP')),
+                        TextEntry::make('discounted_price')->label(__('supermarket_admin.form.discounted_price'))->money(config('app.currency', 'SYP'))->placeholder('—'),
                         TextEntry::make('stock_quantity')->label(__('supermarket_admin.form.stock_quantity')),
                         TextEntry::make('low_stock_threshold')->label(__('supermarket_admin.form.low_stock_threshold')),
                         TextEntry::make('expires_at')->label(__('supermarket_admin.form.expires_at'))->dateTime('Y-m-d')->placeholder('—'),
