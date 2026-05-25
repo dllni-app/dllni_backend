@@ -27,6 +27,9 @@ it('creates a worker', function () {
         'firstName' => 'Ahmed',
         'trustScore' => 85,
         'isActive' => true,
+        'homeAddress' => 'Damascus, Al Mazzeh',
+        'homeLatitude' => 33.5138,
+        'homeLongitude' => 36.2765,
     ];
 
     $response = $this->postJson('/api/v1/workers', $payload);
@@ -55,12 +58,31 @@ it('updates a worker', function () {
         'firstName' => $worker->first_name,
         'trustScore' => 90,
         'isActive' => true,
+        'homeAddress' => 'Damascus, Al Mazzeh',
+        'homeLatitude' => 33.5138,
+        'homeLongitude' => 36.2765,
     ]);
 
     $response->assertOk();
     $this->assertDatabaseHas('workers', [
         'id' => $worker->id,
         'trust_score' => 90,
+    ]);
+});
+
+it('rejects activating worker without home location', function () {
+    $user = User::factory()->create(['email' => 'worker-user-no-home@example.com']);
+
+    $response = $this->postJson('/api/v1/workers', [
+        'userId' => $user->id,
+        'firstName' => 'No Home Worker',
+        'isActive' => true,
+    ]);
+
+    $response->assertUnprocessable()->assertJsonValidationErrors([
+        'homeAddress',
+        'homeLatitude',
+        'homeLongitude',
     ]);
 });
 

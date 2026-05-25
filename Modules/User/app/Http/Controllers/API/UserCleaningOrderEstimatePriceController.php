@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Modules\User\Http\Controllers\API;
 
 use Illuminate\Http\JsonResponse;
+use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
 use Modules\User\Http\Requests\UserCleaningOrderEstimatePriceRequest;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
@@ -17,13 +19,19 @@ final class UserCleaningOrderEstimatePriceController
         $validated = $request->validated();
 
         $estimation = $service->estimate((string) $validated['propertyType'], (array) $validated['propertyDetails']);
-        $pricing = $service->price(
-            (string) $validated['propertyType'],
-            (array) $validated['propertyDetails'],
-            $validated['addressLatitude'] ?? null,
-            $validated['addressLongitude'] ?? null,
-            $validated['preferredWorkerId'] ?? null
-        );
+        try {
+            $pricing = $service->price(
+                (string) $validated['propertyType'],
+                (array) $validated['propertyDetails'],
+                $validated['addressLatitude'] ?? null,
+                $validated['addressLongitude'] ?? null,
+                $validated['preferredWorkerId'] ?? null
+            );
+        } catch (InvalidArgumentException $exception) {
+            throw ValidationException::withMessages([
+                'pricing' => [$exception->getMessage()],
+            ]);
+        }
 
         return response()->json([
             'size' => [

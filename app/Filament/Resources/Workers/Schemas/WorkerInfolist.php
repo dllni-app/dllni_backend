@@ -33,6 +33,9 @@ final class WorkerInfolist
                                         TextEntry::make('first_name')->label(__('cleaning_admin.workers.fields.name')),
                                         TextEntry::make('gender')->label('Gender'),
                                         TextEntry::make('user.phone')->label(__('cleaning_admin.workers.fields.phone')),
+                                        TextEntry::make('home_address')->label('Home Address')->placeholder('-'),
+                                        TextEntry::make('home_latitude')->label('Home Latitude')->placeholder('-'),
+                                        TextEntry::make('home_longitude')->label('Home Longitude')->placeholder('-'),
                                         TextEntry::make('average_rating')->label(__('cleaning_admin.workers.fields.average_rating'))->suffix(' / 5'),
                                         TextEntry::make('total_completed_jobs')->label(__('cleaning_admin.workers.fields.total_completed_jobs')),
                                         Group::make()

@@ -50,6 +50,13 @@ final class CleaningBookingForm
                     )
                     ->searchable()
                     ->preload(),
+                TextInput::make('number_of_workers')
+                    ->label(__('cleaning_admin.booking.fields.number_of_workers'))
+                    ->numeric()
+                    ->minValue(1)
+                    ->maxValue(20)
+                    ->default(1)
+                    ->required(),
                 DatePicker::make('scheduled_date')
                     ->label(__('cleaning_admin.booking.fields.scheduled_date'))
                     ->required(),
@@ -91,6 +98,18 @@ final class CleaningBookingForm
                     ->dehydrated(false),
                 TextInput::make('travel_fee')
                     ->label(__('cleaning_admin.booking.fields.travel_fee'))
+                    ->disabled()
+                    ->dehydrated(false),
+                TextInput::make('travel_distance_km')
+                    ->label('Travel distance (km)')
+                    ->disabled()
+                    ->dehydrated(false),
+                TextInput::make('admin_margin_amount')
+                    ->label('Admin margin')
+                    ->disabled()
+                    ->dehydrated(false),
+                Toggle::make('is_pricing_final')
+                    ->label('Pricing finalized')
                     ->disabled()
                     ->dehydrated(false),
                 TextInput::make('total_price')

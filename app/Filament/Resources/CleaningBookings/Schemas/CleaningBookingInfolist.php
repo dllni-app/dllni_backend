@@ -24,6 +24,7 @@ final class CleaningBookingInfolist
                         TextEntry::make('cancelled_at')->label(__('cleaning_admin.booking.fields.cancelled_at'))->dateTime('Y-m-d H:i')->placeholder('-'),
                         TextEntry::make('cancellationPolicy.name')->label(__('cleaning_admin.booking.fields.cancellation_policy'))->placeholder('-'),
                         TextEntry::make('property_type')->label(__('cleaning_admin.booking.fields.property_type')),
+                        TextEntry::make('number_of_workers')->label(__('cleaning_admin.booking.fields.number_of_workers')),
                         TextEntry::make('estimated_sqm')->label(__('cleaning_admin.booking.fields.estimated_sqm')),
                         TextEntry::make('estimated_hours')->label(__('cleaning_admin.booking.fields.estimated_hours')),
                         TextEntry::make('scheduled_date')->label(__('cleaning_admin.booking.fields.scheduled_date'))->date(),
@@ -35,6 +36,9 @@ final class CleaningBookingInfolist
                         TextEntry::make('base_price')->label(__('cleaning_admin.booking.fields.base_price'))->money('SAR'),
                         TextEntry::make('addons_total')->label(__('cleaning_admin.booking.fields.addons_total'))->money('SAR'),
                         TextEntry::make('travel_fee')->label(__('cleaning_admin.booking.fields.travel_fee'))->money('SAR'),
+                        TextEntry::make('travel_distance_km')->label('Travel distance (km)')->placeholder('-'),
+                        TextEntry::make('admin_margin_amount')->label('Admin margin')->money('SAR'),
+                        TextEntry::make('is_pricing_final')->label('Pricing finalized')->formatStateUsing($yesNo),
                         TextEntry::make('total_price')->label(__('cleaning_admin.booking.fields.total_price'))->money('SAR'),
                     ])
                     ->columns(2),

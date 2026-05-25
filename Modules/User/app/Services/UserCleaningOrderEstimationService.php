@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Modules\User\Services;
 
+use App\Models\Worker;
 use Illuminate\Support\Arr;
+use InvalidArgumentException;
+use Modules\Cleaning\Services\CleaningPricingCalculator;
 
 final class UserCleaningOrderEstimationService
 {
-    public const ALGORITHM_VERSION = '2026-04-08-v1';
+    public const ALGORITHM_VERSION = '2026-05-25-v2';
 
     /**
      * @var array<int, string>
@@ -30,6 +33,10 @@ final class UserCleaningOrderEstimationService
         'large',
         'very_large',
     ];
+
+    public function __construct(
+        private readonly CleaningPricingCalculator $pricingCalculator,
+    ) {}
 
     public function algorithmVersion(): string
     {
@@ -154,7 +161,7 @@ final class UserCleaningOrderEstimationService
 
     /**
      * @param  array<string, mixed>  $propertyDetails
-     * @return array{basePrice: float, travelFee: float, addonsTotal: float, totalPrice: float, currency: string}
+     * @return array{basePrice: float, travelFee: float, addonsTotal: float, distanceKm: ?float, adminMargin: float, isPricingFinal: bool, totalPrice: float, currency: string}
      */
     public function price(
         string $propertyType,
@@ -175,17 +182,33 @@ final class UserCleaningOrderEstimationService
 
         $pricePerSqm = $this->pricePerSqmByPropertyType($normalizedInput['propertyType']);
         $basePrice = round(max(250.0, $estimation['estimatedSqm'] * $pricePerSqm), 2);
+        $addonsTotal = 0.0;
 
-        $hasCoordinates = $normalizedInput['addressLatitude'] !== null && $normalizedInput['addressLongitude'] !== null;
-        $travelFee = $hasCoordinates ? 150.0 : 200.0;
+        if ($normalizedInput['preferredWorkerId'] === null) {
+            $pricing = $this->pricingCalculator->provisional($basePrice, $addonsTotal);
+        } else {
+            $worker = Worker::query()->find($normalizedInput['preferredWorkerId']);
+            if (! $worker) {
+                throw new InvalidArgumentException('Preferred worker is not available.');
+            }
 
-        $addonsTotal = $normalizedInput['preferredWorkerId'] !== null ? 100.0 : 0.0;
+            $pricing = $this->pricingCalculator->finalizedForWorker(
+                $basePrice,
+                $addonsTotal,
+                $normalizedInput['addressLatitude'],
+                $normalizedInput['addressLongitude'],
+                $worker,
+            );
+        }
 
         return [
             'basePrice' => $basePrice,
-            'travelFee' => $travelFee,
             'addonsTotal' => $addonsTotal,
-            'totalPrice' => round($basePrice + $travelFee + $addonsTotal, 2),
+            'travelFee' => $pricing['travelFee'],
+            'distanceKm' => $pricing['distanceKm'],
+            'adminMargin' => $pricing['adminMargin'],
+            'isPricingFinal' => $pricing['isPricingFinal'],
+            'totalPrice' => $pricing['totalPrice'],
             'currency' => (string) config('app.currency', 'SYP'),
         ];
     }

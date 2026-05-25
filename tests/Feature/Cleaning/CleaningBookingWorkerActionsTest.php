@@ -30,13 +30,21 @@ it('accepts a cleaning booking when status is pending (worker takes order)', fun
     Event::fake([CleaningBookingTrackingUpdated::class]);
 
     $workerUser = User::factory()->create(['email' => 'worker-accept@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->create([
+        'user_id' => $workerUser->id,
+        'home_address' => 'Worker Home',
+        'home_latitude' => 33.6,
+        'home_longitude' => 36.3,
+    ]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
         'worker_id' => null,
         'billing_policy_id' => $this->billingPolicy->id,
         'status' => CleaningBookingStatus::Pending,
+        'gender_preference' => 'any',
+        'address_latitude' => 33.5,
+        'address_longitude' => 36.3,
     ]);
 
     $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/accept");
@@ -65,6 +73,8 @@ it('returns 422 when accept from non-pending status', function () {
         'worker_id' => $worker->id,
         'billing_policy_id' => $this->billingPolicy->id,
         'status' => CleaningBookingStatus::WorkerAssigned,
+        'scheduled_date' => now()->format('Y-m-d'),
+        'scheduled_time' => now()->addHour()->format('H:i'),
     ]);
 
     $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/accept");
@@ -112,6 +122,8 @@ it('rejects a cleaning booking', function () {
         'worker_id' => $worker->id,
         'billing_policy_id' => $this->billingPolicy->id,
         'status' => CleaningBookingStatus::WorkerAssigned,
+        'scheduled_date' => now()->format('Y-m-d'),
+        'scheduled_time' => now()->addHour()->format('H:i'),
     ]);
 
     $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/reject", [
@@ -138,6 +150,8 @@ it('starts travel for a cleaning booking (sets started_travel_at, status stays w
         'worker_id' => $worker->id,
         'billing_policy_id' => $this->billingPolicy->id,
         'status' => CleaningBookingStatus::WorkerAssigned,
+        'scheduled_date' => now()->format('Y-m-d'),
+        'scheduled_time' => now()->addHour()->format('H:i'),
     ]);
 
     $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/start-travel");
@@ -198,6 +212,8 @@ it('returns 422 when completing booking not in progress', function () {
         'worker_id' => $worker->id,
         'billing_policy_id' => $this->billingPolicy->id,
         'status' => CleaningBookingStatus::WorkerAssigned,
+        'scheduled_date' => now()->format('Y-m-d'),
+        'scheduled_time' => now()->addHour()->format('H:i'),
     ]);
 
     $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/complete");
@@ -263,6 +279,8 @@ it('rejects a cleaning booking without reason (uses default)', function () {
         'worker_id' => $worker->id,
         'billing_policy_id' => $this->billingPolicy->id,
         'status' => CleaningBookingStatus::WorkerAssigned,
+        'scheduled_date' => now()->format('Y-m-d'),
+        'scheduled_time' => now()->addHour()->format('H:i'),
     ]);
 
     $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/reject", []);

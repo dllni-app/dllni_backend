@@ -28,8 +28,8 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             'propertyDetails.bathrooms' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.kitchens' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.living_room_size' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::LIVING_ROOM_SIZES)],
-            'addressLatitude' => ['nullable', 'numeric', 'between:-90,90'],
-            'addressLongitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'addressLatitude' => ['nullable', 'required_with:preferredWorkerId', 'numeric', 'between:-90,90'],
+            'addressLongitude' => ['nullable', 'required_with:preferredWorkerId', 'numeric', 'between:-180,180'],
             'preferredWorkerId' => ['nullable', 'exists:workers,id'],
         ];
     }

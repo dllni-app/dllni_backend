@@ -34,8 +34,8 @@ final class WorkerRequest extends FormRequest
             'isSuspended' => 'nullable|boolean',
             'suspendedUntil' => 'nullable|date',
             'homeAddress' => 'nullable|string|max:255',
-            'homeLatitude' => 'nullable|numeric',
-            'homeLongitude' => 'nullable|numeric',
+            'homeLatitude' => 'nullable|numeric|between:-90,90',
+            'homeLongitude' => 'nullable|numeric|between:-180,180',
             'defaultWorkingHours' => ['nullable', 'array'],
             'avatar' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:2048',
         ];
@@ -81,6 +81,38 @@ final class WorkerRequest extends FormRequest
                         break;
                     }
                 }
+            }
+
+            $worker = $this->route('worker');
+            $isUpdate = $worker !== null;
+            $isActive = array_key_exists('isActive', $this->all())
+                ? (bool) $this->input('isActive')
+                : ($isUpdate ? (bool) $worker->is_active : true);
+
+            if (! $isActive) {
+                return;
+            }
+
+            $homeAddress = array_key_exists('homeAddress', $this->all())
+                ? $this->input('homeAddress')
+                : ($isUpdate ? $worker->home_address : null);
+            $homeLatitude = array_key_exists('homeLatitude', $this->all())
+                ? $this->input('homeLatitude')
+                : ($isUpdate ? $worker->home_latitude : null);
+            $homeLongitude = array_key_exists('homeLongitude', $this->all())
+                ? $this->input('homeLongitude')
+                : ($isUpdate ? $worker->home_longitude : null);
+
+            if ($homeAddress === null || mb_trim((string) $homeAddress) === '') {
+                $validator->errors()->add('homeAddress', 'Active workers must have a home address.');
+            }
+
+            if ($homeLatitude === null) {
+                $validator->errors()->add('homeLatitude', 'Active workers must have home latitude.');
+            }
+
+            if ($homeLongitude === null) {
+                $validator->errors()->add('homeLongitude', 'Active workers must have home longitude.');
             }
         });
     }

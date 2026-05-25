@@ -15,6 +15,7 @@ final class CleaningFinancialSetting extends Model
         'commission_fixed_amount',
         'travel_markup_type',
         'travel_markup_value',
+        'travel_per_km',
         'travel_distance_start_point',
         'coverage_thresholds',
         'time_billing_mode',
@@ -29,6 +30,7 @@ final class CleaningFinancialSetting extends Model
             'vat_rate' => 'decimal:2',
             'commission_fixed_amount' => 'decimal:2',
             'travel_markup_value' => 'decimal:2',
+            'travel_per_km' => 'decimal:2',
             'coverage_thresholds' => 'array',
         ];
     }

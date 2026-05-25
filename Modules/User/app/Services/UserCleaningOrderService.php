@@ -12,6 +12,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
 use Modules\Cleaning\Events\ArrivalVerified;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
@@ -47,18 +48,25 @@ final class UserCleaningOrderService
                 $normalizedInput['propertyType'],
                 $normalizedInput['propertyDetails']
             );
-            $pricing = $this->estimationService->price(
-                $normalizedInput['propertyType'],
-                $normalizedInput['propertyDetails'],
-                $normalizedInput['addressLatitude'],
-                $normalizedInput['addressLongitude'],
-                $normalizedInput['preferredWorkerId']
-            );
+            try {
+                $pricing = $this->estimationService->price(
+                    $normalizedInput['propertyType'],
+                    $normalizedInput['propertyDetails'],
+                    $normalizedInput['addressLatitude'],
+                    $normalizedInput['addressLongitude'],
+                    $normalizedInput['preferredWorkerId']
+                );
+            } catch (InvalidArgumentException $exception) {
+                throw ValidationException::withMessages([
+                    'pricing' => [$exception->getMessage()],
+                ]);
+            }
 
             $booking = CleaningBooking::create([
                 'customer_id' => $user->id,
                 'worker_id' => null,
                 'preferred_worker_id' => $normalizedInput['preferredWorkerId'],
+                'number_of_workers' => (int) ($validated['numberOfWorkers'] ?? 1),
                 'cancellation_policy_id' => $validated['cancellationPolicyId'] ?? $this->defaultCancellationPolicyId(),
                 'billing_policy_id' => $validated['billingPolicyId'] ?? $this->defaultBillingPolicyId(),
                 'booking_number' => $this->generateBookingNumber(),
@@ -75,6 +83,9 @@ final class UserCleaningOrderService
                 'base_price' => $pricing['basePrice'],
                 'addons_total' => $pricing['addonsTotal'],
                 'travel_fee' => $pricing['travelFee'],
+                'travel_distance_km' => $pricing['distanceKm'],
+                'admin_margin_amount' => $pricing['adminMargin'],
+                'is_pricing_final' => $pricing['isPricingFinal'],
                 'cancellation_fee' => 0,
                 'total_price' => $pricing['totalPrice'],
                 'terms_accepted' => true,
@@ -123,6 +134,9 @@ final class UserCleaningOrderService
                 $updates['preferred_worker_id'] = $validated['preferredWorkerId'];
                 $pricingFieldsChanged = true;
             }
+            if (array_key_exists('numberOfWorkers', $validated)) {
+                $updates['number_of_workers'] = (int) ($validated['numberOfWorkers'] ?? 1);
+            }
 
             if ($pricingFieldsChanged) {
                 $propertyType = (string) ($updates['property_type'] ?? $booking->property_type);
@@ -139,13 +153,19 @@ final class UserCleaningOrderService
                     $preferredWorkerId
                 );
                 $estimation = $this->estimationService->estimate($normalizedInput['propertyType'], $normalizedInput['propertyDetails']);
-                $pricing = $this->estimationService->price(
-                    $normalizedInput['propertyType'],
-                    $normalizedInput['propertyDetails'],
-                    $normalizedInput['addressLatitude'],
-                    $normalizedInput['addressLongitude'],
-                    $normalizedInput['preferredWorkerId']
-                );
+                try {
+                    $pricing = $this->estimationService->price(
+                        $normalizedInput['propertyType'],
+                        $normalizedInput['propertyDetails'],
+                        $normalizedInput['addressLatitude'],
+                        $normalizedInput['addressLongitude'],
+                        $normalizedInput['preferredWorkerId']
+                    );
+                } catch (InvalidArgumentException $exception) {
+                    throw ValidationException::withMessages([
+                        'pricing' => [$exception->getMessage()],
+                    ]);
+                }
 
                 $updates['property_type'] = $normalizedInput['propertyType'];
                 if (array_key_exists('propertyDetails', $validated)) {
@@ -166,7 +186,10 @@ final class UserCleaningOrderService
                 $updates['total_hours'] = $estimation['estimatedHours'];
                 $updates['base_price'] = $pricing['basePrice'];
                 $updates['travel_fee'] = $pricing['travelFee'];
+                $updates['travel_distance_km'] = $pricing['distanceKm'];
                 $updates['addons_total'] = $pricing['addonsTotal'];
+                $updates['admin_margin_amount'] = $pricing['adminMargin'];
+                $updates['is_pricing_final'] = $pricing['isPricingFinal'];
                 $updates['total_price'] = $pricing['totalPrice'];
             }
 

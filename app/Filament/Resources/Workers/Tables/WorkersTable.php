@@ -31,6 +31,15 @@ final class WorkersTable
                 TextColumn::make('user.phone')
                     ->label(__('cleaning_admin.workers.fields.phone'))
                     ->description(__('cleaning_admin.column_descriptions.phone')),
+                TextColumn::make('home_address')
+                    ->label('Home Address')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('home_latitude')
+                    ->label('Home Latitude')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('home_longitude')
+                    ->label('Home Longitude')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('trust_score')
                     ->label(__('cleaning_admin.workers.fields.trust_score'))
                     ->description(__('cleaning_admin.column_descriptions.trust_score'))

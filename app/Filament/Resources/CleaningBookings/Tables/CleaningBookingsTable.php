@@ -42,6 +42,10 @@ final class CleaningBookingsTable
                     ->label(__('cleaning_admin.booking.fields.worker'))
                     ->description(__('cleaning_admin.column_descriptions.worker'))
                     ->placeholder('—'),
+                TextColumn::make('number_of_workers')
+                    ->label(__('cleaning_admin.booking.fields.number_of_workers'))
+                    ->description(__('cleaning_admin.column_descriptions.number_of_workers'))
+                    ->sortable(),
                 TextColumn::make('scheduled_date')
                     ->label(__('cleaning_admin.booking.fields.scheduled_date'))
                     ->description(__('cleaning_admin.column_descriptions.scheduled_date'))
@@ -55,6 +59,10 @@ final class CleaningBookingsTable
                     ->description(__('cleaning_admin.column_descriptions.total_price'))
                     ->money('SAR')
                     ->sortable(),
+                TextColumn::make('is_pricing_final')
+                    ->label('Pricing')
+                    ->badge()
+                    ->formatStateUsing(fn ($state): string => $state ? 'Final' : 'Provisional'),
                 TextColumn::make('disputes_count')
                     ->counts('disputes')
                     ->label(__('cleaning_admin.booking.fields.disputes_count'))

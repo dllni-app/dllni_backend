@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\CancellationPolicy;
+use App\Models\CleaningFinancialSetting;
 use App\Models\BookingReview;
 use App\Models\User;
 use App\Models\Worker;
@@ -60,6 +61,7 @@ it('creates a cleaning order for authenticated user', function (): void {
         'scheduledTime' => '09:00',
         'addressLatitude' => 33.5138,
         'addressLongitude' => 36.2765,
+        'numberOfWorkers' => 2,
         'termsAccepted' => true,
     ]);
 
@@ -73,9 +75,16 @@ it('creates a cleaning order for authenticated user', function (): void {
         ->where('id', $orderId)
         ->where('customer_id', $user->id)
         ->where('status', CleaningBookingStatus::Pending->value)
+        ->where('number_of_workers', 2)
+        ->where('is_pricing_final', false)
         ->exists())->toBeTrue();
 
+    expect($response->json('order.numberOfWorkers'))->toBe(2);
     expect((float) $response->json('order.basePrice'))->toBeGreaterThan(0);
+    expect($response->json('order.travelDistanceKm'))->toBeNull();
+    expect((float) $response->json('order.travelFee'))->toBe(0.0);
+    expect((float) $response->json('order.adminMargin'))->toBe(0.0);
+    expect((bool) $response->json('order.isPricingFinal'))->toBeFalse();
     expect((float) $response->json('order.totalPrice'))->toBeGreaterThan(0);
     expect((float) $response->json('order.estimatedSqm'))->toBeGreaterThan(0);
     expect((float) $response->json('order.totalHours'))->toBeGreaterThan(0);
@@ -165,6 +174,7 @@ it('updates a pending cleaning order schedule', function (): void {
     $response = patchJson("/api/v1/user/cleaning/orders/{$order->id}", [
         'scheduledDate' => now()->addDays(2)->format('Y-m-d'),
         'scheduledTime' => '11:00',
+        'numberOfWorkers' => 3,
         'propertyDetails' => [
             'address' => 'Updated address',
             'rooms' => 4,
@@ -175,9 +185,11 @@ it('updates a pending cleaning order schedule', function (): void {
     ]);
 
     $response->assertOk()->assertJsonPath('order.scheduledTime', '11:00');
+    $response->assertJsonPath('order.numberOfWorkers', 3);
 
     $order->refresh();
     expect((string) $order->scheduled_time)->toStartWith('11:00');
+    expect($order->number_of_workers)->toBe(3);
     expect((float) $order->total_hours)->toBeGreaterThan(0);
     expect((float) $order->total_price)->toBeGreaterThan(0);
 });
@@ -283,7 +295,7 @@ it('returns estimated cleaning price from backend algorithm', function (): void 
 
     $response->assertOk()->assertJsonStructure([
         'size' => ['estimatedSqm', 'estimatedHours', 'sizeTier'],
-        'pricing' => ['basePrice', 'travelFee', 'addonsTotal', 'totalPrice', 'currency'],
+        'pricing' => ['basePrice', 'travelFee', 'addonsTotal', 'distanceKm', 'adminMargin', 'isPricingFinal', 'totalPrice', 'currency'],
         'algorithmVersion',
     ]);
 
@@ -291,10 +303,55 @@ it('returns estimated cleaning price from backend algorithm', function (): void 
     expect((float) $response->json('size.estimatedHours'))->toBe(4.0);
     expect((string) $response->json('size.sizeTier'))->toBe('medium');
     expect((float) $response->json('pricing.basePrice'))->toBe(920.0);
-    expect((float) $response->json('pricing.travelFee'))->toBe(150.0);
+    expect($response->json('pricing.distanceKm'))->toBeNull();
+    expect((float) $response->json('pricing.travelFee'))->toBe(0.0);
     expect((float) $response->json('pricing.addonsTotal'))->toBe(0.0);
-    expect((float) $response->json('pricing.totalPrice'))->toBe(1070.0);
-    expect((string) $response->json('algorithmVersion'))->toBe('2026-04-08-v1');
+    expect((float) $response->json('pricing.adminMargin'))->toBe(0.0);
+    expect((bool) $response->json('pricing.isPricingFinal'))->toBeFalse();
+    expect((float) $response->json('pricing.totalPrice'))->toBe(920.0);
+    expect((string) $response->json('algorithmVersion'))->toBe('2026-05-25-v2');
+});
+
+it('returns finalized pricing when preferred worker is selected in estimate endpoint', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    CleaningFinancialSetting::query()->updateOrCreate(
+        ['id' => 1],
+        [
+            'default_commission_rate' => 10,
+            'commission_type' => 'percent',
+            'commission_fixed_amount' => null,
+            'travel_per_km' => 10,
+            'travel_distance_start_point' => 'worker_home',
+        ]
+    );
+
+    $worker = Worker::factory()->create([
+        'home_address' => 'Worker Home',
+        'home_latitude' => 33.6,
+        'home_longitude' => 36.3,
+    ]);
+
+    $response = postJson('/api/v1/user/cleaning/orders/estimate-price', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'rooms' => 2,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+        ],
+        'addressLatitude' => 33.5,
+        'addressLongitude' => 36.3,
+        'preferredWorkerId' => $worker->id,
+    ]);
+
+    $response->assertOk();
+    expect((bool) $response->json('pricing.isPricingFinal'))->toBeTrue();
+    expect((float) $response->json('pricing.distanceKm'))->toBe(11.119);
+    expect((float) $response->json('pricing.travelFee'))->toBe(111.19);
+    expect((float) $response->json('pricing.adminMargin'))->toBe(103.12);
+    expect((float) $response->json('pricing.totalPrice'))->toBe(1134.31);
 });
 
 it('creates a cleaning order with totals matching a prior estimate for the same inputs', function (): void {

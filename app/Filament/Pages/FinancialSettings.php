@@ -23,7 +23,9 @@ final class FinancialSettings extends Page
 
     public float $travelMarkupValue = 0.0;
 
-    public string $travelDistanceStartPoint = 'auto';
+    public float $travelPerKm = 0.0;
+
+    public string $travelDistanceStartPoint = 'worker_home';
 
     public int $coverageLow = 3;
 
@@ -95,7 +97,8 @@ final class FinancialSettings extends Page
         $this->commissionFixedAmount = $setting->commission_fixed_amount !== null ? (float) $setting->commission_fixed_amount : null;
         $this->travelMarkupType = (string) $setting->travel_markup_type;
         $this->travelMarkupValue = (float) $setting->travel_markup_value;
-        $this->travelDistanceStartPoint = (string) ($setting->travel_distance_start_point ?? 'auto');
+        $this->travelPerKm = (float) ($setting->travel_per_km ?? 0.0);
+        $this->travelDistanceStartPoint = 'worker_home';
         $this->coverageLow = (int) data_get($setting->coverage_thresholds, 'low', 3);
         $this->coverageOk = (int) data_get($setting->coverage_thresholds, 'ok', 7);
         $this->timeBillingMode = (string) ($setting->time_billing_mode ?? 'actual');
@@ -105,16 +108,32 @@ final class FinancialSettings extends Page
 
     public function save(): void
     {
+        $this->validate([
+            'defaultCommissionRate' => ['required', 'numeric', 'min:0'],
+            'vatRate' => ['required', 'numeric', 'min:0'],
+            'commissionType' => ['required', 'in:percent,fixed'],
+            'commissionFixedAmount' => ['nullable', 'numeric', 'min:0', 'required_if:commissionType,fixed'],
+            'travelMarkupType' => ['required', 'in:fixed,percent'],
+            'travelMarkupValue' => ['required', 'numeric', 'min:0'],
+            'travelPerKm' => ['required', 'numeric', 'min:0'],
+            'coverageLow' => ['required', 'integer', 'min:0'],
+            'coverageOk' => ['required', 'integer', 'gte:coverageLow'],
+            'timeBillingMode' => ['required', 'in:full_booked,actual'],
+            'minBillableMinutes' => ['nullable', 'integer', 'min:0'],
+            'timeWarningMinutesBeforeEnd' => ['nullable', 'integer', 'min:0'],
+        ]);
+
         CleaningFinancialSetting::query()->updateOrCreate(
             ['id' => 1],
             [
                 'default_commission_rate' => $this->defaultCommissionRate,
                 'vat_rate' => $this->vatRate,
                 'commission_type' => $this->commissionType,
-                'commission_fixed_amount' => $this->commissionFixedAmount,
+                'commission_fixed_amount' => $this->commissionType === 'fixed' ? $this->commissionFixedAmount : null,
                 'travel_markup_type' => $this->travelMarkupType,
                 'travel_markup_value' => $this->travelMarkupValue,
-                'travel_distance_start_point' => $this->travelDistanceStartPoint,
+                'travel_per_km' => $this->travelPerKm,
+                'travel_distance_start_point' => 'worker_home',
                 'coverage_thresholds' => [
                     'low' => $this->coverageLow,
                     'ok' => $this->coverageOk,
