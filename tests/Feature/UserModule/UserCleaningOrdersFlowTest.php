@@ -13,9 +13,12 @@ use Illuminate\Support\Facades\Event;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBillingMode;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Enums\ServiceCategory;
 use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningService;
+use Modules\Cleaning\Models\ServicePricing;
 
 use function Pest\Laravel\getJson;
 use function Pest\Laravel\patchJson;
@@ -312,6 +315,60 @@ it('returns estimated cleaning price from backend algorithm', function (): void 
     expect((string) $response->json('algorithmVersion'))->toBe('2026-05-25-v2');
 });
 
+it('returns regular cleaning estimate with selected cleaning services in addons', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $serviceA = CleaningService::query()->create([
+        'name' => 'Deep clean add-on',
+        'slug' => 'deep-clean-addon-'.fake()->unique()->numerify('###'),
+        'category' => ServiceCategory::Cleaning->value,
+        'description' => 'Deep cleaning',
+        'is_active' => true,
+    ]);
+    $serviceB = CleaningService::query()->create([
+        'name' => 'Kitchen add-on',
+        'slug' => 'kitchen-clean-addon-'.fake()->unique()->numerify('###'),
+        'category' => ServiceCategory::Cleaning->value,
+        'description' => 'Kitchen focused cleaning',
+        'is_active' => true,
+    ]);
+
+    ServicePricing::query()->create([
+        'cleaning_service_id' => $serviceA->id,
+        'property_type' => 'apartment',
+        'living_room_size' => 'small',
+        'base_price' => 100,
+        'price_per_sqm' => null,
+        'min_hours' => 1,
+    ]);
+    ServicePricing::query()->create([
+        'cleaning_service_id' => $serviceB->id,
+        'property_type' => 'apartment',
+        'living_room_size' => 'small',
+        'base_price' => 80,
+        'price_per_sqm' => null,
+        'min_hours' => 1,
+    ]);
+
+    $response = postJson('/api/v1/user/cleaning/orders/estimate-price', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'rooms' => 2,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+        ],
+        'serviceIds' => [$serviceA->id, $serviceB->id],
+    ]);
+
+    $response->assertOk();
+    expect((float) $response->json('pricing.basePrice'))->toBe(920.0);
+    expect((float) $response->json('pricing.addonsTotal'))->toBe(180.0);
+    expect((float) $response->json('pricing.totalPrice'))->toBe(1100.0);
+    expect($response->json('pricing.serviceLines'))->toHaveCount(2);
+});
+
 it('returns finalized pricing when preferred worker is selected in estimate endpoint', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
@@ -404,6 +461,78 @@ it('creates a cleaning order with totals matching a prior estimate for the same 
     expect((float) $createResponse->json('order.totalPrice'))->toBe($expectedTotalPrice);
     expect((float) $createResponse->json('order.estimatedSqm'))->toBe($expectedEstimatedSqm);
     expect((float) $createResponse->json('order.estimatedHours'))->toBe($expectedEstimatedHours);
+});
+
+it('creates regular cleaning order with selected services and persists booking service lines', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $serviceA = CleaningService::query()->create([
+        'name' => 'Balcony add-on',
+        'slug' => 'balcony-addon-'.fake()->unique()->numerify('###'),
+        'category' => ServiceCategory::Cleaning->value,
+        'description' => 'Balcony cleaning',
+        'is_active' => true,
+    ]);
+    $serviceB = CleaningService::query()->create([
+        'name' => 'Window add-on',
+        'slug' => 'window-addon-'.fake()->unique()->numerify('###'),
+        'category' => ServiceCategory::Cleaning->value,
+        'description' => 'Window cleaning',
+        'is_active' => true,
+    ]);
+
+    ServicePricing::query()->create([
+        'cleaning_service_id' => $serviceA->id,
+        'property_type' => 'apartment',
+        'living_room_size' => 'small',
+        'base_price' => 120,
+        'price_per_sqm' => null,
+        'min_hours' => 1,
+    ]);
+    ServicePricing::query()->create([
+        'cleaning_service_id' => $serviceB->id,
+        'property_type' => 'apartment',
+        'living_room_size' => 'small',
+        'base_price' => 90,
+        'price_per_sqm' => null,
+        'min_hours' => 1,
+    ]);
+
+    $response = postJson('/api/v1/user/cleaning/orders', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'address' => 'Damascus - Mazzeh',
+            'location_name' => 'Home',
+            'rooms' => 2,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+        ],
+        'serviceIds' => [$serviceA->id, $serviceB->id],
+        'scheduledDate' => now()->addDay()->format('Y-m-d'),
+        'scheduledTime' => '10:30',
+        'termsAccepted' => true,
+    ]);
+
+    $response->assertCreated();
+    $orderId = (int) $response->json('order.id');
+
+    expect((float) $response->json('order.addonsTotal'))->toBe(210.0);
+    expect((float) $response->json('order.totalPrice'))->toBe(1130.0);
+
+    $this->assertDatabaseHas('cleaning_booking_service', [
+        'cleaning_booking_id' => $orderId,
+        'cleaning_service_id' => $serviceA->id,
+        'unit_price' => 120.0,
+        'total_price' => 120.0,
+    ]);
+    $this->assertDatabaseHas('cleaning_booking_service', [
+        'cleaning_booking_id' => $orderId,
+        'cleaning_service_id' => $serviceB->id,
+        'unit_price' => 90.0,
+        'total_price' => 90.0,
+    ]);
 });
 
 it('allows schedule-only update on a pending cleaning order', function (): void {
@@ -514,6 +643,101 @@ it('updates property type and recalculates totals from server pricing', function
     expect((float) $order->total_price)->toBe($expectedTotalPrice);
 });
 
+it('updates regular cleaning order services and re-syncs booking service lines', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $serviceA = CleaningService::query()->create([
+        'name' => 'Regular service A',
+        'slug' => 'regular-service-a-'.fake()->unique()->numerify('###'),
+        'category' => ServiceCategory::Cleaning->value,
+        'description' => 'A',
+        'is_active' => true,
+    ]);
+    $serviceB = CleaningService::query()->create([
+        'name' => 'Regular service B',
+        'slug' => 'regular-service-b-'.fake()->unique()->numerify('###'),
+        'category' => ServiceCategory::Cleaning->value,
+        'description' => 'B',
+        'is_active' => true,
+    ]);
+    $serviceC = CleaningService::query()->create([
+        'name' => 'Regular service C',
+        'slug' => 'regular-service-c-'.fake()->unique()->numerify('###'),
+        'category' => ServiceCategory::Cleaning->value,
+        'description' => 'C',
+        'is_active' => true,
+    ]);
+
+    ServicePricing::query()->create([
+        'cleaning_service_id' => $serviceA->id,
+        'property_type' => 'apartment',
+        'living_room_size' => 'small',
+        'base_price' => 100,
+        'price_per_sqm' => null,
+        'min_hours' => 1,
+    ]);
+    ServicePricing::query()->create([
+        'cleaning_service_id' => $serviceB->id,
+        'property_type' => 'apartment',
+        'living_room_size' => 'small',
+        'base_price' => 70,
+        'price_per_sqm' => null,
+        'min_hours' => 1,
+    ]);
+    ServicePricing::query()->create([
+        'cleaning_service_id' => $serviceC->id,
+        'property_type' => 'apartment',
+        'living_room_size' => 'small',
+        'base_price' => 40,
+        'price_per_sqm' => null,
+        'min_hours' => 1,
+    ]);
+
+    $create = postJson('/api/v1/user/cleaning/orders', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'address' => 'Damascus',
+            'rooms' => 2,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+        ],
+        'serviceIds' => [$serviceA->id],
+        'scheduledDate' => now()->addDay()->format('Y-m-d'),
+        'scheduledTime' => '16:00',
+        'termsAccepted' => true,
+    ])->assertCreated();
+
+    $orderId = (int) $create->json('order.id');
+
+    patchJson("/api/v1/user/cleaning/orders/{$orderId}", [
+        'serviceIds' => [$serviceB->id, $serviceC->id],
+        'propertyDetails' => [
+            'address' => 'Damascus updated',
+            'rooms' => 2,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+        ],
+    ])->assertOk();
+
+    $this->assertDatabaseHas('cleaning_booking_service', [
+        'cleaning_booking_id' => $orderId,
+        'cleaning_service_id' => $serviceB->id,
+        'unit_price' => 70.0,
+    ]);
+    $this->assertDatabaseHas('cleaning_booking_service', [
+        'cleaning_booking_id' => $orderId,
+        'cleaning_service_id' => $serviceC->id,
+        'unit_price' => 40.0,
+    ]);
+    $this->assertDatabaseMissing('cleaning_booking_service', [
+        'cleaning_booking_id' => $orderId,
+        'cleaning_service_id' => $serviceA->id,
+    ]);
+});
+
 it('cancels pending cleaning order and rejects cancelling completed order', function (): void {
     Event::fake([CleaningBookingTrackingUpdated::class]);
 
@@ -582,4 +806,290 @@ it('rejects cleaning order review for non-completed order', function (): void {
         'comment' => 'Good work.',
     ])->assertUnprocessable()
         ->assertJsonValidationErrors(['status']);
+});
+
+it('estimates event assistance pricing with recommendation and selected services', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $setupEventServices = function (): array {
+        $serviceA = CleaningService::query()->create([
+            'name' => 'Event serving support',
+            'slug' => 'event-serving-support-'.fake()->unique()->numerify('###'),
+            'category' => ServiceCategory::EventAssistance->value,
+            'description' => 'Serving support for events',
+            'is_active' => true,
+        ]);
+        $serviceB = CleaningService::query()->create([
+            'name' => 'Event cleanup support',
+            'slug' => 'event-cleanup-support-'.fake()->unique()->numerify('###'),
+            'category' => ServiceCategory::EventAssistance->value,
+            'description' => 'Cleanup support for events',
+            'is_active' => true,
+        ]);
+
+        ServicePricing::query()->create([
+            'cleaning_service_id' => $serviceA->id,
+            'property_type' => 'apartment',
+            'living_room_size' => null,
+            'base_price' => 300,
+            'price_per_sqm' => null,
+            'min_hours' => 3,
+        ]);
+        // Purposefully no apartment row: price should fall back to first row for this service.
+        ServicePricing::query()->create([
+            'cleaning_service_id' => $serviceB->id,
+            'property_type' => 'villa',
+            'living_room_size' => null,
+            'base_price' => 250,
+            'price_per_sqm' => null,
+            'min_hours' => 2,
+        ]);
+
+        return [$serviceA, $serviceB];
+    };
+
+    [$serviceA, $serviceB] = $setupEventServices();
+
+    $response = postJson('/api/v1/user/cleaning/orders/estimate-price', [
+        'propertyType' => 'event_assistance',
+        'propertyDetails' => [
+            'eventType' => 'birthday',
+            'guestCount' => 45,
+            'venueType' => 'apartment',
+        ],
+        'serviceIds' => [$serviceA->id, $serviceB->id],
+    ]);
+
+    $response->assertOk();
+    expect((float) $response->json('pricing.basePrice'))->toBe(550.0);
+    expect((float) $response->json('pricing.totalPrice'))->toBe(550.0);
+    expect((float) $response->json('size.estimatedHours'))->toBe(5.0);
+    expect($response->json('recommendation.guestCount'))->toBe(45);
+    expect($response->json('recommendation.suggestedTeamSize'))->toBe(6);
+    expect($response->json('pricing.serviceLines'))->toHaveCount(2);
+});
+
+it('creates event assistance order and syncs booking services pivot', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $serviceA = CleaningService::query()->create([
+        'name' => 'Event setup support',
+        'slug' => 'event-setup-support-'.fake()->unique()->numerify('###'),
+        'category' => ServiceCategory::EventAssistance->value,
+        'description' => 'Setup support for events',
+        'is_active' => true,
+    ]);
+    $serviceB = CleaningService::query()->create([
+        'name' => 'Event hosting support',
+        'slug' => 'event-hosting-support-'.fake()->unique()->numerify('###'),
+        'category' => ServiceCategory::EventAssistance->value,
+        'description' => 'Hosting support for events',
+        'is_active' => true,
+    ]);
+
+    ServicePricing::query()->create([
+        'cleaning_service_id' => $serviceA->id,
+        'property_type' => 'apartment',
+        'living_room_size' => null,
+        'base_price' => 300,
+        'price_per_sqm' => null,
+        'min_hours' => 3,
+    ]);
+    ServicePricing::query()->create([
+        'cleaning_service_id' => $serviceB->id,
+        'property_type' => 'apartment',
+        'living_room_size' => null,
+        'base_price' => 250,
+        'price_per_sqm' => null,
+        'min_hours' => 2,
+    ]);
+
+    $response = postJson('/api/v1/user/cleaning/orders', [
+        'propertyType' => 'event_assistance',
+        'propertyDetails' => [
+            'address' => 'Damascus, Mazzeh',
+            'location_name' => 'Family Hall',
+            'eventType' => 'family_dinner',
+            'guestCount' => 40,
+            'venueType' => 'apartment',
+            'specialRequirement' => 'Male helpers only',
+            'notes' => 'Call before arrival',
+        ],
+        'serviceIds' => [$serviceA->id, $serviceB->id],
+        'scheduledDate' => now()->addDay()->format('Y-m-d'),
+        'scheduledTime' => '18:30',
+        'genderPreference' => 'male',
+        'termsAccepted' => true,
+    ]);
+
+    $response->assertCreated();
+    $orderId = (int) $response->json('order.id');
+
+    expect($response->json('order.propertyType'))->toBe('event_assistance');
+    expect($response->json('order.genderPreference'))->toBe('male');
+    // Suggested team size = ceil(40/10) + (2-1) = 5
+    expect($response->json('order.numberOfWorkers'))->toBe(5);
+    expect((float) $response->json('order.basePrice'))->toBe(550.0);
+
+    $this->assertDatabaseHas('cleaning_bookings', [
+        'id' => $orderId,
+        'property_type' => 'event_assistance',
+        'gender_preference' => 'male',
+    ]);
+    $this->assertDatabaseHas('cleaning_booking_service', [
+        'cleaning_booking_id' => $orderId,
+        'cleaning_service_id' => $serviceA->id,
+        'unit_price' => 300.0,
+        'total_price' => 300.0,
+    ]);
+    $this->assertDatabaseHas('cleaning_booking_service', [
+        'cleaning_booking_id' => $orderId,
+        'cleaning_service_id' => $serviceB->id,
+        'unit_price' => 250.0,
+        'total_price' => 250.0,
+    ]);
+});
+
+it('updates event assistance order and re-syncs selected services', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $serviceA = CleaningService::query()->create([
+        'name' => 'Event prep support',
+        'slug' => 'event-prep-support-'.fake()->unique()->numerify('###'),
+        'category' => ServiceCategory::EventAssistance->value,
+        'description' => 'Preparation support',
+        'is_active' => true,
+    ]);
+    $serviceB = CleaningService::query()->create([
+        'name' => 'Event cleanup premium',
+        'slug' => 'event-cleanup-premium-'.fake()->unique()->numerify('###'),
+        'category' => ServiceCategory::EventAssistance->value,
+        'description' => 'Premium cleanup support',
+        'is_active' => true,
+    ]);
+    $serviceC = CleaningService::query()->create([
+        'name' => 'Event serving premium',
+        'slug' => 'event-serving-premium-'.fake()->unique()->numerify('###'),
+        'category' => ServiceCategory::EventAssistance->value,
+        'description' => 'Premium serving support',
+        'is_active' => true,
+    ]);
+
+    ServicePricing::query()->create([
+        'cleaning_service_id' => $serviceA->id,
+        'property_type' => 'apartment',
+        'living_room_size' => null,
+        'base_price' => 200,
+        'price_per_sqm' => null,
+        'min_hours' => 2,
+    ]);
+    ServicePricing::query()->create([
+        'cleaning_service_id' => $serviceB->id,
+        'property_type' => 'apartment',
+        'living_room_size' => null,
+        'base_price' => 350,
+        'price_per_sqm' => null,
+        'min_hours' => 3,
+    ]);
+    ServicePricing::query()->create([
+        'cleaning_service_id' => $serviceC->id,
+        'property_type' => 'apartment',
+        'living_room_size' => null,
+        'base_price' => 150,
+        'price_per_sqm' => null,
+        'min_hours' => 2,
+    ]);
+
+    $create = postJson('/api/v1/user/cleaning/orders', [
+        'propertyType' => 'event_assistance',
+        'propertyDetails' => [
+            'address' => 'Damascus',
+            'eventType' => 'birthday',
+            'guestCount' => 25,
+            'venueType' => 'apartment',
+        ],
+        'serviceIds' => [$serviceA->id],
+        'scheduledDate' => now()->addDay()->format('Y-m-d'),
+        'scheduledTime' => '16:00',
+        'termsAccepted' => true,
+    ])->assertCreated();
+
+    $orderId = (int) $create->json('order.id');
+
+    $update = patchJson("/api/v1/user/cleaning/orders/{$orderId}", [
+        'propertyType' => 'event_assistance',
+        'propertyDetails' => [
+            'address' => 'Damascus - updated',
+            'eventType' => 'large_gathering',
+            'guestCount' => 60,
+            'venueType' => 'apartment',
+            'notes' => 'Need early arrival',
+        ],
+        'serviceIds' => [$serviceB->id, $serviceC->id],
+    ]);
+
+    $update->assertOk();
+    expect((float) $update->json('order.basePrice'))->toBe(500.0);
+    expect($update->json('order.propertyDetails.event_type'))->toBe('large_gathering');
+    expect($update->json('order.propertyDetails.guest_count'))->toBe(60);
+
+    $this->assertDatabaseHas('cleaning_booking_service', [
+        'cleaning_booking_id' => $orderId,
+        'cleaning_service_id' => $serviceB->id,
+        'unit_price' => 350.0,
+    ]);
+    $this->assertDatabaseHas('cleaning_booking_service', [
+        'cleaning_booking_id' => $orderId,
+        'cleaning_service_id' => $serviceC->id,
+        'unit_price' => 150.0,
+    ]);
+    $this->assertDatabaseMissing('cleaning_booking_service', [
+        'cleaning_booking_id' => $orderId,
+        'cleaning_service_id' => $serviceA->id,
+    ]);
+});
+
+it('validates required event assistance fields and rejects non-event services', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    postJson('/api/v1/user/cleaning/orders/estimate-price', [
+        'propertyType' => 'event_assistance',
+        'propertyDetails' => [
+            'guestCount' => 10,
+        ],
+    ])->assertUnprocessable()->assertJsonValidationErrors([
+        'propertyDetails.eventType',
+        'propertyDetails.venueType',
+        'serviceIds',
+    ]);
+
+    $nonEventService = CleaningService::query()->create([
+        'name' => 'Normal cleaning service',
+        'slug' => 'normal-cleaning-service-'.fake()->unique()->numerify('###'),
+        'category' => ServiceCategory::Cleaning->value,
+        'description' => 'Normal service',
+        'is_active' => true,
+    ]);
+    ServicePricing::query()->create([
+        'cleaning_service_id' => $nonEventService->id,
+        'property_type' => 'apartment',
+        'living_room_size' => null,
+        'base_price' => 100,
+        'price_per_sqm' => null,
+        'min_hours' => 1,
+    ]);
+
+    postJson('/api/v1/user/cleaning/orders/estimate-price', [
+        'propertyType' => 'event_assistance',
+        'propertyDetails' => [
+            'eventType' => 'birthday',
+            'guestCount' => 20,
+            'venueType' => 'apartment',
+        ],
+        'serviceIds' => [$nonEventService->id],
+    ])->assertUnprocessable()->assertJsonValidationErrors(['pricing']);
 });

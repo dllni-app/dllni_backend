@@ -5,6 +5,9 @@ declare(strict_types=1);
 use Modules\User\Services\UserCleaningOrderEstimationService;
 use App\Models\CleaningFinancialSetting;
 use App\Models\Worker;
+use Modules\Cleaning\Enums\ServiceCategory;
+use Modules\Cleaning\Models\CleaningService;
+use Modules\Cleaning\Models\ServicePricing;
 
 it('computes deterministic cleaning size, duration, and tier', function (): void {
     $service = app(UserCleaningOrderEstimationService::class);
@@ -127,4 +130,120 @@ it('returns provisional pricing when preferred worker is not selected', function
     expect($pricing['adminMargin'])->toBe(0.0);
     expect($pricing['isPricingFinal'])->toBeFalse();
     expect($pricing['totalPrice'])->toBe(920.0);
+});
+
+it('computes event assistance estimate and service-based pricing', function (): void {
+    $serviceA = CleaningService::query()->create([
+        'name' => 'Event service A',
+        'slug' => 'event-service-a-'.fake()->unique()->numerify('###'),
+        'category' => ServiceCategory::EventAssistance->value,
+        'description' => 'A',
+        'is_active' => true,
+    ]);
+    $serviceB = CleaningService::query()->create([
+        'name' => 'Event service B',
+        'slug' => 'event-service-b-'.fake()->unique()->numerify('###'),
+        'category' => ServiceCategory::EventAssistance->value,
+        'description' => 'B',
+        'is_active' => true,
+    ]);
+
+    ServicePricing::query()->create([
+        'cleaning_service_id' => $serviceA->id,
+        'property_type' => 'apartment',
+        'living_room_size' => null,
+        'base_price' => 300,
+        'price_per_sqm' => null,
+        'min_hours' => 3,
+    ]);
+    ServicePricing::query()->create([
+        'cleaning_service_id' => $serviceB->id,
+        'property_type' => 'villa',
+        'living_room_size' => null,
+        'base_price' => 250,
+        'price_per_sqm' => null,
+        'min_hours' => 2,
+    ]);
+
+    $service = app(UserCleaningOrderEstimationService::class);
+
+    $estimation = $service->estimate('event_assistance', [
+        'eventType' => 'birthday',
+        'guestCount' => 45,
+        'venueType' => 'apartment',
+    ], [$serviceA->id, $serviceB->id]);
+
+    $pricing = $service->price(
+        'event_assistance',
+        [
+            'eventType' => 'birthday',
+            'guestCount' => 45,
+            'venueType' => 'apartment',
+        ],
+        null,
+        null,
+        null,
+        [$serviceA->id, $serviceB->id],
+    );
+
+    expect($estimation['recommendation']['suggestedTeamSize'])->toBe(6);
+    expect($estimation['estimatedHours'])->toBe(5.0);
+    expect($pricing['basePrice'])->toBe(550.0);
+    expect($pricing['totalPrice'])->toBe(550.0);
+    expect($pricing['serviceLines'])->toHaveCount(2);
+});
+
+it('includes selected regular cleaning services in addons pricing', function (): void {
+    $serviceA = CleaningService::query()->create([
+        'name' => 'Deep cleaning add-on',
+        'slug' => 'deep-cleaning-addon-'.fake()->unique()->numerify('###'),
+        'category' => ServiceCategory::Cleaning->value,
+        'description' => 'A',
+        'is_active' => true,
+    ]);
+    $serviceB = CleaningService::query()->create([
+        'name' => 'Kitchen intensive add-on',
+        'slug' => 'kitchen-intensive-addon-'.fake()->unique()->numerify('###'),
+        'category' => ServiceCategory::Cleaning->value,
+        'description' => 'B',
+        'is_active' => true,
+    ]);
+
+    ServicePricing::query()->create([
+        'cleaning_service_id' => $serviceA->id,
+        'property_type' => 'apartment',
+        'living_room_size' => 'small',
+        'base_price' => 100,
+        'price_per_sqm' => null,
+        'min_hours' => 1,
+    ]);
+    ServicePricing::query()->create([
+        'cleaning_service_id' => $serviceB->id,
+        'property_type' => 'apartment',
+        'living_room_size' => 'small',
+        'base_price' => 90,
+        'price_per_sqm' => null,
+        'min_hours' => 1,
+    ]);
+
+    $service = app(UserCleaningOrderEstimationService::class);
+
+    $pricing = $service->price(
+        'apartment',
+        [
+            'rooms' => 2,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+        ],
+        null,
+        null,
+        null,
+        [$serviceA->id, $serviceB->id],
+    );
+
+    expect($pricing['basePrice'])->toBe(920.0);
+    expect($pricing['addonsTotal'])->toBe(190.0);
+    expect($pricing['totalPrice'])->toBe(1110.0);
+    expect($pricing['serviceLines'])->toHaveCount(2);
 });

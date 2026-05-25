@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\HtmlString;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class CleaningBookingsTable
 {
@@ -38,7 +39,7 @@ final class CleaningBookingsTable
                         __('cleaning_admin.column_descriptions.status'),
                     ))
                     ->badge()
-                    ->formatStateUsing(fn($state) => $state?->label()),
+                    ->formatStateUsing(fn ($state) => $state?->label()),
                 TextColumn::make('customer.name')
                     ->label(self::headerLabel(
                         __('cleaning_admin.booking.fields.customer'),
@@ -50,13 +51,17 @@ final class CleaningBookingsTable
                         __('cleaning_admin.booking.fields.worker'),
                         __('cleaning_admin.column_descriptions.worker'),
                     ))
-                    ->placeholder('—'),
+                    ->placeholder('-'),
                 TextColumn::make('number_of_workers')
                     ->label(self::headerLabel(
                         __('cleaning_admin.booking.fields.number_of_workers'),
                         __('cleaning_admin.column_descriptions.number_of_workers'),
                     ))
                     ->sortable(),
+                TextColumn::make('property_details.event_type')
+                    ->label('Event type')
+                    ->placeholder('-')
+                    ->toggleable(),
                 TextColumn::make('scheduled_date')
                     ->label(self::headerLabel(
                         __('cleaning_admin.booking.fields.scheduled_date'),
@@ -79,7 +84,7 @@ final class CleaningBookingsTable
                 TextColumn::make('is_pricing_final')
                     ->label('Pricing')
                     ->badge()
-                    ->formatStateUsing(fn($state): string => $state ? 'Final' : 'Provisional'),
+                    ->formatStateUsing(fn ($state): string => $state ? 'Final' : 'Provisional'),
                 TextColumn::make('disputes_count')
                     ->counts('disputes')
                     ->label(self::headerLabel(
@@ -89,24 +94,34 @@ final class CleaningBookingsTable
             ])
             ->filters([
                 SelectFilter::make('status')
-                    ->label('الحالة')
-                    ->options(collect(CleaningBookingStatus::cases())->mapWithKeys(fn($c) => [$c->value => $c->label()])->all()),
+                    ->label('Status')
+                    ->options(collect(CleaningBookingStatus::cases())->mapWithKeys(fn ($c) => [$c->value => $c->label()])->all()),
                 Filter::make('has_dispute')
-                    ->label('يحتوي على نزاع')
-                    ->query(fn(Builder $query): Builder => $query->whereHas('disputes')),
+                    ->label('Has dispute')
+                    ->query(fn (Builder $query): Builder => $query->whereHas('disputes')),
                 Filter::make('scheduled_today')
-                    ->label('اليوم فقط')
-                    ->query(fn(Builder $query): Builder => $query->whereDate('scheduled_date', today())),
+                    ->label('Scheduled today')
+                    ->query(fn (Builder $query): Builder => $query->whereDate('scheduled_date', today())),
+                SelectFilter::make('property_type')
+                    ->label('Property type')
+                    ->options([
+                        UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE => 'Event assistance',
+                        'apartment' => 'Apartment',
+                        'villa' => 'Villa',
+                        'house' => 'House',
+                        'office' => 'Office',
+                        'studio' => 'Studio',
+                    ]),
             ])
             ->recordActions([
                 Action::make('assign_worker')
-                    ->label('تعيين عامل')
+                    ->label('Assign worker')
                     ->icon('heroicon-o-user-plus')
-                    ->visible(fn(CleaningBooking $record) => $record->status === CleaningBookingStatus::Pending)
+                    ->visible(fn (CleaningBooking $record) => $record->status === CleaningBookingStatus::Pending && $record->property_type !== UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
                     ->form([
                         Select::make('worker_id')
-                            ->label('العامل')
-                            ->options(Worker::query()->where('is_active', true)->get()->mapWithKeys(fn($w) => [$w->id => $w->first_name . ' (' . $w->user?->phone . ')']))
+                            ->label('Worker')
+                            ->options(Worker::query()->where('is_active', true)->get()->mapWithKeys(fn ($w) => [$w->id => $w->first_name.' ('.$w->user?->phone.')']))
                             ->searchable()
                             ->required(),
                     ])
@@ -117,13 +132,13 @@ final class CleaningBookingsTable
                             'cancelled_at' => null,
                             'cancellation_reason' => null,
                         ]);
-                        Notification::make()->title('تم تعيين العامل')->success()->send();
+                        Notification::make()->title('Worker assigned')->success()->send();
                     }),
                 Action::make('start_work')
-                    ->label('بدء العمل')
+                    ->label('Start work')
                     ->icon('heroicon-o-play')
                     ->color('info')
-                    ->visible(fn(CleaningBooking $record): bool => $record->status === CleaningBookingStatus::WorkerAssigned)
+                    ->visible(fn (CleaningBooking $record): bool => $record->status === CleaningBookingStatus::WorkerAssigned && $record->property_type !== UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
                     ->requiresConfirmation()
                     ->action(function (CleaningBooking $record): void {
                         $record->update([
@@ -131,13 +146,13 @@ final class CleaningBookingsTable
                             'work_started_at' => $record->work_started_at ?? now(),
                         ]);
 
-                        Notification::make()->title('تم بدء العمل')->success()->send();
+                        Notification::make()->title('Work started')->success()->send();
                     }),
                 Action::make('complete')
-                    ->label('إنهاء')
+                    ->label('Complete')
                     ->icon('heroicon-o-check-circle')
                     ->color('success')
-                    ->visible(fn(CleaningBooking $record): bool => $record->status === CleaningBookingStatus::InProgress)
+                    ->visible(fn (CleaningBooking $record): bool => $record->status === CleaningBookingStatus::InProgress && $record->property_type !== UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
                     ->requiresConfirmation()
                     ->action(function (CleaningBooking $record): void {
                         $record->update([
@@ -145,20 +160,21 @@ final class CleaningBookingsTable
                             'work_finished_at' => now(),
                         ]);
 
-                        Notification::make()->title('تم إنهاء الحجز')->success()->send();
+                        Notification::make()->title('Booking completed')->success()->send();
                     }),
                 Action::make('cancel')
-                    ->label('إلغاء')
+                    ->label('Cancel')
                     ->color('danger')
                     ->icon('heroicon-o-x-circle')
-                    ->visible(fn(CleaningBooking $record) => ! in_array($record->status, [CleaningBookingStatus::Completed, CleaningBookingStatus::Cancelled], true))
+                    ->visible(fn (CleaningBooking $record) => ! in_array($record->status, [CleaningBookingStatus::Completed, CleaningBookingStatus::Cancelled], true) && $record->property_type !== UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
                     ->requiresConfirmation()
-                    ->modalHeading('إلغاء الحجز')
+                    ->modalHeading('Cancel booking')
                     ->action(function (CleaningBooking $record): void {
                         $record->update(['status' => CleaningBookingStatus::Cancelled, 'cancelled_at' => now()]);
-                        Notification::make()->title('تم إلغاء الحجز')->success()->send();
+                        Notification::make()->title('Booking cancelled')->success()->send();
                     }),
-                EditAction::make(),
+                EditAction::make()
+                    ->visible(fn (CleaningBooking $record): bool => $record->property_type !== UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE),
                 ViewAction::make(),
             ]);
     }
@@ -167,8 +183,8 @@ final class CleaningBookingsTable
     {
         return new HtmlString(
             '<span style="display:flex;flex-direction:column;line-height:1.2;">'
-                . '<span style="display:block;font-weight:600;color:inherit;">' . e($label) . '</span>'
-                . '<span style="display:block;margin-top:2px;font-size:11px;font-weight:400;color:#9ca3af;">' . e($description) . '</span>'
+                . '<span style="display:block;font-weight:600;color:inherit;">'.e($label).'</span>'
+                . '<span style="display:block;margin-top:2px;font-size:11px;font-weight:400;color:#9ca3af;">'.e($description).'</span>'
                 . '</span>',
         );
     }

@@ -7,11 +7,15 @@ namespace Modules\User\Services;
 use App\Models\Worker;
 use Illuminate\Support\Arr;
 use InvalidArgumentException;
+use Modules\Cleaning\Enums\ServiceCategory;
+use Modules\Cleaning\Models\CleaningService;
+use Modules\Cleaning\Models\ServicePricing;
 use Modules\Cleaning\Services\CleaningPricingCalculator;
 
 final class UserCleaningOrderEstimationService
 {
     public const ALGORITHM_VERSION = '2026-05-25-v2';
+    public const EVENT_ASSISTANCE_PROPERTY_TYPE = 'event_assistance';
 
     /**
      * @var array<int, string>
@@ -22,6 +26,7 @@ final class UserCleaningOrderEstimationService
         'house',
         'office',
         'studio',
+        self::EVENT_ASSISTANCE_PROPERTY_TYPE,
     ];
 
     /**
@@ -32,6 +37,17 @@ final class UserCleaningOrderEstimationService
         'medium',
         'large',
         'very_large',
+    ];
+
+    /**
+     * @var array<int, string>
+     */
+    public const EVENT_TYPES = [
+        'family_dinner',
+        'birthday',
+        'large_gathering',
+        'funeral',
+        'other',
     ];
 
     public function __construct(
@@ -52,6 +68,11 @@ final class UserCleaningOrderEstimationService
         }
 
         return $normalized;
+    }
+
+    public function isEventAssistanceType(string $propertyType): bool
+    {
+        return $this->normalizePropertyType($propertyType) === self::EVENT_ASSISTANCE_PROPERTY_TYPE;
     }
 
     /**
@@ -94,21 +115,20 @@ final class UserCleaningOrderEstimationService
         mixed $addressLatitude,
         mixed $addressLongitude,
         mixed $preferredWorkerId = null,
+        ?array $serviceIds = null,
     ): array {
-        $normalizedDetails = $this->normalizePropertyDetails($propertyDetails);
+        $normalizedPropertyType = $this->normalizePropertyType($propertyType);
+        $normalizedDetails = $this->isEventAssistanceType($normalizedPropertyType)
+            ? $this->normalizeEventPropertyDetailsForStorage($propertyDetails)
+            : $this->normalizePropertyDetails($propertyDetails);
 
         return [
-            'propertyType' => $this->normalizePropertyType($propertyType),
-            'propertyDetails' => [
-                'bedrooms' => $normalizedDetails['bedrooms'],
-                'rooms' => $normalizedDetails['rooms'],
-                'bathrooms' => $normalizedDetails['bathrooms'],
-                'kitchens' => $normalizedDetails['kitchens'],
-                'living_room_size' => $normalizedDetails['living_room_size'],
-            ],
+            'propertyType' => $normalizedPropertyType,
+            'propertyDetails' => $normalizedDetails,
             'addressLatitude' => $this->normalizeCoordinate($addressLatitude),
             'addressLongitude' => $this->normalizeCoordinate($addressLongitude),
             'preferredWorkerId' => $this->normalizePreferredWorkerId($preferredWorkerId),
+            'serviceIds' => $this->normalizeServiceIds($serviceIds ?? []),
         ];
     }
 
@@ -116,8 +136,12 @@ final class UserCleaningOrderEstimationService
      * @param  array<string, mixed>  $propertyDetails
      * @return array<string, mixed>
      */
-    public function normalizePropertyDetailsForStorage(array $propertyDetails): array
+    public function normalizePropertyDetailsForStorage(string $propertyType, array $propertyDetails): array
     {
+        if ($this->isEventAssistanceType($propertyType)) {
+            return $this->normalizeEventPropertyDetailsForStorage($propertyDetails);
+        }
+
         return array_filter(
             $this->normalizePropertyDetails($propertyDetails),
             static fn (mixed $value): bool => $value !== null
@@ -128,9 +152,43 @@ final class UserCleaningOrderEstimationService
      * @param  array<string, mixed>  $propertyDetails
      * @return array{estimatedSqm: float, estimatedHours: float, sizeTier: string}
      */
-    public function estimate(string $propertyType, array $propertyDetails): array
+    public function estimate(string $propertyType, array $propertyDetails, ?array $serviceIds = null): array
     {
         $normalizedPropertyType = $this->normalizePropertyType($propertyType);
+
+        if ($this->isEventAssistanceType($normalizedPropertyType)) {
+            $normalizedDetails = $this->normalizeEventPropertyDetailsForStorage($propertyDetails);
+            $guestCount = (int) ($normalizedDetails['guest_count'] ?? 0);
+            $venueType = (string) ($normalizedDetails['venue_type'] ?? 'apartment');
+            $eventType = (string) ($normalizedDetails['event_type'] ?? 'other');
+            $lines = $this->resolveEventAssistancePricingLines(
+                $this->normalizeServiceIds($serviceIds ?? []),
+                $venueType
+            );
+
+            $serviceMinHours = array_sum(array_map(
+                static fn (array $line): float => (float) $line['minHours'],
+                $lines
+            ));
+            $estimatedSqm = max(25.0, $guestCount * 2.0);
+            $estimatedHours = max(1.0, $this->roundToHalfHour(max($serviceMinHours, $guestCount / 12.0)));
+            $recommendedTeamSize = $this->suggestedEventTeamSize($guestCount, count($lines));
+
+            return [
+                'estimatedSqm' => $estimatedSqm,
+                'estimatedHours' => $estimatedHours,
+                'sizeTier' => $this->sizeTier($estimatedSqm),
+                'isEventAssistance' => true,
+                'recommendation' => [
+                    'eventType' => $eventType,
+                    'guestCount' => $guestCount,
+                    'venueType' => $venueType,
+                    'selectedServiceCount' => count($lines),
+                    'suggestedTeamSize' => $recommendedTeamSize,
+                ],
+            ];
+        }
+
         $normalizedDetails = $this->normalizePropertyDetails($propertyDetails);
 
         $bedrooms = $normalizedDetails['bedrooms'];
@@ -156,6 +214,8 @@ final class UserCleaningOrderEstimationService
             'estimatedSqm' => $estimatedSqm,
             'estimatedHours' => $estimatedHours,
             'sizeTier' => $this->sizeTier($estimatedSqm),
+            'isEventAssistance' => false,
+            'recommendation' => null,
         ];
     }
 
@@ -169,20 +229,46 @@ final class UserCleaningOrderEstimationService
         mixed $addressLatitude,
         mixed $addressLongitude,
         mixed $preferredWorkerId = null,
+        ?array $serviceIds = null,
     ): array {
         $normalizedInput = $this->pricingSnapshotInput(
             $propertyType,
             $propertyDetails,
             $addressLatitude,
             $addressLongitude,
-            $preferredWorkerId
+            $preferredWorkerId,
+            $serviceIds,
         );
 
-        $estimation = $this->estimate($normalizedInput['propertyType'], $normalizedInput['propertyDetails']);
-
-        $pricePerSqm = $this->pricePerSqmByPropertyType($normalizedInput['propertyType']);
-        $basePrice = round(max(250.0, $estimation['estimatedSqm'] * $pricePerSqm), 2);
-        $addonsTotal = 0.0;
+        if ($this->isEventAssistanceType($normalizedInput['propertyType'])) {
+            $venueType = (string) ($normalizedInput['propertyDetails']['venue_type'] ?? 'apartment');
+            $lines = $this->resolveEventAssistancePricingLines($normalizedInput['serviceIds'], $venueType);
+            $basePrice = round(array_sum(array_map(
+                static fn (array $line): float => (float) $line['totalPrice'],
+                $lines
+            )), 2);
+            $addonsTotal = 0.0;
+            $estimation = $this->estimate(
+                $normalizedInput['propertyType'],
+                $normalizedInput['propertyDetails'],
+                $normalizedInput['serviceIds']
+            );
+        } else {
+            $estimation = $this->estimate($normalizedInput['propertyType'], $normalizedInput['propertyDetails']);
+            $pricePerSqm = $this->pricePerSqmByPropertyType($normalizedInput['propertyType']);
+            $basePrice = round(max(250.0, $estimation['estimatedSqm'] * $pricePerSqm), 2);
+            $livingRoomSize = (string) ($normalizedInput['propertyDetails']['living_room_size'] ?? 'medium');
+            $lines = $this->resolveRegularCleaningPricingLines(
+                $normalizedInput['serviceIds'],
+                $normalizedInput['propertyType'],
+                $livingRoomSize,
+                (float) $estimation['estimatedSqm'],
+            );
+            $addonsTotal = round(array_sum(array_map(
+                static fn (array $line): float => (float) $line['totalPrice'],
+                $lines
+            )), 2);
+        }
 
         if ($normalizedInput['preferredWorkerId'] === null) {
             $pricing = $this->pricingCalculator->provisional($basePrice, $addonsTotal);
@@ -210,6 +296,8 @@ final class UserCleaningOrderEstimationService
             'isPricingFinal' => $pricing['isPricingFinal'],
             'totalPrice' => $pricing['totalPrice'],
             'currency' => (string) config('app.currency', 'SYP'),
+            'serviceLines' => $lines,
+            'recommendation' => $estimation['recommendation'] ?? null,
         ];
     }
 
@@ -283,5 +371,213 @@ final class UserCleaningOrderEstimationService
         $normalized = (int) $preferredWorkerId;
 
         return $normalized > 0 ? $normalized : null;
+    }
+
+    /**
+     * @param  array<int, mixed>  $serviceIds
+     * @return array<int, int>
+     */
+    private function normalizeServiceIds(array $serviceIds): array
+    {
+        $normalized = [];
+
+        foreach ($serviceIds as $serviceId) {
+            if (! is_numeric($serviceId)) {
+                continue;
+            }
+
+            $id = (int) $serviceId;
+
+            if ($id <= 0) {
+                continue;
+            }
+
+            if (! in_array($id, $normalized, true)) {
+                $normalized[] = $id;
+            }
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param  array<int, int>  $serviceIds
+     * @return array<int, array{cleaningServiceId:int,name:string,quantity:float,unitPrice:float,totalPrice:float,minHours:float}>
+     */
+    private function resolveEventAssistancePricingLines(array $serviceIds, string $venueType): array
+    {
+        if ($serviceIds === []) {
+            throw new InvalidArgumentException('At least one event assistance service must be selected.');
+        }
+
+        $services = CleaningService::query()
+            ->whereIn('id', $serviceIds)
+            ->where('is_active', true)
+            ->where('category', ServiceCategory::EventAssistance->value)
+            ->with(['pricing' => fn ($query) => $query->orderBy('id')])
+            ->get()
+            ->keyBy('id');
+
+        if ($services->count() !== count($serviceIds)) {
+            throw new InvalidArgumentException('One or more selected event assistance services are invalid.');
+        }
+
+        $lines = [];
+
+        foreach ($serviceIds as $serviceId) {
+            $service = $services->get($serviceId);
+
+            if (! $service instanceof CleaningService) {
+                throw new InvalidArgumentException('One or more selected event assistance services are invalid.');
+            }
+
+            $pricing = $service->pricing
+                ->firstWhere('property_type', $venueType);
+
+            if (! $pricing instanceof ServicePricing) {
+                $pricing = $service->pricing->first();
+            }
+
+            if (! $pricing instanceof ServicePricing) {
+                throw new InvalidArgumentException("No pricing configured for event assistance service [{$service->name}].");
+            }
+
+            $unitPrice = round((float) $pricing->base_price, 2);
+
+            $lines[] = [
+                'cleaningServiceId' => (int) $service->id,
+                'name' => (string) $service->name,
+                'quantity' => 1.0,
+                'unitPrice' => $unitPrice,
+                'totalPrice' => $unitPrice,
+                'minHours' => round((float) ($pricing->min_hours ?? 0), 2),
+            ];
+        }
+
+        return $lines;
+    }
+
+    /**
+     * @param  array<int, int>  $serviceIds
+     * @return array<int, array{cleaningServiceId:int,name:string,quantity:float,unitPrice:float,totalPrice:float,minHours:float}>
+     */
+    private function resolveRegularCleaningPricingLines(
+        array $serviceIds,
+        string $propertyType,
+        string $livingRoomSize,
+        float $estimatedSqm,
+    ): array {
+        if ($serviceIds === []) {
+            return [];
+        }
+
+        $services = CleaningService::query()
+            ->whereIn('id', $serviceIds)
+            ->where('is_active', true)
+            ->where('category', ServiceCategory::Cleaning->value)
+            ->with(['pricing' => fn ($query) => $query->orderBy('id')])
+            ->get()
+            ->keyBy('id');
+
+        if ($services->count() !== count($serviceIds)) {
+            throw new InvalidArgumentException('One or more selected regular cleaning services are invalid.');
+        }
+
+        $lines = [];
+
+        foreach ($serviceIds as $serviceId) {
+            $service = $services->get($serviceId);
+
+            if (! $service instanceof CleaningService) {
+                throw new InvalidArgumentException('One or more selected regular cleaning services are invalid.');
+            }
+
+            $pricing = $service->pricing->first(function (ServicePricing $row) use ($propertyType, $livingRoomSize): bool {
+                return $row->property_type === $propertyType && $row->living_room_size === $livingRoomSize;
+            });
+
+            if (! $pricing instanceof ServicePricing) {
+                $pricing = $service->pricing->first(function (ServicePricing $row) use ($propertyType): bool {
+                    return $row->property_type === $propertyType && $row->living_room_size === null;
+                });
+            }
+
+            if (! $pricing instanceof ServicePricing) {
+                $pricing = $service->pricing->first(function (ServicePricing $row) use ($propertyType): bool {
+                    return $row->property_type === $propertyType;
+                });
+            }
+
+            if (! $pricing instanceof ServicePricing) {
+                $pricing = $service->pricing->first();
+            }
+
+            if (! $pricing instanceof ServicePricing) {
+                throw new InvalidArgumentException("No pricing configured for regular cleaning service [{$service->name}].");
+            }
+
+            $basePrice = round((float) $pricing->base_price, 2);
+            $sqmPrice = $pricing->price_per_sqm !== null
+                ? round((float) $pricing->price_per_sqm * $estimatedSqm, 2)
+                : null;
+            $unitPrice = $sqmPrice !== null ? max($basePrice, $sqmPrice) : $basePrice;
+            $unitPrice = round($unitPrice, 2);
+
+            $lines[] = [
+                'cleaningServiceId' => (int) $service->id,
+                'name' => (string) $service->name,
+                'quantity' => 1.0,
+                'unitPrice' => $unitPrice,
+                'totalPrice' => $unitPrice,
+                'minHours' => round((float) ($pricing->min_hours ?? 0), 2),
+            ];
+        }
+
+        return $lines;
+    }
+
+    /**
+     * @param  array<string, mixed>  $propertyDetails
+     * @return array<string, mixed>
+     */
+    private function normalizeEventPropertyDetailsForStorage(array $propertyDetails): array
+    {
+        $eventType = mb_strtolower((string) Arr::get($propertyDetails, 'eventType', Arr::get($propertyDetails, 'event_type', 'other')));
+        if (! in_array($eventType, self::EVENT_TYPES, true)) {
+            $eventType = 'other';
+        }
+
+        $venueType = $this->normalizePropertyType((string) Arr::get($propertyDetails, 'venueType', Arr::get($propertyDetails, 'venue_type', 'apartment')));
+        if ($venueType === self::EVENT_ASSISTANCE_PROPERTY_TYPE) {
+            $venueType = 'apartment';
+        }
+
+        $address = Arr::has($propertyDetails, 'address')
+            ? mb_trim((string) Arr::get($propertyDetails, 'address'))
+            : null;
+        $locationName = Arr::has($propertyDetails, 'location_name')
+            ? mb_trim((string) Arr::get($propertyDetails, 'location_name'))
+            : null;
+        $specialRequirement = Arr::has($propertyDetails, 'specialRequirement')
+            ? mb_trim((string) Arr::get($propertyDetails, 'specialRequirement'))
+            : null;
+        $notes = Arr::has($propertyDetails, 'notes')
+            ? mb_trim((string) Arr::get($propertyDetails, 'notes'))
+            : null;
+
+        return array_filter([
+            'address' => $address !== '' ? $address : null,
+            'location_name' => $locationName !== '' ? $locationName : null,
+            'event_type' => $eventType,
+            'guest_count' => max(0, (int) Arr::get($propertyDetails, 'guestCount', Arr::get($propertyDetails, 'guest_count', 0))),
+            'venue_type' => $venueType,
+            'special_requirement' => $specialRequirement !== '' ? $specialRequirement : null,
+            'notes' => $notes !== '' ? $notes : null,
+        ], static fn (mixed $value): bool => $value !== null);
+    }
+
+    private function suggestedEventTeamSize(int $guestCount, int $serviceCount): int
+    {
+        return max(1, (int) ceil($guestCount / 10) + max(0, $serviceCount - 1));
     }
 }

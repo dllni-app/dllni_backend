@@ -7,6 +7,7 @@ namespace App\Filament\Resources\CleaningBookings\Schemas;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class CleaningBookingInfolist
 {
@@ -31,6 +32,20 @@ final class CleaningBookingInfolist
                         TextEntry::make('scheduled_time')->label(__('cleaning_admin.booking.fields.scheduled_time')),
                     ])
                     ->columns(2),
+                Section::make('Event assistance details')
+                    ->schema([
+                        TextEntry::make('property_details.event_type')->label('Event type')->placeholder('-'),
+                        TextEntry::make('property_details.guest_count')->label('Guest count')->placeholder('-'),
+                        TextEntry::make('property_details.venue_type')->label('Venue type')->placeholder('-'),
+                        TextEntry::make('property_details.special_requirement')->label('Special requirement')->placeholder('-'),
+                        TextEntry::make('property_details.notes')->label('Notes')->placeholder('-'),
+                        TextEntry::make('event_services')
+                            ->label('Selected services')
+                            ->state(fn ($record): string => $record->services()->pluck('name')->implode(', '))
+                            ->placeholder('-'),
+                    ])
+                    ->columns(2)
+                    ->visible(fn ($record): bool => $record->property_type === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE),
                 Section::make(__('cleaning_admin.booking.sections.pricing'))
                     ->schema([
                         TextEntry::make('base_price')->label(__('cleaning_admin.booking.fields.base_price'))->money(config('app.currency', 'SYP')),

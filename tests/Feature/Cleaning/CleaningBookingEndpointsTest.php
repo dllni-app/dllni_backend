@@ -218,6 +218,31 @@ it('returns pending unassigned bookings for worker when forCurrentWorker and sta
     expect($response->json('data'))->toBeArray()->toHaveCount(2);
 });
 
+it('filters cleaning bookings by property type', function () {
+    $billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
+        'name' => 'Default',
+        'billing_mode' => 'actual_working_time',
+        'rules' => [],
+        'is_active' => true,
+        'is_default' => true,
+    ]);
+
+    CleaningBooking::factory()->create([
+        'billing_policy_id' => $billingPolicy->id,
+        'property_type' => 'event_assistance',
+    ]);
+    CleaningBooking::factory()->create([
+        'billing_policy_id' => $billingPolicy->id,
+        'property_type' => 'apartment',
+    ]);
+
+    $response = $this->getJson('/api/v1/cleaning-bookings?filter[propertyType]=event_assistance');
+
+    $response->assertOk();
+    expect($response->json('data'))->toHaveCount(1);
+    expect($response->json('data.0.propertyType'))->toBe('event_assistance');
+});
+
 it('returns worker profile when user has worker', function () {
     $workerUser = User::factory()->create(['email' => 'profile-worker@example.com', 'phone' => '+963991234567']);
     $worker = Worker::factory()->create(['user_id' => $workerUser->id, 'first_name' => 'Ahmed']);
@@ -289,6 +314,7 @@ it('finalizes provisional pricing when worker accepts booking', function () {
     $booking = CleaningBooking::factory()->create([
         'worker_id' => null,
         'status' => CleaningBookingStatus::Pending,
+        'gender_preference' => 'any',
         'address_latitude' => 33.5,
         'address_longitude' => 36.3,
         'base_price' => 920,

@@ -20,6 +20,8 @@ final class UserCleaningOrderEstimateSizeRequest extends FormRequest
      */
     public function rules(): array
     {
+        $isEventAssistance = $this->isEventAssistanceRequested();
+
         return [
             'propertyType' => ['required', 'string', Rule::in(UserCleaningOrderEstimationService::PROPERTY_TYPES)],
             'propertyDetails' => ['required', 'array'],
@@ -28,6 +30,27 @@ final class UserCleaningOrderEstimateSizeRequest extends FormRequest
             'propertyDetails.bathrooms' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.kitchens' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.living_room_size' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::LIVING_ROOM_SIZES)],
+            'propertyDetails.eventType' => [Rule::requiredIf($isEventAssistance), 'string', Rule::in(UserCleaningOrderEstimationService::EVENT_TYPES)],
+            'propertyDetails.guestCount' => [Rule::requiredIf($isEventAssistance), 'integer', 'min:1', 'max:5000'],
+            'propertyDetails.venueType' => [Rule::requiredIf($isEventAssistance), 'string', Rule::in($this->availableVenueTypes())],
+            'serviceIds' => [Rule::requiredIf($isEventAssistance), 'array', 'min:1'],
+            'serviceIds.*' => ['integer', 'distinct', 'exists:cleaning_services,id'],
         ];
+    }
+
+    private function isEventAssistanceRequested(): bool
+    {
+        return mb_strtolower((string) $this->input('propertyType')) === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function availableVenueTypes(): array
+    {
+        return array_values(array_filter(
+            UserCleaningOrderEstimationService::PROPERTY_TYPES,
+            static fn (string $type): bool => $type !== UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE
+        ));
     }
 }

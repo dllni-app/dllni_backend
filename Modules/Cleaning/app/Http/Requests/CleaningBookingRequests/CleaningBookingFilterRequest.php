@@ -7,6 +7,7 @@ namespace Modules\Cleaning\Http\Requests\CleaningBookingRequests;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class CleaningBookingFilterRequest extends FormRequest
 {
@@ -30,6 +31,7 @@ final class CleaningBookingFilterRequest extends FormRequest
             'filter.scheduledDate' => 'sometimes|date',
             'filter.customerId' => 'sometimes|exists:users,id',
             'filter.workerId' => 'sometimes|exists:workers,id',
+            'filter.propertyType' => ['sometimes', 'string', Rule::in(UserCleaningOrderEstimationService::PROPERTY_TYPES)],
             'filter.forCurrentWorker' => 'sometimes|boolean',
             'filter.hasDispute' => 'sometimes|boolean',
             'sort' => 'sometimes|string|in:scheduledDate,-scheduledDate,createdAt,-createdAt,status,-status,totalPrice,-totalPrice',

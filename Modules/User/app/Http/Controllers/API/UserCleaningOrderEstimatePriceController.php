@@ -18,14 +18,19 @@ final class UserCleaningOrderEstimatePriceController
     ): JsonResponse {
         $validated = $request->validated();
 
-        $estimation = $service->estimate((string) $validated['propertyType'], (array) $validated['propertyDetails']);
         try {
+            $estimation = $service->estimate(
+                (string) $validated['propertyType'],
+                (array) $validated['propertyDetails'],
+                isset($validated['serviceIds']) ? (array) $validated['serviceIds'] : null,
+            );
             $pricing = $service->price(
                 (string) $validated['propertyType'],
                 (array) $validated['propertyDetails'],
                 $validated['addressLatitude'] ?? null,
                 $validated['addressLongitude'] ?? null,
-                $validated['preferredWorkerId'] ?? null
+                $validated['preferredWorkerId'] ?? null,
+                isset($validated['serviceIds']) ? (array) $validated['serviceIds'] : null,
             );
         } catch (InvalidArgumentException $exception) {
             throw ValidationException::withMessages([
@@ -40,6 +45,7 @@ final class UserCleaningOrderEstimatePriceController
                 'sizeTier' => $estimation['sizeTier'],
             ],
             'pricing' => $pricing,
+            'recommendation' => $estimation['recommendation'] ?? null,
             'algorithmVersion' => $service->algorithmVersion(),
         ]);
     }

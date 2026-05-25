@@ -24,6 +24,7 @@ trait CleaningBookingFilterQuery
                 AllowedFilter::scope('scheduledDate'),
                 AllowedFilter::exact('customerId', 'customer_id'),
                 AllowedFilter::exact('workerId', 'worker_id'),
+                AllowedFilter::exact('propertyType', 'property_type'),
                 AllowedFilter::scope('forCurrentWorker'),
                 AllowedFilter::scope('hasDispute'),
             ])
