@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+use Modules\Cleaning\Enums\ServiceCategory;
 
 final class CleaningServiceRequest extends FormRequest
 {
@@ -15,13 +17,14 @@ final class CleaningServiceRequest extends FormRequest
 
     public function rules(): array
     {
-        $cleaningService = $this->route('cleaning_service');
-
         return [
             'name' => 'required|string|max:255',
-            'slug' => 'required|string|max:255|unique:cleaning_services,slug,'.($cleaningService?->id ?? 'NULL'),
-            'category' => 'required|string|in:cleaning,event_assistance,other',
+            'category' => ['required', 'string', Rule::in([
+                ServiceCategory::Cleaning->value,
+                ServiceCategory::EventAssistance->value,
+            ])],
             'description' => 'nullable|string',
+            'price' => 'required|numeric|min:0',
             'isActive' => 'nullable|boolean',
         ];
     }

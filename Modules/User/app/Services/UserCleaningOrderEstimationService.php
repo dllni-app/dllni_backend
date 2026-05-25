@@ -402,7 +402,7 @@ final class UserCleaningOrderEstimationService
 
     /**
      * @param  array<int, int>  $serviceIds
-     * @return array<int, array{cleaningServiceId:int,name:string,quantity:float,unitPrice:float,totalPrice:float,minHours:float}>
+     * @return array<int, array{cleaningServiceId:int,name:string,description:?string,price:float,quantity:float,unitPrice:float,totalPrice:float,minHours:float}>
      */
     private function resolveEventAssistancePricingLines(array $serviceIds, string $venueType): array
     {
@@ -442,11 +442,13 @@ final class UserCleaningOrderEstimationService
                 throw new InvalidArgumentException("No pricing configured for event assistance service [{$service->name}].");
             }
 
-            $unitPrice = round((float) $pricing->base_price, 2);
+            $unitPrice = round((float) ($service->price ?? $pricing->base_price), 2);
 
             $lines[] = [
                 'cleaningServiceId' => (int) $service->id,
                 'name' => (string) $service->name,
+                'description' => $service->description,
+                'price' => $unitPrice,
                 'quantity' => 1.0,
                 'unitPrice' => $unitPrice,
                 'totalPrice' => $unitPrice,
@@ -459,7 +461,7 @@ final class UserCleaningOrderEstimationService
 
     /**
      * @param  array<int, int>  $serviceIds
-     * @return array<int, array{cleaningServiceId:int,name:string,quantity:float,unitPrice:float,totalPrice:float,minHours:float}>
+     * @return array<int, array{cleaningServiceId:int,name:string,description:?string,price:float,quantity:float,unitPrice:float,totalPrice:float,minHours:float}>
      */
     private function resolveRegularCleaningPricingLines(
         array $serviceIds,
@@ -520,12 +522,16 @@ final class UserCleaningOrderEstimationService
             $sqmPrice = $pricing->price_per_sqm !== null
                 ? round((float) $pricing->price_per_sqm * $estimatedSqm, 2)
                 : null;
-            $unitPrice = $sqmPrice !== null ? max($basePrice, $sqmPrice) : $basePrice;
+            $unitPrice = $service->price !== null
+                ? round((float) $service->price, 2)
+                : ($sqmPrice !== null ? max($basePrice, $sqmPrice) : $basePrice);
             $unitPrice = round($unitPrice, 2);
 
             $lines[] = [
                 'cleaningServiceId' => (int) $service->id,
                 'name' => (string) $service->name,
+                'description' => $service->description,
+                'price' => $unitPrice,
                 'quantity' => 1.0,
                 'unitPrice' => $unitPrice,
                 'totalPrice' => $unitPrice,

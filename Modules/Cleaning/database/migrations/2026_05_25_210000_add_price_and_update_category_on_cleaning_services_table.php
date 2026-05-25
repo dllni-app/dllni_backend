@@ -1,0 +1,43 @@
+<?php
+
+declare(strict_types=1);
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('cleaning_services', function (Blueprint $table): void {
+            $table->decimal('price', 10, 2)->default(0)->after('description');
+        });
+
+        DB::table('cleaning_services')
+            ->where('category', 'event_assistance')
+            ->update(['category' => 'event_assisent']);
+
+        DB::statement(
+            'UPDATE cleaning_services cs '
+            .'LEFT JOIN ('
+            .'  SELECT cleaning_service_id, MIN(base_price) AS min_base_price '
+            .'  FROM service_pricing '
+            .'  GROUP BY cleaning_service_id'
+            .') sp ON sp.cleaning_service_id = cs.id '
+            .'SET cs.price = COALESCE(sp.min_base_price, cs.price, 0)'
+        );
+    }
+
+    public function down(): void
+    {
+        DB::table('cleaning_services')
+            ->where('category', 'event_assisent')
+            ->update(['category' => 'event_assistance']);
+
+        Schema::table('cleaning_services', function (Blueprint $table): void {
+            $table->dropColumn('price');
+        });
+    }
+};

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Http\Requests\CleaningServiceRequests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Modules\Cleaning\Enums\ServiceCategory;
 
 final class CleaningServiceFilterRequest extends FormRequest
 {
@@ -18,7 +19,7 @@ final class CleaningServiceFilterRequest extends FormRequest
         return [
             'perPage' => 'sometimes|integer|min:1|max:100',
             'filter.isActive' => 'sometimes|boolean',
-            'filter.category' => 'sometimes|string|in:cleaning,event_assistance,other',
+            'filter.category' => 'sometimes|string|in:'.ServiceCategory::Cleaning->value.','.ServiceCategory::EventAssistance->value,
             'filter.search' => 'sometimes|string|max:255',
             'sort' => 'sometimes|string|in:name,-name,category,-category,createdAt,-createdAt',
         ];

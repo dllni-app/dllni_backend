@@ -18,9 +18,9 @@ final class CleaningServiceResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->name,
-            'slug' => $this->slug,
             'category' => $this->category?->value ?? $this->category,
             'description' => $this->description,
+            'price' => $this->price !== null ? (float) $this->price : 0.0,
             'isActive' => $this->is_active,
             'pricing' => ServicePricingResource::collection($this->whenLoaded('pricing')),
             'createdAt' => $this->created_at->toDateTimeString(),

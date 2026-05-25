@@ -17,8 +17,9 @@ final class CleaningServicesTable
         return $table
             ->columns([
                 TextColumn::make('name')->searchable(),
-                TextColumn::make('slug')->searchable(),
                 TextColumn::make('category')->badge(),
+                TextColumn::make('description')->limit(80)->toggleable(),
+                TextColumn::make('price')->numeric(2)->sortable(),
                 IconColumn::make('is_active')->boolean(),
             ])
             ->recordActions([

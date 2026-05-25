@@ -26,7 +26,9 @@ final class ServicePricingResource extends JsonResource
             'cleaningService' => $this->whenLoaded('cleaningService', fn () => [
                 'id' => $this->cleaningService->id,
                 'name' => $this->cleaningService->name,
-                'slug' => $this->cleaningService->slug,
+                'category' => $this->cleaningService->category?->value ?? $this->cleaningService->category,
+                'description' => $this->cleaningService->description,
+                'price' => $this->cleaningService->price !== null ? (float) $this->cleaningService->price : 0.0,
             ]),
             'createdAt' => $this->created_at->toDateTimeString(),
             'updatedAt' => $this->updated_at->toDateTimeString(),
