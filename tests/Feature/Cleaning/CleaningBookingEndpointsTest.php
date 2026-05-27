@@ -420,6 +420,11 @@ it('returns zeros for worker homepage when user has no worker', function () {
     expect($response->json('earningsChangePercent'))->toBe(0);
     expect($response->json('newOrdersCount'))->toBe(0);
     expect($response->json('pendingExtensionRequestsCount'))->toBe(0);
+    expect((float) $response->json('amountSummary.workerAmount'))->toBe(0.0);
+    expect((float) $response->json('amountSummary.adminAmount'))->toBe(0.0);
+    expect((float) $response->json('amountSummary.grossInvoicesAmount'))->toBe(0.0);
+    expect($response->json('bookingsWeeklyChart'))->toBeArray()->toHaveCount(7);
+    expect($response->json('invoicesFourWeeksChart'))->toBeArray()->toHaveCount(4);
 });
 
 it('returns worker homepage with todayEarnings newOrdersCount and pendingExtensionRequestsCount', function () {
@@ -472,6 +477,59 @@ it('returns worker homepage with todayEarnings newOrdersCount and pendingExtensi
     expect((float) $response->json('earningsChangePercent'))->toBe(100.0);
     expect($response->json('newOrdersCount'))->toBeGreaterThanOrEqual(1);
     expect($response->json('pendingExtensionRequestsCount'))->toBe(1);
+    expect((float) $response->json('amountSummary.workerAmount'))->toBe(200.0);
+    expect((float) $response->json('amountSummary.adminAmount'))->toBe(0.0);
+    expect((float) $response->json('amountSummary.grossInvoicesAmount'))->toBe(200.0);
+    expect($response->json('bookingsWeeklyChart'))->toBeArray()->toHaveCount(7);
+    expect($response->json('invoicesFourWeeksChart'))->toBeArray()->toHaveCount(4);
+});
+
+it('returns worker homepage chart and amount summary blocks for the owner dashboard screen', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-homepage-owner-dashboard@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
+        'name' => 'Default',
+        'billing_mode' => 'actual_working_time',
+        'rules' => [],
+        'is_active' => true,
+        'is_default' => true,
+    ]);
+
+    $today = now()->startOfDay();
+    $monday = $today->copy()->startOfWeek(Carbon\Carbon::MONDAY);
+
+    CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $billingPolicy->id,
+        'status' => CleaningBookingStatus::Completed,
+        'scheduled_date' => $monday->copy()->format('Y-m-d'),
+        'total_price' => 1000,
+        'admin_margin_amount' => 200,
+    ]);
+    CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $billingPolicy->id,
+        'status' => CleaningBookingStatus::WorkerAssigned,
+        'scheduled_date' => $monday->copy()->addDay()->format('Y-m-d'),
+    ]);
+
+    $response = $this->getJson('/api/v1/cleaning/worker/homepage');
+
+    $response->assertOk();
+    expect((float) $response->json('amountSummary.workerAmount'))->toBe(800.0);
+    expect((float) $response->json('amountSummary.adminAmount'))->toBe(200.0);
+    expect((float) $response->json('amountSummary.grossInvoicesAmount'))->toBe(1000.0);
+
+    $bookingsWeeklyChart = $response->json('bookingsWeeklyChart');
+    expect($bookingsWeeklyChart)->toBeArray()->toHaveCount(7);
+    expect((int) $bookingsWeeklyChart[0]['bookingsCount'])->toBeGreaterThanOrEqual(1);
+
+    $invoicesChart = $response->json('invoicesFourWeeksChart');
+    expect($invoicesChart)->toBeArray()->toHaveCount(4);
+    $invoiceSum = collect($invoicesChart)->sum(fn ($item) => (float) ($item['invoiceAmount'] ?? 0));
+    expect((float) $invoiceSum)->toBeGreaterThanOrEqual(1000.0);
 });
 
 it('returns working hours for authenticated worker', function () {
