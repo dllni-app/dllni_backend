@@ -28,6 +28,11 @@ final class CleaningServiceResource extends Resource
 
     protected static ?int $navigationSort = 21;
 
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
+
     public static function getNavigationGroup(): ?string
     {
         return __('cleaning_admin.nav_groups.operations');
@@ -41,6 +46,16 @@ final class CleaningServiceResource extends Resource
     public static function getNavigationTooltip(): ?string
     {
         return __('cleaning_admin.cleaning_services.tooltip');
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('cleaning_admin.cleaning_services.model');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('cleaning_admin.cleaning_services.plural');
     }
 
     public static function form(Schema $schema): Schema

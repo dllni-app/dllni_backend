@@ -20,7 +20,8 @@ final class CleaningServiceSeeder extends Seeder
                 'name' => 'تنظيف الشقة المعياري',
                 'slug' => 'standard-apartment-cleaning',
                 'category' => ServiceCategory::Cleaning->value,
-                'description' => 'تنظيف دوري للشقق. يشمل المسح والكنس والغسيل وتنظيف الحمام والمطبخ.',
+                'description' => 'تنظيف دوري للشقق يشمل المسح والكنس والغسيل وتنظيف الحمام والمطبخ.',
+                'price' => 45.00,
                 'pricing' => [
                     [PropertyType::Studio->value, null, 45.00, 0.50, 2],
                     [PropertyType::Apartment->value, LivingRoomSize::Small->value, 55.00, 0.45, 3],
@@ -34,6 +35,7 @@ final class CleaningServiceSeeder extends Seeder
                 'slug' => 'deep-cleaning',
                 'category' => ServiceCategory::Cleaning->value,
                 'description' => 'تنظيف شامل يشمل داخل الخزائن والأجهزة والمناطق صعبة الوصول.',
+                'price' => 85.00,
                 'pricing' => [
                     [PropertyType::Studio->value, null, 85.00, 1.00, 3],
                     [PropertyType::Apartment->value, LivingRoomSize::Small->value, 110.00, 0.90, 4],
@@ -43,10 +45,11 @@ final class CleaningServiceSeeder extends Seeder
                 ],
             ],
             [
-                'name' => 'تنظيف نقل سكن',
+                'name' => 'تنظيف نقل السكن',
                 'slug' => 'move-in-move-out-cleaning',
                 'category' => ServiceCategory::Cleaning->value,
-                'description' => 'تنظيف شامل عند الانتقال. يضمن أن تكون العقار نظيفة للمستأجرين الجدد.',
+                'description' => 'تنظيف شامل عند الانتقال يضمن جاهزية العقار للمستأجرين الجدد.',
+                'price' => 95.00,
                 'pricing' => [
                     [PropertyType::Studio->value, null, 95.00, 1.20, 3],
                     [PropertyType::Apartment->value, LivingRoomSize::Small->value, 125.00, 1.10, 4],
@@ -59,6 +62,7 @@ final class CleaningServiceSeeder extends Seeder
                 'slug' => 'event-assistance',
                 'category' => ServiceCategory::EventAssistance->value,
                 'description' => 'مساعدة في التحضير والتقديم والتنظيف للمناسبات والتجمعات.',
+                'price' => 25.00,
                 'pricing' => [
                     [PropertyType::Apartment->value, null, 25.00, null, 4],
                     [PropertyType::Villa->value, null, 25.00, null, 6],
@@ -68,7 +72,8 @@ final class CleaningServiceSeeder extends Seeder
                 'name' => 'تنظيف المكاتب',
                 'slug' => 'office-cleaning',
                 'category' => ServiceCategory::Cleaning->value,
-                'description' => 'تنظيف مكاتب احترافي. المكاتب والمناطق المشتركة ودورات المياه.',
+                'description' => 'تنظيف مكاتب احترافي يشمل المكاتب والمناطق المشتركة ودورات المياه.',
+                'price' => 60.00,
                 'pricing' => [
                     [PropertyType::Office->value, null, 60.00, 0.35, 4],
                 ],
@@ -79,33 +84,32 @@ final class CleaningServiceSeeder extends Seeder
             $pricing = $data['pricing'];
             unset($data['pricing']);
 
-            $service = CleaningService::firstOrCreate(
+            $service = CleaningService::updateOrCreate(
                 ['slug' => $data['slug']],
                 [
                     'name' => $data['name'],
                     'category' => $data['category'],
                     'description' => $data['description'],
+                    'price' => $data['price'],
                     'is_active' => true,
                 ]
             );
 
             foreach ($pricing as $p) {
                 [$propertyType, $livingRoomSize, $basePrice, $pricePerSqm, $minHours] = $p;
-                $exists = ServicePricing::where('cleaning_service_id', $service->id)
-                    ->where('property_type', $propertyType)
-                    ->where('living_room_size', $livingRoomSize)
-                    ->exists();
 
-                if (! $exists) {
-                    ServicePricing::create([
+                ServicePricing::updateOrCreate(
+                    [
                         'cleaning_service_id' => $service->id,
                         'property_type' => $propertyType,
                         'living_room_size' => $livingRoomSize,
+                    ],
+                    [
                         'base_price' => $basePrice,
                         'price_per_sqm' => $pricePerSqm,
                         'min_hours' => $minHours,
-                    ]);
-                }
+                    ]
+                );
             }
         }
     }

@@ -8,6 +8,7 @@ use App\Models\CleaningFinancialSetting;
 use App\Models\WorkerZone;
 use BackedEnum;
 use Filament\Pages\Page;
+use Illuminate\Contracts\Support\Htmlable;
 
 final class GeographicCoverage extends Page
 {
@@ -48,9 +49,14 @@ final class GeographicCoverage extends Page
         return $user->can('pricing.view') || $user->can('settings.view');
     }
 
-    public function getSubheading(): ?string
+    public function getHeading(): string|Htmlable|null
     {
-        return __('cleaning_admin.pages.geographic_coverage.description');
+        return null;
+    }
+
+    public function getSubheading(): string|Htmlable|null
+    {
+        return null;
     }
 
     public function getViewData(): array
@@ -91,6 +97,13 @@ final class GeographicCoverage extends Page
                 ];
             });
 
-        return ['rows' => $rows];
+        return [
+            'rows' => $rows,
+            'summary' => [
+                'regions_count' => $rows->count(),
+                'high_pressure_count' => $rows->where('level', 'High')->count(),
+                'workers_count' => $rows->sum('workers_count'),
+            ],
+        ];
     }
 }

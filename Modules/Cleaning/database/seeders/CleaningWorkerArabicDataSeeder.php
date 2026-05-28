@@ -444,6 +444,10 @@ final class CleaningWorkerArabicDataSeeder extends Seeder
                 ]
             );
 
+            $user->forceFill([
+                'name' => $data['name'],
+            ])->save();
+
             SeederMedia::ensureSingleMedia(
                 $user,
                 'primary-image',

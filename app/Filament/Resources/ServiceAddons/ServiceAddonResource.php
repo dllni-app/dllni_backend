@@ -42,6 +42,16 @@ final class ServiceAddonResource extends Resource
         return __('cleaning_admin.service_addons.tooltip');
     }
 
+    public static function getModelLabel(): string
+    {
+        return __('cleaning_admin.service_addons.model');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('cleaning_admin.service_addons.plural');
+    }
+
     public static function form(Schema $schema): Schema
     {
         return ServiceAddonForm::configure($schema);

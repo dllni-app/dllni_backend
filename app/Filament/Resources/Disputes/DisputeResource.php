@@ -42,6 +42,16 @@ final class DisputeResource extends Resource
         return __('cleaning_admin.disputes.tooltip');
     }
 
+    public static function getModelLabel(): string
+    {
+        return __('cleaning_admin.disputes.model');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('cleaning_admin.disputes.plural');
+    }
+
     public static function form(Schema $schema): Schema
     {
         return DisputeForm::configure($schema);

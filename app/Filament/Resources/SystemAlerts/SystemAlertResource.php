@@ -41,6 +41,16 @@ final class SystemAlertResource extends Resource
         return __('cleaning_admin.system_alerts.tooltip');
     }
 
+    public static function getModelLabel(): string
+    {
+        return __('cleaning_admin.system_alerts.model');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('cleaning_admin.system_alerts.plural');
+    }
+
     public static function form(Schema $schema): Schema
     {
         return SystemAlertForm::configure($schema);

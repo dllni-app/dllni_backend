@@ -3,6 +3,13 @@
 declare(strict_types=1);
 
 return [
+    'shared' => [
+        'actions' => [
+            'view' => 'View',
+            'edit' => 'Edit',
+        ],
+    ],
+
     'nav_group' => 'Cleaning Section',
     'nav_groups' => [
         'operations' => 'Cleaning Operations',
@@ -91,10 +98,18 @@ return [
             'start' => 'From',
             'end' => 'To',
         ],
+        'stats' => [
+            'total' => 'Total workers',
+            'active' => 'Active workers',
+            'suspended' => 'Suspended',
+            'average_rating' => 'Average rating',
+        ],
     ],
 
     'disputes' => [
         'nav_label' => 'Disputes & Complaints',
+        'model' => 'Dispute',
+        'plural' => 'Disputes',
         'tooltip' => 'Resolve disputes and complaints: ticket #, booking #, customer, worker, reason, status; reply, partial refund, deduct from worker, close.',
         'sections' => [
             'ticket' => 'Ticket',
@@ -116,10 +131,17 @@ return [
             'created_at' => 'Opened at',
         ],
         'actions' => [
+            'create' => 'Add dispute',
             'reply' => 'Reply',
             'refund_partial' => 'Partial Refund',
             'deduct_worker' => 'Deduct from Worker',
             'close' => 'Close Dispute',
+        ],
+        'stats' => [
+            'total' => 'Total disputes',
+            'open' => 'Open',
+            'under_review' => 'Under review',
+            'resolved' => 'Resolved',
         ],
         'modals' => [
             'refund_heading' => 'Partial Refund to Customer',
@@ -135,7 +157,22 @@ return [
 
     'system_alerts' => [
         'nav_label' => 'System Alerts',
+        'model' => 'System alert',
+        'plural' => 'System alerts',
         'tooltip' => 'Delayed mutual rating, frozen location, SOS, time exceeded without end; contact or resolve actions.',
+        'fields' => [
+            'alert_type' => 'Alert type',
+            'severity' => 'Severity',
+            'status' => 'Status',
+            'booking_type' => 'Booking type',
+            'created_at' => 'Created at',
+        ],
+        'stats' => [
+            'total' => 'Total alerts',
+            'new' => 'New alerts',
+            'critical' => 'Critical',
+            'resolved' => 'Resolved',
+        ],
     ],
 
     'booking_morph_labels' => [
@@ -157,6 +194,8 @@ return [
 
     'cleaning_bookings' => [
         'nav_label' => 'Cleaning Bookings',
+        'model' => 'Cleaning booking',
+        'plural' => 'Cleaning bookings',
         'tooltip' => 'View and manage all cleaning bookings: booking #, customer, worker, date and time, status, total price, assign worker or cancel.',
     ],
 
@@ -174,13 +213,57 @@ return [
 
     'cleaning_services' => [
         'nav_label' => 'Cleaning Services',
+        'model' => 'Cleaning service',
+        'plural' => 'Cleaning services',
         'tooltip' => 'Manage cleaning services and base pricing.',
         'tooltip_full' => 'Define cleaning service types: name, description, link to base pricing and available add-ons.',
+        'fields' => [
+            'name' => 'Name',
+            'category' => 'Category',
+            'description' => 'Description',
+            'price' => 'Price',
+            'is_active' => 'Active',
+        ],
+        'filters' => [
+            'category' => 'Category',
+            'is_active' => 'Active',
+        ],
+        'actions' => [
+            'create' => 'Add service',
+        ],
+        'stats' => [
+            'total' => 'Total services',
+            'active' => 'Active services',
+            'cleaning' => 'Cleaning',
+            'event_assistance' => 'Event assistance',
+        ],
     ],
 
     'service_addons' => [
         'nav_label' => 'Service Add-ons',
+        'model' => 'Service add-on',
+        'plural' => 'Service add-ons',
         'tooltip' => 'Manage optional add-ons: name, description, pricing type (fixed or percentage of service cost).',
+        'fields' => [
+            'name' => 'Name',
+            'slug' => 'Slug',
+            'pricing_type' => 'Pricing type',
+            'price_value' => 'Price',
+            'is_active' => 'Active',
+        ],
+        'filters' => [
+            'pricing_type' => 'Pricing type',
+            'is_active' => 'Active',
+        ],
+        'actions' => [
+            'create' => 'Add add-on',
+        ],
+        'stats' => [
+            'total' => 'Total add-ons',
+            'active' => 'Active add-ons',
+            'fixed' => 'Fixed price',
+            'percentage' => 'Percentage',
+        ],
     ],
 
     'travel_cost_configs' => [
@@ -239,6 +322,46 @@ return [
             'worker' => 'Worker',
             'number_of_workers' => 'Number of Workers',
             'disputes_count' => 'Disputes Count',
+            'event_type' => 'Event Type',
+            'pricing_status' => 'Pricing',
+        ],
+        'filters' => [
+            'status' => 'Status',
+            'has_dispute' => 'Has dispute',
+            'scheduled_today' => 'Scheduled today',
+            'property_type' => 'Property type',
+        ],
+        'property_types' => [
+            'event_assistance' => 'Event assistance',
+            'apartment' => 'Apartment',
+            'villa' => 'Villa',
+            'house' => 'House',
+            'office' => 'Office',
+            'studio' => 'Studio',
+        ],
+        'actions' => [
+            'assign_worker' => 'Assign worker',
+            'worker' => 'Worker',
+            'worker_assigned' => 'Worker assigned',
+            'start_work' => 'Start work',
+            'work_started' => 'Work started',
+            'complete' => 'Complete',
+            'booking_completed' => 'Booking completed',
+            'cancel' => 'Cancel',
+            'cancel_booking' => 'Cancel booking',
+            'booking_cancelled' => 'Booking cancelled',
+        ],
+        'pricing' => [
+            'final' => 'Final',
+            'provisional' => 'Provisional',
+            'formula' => 'Base :base + add-ons :addons + travel :travel + cancellation :cancellation = total :total',
+        ],
+        'stats' => [
+            'total' => 'Total bookings',
+            'pending' => 'Waiting assignment',
+            'assigned' => 'Worker assigned',
+            'in_progress' => 'In progress',
+            'today' => 'Today',
         ],
     ],
 
@@ -338,7 +461,8 @@ return [
         'number_of_workers' => 'Number of workers requested for this booking.',
         'scheduled_date' => 'Scheduled date for the service.',
         'scheduled_time' => 'Scheduled start time for the service.',
-        'total_price' => 'Total amount (base + add-ons + travel) in SAR.',
+        'total_price' => 'Total amount (base + add-ons + travel) in the configured currency.',
+        'pricing_status' => 'Whether the shown amount is final or still provisional.',
         'disputes_count' => 'Number of open or closed disputes linked to this booking.',
         'ticket_number' => 'Dispute or complaint ticket number.',
         'category' => 'Dispute category (quality, damage, conduct, billing, other).',
@@ -364,9 +488,16 @@ return [
         'cleaning_booking_status' => [
             'pending' => 'Pending',
             'worker_assigned' => 'Worker assigned',
+            'awaiting_start_verification' => 'Awaiting start verification',
             'in_progress' => 'In progress',
+            'awaiting_customer_completion' => 'Awaiting customer completion',
+            'time_extension_requested' => 'Time extension requested',
             'completed' => 'Completed',
             'cancelled' => 'Cancelled',
+        ],
+        'service_category' => [
+            'cleaning' => 'Cleaning',
+            'event_assisent' => 'Event assistance',
         ],
         'dispute_status' => [
             'open' => 'Open',

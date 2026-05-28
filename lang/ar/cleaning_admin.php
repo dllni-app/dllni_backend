@@ -3,6 +3,13 @@
 declare(strict_types=1);
 
 return [
+    'shared' => [
+        'actions' => [
+            'view' => 'عرض',
+            'edit' => 'تعديل',
+        ],
+    ],
+
     'nav_group' => 'قسم التنظيف',
     'nav_groups' => [
         'operations' => 'عمليات التنظيف',
@@ -28,6 +35,64 @@ return [
             'call_worker' => 'اتصل بالعامل',
             'resolve' => 'حل / إغلاق',
             'booking_ref' => 'حجز #:number',
+            'no_booking_ref' => 'غير مرتبط بحجز',
+            'urgent' => 'عاجل',
+            'needs_review' => 'بحاجة متابعة',
+            'booking' => 'المرجع',
+            'severity' => 'الأولوية',
+            'status' => 'الحالة',
+            'created_at' => 'وقت التنبيه',
+        ],
+        'live_now' => 'مباشر الآن',
+        'operator_brief' => 'ابدأ من الأولويات: حجوزات اليوم، الطلبات التي تنتظر التعيين، الأعمال النشطة، ثم التنبيهات التي تحتاج متابعة.',
+        'today_focus' => 'تركيز اليوم',
+        'today_focus_hint' => 'ملخص سريع يساعد المشرف على اتخاذ القرار قبل الدخول إلى الجداول التفصيلية.',
+        'kpi_hints' => [
+            'cleaning_bookings' => 'كل حجوزات التنظيف المسجلة.',
+            'event_bookings' => 'طلبات المناسبات والفرق الخاصة.',
+            'open_disputes' => 'نزاعات تحتاج متابعة أو قرار.',
+            'open_sos' => 'بلاغات استغاثة غير محلولة.',
+            'new_system_alerts' => 'تنبيهات جديدة لم تتم معالجتها.',
+        ],
+        'workload' => [
+            'today_cleaning' => 'حجوزات تنظيف اليوم',
+            'today_cleaning_hint' => 'المهام المجدولة لهذا التاريخ.',
+            'waiting_assignment' => 'بانتظار تعيين عامل',
+            'waiting_assignment_hint' => 'طلبات لم تبدأ بعد وتحتاج توزيع.',
+            'active_jobs' => 'أعمال نشطة',
+            'active_jobs_hint' => 'تعيين، تحقق، تنفيذ أو انتظار تأكيد.',
+            'pending_events' => 'مناسبات قيد التحضير',
+            'pending_events_hint' => 'مناسبات جديدة أو مؤكدة تحتاج متابعة.',
+        ],
+        'actions' => [
+            'review_bookings' => 'مراجعة الحجوزات',
+            'review_bookings_hint' => 'افتح قائمة الحجوزات للتعيين والمتابعة.',
+            'handle_disputes' => 'معالجة النزاعات',
+            'handle_disputes_hint' => 'راجع الشكاوى المفتوحة وسجل القرار.',
+            'review_alerts' => 'مراجعة التنبيهات',
+            'review_alerts_hint' => 'افتح تنبيهات النظام وحالة كل تنبيه.',
+        ],
+        'sections' => [
+            'activity_trend' => 'حركة آخر 7 أيام',
+            'activity_trend_hint' => 'مقارنة يومية بين الحجوزات والتنبيهات.',
+            'booking_statuses' => 'حالات حجوزات التنظيف',
+            'booking_statuses_hint' => 'توزيع الحجوزات حسب الحالة الحالية.',
+            'alert_types' => 'أنواع التنبيهات خلال 7 أيام',
+            'alert_types_hint' => 'أكثر أسباب التنبيه تكراراً.',
+            'alert_lifecycle' => 'دورة حياة التنبيهات',
+            'alert_lifecycle_hint' => 'جديد، تمت المشاهدة، وتم الحل.',
+            'alert_queue_hint' => 'آخر التنبيهات التشغيلية مع إجراءات سريعة.',
+            'sos_hint' => 'تعامل معها قبل أي مهمة أخرى.',
+        ],
+        'labels' => [
+            'bookings' => 'الحجوزات',
+            'alerts' => 'التنبيهات',
+        ],
+        'empty' => [
+            'booking_statuses' => 'لا توجد بيانات حجوزات حالياً.',
+            'alert_types' => 'لا توجد تنبيهات خلال آخر 7 أيام.',
+            'alert_lifecycle' => 'لا توجد بيانات تنبيهات حالياً.',
+            'all_clear' => 'كل شيء يعمل بشكل طبيعي.',
         ],
     ],
 
@@ -91,10 +156,18 @@ return [
             'start' => 'من',
             'end' => 'إلى',
         ],
+        'stats' => [
+            'total' => 'إجمالي العمال',
+            'active' => 'العمال النشطون',
+            'suspended' => 'المعلقون',
+            'average_rating' => 'متوسط التقييم',
+        ],
     ],
 
     'disputes' => [
         'nav_label' => 'النزاعات والشكاوى',
+        'model' => 'نزاع',
+        'plural' => 'النزاعات',
         'tooltip' => 'حل النزاعات والشكاوى: رقم النزاع، رقم الحجز، العميل، العامل، السبب، الحالة؛ رد، استرداد جزئي، خصم من العامل، إغلاق.',
         'sections' => [
             'ticket' => 'التذكرة',
@@ -116,10 +189,17 @@ return [
             'created_at' => 'تاريخ الفتح',
         ],
         'actions' => [
+            'create' => 'إضافة نزاع',
             'reply' => 'رد',
             'refund_partial' => 'إعادة جزء من المبلغ',
             'deduct_worker' => 'خصم من العامل',
             'close' => 'إغلاق النزاع',
+        ],
+        'stats' => [
+            'total' => 'إجمالي النزاعات',
+            'open' => 'مفتوحة',
+            'under_review' => 'قيد المراجعة',
+            'resolved' => 'تم حلها',
         ],
         'modals' => [
             'refund_heading' => 'إعادة جزء من المبلغ للعميل',
@@ -135,7 +215,22 @@ return [
 
     'system_alerts' => [
         'nav_label' => 'تنبيهات النظام',
+        'model' => 'تنبيه نظام',
+        'plural' => 'تنبيهات النظام',
         'tooltip' => 'تنبيهات تأخر التقييم المتبادل، تجمد الموقع، استغاثة، تجاوز الوقت دون انتهاء؛ إجراءات الاتصال أو الحل.',
+        'fields' => [
+            'alert_type' => 'نوع التنبيه',
+            'severity' => 'الخطورة',
+            'status' => 'الحالة',
+            'booking_type' => 'نوع الحجز',
+            'created_at' => 'تاريخ الإنشاء',
+        ],
+        'stats' => [
+            'total' => 'إجمالي التنبيهات',
+            'new' => 'تنبيهات جديدة',
+            'critical' => 'حرجة',
+            'resolved' => 'تم حلها',
+        ],
     ],
 
     'booking_morph_labels' => [
@@ -157,6 +252,8 @@ return [
 
     'cleaning_bookings' => [
         'nav_label' => 'حجوزات التنظيف',
+        'model' => 'حجز تنظيف',
+        'plural' => 'حجوزات التنظيف',
         'tooltip' => 'عرض وإدارة جميع حجوزات التنظيف: رقم الحجز، العميل، العامل، التاريخ والوقت، الحالة، السعر الإجمالي، وتعيين عامل أو إلغاء.',
     ],
 
@@ -172,12 +269,56 @@ return [
 
     'cleaning_services' => [
         'nav_label' => 'خدمات التنظيف',
+        'model' => 'خدمة تنظيف',
+        'plural' => 'خدمات التنظيف',
         'tooltip' => 'تعريف أنواع خدمات التنظيف: الاسم، الوصف، ربط التسعير الأساسي والإضافات المتاحة.',
+        'fields' => [
+            'name' => 'الاسم',
+            'category' => 'التصنيف',
+            'description' => 'الوصف',
+            'price' => 'السعر',
+            'is_active' => 'نشط',
+        ],
+        'filters' => [
+            'category' => 'التصنيف',
+            'is_active' => 'نشط',
+        ],
+        'actions' => [
+            'create' => 'إضافة خدمة',
+        ],
+        'stats' => [
+            'total' => 'إجمالي الخدمات',
+            'active' => 'الخدمات النشطة',
+            'cleaning' => 'تنظيف',
+            'event_assistance' => 'مناسبات',
+        ],
     ],
 
     'service_addons' => [
         'nav_label' => 'إضافات الخدمة',
+        'model' => 'إضافة خدمة',
+        'plural' => 'إضافات الخدمة',
         'tooltip' => 'إدارة الإضافات الاختيارية: الاسم، الوصف، نوع التسعير (ثابت أو نسبة مئوية من تكلفة الخدمة).',
+        'fields' => [
+            'name' => 'الاسم',
+            'slug' => 'المعرّف',
+            'pricing_type' => 'نوع التسعير',
+            'price_value' => 'السعر',
+            'is_active' => 'نشط',
+        ],
+        'filters' => [
+            'pricing_type' => 'نوع التسعير',
+            'is_active' => 'نشط',
+        ],
+        'actions' => [
+            'create' => 'إضافة إضافة',
+        ],
+        'stats' => [
+            'total' => 'إجمالي الإضافات',
+            'active' => 'الإضافات النشطة',
+            'fixed' => 'سعر ثابت',
+            'percentage' => 'نسبة مئوية',
+        ],
     ],
 
     'travel_cost_configs' => [
@@ -236,6 +377,46 @@ return [
             'worker' => 'العامل',
             'number_of_workers' => 'عدد العمال',
             'disputes_count' => 'عدد النزاعات',
+            'event_type' => 'نوع المناسبة',
+            'pricing_status' => 'حالة التسعير',
+        ],
+        'filters' => [
+            'status' => 'الحالة',
+            'has_dispute' => 'لديه نزاع',
+            'scheduled_today' => 'مجدول اليوم',
+            'property_type' => 'نوع العقار',
+        ],
+        'property_types' => [
+            'event_assistance' => 'مساعدة مناسبات',
+            'apartment' => 'شقة',
+            'villa' => 'فيلا',
+            'house' => 'منزل',
+            'office' => 'مكتب',
+            'studio' => 'استوديو',
+        ],
+        'actions' => [
+            'assign_worker' => 'تعيين عامل',
+            'worker' => 'العامل',
+            'worker_assigned' => 'تم تعيين العامل وتحديث حالة الحجز',
+            'start_work' => 'بدء العمل',
+            'work_started' => 'تم بدء العمل',
+            'complete' => 'إكمال',
+            'booking_completed' => 'تم إكمال الحجز',
+            'cancel' => 'إلغاء',
+            'cancel_booking' => 'إلغاء الحجز',
+            'booking_cancelled' => 'تم إلغاء الحجز',
+        ],
+        'pricing' => [
+            'final' => 'نهائي',
+            'provisional' => 'مبدئي',
+            'formula' => 'الأساسي :base + الإضافات :addons + التنقل :travel + الإلغاء :cancellation = الإجمالي :total',
+        ],
+        'stats' => [
+            'total' => 'إجمالي الحجوزات',
+            'pending' => 'بانتظار التعيين',
+            'assigned' => 'تم تعيين عامل',
+            'in_progress' => 'قيد التنفيذ',
+            'today' => 'حجوزات اليوم',
         ],
     ],
 
@@ -335,7 +516,8 @@ return [
         'number_of_workers' => 'عدد العمال المطلوبين لهذا الحجز.',
         'scheduled_date' => 'التاريخ المحدد لتنفيذ الخدمة.',
         'scheduled_time' => 'الوقت المحدد لبدء الخدمة.',
-        'total_price' => 'المبلغ الإجمالي (أساسي + إضافات + انتقال) بالريال.',
+        'total_price' => 'المبلغ الإجمالي (أساسي + إضافات + انتقال) بعملة النظام.',
+        'pricing_status' => 'هل السعر المعروض نهائي أم ما زال مبدئياً.',
         'disputes_count' => 'عدد النزاعات المفتوحة أو المغلقة المرتبطة بهذا الحجز.',
         'ticket_number' => 'رقم تذكرة النزاع أو الشكوى.',
         'category' => 'تصنيف النزاع (جودة، تلف، سلوك، دفع، أخرى).',
@@ -361,9 +543,16 @@ return [
         'cleaning_booking_status' => [
             'pending' => 'قيد الانتظار',
             'worker_assigned' => 'تم تعيين عامل',
+            'awaiting_start_verification' => 'بانتظار تأكيد بدء العمل',
             'in_progress' => 'قيد التنفيذ',
+            'awaiting_customer_completion' => 'بانتظار تأكيد العميل',
+            'time_extension_requested' => 'طلب تمديد الوقت',
             'completed' => 'مكتمل',
             'cancelled' => 'ملغي',
+        ],
+        'service_category' => [
+            'cleaning' => 'تنظيف',
+            'event_assisent' => 'مساعدة مناسبات',
         ],
         'dispute_status' => [
             'open' => 'مفتوح',
