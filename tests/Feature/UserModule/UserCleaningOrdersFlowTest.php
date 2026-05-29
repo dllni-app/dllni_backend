@@ -315,6 +315,87 @@ it('returns estimated cleaning price from backend algorithm', function (): void 
     expect((string) $response->json('algorithmVersion'))->toBe('2026-05-25-v2');
 });
 
+it('prefers room_size_breakdown for estimate-price when provided', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $response = postJson('/api/v1/user/cleaning/orders/estimate-price', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'rooms' => 1,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+            'room_size_breakdown' => [
+                'bedroom' => ['small' => 1, 'medium' => 2, 'large' => 1],
+                'bathroom' => ['small' => 1, 'medium' => 1, 'large' => 1],
+                'kitchen' => ['small' => 1, 'medium' => 0, 'large' => 0],
+                'living_room' => ['small' => 0, 'medium' => 1, 'large' => 0],
+            ],
+        ],
+    ]);
+
+    $response->assertOk();
+    expect((float) $response->json('size.estimatedSqm'))->toBe(331.0);
+    expect((float) $response->json('size.estimatedHours'))->toBe(12.5);
+    expect((string) $response->json('size.sizeTier'))->toBe('very_large');
+    expect((float) $response->json('pricing.basePrice'))->toBe(2648.0);
+});
+
+it('creates order with room_size_breakdown and persists normalized breakdown-derived values', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $response = postJson('/api/v1/user/cleaning/orders', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'address' => 'Damascus - Kafar Souseh',
+            'location_name' => 'Home',
+            'rooms' => 1,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+            'room_size_breakdown' => [
+                'bedroom' => ['small' => 1, 'medium' => 2, 'large' => 1],
+                'bathroom' => ['small' => 1, 'medium' => 1, 'large' => 1],
+                'kitchen' => ['small' => 1, 'medium' => 0, 'large' => 0],
+                'living_room' => ['small' => 0, 'medium' => 1, 'large' => 0],
+            ],
+        ],
+        'scheduledDate' => now()->addDay()->format('Y-m-d'),
+        'scheduledTime' => '10:00',
+        'termsAccepted' => true,
+    ]);
+
+    $response->assertCreated();
+    expect($response->json('order.propertyDetails.bedrooms'))->toBe(9);
+    expect($response->json('order.propertyDetails.rooms'))->toBe(4);
+    expect($response->json('order.propertyDetails.bathrooms'))->toBe(3);
+    expect($response->json('order.propertyDetails.kitchens'))->toBe(1);
+    expect($response->json('order.propertyDetails.living_room_size'))->toBe('medium');
+    expect($response->json('order.propertyDetails.room_size_breakdown.bedroom.large'))->toBe(1);
+});
+
+it('validates room_size_breakdown shape and rejects invalid bucket keys', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    postJson('/api/v1/user/cleaning/orders/estimate-price', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'room_size_breakdown' => [
+                'bedroom' => ['tiny' => 1, 'medium' => 1, 'large' => 0],
+                'bathroom' => ['small' => 1, 'medium' => 0, 'large' => 0],
+                'kitchen' => ['small' => 1, 'medium' => 0, 'large' => 0],
+                'living_room' => ['small' => 1, 'medium' => 0, 'large' => 0],
+            ],
+        ],
+    ])->assertUnprocessable()->assertJsonValidationErrors([
+        'propertyDetails.room_size_breakdown.bedroom',
+        'propertyDetails.room_size_breakdown.bedroom.small',
+    ]);
+});
+
 it('returns regular cleaning estimate with selected cleaning services in addons', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);

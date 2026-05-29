@@ -77,15 +77,10 @@ final class UserCleaningOrderEstimationService
 
     /**
      * @param  array<string, mixed>  $propertyDetails
-     * @return array{address: ?string, location_name: ?string, bedrooms: int, rooms: int, bathrooms: int, kitchens: int, living_room_size: string}
+     * @return array{address: ?string, location_name: ?string, bedrooms: int, rooms: int, bathrooms: int, kitchens: int, living_room_size: string, room_size_breakdown: ?array<string, array{small:int, medium:int, large:int}>}
      */
     public function normalizePropertyDetails(array $propertyDetails): array
     {
-        $livingRoomSize = mb_strtolower((string) Arr::get($propertyDetails, 'living_room_size', 'medium'));
-        if (! in_array($livingRoomSize, self::LIVING_ROOM_SIZES, true)) {
-            $livingRoomSize = 'medium';
-        }
-
         $address = Arr::has($propertyDetails, 'address')
             ? mb_trim((string) Arr::get($propertyDetails, 'address'))
             : null;
@@ -94,14 +89,40 @@ final class UserCleaningOrderEstimationService
             ? mb_trim((string) Arr::get($propertyDetails, 'location_name'))
             : null;
 
+        $normalizedBreakdown = $this->normalizeRoomSizeBreakdown(
+            Arr::get($propertyDetails, 'room_size_breakdown')
+        );
+
+        if ($normalizedBreakdown !== null) {
+            $livingRoomSize = $this->deriveLivingRoomSizeFromBreakdown($normalizedBreakdown['living_room']);
+            $bedrooms = $this->sumRoomTypeBuckets($normalizedBreakdown['bedroom'])
+                + $this->sumRoomTypeBuckets($normalizedBreakdown['bathroom'])
+                + $this->sumRoomTypeBuckets($normalizedBreakdown['kitchen'])
+                + $this->sumRoomTypeBuckets($normalizedBreakdown['living_room']);
+            $rooms = $this->sumRoomTypeBuckets($normalizedBreakdown['bedroom']);
+            $bathrooms = $this->sumRoomTypeBuckets($normalizedBreakdown['bathroom']);
+            $kitchens = $this->sumRoomTypeBuckets($normalizedBreakdown['kitchen']);
+        } else {
+            $livingRoomSize = mb_strtolower((string) Arr::get($propertyDetails, 'living_room_size', 'medium'));
+            if (! in_array($livingRoomSize, self::LIVING_ROOM_SIZES, true)) {
+                $livingRoomSize = 'medium';
+            }
+
+            $bedrooms = max(0, (int) Arr::get($propertyDetails, 'bedrooms', 0));
+            $rooms = max(0, (int) Arr::get($propertyDetails, 'rooms', 0));
+            $bathrooms = max(0, (int) Arr::get($propertyDetails, 'bathrooms', 0));
+            $kitchens = max(0, (int) Arr::get($propertyDetails, 'kitchens', Arr::get($propertyDetails, 'kitchen_included') ? 1 : 0));
+        }
+
         return [
             'address' => $address !== '' ? $address : null,
             'location_name' => $locationName !== '' ? $locationName : null,
-            'bedrooms' => max(0, (int) Arr::get($propertyDetails, 'bedrooms', 0)),
-            'rooms' => max(0, (int) Arr::get($propertyDetails, 'rooms', 0)),
-            'bathrooms' => max(0, (int) Arr::get($propertyDetails, 'bathrooms', 0)),
-            'kitchens' => max(0, (int) Arr::get($propertyDetails, 'kitchens', Arr::get($propertyDetails, 'kitchen_included') ? 1 : 0)),
+            'bedrooms' => $bedrooms,
+            'rooms' => $rooms,
+            'bathrooms' => $bathrooms,
+            'kitchens' => $kitchens,
             'living_room_size' => $livingRoomSize,
+            'room_size_breakdown' => $normalizedBreakdown,
         ];
     }
 
@@ -585,5 +606,58 @@ final class UserCleaningOrderEstimationService
     private function suggestedEventTeamSize(int $guestCount, int $serviceCount): int
     {
         return max(1, (int) ceil($guestCount / 10) + max(0, $serviceCount - 1));
+    }
+
+    /**
+     * @param  mixed  $value
+     * @return array<string, array{small:int, medium:int, large:int}>|null
+     */
+    private function normalizeRoomSizeBreakdown(mixed $value): ?array
+    {
+        if (! is_array($value)) {
+            return null;
+        }
+
+        $types = ['bedroom', 'bathroom', 'kitchen', 'living_room'];
+        $buckets = ['small', 'medium', 'large'];
+        $normalized = [];
+
+        foreach ($types as $type) {
+            $roomTypeCounts = Arr::get($value, $type);
+            if (! is_array($roomTypeCounts)) {
+                return null;
+            }
+
+            $normalized[$type] = [];
+            foreach ($buckets as $bucket) {
+                $normalized[$type][$bucket] = max(0, (int) Arr::get($roomTypeCounts, $bucket, 0));
+            }
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param  array{small:int, medium:int, large:int}  $roomTypeBuckets
+     */
+    private function deriveLivingRoomSizeFromBreakdown(array $roomTypeBuckets): string
+    {
+        if ($roomTypeBuckets['large'] > 0) {
+            return 'large';
+        }
+
+        if ($roomTypeBuckets['medium'] > 0) {
+            return 'medium';
+        }
+
+        return 'small';
+    }
+
+    /**
+     * @param  array{small:int, medium:int, large:int}  $roomTypeBuckets
+     */
+    private function sumRoomTypeBuckets(array $roomTypeBuckets): int
+    {
+        return $roomTypeBuckets['small'] + $roomTypeBuckets['medium'] + $roomTypeBuckets['large'];
     }
 }

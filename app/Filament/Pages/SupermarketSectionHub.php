@@ -16,9 +16,11 @@ use App\Filament\Resources\SmProducts\SmProductResource;
 use App\Filament\Resources\SmStoreDocuments\SmStoreDocumentResource;
 use App\Filament\Resources\SmStores\SmStoreResource;
 use App\Filament\Resources\SmStoreTrustLogs\SmStoreTrustLogResource;
+use App\Filament\Support\AdminUiFormatter;
 use BackedEnum;
 use Carbon\CarbonImmutable;
 use Filament\Pages\Page;
+use Illuminate\Support\Str;
 use Modules\Supermarket\Enums\SmDisputeStatus;
 use Modules\Supermarket\Enums\SmOrderStatus;
 use Modules\Supermarket\Models\SmCoupon;
@@ -45,6 +47,10 @@ final class SupermarketSectionHub extends Page
     protected static bool $shouldRegisterNavigation = true;
 
     protected string $view = 'filament.supermarket-admin.pages.supermarket-section-hub';
+
+    public string $search = '';
+
+    public string $focus = 'all';
 
     public static function getNavigationLabel(): string
     {
@@ -136,6 +142,7 @@ final class SupermarketSectionHub extends Page
                         'label' => ($document->store?->name ?? __('supermarket_admin.labels.unknown_store')) . ' - ' . ($documentType ? __('supermarket_admin.enums.document_type.' . $documentType) : '—'),
                         'meta' => $document->created_at?->diffForHumans() ?? '—',
                         'url' => SmStoreDocumentResource::getUrl('edit', ['record' => $document]),
+                        'tone' => 'warning',
                     ];
                 })->all(),
                 $queueEmpty,
@@ -147,6 +154,8 @@ final class SupermarketSectionHub extends Page
                     'label' => $dispute->ticket_number . ' - ' . ($dispute->order?->order_number ?? '—'),
                     'meta' => $dispute->order?->store?->name ?? __('supermarket_admin.labels.unknown_store'),
                     'url' => SmOrderDisputeResource::getUrl('edit', ['record' => $dispute]),
+                    'tone' => 'danger',
+                    'badge' => __('supermarket_admin.filters.requires_action'),
                 ])->all(),
                 $queueEmpty,
             ),
@@ -157,6 +166,7 @@ final class SupermarketSectionHub extends Page
                     'label' => $store->name,
                     'meta' => __('supermarket_admin.queues.suspended_until', ['date' => $store->suspension_until?->format('Y-m-d H:i') ?? '—']),
                     'url' => SmStoreResource::getUrl('edit', ['record' => $store]),
+                    'tone' => 'warning',
                 ])->all(),
                 $queueEmpty,
             ),
@@ -170,6 +180,7 @@ final class SupermarketSectionHub extends Page
                     'label' => $order->order_number . ' - ' . ($order->store?->name ?? __('supermarket_admin.labels.unknown_store')),
                     'meta' => $order->ready_for_pickup_at?->diffForHumans() ?? ($order->created_at?->diffForHumans() ?? '—'),
                     'url' => SmOrderResource::getUrl('view', ['record' => $order]),
+                    'tone' => 'primary',
                 ])->all(),
                 $queueEmpty,
             ),
@@ -186,6 +197,8 @@ final class SupermarketSectionHub extends Page
                         'threshold' => (int) ($product->low_stock_threshold ?? 0),
                     ]),
                     'url' => SmProductResource::getUrl('edit', ['record' => $product]),
+                    'tone' => 'warning',
+                    'badge' => __('supermarket_admin.filters.low_stock'),
                 ])->all(),
                 $queueEmpty,
             ),
@@ -196,16 +209,60 @@ final class SupermarketSectionHub extends Page
                     'label' => __('supermarket_admin.queues.offer_label', ['name' => $offer->name]),
                     'meta' => ($offer->store?->name ?? __('supermarket_admin.labels.unknown_store')) . ' - ' . ($offer->ends_at?->format('Y-m-d H:i') ?? '—'),
                     'url' => SmOfferResource::getUrl('edit', ['record' => $offer]),
+                    'tone' => 'info',
                 ])->concat(
                     $expiringCoupons->map(fn(SmCoupon $coupon): array => [
                         'label' => __('supermarket_admin.queues.coupon_label', ['code' => $coupon->code]),
                         'meta' => ($coupon->store?->name ?? __('supermarket_admin.labels.unknown_store')) . ' - ' . ($coupon->ends_at?->format('Y-m-d H:i') ?? '—'),
                         'url' => SmCouponResource::getUrl('edit', ['record' => $coupon]),
+                        'tone' => 'info',
                     ])
                 )->take(6)->values()->all(),
                 $queueEmpty,
             ),
         ];
+
+        $attentionGroups = [
+            [
+                'key' => 'compliance',
+                'title' => __('supermarket_admin.attention.compliance_title'),
+                'description' => __('supermarket_admin.attention.compliance_description'),
+                'queues' => $attentionComplianceQueues,
+            ],
+            [
+                'key' => 'fulfillment',
+                'title' => __('supermarket_admin.attention.fulfillment_title'),
+                'description' => __('supermarket_admin.attention.fulfillment_description'),
+                'queues' => $attentionFulfillmentQueues,
+            ],
+            [
+                'key' => 'catalog',
+                'title' => __('supermarket_admin.attention.catalog_title'),
+                'description' => __('supermarket_admin.attention.catalog_description'),
+                'queues' => $attentionCatalogQueues,
+            ],
+        ];
+
+        $attentionGroups = $this->filterAttentionGroups($attentionGroups);
+
+        $recentActivity = collect($dashboard['recent_activity'] ?? [])
+            ->filter(function (array $activity): bool {
+                $search = Str::lower(trim($this->search));
+
+                if ($search === '') {
+                    return true;
+                }
+
+                $haystack = Str::lower(
+                    ($activity['order_number'] ?? '') . ' ' .
+                    ($activity['store_name'] ?? '') . ' ' .
+                    ($activity['customer_name'] ?? '')
+                );
+
+                return Str::contains($haystack, $search);
+            })
+            ->values()
+            ->all();
 
         return [
             'overviewKpis' => [
@@ -213,21 +270,33 @@ final class SupermarketSectionHub extends Page
                     'label' => __('supermarket_admin.metrics.total_stores'),
                     'value' => (int) ($activityMetrics['total_stores'] ?? 0),
                     'hint' => __('supermarket_admin.metrics.active_stores_hint', ['count' => (int) ($activityMetrics['active_stores'] ?? 0)]),
+                    'tone' => 'success',
                 ],
                 [
                     'label' => __('supermarket_admin.metrics.total_orders'),
                     'value' => (int) ($activityMetrics['total_orders'] ?? 0),
                     'hint' => __('supermarket_admin.metrics.pending_pickup_hint', ['count' => (int) ($activityMetrics['pending_pickup_orders'] ?? 0)]),
+                    'tone' => 'primary',
                 ],
                 [
                     'label' => __('supermarket_admin.metrics.open_disputes'),
                     'value' => (int) ($operationalAlerts['open_disputes_count'] ?? 0),
                     'hint' => __('supermarket_admin.metrics.high_cancellation_hint', ['count' => (int) ($operationalAlerts['high_cancellation_stores_count'] ?? 0)]),
+                    'tone' => 'danger',
                 ],
                 [
                     'label' => __('supermarket_admin.metrics.low_stock_products'),
                     'value' => (int) ($operationalAlerts['low_stock_products_count'] ?? 0),
                     'hint' => __('supermarket_admin.metrics.week_sales_hint', ['amount' => $this->formatCurrency($salesSummary['this_week'] ?? 0)]),
+                    'tone' => 'warning',
+                ],
+            ],
+            'filterOptions' => [
+                'focus' => [
+                    'all' => __('supermarket_admin.filters.focus_all'),
+                    'compliance' => __('supermarket_admin.filters.focus_compliance'),
+                    'fulfillment' => __('supermarket_admin.filters.focus_fulfillment'),
+                    'catalog' => __('supermarket_admin.filters.focus_catalog'),
                 ],
             ],
             'workflowSections' => [
@@ -235,8 +304,8 @@ final class SupermarketSectionHub extends Page
                     'title' => __('supermarket_admin.flow.governance.title'),
                     'description' => __('supermarket_admin.flow.governance.description'),
                     'links' => [
-                        ['label' => __('supermarket_admin.hub.stores'), 'url' => SmStoreResource::getUrl('index')],
-                        ['label' => __('supermarket_admin.hub.documents'), 'url' => SmStoreDocumentResource::getUrl('index')],
+                        ['label' => __('supermarket_admin.hub.stores'), 'url' => SmStoreResource::getUrl('index'), 'tone' => 'success'],
+                        ['label' => __('supermarket_admin.hub.documents'), 'url' => SmStoreDocumentResource::getUrl('index'), 'tone' => 'warning'],
                     ],
                 ],
                 [
@@ -255,39 +324,66 @@ final class SupermarketSectionHub extends Page
                     'title' => __('supermarket_admin.flow.operations.title'),
                     'description' => __('supermarket_admin.flow.operations.description'),
                     'links' => [
-                        ['label' => __('supermarket_admin.hub.orders'), 'url' => SmOrderResource::getUrl('index'), 'badge' => __('supermarket_admin.labels.read_only')],
-                        ['label' => __('supermarket_admin.hub.disputes'), 'url' => SmOrderDisputeResource::getUrl('index')],
+                        ['label' => __('supermarket_admin.hub.orders'), 'url' => SmOrderResource::getUrl('index'), 'badge' => __('supermarket_admin.labels.read_only'), 'tone' => 'primary'],
+                        ['label' => __('supermarket_admin.hub.disputes'), 'url' => SmOrderDisputeResource::getUrl('index'), 'tone' => 'danger'],
                     ],
                 ],
             ],
             'referenceLinks' => [
                 ['label' => __('supermarket_admin.hub.trust_logs'), 'url' => SmStoreTrustLogResource::getUrl('index'), 'badge' => __('supermarket_admin.labels.read_only')],
-                ['label' => __('supermarket_admin.hub.daily_stats'), 'url' => SupermarketStatsPage::getUrl()],
+                ['label' => __('supermarket_admin.hub.daily_stats'), 'url' => SupermarketStatsPage::getUrl(), 'tone' => 'info', 'actionEmphasis' => true],
             ],
-            'attentionGroups' => [
-                [
-                    'title' => __('supermarket_admin.attention.compliance_title'),
-                    'description' => __('supermarket_admin.attention.compliance_description'),
-                    'queues' => $attentionComplianceQueues,
-                ],
-                [
-                    'title' => __('supermarket_admin.attention.fulfillment_title'),
-                    'description' => __('supermarket_admin.attention.fulfillment_description'),
-                    'queues' => $attentionFulfillmentQueues,
-                ],
-                [
-                    'title' => __('supermarket_admin.attention.catalog_title'),
-                    'description' => __('supermarket_admin.attention.catalog_description'),
-                    'queues' => $attentionCatalogQueues,
-                ],
-            ],
-            'recentActivity' => $dashboard['recent_activity'] ?? [],
+            'attentionGroups' => $attentionGroups,
+            'recentActivity' => $recentActivity,
         ];
     }
 
     /**
-     * @param  list<array{label: string, meta: string, url: string}>  $items
-     * @return array{title: string, count: int, items: list<array{label: string, meta: string, url: string}>, emptyMessage: string}
+     * @param  list<array{title:string,count:int,items:list<array{label:string,meta:string,url:string,tone?:string,badge?:string|null}>,emptyMessage:string}>  $queues
+     * @return list<array{title:string,count:int,items:list<array{label:string,meta:string,url:string,tone?:string,badge?:string|null}>,emptyMessage:string}>
+     */
+    private function filterQueueItems(array $queues): array
+    {
+        $search = Str::lower(trim($this->search));
+
+        return array_map(function (array $queue) use ($search): array {
+            if ($search === '') {
+                return $queue;
+            }
+
+            $queue['items'] = array_values(array_filter($queue['items'], function (array $item) use ($search): bool {
+                $haystack = Str::lower(($item['label'] ?? '') . ' ' . ($item['meta'] ?? ''));
+
+                return Str::contains($haystack, $search);
+            }));
+            $queue['count'] = count($queue['items']);
+
+            return $queue;
+        }, $queues);
+    }
+
+    /**
+     * @param  list<array{key:string,title:string,description:string,queues:list<array{title:string,count:int,items:list<array{label:string,meta:string,url:string,tone?:string,badge?:string|null}>,emptyMessage:string}>}>  $groups
+     * @return list<array{key:string,title:string,description:string,queues:list<array{title:string,count:int,items:list<array{label:string,meta:string,url:string,tone?:string,badge?:string|null}>,emptyMessage:string}>}>
+     */
+    private function filterAttentionGroups(array $groups): array
+    {
+        $filtered = array_map(function (array $group): array {
+            $group['queues'] = $this->filterQueueItems($group['queues']);
+
+            return $group;
+        }, $groups);
+
+        if ($this->focus === 'all') {
+            return $filtered;
+        }
+
+        return array_values(array_filter($filtered, fn (array $group): bool => ($group['key'] ?? 'all') === $this->focus));
+    }
+
+    /**
+     * @param  list<array{label: string, meta: string, url: string, tone?:string, badge?:string|null}>  $items
+     * @return array{title: string, count: int, items: list<array{label: string, meta: string, url: string, tone?:string, badge?:string|null}>, emptyMessage: string}
      */
     private function makeQueue(string $title, int $count, array $items, string $emptyMessage): array
     {
@@ -301,6 +397,7 @@ final class SupermarketSectionHub extends Page
 
     private function formatCurrency(float|int|string $amount): string
     {
-        return number_format((float) $amount, 2);
+        return AdminUiFormatter::formatCurrency($amount);
     }
 }
+

@@ -66,6 +66,21 @@ return [
         ],
     ],
     'filters' => [
+        'search_placeholder' => 'Search by restaurant, dispute, or product...',
+        'focus_all' => 'All priority lists',
+        'focus_restaurants' => 'Restaurants only',
+        'focus_disputes' => 'Disputes only',
+        'focus_inventory' => 'Inventory only',
+        'last_7_days' => 'Last 7 days',
+        'last_30_days' => 'Last 30 days',
+        'last_90_days' => 'Last 90 days',
+        'all_rows' => 'All rows',
+        'status' => 'Status',
+        'with_revenue' => 'With revenue',
+        'without_revenue' => 'Without revenue',
+        'temporarily_closed' => 'Temporarily closed',
+        'requires_action' => 'Requires action',
+        'low_stock' => 'Low stock',
         'readiness_label' => 'Readiness gap',
         'readiness_placeholder' => 'All restaurants',
         'readiness' => [
@@ -128,6 +143,7 @@ return [
         'actual' => 'Actual Time',
     ],
     'stats' => [
+        'nav_title' => 'Daily and monthly statistics',
         'title' => 'Daily & Monthly Statistics',
         'description' => 'View restaurant performance by day and month.',
         'summary_heading' => 'Performance Summary',
@@ -139,6 +155,7 @@ return [
             'tracked_restaurants' => 'Tracked restaurants',
         ],
         'actions' => [
+            'hub' => 'Back to operations hub',
             'restaurants' => 'Go to restaurant governance',
             'orders' => 'Go to orders',
         ],

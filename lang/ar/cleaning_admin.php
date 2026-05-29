@@ -332,6 +332,54 @@ return [
         'tooltip' => 'إعدادات التسعير الأساسي، الإضافات، العمولة، تكاليف التنقل، نقطة بدء المسافة، سياسة فوترة الوقت والحد الأدنى للدقائق القابلة للفوترة.',
         'subheading' => 'إدارة التسعير الأساسي، الإضافات، العمولة، تكاليف التنقل، نقطة بدء احتساب المسافة، سياسة فوترة الوقت والحد الأدنى للدقائق القابلة للفوترة.',
         'saved' => 'تم حفظ الإعدادات المالية',
+        'sections' => [
+            'revenue_model' => 'نموذج الإيراد',
+            'travel_costs' => 'تكاليف التنقل',
+            'time_billing_policy' => 'سياسة فوترة الوقت',
+            'coverage_thresholds' => 'حدود التغطية',
+        ],
+        'fields' => [
+            'commission_type' => 'نوع العمولة',
+            'default_commission_rate' => 'نسبة العمولة الافتراضية (%)',
+            'commission_fixed_amount' => 'مبلغ العمولة الثابت',
+            'vat_rate' => 'نسبة الضريبة (%)',
+            'travel_markup_type' => 'نوع إضافة التنقل',
+            'travel_markup_value' => 'قيمة إضافة التنقل',
+            'travel_per_km' => 'تكلفة الكيلومتر',
+            'travel_distance_start_point' => 'نقطة بدء احتساب المسافة',
+            'time_billing_mode' => 'نمط فوترة الوقت',
+            'min_billable_minutes' => 'الحد الأدنى للدقائق القابلة للفوترة',
+            'time_warning_minutes_before_end' => 'دقائق التنبيه قبل انتهاء الوقت',
+            'coverage_low' => 'حد التغطية المنخفضة',
+            'coverage_ok' => 'حد التغطية المتوازنة',
+        ],
+        'options' => [
+            'commission_percent' => 'نسبة مئوية',
+            'commission_fixed' => 'مبلغ ثابت',
+            'travel_fixed' => 'مبلغ ثابت',
+            'travel_percent' => 'نسبة مئوية',
+            'worker_home' => 'موقع منزل العامل',
+            'time_billing_full_booked' => 'الوقت المحجوز بالكامل',
+            'time_billing_actual' => 'وقت العمل الفعلي',
+        ],
+        'placeholders' => [
+            'min_billable_minutes' => 'مثال: 30',
+            'time_warning_minutes_before_end' => 'مثال: 15',
+        ],
+        'actions' => [
+            'save' => 'حفظ الإعدادات',
+        ],
+    ],
+
+    'filters' => [
+        'search' => 'بحث',
+        'search_placeholder' => 'ابحث…',
+        'status' => 'الحالة',
+        'date_range' => 'النطاق الزمني',
+        'last_7_days' => 'آخر 7 أيام',
+        'last_14_days' => 'آخر 14 يومًا',
+        'last_30_days' => 'آخر 30 يومًا',
+        'all_levels' => 'كل المستويات',
     ],
 
     'overview_alerts' => [
@@ -433,6 +481,31 @@ return [
             'description' => 'إدارة التسعير الأساسي، الإضافات، العمولة، تكاليف التنقل، نقطة بدء احتساب المسافة، سياسة فوترة الوقت والحد الأدنى للدقائق القابلة للفوترة.',
         ],
         'geographic_coverage' => [
+            'title' => 'التغطية الجغرافية',
+            'search_placeholder' => 'ابحث باسم المنطقة…',
+            'table_title' => 'جدول التغطية',
+            'chart_title' => 'الطلب مقابل عدد العمال',
+            'empty' => 'لا توجد بيانات تغطية مطابقة للفلاتر الحالية.',
+            'summary' => [
+                'workers_count' => 'عدد العمال في المناطق المعروضة',
+                'high_pressure_count' => 'مناطق الضغط المرتفع',
+                'regions_count' => 'عدد المناطق المعروضة',
+            ],
+            'columns' => [
+                'zone' => 'المنطقة',
+                'demand_count' => 'عدد الطلبات',
+                'workers_count' => 'عدد العمال',
+                'coverage_ratio' => 'نسبة التغطية',
+            ],
+            'levels' => [
+                'high' => 'ضغط مرتفع',
+                'ok' => 'متوازن',
+                'low' => 'ضغط منخفض',
+            ],
+            'legends' => [
+                'demand' => 'الطلب',
+                'workers' => 'العمال',
+            ],
             'description' => 'عرض الطلب مقابل تغطية العمال حسب المناطق الجغرافية لتحديد فجوات الخدمة (منخفض / جيد / مرتفع) وعدد العمال لكل منطقة.',
         ],
         'cleaning_bookings' => [

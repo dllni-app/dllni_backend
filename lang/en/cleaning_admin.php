@@ -277,6 +277,54 @@ return [
         'tooltip' => 'Base pricing, add-ons, commission, travel costs, distance start point, time billing policy and minimum billable minutes.',
         'subheading' => 'Manage base pricing, add-ons, commission, travel costs, distance calculation start point, time billing policy and minimum billable minutes.',
         'saved' => 'Financial settings saved',
+        'sections' => [
+            'revenue_model' => 'Revenue Model',
+            'travel_costs' => 'Travel Costs',
+            'time_billing_policy' => 'Time Billing Policy',
+            'coverage_thresholds' => 'Coverage Thresholds',
+        ],
+        'fields' => [
+            'commission_type' => 'Commission type',
+            'default_commission_rate' => 'Default commission rate (%)',
+            'commission_fixed_amount' => 'Fixed commission amount',
+            'vat_rate' => 'VAT rate (%)',
+            'travel_markup_type' => 'Travel markup type',
+            'travel_markup_value' => 'Travel markup value',
+            'travel_per_km' => 'Travel fee per kilometer',
+            'travel_distance_start_point' => 'Distance start point',
+            'time_billing_mode' => 'Time billing mode',
+            'min_billable_minutes' => 'Minimum billable minutes',
+            'time_warning_minutes_before_end' => 'Warning minutes before end',
+            'coverage_low' => 'Low coverage threshold',
+            'coverage_ok' => 'Normal coverage threshold',
+        ],
+        'options' => [
+            'commission_percent' => 'Percentage',
+            'commission_fixed' => 'Fixed amount',
+            'travel_fixed' => 'Fixed amount',
+            'travel_percent' => 'Percentage',
+            'worker_home' => 'Worker home location',
+            'time_billing_full_booked' => 'Full booked time',
+            'time_billing_actual' => 'Actual working time',
+        ],
+        'placeholders' => [
+            'min_billable_minutes' => 'e.g. 30',
+            'time_warning_minutes_before_end' => 'e.g. 15',
+        ],
+        'actions' => [
+            'save' => 'Save settings',
+        ],
+    ],
+
+    'filters' => [
+        'search' => 'Search',
+        'search_placeholder' => 'Search...',
+        'status' => 'Status',
+        'date_range' => 'Date range',
+        'last_7_days' => 'Last 7 days',
+        'last_14_days' => 'Last 14 days',
+        'last_30_days' => 'Last 30 days',
+        'all_levels' => 'All levels',
     ],
 
     'overview_alerts' => [
@@ -378,7 +426,32 @@ return [
             'description' => 'Manage base pricing, add-ons, commission, travel costs, distance start point, time billing policy and minimum billable minutes.',
         ],
         'geographic_coverage' => [
+            'title' => 'Geographic Coverage',
             'description' => 'View demand vs worker coverage by geographic area to identify service gaps (low/good/high) and worker count per zone.',
+            'search_placeholder' => 'Search by zone name...',
+            'table_title' => 'Coverage Table',
+            'chart_title' => 'Demand vs Workers',
+            'empty' => 'No coverage data found for the current filters.',
+            'summary' => [
+                'workers_count' => 'Workers in displayed zones',
+                'high_pressure_count' => 'High-pressure zones',
+                'regions_count' => 'Displayed zones',
+            ],
+            'columns' => [
+                'zone' => 'Zone',
+                'demand_count' => 'Demand count',
+                'workers_count' => 'Workers count',
+                'coverage_ratio' => 'Coverage ratio',
+            ],
+            'levels' => [
+                'high' => 'High pressure',
+                'ok' => 'Balanced',
+                'low' => 'Low pressure',
+            ],
+            'legends' => [
+                'demand' => 'Demand',
+                'workers' => 'Workers',
+            ],
         ],
         'cleaning_bookings' => [
             'list' => 'View and manage all cleaning bookings: booking #, customer, worker, date and time, status, total price, assign worker or cancel.',

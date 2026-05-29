@@ -1,241 +1,126 @@
-@php
-    $chartRows = $rows->values()->all();
-@endphp
+<x-filament-hub.page-shell>
+    <x-filament::section :heading="__('cleaning_admin.pages.geographic_coverage.title')"
+        :description="__('cleaning_admin.pages.geographic_coverage.description')">
+        <x-filament-hub.filter-toolbar
+            search-model="search"
+            :search-placeholder="__('cleaning_admin.pages.geographic_coverage.search_placeholder')"
+            status-model="levelFilter"
+            :status-options="$filters['levels']"
+            range-model="dateRange"
+            :range-options="$filters['dateRange']"
+        />
 
-<x-filament-panels::page
-    x-data="geographicCoverageDashboard(@js($chartRows))"
-    class="gc-page-root"
->
-    <section dir="rtl" class="gc-dashboard space-y-6">
-        <header class="gc-page-header">
-            <h1 class="gc-page-title">التغطية حسب المنطقة</h1>
-            <p class="gc-page-subtitle">
-                عرض الطلب مقابل تغطية العمال حسب المناطق الجغرافية لتحديد فجوات الخدمة (منخفض / جيد / مرتفع) وعدد
-                العمال لكل منطقة.
-            </p>
-        </header>
-
-        <div class="grid gap-4 md:grid-cols-3">
-            <article class="gc-stat-card">
-                <div class="gc-stat-content">
-                    <p class="gc-stat-label">العمال المتاحون</p>
-                    <p class="gc-stat-value">{{ $summary['workers_count'] }}</p>
-                </div>
-                <div class="gc-stat-icon gc-stat-icon-blue">
-                    <x-filament::icon icon="heroicon-o-user-group" class="h-7 w-7" />
-                </div>
-            </article>
-
-            <article class="gc-stat-card">
-                <div class="gc-stat-content">
-                    <p class="gc-stat-label">مناطق ذات طلب مرتفع</p>
-                    <p class="gc-stat-value gc-stat-value-danger">{{ $summary['high_pressure_count'] }}</p>
-                </div>
-                <div class="gc-stat-icon gc-stat-icon-red">
-                    <x-filament::icon icon="heroicon-o-exclamation-triangle" class="h-7 w-7" />
-                </div>
-            </article>
-
-            <article class="gc-stat-card">
-                <div class="gc-stat-content">
-                    <p class="gc-stat-label">إجمالي المناطق</p>
-                    <p class="gc-stat-value">{{ $summary['regions_count'] }}</p>
-                </div>
-                <div class="gc-stat-icon gc-stat-icon-blue">
-                    <x-filament::icon icon="heroicon-o-map" class="h-7 w-7" />
-                </div>
-            </article>
+        <div class="mt-4 grid gap-3 md:grid-cols-3">
+            <a href="{{ \App\Filament\Pages\CleaningOverview::getUrl() }}"
+                class="rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 text-center text-sm font-semibold text-primary-700 transition hover:border-primary-600 hover:shadow-sm dark:border-primary-700/60 dark:bg-primary-900/20 dark:text-primary-300">
+                {{ __('cleaning_admin.shared.actions.view') }}: {{ __('cleaning_admin.overview.title') }}
+            </a>
         </div>
 
-        <section class="gc-filter-card">
-            <div class="gc-filter-layout">
-                <div class="gc-filter-spacer"></div>
+        <div class="mt-4 grid gap-4 md:grid-cols-3">
+            <x-filament-hub.kpi-stat
+                :label="__('cleaning_admin.pages.geographic_coverage.summary.workers_count')"
+                :value="$summary['workers_count']"
+                tone="primary"
+                format-value-as-integer
+                card-padding="p-4"
+                value-size="xl"
+            />
+            <x-filament-hub.kpi-stat
+                :label="__('cleaning_admin.pages.geographic_coverage.summary.high_pressure_count')"
+                :value="$summary['high_pressure_count']"
+                tone="danger"
+                format-value-as-integer
+                card-padding="p-4"
+                value-size="xl"
+            />
+            <x-filament-hub.kpi-stat
+                :label="__('cleaning_admin.pages.geographic_coverage.summary.regions_count')"
+                :value="$summary['regions_count']"
+                tone="info"
+                format-value-as-integer
+                card-padding="p-4"
+                value-size="xl"
+            />
+        </div>
+    </x-filament::section>
 
-                <div class="gc-filter-controls">
-                    <div class="gc-filter-input-wrapper">
-                        <label class="gc-filter-floating-label">نطاق التاريخ</label>
-                        <select x-model="dateRange" class="gc-filter-select">
-                            <option value="last_7_days">آخر 7 أيام</option>
-                            <option value="last_14_days">آخر 14 يوم</option>
-                            <option value="last_30_days">آخر 30 يوم</option>
-                        </select>
-                    </div>
-
-                    <div class="gc-filter-input-wrapper">
-                        <select x-model="selectedCategory" class="gc-filter-select">
-                            <option value="all">فئة المنطقة</option>
-                            <option value="High">ضغط مرتفع</option>
-                            <option value="OK">جيد</option>
-                            <option value="Low">ضغط منخفض</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <div class="grid gap-6 xl:grid-cols-2">
-            <section class="gc-panel">
-                <div class="gc-panel-header">
-                    <h2 class="gc-panel-title">جدول التغطية</h2>
-                </div>
-
-                <div class="gc-table-wrap">
-                    <table class="gc-table">
-                        <thead>
+    <div class="grid gap-6 xl:grid-cols-2">
+        <x-filament::section :heading="__('cleaning_admin.pages.geographic_coverage.table_title')">
+            @if ($rows->isEmpty())
+                <x-filament-hub.empty-state :message="__('cleaning_admin.pages.geographic_coverage.empty')" />
+            @else
+                <div class="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
+                    <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-800/50">
                             <tr>
-                                <th>المنطقة</th>
-                                <th>الطلب المتوقع</th>
-                                <th>عدد العمال</th>
-                                <th>نسبة الضغط/الحالة</th>
+                                <th class="px-3 py-2 text-start font-medium text-gray-700 dark:text-gray-300">{{ __('cleaning_admin.pages.geographic_coverage.columns.zone') }}</th>
+                                <th class="px-3 py-2 text-start font-medium text-gray-700 dark:text-gray-300">{{ __('cleaning_admin.pages.geographic_coverage.columns.demand_count') }}</th>
+                                <th class="px-3 py-2 text-start font-medium text-gray-700 dark:text-gray-300">{{ __('cleaning_admin.pages.geographic_coverage.columns.workers_count') }}</th>
+                                <th class="px-3 py-2 text-start font-medium text-gray-700 dark:text-gray-300">{{ __('cleaning_admin.pages.geographic_coverage.columns.coverage_ratio') }}</th>
+                                <th class="px-3 py-2 text-start font-medium text-gray-700 dark:text-gray-300">{{ __('cleaning_admin.filters.status') }}</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            <template x-if="filteredRows.length === 0">
-                                <tr>
-                                    <td colspan="4" class="gc-empty-state">لا توجد بيانات مطابقة للفلاتر الحالية.</td>
-                                </tr>
-                            </template>
-
-                            <template x-for="(row, index) in filteredRows" :key="`${row.zone}-${index}`">
-                                <tr>
-                                    <td class="gc-zone-cell" x-text="row.zone"></td>
-                                    <td x-text="row.demand_count"></td>
-                                    <td x-text="row.workers_count"></td>
-                                    <td>
-                                        <span
-                                            class="gc-status-badge"
-                                            :class="statusClass(row.level)"
-                                            x-text="row.level"
-                                        ></span>
+                        <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
+                            @foreach ($rows as $row)
+                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/80">
+                                    <td class="px-3 py-2 font-semibold text-gray-900 dark:text-gray-100">{{ $row['zone'] }}</td>
+                                    <td class="px-3 py-2 text-gray-900 dark:text-gray-100">{{ \App\Filament\Support\AdminUiFormatter::formatNumber($row['demand_count'], 0) }}</td>
+                                    <td class="px-3 py-2 text-gray-900 dark:text-gray-100">{{ \App\Filament\Support\AdminUiFormatter::formatNumber($row['workers_count'], 0) }}</td>
+                                    <td class="px-3 py-2 text-gray-900 dark:text-gray-100">{{ \App\Filament\Support\AdminUiFormatter::formatNumber($row['coverage_ratio'], 0) }}</td>
+                                    <td class="px-3 py-2 text-gray-900 dark:text-gray-100">
+                                        <x-filament-hub.status-badge :label="$row['level_label']" :tone="$row['level_tone']" />
                                     </td>
                                 </tr>
-                            </template>
+                            @endforeach
                         </tbody>
                     </table>
                 </div>
-            </section>
+            @endif
+        </x-filament::section>
 
-            <section class="gc-panel">
-                <div class="gc-panel-header">
-                    <h2 class="gc-panel-title">مقارنة الطلب مقابل العمال</h2>
-                </div>
-
-                <div class="gc-chart-wrap">
-                    <div class="gc-chart-legend">
-                        <span class="gc-chart-legend-item">
-                            <span class="gc-chart-legend-swatch gc-chart-legend-swatch-demand"></span>
-                            الطلب
-                        </span>
-                        <span class="gc-chart-legend-item">
-                            <span class="gc-chart-legend-swatch gc-chart-legend-swatch-workers"></span>
-                            العمال
-                        </span>
-                    </div>
-
-                    <div class="gc-chart-shell">
-                        <div class="gc-chart-y-axis">
-                            <template x-for="tick in yTicks" :key="`tick-${tick}`">
-                                <span class="gc-chart-y-tick" x-text="tick"></span>
-                            </template>
-                        </div>
-
-                        <div class="gc-chart-plot-area">
-                            <div class="gc-chart-grid">
-                                <template x-for="tick in yTicks" :key="`line-${tick}`">
-                                    <div class="gc-chart-grid-line"></div>
-                                </template>
+        <x-filament::section :heading="__('cleaning_admin.pages.geographic_coverage.chart_title')">
+            @if ($rows->isEmpty())
+                <x-filament-hub.empty-state :message="__('cleaning_admin.pages.geographic_coverage.empty')" />
+            @else
+                @php
+                    $maxValue = max(1, (int) $rows->max('demand_count'), (int) $rows->max('workers_count'));
+                @endphp
+                <div class="space-y-3">
+                    @foreach ($rows as $row)
+                        @php
+                            $demandWidth = round(($row['demand_count'] / $maxValue) * 100, 1);
+                            $workersWidth = round(($row['workers_count'] / $maxValue) * 100, 1);
+                        @endphp
+                        <div class="rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
+                            <div class="mb-2 flex items-center justify-between gap-2">
+                                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $row['zone'] }}</p>
+                                <x-filament-hub.status-badge :label="$row['level_label']" :tone="$row['level_tone']" />
                             </div>
-
-                            <div class="gc-chart-bars">
-                                <template x-for="(row, index) in filteredRows" :key="`bar-${row.zone}-${index}`">
-                                    <div class="gc-chart-group">
-                                        <div class="gc-chart-columns">
-                                            <div
-                                                class="gc-chart-bar gc-chart-bar-demand"
-                                                :style="`height: ${barHeight(row.demand_count)}%`"
-                                                :title="`الطلب: ${row.demand_count}`"
-                                            ></div>
-                                            <div
-                                                class="gc-chart-bar gc-chart-bar-workers"
-                                                :style="`height: ${barHeight(row.workers_count)}%`"
-                                                :title="`العمال: ${row.workers_count}`"
-                                            ></div>
-                                        </div>
-
-                                        <div class="gc-chart-zone" x-text="row.zone"></div>
+                            <div class="space-y-2 text-xs text-gray-600 dark:text-gray-300">
+                                <div>
+                                    <div class="mb-1 flex items-center justify-between">
+                                        <span>{{ __('cleaning_admin.pages.geographic_coverage.legends.demand') }}</span>
+                                        <span>{{ \App\Filament\Support\AdminUiFormatter::formatNumber($row['demand_count'], 0) }}</span>
                                     </div>
-                                </template>
+                                    <div class="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+                                        <div class="h-full rounded-full bg-blue-500" style="width: {{ $demandWidth }}%;"></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="mb-1 flex items-center justify-between">
+                                        <span>{{ __('cleaning_admin.pages.geographic_coverage.legends.workers') }}</span>
+                                        <span>{{ \App\Filament\Support\AdminUiFormatter::formatNumber($row['workers_count'], 0) }}</span>
+                                    </div>
+                                    <div class="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+                                        <div class="h-full rounded-full bg-amber-500" style="width: {{ $workersWidth }}%;"></div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    @endforeach
                 </div>
-            </section>
-        </div>
-    </section>
-
-    @script
-        <script>
-            if (! window.geographicCoverageDashboard) {
-                window.geographicCoverageDashboard = function (rows) {
-                    return {
-                        rows,
-                        selectedCategory: 'all',
-                        dateRange: 'last_7_days',
-                        get filteredRows() {
-                            if (this.selectedCategory === 'all') {
-                                return this.rows;
-                            }
-
-                            return this.rows.filter((row) => row.level === this.selectedCategory);
-                        },
-                        get chartMax() {
-                            const values = this.filteredRows.flatMap((row) => [
-                                Number(row.demand_count) || 0,
-                                Number(row.workers_count) || 0,
-                            ]);
-                            const currentMax = values.length ? Math.max(...values) : 0;
-
-                            if (currentMax <= 10) {
-                                return 10;
-                            }
-
-                            return Math.ceil(currentMax / 5) * 5;
-                        },
-                        get yTicks() {
-                            const ticks = [];
-                            const step = Math.max(1, Math.ceil(this.chartMax / 5));
-
-                            for (let value = this.chartMax; value >= 0; value -= step) {
-                                ticks.push(value);
-                            }
-
-                            if (ticks[ticks.length - 1] !== 0) {
-                                ticks.push(0);
-                            }
-
-                            return ticks;
-                        },
-                        barHeight(value) {
-                            if (this.chartMax <= 0) {
-                                return 0;
-                            }
-
-                            return Math.max(2, Math.round(((Number(value) || 0) / this.chartMax) * 100));
-                        },
-                        statusClass(level) {
-                            if (level === 'High') {
-                                return 'gc-status-badge-high';
-                            }
-
-                            if (level === 'Low') {
-                                return 'gc-status-badge-low';
-                            }
-
-                            return 'gc-status-badge-ok';
-                        },
-                    };
-                };
-            }
-        </script>
-    @endscript
-</x-filament-panels::page>
+            @endif
+        </x-filament::section>
+    </div>
+</x-filament-hub.page-shell>
