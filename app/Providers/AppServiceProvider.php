@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Delivery\Models\DeliveryCompany;
 use Modules\Delivery\Models\DeliveryDriver;
 use Modules\Delivery\Models\DeliveryOrder;
 use Modules\Delivery\Policies\DeliveryDriverPolicy;
@@ -187,6 +188,8 @@ final class AppServiceProvider extends ServiceProvider
             'marketing_offer' => MarketingOffer::class,
             'cleaning_booking' => CleaningBooking::class,
             'event_booking' => \Modules\Cleaning\Models\EventBooking::class,
+            'delivery_company' => DeliveryCompany::class,
+            'delivery_driver' => DeliveryDriver::class,
             'delivery_order' => DeliveryOrder::class,
         ]);
     }

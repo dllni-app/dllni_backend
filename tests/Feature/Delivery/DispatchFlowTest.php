@@ -11,6 +11,7 @@ use Modules\Delivery\Models\DeliveryAssignmentAttempt;
 use Modules\Delivery\Models\DeliveryCompany;
 use Modules\Delivery\Models\DeliveryDriver;
 use Modules\Delivery\Models\DeliveryDriverLocation;
+use Modules\Delivery\Models\DeliveryOrder;
 use Modules\Delivery\Services\DeliveryOrderService;
 use Modules\Delivery\Services\DriverDispatchService;
 

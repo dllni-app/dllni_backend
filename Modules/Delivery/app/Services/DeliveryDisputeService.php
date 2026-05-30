@@ -7,9 +7,12 @@ namespace Modules\Delivery\Services;
 use App\Enums\DisputeStatus;
 use App\Models\Dispute;
 use Modules\Delivery\Models\DeliveryOrder;
+use Modules\Delivery\Support\ResolvesDisputeStatus;
 
 final class DeliveryDisputeService
 {
+    use ResolvesDisputeStatus;
+
     public function __construct(
         private readonly DeliveryNotificationService $notifications,
         private readonly DriverTrustService $trustService,
@@ -35,10 +38,8 @@ final class DeliveryDisputeService
             return;
         }
 
-        $previous = DisputeStatus::tryFrom((string) $dispute->getOriginal('status'));
-        $current = $dispute->status instanceof DisputeStatus
-            ? $dispute->status
-            : DisputeStatus::tryFrom((string) $dispute->status);
+        $previous = $this->resolvePreviousDisputeStatus($dispute);
+        $current = $this->resolveDisputeStatus($dispute->status);
 
         if ($current === null) {
             return;

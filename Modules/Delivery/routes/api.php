@@ -11,6 +11,7 @@ use Modules\Delivery\Http\Controllers\API\Driver\DriverLocationController;
 use Modules\Delivery\Http\Controllers\API\Driver\DriverNotificationController;
 use Modules\Delivery\Http\Controllers\API\Driver\DriverOfferController;
 use Modules\Delivery\Http\Controllers\API\Driver\DriverOrderController;
+use Modules\Delivery\Http\Controllers\API\Driver\DriverUiController;
 use Modules\Delivery\Http\Middleware\EnsureDeliveryDriver;
 
 Route::prefix('v1/delivery/driver')->group(function (): void {
@@ -38,5 +39,28 @@ Route::prefix('v1/delivery/driver')->group(function (): void {
         Route::patch('notifications/{id}/read', [DriverNotificationController::class, 'markAsRead']);
 
         Route::get('disputes', DriverDisputeController::class);
+
+        // Additive UI-facing aliases for Flutter contract alignment.
+        Route::get('bootstrap', [DriverUiController::class, 'bootstrap']);
+
+        Route::get('orders/status-counts', [DriverUiController::class, 'statusCounts']);
+        Route::get('orders/{order}/offer-state', [DriverUiController::class, 'offerState'])->whereNumber('order');
+        Route::get('orders/{order}/timeline', [DriverUiController::class, 'timeline'])->whereNumber('order');
+        Route::get('orders/{order}', [DriverUiController::class, 'show'])->whereNumber('order');
+        Route::get('orders', [DriverUiController::class, 'indexOrders']);
+        Route::post('orders/{order}/arrived-pickup', [DriverUiController::class, 'arrivedPickup'])->whereNumber('order');
+        Route::post('orders/{order}/arrived-dropoff', [DriverUiController::class, 'arrivedDropoff'])->whereNumber('order');
+        Route::post('orders/{order}/call-events', [DriverUiController::class, 'callEvent'])->whereNumber('order');
+
+        Route::get('wallet/transactions', [DriverUiController::class, 'walletTransactions']);
+        Route::get('wallet/limits', [DriverUiController::class, 'walletLimits']);
+
+        Route::post('notifications/read-all', [DriverUiController::class, 'readAllNotifications']);
+        Route::get('notifications/unread-count', [DriverUiController::class, 'unreadNotificationCount']);
+
+        Route::get('config/reject-reasons', [DriverUiController::class, 'rejectReasons']);
+        Route::get('app/version-check', [DriverUiController::class, 'versionCheck']);
+        Route::post('push/register', [DriverUiController::class, 'registerPushToken']);
+        Route::post('push/unregister', [DriverUiController::class, 'unregisterPushToken']);
     });
 });

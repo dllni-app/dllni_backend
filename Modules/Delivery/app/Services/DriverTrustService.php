@@ -11,9 +11,12 @@ use Illuminate\Support\Facades\DB;
 use Modules\Delivery\Models\DeliveryDriver;
 use Modules\Delivery\Models\DeliveryDriverTrustLog;
 use Modules\Delivery\Models\DeliveryOrder;
+use Modules\Delivery\Support\ResolvesDisputeStatus;
 
 final class DriverTrustService
 {
+    use ResolvesDisputeStatus;
+
     public function __construct(
         private readonly DeliveryNotificationService $notifications,
         private readonly FinancialLedgerService $ledgerService,
@@ -29,13 +32,7 @@ final class DriverTrustService
 
     public function decrementOpenDisputes(DeliveryDriver $driver): void
     {
-        $driver->refresh();
-
-        DeliveryDriver::query()
-            ->whereKey($driver->id)
-            ->update([
-                'open_disputes_count' => max(0, (int) $driver->open_disputes_count - 1),
-            ]);
+        $this->syncOpenDisputesCount($driver);
     }
 
     public function applyDisputePenalty(DeliveryDriver $driver, Dispute $dispute, ?int $delta = null): void
@@ -84,29 +81,59 @@ final class DriverTrustService
             return;
         }
 
-        $previous = DisputeStatus::tryFrom((string) $dispute->getOriginal('status'));
-        $current = $dispute->status instanceof DisputeStatus
-            ? $dispute->status
-            : DisputeStatus::tryFrom((string) $dispute->status);
+        $current = $this->resolveDisputeStatus($dispute->status);
 
-        if ($current === null) {
+        if ($current === null || ! $current->isTerminal()) {
             return;
         }
 
-        if ($previous?->isTerminal() || ! $current->isTerminal()) {
-            return;
-        }
-
-        $this->decrementOpenDisputes($driver);
+        $this->syncOpenDisputesCount($driver);
 
         $resolution = $dispute->resolution instanceof DisputeResolution
             ? $dispute->resolution
             : DisputeResolution::tryFrom((string) ($dispute->resolution ?? ''));
 
-        if ($resolution === DisputeResolution::WorkerPenalty) {
+        if ($resolution === DisputeResolution::WorkerPenalty && ! $this->hasPenaltyBeenApplied($driver, $dispute)) {
             $this->applyDisputePenalty($driver->fresh(), $dispute);
             $this->recordDisputeFinancialPenalty($order, $dispute);
         }
+    }
+
+    private function syncOpenDisputesCount(DeliveryDriver $driver): void
+    {
+        $orderIds = DeliveryOrder::query()
+            ->where('driver_id', $driver->id)
+            ->pluck('id');
+
+        if ($orderIds->isEmpty()) {
+            DeliveryDriver::query()
+                ->whereKey($driver->id)
+                ->update(['open_disputes_count' => 0]);
+
+            return;
+        }
+
+        $openDisputes = Dispute::query()
+            ->where('booking_type', 'delivery_order')
+            ->whereIn('booking_id', $orderIds)
+            ->whereIn('status', [
+                DisputeStatus::Open->value,
+                DisputeStatus::UnderReview->value,
+            ])
+            ->count();
+
+        DeliveryDriver::query()
+            ->whereKey($driver->id)
+            ->update(['open_disputes_count' => $openDisputes]);
+    }
+
+    private function hasPenaltyBeenApplied(DeliveryDriver $driver, Dispute $dispute): bool
+    {
+        return DeliveryDriverTrustLog::query()
+            ->where('driver_id', $driver->id)
+            ->where('related_dispute_id', $dispute->id)
+            ->where('reason', 'dispute_penalty')
+            ->exists();
     }
 
     private function recordDisputeFinancialPenalty(DeliveryOrder $order, Dispute $dispute): void

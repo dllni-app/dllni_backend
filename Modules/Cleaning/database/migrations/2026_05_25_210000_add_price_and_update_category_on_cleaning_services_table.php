@@ -20,13 +20,12 @@ return new class extends Migration
             ->update(['category' => 'event_assisent']);
 
         DB::statement(
-            'UPDATE cleaning_services cs '
-            .'LEFT JOIN ('
-            .'  SELECT cleaning_service_id, MIN(base_price) AS min_base_price '
+            'UPDATE cleaning_services '
+            .'SET price = COALESCE(('
+            .'  SELECT MIN(base_price) '
             .'  FROM service_pricing '
-            .'  GROUP BY cleaning_service_id'
-            .') sp ON sp.cleaning_service_id = cs.id '
-            .'SET cs.price = COALESCE(sp.min_base_price, cs.price, 0)'
+            .'  WHERE service_pricing.cleaning_service_id = cleaning_services.id'
+            .'), price, 0)'
         );
     }
 

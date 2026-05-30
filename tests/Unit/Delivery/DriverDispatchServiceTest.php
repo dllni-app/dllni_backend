@@ -111,15 +111,16 @@ it('prevents a driver with an active order from accepting another offer', functi
         'dropoffLongitude' => 36.2910,
     ]);
 
-    $attempt = DeliveryAssignmentAttempt::query()->create([
-        'order_id' => $pendingOrder->id,
-        'driver_id' => $driver->id,
-        'attempt_no' => 1,
-        'status' => 'open',
-        'distance_to_pickup_km' => 0.5,
-        'offered_at' => now(),
-        'expires_at' => now()->addSeconds(30),
-    ]);
+    $attempt = $pendingOrder->assignmentAttempts()->first();
+
+    if (! $attempt instanceof DeliveryAssignmentAttempt) {
+        app(DriverDispatchService::class)->dispatchByOrderId($pendingOrder->id);
+        $attempt = $pendingOrder->fresh()->assignmentAttempts()->first();
+    }
+
+    if (! $attempt instanceof DeliveryAssignmentAttempt) {
+        throw new RuntimeException('Expected a delivery assignment attempt for pending order.');
+    }
 
     expect(fn () => app(DriverDispatchService::class)->acceptAttempt($attempt->id, $driver))
         ->toThrow(RuntimeException::class, 'Driver already has an active order');

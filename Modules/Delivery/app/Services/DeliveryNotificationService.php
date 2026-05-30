@@ -418,6 +418,19 @@ final class DeliveryNotificationService
     private function mapNotification(DatabaseNotification $notification): array
     {
         $normalized = $this->feedNormalizer->normalize($notification);
+        $data = is_array($normalized['data'] ?? null) ? $normalized['data'] : [];
+
+        if (! array_key_exists('canonicalType', $data) && isset($data['canonical_type']) && is_string($data['canonical_type'])) {
+            $data['canonicalType'] = $data['canonical_type'];
+        }
+
+        if (! array_key_exists('canonicalType', $data) && isset($normalized['canonicalType']) && is_string($normalized['canonicalType'])) {
+            $data['canonicalType'] = $normalized['canonicalType'];
+        }
+
+        if (! array_key_exists('canonical_type', $data) && isset($normalized['canonical_type']) && is_string($normalized['canonical_type'])) {
+            $data['canonical_type'] = $normalized['canonical_type'];
+        }
 
         return [
             'id' => $notification->id,
@@ -426,7 +439,7 @@ final class DeliveryNotificationService
             'category' => $normalized['category'],
             'priority' => $normalized['priority'],
             'icon' => $normalized['icon'],
-            'data' => $normalized['data'],
+            'data' => $data,
             'createdAt' => $normalized['createdAt'],
             'readAt' => $normalized['readAt'],
             'isRead' => $notification->read_at !== null,

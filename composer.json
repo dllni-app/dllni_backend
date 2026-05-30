@@ -50,8 +50,10 @@
             "Modules\\Resturants\\Database\\Seeders\\": "Modules/Resturants/database/seeders/",
             "Modules\\Resturants\\": "Modules/Resturants/app/",
             "Modules\\Cleaning\\": "Modules/Cleaning/app/",
+            "Modules\\Delivery\\": "Modules/Delivery/app/",
             "Modules\\Supermarket\\": "Modules/Supermarket/app/",
             "Modules\\Supermarket\\Database\\Seeders\\": "Modules/Supermarket/database/seeders/",
+            "Modules\\Delivery\\Database\\Seeders\\": "Modules/Delivery/database/seeders/",
             "Modules\\User\\": "Modules/User/app/",
             "Modules\\User\\Database\\Seeders\\": "Modules/User/database/seeders/"
             },
