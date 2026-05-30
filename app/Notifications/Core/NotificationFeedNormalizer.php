@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Notifications\Core;
 
-use InvalidArgumentException;
 use Illuminate\Notifications\DatabaseNotification;
+use InvalidArgumentException;
 
 final class NotificationFeedNormalizer
 {
@@ -112,6 +112,10 @@ final class NotificationFeedNormalizer
 
         if (str_contains($notificationClass, '\\Resturants\\') || str_contains($notificationClass, '\\Restaurant\\')) {
             return 'restaurant';
+        }
+
+        if (str_contains($notificationClass, '\\Delivery\\')) {
+            return 'delivery';
         }
 
         return null;

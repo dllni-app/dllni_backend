@@ -9,6 +9,7 @@ return [
         'cleaning' => '/images/notifications/cleaning.svg',
         'supermarket' => '/images/notifications/supermarket.svg',
         'restaurant' => '/images/notifications/restaurant.svg',
+        'delivery' => '/images/notifications/delivery.svg',
     ],
     'types' => [
         'cleaning.booking.new_order_request' => [
@@ -380,6 +381,261 @@ return [
                 'en' => [
                     'title' => 'Account reminder',
                     'body' => ':message',
+                ],
+            ],
+        ],
+        'delivery.order.completed' => [
+            'legacy_type' => 'delivery_order_completed',
+            'module' => 'delivery',
+            'category' => 'orders',
+            'priority' => 'normal',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'اكتمل الطلب',
+                    'body' => 'اكتمل طلب التوصيل :order_number.',
+                ],
+                'en' => [
+                    'title' => 'Order completed',
+                    'body' => 'Delivery order :order_number has been completed.',
+                ],
+            ],
+        ],
+        'delivery.order.stopped' => [
+            'legacy_type' => 'delivery_order_stopped',
+            'module' => 'delivery',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'توقف التوزيع',
+                    'body' => 'تعذر إسناد الطلب :order_number. السبب: :reason',
+                ],
+                'en' => [
+                    'title' => 'Dispatch stopped',
+                    'body' => 'Delivery order :order_number could not be assigned. Reason: :reason',
+                ],
+            ],
+        ],
+        'delivery.order.offer' => [
+            'legacy_type' => 'delivery_order_offer',
+            'module' => 'delivery',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'عرض توصيل جديد',
+                    'body' => 'لديك عرض توصيل للطلب :order_number.',
+                ],
+                'en' => [
+                    'title' => 'New delivery offer',
+                    'body' => 'You have a delivery offer for order :order_number.',
+                ],
+            ],
+        ],
+        'delivery.order.offer_timed_out' => [
+            'legacy_type' => 'delivery_order_offer_timed_out',
+            'module' => 'delivery',
+            'category' => 'orders',
+            'priority' => 'normal',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'انتهى وقت العرض',
+                    'body' => 'انتهى وقت عرض الطلب :order_number.',
+                ],
+                'en' => [
+                    'title' => 'Offer timed out',
+                    'body' => 'The offer for order :order_number has expired.',
+                ],
+            ],
+        ],
+        'delivery.order.accepted' => [
+            'legacy_type' => 'delivery_order_accepted',
+            'module' => 'delivery',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'تم قبول الطلب',
+                    'body' => 'قبل السائق الطلب :order_number.',
+                ],
+                'en' => [
+                    'title' => 'Order accepted',
+                    'body' => 'A driver accepted delivery order :order_number.',
+                ],
+            ],
+        ],
+        'delivery.dispute.opened' => [
+            'legacy_type' => 'delivery_dispute_opened',
+            'module' => 'delivery',
+            'category' => 'system',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'نزاع جديد',
+                    'body' => 'تم فتح نزاع :ticket_number على الطلب :order_number.',
+                ],
+                'en' => [
+                    'title' => 'Dispute opened',
+                    'body' => 'Dispute :ticket_number was opened for order :order_number.',
+                ],
+            ],
+        ],
+        'delivery.dispute.resolved' => [
+            'legacy_type' => 'delivery_dispute_resolved',
+            'module' => 'delivery',
+            'category' => 'system',
+            'priority' => 'normal',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'تم تحديث النزاع',
+                    'body' => 'تم تحديث النزاع :ticket_number للطلب :order_number إلى :status.',
+                ],
+                'en' => [
+                    'title' => 'Dispute updated',
+                    'body' => 'Dispute :ticket_number for order :order_number is now :status.',
+                ],
+            ],
+        ],
+        'delivery.dispute.rejected' => [
+            'legacy_type' => 'delivery_dispute_rejected',
+            'module' => 'delivery',
+            'category' => 'system',
+            'priority' => 'normal',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'تم رفض النزاع',
+                    'body' => 'تم رفض النزاع :ticket_number للطلب :order_number.',
+                ],
+                'en' => [
+                    'title' => 'Dispute rejected',
+                    'body' => 'Dispute :ticket_number for order :order_number was rejected.',
+                ],
+            ],
+        ],
+        'delivery.order.started' => [
+            'legacy_type' => 'delivery_order_started',
+            'module' => 'delivery',
+            'category' => 'orders',
+            'priority' => 'normal',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'بدء التوصيل',
+                    'body' => 'بدأ السائق توصيل الطلب :order_number.',
+                ],
+                'en' => [
+                    'title' => 'Delivery started',
+                    'body' => 'The driver started delivery for order :order_number.',
+                ],
+            ],
+        ],
+        'delivery.order.picked_up' => [
+            'legacy_type' => 'delivery_order_picked_up',
+            'module' => 'delivery',
+            'category' => 'orders',
+            'priority' => 'normal',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'تم الاستلام',
+                    'body' => 'تم استلام الطلب :order_number من نقطة الإرسال.',
+                ],
+                'en' => [
+                    'title' => 'Order picked up',
+                    'body' => 'Order :order_number was picked up from the sender.',
+                ],
+            ],
+        ],
+        'delivery.order.delivered' => [
+            'legacy_type' => 'delivery_order_delivered',
+            'module' => 'delivery',
+            'category' => 'orders',
+            'priority' => 'normal',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'تم التسليم',
+                    'body' => 'تم تسليم الطلب :order_number إلى المستلم.',
+                ],
+                'en' => [
+                    'title' => 'Order delivered',
+                    'body' => 'Order :order_number was delivered to the recipient.',
+                ],
+            ],
+        ],
+        'delivery.driver.trust_changed' => [
+            'legacy_type' => 'delivery_driver_trust_changed',
+            'module' => 'delivery',
+            'category' => 'system',
+            'priority' => 'normal',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'تحديث نقاط الثقة',
+                    'body' => 'نقاط الثقة: :delta (الإجمالي :score).',
+                ],
+                'en' => [
+                    'title' => 'Trust score updated',
+                    'body' => 'Trust score changed by :delta (now :score).',
+                ],
+            ],
+        ],
+        'delivery.financial.collection_posted' => [
+            'legacy_type' => 'delivery_financial_collection_posted',
+            'module' => 'delivery',
+            'category' => 'system',
+            'priority' => 'normal',
+            'channels' => ['database'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'تم تسجيل تحصيل',
+                    'body' => 'تم تسجيل تحصيل بقيمة :amount لـ :company_name.',
+                ],
+                'en' => [
+                    'title' => 'Collection recorded',
+                    'body' => 'A collection of :amount was recorded for :company_name.',
+                ],
+            ],
+        ],
+        'delivery.financial.suspended' => [
+            'legacy_type' => 'delivery_financial_suspended',
+            'module' => 'delivery',
+            'category' => 'system',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'إيقاف مالي',
+                    'body' => 'بلغت :company_name الحد المالي (الرصيد :balance / الحد :limit).',
+                ],
+                'en' => [
+                    'title' => 'Financial suspension',
+                    'body' => ':company_name reached the financial limit (balance :balance / limit :limit).',
+                ],
+            ],
+        ],
+        'delivery.financial.reactivated' => [
+            'legacy_type' => 'delivery_financial_reactivated',
+            'module' => 'delivery',
+            'category' => 'system',
+            'priority' => 'normal',
+            'channels' => ['database'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'إعادة تفعيل الحساب المالي',
+                    'body' => ':company_name أصبحت دون الحد المالي ويمكنها التوزيع مجدداً.',
+                ],
+                'en' => [
+                    'title' => 'Financial account reactivated',
+                    'body' => ':company_name is below the financial limit and can dispatch again.',
                 ],
             ],
         ],

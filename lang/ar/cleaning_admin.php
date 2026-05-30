@@ -632,6 +632,7 @@ return [
             'under_review' => 'قيد المراجعة',
             'resolved' => 'تم الحل',
             'closed' => 'مغلق',
+            'rejected' => 'مرفوض',
         ],
         'dispute_category' => [
             'poor_quality' => 'جودة الخدمة',

@@ -12,6 +12,7 @@ use Modules\Cleaning\Database\Seeders\CleaningBookingSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningServiceSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningWorkerArabicDataSeeder;
 use Modules\Cleaning\Database\Seeders\EventBookingSeeder;
+use Modules\Delivery\Database\Seeders\DeliveryPermissionsSeeder;
 use Modules\Resturants\Database\Seeders\RestaurantSeeder;
 use Modules\Supermarket\Database\Seeders\SupermarketDatabaseSeeder;
 
@@ -30,6 +31,7 @@ final class DatabaseSeeder extends Seeder
         $this->call([
             VerifiedUserSeeder::class,
             DashboardPermissionsSeeder::class,
+            DeliveryPermissionsSeeder::class,
             RestaurantOwnerEmployeePermissionsSeeder::class,
             TeamRoleTemplatesSeeder::class,
             AdminUserSeeder::class,

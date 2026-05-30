@@ -17,13 +17,17 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Delivery\Models\DeliveryDriver;
+use Modules\Delivery\Models\DeliveryOrder;
+use Modules\Delivery\Policies\DeliveryDriverPolicy;
+use Modules\Delivery\Policies\DeliveryOrderPolicy;
 use Modules\Resturants\Models\Category;
 use Modules\Resturants\Models\Offer;
 use Modules\Resturants\Models\Order;
-use Modules\Resturants\Models\RestaurantGroupOrder;
-use Modules\Resturants\Models\RestaurantGroupOrderParticipant;
 use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
+use Modules\Resturants\Models\RestaurantGroupOrder;
+use Modules\Resturants\Models\RestaurantGroupOrderParticipant;
 use Modules\Resturants\Models\RestaurantOrderDispute;
 use Modules\Resturants\Policies\OrderPolicy;
 use Modules\Resturants\Policies\RestaurantOrderDisputePolicy;
@@ -78,7 +82,7 @@ final class AppServiceProvider extends ServiceProvider
             $userId = $request->user()?->id ?? 'guest';
             $orderId = (string) $request->route('order');
 
-            return Limit::perMinute(5)->by($userId . '|' . $orderId);
+            return Limit::perMinute(5)->by($userId.'|'.$orderId);
         });
 
         $this->bootModelsDefaults();
@@ -86,6 +90,13 @@ final class AppServiceProvider extends ServiceProvider
         $this->bootBroadcastChannels();
         $this->bootRestaurantPolicies();
         $this->bootSupermarketPolicies();
+        $this->bootDeliveryPolicies();
+    }
+
+    private function bootDeliveryPolicies(): void
+    {
+        Gate::policy(DeliveryOrder::class, DeliveryOrderPolicy::class);
+        Gate::policy(DeliveryDriver::class, DeliveryDriverPolicy::class);
     }
 
     private function bootRestaurantPolicies(): void
@@ -176,6 +187,7 @@ final class AppServiceProvider extends ServiceProvider
             'marketing_offer' => MarketingOffer::class,
             'cleaning_booking' => CleaningBooking::class,
             'event_booking' => \Modules\Cleaning\Models\EventBooking::class,
+            'delivery_order' => DeliveryOrder::class,
         ]);
     }
 

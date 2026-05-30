@@ -577,6 +577,7 @@ return [
             'under_review' => 'Under review',
             'resolved' => 'Resolved',
             'closed' => 'Closed',
+            'rejected' => 'Rejected',
         ],
         'dispute_category' => [
             'poor_quality' => 'Service quality',

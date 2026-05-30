@@ -41,6 +41,7 @@ final class Worker extends Model implements HasMedia
         'home_latitude',
         'home_longitude',
         'default_working_hours',
+        'security_deposit_status',
     ];
 
     public function user(): BelongsTo
@@ -73,6 +74,16 @@ final class Worker extends Model implements HasMedia
         return $this->hasMany(WorkerCustomerRating::class);
     }
 
+    public function deposit()
+    {
+        return $this->hasOne(CleaningWorkerDeposit::class);
+    }
+
+    public function depositTransactions(): HasMany
+    {
+        return $this->hasMany(CleaningDepositTransaction::class);
+    }
+
     public function casts(): array
     {
         return [
@@ -88,6 +99,7 @@ final class Worker extends Model implements HasMedia
             'featured_until' => 'datetime',
             'suspended_until' => 'datetime',
             'default_working_hours' => 'array',
+            'security_deposit_status' => 'string',
         ];
     }
 

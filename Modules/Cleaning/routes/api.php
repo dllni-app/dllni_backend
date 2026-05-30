@@ -2,25 +2,26 @@
 
 declare(strict_types=1);
 
-use App\Http\Controllers\API\UserNotificationController;
 use App\Http\Controllers\API\RegisterFcmTokenController;
+use App\Http\Controllers\API\UserNotificationController;
 use Illuminate\Support\Facades\Route;
 use Modules\Cleaning\Http\Controllers\API\CleaningBillingPolicyController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingController;
 use Modules\Cleaning\Http\Controllers\API\CleaningServiceController;
 use Modules\Cleaning\Http\Controllers\API\CleaningTimeWarningController;
 use Modules\Cleaning\Http\Controllers\API\DashboardOverviewController;
+use Modules\Cleaning\Http\Controllers\API\DepositManagementController;
 use Modules\Cleaning\Http\Controllers\API\EventBookingController;
 use Modules\Cleaning\Http\Controllers\API\GeographicCoverageController;
 use Modules\Cleaning\Http\Controllers\API\ServicePricingController;
 use Modules\Cleaning\Http\Controllers\API\WorkerAccountProfileController;
 use Modules\Cleaning\Http\Controllers\API\WorkerAccountStatusController;
+use Modules\Cleaning\Http\Controllers\API\WorkerDepositController;
 use Modules\Cleaning\Http\Controllers\API\WorkerDetailsController;
 use Modules\Cleaning\Http\Controllers\API\WorkerHomepageController;
 use Modules\Cleaning\Http\Controllers\API\WorkerStatisticsController;
 use Modules\Cleaning\Http\Controllers\API\WorkerTransactionsController;
 use Modules\Cleaning\Http\Controllers\API\WorkerWorkAreasController;
-use Modules\Cleaning\Http\Controllers\API\WorkerWorkingHoursController;
 
 Route::prefix('v1')->group(function () {
     // Public endpoints - no auth required
@@ -53,6 +54,8 @@ Route::prefix('v1')->group(function () {
             Route::get('transactions', WorkerTransactionsController::class);
             Route::get('status', [WorkerAccountStatusController::class, 'show']);
             Route::patch('status', [WorkerAccountStatusController::class, 'update']);
+            Route::get('deposit', [WorkerDepositController::class, 'getStatus']);
+            Route::get('deposit/transactions', [WorkerDepositController::class, 'getTransactions']);
         });
 
         // Analytics endpoints
@@ -62,6 +65,15 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('cleaning-services', CleaningServiceController::class)->only(['store', 'update', 'destroy']);
         Route::apiResource('cleaning-services.pricing', ServicePricingController::class)->only(['store', 'update', 'destroy'])->scoped();
         Route::apiResource('cleaning-billing-policies', CleaningBillingPolicyController::class)->only(['store', 'update', 'destroy']);
+
+        // Deposit management endpoints (admin)
+        Route::prefix('admin/cleaning/deposits')->group(function (): void {
+            Route::get('settings', [DepositManagementController::class, 'getSettings']);
+            Route::put('settings', [DepositManagementController::class, 'updateSettings']);
+            Route::post('{worker}/deposit', [DepositManagementController::class, 'recordDeposit']);
+            Route::post('{worker}/withdraw', [DepositManagementController::class, 'recordWithdrawal']);
+            Route::get('{worker}/transactions', [DepositManagementController::class, 'getWorkerTransactions']);
+        });
 
         // Booking endpoints (ordering)
         Route::post('cleaning-bookings/{cleaning_booking}/accept', [CleaningBookingController::class, 'accept'])->name('cleaning-bookings.accept');

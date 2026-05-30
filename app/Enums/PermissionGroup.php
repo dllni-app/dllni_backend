@@ -23,4 +23,10 @@ enum PermissionGroup: string
     case SystemAlerts = 'system_alerts';
     case Pricing = 'pricing';
     case Catalog = 'catalog';
+    case DeliveryCompanies = 'delivery_companies';
+    case DeliveryDrivers = 'delivery_drivers';
+    case DeliveryOrders = 'delivery_orders';
+    case DeliveryDisputes = 'delivery_disputes';
+    case DeliveryFinancial = 'delivery_financial';
+    case DeliveryReports = 'delivery_reports';
 }

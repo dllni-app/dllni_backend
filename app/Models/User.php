@@ -184,6 +184,13 @@ final class User extends Authenticatable implements FilamentUser, HasMedia
 
     public function canAccessPanel(Panel $panel): bool
     {
+        if ($panel->getId() === 'company') {
+            return $this->hasAnyRole([
+                'delivery_company_admin',
+                'delivery_company_staff',
+            ]);
+        }
+
         return $this->hasAnyRole([
             'admin',
             'Super Admin',
