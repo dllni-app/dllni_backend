@@ -26,7 +26,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->index(['account_id', 'created_at']);
-            $table->index(['reference_type', 'reference_id']);
+            $table->index(['reference_type', 'reference_id'], 'dft_ref_type_ref_id_idx');
         });
     }
 
