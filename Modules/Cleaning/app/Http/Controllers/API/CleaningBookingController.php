@@ -135,7 +135,7 @@ final class CleaningBookingController
     /** @throws Throwable */
     public function reject(CleaningBookingRejectRequest $request, CleaningBooking $cleaning_booking): CleaningBookingResource|JsonResponse
     {
-        $this->ensureWorkerCanActOnBooking($cleaning_booking, requireOwnership: true);
+        $this->ensureWorkerCanActOnBooking($cleaning_booking, requireOwnership: false);
 
         try {
             $booking = $this->cleaningBookingService->reject($cleaning_booking, $request->validated('reason'));

@@ -293,6 +293,32 @@ it('rejects a cleaning booking without reason (uses default)', function () {
     ]);
 });
 
+it('allows worker to reject a pending unassigned booking', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-reject-pending@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => null,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'status' => CleaningBookingStatus::Pending,
+        'scheduled_date' => now()->format('Y-m-d'),
+        'scheduled_time' => now()->addHour()->format('H:i'),
+    ]);
+
+    $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/reject", [
+        'reason' => 'Cannot take this booking',
+    ]);
+
+    $response->assertOk();
+    $response->assertJsonPath('data.status', 'cancelled');
+    $this->assertDatabaseHas('cleaning_booking_worker_rejections', [
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $worker->id,
+        'reason' => 'Cannot take this booking',
+    ]);
+});
+
 it('cancels a cleaning booking without reason', function () {
     $workerUser = User::factory()->create(['email' => 'worker-cancel-no-reason@example.com']);
     $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
