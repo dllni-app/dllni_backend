@@ -218,6 +218,50 @@ it('returns pending unassigned bookings for worker when forCurrentWorker and sta
     expect($response->json('data'))->toBeArray()->toHaveCount(2);
 });
 
+it('filters cleaning bookings by multiple statuses for current worker', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-multi-status@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
+        'name' => 'Default',
+        'billing_mode' => 'actual_working_time',
+        'rules' => [],
+        'is_active' => true,
+        'is_default' => true,
+    ]);
+
+    CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $billingPolicy->id,
+        'status' => CleaningBookingStatus::InProgress,
+    ]);
+    CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $billingPolicy->id,
+        'status' => CleaningBookingStatus::AwaitingStartVerification,
+    ]);
+    CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $billingPolicy->id,
+        'status' => CleaningBookingStatus::Completed,
+    ]);
+    CleaningBooking::factory()->create([
+        'billing_policy_id' => $billingPolicy->id,
+        'status' => CleaningBookingStatus::InProgress,
+    ]);
+
+    $response = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=in_progress,awaiting_start_verification');
+
+    $response->assertOk();
+    expect($response->json('data'))->toBeArray()->toHaveCount(2);
+    expect(collect($response->json('data'))->pluck('status')->all())
+        ->toBe([
+            CleaningBookingStatus::AwaitingStartVerification->value,
+            CleaningBookingStatus::InProgress->value,
+        ]);
+});
+
 it('filters cleaning bookings by property type', function () {
     $billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
         'name' => 'Default',

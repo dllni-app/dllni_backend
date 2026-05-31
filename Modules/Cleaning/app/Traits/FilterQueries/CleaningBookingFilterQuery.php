@@ -18,7 +18,7 @@ trait CleaningBookingFilterQuery
     {
         return QueryBuilder::for(CleaningBooking::class)
             ->allowedFilters([
-                AllowedFilter::exact('status'),
+                AllowedFilter::scope('status'),
                 AllowedFilter::scope('scheduledDateFrom'),
                 AllowedFilter::scope('scheduledDateTo'),
                 AllowedFilter::scope('scheduledDate'),
@@ -35,6 +35,33 @@ trait CleaningBookingFilterQuery
                 AllowedSort::field('totalPrice', 'total_price'),
             ])
             ->defaultSort('-created_at');
+    }
+
+    public function scopeStatus(Builder $query, string ...$values): Builder
+    {
+        $statuses = [];
+        foreach ($values as $value) {
+            foreach (explode(',', $value) as $status) {
+                $normalized = trim($status);
+                if ($normalized === '') {
+                    continue;
+                }
+
+                $statuses[] = $normalized;
+            }
+        }
+
+        $statuses = array_values(array_unique($statuses));
+
+        if ($statuses === []) {
+            return $query;
+        }
+
+        if (count($statuses) === 1) {
+            return $query->where('status', $statuses[0]);
+        }
+
+        return $query->whereIn('status', $statuses);
     }
 
     public function scopeScheduledDateFrom(Builder $query, string $date): Builder

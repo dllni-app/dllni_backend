@@ -21,6 +21,7 @@ use Modules\Cleaning\Http\Controllers\API\WorkerDetailsController;
 use Modules\Cleaning\Http\Controllers\API\WorkerHomepageController;
 use Modules\Cleaning\Http\Controllers\API\WorkerStatisticsController;
 use Modules\Cleaning\Http\Controllers\API\WorkerTransactionsController;
+use Modules\Cleaning\Http\Controllers\API\WorkerWorkingHoursController;
 use Modules\Cleaning\Http\Controllers\API\WorkerWorkAreasController;
 
 Route::prefix('v1')->group(function () {
