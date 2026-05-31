@@ -77,7 +77,7 @@ final class UserCleaningOrderEstimationService
 
     /**
      * @param  array<string, mixed>  $propertyDetails
-     * @return array{address: ?string, location_name: ?string, bedrooms: int, rooms: int, bathrooms: int, kitchens: int, living_room_size: string, room_size_breakdown: ?array<string, array{small:int, medium:int, large:int}>}
+     * @return array{address: ?string, location_name: ?string, bedrooms: int, rooms: int, bathrooms: int, kitchens: int, balconies: int, living_room_size: string, room_size_breakdown: ?array<string, array{small:int, medium:int, large:int}>}
      */
     public function normalizePropertyDetails(array $propertyDetails): array
     {
@@ -98,10 +98,12 @@ final class UserCleaningOrderEstimationService
             $bedrooms = $this->sumRoomTypeBuckets($normalizedBreakdown['bedroom'])
                 + $this->sumRoomTypeBuckets($normalizedBreakdown['bathroom'])
                 + $this->sumRoomTypeBuckets($normalizedBreakdown['kitchen'])
-                + $this->sumRoomTypeBuckets($normalizedBreakdown['living_room']);
+                + $this->sumRoomTypeBuckets($normalizedBreakdown['living_room'])
+                + $this->sumRoomTypeBuckets($normalizedBreakdown['balcony']);
             $rooms = $this->sumRoomTypeBuckets($normalizedBreakdown['bedroom']);
             $bathrooms = $this->sumRoomTypeBuckets($normalizedBreakdown['bathroom']);
             $kitchens = $this->sumRoomTypeBuckets($normalizedBreakdown['kitchen']);
+            $balconies = $this->sumRoomTypeBuckets($normalizedBreakdown['balcony']);
         } else {
             $livingRoomSize = mb_strtolower((string) Arr::get($propertyDetails, 'living_room_size', 'medium'));
             if (! in_array($livingRoomSize, self::LIVING_ROOM_SIZES, true)) {
@@ -112,6 +114,7 @@ final class UserCleaningOrderEstimationService
             $rooms = max(0, (int) Arr::get($propertyDetails, 'rooms', 0));
             $bathrooms = max(0, (int) Arr::get($propertyDetails, 'bathrooms', 0));
             $kitchens = max(0, (int) Arr::get($propertyDetails, 'kitchens', Arr::get($propertyDetails, 'kitchen_included') ? 1 : 0));
+            $balconies = max(0, (int) Arr::get($propertyDetails, 'balconies', 0));
         }
 
         return [
@@ -121,6 +124,7 @@ final class UserCleaningOrderEstimationService
             'rooms' => $rooms,
             'bathrooms' => $bathrooms,
             'kitchens' => $kitchens,
+            'balconies' => $balconies,
             'living_room_size' => $livingRoomSize,
             'room_size_breakdown' => $normalizedBreakdown,
         ];
@@ -128,7 +132,7 @@ final class UserCleaningOrderEstimationService
 
     /**
      * @param  array<string, mixed>  $propertyDetails
-     * @return array{propertyType: string, propertyDetails: array{bedrooms: int, rooms: int, bathrooms: int, kitchens: int, living_room_size: string}, addressLatitude: ?float, addressLongitude: ?float, preferredWorkerId: ?int}
+     * @return array{propertyType: string, propertyDetails: array{bedrooms: int, rooms: int, bathrooms: int, kitchens: int, balconies: int, living_room_size: string}, addressLatitude: ?float, addressLongitude: ?float, preferredWorkerId: ?int}
      */
     public function pricingSnapshotInput(
         string $propertyType,
@@ -216,16 +220,18 @@ final class UserCleaningOrderEstimationService
         $rooms = $normalizedDetails['rooms'];
         $bathrooms = $normalizedDetails['bathrooms'];
         $kitchens = $normalizedDetails['kitchens'];
+        $balconies = $normalizedDetails['balconies'];
         $livingRoomSize = $normalizedDetails['living_room_size'];
 
         $baseSqm = $this->baseSqmByPropertyType($normalizedPropertyType);
         $livingRoomSqm = $this->livingRoomSqmAdjustment($livingRoomSize);
 
-        $estimatedSqm = max(25.0, $baseSqm + ($bedrooms * 18.0) + ($rooms * 8.0) + ($bathrooms * 6.0) + ($kitchens * 10.0) + $livingRoomSqm);
+        $estimatedSqm = max(25.0, $baseSqm + ($bedrooms * 18.0) + ($rooms * 8.0) + ($bathrooms * 6.0) + ($kitchens * 10.0) + ($balconies * 4.0) + $livingRoomSqm);
 
         $rawHours = ($estimatedSqm / 35.0)
             + ($bathrooms * 0.25)
             + ($kitchens * 0.20)
+            + ($balconies * 0.10)
             + ($livingRoomSize === 'large' ? 0.25 : 0.0)
             + ($livingRoomSize === 'very_large' ? 0.50 : 0.0);
 
@@ -618,7 +624,7 @@ final class UserCleaningOrderEstimationService
             return null;
         }
 
-        $types = ['bedroom', 'bathroom', 'kitchen', 'living_room'];
+        $types = ['bedroom', 'bathroom', 'kitchen', 'living_room', 'balcony'];
         $buckets = ['small', 'medium', 'large'];
         $normalized = [];
 

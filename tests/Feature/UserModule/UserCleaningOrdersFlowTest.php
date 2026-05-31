@@ -331,6 +331,7 @@ it('prefers room_size_breakdown for estimate-price when provided', function (): 
                 'bathroom' => ['small' => 1, 'medium' => 1, 'large' => 1],
                 'kitchen' => ['small' => 1, 'medium' => 0, 'large' => 0],
                 'living_room' => ['small' => 0, 'medium' => 1, 'large' => 0],
+                'balcony' => ['small' => 0, 'medium' => 0, 'large' => 0],
             ],
         ],
     ]);
@@ -360,6 +361,7 @@ it('creates order with room_size_breakdown and persists normalized breakdown-der
                 'bathroom' => ['small' => 1, 'medium' => 1, 'large' => 1],
                 'kitchen' => ['small' => 1, 'medium' => 0, 'large' => 0],
                 'living_room' => ['small' => 0, 'medium' => 1, 'large' => 0],
+                'balcony' => ['small' => 0, 'medium' => 0, 'large' => 0],
             ],
         ],
         'scheduledDate' => now()->addDay()->format('Y-m-d'),
@@ -372,6 +374,7 @@ it('creates order with room_size_breakdown and persists normalized breakdown-der
     expect($response->json('order.propertyDetails.rooms'))->toBe(4);
     expect($response->json('order.propertyDetails.bathrooms'))->toBe(3);
     expect($response->json('order.propertyDetails.kitchens'))->toBe(1);
+    expect($response->json('order.propertyDetails.balconies'))->toBe(0);
     expect($response->json('order.propertyDetails.living_room_size'))->toBe('medium');
     expect($response->json('order.propertyDetails.room_size_breakdown.bedroom.large'))->toBe(1);
 });
@@ -388,6 +391,7 @@ it('validates room_size_breakdown shape and rejects invalid bucket keys', functi
                 'bathroom' => ['small' => 1, 'medium' => 0, 'large' => 0],
                 'kitchen' => ['small' => 1, 'medium' => 0, 'large' => 0],
                 'living_room' => ['small' => 1, 'medium' => 0, 'large' => 0],
+                'balcony' => ['small' => 0, 'medium' => 0, 'large' => 0],
             ],
         ],
     ])->assertUnprocessable()->assertJsonValidationErrors([

@@ -36,6 +36,7 @@ final class CleaningBookingResource extends JsonResource
             'locationName' => Arr::get($normalizedPropertyDetails, 'location_name') ?? Arr::get($normalizedPropertyDetails, 'address') ?? $this->property_type,
             'numberOfRooms' => Arr::get($normalizedPropertyDetails, 'bedrooms') ?? Arr::get($normalizedPropertyDetails, 'rooms'),
             'numberOfKitchens' => Arr::get($normalizedPropertyDetails, 'kitchens', 0),
+            'numberOfBalconies' => Arr::get($normalizedPropertyDetails, 'balconies', 0),
             'estimatedSqm' => $this->estimated_sqm,
             'estimatedHours' => $this->estimated_hours,
             'scheduledDate' => $this->scheduled_date?->format('Y-m-d'),

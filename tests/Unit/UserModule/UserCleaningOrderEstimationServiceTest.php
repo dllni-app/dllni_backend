@@ -247,3 +247,21 @@ it('includes selected regular cleaning services in addons pricing', function ():
     expect($pricing['totalPrice'])->toBe(1110.0);
     expect($pricing['serviceLines'])->toHaveCount(2);
 });
+
+it('normalizes balcony from room size breakdown', function (): void {
+    $service = app(UserCleaningOrderEstimationService::class);
+
+    $details = $service->normalizePropertyDetailsForStorage('apartment', [
+        'room_size_breakdown' => [
+            'bedroom' => ['small' => 1, 'medium' => 2, 'large' => 1],
+            'bathroom' => ['small' => 1, 'medium' => 1, 'large' => 1],
+            'kitchen' => ['small' => 1, 'medium' => 0, 'large' => 0],
+            'living_room' => ['small' => 0, 'medium' => 1, 'large' => 0],
+            'balcony' => ['small' => 2, 'medium' => 1, 'large' => 0],
+        ],
+    ]);
+
+    expect($details['balconies'])->toBe(3);
+    expect($details['room_size_breakdown']['balcony']['small'])->toBe(2);
+    expect($details['room_size_breakdown']['balcony']['medium'])->toBe(1);
+});
