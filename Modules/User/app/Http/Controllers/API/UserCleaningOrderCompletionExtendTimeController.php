@@ -18,7 +18,10 @@ final class UserCleaningOrderCompletionExtendTimeController
             ->where('customer_id', $request->user()->id)
             ->findOrFail($order);
 
-        $updated = $service->requestCompletionExtension($model);
+        $updated = $service->requestCompletionExtension(
+            booking: $model,
+            additionalMinutes: (int) $request->validated('additionalMinutes'),
+        );
         $updated->load(['worker.user', 'timeWarnings', 'disputes', 'services', 'addons', 'billingPolicy']);
 
         return CleaningBookingResource::make($updated)->additional([

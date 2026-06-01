@@ -295,6 +295,7 @@ return [
             'time_billing_mode' => 'Time billing mode',
             'min_billable_minutes' => 'Minimum billable minutes',
             'time_warning_minutes_before_end' => 'Warning minutes before end',
+            'extension_rate_per_30_minutes' => 'Extension rate per 30 minutes',
             'coverage_low' => 'Low coverage threshold',
             'coverage_ok' => 'Normal coverage threshold',
         ],
@@ -310,6 +311,7 @@ return [
         'placeholders' => [
             'min_billable_minutes' => 'e.g. 30',
             'time_warning_minutes_before_end' => 'e.g. 15',
+            'extension_rate_per_30_minutes' => 'e.g. 4500',
         ],
         'actions' => [
             'save' => 'Save settings',

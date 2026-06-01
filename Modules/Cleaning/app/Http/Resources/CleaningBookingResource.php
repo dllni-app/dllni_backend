@@ -44,6 +44,7 @@ final class CleaningBookingResource extends JsonResource
             'totalHours' => (float) $this->total_hours,
             'basePrice' => (float) $this->base_price,
             'addonsTotal' => (float) $this->addons_total,
+            'extensionFeeTotal' => (float) ($this->extension_fee_total ?? 0),
             'travelFee' => (float) $this->travel_fee,
             'travelDistanceKm' => $this->travel_distance_km !== null ? (float) $this->travel_distance_km : null,
             'adminMargin' => (float) ($this->admin_margin_amount ?? 0),

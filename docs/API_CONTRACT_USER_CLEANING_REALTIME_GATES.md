@@ -1,9 +1,9 @@
-# API Contract – User app: cleaning realtime gates (start verification & completion)
+# API Contract Ã¢â‚¬â€œ User app: cleaning realtime gates (start verification & completion)
 
 **Audience:** Flutter / mobile (customer app)  
 **Base URL:** Same as other user APIs, e.g. `https://dllni.mustafafares.com`  
 **Prefix:** `/api/v1/user/...`  
-**Auth:** Laravel Sanctum – `Authorization: Bearer {token}` on all routes below.
+**Auth:** Laravel Sanctum Ã¢â‚¬â€œ `Authorization: Bearer {token}` on all routes below.
 
 This document covers **customer-only** HTTP actions that pair with worker lifecycle steps and **private Pusher** events on the booking channel. For worker endpoints (travel, arrive, security code, complete, etc.), 
 
@@ -11,15 +11,15 @@ This document covers **customer-only** HTTP actions that pair with worker lifecy
 
 ## 1. Lifecycle overview (happy path)
 
-1. Worker accepts → `worker_assigned`.
-2. Worker **start travel** → still `worker_assigned`, `startedTravelAt` set.
-3. Worker **arrive** → status becomes **`awaiting_start_verification`**, `arrivedAt` set. Server broadcasts gate + tracking events (see §4).
+1. Worker accepts Ã¢â€ â€™ `worker_assigned`.
+2. Worker **start travel** Ã¢â€ â€™ still `worker_assigned`, `startedTravelAt` set.
+3. Worker **arrive** Ã¢â€ â€™ status becomes **`awaiting_start_verification`**, `arrivedAt` set. Server broadcasts gate + tracking events (see Ã‚Â§4).
 4. Worker calls **`GET /api/v1/cleaning-bookings/{id}/security-code`** (worker token) and reads the **4-digit** code to the customer.
-5. Customer submits **`POST …/cleaning/orders/{order}/start-verification/confirm`** with `{ "code": "0123" }`. On success the booking becomes **`in_progress`** (work starts from the customer app’s perspective). Server broadcasts **`ArrivalVerified`** and **`CleaningBookingTrackingUpdated`**.
-6. Worker finishes on site → **`POST …/cleaning-bookings/{id}/complete`** → status **`awaiting_customer_completion`**, `workFinishedAt` set. Server broadcasts **`cleaning_order.awaiting_customer_completion`** and tracking.
-7. Customer either **confirms** completion, **rejects** (reopens job), or **requests extension** using the endpoints in §3.
+5. Customer submits **`POST Ã¢â‚¬Â¦/cleaning/orders/{order}/start-verification/confirm`** with `{ "code": "0123" }`. On success the booking becomes **`in_progress`** (work starts from the customer appÃ¢â‚¬â„¢s perspective). Server broadcasts **`ArrivalVerified`** and **`CleaningBookingTrackingUpdated`**.
+6. Worker finishes on site Ã¢â€ â€™ **`POST Ã¢â‚¬Â¦/cleaning-bookings/{id}/complete`** Ã¢â€ â€™ status **`awaiting_customer_completion`**, `workFinishedAt` set. Server broadcasts **`cleaning_order.awaiting_customer_completion`** and tracking.
+7. Customer either **confirms** completion, **rejects** (reopens job), or **requests extension** using the endpoints in Ã‚Â§3.
 
-**Note:** While the worker app may still call **`POST …/cleaning-bookings/{id}/start-work`** from `worker_assigned` without going through arrival + code (legacy compatibility), the recommended flow is: arrive → code → customer confirm. After the customer confirms the code, the booking is already `in_progress`; the worker should not call `start-work` again for that booking.
+**Note:** While the worker app may still call **`POST Ã¢â‚¬Â¦/cleaning-bookings/{id}/start-work`** from `worker_assigned` without going through arrival + code (legacy compatibility), the recommended flow is: arrive Ã¢â€ â€™ code Ã¢â€ â€™ customer confirm. After the customer confirms the code, the booking is already `in_progress`; the worker should not call `start-work` again for that booking.
 
 ---
 
@@ -30,17 +30,17 @@ All paths are under **`/api/v1/user`**. `{order}` is the cleaning booking **nume
 | Method | Path | Description |
 | ------ | ---- | ----------- |
 | POST | `/cleaning/orders/{order}/start-verification/confirm` | Customer enters the 4-digit code shown by the worker. |
-| POST | `/cleaning/orders/{order}/completion/confirm` | Customer approves completion (`awaiting_customer_completion` → `completed`). |
-| POST | `/cleaning/orders/{order}/completion/reject` | Customer says work is not finished (`awaiting_customer_completion` → `in_progress`, clears `workFinishedAt`). |
-| POST | `/cleaning/orders/{order}/completion/extend-time` | Customer asks for more time (`awaiting_customer_completion` → `time_extension_requested`). |
+| POST | `/cleaning/orders/{order}/completion/confirm` | Customer approves completion (`awaiting_customer_completion` Ã¢â€ â€™ `completed`). |
+| POST | `/cleaning/orders/{order}/completion/reject` | Customer says work is not finished (`awaiting_customer_completion` Ã¢â€ â€™ `in_progress`, clears `workFinishedAt`). |
+| POST | `/cleaning/orders/{order}/completion/extend-time` | Customer asks for more time (`awaiting_customer_completion` Ã¢â€ â€™ `time_extension_requested`). |
 
-**Success:** HTTP **200**, body matches other user cleaning actions: `{ "data": { …CleaningBookingResource… }, "message": "…" }` (message is translated string).
+**Success:** HTTP **200**, body matches other user cleaning actions: `{ "data": { Ã¢â‚¬Â¦CleaningBookingResourceÃ¢â‚¬Â¦ }, "message": "Ã¢â‚¬Â¦" }` (message is translated string).
 
 **Ownership:** Only the **customer** who owns the booking may call these. Others get **404** (id scoped to `customer_id`).
 
 ### 2.1 Start verification confirm
 
-- **Middleware:** `throttle:cleaning-start-verification` – **5 requests per minute** per authenticated user **and** per `{order}` (see `AppServiceProvider`).
+- **Middleware:** `throttle:cleaning-start-verification` Ã¢â‚¬â€œ **5 requests per minute** per authenticated user **and** per `{order}` (see `AppServiceProvider`).
 - **Body (JSON):**
 
 ```json
@@ -59,8 +59,8 @@ All paths are under **`/api/v1/user`**. `{order}` is the cleaning booking **nume
 
 **Errors:**
 
-- **422** – Validation (bad `code` format), wrong code (`errors.code`), expired code, no code row, or booking not in `awaiting_start_verification`.
-- **429** – Too many failed attempts for this code row (HTTP exception; not Laravel validation shape).
+- **422** Ã¢â‚¬â€œ Validation (bad `code` format), wrong code (`errors.code`), expired code, no code row, or booking not in `awaiting_start_verification`.
+- **429** Ã¢â‚¬â€œ Too many failed attempts for this code row (HTTP exception; not Laravel validation shape).
 
 **Idempotency:** If the code row is **already consumed**, the server returns **200** with the current booking (no error).
 
@@ -68,9 +68,9 @@ All paths are under **`/api/v1/user`**. `{order}` is the cleaning booking **nume
 
 - **Body:** empty object `{}` accepted.
 
-**Valid status:** `awaiting_customer_completion` → **`completed`**.
+**Valid status:** `awaiting_customer_completion` Ã¢â€ â€™ **`completed`**.
 
-Dispatches **`CompletionDecisionMade`** with `decision: "approved"` (see §4).
+Dispatches **`CompletionDecisionMade`** with `decision: "approved"` (see Ã‚Â§4).
 
 ### 2.3 Completion reject
 
@@ -82,13 +82,13 @@ Dispatches **`CompletionDecisionMade`** with `decision: "approved"` (see §4).
 }
 ```
 
-**Valid status:** `awaiting_customer_completion` → **`in_progress`**, `workFinishedAt` cleared.
+**Valid status:** `awaiting_customer_completion` Ã¢â€ â€™ **`in_progress`**, `workFinishedAt` cleared.
 
 Dispatches **`CompletionDecisionMade`** with `decision: "rejected"`.
 
 ### 2.4 Completion extend time
 
-**Body (optional):**
+**Body (required):**
 
 ```json
 {
@@ -98,11 +98,11 @@ Dispatches **`CompletionDecisionMade`** with `decision: "rejected"`.
 
 | Field | Type | Rules |
 | ----- | ---- | ----- |
-| additionalMinutes | integer | Optional; 1–480 if present. |
+| additionalMinutes | integer | Required; 1-480. |
 
-**Valid status:** `awaiting_customer_completion` → **`time_extension_requested`**.
+**Valid status:** `awaiting_customer_completion` -> **`time_extension_requested`**.
 
-Dispatches **`CompletionDecisionMade`** with `decision: "extension_requested"`. (Downstream worker handling of the extension is outside this snippet.)
+Dispatches **`CompletionDecisionMade`** with `decision: "extension_requested"` and creates a quoted extension warning for worker handling.
 
 ---
 
@@ -125,7 +125,7 @@ String values on booking `status` (camelCase in JSON per API resources):
 
 ### 4.1 Channel auth
 
-- **Subscribe (client channel name):** `private-cleaning-booking.{bookingId}` (Laravel `PrivateChannel('cleaning-booking.{id}')` → Pusher prefix `private-`).
+- **Subscribe (client channel name):** `private-cleaning-booking.{bookingId}` (Laravel `PrivateChannel('cleaning-booking.{id}')` Ã¢â€ â€™ Pusher prefix `private-`).
 - **Auth:** `POST /broadcasting/auth` with Sanctum token; body includes `channel_name` and `socket_id` per Pusher docs.
 - **Authorization:** Customer **or** assigned worker for that booking may subscribe (see `AppServiceProvider::bootBroadcastChannels`).
 
@@ -142,7 +142,7 @@ String values on booking `status` (camelCase in JSON per API resources):
 | `cleaning_order.awaiting_customer_completion` | After worker **complete** | cleaningBookingId, workerId, status (`awaiting_customer_completion`), expiresAt (server-chosen completion window hint) |
 | `ArrivalVerified` | After customer **start-verification confirm** | cleaningBookingId, workerId, arrivedAt, version |
 | `CompletionDecisionMade` | After customer completion **confirm** / **reject** / **extend-time** | cleaningBookingId, workerId, decision (`approved` \| `rejected` \| `extension_requested`), message, decidedAt, version |
-| `ServiceExtensionRequested` | When backend creates a cleaning time warning row for the booking | warningId, cleaningBookingId, workerId, requestedMinutes, version |
+| `ServiceExtensionRequested` | When backend creates a cleaning time warning row for the booking | warningId, cleaningBookingId, workerId, requestedMinutes, additionalAmount, currency, version |
 
 `ArrivalVerified` and `CompletionDecisionMade` are also sent on **`private-cleaning-worker.{workerId}`** when `workerId` is set, so the worker app can refresh without relying only on the booking channel.
 
@@ -150,7 +150,7 @@ String values on booking `status` (camelCase in JSON per API resources):
 
 ## 5. Security notes (client)
 
-- The **plaintext 4-digit code** is only returned to the **worker** (`GET …/security-code`). The customer app should **never** display a stored code from the API; they type what the worker shows.
+- The **plaintext 4-digit code** is only returned to the **worker** (`GET Ã¢â‚¬Â¦/security-code`). The customer app should **never** display a stored code from the API; they type what the worker shows.
 - Wrong codes increment server-side attempts; after repeated failures the API may return **429** on confirm.
 
 ---
@@ -220,11 +220,13 @@ Client behavior:
   "cleaningBookingId": 123,
   "workerId": 45,
   "requestedMinutes": 30,
+  "additionalAmount": 4500,
+  "currency": "SYP",
   "version": 1
 }
 ```
 
-`ServiceExtensionRequested` (`requestedMinutes` may be `null`)
+`ServiceExtensionRequested` (`requestedMinutes` may be `null`; `additionalAmount` may be numeric string or number)`
 
 ### 6.4 Dart-style reference snippet
 

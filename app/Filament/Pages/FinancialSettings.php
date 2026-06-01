@@ -37,6 +37,8 @@ final class FinancialSettings extends Page
 
     public ?int $timeWarningMinutesBeforeEnd = null;
 
+    public float $extensionRatePer30Minutes = 0.0;
+
     protected static string|BackedEnum|null $navigationIcon = \Filament\Support\Icons\Heroicon::OutlinedCurrencyDollar;
 
     protected string $view = 'filament.cleaning-admin.pages.financial-settings';
@@ -104,6 +106,7 @@ final class FinancialSettings extends Page
         $this->timeBillingMode = (string) ($setting->time_billing_mode ?? 'actual');
         $this->minBillableMinutes = $setting->min_billable_minutes !== null ? (int) $setting->min_billable_minutes : null;
         $this->timeWarningMinutesBeforeEnd = $setting->time_warning_minutes_before_end !== null ? (int) $setting->time_warning_minutes_before_end : null;
+        $this->extensionRatePer30Minutes = (float) ($setting->extension_rate_per_30_minutes ?? 0.0);
     }
 
     public function save(): void
@@ -121,6 +124,7 @@ final class FinancialSettings extends Page
             'timeBillingMode' => ['required', 'in:full_booked,actual'],
             'minBillableMinutes' => ['nullable', 'integer', 'min:0'],
             'timeWarningMinutesBeforeEnd' => ['nullable', 'integer', 'min:0'],
+            'extensionRatePer30Minutes' => ['required', 'numeric', 'min:0'],
         ]);
 
         CleaningFinancialSetting::query()->updateOrCreate(
@@ -141,6 +145,7 @@ final class FinancialSettings extends Page
                 'time_billing_mode' => $this->timeBillingMode,
                 'min_billable_minutes' => $this->minBillableMinutes,
                 'time_warning_minutes_before_end' => $this->timeWarningMinutesBeforeEnd,
+                'extension_rate_per_30_minutes' => $this->extensionRatePer30Minutes,
             ],
         );
 

@@ -87,6 +87,11 @@
                 <input type="number" min="0" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="timeWarningMinutesBeforeEnd" placeholder="{{ __('cleaning_admin.financial.placeholders.time_warning_minutes_before_end') }}">
                 @error('timeWarningMinutesBeforeEnd') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
             </label>
+            <label class="flex flex-col gap-1">
+                <span class="text-sm">{{ __('cleaning_admin.financial.fields.extension_rate_per_30_minutes') }}</span>
+                <input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="extensionRatePer30Minutes" placeholder="{{ __('cleaning_admin.financial.placeholders.extension_rate_per_30_minutes') }}">
+                @error('extensionRatePer30Minutes') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
+            </label>
         </div>
     </x-filament::section>
 

@@ -6,6 +6,7 @@ namespace Modules\User\Services;
 
 use Carbon\Carbon;
 use App\Enums\GenderPreference;
+use App\Models\CleaningFinancialSetting;
 use App\Support\Broadcast\BroadcastAfterResponse;
 use App\Models\BookingReview;
 use App\Models\CancellationPolicy;
@@ -16,10 +17,12 @@ use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 use Modules\Cleaning\Events\ArrivalVerified;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Enums\CleaningTimeWarningResponse;
 use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
 use Modules\Cleaning\Events\CompletionDecisionMade;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningTimeWarning;
 use Modules\Cleaning\Services\CleaningLifecycleNotificationService;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -441,7 +444,7 @@ final class UserCleaningOrderService
         return $updated;
     }
 
-    public function requestCompletionExtension(CleaningBooking $booking): CleaningBooking
+    public function requestCompletionExtension(CleaningBooking $booking, int $additionalMinutes): CleaningBooking
     {
         $fromStatus = (string) $booking->status->value;
 
@@ -451,11 +454,40 @@ final class UserCleaningOrderService
             ]);
         }
 
-        $booking->update([
-            'status' => CleaningBookingStatus::TimeExtensionRequested,
-        ]);
+        $updated = DB::transaction(function () use ($booking, $additionalMinutes): CleaningBooking {
+            $booking = CleaningBooking::query()->lockForUpdate()->findOrFail($booking->id);
 
-        $updated = $booking->fresh();
+            if ($booking->status !== CleaningBookingStatus::AwaitingCustomerCompletion) {
+                throw ValidationException::withMessages([
+                    'status' => ['Order is not waiting for completion confirmation.'],
+                ]);
+            }
+
+            $quotedAmount = $this->calculateExtensionQuotedAmount($additionalMinutes);
+            $quotedCurrency = (string) config('app.currency', 'SYP');
+
+            CleaningTimeWarning::query()->create([
+                'booking_id' => $booking->id,
+                'booking_type' => $booking->getMorphClass(),
+                'customer_response' => CleaningTimeWarningResponse::ExtendTime->value,
+                'worker_response' => null,
+                'sent_at' => now(),
+                'customer_responded_at' => now(),
+                'worker_responded_at' => null,
+                'additional_minutes' => $additionalMinutes,
+                'quoted_amount' => $quotedAmount,
+                'quoted_currency' => $quotedCurrency,
+                'price_applied_at' => null,
+                'worker_reject_message' => null,
+            ]);
+
+            $booking->update([
+                'status' => CleaningBookingStatus::TimeExtensionRequested,
+            ]);
+
+            return $booking->fresh();
+        });
+
         $this->dispatchTrackingUpdate($updated);
         BroadcastAfterResponse::send(new CompletionDecisionMade(
             $updated->id,
@@ -474,6 +506,24 @@ final class UserCleaningOrderService
         );
 
         return $updated;
+    }
+
+    private function calculateExtensionQuotedAmount(int $additionalMinutes): float
+    {
+        $ratePerThirtyMinutes = $this->extensionRatePerThirtyMinutes();
+
+        if ($ratePerThirtyMinutes <= 0) {
+            return 0.0;
+        }
+
+        return round(($ratePerThirtyMinutes / 30) * $additionalMinutes, 2);
+    }
+
+    private function extensionRatePerThirtyMinutes(): float
+    {
+        $value = CleaningFinancialSetting::query()->value('extension_rate_per_30_minutes');
+
+        return $value === null ? 0.0 : (float) $value;
     }
 
     /**

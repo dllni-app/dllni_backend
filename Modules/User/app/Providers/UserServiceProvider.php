@@ -54,9 +54,18 @@ final class UserServiceProvider extends ServiceProvider
         $viewPath = resource_path('views/modules/'.$this->nameLower);
         $sourcePath = module_path($this->name, 'resources/views');
 
-        $this->publishes([$sourcePath => $viewPath], ['views', $this->nameLower.'-module-views']);
+        if (is_dir($sourcePath)) {
+            $this->publishes([$sourcePath => $viewPath], ['views', $this->nameLower.'-module-views']);
+        }
 
-        $this->loadViewsFrom([$sourcePath], $this->nameLower);
+        $paths = $this->getPublishableViewPaths();
+        if (is_dir($sourcePath)) {
+            $paths[] = $sourcePath;
+        }
+
+        if ($paths !== []) {
+            $this->loadViewsFrom($paths, $this->nameLower);
+        }
     }
 
     public function provides(): array
@@ -107,5 +116,17 @@ final class UserServiceProvider extends ServiceProvider
         $moduleConfig = require $path;
 
         config([$key => array_replace_recursive($existing, $moduleConfig)]);
+    }
+
+    private function getPublishableViewPaths(): array
+    {
+        $paths = [];
+        foreach (config('view.paths') as $path) {
+            if (is_dir($path.'/modules/'.$this->nameLower)) {
+                $paths[] = $path.'/modules/'.$this->nameLower;
+            }
+        }
+
+        return $paths;
     }
 }

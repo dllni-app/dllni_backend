@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Models\User;
 use App\Models\Worker;
+use App\Models\CleaningFinancialSetting;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Laravel\Sanctum\Sanctum;
@@ -11,6 +12,7 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Events\ArrivalVerified;
 use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
 use Modules\Cleaning\Events\CompletionDecisionMade;
+use Modules\Cleaning\Events\ServiceExtensionRequested;
 use Modules\Cleaning\Models\CleaningBooking;
 
 /** @var \Illuminate\Foundation\Testing\TestCase $this */
@@ -154,12 +156,17 @@ it('rejects completion and reopens the booking', function () {
 });
 
 it('requests a completion extension', function () {
-    Event::fake([CompletionDecisionMade::class]);
+    Event::fake([CompletionDecisionMade::class, ServiceExtensionRequested::class]);
 
     $customer = User::factory()->create(['email' => 'customer-complete-extend@example.com']);
     $workerUser = User::factory()->create(['email' => 'worker-complete-extend@example.com']);
     $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($customer);
+
+    CleaningFinancialSetting::query()->updateOrCreate(
+        ['id' => 1],
+        ['extension_rate_per_30_minutes' => 4500]
+    );
 
     $booking = CleaningBooking::factory()->create([
         'customer_id' => $customer->id,
@@ -176,14 +183,30 @@ it('requests a completion extension', function () {
 
     $response->assertOk();
     expect($response->json('data.status'))->toBe('time_extension_requested');
+    expect($response->json('data.extensionFeeTotal'))->toBe(0.0);
     $this->assertDatabaseHas('cleaning_bookings', [
         'id' => $booking->id,
         'status' => CleaningBookingStatus::TimeExtensionRequested->value,
+    ]);
+    $this->assertDatabaseHas('cleaning_time_warnings', [
+        'booking_id' => $booking->id,
+        'customer_response' => 'extend_time',
+        'additional_minutes' => 30,
+        'quoted_amount' => 4500.00,
+        'quoted_currency' => (string) config('app.currency', 'SYP'),
     ]);
 
     Event::assertDispatched(CompletionDecisionMade::class, function (CompletionDecisionMade $event) use ($booking, $worker): bool {
         return $event->cleaningBookingId === $booking->id
             && $event->workerId === $worker->id
             && $event->decision === 'extension_requested';
+    });
+
+    Event::assertDispatched(ServiceExtensionRequested::class, function (ServiceExtensionRequested $event) use ($booking, $worker): bool {
+        return $event->cleaningBookingId === $booking->id
+            && $event->workerId === $worker->id
+            && $event->requestedMinutes === 30
+            && $event->additionalAmount === 4500.0
+            && $event->currency === (string) config('app.currency', 'SYP');
     });
 });

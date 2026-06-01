@@ -55,10 +55,16 @@ Request body:
 ```
 
 Validation (`UserCleaningOrderCompletionExtendTimeRequest`):
-- `additionalMinutes`: nullable, integer, min 1, max 480.
+- `additionalMinutes`: required, integer, min 1, max 480.
 
 Behavior (`UserCleaningOrderService::requestCompletionExtension`):
 - Allowed only when booking status is `awaiting_customer_completion`.
+- Computes quote using dashboard setting `extension_rate_per_30_minutes`:
+  - `quotedAmount = round((extensionRatePer30Minutes / 30) * additionalMinutes, 2)`
+- Creates a `cleaning_time_warnings` row with:
+  - `customer_response=extend_time`, `customer_responded_at`, `sent_at`
+  - `additional_minutes` (requested minutes)
+  - `quoted_amount`, `quoted_currency` (default `SYP`), `price_applied_at=null`
 - Updates booking status to `time_extension_requested`.
 - Broadcasts `CleaningBookingTrackingUpdated` + `CompletionDecisionMade(decision=extension_requested)`.
 
@@ -69,7 +75,7 @@ Success response (shape):
     "id": 123,
     "status": "time_extension_requested",
     "bookingNumber": "CLN-USER-AB12CD34",
-    "timeWarnings": []
+    "extensionFeeTotal": 0
   },
   "message": "Extension request sent successfully."
 }
@@ -126,10 +132,15 @@ Response item shape (`CleaningTimeWarningResource`):
   "customerRespondedAt": "2026-05-18 10:15:00",
   "workerRespondedAt": null,
   "additionalMinutes": 30,
+  "requestedMinutes": 30,
+  "additionalAmount": 4500,
+  "currency": "SYP",
+  "priceAppliedAt": null,
   "workerRejectMessage": null,
   "booking": {
     "id": 123,
-    "status": "time_extension_requested"
+    "status": "time_extension_requested",
+    "extensionFeeTotal": 0
   },
   "createdAt": "2026-05-18 10:15:00",
   "updatedAt": "2026-05-18 10:15:00"
@@ -152,7 +163,11 @@ Validation:
 Behavior:
 - Sets warning `worker_response = extend_time`.
 - Sets `worker_responded_at`.
-- Stores `additional_minutes` if provided.
+- Applies quote to booking totals exactly once (`price_applied_at` guard):
+  - increments `cleaning_bookings.extension_fee_total` by `quoted_amount`
+  - increments `cleaning_bookings.total_price` by `quoted_amount`
+- Sets `price_applied_at` when price is applied.
+- Optional `additionalMinutes` remains backward-compatible but no longer drives pricing.
 
 ### 3) Reject extension request
 `POST /cleaning-time-warnings/{warningId}/reject`
@@ -241,6 +256,8 @@ Possible errors:
   "cleaningBookingId": 123,
   "workerId": 52,
   "requestedMinutes": 30,
+  "additionalAmount": 4500,
+  "currency": "SYP",
   "version": 1
 }
 ```
@@ -252,7 +269,11 @@ Possible errors:
 ### dllni-user-app
 - Uses `POST /api/v1/user/cleaning/orders/{id}/completion/extend-time` in:
 - `lib/features/orders/data/source/orders_remote_data_source.dart`
-- Sends `additionalMinutes` when provided.
+- Must send `additionalMinutes` (required).
+- Parse and map:
+  - `requestedMinutes`, `additionalAmount`, `currency` from warning/event payloads
+  - `extensionFeeTotal` from booking payload
+- UX should show extension charge as pending until worker accepts.
 - Should listen on `private-cleaning-booking.{bookingId}` for:
 - `CleaningBookingTrackingUpdated`
 - `CompletionDecisionMade`
@@ -264,6 +285,8 @@ Possible errors:
 - `POST /api/v1/cleaning-time-warnings/{id}/accept`
 - `POST /api/v1/cleaning-time-warnings/{id}/reject`
 - in `lib/features/orders/data/source/orders_remote_data_source.dart`
+- Show request minutes and quoted price from:
+  - `requestedMinutes`, `additionalAmount`, `currency`
 - Should subscribe to:
 - `private-cleaning-worker.{workerId}` for global worker-level extension notifications.
 - `private-cleaning-booking.{bookingId}` while order details is open.
@@ -271,16 +294,18 @@ Possible errors:
 ---
 
 ## Important Implementation Notes
-1. Backend currently validates `additionalMinutes` on customer extend endpoint, but `requestCompletionExtension()` changes booking status and does not directly persist that value on booking itself.
-2. Worker extension decision is stored on `cleaning_time_warnings` (not directly on booking row).
-3. Treat backend booking `status` as source of truth for UI state transitions.
-4. For race safety, always refetch booking details after critical completion/extension events.
+1. Customer `additionalMinutes` is required and stored on the warning row (`additional_minutes`).
+2. Price quote is calculated at request time and stored in warning (`quoted_amount`, `quoted_currency`).
+3. Booking totals are updated only after worker accepts, and guarded from double apply via `price_applied_at`.
+4. Treat backend booking `status` as source of truth for UI state transitions.
+5. For race safety, always refetch booking details after critical completion/extension events.
 
 ---
 
 ## Suggested QA Scenarios
-1. Customer requests extension while status is `awaiting_customer_completion` -> expect `200`, status becomes `time_extension_requested`.
-2. Customer requests extension in any other status -> expect `422`.
-3. Worker receives `ServiceExtensionRequested` then `GET /cleaning-time-warnings` includes new warning.
-4. Worker accepts once -> second accept/reject on same warning returns `422`.
-5. Unauthorized worker (different booking owner) gets `403` on warning accept/reject.
+1. Customer requests extension with required `additionalMinutes` while status is `awaiting_customer_completion` -> expect `200`, warning stores requested minutes + quote fields and status becomes `time_extension_requested`.
+2. Customer requests extension without `additionalMinutes` or in invalid status -> expect `422`.
+3. Worker receives `ServiceExtensionRequested` with `requestedMinutes`, `additionalAmount`, `currency`, then `GET /cleaning-time-warnings` includes matching fields.
+4. Worker accepts once -> booking `extensionFeeTotal` and `totalPrice` increase by quote, `priceAppliedAt` is set.
+5. Worker retries accept/reject on same warning -> expect `422` and no double-charge.
+6. Unauthorized worker (different booking owner) gets `403` on warning accept/reject.
