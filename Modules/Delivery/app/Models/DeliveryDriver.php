@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 
 final class DeliveryDriver extends Model
@@ -32,6 +33,11 @@ final class DeliveryDriver extends Model
     public function locations(): HasMany
     {
         return $this->hasMany(DeliveryDriverLocation::class, 'driver_id');
+    }
+
+    public function latestLocation(): HasOne
+    {
+        return $this->hasOne(DeliveryDriverLocation::class, 'driver_id')->latestOfMany('recorded_at');
     }
 
     public function assignmentAttempts(): HasMany

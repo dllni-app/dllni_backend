@@ -8,6 +8,7 @@ use App\Http\Resources\UserResource;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Modules\Supermarket\Models\SmOrder;
+use Modules\Delivery\Support\DeliveryPresentation;
 
 /**
  * @mixin SmOrder
@@ -16,6 +17,8 @@ final class SmOrderResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $deliverySummary = DeliveryPresentation::merchantSummary($this->resource);
+
         return [
             'id' => $this->id,
             'customerId' => $this->customer_id,
@@ -41,6 +44,7 @@ final class SmOrderResource extends JsonResource
             'specialInstructions' => $this->special_instructions,
             'cancelledAt' => $this->cancelled_at?->toDateTimeString(),
             'cancellationReason' => $this->cancellation_reason,
+            'deliverySummary' => $deliverySummary,
             'items' => SmOrderItemResource::collection($this->whenLoaded('items')),
             'statusLogs' => SmOrderStatusLogResource::collection($this->whenLoaded('statusLogs')),
             'disputes' => SmOrderDisputeResource::collection($this->whenLoaded('disputes')),

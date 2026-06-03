@@ -58,11 +58,13 @@ use Modules\User\Http\Controllers\API\UserCleaningOrderCompletionRejectControlle
 use Modules\User\Http\Controllers\API\UserCleaningOrderReviewController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderEstimatePriceController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderEstimateSizeController;
+use Modules\User\Http\Controllers\API\UserCleaningOrderRoomAssignmentsController;
 use Modules\User\Http\Controllers\API\UserCleaningOrdersController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderShowController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderStartVerificationConfirmController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderStoreController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderUpdateController;
+use Modules\User\Http\Controllers\API\UserCleaningBannersController;
 use Modules\User\Http\Controllers\API\UserCleaningPreviousWorkersController;
 use Modules\User\Http\Controllers\API\UserCouponAvailabilityCheckController;
 use Modules\User\Http\Controllers\API\UserMarketingOfferShowController;
@@ -161,6 +163,10 @@ Route::prefix('v1/user')->group(function (): void {
         Route::get('suggested-products', UserRestaurantHomeSuggestedProductsController::class);
     });
 
+    Route::prefix('cleaning/home')->group(function (): void {
+        Route::get('banners', UserCleaningBannersController::class);
+    });
+
     Route::get('restaurants/products/with-offers', UserRestaurantProductsWithOffersController::class);
     Route::get('restaurants/products/search', UserRestaurantProductsSearchController::class);
     Route::get('restaurants/products/by-category/{category}', UserRestaurantProductsByCategoryController::class);
@@ -228,6 +234,7 @@ Route::prefix('v1/user')->group(function (): void {
         Route::post('cleaning/orders/estimate-price', UserCleaningOrderEstimatePriceController::class);
         Route::get('cleaning/orders/{order}', UserCleaningOrderShowController::class);
         Route::patch('cleaning/orders/{order}', UserCleaningOrderUpdateController::class);
+        Route::patch('cleaning/orders/{order}/room-assignments', UserCleaningOrderRoomAssignmentsController::class);
         Route::post('cleaning/orders/{order}/cancel', UserCleaningOrderCancelController::class);
         Route::post('cleaning/orders/{order}/start-verification/confirm', UserCleaningOrderStartVerificationConfirmController::class)
             ->middleware('throttle:cleaning-start-verification');

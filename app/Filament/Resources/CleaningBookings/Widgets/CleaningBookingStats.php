@@ -24,6 +24,9 @@ final class CleaningBookingStats extends StatsOverviewWidget
             Stat::make(__('cleaning_admin.booking.stats.pending'), $this->statusCount(CleaningBookingStatus::Pending))
                 ->icon('heroicon-o-clock')
                 ->color('warning'),
+            Stat::make(__('cleaning_admin.booking.stats.searching'), $this->searchingCount())
+                ->icon('heroicon-o-user-group')
+                ->color('info'),
             Stat::make(__('cleaning_admin.booking.stats.assigned'), $this->statusCount(CleaningBookingStatus::WorkerAssigned))
                 ->icon('heroicon-o-user-plus')
                 ->color('info'),
@@ -39,5 +42,13 @@ final class CleaningBookingStats extends StatsOverviewWidget
     private function statusCount(CleaningBookingStatus $status): int
     {
         return CleaningBooking::query()->where('status', $status->value)->count();
+    }
+
+    private function searchingCount(): int
+    {
+        return CleaningBooking::query()
+            ->where('status', CleaningBookingStatus::Pending->value)
+            ->whereHas('acceptedWorkerAssignments')
+            ->count();
     }
 }

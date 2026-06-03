@@ -12,6 +12,7 @@ use App\Models\Worker;
 use App\Models\WorkerCustomerRating;
 use Database\Factories\CleaningBookingFactory;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -19,7 +20,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use App\Enums\GenderPreference;
+use Modules\Cleaning\Enums\CleaningAssignmentMode;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Observers\CleaningBookingObserver;
 use Modules\Cleaning\Traits\FilterQueries\CleaningBookingFilterQuery;
 
@@ -38,6 +41,7 @@ final class CleaningBooking extends Model
         'customer_id',
         'worker_id',
         'preferred_worker_id',
+        'assignment_mode',
         'number_of_workers',
         'gender_preference',
         'cancellation_policy_id',
@@ -85,6 +89,29 @@ final class CleaningBooking extends Model
     public function preferredWorker(): BelongsTo
     {
         return $this->belongsTo(Worker::class, 'preferred_worker_id');
+    }
+
+    public function rooms(): HasMany
+    {
+        return $this->hasMany(CleaningBookingRoom::class, 'cleaning_booking_id');
+    }
+
+    public function roomAssignments(): HasMany
+    {
+        return $this->rooms();
+    }
+
+    public function workerAssignments(): HasMany
+    {
+        return $this->hasMany(CleaningBookingWorkerAssignment::class, 'cleaning_booking_id');
+    }
+
+    public function acceptedWorkerAssignments(): HasMany
+    {
+        return $this->hasMany(CleaningBookingWorkerAssignment::class, 'cleaning_booking_id')
+            ->where('status', CleaningBookingWorkerAssignmentStatus::Accepted->value)
+            ->orderBy('accepted_at')
+            ->orderBy('id');
     }
 
     public function cancellationPolicy(): BelongsTo
@@ -153,6 +180,7 @@ final class CleaningBooking extends Model
     {
         return [
             'status' => CleaningBookingStatus::class,
+            'assignment_mode' => CleaningAssignmentMode::class,
             'gender_preference' => GenderPreference::class,
             'number_of_workers' => 'integer',
             'property_details' => 'array',
@@ -179,6 +207,152 @@ final class CleaningBooking extends Model
             'address_longitude' => 'decimal:8',
             'cancelled_at' => 'datetime',
         ];
+    }
+
+    public function resolvedAssignmentMode(): string
+    {
+        if ($this->assignment_mode instanceof CleaningAssignmentMode) {
+            return $this->assignment_mode->value;
+        }
+
+        if (is_string($this->assignment_mode) && $this->assignment_mode !== '') {
+            return $this->assignment_mode;
+        }
+
+        if ($this->preferred_worker_id !== null && (int) ($this->number_of_workers ?? 1) === 1) {
+            return CleaningAssignmentMode::PreferredWorker->value;
+        }
+
+        return CleaningAssignmentMode::OpenCount->value;
+    }
+
+    public function acceptedWorkerCount(): int
+    {
+        $count = 0;
+
+        if ($this->relationLoaded('acceptedWorkerAssignments')) {
+            $count = $this->acceptedWorkerAssignments->count();
+        } elseif ($this->relationLoaded('workerAssignments')) {
+            $count = $this->workerAssignments->filter(
+                static fn (CleaningBookingWorkerAssignment $assignment): bool => $assignment->status === CleaningBookingWorkerAssignmentStatus::Accepted
+            )->count();
+        } else {
+            $count = $this->acceptedWorkerAssignments()->count();
+        }
+
+        if ($count > 0) {
+            return $count;
+        }
+
+        if ($this->worker_id !== null && max(1, (int) ($this->number_of_workers ?? 1)) <= 1) {
+            return 1;
+        }
+
+        return 0;
+    }
+
+    public function remainingWorkerCount(): int
+    {
+        return max(0, max(1, (int) ($this->number_of_workers ?? 1)) - $this->acceptedWorkerCount());
+    }
+
+    public function isTeamFulfilled(): bool
+    {
+        return $this->acceptedWorkerCount() >= max(1, (int) ($this->number_of_workers ?? 1));
+    }
+
+    /**
+     * @return array{required:int, accepted:int, remaining:int, isFulfilled:bool}
+     */
+    public function workerAcceptanceSummary(): array
+    {
+        $required = max(1, (int) ($this->number_of_workers ?? 1));
+        $accepted = $this->acceptedWorkerCount();
+
+        return [
+            'required' => $required,
+            'accepted' => $accepted,
+            'remaining' => max(0, $required - $accepted),
+            'isFulfilled' => $accepted >= $required,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function teamSummary(): array
+    {
+        $summary = $this->workerAcceptanceSummary();
+
+        return [
+            'cleaningBookingId' => $this->id,
+            'assignmentMode' => $this->resolvedAssignmentMode(),
+            'requiredWorkers' => $summary['required'],
+            'acceptedWorkers' => $summary['accepted'],
+            'remainingWorkers' => $summary['remaining'],
+            'isFulfilled' => $summary['isFulfilled'],
+            'status' => $this->status?->value ?? $this->status,
+            'updatedAt' => $this->updated_at?->toIso8601String(),
+        ];
+    }
+
+    public function workerAssignmentForWorker(int $workerId): ?CleaningBookingWorkerAssignment
+    {
+        $assignments = $this->relationLoaded('workerAssignments')
+            ? $this->workerAssignments
+            : $this->workerAssignments()->get();
+
+        $assignment = $assignments->firstWhere('worker_id', $workerId);
+
+        if ($assignment instanceof CleaningBookingWorkerAssignment) {
+            return $assignment;
+        }
+
+        if ($this->worker_id !== null && (int) $this->worker_id === $workerId && max(1, (int) ($this->number_of_workers ?? 1)) <= 1) {
+            return $this->legacyWorkerAssignment($workerId);
+        }
+
+        return null;
+    }
+
+    /**
+     * @return EloquentCollection<int, CleaningBookingRoom>
+     */
+    public function roomsForWorker(?int $workerId): EloquentCollection
+    {
+        $rooms = $this->relationLoaded('rooms')
+            ? $this->rooms
+            : $this->rooms()->get();
+
+        if ($workerId === null) {
+            return $rooms->whereNull('assigned_worker_id')->values();
+        }
+
+        return $rooms->where('assigned_worker_id', $workerId)->values();
+    }
+
+    private function legacyWorkerAssignment(int $workerId): CleaningBookingWorkerAssignment
+    {
+        $assignment = new CleaningBookingWorkerAssignment();
+
+        $payout = max(0.0, round((float) ($this->total_price ?? 0) - (float) ($this->admin_margin_amount ?? 0), 2));
+
+        $assignment->forceFill([
+            'id' => null,
+            'cleaning_booking_id' => $this->id,
+            'worker_id' => $workerId,
+            'status' => CleaningBookingWorkerAssignmentStatus::Accepted,
+            'accepted_at' => $this->updated_at ?? $this->created_at ?? now(),
+            'room_count' => 1,
+            'rooms_weight' => 0,
+            'service_share_amount' => $payout,
+            'travel_fee' => (float) ($this->travel_fee ?? 0),
+            'admin_margin_amount' => (float) ($this->admin_margin_amount ?? 0),
+            'worker_amount' => $payout,
+            'currency' => (string) config('app.currency', 'SYP'),
+        ]);
+
+        return $assignment;
     }
 
     protected static function newFactory(): CleaningBookingFactory

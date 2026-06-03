@@ -31,6 +31,7 @@ final class UserCleaningOrderEstimateSizeRequest extends FormRequest
             'propertyDetails.kitchens' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.balconies' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.living_room_size' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::LIVING_ROOM_SIZES)],
+            'propertyDetails.cleaning_mode' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::CLEANING_MODES)],
             'propertyDetails.room_size_breakdown' => ['nullable', 'array:bedroom,bathroom,kitchen,living_room,balcony'],
             'propertyDetails.room_size_breakdown.bedroom' => ['required_with:propertyDetails.room_size_breakdown', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.bathroom' => ['required_with:propertyDetails.room_size_breakdown', 'array:small,medium,large'],

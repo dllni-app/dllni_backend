@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
+use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Delivery\Models\DeliveryCompany;
 use Modules\Delivery\Models\DeliveryDriver;
@@ -155,6 +156,13 @@ final class AppServiceProvider extends ServiceProvider
             }
 
             if ($user->worker && $booking->worker_id === $user->worker->id) {
+                return true;
+            }
+
+            if ($user->worker && $booking->workerAssignments()
+                ->where('worker_id', $user->worker->id)
+                ->where('status', CleaningBookingWorkerAssignmentStatus::Accepted->value)
+                ->exists()) {
                 return true;
             }
 

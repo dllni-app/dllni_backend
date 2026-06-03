@@ -15,7 +15,17 @@ final class UserCleaningOrdersController
     {
         $orders = CleaningBooking::getQuery()
             ->where('customer_id', $request->user()->id)
-            ->with(['worker.user', 'timeWarnings', 'disputes', 'services'])
+            ->with([
+                'worker.user',
+                'preferredWorker.user',
+                'rooms.assignedWorker.user',
+                'workerAssignments.worker.user',
+                'timeWarnings',
+                'disputes',
+                'services',
+                'addons',
+                'billingPolicy',
+            ])
             ->paginate((int) $request->validated('perPage', 20));
 
         return CleaningBookingResource::collection($orders);

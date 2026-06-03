@@ -38,6 +38,15 @@ final class UserCleaningOrderEstimatePriceController
             ]);
         }
 
+        $assignmentMode = $this->resolveAssignmentMode(
+            $validated['assignmentMode'] ?? null,
+            $validated['preferredWorkerId'] ?? null,
+            $validated['numberOfWorkers'] ?? null,
+        );
+        $requiredWorkers = $assignmentMode === 'preferred_worker'
+            ? 1
+            : max(1, (int) ($validated['numberOfWorkers'] ?? $estimation['recommendation']['suggestedTeamSize'] ?? 1));
+
         return response()->json([
             'size' => [
                 'estimatedSqm' => $estimation['estimatedSqm'],
@@ -45,8 +54,28 @@ final class UserCleaningOrderEstimatePriceController
                 'sizeTier' => $estimation['sizeTier'],
             ],
             'pricing' => $pricing,
+            'assignmentMode' => $assignmentMode,
+            'workerAcceptance' => [
+                'required' => $requiredWorkers,
+                'accepted' => 0,
+                'remaining' => $requiredWorkers,
+                'isFulfilled' => false,
+            ],
             'recommendation' => $estimation['recommendation'] ?? null,
             'algorithmVersion' => $service->algorithmVersion(),
         ]);
+    }
+
+    private function resolveAssignmentMode(mixed $assignmentMode, mixed $preferredWorkerId, mixed $numberOfWorkers): string
+    {
+        if (is_string($assignmentMode) && mb_trim($assignmentMode) !== '') {
+            return mb_strtolower(mb_trim($assignmentMode));
+        }
+
+        if (is_numeric($preferredWorkerId) && (int) $preferredWorkerId > 0 && ((int) ($numberOfWorkers ?? 1)) <= 1) {
+            return 'preferred_worker';
+        }
+
+        return 'open_count';
     }
 }

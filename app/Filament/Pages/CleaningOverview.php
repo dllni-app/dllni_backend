@@ -8,6 +8,7 @@ use App\Enums\DisputeStatus;
 use App\Enums\AlertType;
 use App\Enums\SOSStatus;
 use App\Enums\SystemAlertStatus;
+use App\Filament\Resources\CleaningBanners\CleaningBannerResource;
 use App\Filament\Resources\CleaningBookings\CleaningBookingResource;
 use App\Filament\Resources\Disputes\DisputeResource;
 use App\Filament\Resources\EventBookings\EventBookingResource;
@@ -24,7 +25,9 @@ use Illuminate\Support\Str;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\EventBookingStatus;
+use Modules\Cleaning\Models\CleaningBanner;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingRoom;
 use Modules\Cleaning\Models\EventBooking;
 use Modules\Resturants\Models\Order;
 
@@ -80,7 +83,8 @@ final class CleaningOverview extends Page
         return $user->can('bookings.view')
             || $user->can('workers.view')
             || $user->can('disputes.view')
-            || $user->can('system_alerts.view');
+            || $user->can('system_alerts.view')
+            || $user->can('banners.view');
     }
 
     public function getTitle(): string
@@ -108,6 +112,7 @@ final class CleaningOverview extends Page
         $newSystemAlertsCount = SystemAlert::query()
             ->where('status', SystemAlertStatus::New->value)
             ->count();
+        $visibleBannersCount = CleaningBanner::query()->visibleNow()->count();
 
         $overviewKpis = [
             [
@@ -149,6 +154,14 @@ final class CleaningOverview extends Page
                 'tone' => 'info',
                 'url' => SystemAlertResource::getUrl('index'),
             ],
+            [
+                'label' => __('cleaning_admin.overview.kpis.active_banners'),
+                'value' => $visibleBannersCount,
+                'hint' => __('cleaning_admin.overview.kpi_hints.active_banners'),
+                'icon' => 'heroicon-o-photo',
+                'tone' => 'primary',
+                'url' => CleaningBannerResource::getUrl('index'),
+            ],
         ];
 
         $workloadSummary = [
@@ -167,6 +180,16 @@ final class CleaningOverview extends Page
                 'tone' => 'warning',
             ],
             [
+                'label' => __('cleaning_admin.overview.workload.searching_team'),
+                'value' => CleaningBooking::query()
+                    ->where('status', CleaningBookingStatus::Pending->value)
+                    ->whereHas('acceptedWorkerAssignments')
+                    ->count(),
+                'description' => __('cleaning_admin.overview.workload.searching_team_hint'),
+                'icon' => 'heroicon-o-users',
+                'tone' => 'info',
+            ],
+            [
                 'label' => __('cleaning_admin.overview.workload.active_jobs'),
                 'value' => CleaningBooking::query()
                     ->whereIn('status', [
@@ -180,6 +203,13 @@ final class CleaningOverview extends Page
                 'description' => __('cleaning_admin.overview.workload.active_jobs_hint'),
                 'icon' => 'heroicon-o-bolt',
                 'tone' => 'success',
+            ],
+            [
+                'label' => __('cleaning_admin.overview.workload.unassigned_rooms'),
+                'value' => CleaningBookingRoom::query()->whereNull('assigned_worker_id')->count(),
+                'description' => __('cleaning_admin.overview.workload.unassigned_rooms_hint'),
+                'icon' => 'heroicon-o-square-3-stack-3d',
+                'tone' => 'gray',
             ],
             [
                 'label' => __('cleaning_admin.overview.workload.pending_events'),
@@ -210,6 +240,12 @@ final class CleaningOverview extends Page
                 'description' => __('cleaning_admin.overview.actions.review_alerts_hint'),
                 'icon' => 'heroicon-o-bell-alert',
                 'url' => SystemAlertResource::getUrl('index'),
+            ],
+            [
+                'label' => __('cleaning_admin.overview.actions.manage_banners'),
+                'description' => __('cleaning_admin.overview.actions.manage_banners_hint'),
+                'icon' => 'heroicon-o-photo',
+                'url' => CleaningBannerResource::getUrl('index'),
             ],
         ];
 

@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Models\Order;
+use Modules\Delivery\Support\DeliveryPresentation;
 
 /**
  * @mixin Order
@@ -27,6 +28,7 @@ final class OrderResource extends JsonResource
     public function toArray(Request $request): array
     {
         $statusValue = $this->status?->value ?? $this->status;
+        $deliverySummary = DeliveryPresentation::merchantSummary($this->resource);
 
         return [
             'id' => $this->id,
@@ -84,6 +86,7 @@ final class OrderResource extends JsonResource
                 ] : null,
             ])->values()->all()),
             'orderStatusLogs' => $this->whenLoaded('orderStatusLogs'),
+            'deliverySummary' => $deliverySummary,
             'promoCode' => $this->whenLoaded('promoCode'),
             'assignedStaff' => $this->whenLoaded('assignedStaff', fn () => $this->assignedStaff ? [
                 'id' => $this->assignedStaff->id,

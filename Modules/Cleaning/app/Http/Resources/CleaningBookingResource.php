@@ -8,6 +8,8 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Arr;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingRoom;
+use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 
 /**
  * @mixin CleaningBooking
@@ -23,7 +25,9 @@ final class CleaningBookingResource extends JsonResource
             'customerId' => $this->customer_id,
             'workerId' => $this->worker_id,
             'preferredWorkerId' => $this->preferred_worker_id,
+            'assignmentMode' => $this->resolvedAssignmentMode(),
             'numberOfWorkers' => (int) ($this->number_of_workers ?? 1),
+            'workerAcceptance' => $this->workerAcceptanceSummary(),
             'genderPreference' => $this->gender_preference?->value ?? $this->gender_preference,
             'cancellationPolicyId' => $this->cancellation_policy_id,
             'billingPolicyId' => $this->billing_policy_id,
@@ -65,27 +69,21 @@ final class CleaningBookingResource extends JsonResource
                 'email' => $this->customer->email,
                 'phone' => $this->customer->phone,
             ]),
+            'preferredWorker' => $this->whenLoaded('preferredWorker', fn () => $this->preferredWorker ? $this->serializeWorker($this->preferredWorker) : null),
             'worker' => $this->whenLoaded('worker', function () {
-                if (! $this->worker) {
-                    return null;
-                }
-
-                $workerUser = $this->worker->relationLoaded('user') ? $this->worker->user : null;
-                $userAvatar = $workerUser?->getFirstMediaUrl('primary-image');
-                $workerAvatar = $this->worker->getFirstMediaUrl('primary-image');
-                $avatarUrl = $userAvatar !== '' ? $userAvatar : ($workerAvatar !== '' ? $workerAvatar : null);
-
-                return [
-                    'id' => $this->worker->id,
-                    'firstName' => $this->worker->first_name,
-                    'name' => $workerUser?->name,
-                    'phone' => $workerUser?->phone,
-                    'averageRating' => $this->worker->average_rating !== null ? (float) $this->worker->average_rating : null,
-                    'totalCompletedJobs' => $this->worker->total_completed_jobs,
-                    'isVerified' => (bool) $this->worker->is_verified,
-                    'avatarUrl' => $avatarUrl,
-                ];
+                return $this->worker ? $this->serializeWorker($this->worker) : null;
             }),
+            'workerAssignments' => $this->whenLoaded('workerAssignments', function () {
+                return $this->workerAssignments->map(
+                    fn (CleaningBookingWorkerAssignment $assignment): array => $this->serializeWorkerAssignment($assignment)
+                )->values();
+            }),
+            'roomAssignments' => $this->whenLoaded('rooms', function () {
+                return $this->rooms->map(
+                    fn (CleaningBookingRoom $room): array => $this->serializeRoomAssignment($room)
+                )->values();
+            }),
+            'myAssignment' => $this->serializeMyAssignment($request),
             'services' => $this->whenLoaded('services'),
             'addons' => $this->whenLoaded('addons'),
             'billingPolicy' => $this->whenLoaded('billingPolicy'),
@@ -108,6 +106,112 @@ final class CleaningBookingResource extends JsonResource
             unset($propertyDetails['kitchen_included']);
         }
 
+        if (array_key_exists('cleaning_mode', $propertyDetails)) {
+            $propertyDetails['cleaning_mode'] = $this->normalizeCleaningMode((string) $propertyDetails['cleaning_mode']);
+        } elseif (! array_key_exists('event_type', $propertyDetails) && ! array_key_exists('eventType', $propertyDetails)) {
+            $propertyDetails['cleaning_mode'] = 'regular';
+        }
+
         return $propertyDetails;
+    }
+
+    private function normalizeCleaningMode(string $cleaningMode): string
+    {
+        $normalized = mb_strtolower(mb_trim($cleaningMode));
+
+        return in_array($normalized, ['regular', 'deep'], true) ? $normalized : 'regular';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serializeWorker(object $worker): array
+    {
+        $workerUser = $worker->relationLoaded('user') ? $worker->user : null;
+        $userAvatar = $workerUser?->getFirstMediaUrl('primary-image');
+        $workerAvatar = method_exists($worker, 'getFirstMediaUrl') ? $worker->getFirstMediaUrl('primary-image') : '';
+        $avatarUrl = $userAvatar !== '' ? $userAvatar : ($workerAvatar !== '' ? $workerAvatar : null);
+
+        return [
+            'id' => $worker->id,
+            'firstName' => $worker->first_name,
+            'name' => $workerUser?->name,
+            'phone' => $workerUser?->phone,
+            'averageRating' => $worker->average_rating !== null ? (float) $worker->average_rating : null,
+            'totalCompletedJobs' => $worker->total_completed_jobs,
+            'isVerified' => (bool) $worker->is_verified,
+            'avatarUrl' => $avatarUrl,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serializeWorkerAssignment(CleaningBookingWorkerAssignment $assignment): array
+    {
+        $worker = $assignment->relationLoaded('worker') ? $assignment->worker : null;
+        $roomIds = $this->relationLoaded('rooms')
+            ? $this->rooms
+                ->where('assigned_worker_id', $assignment->worker_id)
+                ->pluck('id')
+                ->values()
+                ->all()
+            : [];
+
+        return [
+            'id' => $assignment->id,
+            'workerId' => $assignment->worker_id,
+            'status' => $assignment->status?->value ?? $assignment->status,
+            'acceptedAt' => $assignment->accepted_at?->toIso8601String(),
+            'roomCount' => (int) $assignment->room_count,
+            'roomsWeight' => (float) $assignment->rooms_weight,
+            'serviceShareAmount' => (float) $assignment->service_share_amount,
+            'travelFee' => (float) $assignment->travel_fee,
+            'adminMarginAmount' => (float) $assignment->admin_margin_amount,
+            'workerAmount' => (float) $assignment->worker_amount,
+            'currency' => $assignment->currency,
+            'roomIds' => $roomIds,
+            'worker' => $worker ? $this->serializeWorker($worker) : null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serializeRoomAssignment(CleaningBookingRoom $room): array
+    {
+        return [
+            'id' => $room->id,
+            'roomKey' => $room->room_key,
+            'roomType' => $room->room_type,
+            'roomSize' => $room->room_size,
+            'displayLabel' => $room->display_label,
+            'weight' => (float) $room->weight,
+            'assignedWorkerId' => $room->assigned_worker_id,
+            'assignmentSource' => $room->assignment_source?->value ?? $room->assignment_source,
+            'assignedWorker' => $room->relationLoaded('assignedWorker') && $room->assignedWorker
+                ? $this->serializeWorker($room->assignedWorker)
+                : null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function serializeMyAssignment(Request $request): ?array
+    {
+        $workerId = $request->user()?->worker?->id;
+
+        if ($workerId === null) {
+            return null;
+        }
+
+        $assignment = $this->workerAssignmentForWorker($workerId);
+
+        if (! $assignment) {
+            return null;
+        }
+
+        return $this->serializeWorkerAssignment($assignment);
     }
 }

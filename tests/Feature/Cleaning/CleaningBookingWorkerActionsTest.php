@@ -131,11 +131,16 @@ it('rejects a cleaning booking', function () {
     ]);
 
     $response->assertOk();
-    expect($response->json('data.status'))->toBe('cancelled');
+    expect($response->json('data.status'))->toBe('pending');
     $this->assertDatabaseHas('cleaning_bookings', [
         'id' => $booking->id,
-        'status' => CleaningBookingStatus::Cancelled->value,
-        'cancellation_reason' => 'Schedule conflict',
+        'status' => CleaningBookingStatus::Pending->value,
+        'worker_id' => null,
+    ]);
+    $this->assertDatabaseHas('cleaning_booking_worker_rejections', [
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $worker->id,
+        'reason' => 'Schedule conflict',
     ]);
 });
 
@@ -286,10 +291,15 @@ it('rejects a cleaning booking without reason (uses default)', function () {
     $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/reject", []);
 
     $response->assertOk();
-    expect($response->json('data.status'))->toBe('cancelled');
+    expect($response->json('data.status'))->toBe('pending');
     $this->assertDatabaseHas('cleaning_bookings', [
         'id' => $booking->id,
-        'status' => CleaningBookingStatus::Cancelled->value,
+        'status' => CleaningBookingStatus::Pending->value,
+        'worker_id' => null,
+    ]);
+    $this->assertDatabaseHas('cleaning_booking_worker_rejections', [
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $worker->id,
     ]);
 });
 
@@ -311,11 +321,15 @@ it('allows worker to reject a pending unassigned booking', function () {
     ]);
 
     $response->assertOk();
-    $response->assertJsonPath('data.status', 'cancelled');
+    $response->assertJsonPath('data.status', 'pending');
     $this->assertDatabaseHas('cleaning_booking_worker_rejections', [
         'cleaning_booking_id' => $booking->id,
         'worker_id' => $worker->id,
         'reason' => 'Cannot take this booking',
+    ]);
+    $this->assertDatabaseHas('cleaning_bookings', [
+        'id' => $booking->id,
+        'status' => CleaningBookingStatus::Pending->value,
     ]);
 });
 

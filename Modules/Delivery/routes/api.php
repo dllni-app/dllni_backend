@@ -12,7 +12,13 @@ use Modules\Delivery\Http\Controllers\API\Driver\DriverNotificationController;
 use Modules\Delivery\Http\Controllers\API\Driver\DriverOfferController;
 use Modules\Delivery\Http\Controllers\API\Driver\DriverOrderController;
 use Modules\Delivery\Http\Controllers\API\Driver\DriverUiController;
+use Modules\Delivery\Http\Controllers\API\User\DeliveryUserOrderController;
 use Modules\Delivery\Http\Middleware\EnsureDeliveryDriver;
+
+Route::prefix('v1/delivery/user')->middleware(['auth:sanctum'])->group(function (): void {
+    Route::get('orders', [DeliveryUserOrderController::class, 'index']);
+    Route::get('orders/{order}', [DeliveryUserOrderController::class, 'show'])->whereNumber('order');
+});
 
 Route::prefix('v1/delivery/driver')->group(function (): void {
     Route::post('auth/login', [DriverAuthController::class, 'login']);

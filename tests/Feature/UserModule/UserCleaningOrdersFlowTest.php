@@ -91,6 +91,44 @@ it('creates a cleaning order for authenticated user', function (): void {
     expect((float) $response->json('order.totalPrice'))->toBeGreaterThan(0);
     expect((float) $response->json('order.estimatedSqm'))->toBeGreaterThan(0);
     expect((float) $response->json('order.totalHours'))->toBeGreaterThan(0);
+    expect($response->json('order.propertyDetails.cleaning_mode'))->toBe('regular');
+});
+
+it('creates a deep cleaning order and persists the mode in the response payload', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $payload = [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'address' => 'Damascus - Mazzeh',
+            'location_name' => 'Home',
+            'rooms' => 2,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+            'cleaning_mode' => 'deep',
+        ],
+        'scheduledDate' => now()->addDay()->format('Y-m-d'),
+        'scheduledTime' => '09:00',
+        'addressLatitude' => 33.5138,
+        'addressLongitude' => 36.2765,
+        'termsAccepted' => true,
+    ];
+
+    $priceResponse = postJson('/api/v1/user/cleaning/orders/estimate-price', [
+        'propertyType' => $payload['propertyType'],
+        'propertyDetails' => $payload['propertyDetails'],
+        'addressLatitude' => $payload['addressLatitude'],
+        'addressLongitude' => $payload['addressLongitude'],
+    ])->assertOk();
+
+    $response = postJson('/api/v1/user/cleaning/orders', $payload);
+
+    $response->assertCreated();
+    expect($response->json('order.propertyDetails.cleaning_mode'))->toBe('deep');
+    expect((float) $response->json('order.basePrice'))->toBe((float) $priceResponse->json('pricing.basePrice'));
+    expect((float) $response->json('order.totalPrice'))->toBe((float) $priceResponse->json('pricing.totalPrice'));
 });
 
 it('rejects calculated cleaning values supplied by the client when creating an order', function (): void {
@@ -312,7 +350,7 @@ it('returns estimated cleaning price from backend algorithm', function (): void 
     expect((float) $response->json('pricing.adminMargin'))->toBe(0.0);
     expect((bool) $response->json('pricing.isPricingFinal'))->toBeFalse();
     expect((float) $response->json('pricing.totalPrice'))->toBe(920.0);
-    expect((string) $response->json('algorithmVersion'))->toBe('2026-05-25-v2');
+    expect((string) $response->json('algorithmVersion'))->toBe('2026-06-03-v3');
 });
 
 it('prefers room_size_breakdown for estimate-price when provided', function (): void {
@@ -337,10 +375,10 @@ it('prefers room_size_breakdown for estimate-price when provided', function (): 
     ]);
 
     $response->assertOk();
-    expect((float) $response->json('size.estimatedSqm'))->toBe(331.0);
-    expect((float) $response->json('size.estimatedHours'))->toBe(12.5);
+    expect((float) $response->json('size.estimatedSqm'))->toBe(302.0);
+    expect((float) $response->json('size.estimatedHours'))->toBe(10.0);
     expect((string) $response->json('size.sizeTier'))->toBe('very_large');
-    expect((float) $response->json('pricing.basePrice'))->toBe(2648.0);
+    expect((float) $response->json('pricing.basePrice'))->toBe(2416.0);
 });
 
 it('creates order with room_size_breakdown and persists normalized breakdown-derived values', function (): void {
@@ -400,6 +438,24 @@ it('validates room_size_breakdown shape and rejects invalid bucket keys', functi
     ]);
 });
 
+it('rejects invalid cleaning mode values in user cleaning requests', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    postJson('/api/v1/user/cleaning/orders/estimate-price', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'rooms' => 2,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+            'cleaning_mode' => 'ultra',
+        ],
+    ])->assertUnprocessable()->assertJsonValidationErrors([
+        'propertyDetails.cleaning_mode',
+    ]);
+});
+
 it('returns regular cleaning estimate with selected cleaning services in addons', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
@@ -451,6 +507,61 @@ it('returns regular cleaning estimate with selected cleaning services in addons'
     expect((float) $response->json('pricing.basePrice'))->toBe(920.0);
     expect((float) $response->json('pricing.addonsTotal'))->toBe(180.0);
     expect((float) $response->json('pricing.totalPrice'))->toBe(1100.0);
+    expect($response->json('pricing.serviceLines'))->toHaveCount(2);
+});
+
+it('returns deep cleaning estimate with selected services while keeping add-ons unchanged', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $serviceA = CleaningService::query()->create([
+        'name' => 'Deep clean add-on',
+        'slug' => 'deep-clean-addon-flow-'.fake()->unique()->numerify('###'),
+        'category' => ServiceCategory::Cleaning->value,
+        'description' => 'Deep cleaning',
+        'is_active' => true,
+    ]);
+    $serviceB = CleaningService::query()->create([
+        'name' => 'Kitchen add-on',
+        'slug' => 'kitchen-clean-addon-flow-'.fake()->unique()->numerify('###'),
+        'category' => ServiceCategory::Cleaning->value,
+        'description' => 'Kitchen focused cleaning',
+        'is_active' => true,
+    ]);
+
+    ServicePricing::query()->create([
+        'cleaning_service_id' => $serviceA->id,
+        'property_type' => 'apartment',
+        'living_room_size' => 'small',
+        'base_price' => 100,
+        'price_per_sqm' => null,
+        'min_hours' => 1,
+    ]);
+    ServicePricing::query()->create([
+        'cleaning_service_id' => $serviceB->id,
+        'property_type' => 'apartment',
+        'living_room_size' => 'small',
+        'base_price' => 80,
+        'price_per_sqm' => null,
+        'min_hours' => 1,
+    ]);
+
+    $response = postJson('/api/v1/user/cleaning/orders/estimate-price', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'rooms' => 2,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+            'cleaning_mode' => 'deep',
+        ],
+        'serviceIds' => [$serviceA->id, $serviceB->id],
+    ]);
+
+    $response->assertOk();
+    expect((float) $response->json('pricing.basePrice'))->toBe(4600.0);
+    expect((float) $response->json('pricing.addonsTotal'))->toBe(180.0);
+    expect((float) $response->json('pricing.totalPrice'))->toBe(4780.0);
     expect($response->json('pricing.serviceLines'))->toHaveCount(2);
 });
 
@@ -637,7 +748,7 @@ it('allows schedule-only update on a pending cleaning order', function (): void 
     ])->assertOk()->assertJsonPath('order.scheduledTime', '12:30');
 });
 
-it('recalculates totals on price-affecting update', function (): void {
+it('recalculates totals when cleaning mode changes', function (): void {
     Carbon::setTestNow(Carbon::parse('2026-04-23 09:00:00'));
 
     $user = User::factory()->create();
@@ -646,16 +757,27 @@ it('recalculates totals on price-affecting update', function (): void {
     $order = CleaningBooking::factory()->create([
         'customer_id' => $user->id,
         'status' => CleaningBookingStatus::Pending->value,
+        'property_type' => 'apartment',
+        'property_details' => [
+            'address' => 'Damascus - Kafar Souseh',
+            'location_name' => 'Home',
+            'rooms' => 2,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+        ],
     ]);
 
     $priceResponse = postJson('/api/v1/user/cleaning/orders/estimate-price', [
-        'propertyType' => (string) $order->property_type,
+        'propertyType' => 'apartment',
         'propertyDetails' => [
-            'address' => 'Updated address',
-            'rooms' => 4,
-            'bedrooms' => 3,
-            'bathrooms' => 2,
-            'living_room_size' => 'large',
+            'address' => 'Damascus - Kafar Souseh',
+            'location_name' => 'Home',
+            'rooms' => 2,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+            'cleaning_mode' => 'deep',
         ],
     ])->assertOk();
 
@@ -663,15 +785,14 @@ it('recalculates totals on price-affecting update', function (): void {
 
     patchJson("/api/v1/user/cleaning/orders/{$order->id}", [
         'propertyDetails' => [
-            'address' => 'Updated address',
-            'rooms' => 4,
-            'bedrooms' => 3,
-            'bathrooms' => 2,
-            'living_room_size' => 'large',
+            'cleaning_mode' => 'deep',
         ],
-    ])->assertOk();
+    ])->assertOk()
+        ->assertJsonPath('order.propertyDetails.address', 'Damascus - Kafar Souseh')
+        ->assertJsonPath('order.propertyDetails.cleaning_mode', 'deep');
 
     $order->refresh();
+    expect((string) $order->property_details['cleaning_mode'])->toBe('deep');
     expect((float) $order->total_price)->toBe($expectedTotalPrice);
 });
 

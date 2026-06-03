@@ -14,8 +14,16 @@ use Modules\Cleaning\Services\CleaningPricingCalculator;
 
 final class UserCleaningOrderEstimationService
 {
-    public const ALGORITHM_VERSION = '2026-05-25-v2';
+    public const ALGORITHM_VERSION = '2026-06-03-v3';
     public const EVENT_ASSISTANCE_PROPERTY_TYPE = 'event_assistance';
+
+    /**
+     * @var array<int, string>
+     */
+    public const CLEANING_MODES = [
+        'regular',
+        'deep',
+    ];
 
     /**
      * @var array<int, string>
@@ -77,7 +85,7 @@ final class UserCleaningOrderEstimationService
 
     /**
      * @param  array<string, mixed>  $propertyDetails
-     * @return array{address: ?string, location_name: ?string, bedrooms: int, rooms: int, bathrooms: int, kitchens: int, balconies: int, living_room_size: string, room_size_breakdown: ?array<string, array{small:int, medium:int, large:int}>}
+     * @return array{address: ?string, location_name: ?string, bedrooms: int, rooms: int, bathrooms: int, kitchens: int, balconies: int, living_room_size: string, cleaning_mode: string, room_size_breakdown: ?array<string, array{small:int, medium:int, large:int}>}
      */
     public function normalizePropertyDetails(array $propertyDetails): array
     {
@@ -92,6 +100,7 @@ final class UserCleaningOrderEstimationService
         $normalizedBreakdown = $this->normalizeRoomSizeBreakdown(
             Arr::get($propertyDetails, 'room_size_breakdown')
         );
+        $cleaningMode = $this->normalizeCleaningMode(Arr::get($propertyDetails, 'cleaning_mode'));
 
         if ($normalizedBreakdown !== null) {
             $livingRoomSize = $this->deriveLivingRoomSizeFromBreakdown($normalizedBreakdown['living_room']);
@@ -126,13 +135,14 @@ final class UserCleaningOrderEstimationService
             'kitchens' => $kitchens,
             'balconies' => $balconies,
             'living_room_size' => $livingRoomSize,
+            'cleaning_mode' => $cleaningMode,
             'room_size_breakdown' => $normalizedBreakdown,
         ];
     }
 
     /**
      * @param  array<string, mixed>  $propertyDetails
-     * @return array{propertyType: string, propertyDetails: array{bedrooms: int, rooms: int, bathrooms: int, kitchens: int, balconies: int, living_room_size: string}, addressLatitude: ?float, addressLongitude: ?float, preferredWorkerId: ?int}
+     * @return array{propertyType: string, propertyDetails: array{bedrooms: int, rooms: int, bathrooms: int, kitchens: int, balconies: int, living_room_size: string, cleaning_mode: string}, addressLatitude: ?float, addressLongitude: ?float, preferredWorkerId: ?int}
      */
     public function pricingSnapshotInput(
         string $propertyType,
@@ -215,6 +225,7 @@ final class UserCleaningOrderEstimationService
         }
 
         $normalizedDetails = $this->normalizePropertyDetails($propertyDetails);
+        $cleaningModeFactor = $this->cleaningModeFactor((string) $normalizedDetails['cleaning_mode']);
 
         $bedrooms = $normalizedDetails['bedrooms'];
         $rooms = $normalizedDetails['rooms'];
@@ -236,6 +247,7 @@ final class UserCleaningOrderEstimationService
             + ($livingRoomSize === 'very_large' ? 0.50 : 0.0);
 
         $estimatedHours = max(1.0, $this->roundToHalfHour($rawHours));
+        $estimatedHours = $this->roundToHalfHour($estimatedHours * $cleaningModeFactor);
 
         return [
             'estimatedSqm' => $estimatedSqm,
@@ -284,6 +296,8 @@ final class UserCleaningOrderEstimationService
             $estimation = $this->estimate($normalizedInput['propertyType'], $normalizedInput['propertyDetails']);
             $pricePerSqm = $this->pricePerSqmByPropertyType($normalizedInput['propertyType']);
             $basePrice = round(max(250.0, $estimation['estimatedSqm'] * $pricePerSqm), 2);
+            $cleaningModeFactor = $this->cleaningModeFactor((string) ($normalizedInput['propertyDetails']['cleaning_mode'] ?? 'regular'));
+            $basePrice = round($basePrice * $cleaningModeFactor, 2);
             $livingRoomSize = (string) ($normalizedInput['propertyDetails']['living_room_size'] ?? 'medium');
             $lines = $this->resolveRegularCleaningPricingLines(
                 $normalizedInput['serviceIds'],
@@ -400,6 +414,22 @@ final class UserCleaningOrderEstimationService
         return $normalized > 0 ? $normalized : null;
     }
 
+    private function normalizeCleaningMode(mixed $cleaningMode): string
+    {
+        $normalized = mb_strtolower(mb_trim((string) ($cleaningMode ?? 'regular')));
+
+        if (! in_array($normalized, self::CLEANING_MODES, true)) {
+            return 'regular';
+        }
+
+        return $normalized;
+    }
+
+    private function cleaningModeFactor(string $cleaningMode): float
+    {
+        return $this->normalizeCleaningMode($cleaningMode) === 'deep' ? 5.0 : 1.0;
+    }
+
     /**
      * @param  array<int, mixed>  $serviceIds
      * @return array<int, int>
@@ -469,7 +499,10 @@ final class UserCleaningOrderEstimationService
                 throw new InvalidArgumentException("No pricing configured for event assistance service [{$service->name}].");
             }
 
-            $unitPrice = round((float) ($service->price ?? $pricing->base_price), 2);
+            $servicePrice = (float) ($service->price ?? 0);
+            $unitPrice = $servicePrice > 0
+                ? round($servicePrice, 2)
+                : round((float) $pricing->base_price, 2);
 
             $lines[] = [
                 'cleaningServiceId' => (int) $service->id,
@@ -549,8 +582,9 @@ final class UserCleaningOrderEstimationService
             $sqmPrice = $pricing->price_per_sqm !== null
                 ? round((float) $pricing->price_per_sqm * $estimatedSqm, 2)
                 : null;
-            $unitPrice = $service->price !== null
-                ? round((float) $service->price, 2)
+            $servicePrice = (float) ($service->price ?? 0);
+            $unitPrice = $servicePrice > 0
+                ? round($servicePrice, 2)
                 : ($sqmPrice !== null ? max($basePrice, $sqmPrice) : $basePrice);
             $unitPrice = round($unitPrice, 2);
 

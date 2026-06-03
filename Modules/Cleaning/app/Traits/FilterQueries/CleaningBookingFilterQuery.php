@@ -7,6 +7,7 @@ namespace Modules\Cleaning\Traits\FilterQueries;
 use App\Enums\GenderPreference;
 use Illuminate\Database\Eloquent\Builder;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Spatie\QueryBuilder\AllowedFilter;
 use Spatie\QueryBuilder\AllowedSort;
@@ -93,6 +94,11 @@ trait CleaningBookingFilterQuery
 
         return $query->where(function (Builder $q) use ($worker): void {
             $q->where('worker_id', $worker->id)
+                ->orWhereHas('workerAssignments', function (Builder $assignments) use ($worker): void {
+                    $assignments
+                        ->where('worker_id', $worker->id)
+                        ->where('status', CleaningBookingWorkerAssignmentStatus::Accepted->value);
+                })
                 ->orWhere(function (Builder $pending) use ($worker): void {
                     $pending->where('status', CleaningBookingStatus::Pending)
                         ->whereNull('worker_id')

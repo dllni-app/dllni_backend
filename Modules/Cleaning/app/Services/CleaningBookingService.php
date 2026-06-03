@@ -19,6 +19,7 @@ use Modules\Cleaning\Events\CleaningOrderAwaitingStartVerification;
 use Modules\Cleaning\Events\WorkerArrived;
 use Modules\Cleaning\Events\WorkerLocationUpdated;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Services\CleaningBookingTeamService;
 
 final class CleaningBookingService
 {
@@ -26,29 +27,40 @@ final class CleaningBookingService
 
     private const SECURITY_CODE_LENGTH = 4;
 
-    private const REASSIGN_REJECTION_WINDOW_HOURS = 24;
-
     public function __construct(
         private readonly CleaningLifecycleNotificationService $lifecycleNotifications,
-        private readonly CleaningPricingCalculator $pricingCalculator,
+        private readonly CleaningBookingTeamService $teamService,
     ) {}
 
     public function store(CleaningBookingData $data): CleaningBooking
     {
-        return DB::transaction(static function () use ($data) {
+        return DB::transaction(function () use ($data): CleaningBooking {
             $attributes = $data->onlyModelAttributes();
             $attributes['gender_preference'] = $attributes['gender_preference'] ?? GenderPreference::Any->value;
             $attributes['number_of_workers'] = $attributes['number_of_workers'] ?? 1;
 
             $booking = CleaningBooking::create($attributes);
 
-            return $booking;
+            $this->teamService->syncRooms($booking);
+
+            return $booking->fresh([
+                'customer',
+                'worker.user',
+                'preferredWorker.user',
+                'rooms.assignedWorker.user',
+                'workerAssignments.worker.user',
+                'services',
+                'addons',
+                'billingPolicy',
+                'timeWarnings',
+                'disputes',
+            ]);
         });
     }
 
     public function update(CleaningBookingData $data, CleaningBooking $booking): CleaningBooking
     {
-        return DB::transaction(static function () use ($data, $booking) {
+        return DB::transaction(function () use ($data, $booking): CleaningBooking {
             $attributes = $data->onlyModelAttributes();
             if (array_key_exists('gender_preference', $attributes) && $attributes['gender_preference'] === null) {
                 $attributes['gender_preference'] = GenderPreference::Any->value;
@@ -59,85 +71,63 @@ final class CleaningBookingService
 
             tap($booking)->update($attributes);
 
-            return $booking;
+            if (array_intersect(array_keys($attributes), ['property_type', 'property_details']) !== [] && ! $booking->acceptedWorkerAssignments()->exists()) {
+                $this->teamService->syncRooms($booking->fresh());
+            }
+
+            return $booking->fresh([
+                'customer',
+                'worker.user',
+                'preferredWorker.user',
+                'rooms.assignedWorker.user',
+                'workerAssignments.worker.user',
+                'services',
+                'addons',
+                'billingPolicy',
+                'timeWarnings',
+                'disputes',
+            ]);
         });
     }
 
-    public function accept(CleaningBooking $booking): CleaningBooking
+    public function accept(CleaningBooking $booking, ?array $roomIds = null): CleaningBooking
     {
         $fromStatus = (string) $booking->status->value;
 
-        $updated = DB::transaction(function () use ($booking) {
-            if ($booking->status !== CleaningBookingStatus::Pending) {
-                throw new InvalidArgumentException('Booking cannot be accepted in current status.');
-            }
-
-            $workerId = Auth::user()?->worker?->id;
+        $updated = DB::transaction(function () use ($booking, $roomIds): CleaningBooking {
             $worker = Auth::user()?->worker;
-            if (! $workerId || ! $worker) {
+            if (! $worker) {
                 throw new InvalidArgumentException('User must have an associated worker.');
             }
-            if ($booking->worker_id !== null && $booking->worker_id !== $workerId) {
-                throw new InvalidArgumentException('Booking is assigned to another worker.');
-            }
-            if (
-                $booking->gender_preference instanceof GenderPreference
-                && $booking->gender_preference !== GenderPreference::Any
-                && $worker
-                && $worker->gender !== $booking->gender_preference->value
-            ) {
-                throw new InvalidArgumentException('Booking gender preference does not match worker profile.');
-            }
 
-            if ($worker->home_address === null || mb_trim($worker->home_address) === '') {
-                throw new InvalidArgumentException('Worker home location is required before accepting bookings.');
-            }
-
-            if ($worker->home_latitude === null || $worker->home_longitude === null) {
-                throw new InvalidArgumentException('Worker home location is required before accepting bookings.');
-            }
-
-            if ($booking->address_latitude === null || $booking->address_longitude === null) {
-                throw new InvalidArgumentException('Customer location coordinates are required before accepting bookings.');
-            }
-
-            $updates = [
-                'status' => CleaningBookingStatus::WorkerAssigned,
-                'worker_id' => $booking->worker_id ?? $workerId,
-            ];
-
-            if (! (bool) $booking->is_pricing_final) {
-                $pricing = $this->pricingCalculator->finalizedForWorker(
-                    (float) ($booking->base_price ?? 0.0),
-                    (float) ($booking->addons_total ?? 0.0),
-                    (float) $booking->address_latitude,
-                    (float) $booking->address_longitude,
-                    $worker,
-                );
-
-                $updates['travel_fee'] = $pricing['travelFee'];
-                $updates['travel_distance_km'] = $pricing['distanceKm'];
-                $updates['admin_margin_amount'] = $pricing['adminMargin'];
-                $updates['total_price'] = $pricing['totalPrice'];
-                $updates['is_pricing_final'] = true;
-            }
-
-            $booking->update($updates);
-
-            $booking->rejections()->where('worker_id', $workerId)->delete();
-
-            return $booking->fresh();
+            return $this->teamService->acceptWorker($booking, $worker, $roomIds);
         });
 
         $this->dispatchTrackingUpdate($updated);
-        $this->lifecycleNotifications->notifyCustomer(
-            booking: $updated,
-            canonicalType: 'cleaning.booking.worker_assigned',
-            action: 'worker_assigned',
-            actorRole: 'worker',
-            fromStatus: $fromStatus,
-            occurredAt: $updated->updated_at?->toIso8601String(),
-        );
+        if ($updated->status === CleaningBookingStatus::WorkerAssigned) {
+            $this->lifecycleNotifications->notifyCustomer(
+                booking: $updated,
+                canonicalType: 'cleaning.booking.worker_assigned',
+                action: 'worker_assigned',
+                actorRole: 'worker',
+                fromStatus: $fromStatus,
+                occurredAt: $updated->updated_at?->toIso8601String(),
+            );
+        }
+
+        return $updated;
+    }
+
+    public function claimRooms(CleaningBooking $booking, ?array $roomIds = null): CleaningBooking
+    {
+        $worker = Auth::user()?->worker;
+        if (! $worker) {
+            throw new InvalidArgumentException('User must have an associated worker.');
+        }
+
+        $updated = $this->teamService->claimRooms($booking, $worker, $roomIds);
+
+        $this->dispatchTrackingUpdate($updated);
 
         return $updated;
     }
@@ -145,62 +135,17 @@ final class CleaningBookingService
     public function reject(CleaningBooking $booking, ?string $reason = null): CleaningBooking
     {
         $fromStatus = (string) $booking->status->value;
-        $shouldRedispatch = false;
 
-        $updated = DB::transaction(function () use ($booking, $reason, &$shouldRedispatch) {
-            $allowedStatuses = [
-                CleaningBookingStatus::Pending,
-                CleaningBookingStatus::WorkerAssigned,
-            ];
-
-            if (! in_array($booking->status, $allowedStatuses, true)) {
-                throw new InvalidArgumentException('Booking cannot be rejected in current status.');
-            }
-
-            $workerId = Auth::user()?->worker?->id;
-            if (! $workerId) {
+        $updated = DB::transaction(function () use ($booking, $reason): CleaningBooking {
+            $worker = Auth::user()?->worker;
+            if (! $worker) {
                 throw new InvalidArgumentException('User must have an associated worker.');
             }
 
-            $scheduledAt = Carbon::parse(sprintf(
-                '%s %s',
-                $booking->scheduled_date->format('Y-m-d'),
-                (string) $booking->scheduled_time
-            ));
-
-            $isBeforeWindow = now()->lt($scheduledAt->copy()->subHours(self::REASSIGN_REJECTION_WINDOW_HOURS));
-
-            $booking->rejections()->updateOrCreate(
-                ['worker_id' => $workerId],
-                [
-                    'reason' => $reason,
-                    'rejected_at' => now(),
-                ]
-            );
-
-            if ($isBeforeWindow) {
-                $booking->update([
-                    'status' => CleaningBookingStatus::Pending,
-                    'worker_id' => null,
-                    'cancelled_at' => null,
-                    'cancellation_reason' => null,
-                ]);
-
-                $shouldRedispatch = true;
-            } else {
-                $booking->update([
-                    'status' => CleaningBookingStatus::Cancelled,
-                    'cancelled_at' => now(),
-                    'cancellation_reason' => $reason ?? 'Rejected by worker',
-                ]);
-            }
-
-            return $booking->fresh();
+            return $this->teamService->rejectWorker($booking, $worker, $reason);
         });
 
-        if ($shouldRedispatch) {
-            NotifyEligibleWorkersNewOrderJob::dispatch($updated->id);
-        }
+        NotifyEligibleWorkersNewOrderJob::dispatch($updated->id);
 
         $this->dispatchTrackingUpdate($updated);
 
@@ -454,6 +399,11 @@ final class CleaningBookingService
             'cleaningBookingId' => $booking->id,
             'status' => $booking->status?->value,
             'workerId' => $booking->worker_id,
+            'assignmentMode' => $booking->resolvedAssignmentMode(),
+            'requiredWorkers' => max(1, (int) ($booking->number_of_workers ?? 1)),
+            'acceptedWorkers' => $booking->acceptedWorkerCount(),
+            'remainingWorkers' => $booking->remainingWorkerCount(),
+            'isTeamFulfilled' => $booking->isTeamFulfilled(),
             'startedTravelAt' => $booking->started_travel_at?->toIso8601String(),
             'arrivedAt' => $booking->arrived_at?->toIso8601String(),
             'workStartedAt' => $booking->work_started_at?->toIso8601String(),

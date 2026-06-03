@@ -12,8 +12,10 @@ use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 use Modules\Cleaning\Data\CleaningBookingData;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Http\Requests\CleaningBookingAcceptRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingCancelRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingLocationRequest;
+use Modules\Cleaning\Http\Requests\CleaningBookingRoomClaimRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingRejectRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingRequests\CleaningBookingFilterRequest;
@@ -34,6 +36,9 @@ final class CleaningBookingController
             ->with([
                 'customer',
                 'worker.user',
+                'preferredWorker.user',
+                'rooms.assignedWorker.user',
+                'workerAssignments.worker.user',
                 'services',
                 'addons',
                 'billingPolicy',
@@ -53,17 +58,13 @@ final class CleaningBookingController
         );
 
         return CleaningBookingResource::make(
-            $booking->load(['customer', 'worker', 'services', 'addons', 'billingPolicy', 'timeWarnings', 'disputes'])
+            $this->loadBookingDetails($booking)
         );
     }
 
     public function show(CleaningBooking $cleaning_booking): CleaningBookingResource
     {
-        $cleaning_booking->load([
-            'customer', 'worker', 'services', 'addons', 'billingPolicy', 'timeWarnings', 'disputes',
-        ]);
-
-        return CleaningBookingResource::make($cleaning_booking);
+        return CleaningBookingResource::make($this->loadBookingDetails($cleaning_booking));
     }
 
     public function securityCode(CleaningBooking $cleaning_booking): JsonResponse
@@ -105,7 +106,7 @@ final class CleaningBookingController
         );
 
         return CleaningBookingResource::make(
-            $updated->load(['customer', 'worker', 'services', 'addons', 'billingPolicy', 'timeWarnings', 'disputes'])
+            $this->loadBookingDetails($updated)
         );
     }
 
@@ -117,18 +118,32 @@ final class CleaningBookingController
     }
 
     /** @throws Throwable */
-    public function accept(CleaningBooking $cleaning_booking): CleaningBookingResource|JsonResponse
+    public function accept(CleaningBookingAcceptRequest $request, CleaningBooking $cleaning_booking): CleaningBookingResource|JsonResponse
     {
         $this->ensureWorkerCanActOnBooking($cleaning_booking, requireOwnership: false);
 
         try {
-            $booking = $this->cleaningBookingService->accept($cleaning_booking);
+            $booking = $this->cleaningBookingService->accept($cleaning_booking, $request->validated('roomIds'));
         } catch (InvalidArgumentException $e) {
             throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
         }
 
         return CleaningBookingResource::make(
-            $booking->load(['customer', 'worker', 'services', 'addons', 'billingPolicy', 'timeWarnings', 'disputes'])
+            $this->loadBookingDetails($booking)
+        );
+    }
+
+    /** @throws Throwable */
+    public function claimRooms(CleaningBookingRoomClaimRequest $request, CleaningBooking $cleaning_booking): CleaningBookingResource|JsonResponse
+    {
+        try {
+            $booking = $this->cleaningBookingService->claimRooms($cleaning_booking, $request->validated('roomIds'));
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
+        }
+
+        return CleaningBookingResource::make(
+            $this->loadBookingDetails($booking)
         );
     }
 
@@ -144,7 +159,7 @@ final class CleaningBookingController
         }
 
         return CleaningBookingResource::make(
-            $booking->load(['customer', 'worker', 'services', 'addons', 'billingPolicy', 'timeWarnings', 'disputes'])
+            $this->loadBookingDetails($booking)
         );
     }
 
@@ -160,7 +175,7 @@ final class CleaningBookingController
         }
 
         return CleaningBookingResource::make(
-            $booking->load(['customer', 'worker', 'services', 'addons', 'billingPolicy', 'timeWarnings', 'disputes'])
+            $this->loadBookingDetails($booking)
         );
     }
 
@@ -193,7 +208,7 @@ final class CleaningBookingController
         }
 
         return CleaningBookingResource::make(
-            $booking->load(['customer', 'worker', 'services', 'addons', 'billingPolicy', 'timeWarnings', 'disputes'])
+            $this->loadBookingDetails($booking)
         );
     }
 
@@ -209,7 +224,7 @@ final class CleaningBookingController
         }
 
         return CleaningBookingResource::make(
-            $booking->load(['customer', 'worker', 'services', 'addons', 'billingPolicy', 'timeWarnings', 'disputes'])
+            $this->loadBookingDetails($booking)
         );
     }
 
@@ -225,7 +240,7 @@ final class CleaningBookingController
         }
 
         return CleaningBookingResource::make(
-            $booking->load(['customer', 'worker', 'services', 'addons', 'billingPolicy', 'timeWarnings', 'disputes'])
+            $this->loadBookingDetails($booking)
         );
     }
 
@@ -241,7 +256,7 @@ final class CleaningBookingController
         }
 
         return CleaningBookingResource::make(
-            $booking->load(['customer', 'worker', 'services', 'addons', 'billingPolicy', 'timeWarnings', 'disputes'])
+            $this->loadBookingDetails($booking)
         );
     }
 
@@ -260,5 +275,21 @@ final class CleaningBookingController
         if ($requireOwnership && $booking->worker_id === null) {
             abort(403, 'Booking must be assigned to worker for this action.');
         }
+    }
+
+    private function loadBookingDetails(CleaningBooking $booking): CleaningBooking
+    {
+        return $booking->load([
+            'customer',
+            'worker.user',
+            'preferredWorker.user',
+            'rooms.assignedWorker.user',
+            'workerAssignments.worker.user',
+            'services',
+            'addons',
+            'billingPolicy',
+            'timeWarnings',
+            'disputes',
+        ]);
     }
 }

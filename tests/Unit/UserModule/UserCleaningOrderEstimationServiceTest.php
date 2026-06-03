@@ -248,6 +248,78 @@ it('includes selected regular cleaning services in addons pricing', function ():
     expect($pricing['serviceLines'])->toHaveCount(2);
 });
 
+it('defaults cleaning mode to regular when omitted', function (): void {
+    $service = app(UserCleaningOrderEstimationService::class);
+
+    $details = $service->normalizePropertyDetailsForStorage('apartment', [
+        'rooms' => 2,
+        'bedrooms' => 1,
+        'bathrooms' => 1,
+        'living_room_size' => 'small',
+    ]);
+
+    expect($details['cleaning_mode'])->toBe('regular');
+});
+
+it('multiplies deep cleaning estimates and base price by five while keeping add-ons unchanged', function (): void {
+    $serviceA = CleaningService::query()->create([
+        'name' => 'Deep cleaning add-on',
+        'slug' => 'deep-mode-addon-'.fake()->unique()->numerify('###'),
+        'category' => ServiceCategory::Cleaning->value,
+        'description' => 'A',
+        'is_active' => true,
+    ]);
+
+    ServicePricing::query()->create([
+        'cleaning_service_id' => $serviceA->id,
+        'property_type' => 'apartment',
+        'living_room_size' => 'small',
+        'base_price' => 100,
+        'price_per_sqm' => null,
+        'min_hours' => 1,
+    ]);
+
+    $service = app(UserCleaningOrderEstimationService::class);
+
+    $regularEstimation = $service->estimate('apartment', [
+        'rooms' => 2,
+        'bedrooms' => 1,
+        'bathrooms' => 1,
+        'living_room_size' => 'small',
+    ]);
+
+    $deepEstimation = $service->estimate('apartment', [
+        'rooms' => 2,
+        'bedrooms' => 1,
+        'bathrooms' => 1,
+        'living_room_size' => 'small',
+        'cleaning_mode' => 'deep',
+    ]);
+
+    $regularPricing = $service->price('apartment', [
+        'rooms' => 2,
+        'bedrooms' => 1,
+        'bathrooms' => 1,
+        'living_room_size' => 'small',
+    ], null, null, null, [$serviceA->id]);
+
+    $deepPricing = $service->price('apartment', [
+        'rooms' => 2,
+        'bedrooms' => 1,
+        'bathrooms' => 1,
+        'living_room_size' => 'small',
+        'cleaning_mode' => 'deep',
+    ], null, null, null, [$serviceA->id]);
+
+    expect($deepEstimation['estimatedSqm'])->toBe($regularEstimation['estimatedSqm']);
+    expect($deepEstimation['sizeTier'])->toBe($regularEstimation['sizeTier']);
+    expect($deepEstimation['estimatedHours'])->toBe($regularEstimation['estimatedHours'] * 5);
+    expect($deepPricing['basePrice'])->toBe($regularPricing['basePrice'] * 5);
+    expect($deepPricing['addonsTotal'])->toBe($regularPricing['addonsTotal']);
+    expect($deepPricing['totalPrice'])->toBe($deepPricing['basePrice'] + $deepPricing['addonsTotal']);
+    expect($deepPricing['serviceLines'])->toHaveCount(1);
+});
+
 it('normalizes balcony from room size breakdown', function (): void {
     $service = app(UserCleaningOrderEstimationService::class);
 

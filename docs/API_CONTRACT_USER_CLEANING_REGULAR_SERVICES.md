@@ -14,6 +14,10 @@ Regular property types:
 - `office`
 - `studio`
 
+Cleaning mode:
+- `propertyDetails.cleaning_mode`: optional, `regular | deep`
+- Default when omitted: `regular`
+
 ---
 
 ## Service Discovery
@@ -47,6 +51,7 @@ Each service includes `pricing[]` entries:
 - `serviceIds`: optional array
 - `serviceIds.*`: distinct integer ids from `cleaning_services`
 - If sent, array must be non-empty (`min:1`)
+- `propertyDetails.cleaning_mode`: optional and additive; use it to switch the booking to deep cleaning without changing the rest of the payload
 
 Example request body (estimate/create/update):
 
@@ -58,7 +63,8 @@ Example request body (estimate/create/update):
     "rooms": 2,
     "bedrooms": 1,
     "bathrooms": 1,
-    "living_room_size": "small"
+    "living_room_size": "small",
+    "cleaning_mode": "deep"
   },
   "serviceIds": [12, 15]
 }
@@ -71,6 +77,9 @@ Example request body (estimate/create/update):
 For regular cleaning:
 
 - `basePrice` remains computed by existing property-size algorithm.
+- If `propertyDetails.cleaning_mode = deep`, the backend multiplies the regular cleaning core estimate by `5`:
+  - `estimatedHours` is multiplied by `5`
+  - `basePrice` is multiplied by `5`
 - Selected `serviceIds` are priced as **addons**.
 - `addonsTotal = sum(serviceLines[].totalPrice)`.
 - `totalPrice = basePrice + addonsTotal + travelFee + adminMargin`.
@@ -125,6 +134,7 @@ Service line pricing rule per selected service:
 ```
 
 Create/update responses continue returning `order` (`CleaningBookingResource`) and now persist selected regular services to `order.services`.
+`order.propertyDetails.cleaning_mode` is returned for regular cleaning orders and defaults to `regular` when the client omits it.
 
 ---
 
@@ -137,6 +147,18 @@ Create/update responses continue returning `order` (`CleaningBookingResource`) a
   "errors": {
     "pricing": [
       "One or more selected regular cleaning services are invalid."
+    ]
+  }
+}
+```
+
+### Invalid cleaning mode
+```json
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "propertyDetails.cleaning_mode": [
+      "The selected property details cleaning mode is invalid."
     ]
   }
 }
@@ -159,6 +181,7 @@ Create/update responses continue returning `order` (`CleaningBookingResource`) a
 ## Flutter Notes
 
 - Keep current regular-cleaning flow unchanged if no services are selected.
+- Send `propertyDetails.cleaning_mode = deep` only when the user explicitly chooses deep cleaning; omit it for the default regular flow.
 - When user selects optional services, send `serviceIds` in estimate-price, create, and update payloads.
 - Render `pricing.serviceLines` as selected add-ons summary and use `pricing.addonsTotal` for totals UI.
 - Keep event assistance contract in `API_CONTRACT_USER_CLEANING_EVENT_ASSISTANCE.md` for `propertyType=event_assistance`.

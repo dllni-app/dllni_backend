@@ -6,6 +6,7 @@ namespace Modules\User\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrderEstimatePriceRequest extends FormRequest
@@ -31,6 +32,7 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             'propertyDetails.kitchens' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.balconies' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.living_room_size' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::LIVING_ROOM_SIZES)],
+            'propertyDetails.cleaning_mode' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::CLEANING_MODES)],
             'propertyDetails.room_size_breakdown' => ['nullable', 'array:bedroom,bathroom,kitchen,living_room,balcony'],
             'propertyDetails.room_size_breakdown.bedroom' => ['required_with:propertyDetails.room_size_breakdown', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.bathroom' => ['required_with:propertyDetails.room_size_breakdown', 'array:small,medium,large'],
@@ -57,10 +59,50 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             'propertyDetails.venueType' => [Rule::requiredIf($isEventAssistance), 'string', Rule::in($this->availableVenueTypes())],
             'serviceIds' => [Rule::requiredIf($isEventAssistance), 'array', 'min:1'],
             'serviceIds.*' => ['integer', 'distinct', 'exists:cleaning_services,id'],
-            'addressLatitude' => ['nullable', 'required_with:preferredWorkerId', 'numeric', 'between:-90,90'],
-            'addressLongitude' => ['nullable', 'required_with:preferredWorkerId', 'numeric', 'between:-180,180'],
+            'addressLatitude' => ['nullable', 'required_with:preferredWorkerId', 'required_if:assignmentMode,preferred_worker', 'numeric', 'between:-90,90'],
+            'addressLongitude' => ['nullable', 'required_with:preferredWorkerId', 'required_if:assignmentMode,preferred_worker', 'numeric', 'between:-180,180'],
             'preferredWorkerId' => ['nullable', 'exists:workers,id'],
+            'assignmentMode' => ['nullable', 'string', Rule::in(['preferred_worker', 'open_count'])],
+            'numberOfWorkers' => ['nullable', 'integer', 'min:1', 'max:20'],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            $assignmentMode = $this->normalizedAssignmentMode();
+            $preferredWorkerId = $this->input('preferredWorkerId');
+            $numberOfWorkers = $this->input('numberOfWorkers');
+
+            if ($assignmentMode === 'preferred_worker') {
+                if (! is_numeric($preferredWorkerId) || (int) $preferredWorkerId <= 0) {
+                    $validator->errors()->add('preferredWorkerId', 'The preferred worker is required for preferred worker mode.');
+                }
+
+                if ($numberOfWorkers !== null && (int) $numberOfWorkers !== 1) {
+                    $validator->errors()->add('numberOfWorkers', 'Preferred worker mode only allows one worker.');
+                }
+            }
+
+            if ($assignmentMode === 'open_count' && $preferredWorkerId !== null) {
+                $validator->errors()->add('preferredWorkerId', 'Preferred worker cannot be used with open count mode.');
+            }
+
+            if ($assignmentMode === null && $preferredWorkerId !== null && $numberOfWorkers !== null && (int) $numberOfWorkers !== 1) {
+                $validator->errors()->add('numberOfWorkers', 'Legacy preferred worker requests only support one worker.');
+            }
+        });
+    }
+
+    private function normalizedAssignmentMode(): ?string
+    {
+        $assignmentMode = $this->input('assignmentMode');
+
+        if (! is_string($assignmentMode) || mb_trim($assignmentMode) === '') {
+            return null;
+        }
+
+        return mb_strtolower(mb_trim($assignmentMode));
     }
 
     private function isEventAssistanceRequested(): bool

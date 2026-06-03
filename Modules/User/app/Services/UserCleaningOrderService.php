@@ -23,6 +23,8 @@ use Modules\Cleaning\Events\CompletionDecisionMade;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningTimeWarning;
+use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
+use Modules\Cleaning\Services\CleaningBookingTeamService;
 use Modules\Cleaning\Services\CleaningLifecycleNotificationService;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -32,6 +34,7 @@ final class UserCleaningOrderService
 
     public function __construct(
         private UserCleaningOrderEstimationService $estimationService,
+        private CleaningBookingTeamService $teamService,
         private CleaningLifecycleNotificationService $lifecycleNotifications,
     ) {}
 
@@ -41,12 +44,15 @@ final class UserCleaningOrderService
             $normalizedPropertyType = $this->estimationService->normalizePropertyType((string) $validated['propertyType']);
             $serviceIds = isset($validated['serviceIds']) ? (array) $validated['serviceIds'] : null;
             $normalizedPropertyDetails = $this->estimationService->normalizePropertyDetailsForStorage($normalizedPropertyType, (array) $validated['propertyDetails']);
+            $resolvedAssignmentMode = $this->resolveAssignmentMode($validated);
+            $preferredWorkerPricing = $resolvedAssignmentMode === 'preferred_worker';
+            $pricingPreferredWorkerId = $preferredWorkerPricing ? ($validated['preferredWorkerId'] ?? null) : null;
             $normalizedInput = $this->estimationService->pricingSnapshotInput(
                 $normalizedPropertyType,
                 $normalizedPropertyDetails,
                 $validated['addressLatitude'] ?? null,
                 $validated['addressLongitude'] ?? null,
-                $validated['preferredWorkerId'] ?? null,
+                $pricingPreferredWorkerId,
                 $serviceIds,
             );
 
@@ -61,7 +67,7 @@ final class UserCleaningOrderService
                     $normalizedInput['propertyDetails'],
                     $normalizedInput['addressLatitude'],
                     $normalizedInput['addressLongitude'],
-                    $normalizedInput['preferredWorkerId'],
+                    $pricingPreferredWorkerId,
                     $normalizedInput['serviceIds'],
                 );
             } catch (InvalidArgumentException $exception) {
@@ -71,11 +77,29 @@ final class UserCleaningOrderService
             }
 
             $suggestedWorkers = (int) ($estimation['recommendation']['suggestedTeamSize'] ?? 1);
+            $requestedWorkers = $this->resolveRequestedWorkers(
+                $validated,
+                $normalizedPropertyType,
+                $suggestedWorkers,
+                $resolvedAssignmentMode
+            );
+            $storedPricing = $preferredWorkerPricing ? $pricing : [
+                'basePrice' => $pricing['basePrice'],
+                'addonsTotal' => $pricing['addonsTotal'],
+                'travelFee' => 0.0,
+                'distanceKm' => null,
+                'adminMargin' => 0.0,
+                'isPricingFinal' => false,
+                'totalPrice' => round((float) $pricing['basePrice'] + (float) $pricing['addonsTotal'], 2),
+            ];
             $booking = CleaningBooking::create([
                 'customer_id' => $user->id,
                 'worker_id' => null,
-                'preferred_worker_id' => $normalizedInput['preferredWorkerId'],
-                'number_of_workers' => (int) ($validated['numberOfWorkers'] ?? $suggestedWorkers),
+                'preferred_worker_id' => $resolvedAssignmentMode === 'preferred_worker'
+                    ? $normalizedInput['preferredWorkerId']
+                    : null,
+                'assignment_mode' => $resolvedAssignmentMode,
+                'number_of_workers' => $requestedWorkers,
                 'gender_preference' => $validated['genderPreference'] ?? GenderPreference::Any->value,
                 'cancellation_policy_id' => $validated['cancellationPolicyId'] ?? $this->defaultCancellationPolicyId(),
                 'billing_policy_id' => $validated['billingPolicyId'] ?? $this->defaultBillingPolicyId(),
@@ -90,18 +114,20 @@ final class UserCleaningOrderService
                 'scheduled_date' => $validated['scheduledDate'],
                 'scheduled_time' => $validated['scheduledTime'],
                 'total_hours' => $estimation['estimatedHours'],
-                'base_price' => $pricing['basePrice'],
-                'addons_total' => $pricing['addonsTotal'],
-                'travel_fee' => $pricing['travelFee'],
-                'travel_distance_km' => $pricing['distanceKm'],
-                'admin_margin_amount' => $pricing['adminMargin'],
-                'is_pricing_final' => $pricing['isPricingFinal'],
+                'base_price' => $storedPricing['basePrice'],
+                'addons_total' => $storedPricing['addonsTotal'],
+                'travel_fee' => $storedPricing['travelFee'],
+                'travel_distance_km' => $storedPricing['distanceKm'],
+                'admin_margin_amount' => $storedPricing['adminMargin'],
+                'is_pricing_final' => $storedPricing['isPricingFinal'],
                 'cancellation_fee' => 0,
-                'total_price' => $pricing['totalPrice'],
+                'total_price' => $storedPricing['totalPrice'],
                 'terms_accepted' => true,
             ]);
 
             $this->syncBookingServicesFromPricing($booking, (array) ($pricing['serviceLines'] ?? []));
+
+            $this->teamService->syncRooms($booking);
 
             return $booking->fresh();
         });
@@ -116,6 +142,30 @@ final class UserCleaningOrderService
         }
 
         return DB::transaction(function () use ($booking, $validated): CleaningBooking {
+            $booking = CleaningBooking::query()
+                ->whereKey($booking->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $hasAcceptedAssignments = $booking->workerAssignments()
+                ->where('status', CleaningBookingWorkerAssignmentStatus::Accepted->value)
+                ->exists();
+
+            if ($hasAcceptedAssignments && array_intersect(array_keys($validated), [
+                'propertyType',
+                'propertyDetails',
+                'addressLatitude',
+                'addressLongitude',
+                'preferredWorkerId',
+                'assignmentMode',
+                'numberOfWorkers',
+                'serviceIds',
+            ]) !== []) {
+                throw ValidationException::withMessages([
+                    'order' => ['Order cannot change room or pricing fields after workers have accepted.'],
+                ]);
+            }
+
             $updates = [];
             $pricingFieldsChanged = false;
             $servicesChanged = false;
@@ -129,33 +179,65 @@ final class UserCleaningOrderService
 
             if (array_key_exists('propertyDetails', $validated)) {
                 $effectivePropertyType = (string) ($updates['property_type'] ?? $booking->property_type);
-                $updates['property_details'] = $this->estimationService->normalizePropertyDetailsForStorage($effectivePropertyType, (array) $validated['propertyDetails']);
+                $mergedPropertyDetails = array_replace_recursive(
+                    is_array($booking->property_details) ? $booking->property_details : [],
+                    (array) $validated['propertyDetails']
+                );
+                $updates['property_details'] = $this->estimationService->normalizePropertyDetailsForStorage(
+                    $effectivePropertyType,
+                    $mergedPropertyDetails
+                );
                 $pricingFieldsChanged = true;
             }
+
             if (array_key_exists('scheduledDate', $validated)) {
                 $updates['scheduled_date'] = $validated['scheduledDate'];
             }
+
             if (array_key_exists('scheduledTime', $validated)) {
                 $updates['scheduled_time'] = $validated['scheduledTime'];
             }
+
             if (array_key_exists('addressLatitude', $validated)) {
                 $updates['address_latitude'] = $validated['addressLatitude'];
                 $pricingFieldsChanged = true;
             }
+
             if (array_key_exists('addressLongitude', $validated)) {
                 $updates['address_longitude'] = $validated['addressLongitude'];
                 $pricingFieldsChanged = true;
             }
+
             if (array_key_exists('preferredWorkerId', $validated)) {
                 $updates['preferred_worker_id'] = $validated['preferredWorkerId'];
                 $pricingFieldsChanged = true;
             }
-            if (array_key_exists('numberOfWorkers', $validated)) {
-                $updates['number_of_workers'] = (int) ($validated['numberOfWorkers'] ?? 1);
+
+            if (
+                array_key_exists('assignmentMode', $validated)
+                || array_key_exists('numberOfWorkers', $validated)
+                || array_key_exists('preferredWorkerId', $validated)
+            ) {
+                $updates['assignment_mode'] = $this->resolveAssignmentMode($validated, $booking);
+                $pricingFieldsChanged = true;
+
+                if (! array_key_exists('preferredWorkerId', $validated) && $updates['assignment_mode'] === 'open_count') {
+                    $updates['preferred_worker_id'] = null;
+                }
             }
+
+            if (array_key_exists('numberOfWorkers', $validated)) {
+                $updates['number_of_workers'] = $this->resolveRequestedWorkersForUpdate($booking, $validated);
+            } elseif (array_key_exists('assignmentMode', $validated) && $this->normalizedAssignmentMode($validated['assignmentMode'] ?? null) === 'preferred_worker') {
+                $updates['number_of_workers'] = 1;
+            } elseif ($this->estimationService->isEventAssistanceType((string) ($updates['property_type'] ?? $booking->property_type)) && ! array_key_exists('number_of_workers', $updates)) {
+                $updates['number_of_workers'] = (int) ($booking->number_of_workers ?? 1);
+            }
+
             if (array_key_exists('genderPreference', $validated)) {
                 $updates['gender_preference'] = $validated['genderPreference'] ?? GenderPreference::Any->value;
             }
+
             if (array_key_exists('serviceIds', $validated)) {
                 $servicesChanged = true;
                 $pricingFieldsChanged = true;
@@ -166,7 +248,7 @@ final class UserCleaningOrderService
                 $propertyDetails = (array) ($updates['property_details'] ?? $booking->property_details ?? []);
                 $addressLatitude = $updates['address_latitude'] ?? $booking->address_latitude;
                 $addressLongitude = $updates['address_longitude'] ?? $booking->address_longitude;
-                $preferredWorkerId = $updates['preferred_worker_id'] ?? $booking->preferred_worker_id;
+                $preferredWorkerId = $this->resolvePreferredWorkerForPricing($validated, $booking, $updates);
 
                 $serviceIds = $servicesChanged
                     ? (array) ($validated['serviceIds'] ?? [])
@@ -222,21 +304,21 @@ final class UserCleaningOrderService
                 $updates['estimated_sqm'] = $estimation['estimatedSqm'];
                 $updates['estimated_hours'] = $estimation['estimatedHours'];
                 $updates['total_hours'] = $estimation['estimatedHours'];
-                $updates['base_price'] = $pricing['basePrice'];
-                $updates['travel_fee'] = $pricing['travelFee'];
-                $updates['travel_distance_km'] = $pricing['distanceKm'];
-                $updates['addons_total'] = $pricing['addonsTotal'];
-                $updates['admin_margin_amount'] = $pricing['adminMargin'];
-                $updates['is_pricing_final'] = $pricing['isPricingFinal'];
-                $updates['total_price'] = $pricing['totalPrice'];
+                $storedPricing = $this->resolveStoredPricingForUpdate($pricing, $validated, $booking);
+                $updates['base_price'] = $storedPricing['basePrice'];
+                $updates['travel_fee'] = $storedPricing['travelFee'];
+                $updates['travel_distance_km'] = $storedPricing['distanceKm'];
+                $updates['addons_total'] = $storedPricing['addonsTotal'];
+                $updates['admin_margin_amount'] = $storedPricing['adminMargin'];
+                $updates['is_pricing_final'] = $storedPricing['isPricingFinal'];
+                $updates['total_price'] = $storedPricing['totalPrice'];
                 $this->syncBookingServicesFromPricing($booking, (array) ($pricing['serviceLines'] ?? []));
-
                 if (
                     $this->estimationService->isEventAssistanceType($normalizedInput['propertyType'])
-                    && ! array_key_exists('numberOfWorkers', $validated)
+                    && (! array_key_exists('numberOfWorkers', $validated) || $validated['numberOfWorkers'] === null)
                     && ! array_key_exists('number_of_workers', $updates)
                 ) {
-                    $updates['number_of_workers'] = (int) ($estimation['recommendation']['suggestedTeamSize'] ?? 1);
+                    $updates['number_of_workers'] = max(1, (int) ($estimation['recommendation']['suggestedTeamSize'] ?? $booking->number_of_workers ?? 1));
                 }
             }
 
@@ -244,8 +326,24 @@ final class UserCleaningOrderService
                 $booking->update($updates);
             }
 
+            if ($pricingFieldsChanged || array_key_exists('assignmentMode', $validated) || array_key_exists('numberOfWorkers', $validated) || array_key_exists('propertyDetails', $validated) || array_key_exists('propertyType', $validated)) {
+                $booking = $booking->fresh();
+
+                if (! $hasAcceptedAssignments) {
+                    $this->teamService->syncRooms($booking);
+                }
+            }
+
             return $booking->fresh();
         });
+    }
+
+    /**
+     * @param  array<int, array{roomId:int, workerId:?int}>  $assignments
+     */
+    public function assignRoomAssignments(CleaningBooking $booking, array $assignments): CleaningBooking
+    {
+        return $this->teamService->assignRoomsFromCustomer($booking, $assignments);
     }
 
     public function cancel(CleaningBooking $booking, ?string $reason = null): CleaningBooking
@@ -526,6 +624,136 @@ final class UserCleaningOrderService
         return $value === null ? 0.0 : (float) $value;
     }
 
+    private function normalizedAssignmentMode(mixed $assignmentMode): ?string
+    {
+        if (! is_string($assignmentMode) || mb_trim($assignmentMode) === '') {
+            return null;
+        }
+
+        return mb_strtolower(mb_trim($assignmentMode));
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function resolveAssignmentMode(array $validated, ?CleaningBooking $booking = null): string
+    {
+        $explicitMode = $this->normalizedAssignmentMode($validated['assignmentMode'] ?? null);
+
+        if ($explicitMode !== null) {
+            return $explicitMode;
+        }
+
+        $preferredWorkerId = array_key_exists('preferredWorkerId', $validated)
+            ? $validated['preferredWorkerId']
+            : $booking?->preferred_worker_id;
+        $numberOfWorkers = array_key_exists('numberOfWorkers', $validated)
+            ? (int) $validated['numberOfWorkers']
+            : (int) ($booking?->number_of_workers ?? 1);
+
+        if ($preferredWorkerId !== null && $numberOfWorkers <= 1) {
+            return 'preferred_worker';
+        }
+
+        return 'open_count';
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function shouldUsePreferredWorkerPricing(array $validated, ?CleaningBooking $booking = null): bool
+    {
+        return $this->resolveAssignmentMode($validated, $booking) === 'preferred_worker';
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function resolveRequestedWorkers(
+        array $validated,
+        string $propertyType,
+        int $suggestedWorkers,
+        ?string $assignmentMode = null
+    ): int
+    {
+        $assignmentMode = $assignmentMode ?? $this->resolveAssignmentMode($validated);
+
+        if (array_key_exists('numberOfWorkers', $validated) && $validated['numberOfWorkers'] !== null) {
+            return max(1, (int) $validated['numberOfWorkers']);
+        }
+
+        if ($assignmentMode === 'preferred_worker') {
+            return 1;
+        }
+
+        if ($this->estimationService->isEventAssistanceType($propertyType)) {
+            return max(1, $suggestedWorkers);
+        }
+
+        return 1;
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function resolveRequestedWorkersForUpdate(CleaningBooking $booking, array $validated): int
+    {
+        if (array_key_exists('numberOfWorkers', $validated) && $validated['numberOfWorkers'] !== null) {
+            return max(1, (int) $validated['numberOfWorkers']);
+        }
+
+        if ($this->resolveAssignmentMode($validated, $booking) === 'preferred_worker') {
+            return 1;
+        }
+
+        return max(1, (int) ($booking->number_of_workers ?? 1));
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @param  array<string, mixed>  $updates
+     */
+    private function resolvePreferredWorkerForPricing(array $validated, CleaningBooking $booking, array $updates): ?int
+    {
+        if ($this->shouldUsePreferredWorkerPricing($validated, $booking)) {
+            $preferredWorkerId = $updates['preferred_worker_id'] ?? $validated['preferredWorkerId'] ?? $booking->preferred_worker_id;
+
+            return $preferredWorkerId !== null ? (int) $preferredWorkerId : null;
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $pricing
+     * @param  array<string, mixed>  $validated
+     * @return array{basePrice: float, addonsTotal: float, travelFee: float, distanceKm: ?float, adminMargin: float, isPricingFinal: bool, totalPrice: float}
+     */
+    private function resolveStoredPricingForUpdate(array $pricing, array $validated, CleaningBooking $booking): array
+    {
+        if ($this->shouldUsePreferredWorkerPricing($validated, $booking)) {
+            return [
+                'basePrice' => (float) $pricing['basePrice'],
+                'addonsTotal' => (float) $pricing['addonsTotal'],
+                'travelFee' => (float) $pricing['travelFee'],
+                'distanceKm' => $pricing['distanceKm'] !== null ? (float) $pricing['distanceKm'] : null,
+                'adminMargin' => (float) $pricing['adminMargin'],
+                'isPricingFinal' => (bool) $pricing['isPricingFinal'],
+                'totalPrice' => (float) $pricing['totalPrice'],
+            ];
+        }
+
+        return [
+            'basePrice' => (float) $pricing['basePrice'],
+            'addonsTotal' => (float) $pricing['addonsTotal'],
+            'travelFee' => 0.0,
+            'distanceKm' => null,
+            'adminMargin' => 0.0,
+            'isPricingFinal' => false,
+            'totalPrice' => round(((float) $pricing['basePrice']) + ((float) $pricing['addonsTotal']), 2),
+        ];
+    }
+
     /**
      * @param array{rating:int,comment?:string|null} $validated
      */
@@ -589,6 +817,11 @@ final class UserCleaningOrderService
             'cleaningBookingId' => $booking->id,
             'status' => $booking->status?->value,
             'workerId' => $booking->worker_id,
+            'assignmentMode' => $booking->resolvedAssignmentMode(),
+            'requiredWorkers' => max(1, (int) ($booking->number_of_workers ?? 1)),
+            'acceptedWorkers' => $booking->acceptedWorkerCount(),
+            'remainingWorkers' => $booking->remainingWorkerCount(),
+            'isTeamFulfilled' => $booking->isTeamFulfilled(),
             'startedTravelAt' => $booking->started_travel_at?->toIso8601String(),
             'arrivedAt' => $booking->arrived_at?->toIso8601String(),
             'workStartedAt' => $booking->work_started_at?->toIso8601String(),

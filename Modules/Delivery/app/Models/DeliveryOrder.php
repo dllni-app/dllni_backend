@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Delivery\Models;
 
 use Database\Factories\DeliveryOrderFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -32,6 +33,11 @@ final class DeliveryOrder extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(\App\Models\User::class, 'created_by_user_id');
+    }
+
+    public function scopeOwnedByUser(Builder $query, int $userId): Builder
+    {
+        return $query->where('created_by_user_id', $userId);
     }
 
     public function assignmentAttempts(): HasMany

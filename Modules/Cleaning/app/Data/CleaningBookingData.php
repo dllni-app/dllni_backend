@@ -19,6 +19,7 @@ final class CleaningBookingData extends Data
         public ?int $customerId,
         public ?int $workerId,
         public ?int $preferredWorkerId,
+        public ?string $assignmentMode,
         public ?int $numberOfWorkers,
         public ?string $genderPreference,
         public ?int $cancellationPolicyId,

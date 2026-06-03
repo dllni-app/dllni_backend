@@ -7,11 +7,13 @@ namespace Modules\Cleaning\Http\Controllers\API;
 use App\Enums\GenderPreference;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningTimeWarning;
+use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 
 final class WorkerHomepageController
 {
@@ -60,7 +62,14 @@ final class WorkerHomepageController
             ]);
         }
 
-        $baseQuery = CleaningBooking::query()->where('worker_id', $worker->id);
+        $baseQuery = CleaningBooking::query()->where(function (Builder $query) use ($worker): void {
+            $query->where('worker_id', $worker->id)
+                ->orWhereHas('workerAssignments', function (Builder $assignments) use ($worker): void {
+                    $assignments
+                        ->where('worker_id', $worker->id)
+                        ->where('status', 'accepted');
+                });
+        });
 
         $totalBookings = (clone $baseQuery)->count();
 
@@ -89,20 +98,25 @@ final class WorkerHomepageController
             ->where('status', CleaningBookingStatus::Cancelled)
             ->count();
 
-        $totalEarnings = (float) (clone $baseQuery)
-            ->where('status', CleaningBookingStatus::Completed)
-            ->sum('total_price');
-
-        $todayEarnings = (float) (clone $baseQuery)
-            ->where('status', CleaningBookingStatus::Completed)
-            ->whereDate('scheduled_date', $today)
-            ->sum('total_price');
-
         $yesterday = $today->copy()->subDay();
-        $yesterdayEarnings = (float) (clone $baseQuery)
+        $completedBookings = (clone $baseQuery)
             ->where('status', CleaningBookingStatus::Completed)
-            ->whereDate('scheduled_date', $yesterday)
-            ->sum('total_price');
+            ->with(['workerAssignments' => function (Builder $assignments) use ($worker): void {
+                $assignments->where('worker_id', $worker->id);
+            }])
+            ->get();
+
+        $completedTodayBookings = $completedBookings->filter(
+            fn (CleaningBooking $booking): bool => $booking->scheduled_date?->isSameDay($today) ?? false
+        );
+        $yesterdayBookings = $completedBookings->filter(
+            fn (CleaningBooking $booking): bool => $booking->scheduled_date?->isSameDay($yesterday) ?? false
+        );
+
+        $totalEarnings = (float) $completedBookings->sum(fn (CleaningBooking $booking): float => $this->bookingWorkerAmount($booking, $worker->id));
+
+        $todayEarnings = (float) $completedTodayBookings->sum(fn (CleaningBooking $booking): float => $this->bookingWorkerAmount($booking, $worker->id));
+        $yesterdayEarnings = (float) $yesterdayBookings->sum(fn (CleaningBooking $booking): float => $this->bookingWorkerAmount($booking, $worker->id));
 
         $earningsChangePercent = match (true) {
             $yesterdayEarnings > 0 => round((($todayEarnings - $yesterdayEarnings) / $yesterdayEarnings) * 100, 1),
@@ -114,6 +128,9 @@ final class WorkerHomepageController
             ->where('status', CleaningBookingStatus::Pending)
             ->whereDate('scheduled_date', '>=', $today)
             ->where(fn ($q) => $q->whereNull('worker_id')->orWhere('worker_id', $worker->id))
+            ->whereDoesntHave('workerAssignments', fn (Builder $assignments) => $assignments
+                ->where('worker_id', $worker->id)
+                ->where('status', 'accepted'))
             ->where(function ($genderQuery) use ($worker): void {
                 $genderQuery
                     ->whereNull('gender_preference')
@@ -126,17 +143,28 @@ final class WorkerHomepageController
         $pendingExtensionRequestsCount = CleaningTimeWarning::query()
             ->where('booking_type', 'cleaning_booking')
             ->whereNull('worker_responded_at')
-            ->whereHasMorph('booking', [CleaningBooking::class], fn ($q) => $q->where('worker_id', $worker->id))
+            ->whereHasMorph('booking', [CleaningBooking::class], function (Builder $q) use ($worker): void {
+                $q->where(function (Builder $bookingQuery) use ($worker): void {
+                    $bookingQuery
+                        ->where('worker_id', $worker->id)
+                        ->orWhereHas('workerAssignments', fn (Builder $assignments) => $assignments
+                            ->where('worker_id', $worker->id)
+                            ->where('status', 'accepted'));
+                });
+            })
             ->count();
 
         $completedFourWeeksBookings = (clone $baseQuery)
             ->where('status', CleaningBookingStatus::Completed)
             ->whereBetween('scheduled_date', [$fourWeekStart, $fourWeekEnd])
-            ->get(['scheduled_date', 'total_price', 'admin_margin_amount']);
+            ->with(['workerAssignments' => function (Builder $assignments) use ($worker): void {
+                $assignments->where('worker_id', $worker->id);
+            }])
+            ->get();
 
-        $grossInvoicesAmount = (float) $completedFourWeeksBookings->sum('total_price');
-        $adminAmount = (float) $completedFourWeeksBookings->sum('admin_margin_amount');
-        $workerAmount = (float) max(0, $grossInvoicesAmount - $adminAmount);
+        $adminAmount = (float) $completedFourWeeksBookings->sum(fn (CleaningBooking $booking): float => $this->bookingAdminAmount($booking, $worker->id));
+        $workerAmount = (float) $completedFourWeeksBookings->sum(fn (CleaningBooking $booking): float => $this->bookingWorkerAmount($booking, $worker->id));
+        $grossInvoicesAmount = (float) $completedFourWeeksBookings->sum(fn (CleaningBooking $booking): float => $this->bookingGrossAmount($booking));
 
         $weeklyBookingsCounts = (clone $baseQuery)
             ->whereBetween('scheduled_date', [$weekStart, $weekEnd])
@@ -166,7 +194,7 @@ final class WorkerHomepageController
             $segmentSum = (float) $completedFourWeeksBookings
                 ->filter(fn (CleaningBooking $booking): bool => $booking->scheduled_date !== null
                     && $booking->scheduled_date->betweenIncluded($segmentStart, $segmentEnd))
-                ->sum('total_price');
+                ->sum(fn (CleaningBooking $booking): float => $this->bookingWorkerAmount($booking, $worker->id));
 
             $invoicesFourWeeksChart[] = [
                 'weekNumber' => $index + 1,
@@ -247,5 +275,36 @@ final class WorkerHomepageController
         }
 
         return $rows;
+    }
+
+    private function bookingWorkerAmount(CleaningBooking $booking, int $workerId): float
+    {
+        $assignment = $booking->relationLoaded('workerAssignments')
+            ? $booking->workerAssignments->firstWhere('worker_id', $workerId)
+            : null;
+
+        if ($assignment instanceof CleaningBookingWorkerAssignment) {
+            return (float) $assignment->worker_amount;
+        }
+
+        return max(0.0, round((float) ($booking->total_price ?? 0) - (float) ($booking->admin_margin_amount ?? 0), 2));
+    }
+
+    private function bookingAdminAmount(CleaningBooking $booking, int $workerId): float
+    {
+        $assignment = $booking->relationLoaded('workerAssignments')
+            ? $booking->workerAssignments->firstWhere('worker_id', $workerId)
+            : null;
+
+        if ($assignment instanceof CleaningBookingWorkerAssignment) {
+            return (float) $assignment->admin_margin_amount;
+        }
+
+        return (float) ($booking->admin_margin_amount ?? 0);
+    }
+
+    private function bookingGrossAmount(CleaningBooking $booking): float
+    {
+        return (float) ($booking->total_price ?? 0);
     }
 }
