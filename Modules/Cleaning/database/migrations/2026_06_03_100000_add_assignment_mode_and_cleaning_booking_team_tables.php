@@ -26,9 +26,9 @@ return new class extends Migration
             $table->string('assignment_source')->nullable();
             $table->timestamps();
 
-            $table->unique(['cleaning_booking_id', 'room_key']);
-            $table->index(['cleaning_booking_id', 'assigned_worker_id']);
-            $table->index(['cleaning_booking_id', 'room_type']);
+            $table->unique(['cleaning_booking_id', 'room_key'], 'cbr_booking_room_key_uq');
+            $table->index(['cleaning_booking_id', 'assigned_worker_id'], 'cbr_booking_worker_idx');
+            $table->index(['cleaning_booking_id', 'room_type'], 'cbr_booking_room_type_idx');
         });
 
         Schema::create('cleaning_booking_worker_assignments', function (Blueprint $table): void {
@@ -46,9 +46,9 @@ return new class extends Migration
             $table->string('currency', 8)->default('SYP');
             $table->timestamps();
 
-            $table->unique(['cleaning_booking_id', 'worker_id']);
-            $table->index(['cleaning_booking_id', 'status']);
-            $table->index(['worker_id', 'status']);
+            $table->unique(['cleaning_booking_id', 'worker_id'], 'cbwa_booking_worker_uq');
+            $table->index(['cleaning_booking_id', 'status'], 'cbwa_booking_status_idx');
+            $table->index(['worker_id', 'status'], 'cbwa_worker_status_idx');
         });
     }
 
