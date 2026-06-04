@@ -19,6 +19,7 @@ use Modules\Cleaning\Http\Controllers\API\WorkerAccountStatusController;
 use Modules\Cleaning\Http\Controllers\API\WorkerDepositController;
 use Modules\Cleaning\Http\Controllers\API\WorkerDetailsController;
 use Modules\Cleaning\Http\Controllers\API\WorkerHomepageController;
+use Modules\Cleaning\Http\Controllers\API\WorkerReviewController;
 use Modules\Cleaning\Http\Controllers\API\WorkerStatisticsController;
 use Modules\Cleaning\Http\Controllers\API\WorkerTransactionsController;
 use Modules\Cleaning\Http\Controllers\API\WorkerWorkingHoursController;
@@ -36,6 +37,7 @@ Route::prefix('v1')->group(function () {
         Route::get('cleaning/dashboard/overview', DashboardOverviewController::class);
         Route::get('cleaning/worker/homepage', WorkerHomepageController::class);
         Route::get('cleaning/worker/statistics', WorkerStatisticsController::class);
+        Route::get('cleaning/worker/reviews', [WorkerReviewController::class, 'index']);
         Route::get('worker/{worker}', WorkerDetailsController::class);
         Route::get('cleaning/worker/profile', Modules\Cleaning\Http\Controllers\API\WorkerProfileController::class);
         Route::get('cleaning/worker/working-hours', [WorkerWorkingHoursController::class, 'show']);
