@@ -8,6 +8,7 @@ use App\Enums\GenderPreference;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
@@ -101,7 +102,7 @@ final class WorkerHomepageController
         $yesterday = $today->copy()->subDay();
         $completedBookings = (clone $baseQuery)
             ->where('status', CleaningBookingStatus::Completed)
-            ->with(['workerAssignments' => function (Builder $assignments) use ($worker): void {
+            ->with(['workerAssignments' => function (HasMany $assignments) use ($worker): void {
                 $assignments->where('worker_id', $worker->id);
             }])
             ->get();
@@ -157,7 +158,7 @@ final class WorkerHomepageController
         $completedFourWeeksBookings = (clone $baseQuery)
             ->where('status', CleaningBookingStatus::Completed)
             ->whereBetween('scheduled_date', [$fourWeekStart, $fourWeekEnd])
-            ->with(['workerAssignments' => function (Builder $assignments) use ($worker): void {
+            ->with(['workerAssignments' => function (HasMany $assignments) use ($worker): void {
                 $assignments->where('worker_id', $worker->id);
             }])
             ->get();

@@ -7,6 +7,7 @@ namespace Modules\Cleaning\Http\Controllers\API;
 use App\Models\Dispute;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
@@ -48,7 +49,7 @@ final class WorkerStatisticsController
                     });
             })
             ->whereBetween('scheduled_date', [$startOfWeek, $endOfWeek])
-            ->with(['workerAssignments' => function (Builder $assignments) use ($worker): void {
+            ->with(['workerAssignments' => function (HasMany $assignments) use ($worker): void {
                 $assignments->where('worker_id', $worker->id);
             }])
             ->get();
