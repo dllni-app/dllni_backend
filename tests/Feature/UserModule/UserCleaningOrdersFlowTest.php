@@ -353,6 +353,101 @@ it('returns estimated cleaning price from backend algorithm', function (): void 
     expect((string) $response->json('algorithmVersion'))->toBe('2026-06-03-v3');
 });
 
+it('accepts team worker room assignments on estimate-price and returns weighted pricing preview', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $response = postJson('/api/v1/user/cleaning/orders/estimate-price', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'rooms' => 4,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'kitchens' => 1,
+            'living_room_size' => 'medium',
+            'room_size_breakdown' => [
+                'bedroom' => ['small' => 1, 'medium' => 0, 'large' => 0],
+                'bathroom' => ['small' => 1, 'medium' => 0, 'large' => 0],
+                'kitchen' => ['small' => 0, 'medium' => 1, 'large' => 0],
+                'living_room' => ['small' => 0, 'medium' => 1, 'large' => 0],
+                'balcony' => ['small' => 0, 'medium' => 0, 'large' => 0],
+            ],
+        ],
+        'assignmentMode' => 'open_count',
+        'numberOfWorkers' => 2,
+        'workerRoomAssignments' => [
+            [
+                'workerSlot' => 1,
+                'preferredWorkerId' => null,
+                'rooms' => [
+                    ['roomKey' => 'bedroom.small.1', 'roomType' => 'bedroom', 'roomSize' => 'small'],
+                ],
+            ],
+            [
+                'workerSlot' => 2,
+                'preferredWorkerId' => null,
+                'rooms' => [
+                    ['roomKey' => 'bathroom.small.1', 'roomType' => 'bathroom', 'roomSize' => 'small'],
+                ],
+            ],
+        ],
+    ]);
+
+    $response->assertOk();
+    expect($response->json('workerRoomAssignments'))->toHaveCount(2);
+    expect($response->json('workerRoomAssignments.0.workerSlot'))->toBe(1);
+    expect($response->json('workerRoomAssignments.0.roomsWeight'))->toBeGreaterThan(0);
+    expect($response->json('workerRoomAssignments.0.estimatedServiceShareAmount'))->toBeGreaterThan(0);
+    expect(collect($response->json('workerRoomAssignments.1.rooms'))->pluck('roomKey'))->toContain('living_room.medium.1');
+});
+
+it('accepts preferred worker room assignments on estimate-price', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $preferredWorker = Worker::factory()->create([
+        'home_address' => 'Preferred Worker Home',
+        'home_latitude' => 33.55,
+        'home_longitude' => 36.31,
+    ]);
+
+    $response = postJson('/api/v1/user/cleaning/orders/estimate-price', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'rooms' => 2,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+            'room_size_breakdown' => [
+                'bedroom' => ['small' => 1, 'medium' => 0, 'large' => 0],
+                'bathroom' => ['small' => 1, 'medium' => 0, 'large' => 0],
+                'kitchen' => ['small' => 0, 'medium' => 0, 'large' => 0],
+                'living_room' => ['small' => 0, 'medium' => 1, 'large' => 0],
+                'balcony' => ['small' => 0, 'medium' => 0, 'large' => 0],
+            ],
+        ],
+        'assignmentMode' => 'preferred_worker',
+        'preferredWorkerId' => $preferredWorker->id,
+        'numberOfWorkers' => 1,
+        'addressLatitude' => 33.5,
+        'addressLongitude' => 36.3,
+        'workerRoomAssignments' => [
+            [
+                'workerSlot' => 1,
+                'preferredWorkerId' => $preferredWorker->id,
+                'rooms' => [
+                    ['roomKey' => 'bedroom.small.1', 'roomType' => 'bedroom', 'roomSize' => 'small'],
+                ],
+            ],
+        ],
+    ]);
+
+    $response->assertOk();
+    expect($response->json('workerRoomAssignments'))->toHaveCount(1);
+    expect($response->json('workerRoomAssignments.0.preferredWorkerId'))->toBe($preferredWorker->id);
+    expect(collect($response->json('workerRoomAssignments.0.rooms'))->pluck('roomKey'))->toContain('living_room.medium.1');
+});
+
 it('prefers room_size_breakdown for estimate-price when provided', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
@@ -417,6 +512,120 @@ it('creates order with room_size_breakdown and persists normalized breakdown-der
     expect($response->json('order.propertyDetails.room_size_breakdown.bedroom.large'))->toBe(1);
 });
 
+it('creates team order with worker room assignments and persists planned slots', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $response = postJson('/api/v1/user/cleaning/orders', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'address' => 'Damascus - Kafar Souseh',
+            'location_name' => 'Home',
+            'rooms' => 4,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'kitchens' => 1,
+            'living_room_size' => 'medium',
+            'room_size_breakdown' => [
+                'bedroom' => ['small' => 1, 'medium' => 0, 'large' => 0],
+                'bathroom' => ['small' => 1, 'medium' => 0, 'large' => 0],
+                'kitchen' => ['small' => 0, 'medium' => 1, 'large' => 0],
+                'living_room' => ['small' => 0, 'medium' => 1, 'large' => 0],
+                'balcony' => ['small' => 0, 'medium' => 0, 'large' => 0],
+            ],
+        ],
+        'assignmentMode' => 'open_count',
+        'numberOfWorkers' => 2,
+        'workerRoomAssignments' => [
+            [
+                'workerSlot' => 1,
+                'preferredWorkerId' => null,
+                'rooms' => [
+                    ['roomKey' => 'bedroom.small.1', 'roomType' => 'bedroom', 'roomSize' => 'small'],
+                    ['roomKey' => 'bathroom.small.1', 'roomType' => 'bathroom', 'roomSize' => 'small'],
+                ],
+            ],
+            [
+                'workerSlot' => 2,
+                'preferredWorkerId' => null,
+                'rooms' => [
+                    ['roomKey' => 'kitchen.medium.1', 'roomType' => 'kitchen', 'roomSize' => 'medium'],
+                ],
+            ],
+        ],
+        'scheduledDate' => now()->addDay()->format('Y-m-d'),
+        'scheduledTime' => '10:00',
+        'termsAccepted' => true,
+    ]);
+
+    $response->assertCreated();
+    expect($response->json('order.workerRoomAssignments'))->toHaveCount(2);
+    expect($response->json('order.workerRoomAssignments.0.workerSlot'))->toBe(1);
+    expect($response->json('order.roomAssignments.0.plannedWorkerSlot'))->not->toBeNull();
+    $this->assertDatabaseHas('cleaning_booking_rooms', [
+        'cleaning_booking_id' => (int) $response->json('order.id'),
+        'room_key' => 'bedroom.small.1',
+        'planned_worker_slot' => 1,
+    ]);
+});
+
+it('creates preferred worker order with worker room assignments', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $preferredWorker = Worker::factory()->create([
+        'home_address' => 'Preferred Worker Home',
+        'home_latitude' => 33.55,
+        'home_longitude' => 36.31,
+    ]);
+
+    $response = postJson('/api/v1/user/cleaning/orders', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'address' => 'Damascus - Mazzeh',
+            'location_name' => 'Home',
+            'rooms' => 2,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+            'room_size_breakdown' => [
+                'bedroom' => ['small' => 1, 'medium' => 0, 'large' => 0],
+                'bathroom' => ['small' => 1, 'medium' => 0, 'large' => 0],
+                'kitchen' => ['small' => 0, 'medium' => 0, 'large' => 0],
+                'living_room' => ['small' => 0, 'medium' => 1, 'large' => 0],
+                'balcony' => ['small' => 0, 'medium' => 0, 'large' => 0],
+            ],
+        ],
+        'assignmentMode' => 'preferred_worker',
+        'preferredWorkerId' => $preferredWorker->id,
+        'numberOfWorkers' => 1,
+        'addressLatitude' => 33.5138,
+        'addressLongitude' => 36.2765,
+        'workerRoomAssignments' => [
+            [
+                'workerSlot' => 1,
+                'preferredWorkerId' => $preferredWorker->id,
+                'rooms' => [
+                    ['roomKey' => 'bedroom.small.1', 'roomType' => 'bedroom', 'roomSize' => 'small'],
+                ],
+            ],
+        ],
+        'scheduledDate' => now()->addDay()->format('Y-m-d'),
+        'scheduledTime' => '09:30',
+        'termsAccepted' => true,
+    ]);
+
+    $response->assertCreated();
+    expect($response->json('order.workerRoomAssignments'))->toHaveCount(1);
+    expect($response->json('order.workerRoomAssignments.0.preferredWorkerId'))->toBe($preferredWorker->id);
+    $this->assertDatabaseHas('cleaning_booking_rooms', [
+        'cleaning_booking_id' => (int) $response->json('order.id'),
+        'room_key' => 'bedroom.small.1',
+        'planned_worker_slot' => 1,
+        'planned_preferred_worker_id' => $preferredWorker->id,
+    ]);
+});
+
 it('validates room_size_breakdown shape and rejects invalid bucket keys', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
@@ -435,6 +644,42 @@ it('validates room_size_breakdown shape and rejects invalid bucket keys', functi
     ])->assertUnprocessable()->assertJsonValidationErrors([
         'propertyDetails.room_size_breakdown.bedroom',
         'propertyDetails.room_size_breakdown.bedroom.small',
+    ]);
+});
+
+it('rejects invalid worker room assignments', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    postJson('/api/v1/user/cleaning/orders/estimate-price', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'rooms' => 2,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+            'room_size_breakdown' => [
+                'bedroom' => ['small' => 1, 'medium' => 0, 'large' => 0],
+                'bathroom' => ['small' => 1, 'medium' => 0, 'large' => 0],
+                'kitchen' => ['small' => 0, 'medium' => 0, 'large' => 0],
+                'living_room' => ['small' => 0, 'medium' => 1, 'large' => 0],
+                'balcony' => ['small' => 0, 'medium' => 0, 'large' => 0],
+            ],
+        ],
+        'assignmentMode' => 'open_count',
+        'numberOfWorkers' => 1,
+        'workerRoomAssignments' => [
+            [
+                'workerSlot' => 2,
+                'preferredWorkerId' => null,
+                'rooms' => [
+                    ['roomKey' => 'missing.room.1', 'roomType' => 'bedroom', 'roomSize' => 'small'],
+                ],
+            ],
+        ],
+    ])->assertUnprocessable()->assertJsonValidationErrors([
+        'workerRoomAssignments.0.workerSlot',
+        'workerRoomAssignments.0.rooms.0.roomKey',
     ]);
 });
 

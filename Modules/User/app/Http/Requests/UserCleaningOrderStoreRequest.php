@@ -7,10 +7,13 @@ namespace Modules\User\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
+use Modules\User\Http\Requests\Concerns\ValidatesWorkerRoomAssignments;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrderStoreRequest extends FormRequest
 {
+    use ValidatesWorkerRoomAssignments;
+
     public function authorize(): bool
     {
         return true;
@@ -70,6 +73,7 @@ final class UserCleaningOrderStoreRequest extends FormRequest
             'preferredWorkerId' => ['nullable', 'exists:workers,id', 'required_if:assignmentMode,preferred_worker'],
             'assignmentMode' => ['nullable', 'string', Rule::in(['preferred_worker', 'open_count'])],
             'numberOfWorkers' => ['nullable', 'integer', 'min:1', 'max:20'],
+            ...$this->workerRoomAssignmentRules(),
             'genderPreference' => ['nullable', 'string', Rule::in(['any', 'male', 'female'])],
             'estimatedSqm' => ['prohibited'],
             'estimatedHours' => ['prohibited'],
@@ -108,6 +112,8 @@ final class UserCleaningOrderStoreRequest extends FormRequest
             if ($assignmentMode === null && $preferredWorkerId !== null && $numberOfWorkers !== null && (int) $numberOfWorkers !== 1) {
                 $validator->errors()->add('numberOfWorkers', 'Legacy preferred worker requests only support one worker.');
             }
+
+            $this->validateWorkerRoomAssignments($validator);
         });
     }
 

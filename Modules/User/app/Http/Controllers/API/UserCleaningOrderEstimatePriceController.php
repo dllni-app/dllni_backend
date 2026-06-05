@@ -7,6 +7,7 @@ namespace Modules\User\Http\Controllers\API;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
+use Modules\Cleaning\Support\WorkerRoomAssignmentPlanner;
 use Modules\User\Http\Requests\UserCleaningOrderEstimatePriceRequest;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
@@ -46,6 +47,29 @@ final class UserCleaningOrderEstimatePriceController
         $requiredWorkers = $assignmentMode === 'preferred_worker'
             ? 1
             : max(1, (int) ($validated['numberOfWorkers'] ?? $estimation['recommendation']['suggestedTeamSize'] ?? 1));
+        $workerRoomAssignments = null;
+
+        if (
+            array_key_exists('workerRoomAssignments', $validated)
+            && ! $service->isEventAssistanceType((string) $validated['propertyType'])
+        ) {
+            $plan = WorkerRoomAssignmentPlanner::plan(
+                (array) $validated['propertyDetails'],
+                is_array($validated['workerRoomAssignments']) ? $validated['workerRoomAssignments'] : null,
+                $assignmentMode,
+                $requiredWorkers,
+                isset($validated['preferredWorkerId']) ? (int) $validated['preferredWorkerId'] : null,
+            );
+
+            if ($plan['errors'] !== []) {
+                throw ValidationException::withMessages($plan['errors']);
+            }
+
+            $workerRoomAssignments = WorkerRoomAssignmentPlanner::withPricingPreview(
+                $plan['assignments'],
+                round((float) $pricing['basePrice'] + (float) $pricing['addonsTotal'], 2),
+            );
+        }
 
         return response()->json([
             'size' => [
@@ -62,6 +86,7 @@ final class UserCleaningOrderEstimatePriceController
                 'isFulfilled' => false,
             ],
             'recommendation' => $estimation['recommendation'] ?? null,
+            'workerRoomAssignments' => $workerRoomAssignments,
             'algorithmVersion' => $service->algorithmVersion(),
         ]);
     }

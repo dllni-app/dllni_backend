@@ -7,7 +7,6 @@ namespace Modules\Cleaning\Services;
 use App\Models\Worker;
 use App\Support\Broadcast\BroadcastAfterResponse;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use Modules\Cleaning\Enums\CleaningAssignmentMode;
@@ -18,13 +17,10 @@ use Modules\Cleaning\Events\CleaningBookingTeamUpdated;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingRoom;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
+use Modules\Cleaning\Support\WorkerRoomAssignmentPlanner;
 
 final class CleaningBookingTeamService
 {
-    private const ROOM_TYPE_ORDER = ['bedroom', 'bathroom', 'kitchen', 'living_room', 'balcony'];
-
-    private const ROOM_SIZE_ORDER = ['small', 'medium', 'large'];
-
     public function __construct(
         private readonly CleaningPricingCalculator $pricingCalculator,
     ) {}
@@ -48,9 +44,12 @@ final class CleaningBookingTeamService
         return CleaningAssignmentMode::OpenCount->value;
     }
 
-    public function syncRooms(CleaningBooking $booking): void
+    /**
+     * @param  array<int, array<string, mixed>>|null  $workerRoomAssignments
+     */
+    public function syncRooms(CleaningBooking $booking, ?array $workerRoomAssignments = null): void
     {
-        DB::transaction(function () use ($booking): void {
+        DB::transaction(function () use ($booking, $workerRoomAssignments): void {
             $booking = CleaningBooking::query()
                 ->whereKey($booking->id)
                 ->lockForUpdate()
@@ -60,9 +59,19 @@ final class CleaningBookingTeamService
                 ->where('cleaning_booking_id', $booking->id)
                 ->delete();
 
-            $rooms = $this->generateRoomBlueprints(is_array($booking->property_details) ? $booking->property_details : []);
+            $plan = WorkerRoomAssignmentPlanner::plan(
+                is_array($booking->property_details) ? $booking->property_details : [],
+                $workerRoomAssignments,
+                $this->resolveAssignmentMode($booking),
+                max(1, (int) ($booking->number_of_workers ?? 1)),
+                $booking->preferred_worker_id !== null ? (int) $booking->preferred_worker_id : null,
+            );
+            $rooms = $plan['derivedRooms'];
+            $roomPlans = $plan['roomPlans'];
 
             foreach ($rooms as $room) {
+                $plannedAssignment = $roomPlans[$room['room_key']] ?? null;
+
                 CleaningBookingRoom::query()->create([
                     'cleaning_booking_id' => $booking->id,
                     'room_key' => $room['room_key'],
@@ -70,6 +79,8 @@ final class CleaningBookingTeamService
                     'room_size' => $room['room_size'],
                     'display_label' => $room['display_label'],
                     'weight' => $room['weight'],
+                    'planned_worker_slot' => $plannedAssignment['workerSlot'] ?? null,
+                    'planned_preferred_worker_id' => $plannedAssignment['preferredWorkerId'] ?? null,
                     'assigned_worker_id' => null,
                     'assignment_source' => null,
                 ]);
@@ -311,6 +322,16 @@ final class CleaningBookingTeamService
         $acceptedAssignments = $assignmentQuery->get()->values();
         $totalRoomWeight = round((float) $rooms->sum(fn (CleaningBookingRoom $room): float => (float) $room->weight), 2);
 
+        if ($acceptedAssignments->isNotEmpty()) {
+            $this->applyPlannedAssignmentsToAcceptedWorkers($booking, $rooms, $acceptedAssignments);
+            $rooms = CleaningBookingRoom::query()
+                ->where('cleaning_booking_id', $booking->id)
+                ->lockForUpdate()
+                ->get()
+                ->values();
+            $totalRoomWeight = round((float) $rooms->sum(fn (CleaningBookingRoom $room): float => (float) $room->weight), 2);
+        }
+
         if ($finalizeBooking && $acceptedAssignments->isNotEmpty()) {
             $this->autoBalanceUnassignedRooms($rooms, $acceptedAssignments);
             $rooms = CleaningBookingRoom::query()
@@ -440,6 +461,44 @@ final class CleaningBookingTeamService
             'status' => $booking->status?->value ?? $booking->status,
             'updatedAt' => now()->toIso8601String(),
         ];
+    }
+
+    /**
+     * @return array<int, array{workerSlot:int, preferredWorkerId:?int, rooms:array<int, array{roomKey:string, roomType:string, roomSize:string}>, roomsWeight:float}>
+     */
+    public function exportPlannedWorkerRoomAssignments(CleaningBooking $booking): array
+    {
+        $rooms = $booking->relationLoaded('rooms')
+            ? $booking->rooms
+            : $booking->rooms()->orderBy('planned_worker_slot')->orderBy('room_key')->get();
+
+        $grouped = [];
+
+        foreach ($rooms as $room) {
+            if ($room->planned_worker_slot === null) {
+                continue;
+            }
+
+            $slot = (int) $room->planned_worker_slot;
+
+            $grouped[$slot] ??= [
+                'workerSlot' => $slot,
+                'preferredWorkerId' => $room->planned_preferred_worker_id !== null ? (int) $room->planned_preferred_worker_id : null,
+                'rooms' => [],
+                'roomsWeight' => 0.0,
+            ];
+
+            $grouped[$slot]['rooms'][] = [
+                'roomKey' => $room->room_key,
+                'roomType' => $room->room_type,
+                'roomSize' => (string) $room->room_size,
+            ];
+            $grouped[$slot]['roomsWeight'] = round($grouped[$slot]['roomsWeight'] + (float) $room->weight, 2);
+        }
+
+        ksort($grouped);
+
+        return array_values($grouped);
     }
 
     private function resolveAssignmentMode(CleaningBooking $booking): string
@@ -615,127 +674,83 @@ final class CleaningBookingTeamService
         }
     }
 
-    private function generateRoomBlueprints(array $propertyDetails): array
-    {
-        $breakdown = Arr::get($propertyDetails, 'room_size_breakdown');
-
-        if (is_array($breakdown)) {
-            return $this->generateBlueprintsFromBreakdown($breakdown);
-        }
-
-        return $this->generateBlueprintsFromLegacyFields($propertyDetails);
-    }
-
-    /**
-     * @param  array<string, mixed>  $breakdown
-     * @return array<int, array{room_key:string, room_type:string, room_size:?string, display_label:string, weight:float}>
-     */
-    private function generateBlueprintsFromBreakdown(array $breakdown): array
-    {
-        $rooms = [];
-
-        foreach (self::ROOM_TYPE_ORDER as $roomType) {
-            $buckets = Arr::get($breakdown, $roomType);
-            if (! is_array($buckets)) {
-                continue;
-            }
-
-            foreach (self::ROOM_SIZE_ORDER as $size) {
-                $count = max(0, (int) Arr::get($buckets, $size, 0));
-                for ($index = 1; $index <= $count; $index++) {
-                    $rooms[] = [
-                        'room_key' => sprintf('%s.%s.%d', $roomType, $size, $index),
-                        'room_type' => $roomType,
-                        'room_size' => $size,
-                        'display_label' => $this->displayLabel($roomType, $size, $index),
-                        'weight' => $this->roomWeight($roomType, $size),
-                    ];
-                }
-            }
-        }
-
-        return $rooms;
-    }
-
-    /**
-     * @param  array<string, mixed>  $propertyDetails
-     * @return array<int, array{room_key:string, room_type:string, room_size:?string, display_label:string, weight:float}>
-     */
-    private function generateBlueprintsFromLegacyFields(array $propertyDetails): array
-    {
-        $rooms = [];
-
-        $legacyGroups = [
-            'bedroom' => ['count' => max(0, (int) Arr::get($propertyDetails, 'bedrooms', 0)), 'size' => 'medium'],
-            'bathroom' => ['count' => max(0, (int) Arr::get($propertyDetails, 'bathrooms', 0)), 'size' => 'medium'],
-            'kitchen' => ['count' => max(0, (int) Arr::get($propertyDetails, 'kitchens', Arr::get($propertyDetails, 'kitchen_included') ? 1 : 0)), 'size' => 'medium'],
-            'living_room' => ['count' => 1, 'size' => mb_strtolower((string) Arr::get($propertyDetails, 'living_room_size', 'medium'))],
-            'balcony' => ['count' => max(0, (int) Arr::get($propertyDetails, 'balconies', 0)), 'size' => 'small'],
-            'room' => ['count' => max(0, (int) Arr::get($propertyDetails, 'rooms', 0)), 'size' => 'medium'],
-        ];
-
-        foreach ($legacyGroups as $roomType => $definition) {
-            $count = (int) $definition['count'];
-            $size = (string) $definition['size'];
-
-            if (! in_array($size, self::ROOM_SIZE_ORDER, true)) {
-                $size = 'medium';
-            }
-
-            for ($index = 1; $index <= $count; $index++) {
-                $rooms[] = [
-                    'room_key' => sprintf('%s.%s.%d', $roomType, $size, $index),
-                    'room_type' => $roomType,
-                    'room_size' => $size,
-                    'display_label' => $this->displayLabel($roomType, $size, $index),
-                    'weight' => $this->roomWeight($roomType, $size),
-                ];
-            }
-        }
-
-        return $rooms;
-    }
-
-    private function displayLabel(string $roomType, string $size, int $index): string
-    {
-        $label = match ($roomType) {
-            'bedroom' => 'Bedroom',
-            'bathroom' => 'Bathroom',
-            'kitchen' => 'Kitchen',
-            'living_room' => 'Living Room',
-            'balcony' => 'Balcony',
-            default => 'Room',
-        };
-
-        return sprintf('%s %d - %s', $label, $index, ucfirst($size));
-    }
-
-    private function roomWeight(string $roomType, string $size): float
-    {
-        $typeWeight = match ($roomType) {
-            'bedroom' => 1.0,
-            'bathroom' => 0.8,
-            'kitchen' => 1.1,
-            'living_room' => 1.2,
-            'balcony' => 0.5,
-            default => 1.0,
-        };
-
-        $sizeWeight = match ($size) {
-            'small' => 1.0,
-            'medium' => 1.5,
-            'large' => 2.0,
-            default => 1.0,
-        };
-
-        return round($typeWeight * $sizeWeight, 2);
-    }
-
     private function broadcastTeamUpdated(CleaningBooking $booking): void
     {
         BroadcastAfterResponse::send(new CleaningBookingTeamUpdated(
             $booking->id,
             $this->teamSummary($booking),
         ));
+    }
+
+    /**
+     * @param  EloquentCollection<int, CleaningBookingRoom>  $rooms
+     * @param  EloquentCollection<int, CleaningBookingWorkerAssignment>  $acceptedAssignments
+     */
+    private function applyPlannedAssignmentsToAcceptedWorkers(
+        CleaningBooking $booking,
+        EloquentCollection $rooms,
+        EloquentCollection $acceptedAssignments,
+    ): void {
+        $slotWorkerMap = $this->slotWorkerMap($booking, $acceptedAssignments);
+
+        if ($slotWorkerMap === []) {
+            return;
+        }
+
+        foreach ($rooms as $room) {
+            if ($room->assigned_worker_id !== null || $room->planned_worker_slot === null) {
+                continue;
+            }
+
+            $workerId = $slotWorkerMap[(int) $room->planned_worker_slot] ?? null;
+            if ($workerId === null) {
+                continue;
+            }
+
+            $room->forceFill([
+                'assigned_worker_id' => $workerId,
+                'assignment_source' => CleaningBookingRoomAssignmentSource::Customer,
+            ])->save();
+        }
+    }
+
+    /**
+     * @param  EloquentCollection<int, CleaningBookingWorkerAssignment>  $acceptedAssignments
+     * @return array<int, int>
+     */
+    private function slotWorkerMap(CleaningBooking $booking, EloquentCollection $acceptedAssignments): array
+    {
+        $orderedAssignments = $acceptedAssignments
+            ->sort(static function (CleaningBookingWorkerAssignment $left, CleaningBookingWorkerAssignment $right): int {
+                $leftAcceptedAt = $left->accepted_at?->getTimestamp() ?? 0;
+                $rightAcceptedAt = $right->accepted_at?->getTimestamp() ?? 0;
+
+                if ($leftAcceptedAt !== $rightAcceptedAt) {
+                    return $leftAcceptedAt <=> $rightAcceptedAt;
+                }
+
+                return $left->id <=> $right->id;
+            })
+            ->values();
+
+        $mapping = [];
+
+        if ($this->resolveAssignmentMode($booking) === CleaningAssignmentMode::PreferredWorker->value) {
+            $preferredWorkerId = $booking->preferred_worker_id !== null ? (int) $booking->preferred_worker_id : null;
+
+            foreach ($orderedAssignments as $assignment) {
+                if ($preferredWorkerId !== null && (int) $assignment->worker_id === $preferredWorkerId) {
+                    $mapping[1] = (int) $assignment->worker_id;
+
+                    return $mapping;
+                }
+            }
+        }
+
+        foreach ($orderedAssignments as $index => $assignment) {
+            $mapping[$index + 1] = (int) $assignment->worker_id;
+        }
+
+        return $mapping;
     }
 }

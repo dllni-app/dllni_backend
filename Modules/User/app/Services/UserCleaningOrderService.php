@@ -24,6 +24,7 @@ use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningTimeWarning;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
+use Modules\Cleaning\Support\WorkerRoomAssignmentPlanner;
 use Modules\Cleaning\Services\CleaningBookingTeamService;
 use Modules\Cleaning\Services\CleaningLifecycleNotificationService;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -83,6 +84,16 @@ final class UserCleaningOrderService
                 $suggestedWorkers,
                 $resolvedAssignmentMode
             );
+            $plannedWorkerRoomAssignments = $this->plannedWorkerRoomAssignments(
+                $normalizedPropertyType,
+                $normalizedPropertyDetails,
+                $validated['workerRoomAssignments'] ?? null,
+                $resolvedAssignmentMode,
+                $requestedWorkers,
+                $resolvedAssignmentMode === 'preferred_worker'
+                    ? ($normalizedInput['preferredWorkerId'] !== null ? (int) $normalizedInput['preferredWorkerId'] : null)
+                    : null,
+            );
             $storedPricing = $preferredWorkerPricing ? $pricing : [
                 'basePrice' => $pricing['basePrice'],
                 'addonsTotal' => $pricing['addonsTotal'],
@@ -127,7 +138,7 @@ final class UserCleaningOrderService
 
             $this->syncBookingServicesFromPricing($booking, (array) ($pricing['serviceLines'] ?? []));
 
-            $this->teamService->syncRooms($booking);
+            $this->teamService->syncRooms($booking, $plannedWorkerRoomAssignments);
 
             return $booking->fresh();
         });
@@ -330,7 +341,18 @@ final class UserCleaningOrderService
                 $booking = $booking->fresh();
 
                 if (! $hasAcceptedAssignments) {
-                    $this->teamService->syncRooms($booking);
+                    $plannedWorkerRoomAssignments = array_key_exists('workerRoomAssignments', $validated)
+                        ? $this->plannedWorkerRoomAssignments(
+                            (string) $booking->property_type,
+                            is_array($booking->property_details) ? $booking->property_details : [],
+                            $validated['workerRoomAssignments'] ?? null,
+                            $booking->resolvedAssignmentMode(),
+                            max(1, (int) ($booking->number_of_workers ?? 1)),
+                            $booking->preferred_worker_id !== null ? (int) $booking->preferred_worker_id : null,
+                        )
+                        : $this->teamService->exportPlannedWorkerRoomAssignments($booking);
+
+                    $this->teamService->syncRooms($booking, $plannedWorkerRoomAssignments);
                 }
             }
 
@@ -752,6 +774,45 @@ final class UserCleaningOrderService
             'isPricingFinal' => false,
             'totalPrice' => round(((float) $pricing['basePrice']) + ((float) $pricing['addonsTotal']), 2),
         ];
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>|null  $workerRoomAssignments
+     * @return array<int, array<string, mixed>>|null
+     */
+    private function plannedWorkerRoomAssignments(
+        string $propertyType,
+        array $propertyDetails,
+        ?array $workerRoomAssignments,
+        string $assignmentMode,
+        int $numberOfWorkers,
+        ?int $preferredWorkerId,
+    ): ?array {
+        if ($this->estimationService->isEventAssistanceType($propertyType) || $workerRoomAssignments === null) {
+            return null;
+        }
+
+        $plan = WorkerRoomAssignmentPlanner::plan(
+            $propertyDetails,
+            $workerRoomAssignments,
+            $assignmentMode,
+            $numberOfWorkers,
+            $preferredWorkerId,
+        );
+
+        if ($plan['errors'] !== []) {
+            throw ValidationException::withMessages($plan['errors']);
+        }
+
+        return array_map(static fn (array $assignment): array => [
+            'workerSlot' => $assignment['workerSlot'],
+            'preferredWorkerId' => $assignment['preferredWorkerId'],
+            'rooms' => array_map(static fn (array $room): array => [
+                'roomKey' => $room['roomKey'],
+                'roomType' => $room['roomType'],
+                'roomSize' => $room['roomSize'],
+            ], $assignment['rooms']),
+        ], $plan['assignments']);
     }
 
     /**

@@ -7,10 +7,13 @@ namespace Modules\User\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
+use Modules\User\Http\Requests\Concerns\ValidatesWorkerRoomAssignments;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrderEstimatePriceRequest extends FormRequest
 {
+    use ValidatesWorkerRoomAssignments;
+
     public function authorize(): bool
     {
         return true;
@@ -64,6 +67,7 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             'preferredWorkerId' => ['nullable', 'exists:workers,id'],
             'assignmentMode' => ['nullable', 'string', Rule::in(['preferred_worker', 'open_count'])],
             'numberOfWorkers' => ['nullable', 'integer', 'min:1', 'max:20'],
+            ...$this->workerRoomAssignmentRules(),
         ];
     }
 
@@ -91,6 +95,8 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             if ($assignmentMode === null && $preferredWorkerId !== null && $numberOfWorkers !== null && (int) $numberOfWorkers !== 1) {
                 $validator->errors()->add('numberOfWorkers', 'Legacy preferred worker requests only support one worker.');
             }
+
+            $this->validateWorkerRoomAssignments($validator);
         });
     }
 

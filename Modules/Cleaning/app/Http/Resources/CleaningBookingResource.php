@@ -78,6 +78,7 @@ final class CleaningBookingResource extends JsonResource
                     fn (CleaningBookingWorkerAssignment $assignment): array => $this->serializeWorkerAssignment($assignment)
                 )->values();
             }),
+            'workerRoomAssignments' => $this->whenLoaded('rooms', fn () => $this->serializeWorkerRoomAssignments()),
             'roomAssignments' => $this->whenLoaded('rooms', function () {
                 return $this->rooms->map(
                     fn (CleaningBookingRoom $room): array => $this->serializeRoomAssignment($room)
@@ -187,12 +188,52 @@ final class CleaningBookingResource extends JsonResource
             'roomSize' => $room->room_size,
             'displayLabel' => $room->display_label,
             'weight' => (float) $room->weight,
+            'plannedWorkerSlot' => $room->planned_worker_slot !== null ? (int) $room->planned_worker_slot : null,
+            'plannedPreferredWorkerId' => $room->planned_preferred_worker_id,
             'assignedWorkerId' => $room->assigned_worker_id,
             'assignmentSource' => $room->assignment_source?->value ?? $room->assignment_source,
             'assignedWorker' => $room->relationLoaded('assignedWorker') && $room->assignedWorker
                 ? $this->serializeWorker($room->assignedWorker)
                 : null,
         ];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function serializeWorkerRoomAssignments(): array
+    {
+        $grouped = [];
+
+        foreach ($this->rooms as $room) {
+            if ($room->planned_worker_slot === null) {
+                continue;
+            }
+
+            $slot = (int) $room->planned_worker_slot;
+
+            $grouped[$slot] ??= [
+                'workerSlot' => $slot,
+                'preferredWorkerId' => $room->planned_preferred_worker_id,
+                'roomsWeight' => 0.0,
+                'rooms' => [],
+            ];
+
+            $grouped[$slot]['rooms'][] = [
+                'roomKey' => $room->room_key,
+                'roomType' => $room->room_type,
+                'roomSize' => $room->room_size,
+            ];
+            $grouped[$slot]['roomsWeight'] = round($grouped[$slot]['roomsWeight'] + (float) $room->weight, 2);
+        }
+
+        ksort($grouped);
+
+        return array_values(array_map(function (array $assignment): array {
+            usort($assignment['rooms'], static fn (array $left, array $right): int => strcmp((string) $left['roomKey'], (string) $right['roomKey']));
+
+            return $assignment;
+        }, $grouped));
     }
 
     /**

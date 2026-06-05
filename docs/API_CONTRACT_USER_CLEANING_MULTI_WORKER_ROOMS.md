@@ -132,7 +132,7 @@ Example response:
   },
   "workerAssignments": [
     {
-      "id": 9001,
+      "id": 9001,![alt text](image-3.png)
       "workerId": 44,
       "status": "accepted",
       "acceptedAt": "2026-06-03T18:30:00+03:00",

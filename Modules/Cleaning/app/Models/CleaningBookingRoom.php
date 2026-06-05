@@ -21,6 +21,8 @@ final class CleaningBookingRoom extends Model
         'room_size',
         'display_label',
         'weight',
+        'planned_worker_slot',
+        'planned_preferred_worker_id',
         'assigned_worker_id',
         'assignment_source',
     ];
@@ -39,6 +41,7 @@ final class CleaningBookingRoom extends Model
     {
         return [
             'weight' => 'decimal:2',
+            'planned_worker_slot' => 'integer',
             'assignment_source' => CleaningBookingRoomAssignmentSource::class,
         ];
     }
