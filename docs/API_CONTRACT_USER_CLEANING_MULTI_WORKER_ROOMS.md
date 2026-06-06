@@ -114,6 +114,7 @@ Validation notes:
 - `workerAssignments`
 - `roomAssignments`
 - `myAssignment`
+- `worker_assignment` alias for `myAssignment`
 
 Example response:
 
@@ -191,11 +192,25 @@ Example response:
     "workerAmount": 20500,
     "currency": "SYP",
     "roomIds": [501]
+  },
+  "worker_assignment": {
+    "id": 9001,
+    "workerId": 44,
+    "status": "accepted",
+    "acceptedAt": "2026-06-03T18:30:00+03:00",
+    "roomCount": 1,
+    "roomsWeight": 1.5,
+    "serviceShareAmount": 18000,
+    "travelFee": 2500,
+    "adminMarginAmount": 1500,
+    "workerAmount": 20500,
+    "currency": "SYP",
+    "roomIds": [501]
   }
 }
 ```
 
-`myAssignment` is resolved from the authenticated worker. For legacy single-worker bookings, it can fall back to a synthetic assignment even when `workerAssignments` is empty.
+`myAssignment` is resolved from the authenticated worker. For legacy single-worker bookings, it can fall back to a synthetic assignment even when `workerAssignments` is empty. `worker_assignment` is an additive snake_case alias of the same object for clients that prefer that naming style.
 
 ---
 
@@ -291,4 +306,3 @@ Rules:
 - `Modules/Cleaning/app/Http/Resources/CleaningBookingResource.php`
 - `Modules/Cleaning/app/Http/Controllers/API/CleaningBookingController.php`
 - `Modules/User/app/Http/Controllers/API/UserCleaningOrderRoomAssignmentsController.php`
-

@@ -65,8 +65,8 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
             'serviceIds.*' => ['integer', 'distinct', 'exists:cleaning_services,id'],
             'scheduledDate' => ['sometimes', 'date', 'after_or_equal:today'],
             'scheduledTime' => ['sometimes', 'date_format:H:i'],
-            'addressLatitude' => ['sometimes', 'required_with:preferredWorkerId', 'required_if:assignmentMode,preferred_worker', 'numeric', 'between:-90,90'],
-            'addressLongitude' => ['sometimes', 'required_with:preferredWorkerId', 'required_if:assignmentMode,preferred_worker', 'numeric', 'between:-180,180'],
+            'addressLatitude' => ['sometimes', 'numeric', 'between:-90,90'],
+            'addressLongitude' => ['sometimes', 'numeric', 'between:-180,180'],
             'preferredWorkerId' => ['sometimes', 'nullable', 'exists:workers,id'],
             'numberOfWorkers' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:20'],
             'assignmentMode' => ['sometimes', 'nullable', 'string', Rule::in(['preferred_worker', 'open_count'])],
@@ -88,11 +88,7 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
             $preferredWorkerId = $this->input('preferredWorkerId');
             $numberOfWorkers = $this->input('numberOfWorkers');
 
-            if ($assignmentMode === 'preferred_worker') {
-                if (! is_numeric($preferredWorkerId) || (int) $preferredWorkerId <= 0) {
-                    $validator->errors()->add('preferredWorkerId', 'The preferred worker is required for preferred worker mode.');
-                }
-
+            if ($assignmentMode === 'preferred_worker' && is_numeric($preferredWorkerId) && (int) $preferredWorkerId > 0) {
                 if ($numberOfWorkers !== null && (int) $numberOfWorkers !== 1) {
                     $validator->errors()->add('numberOfWorkers', 'Preferred worker mode only allows one worker.');
                 }

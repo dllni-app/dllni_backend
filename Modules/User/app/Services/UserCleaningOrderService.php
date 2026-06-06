@@ -661,11 +661,6 @@ final class UserCleaningOrderService
     private function resolveAssignmentMode(array $validated, ?CleaningBooking $booking = null): string
     {
         $explicitMode = $this->normalizedAssignmentMode($validated['assignmentMode'] ?? null);
-
-        if ($explicitMode !== null) {
-            return $explicitMode;
-        }
-
         $preferredWorkerId = array_key_exists('preferredWorkerId', $validated)
             ? $validated['preferredWorkerId']
             : $booking?->preferred_worker_id;
@@ -673,8 +668,20 @@ final class UserCleaningOrderService
             ? (int) $validated['numberOfWorkers']
             : (int) ($booking?->number_of_workers ?? 1);
 
+        if ($explicitMode === 'open_count') {
+            return 'open_count';
+        }
+
         if ($preferredWorkerId !== null && $numberOfWorkers <= 1) {
             return 'preferred_worker';
+        }
+
+        if ($explicitMode === 'preferred_worker') {
+            return 'open_count';
+        }
+
+        if ($explicitMode !== null) {
+            return $explicitMode;
         }
 
         return 'open_count';

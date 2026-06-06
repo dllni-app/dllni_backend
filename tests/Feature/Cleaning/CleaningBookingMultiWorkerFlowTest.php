@@ -92,6 +92,7 @@ it('keeps the booking pending after the first worker accepts and finalizes when 
     expect($acceptOne->json('data.workerAcceptance.accepted'))->toBe(1);
     expect($acceptOne->json('data.workerAcceptance.remaining'))->toBe(1);
     expect($acceptOne->json('data.myAssignment.roomIds'))->toEqualCanonicalizing([$roomIds[0]]);
+    expect($acceptOne->json('data.worker_assignment.roomIds'))->toEqualCanonicalizing([$roomIds[0]]);
 
     $worker2User = User::factory()->create(['email' => 'multi-worker-2@example.com']);
     Worker::factory()->create([
@@ -149,6 +150,7 @@ it('allows an accepted worker to claim rooms while the booking is still pending'
     expect($claim->json('data.workerAcceptance.accepted'))->toBe(1);
     expect($claim->json('data.workerAcceptance.remaining'))->toBe(1);
     expect($claim->json('data.myAssignment.roomIds'))->toEqualCanonicalizing([$roomIds[1], $roomIds[2]]);
+    expect($claim->json('data.worker_assignment.roomIds'))->toEqualCanonicalizing([$roomIds[1], $roomIds[2]]);
     expect(collect($claim->json('data.roomAssignments'))
         ->whereIn('id', [$roomIds[1], $roomIds[2]])
         ->pluck('assignedWorkerId'))->not->toContain(null);

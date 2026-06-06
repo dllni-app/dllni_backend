@@ -131,6 +131,32 @@ it('creates a deep cleaning order and persists the mode in the response payload'
     expect((float) $response->json('order.totalPrice'))->toBe((float) $priceResponse->json('pricing.totalPrice'));
 });
 
+it('creates an open count order when preferred worker mode is requested without a preferred worker', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $response = postJson('/api/v1/user/cleaning/orders', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'address' => 'Damascus - Mazzeh',
+            'location_name' => 'Home',
+            'rooms' => 2,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+        ],
+        'assignmentMode' => 'preferred_worker',
+        'scheduledDate' => now()->addDay()->format('Y-m-d'),
+        'scheduledTime' => '09:00',
+        'termsAccepted' => true,
+    ]);
+
+    $response->assertCreated();
+    expect($response->json('order.assignmentMode'))->toBe('open_count');
+    expect($response->json('order.preferredWorker'))->toBeNull();
+    expect($response->json('order.isPricingFinal'))->toBeFalse();
+});
+
 it('rejects calculated cleaning values supplied by the client when creating an order', function (): void {
     Carbon::setTestNow(Carbon::parse('2026-04-10 09:00:00'));
 
@@ -351,6 +377,27 @@ it('returns estimated cleaning price from backend algorithm', function (): void 
     expect((bool) $response->json('pricing.isPricingFinal'))->toBeFalse();
     expect((float) $response->json('pricing.totalPrice'))->toBe(920.0);
     expect((string) $response->json('algorithmVersion'))->toBe('2026-06-03-v3');
+});
+
+it('allows preferred worker mode to fall back to open count when no preferred worker is selected', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $response = postJson('/api/v1/user/cleaning/orders/estimate-price', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'rooms' => 2,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+        ],
+        'assignmentMode' => 'preferred_worker',
+    ]);
+
+    $response->assertOk();
+    expect($response->json('pricing.isPricingFinal'))->toBeFalse();
+    expect($response->json('pricing.travelFee'))->toBe(0);
+    expect($response->json('pricing.distanceKm'))->toBeNull();
 });
 
 it('accepts team worker room assignments on estimate-price and returns weighted pricing preview', function (): void {

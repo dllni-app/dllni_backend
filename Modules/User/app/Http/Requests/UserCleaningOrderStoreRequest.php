@@ -68,9 +68,9 @@ final class UserCleaningOrderStoreRequest extends FormRequest
             'serviceIds.*' => ['integer', 'distinct', 'exists:cleaning_services,id'],
             'scheduledDate' => ['required', 'date', 'after_or_equal:today'],
             'scheduledTime' => ['required', 'date_format:H:i'],
-            'addressLatitude' => ['nullable', 'required_with:preferredWorkerId', 'required_if:assignmentMode,preferred_worker', 'numeric', 'between:-90,90'],
-            'addressLongitude' => ['nullable', 'required_with:preferredWorkerId', 'required_if:assignmentMode,preferred_worker', 'numeric', 'between:-180,180'],
-            'preferredWorkerId' => ['nullable', 'exists:workers,id', 'required_if:assignmentMode,preferred_worker'],
+            'addressLatitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'addressLongitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'preferredWorkerId' => ['nullable', 'exists:workers,id'],
             'assignmentMode' => ['nullable', 'string', Rule::in(['preferred_worker', 'open_count'])],
             'numberOfWorkers' => ['nullable', 'integer', 'min:1', 'max:20'],
             ...$this->workerRoomAssignmentRules(),
@@ -95,11 +95,7 @@ final class UserCleaningOrderStoreRequest extends FormRequest
             $preferredWorkerId = $this->input('preferredWorkerId');
             $numberOfWorkers = $this->input('numberOfWorkers');
 
-            if ($assignmentMode === 'preferred_worker') {
-                if (! is_numeric($preferredWorkerId) || (int) $preferredWorkerId <= 0) {
-                    $validator->errors()->add('preferredWorkerId', 'The preferred worker is required for preferred worker mode.');
-                }
-
+            if ($assignmentMode === 'preferred_worker' && is_numeric($preferredWorkerId) && (int) $preferredWorkerId > 0) {
                 if ($numberOfWorkers !== null && (int) $numberOfWorkers !== 1) {
                     $validator->errors()->add('numberOfWorkers', 'Preferred worker mode only allows one worker.');
                 }

@@ -19,6 +19,7 @@ final class CleaningBookingResource extends JsonResource
     public function toArray(Request $request): array
     {
         $normalizedPropertyDetails = $this->normalizedPropertyDetails();
+        $myAssignment = $this->serializeMyAssignment($request);
 
         return [
             'id' => $this->id,
@@ -84,7 +85,8 @@ final class CleaningBookingResource extends JsonResource
                     fn (CleaningBookingRoom $room): array => $this->serializeRoomAssignment($room)
                 )->values();
             }),
-            'myAssignment' => $this->serializeMyAssignment($request),
+            'myAssignment' => $myAssignment,
+            'worker_assignment' => $myAssignment,
             'services' => $this->whenLoaded('services'),
             'addons' => $this->whenLoaded('addons'),
             'billingPolicy' => $this->whenLoaded('billingPolicy'),
