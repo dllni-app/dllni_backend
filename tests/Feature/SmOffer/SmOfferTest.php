@@ -2,22 +2,21 @@
 
 declare(strict_types=1);
 
-use App\Models\User;
 use Database\Factories\SmOfferFactory;
 use Database\Factories\SmOfferProductFactory;
 use Database\Factories\SmOrderFactory;
 use Database\Factories\SmOrderItemFactory;
 use Database\Factories\SmProductFactory;
 use Database\Factories\SmStoreFactory;
-use Laravel\Sanctum\Sanctum;
 
 beforeEach(function (): void {
-    $user = User::factory()->create();
-    Sanctum::actingAs($user);
+    $context = actingAsSupermarketSeller();
+    $this->user = $context->user;
+    $this->store = $context->store;
 });
 
 it('lists offers', function (): void {
-    SmOfferFactory::new()->count(3)->create();
+    SmOfferFactory::new()->count(3)->create(['store_id' => $this->store->id]);
 
     $response = $this->getJson('/api/v1/sm-offers?perPage=10');
 
@@ -26,12 +25,11 @@ it('lists offers', function (): void {
 });
 
 it('creates an offer', function (): void {
-    $store = SmStoreFactory::new()->create();
-    $productOne = SmProductFactory::new()->create(['store_id' => $store->id]);
-    $productTwo = SmProductFactory::new()->create(['store_id' => $store->id]);
+    $productOne = SmProductFactory::new()->create(['store_id' => $this->store->id]);
+    $productTwo = SmProductFactory::new()->create(['store_id' => $this->store->id]);
 
     $payload = [
-        'storeId' => $store->id,
+        'storeId' => $this->store->id,
         'name' => 'Summer Sale',
         'offerType' => 'Discount',
         'discountPercent' => 20,
@@ -63,12 +61,11 @@ it('creates an offer', function (): void {
 });
 
 it('updates an offer', function (): void {
-    $store = SmStoreFactory::new()->create();
-    $oldProduct = SmProductFactory::new()->create(['store_id' => $store->id]);
-    $newProduct = SmProductFactory::new()->create(['store_id' => $store->id]);
+    $oldProduct = SmProductFactory::new()->create(['store_id' => $this->store->id]);
+    $newProduct = SmProductFactory::new()->create(['store_id' => $this->store->id]);
 
     $offer = SmOfferFactory::new()->create([
-        'store_id' => $store->id,
+        'store_id' => $this->store->id,
         'name' => 'Old Offer',
     ]);
     SmOfferProductFactory::new()->create([
@@ -102,7 +99,7 @@ it('updates an offer', function (): void {
 });
 
 it('deletes an offer', function (): void {
-    $offer = SmOfferFactory::new()->create();
+    $offer = SmOfferFactory::new()->create(['store_id' => $this->store->id]);
 
     $response = $this->deleteJson("/api/v1/sm-offers/{$offer->id}");
 
@@ -111,17 +108,16 @@ it('deletes an offer', function (): void {
 });
 
 it('returns offer products and affected orders counts', function (): void {
-    $store = SmStoreFactory::new()->create();
     $otherStore = SmStoreFactory::new()->create();
     $offer = SmOfferFactory::new()->create([
-        'store_id' => $store->id,
+        'store_id' => $this->store->id,
         'starts_at' => now()->subDay(),
         'ends_at' => now()->addDay(),
     ]);
 
-    $productA = SmProductFactory::new()->create(['store_id' => $store->id]);
-    $productB = SmProductFactory::new()->create(['store_id' => $store->id]);
-    $otherProduct = SmProductFactory::new()->create(['store_id' => $store->id]);
+    $productA = SmProductFactory::new()->create(['store_id' => $this->store->id]);
+    $productB = SmProductFactory::new()->create(['store_id' => $this->store->id]);
+    $otherProduct = SmProductFactory::new()->create(['store_id' => $this->store->id]);
 
     SmOfferProductFactory::new()->create([
         'offer_id' => $offer->id,
@@ -134,7 +130,7 @@ it('returns offer products and affected orders counts', function (): void {
     ]);
 
     $affectedOrderOne = SmOrderFactory::new()->create([
-        'store_id' => $store->id,
+        'store_id' => $this->store->id,
         'created_at' => now(),
     ]);
 
@@ -144,7 +140,7 @@ it('returns offer products and affected orders counts', function (): void {
     ]);
 
     $affectedOrderTwo = SmOrderFactory::new()->create([
-        'store_id' => $store->id,
+        'store_id' => $this->store->id,
         'created_at' => now(),
     ]);
 
@@ -159,7 +155,7 @@ it('returns offer products and affected orders counts', function (): void {
     ]);
 
     $outsideWindowOrder = SmOrderFactory::new()->create([
-        'store_id' => $store->id,
+        'store_id' => $this->store->id,
         'created_at' => now()->subDays(10),
     ]);
 
@@ -179,7 +175,7 @@ it('returns offer products and affected orders counts', function (): void {
     ]);
 
     $nonOfferProductOrder = SmOrderFactory::new()->create([
-        'store_id' => $store->id,
+        'store_id' => $this->store->id,
         'created_at' => now(),
     ]);
 

@@ -24,6 +24,10 @@ final class UserNotificationsSeeder extends Seeder
             '+963944000222',
             'user@dllni.sy',
         ]);
+        $this->seedCleaningWorkerNotifications();
+        $this->seedRestaurantSellerNotifications();
+        $this->seedSupermarketSellerNotifications();
+        $this->seedAppUserNotifications();
     }
 
     private function seedAdminNotifications(): void

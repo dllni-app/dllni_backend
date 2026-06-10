@@ -41,7 +41,7 @@ final class WorkerTransactionsController
             })
             ->with([
                 'customer',
-                'workerAssignments' => function (Builder $assignments) use ($worker): void {
+                'workerAssignments' => function ($assignments) use ($worker): void {
                     $assignments
                         ->where('worker_id', $worker->id)
                         ->where('status', CleaningBookingWorkerAssignmentStatus::Accepted->value);
@@ -64,7 +64,7 @@ final class WorkerTransactionsController
             })
             ->where('status', CleaningBookingStatus::Completed)
             ->with([
-                'workerAssignments' => function (Builder $assignments) use ($worker): void {
+                'workerAssignments' => function ($assignments) use ($worker): void {
                     $assignments
                         ->where('worker_id', $worker->id)
                         ->where('status', CleaningBookingWorkerAssignmentStatus::Accepted->value);

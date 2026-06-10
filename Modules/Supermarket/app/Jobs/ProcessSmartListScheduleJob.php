@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Supermarket\Jobs;
 
 use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -202,7 +203,7 @@ final class ProcessSmartListScheduleJob implements ShouldQueue
     /**
      * @param  array<int, int>  $weekDays
      */
-    private function nextWeeklyRunAt(array $weekDays, string $startTime, Carbon $now): ?Carbon
+    private function nextWeeklyRunAt(array $weekDays, string $startTime, CarbonInterface $now): ?Carbon
     {
         $selectedWeekDays = array_values(array_unique(array_map(static fn (int $day): int => max(0, min(6, $day)), $weekDays)));
 
@@ -226,7 +227,7 @@ final class ProcessSmartListScheduleJob implements ShouldQueue
     /**
      * @param  array<int, int>  $monthDays
      */
-    private function nextMonthlyRunAt(array $monthDays, string $startTime, Carbon $now): ?Carbon
+    private function nextMonthlyRunAt(array $monthDays, string $startTime, CarbonInterface $now): ?Carbon
     {
         $selectedMonthDays = array_values(array_unique(array_map(static fn (int $day): int => max(1, min(31, $day)), $monthDays)));
 

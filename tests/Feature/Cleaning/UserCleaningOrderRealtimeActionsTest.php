@@ -183,7 +183,7 @@ it('requests a completion extension', function () {
 
     $response->assertOk();
     expect($response->json('data.status'))->toBe('time_extension_requested');
-    expect($response->json('data.extensionFeeTotal'))->toBe(0.0);
+    expect((float) $response->json('data.extensionFeeTotal'))->toBe(0.0);
     $this->assertDatabaseHas('cleaning_bookings', [
         'id' => $booking->id,
         'status' => CleaningBookingStatus::TimeExtensionRequested->value,

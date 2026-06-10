@@ -31,5 +31,7 @@
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
+        <env name="DEEP_LINK_CANONICAL_HOST" value="dllni.mustafafares.com"/>
+        <env name="DEEP_LINK_CANONICAL_SCHEME" value="https"/>
     </php>
 </phpunit>

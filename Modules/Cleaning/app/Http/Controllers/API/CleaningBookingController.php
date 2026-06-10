@@ -51,7 +51,7 @@ final class CleaningBookingController
     }
 
     /** @throws Throwable */
-    public function store(CleaningBookingRequest $request): CleaningBookingResource
+    public function store(CleaningBookingRequest $request): JsonResponse
     {
         $booking = $this->cleaningBookingService->store(
             CleaningBookingData::from($request->validated())
@@ -59,7 +59,7 @@ final class CleaningBookingController
 
         return CleaningBookingResource::make(
             $this->loadBookingDetails($booking)
-        );
+        )->response()->setStatusCode(Response::HTTP_CREATED);
     }
 
     public function show(CleaningBooking $cleaning_booking): CleaningBookingResource

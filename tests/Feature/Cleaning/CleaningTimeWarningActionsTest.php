@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 use App\Models\User;
 use App\Models\Worker;
-use Illuminate\Support\Facades\Event;
+use App\Jobs\NotifyWorkerExtensionRequestJob;
 use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
-use Modules\Cleaning\Events\ServiceExtensionRequested;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningTimeWarning;
@@ -333,8 +332,7 @@ it('lists pending extension requests for current worker', function () {
     expect($ids)->toContain($pendingWarning->id);
 });
 
-it('dispatches ServiceExtensionRequested when a time warning is created', function () {
-    Event::fake([ServiceExtensionRequested::class]);
+it('dispatches worker extension notification when a time warning is created', function () {
     Queue::fake();
 
     $workerUser = User::factory()->create(['email' => 'worker-ext-realtime@example.com']);
@@ -357,12 +355,5 @@ it('dispatches ServiceExtensionRequested when a time warning is created', functi
         'quoted_currency' => 'SYP',
     ]);
 
-    Event::assertDispatched(ServiceExtensionRequested::class, function (ServiceExtensionRequested $event) use ($booking, $worker, $warning): bool {
-        return $event->warningId === $warning->id
-            && $event->cleaningBookingId === $booking->id
-            && $event->workerId === $worker->id
-            && $event->requestedMinutes === 40
-            && $event->additionalAmount === 3600.0
-            && $event->currency === 'SYP';
-    });
+    Queue::assertPushed(NotifyWorkerExtensionRequestJob::class);
 });

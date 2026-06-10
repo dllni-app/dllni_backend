@@ -2,19 +2,18 @@
 
 declare(strict_types=1);
 
-use App\Models\User;
 use Database\Factories\SmCouponFactory;
 use Database\Factories\SmOrderFactory;
 use Database\Factories\SmStoreFactory;
-use Laravel\Sanctum\Sanctum;
 
 beforeEach(function (): void {
-    $user = User::factory()->create();
-    Sanctum::actingAs($user);
+    $context = actingAsSupermarketSeller();
+    $this->user = $context->user;
+    $this->store = $context->store;
 });
 
 it('lists coupons', function (): void {
-    SmCouponFactory::new()->count(3)->create();
+    SmCouponFactory::new()->count(3)->create(['store_id' => $this->store->id]);
 
     $response = $this->getJson('/api/v1/sm-coupons?perPage=10');
 
@@ -23,10 +22,8 @@ it('lists coupons', function (): void {
 });
 
 it('creates a coupon', function (): void {
-    $store = SmStoreFactory::new()->create();
-
     $payload = [
-        'storeId' => $store->id,
+        'storeId' => $this->store->id,
         'code' => 'SAVE20',
         'type' => 'Percentage',
         'percent' => 20,
@@ -40,11 +37,10 @@ it('creates a coupon', function (): void {
 });
 
 it('rejects duplicate coupon codes', function (): void {
-    SmCouponFactory::new()->create(['code' => 'UNIQUE']);
+    SmCouponFactory::new()->create(['store_id' => $this->store->id, 'code' => 'UNIQUE']);
 
-    $store = SmStoreFactory::new()->create();
     $payload = [
-        'storeId' => $store->id,
+        'storeId' => $this->store->id,
         'code' => 'UNIQUE',
         'type' => 'Fixed',
         'value' => 10,
@@ -57,7 +53,7 @@ it('rejects duplicate coupon codes', function (): void {
 });
 
 it('deletes a coupon', function (): void {
-    $coupon = SmCouponFactory::new()->create();
+    $coupon = SmCouponFactory::new()->create(['store_id' => $this->store->id]);
 
     $response = $this->deleteJson("/api/v1/sm-coupons/{$coupon->id}");
 
@@ -66,24 +62,23 @@ it('deletes a coupon', function (): void {
 });
 
 it('returns weekly analysis for active and inactive coupons per day', function (): void {
-    $store = SmStoreFactory::new()->create();
     $anotherStore = SmStoreFactory::new()->create();
     $baseDate = now()->startOfDay();
 
     $storeCouponOne = SmCouponFactory::new()->create([
-        'store_id' => $store->id,
+        'store_id' => $this->store->id,
         'is_active' => true,
         'created_at' => $baseDate->copy()->subDays(6)->addHour(),
     ]);
 
     $storeCouponTwo = SmCouponFactory::new()->create([
-        'store_id' => $store->id,
+        'store_id' => $this->store->id,
         'is_active' => false,
         'created_at' => $baseDate->copy()->subDays(3)->addHours(2),
     ]);
 
     SmCouponFactory::new()->create([
-        'store_id' => $store->id,
+        'store_id' => $this->store->id,
         'is_active' => true,
         'created_at' => $baseDate->copy()->addHours(3),
     ]);
@@ -95,20 +90,20 @@ it('returns weekly analysis for active and inactive coupons per day', function (
     ]);
 
     $outOfRangeStoreCoupon = SmCouponFactory::new()->create([
-        'store_id' => $store->id,
+        'store_id' => $this->store->id,
         'is_active' => false,
         'created_at' => $baseDate->copy()->subDays(7),
     ]);
 
     SmOrderFactory::new()->create([
-        'store_id' => $store->id,
+        'store_id' => $this->store->id,
         'coupon_id' => $storeCouponOne->id,
         'discount_amount' => 100.00,
         'created_at' => $baseDate->copy()->subDays(5)->addHour(),
     ]);
 
     SmOrderFactory::new()->create([
-        'store_id' => $store->id,
+        'store_id' => $this->store->id,
         'coupon_id' => $storeCouponTwo->id,
         'discount_amount' => 23.45,
         'created_at' => $baseDate->copy()->subDays(1)->addHours(2),
@@ -122,20 +117,20 @@ it('returns weekly analysis for active and inactive coupons per day', function (
     ]);
 
     SmOrderFactory::new()->create([
-        'store_id' => $store->id,
+        'store_id' => $this->store->id,
         'coupon_id' => $outOfRangeStoreCoupon->id,
         'discount_amount' => 50.00,
         'created_at' => $baseDate->copy()->subDays(8),
     ]);
 
     SmOrderFactory::new()->create([
-        'store_id' => $store->id,
+        'store_id' => $this->store->id,
         'coupon_id' => null,
         'discount_amount' => 500.00,
         'created_at' => $baseDate->copy()->subDays(1),
     ]);
 
-    $response = $this->getJson("/api/v1/sm-coupons/weekly-analysis?storeId={$store->id}");
+    $response = $this->getJson("/api/v1/sm-coupons/weekly-analysis?storeId={$this->store->id}");
 
     $response->assertOk();
 
