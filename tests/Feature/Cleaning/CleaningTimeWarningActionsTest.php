@@ -76,7 +76,7 @@ it('rejects an extension request with message', function () {
     $booking = CleaningBooking::factory()->create([
         'worker_id' => $worker->id,
         'billing_policy_id' => $this->billingPolicy->id,
-        'status' => CleaningBookingStatus::InProgress,
+        'status' => CleaningBookingStatus::TimeExtensionRequested,
         'total_price' => 250.00,
         'extension_fee_total' => 0,
     ]);
@@ -111,6 +111,8 @@ it('rejects an extension request with message', function () {
     $booking->refresh();
     expect((float) $booking->extension_fee_total)->toBe(0.0);
     expect((float) $booking->total_price)->toBe(250.0);
+    expect($booking->status)->toBe(CleaningBookingStatus::Completed);
+    expect($booking->work_finished_at)->not->toBeNull();
     expect($warning->fresh()->price_applied_at)->toBeNull();
 });
 
@@ -147,7 +149,7 @@ it('returns 422 when extension request already responded', function () {
     $booking = CleaningBooking::factory()->create([
         'worker_id' => $worker->id,
         'billing_policy_id' => $this->billingPolicy->id,
-        'status' => CleaningBookingStatus::InProgress,
+        'status' => CleaningBookingStatus::TimeExtensionRequested,
     ]);
 
     $warning = CleaningTimeWarning::create([
@@ -271,6 +273,8 @@ it('rejects an extension request without message', function () {
         'id' => $warning->id,
         'worker_response' => 'commit_current_time',
     ]);
+
+    expect($booking->fresh()->status)->toBe(CleaningBookingStatus::Completed);
 });
 
 it('returns 403 when user has no worker on extension accept', function () {

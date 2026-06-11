@@ -13,7 +13,7 @@ final class CleaningExtendedTimePricingService
     /**
      * @return array{
      *     requestedMinutes:int,
-     *     matchedRange:array{id:int,startMinutes:int,endMinutes:int,label:string},
+     *     matchedRange:array{id:int,startMinutes:int,endMinutes:int,label:string,price:float,currency:string},
      *     calculatedExtensionPrice:float,
      *     currency:string
      * }
@@ -40,6 +40,8 @@ final class CleaningExtendedTimePricingService
             ]);
         }
 
+        $currency = (string) config('app.currency', 'SYP');
+
         return [
             'requestedMinutes' => $minutes,
             'matchedRange' => [
@@ -47,10 +49,35 @@ final class CleaningExtendedTimePricingService
                 'startMinutes' => (int) $range->start_minutes,
                 'endMinutes' => (int) $range->end_minutes,
                 'label' => $range->label(),
+                'price' => round((float) $range->price, 2),
+                'currency' => $currency,
             ],
             'calculatedExtensionPrice' => round((float) $range->price, 2),
-            'currency' => (string) config('app.currency', 'SYP'),
+            'currency' => $currency,
         ];
+    }
+
+    /**
+     * @return array<int, array{id:int,startMinutes:int,endMinutes:int,label:string,price:float,currency:string}>
+     */
+    public function ranges(): array
+    {
+        $this->ensureFixedRanges();
+
+        $currency = (string) config('app.currency', 'SYP');
+
+        return CleaningExtendedTimePrice::query()
+            ->orderBy('sort_order')
+            ->get()
+            ->map(static fn (CleaningExtendedTimePrice $range): array => [
+                'id' => (int) $range->id,
+                'startMinutes' => (int) $range->start_minutes,
+                'endMinutes' => (int) $range->end_minutes,
+                'label' => $range->label(),
+                'price' => round((float) $range->price, 2),
+                'currency' => $currency,
+            ])
+            ->all();
     }
 
     public function ensureFixedRanges(): void

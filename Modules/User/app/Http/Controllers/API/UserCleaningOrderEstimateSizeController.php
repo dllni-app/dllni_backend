@@ -7,13 +7,17 @@ namespace Modules\User\Http\Controllers\API;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
+use Modules\Cleaning\Services\CleaningExtendedTimePricingService;
 use Modules\User\Http\Requests\UserCleaningOrderEstimateSizeRequest;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrderEstimateSizeController
 {
-    public function __invoke(UserCleaningOrderEstimateSizeRequest $request, UserCleaningOrderEstimationService $service): JsonResponse
-    {
+    public function __invoke(
+        UserCleaningOrderEstimateSizeRequest $request,
+        UserCleaningOrderEstimationService $service,
+        CleaningExtendedTimePricingService $extendedTimePricing,
+    ): JsonResponse {
         $validated = $request->validated();
         try {
             $estimation = $service->estimate(
@@ -37,6 +41,7 @@ final class UserCleaningOrderEstimateSizeController
                 'estimatedMinutes' => (int) round($estimation['estimatedHours'] * 60),
             ],
             'recommendation' => $estimation['recommendation'] ?? null,
+            'extendedTimeRanges' => $extendedTimePricing->ranges(),
         ]);
     }
 }

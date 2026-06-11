@@ -17,6 +17,7 @@ use Modules\Cleaning\Enums\ServiceCategory;
 use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningExtendedTimePrice;
 use Modules\Cleaning\Models\CleaningService;
 use Modules\Cleaning\Models\ServicePricing;
 use Modules\User\Services\UserCleaningOrderEstimationService;
@@ -266,6 +267,11 @@ it('returns estimated size and time for cleaning order wizard', function (): voi
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
+    CleaningExtendedTimePrice::query()
+        ->where('start_minutes', 0)
+        ->where('end_minutes', 15)
+        ->update(['price' => 2250.75]);
+
     $response = postJson('/api/v1/user/cleaning/orders/estimate-size', [
         'propertyType' => 'house',
         'propertyDetails' => [
@@ -279,12 +285,22 @@ it('returns estimated size and time for cleaning order wizard', function (): voi
     $response->assertOk()->assertJsonStructure([
         'size' => ['estimatedSqm', 'sizeTier'],
         'estimation' => ['estimatedHours', 'estimatedMinutes'],
+        'extendedTimeRanges' => [
+            '*' => ['id', 'startMinutes', 'endMinutes', 'label', 'price', 'currency'],
+        ],
     ]);
 
     expect((float) $response->json('size.estimatedSqm'))->toBe(171.0);
     expect((string) $response->json('size.sizeTier'))->toBe('large');
     expect((float) $response->json('estimation.estimatedHours'))->toBe(5.5);
     expect((int) $response->json('estimation.estimatedMinutes'))->toBe(330);
+    expect($response->json('extendedTimeRanges.0'))->toMatchArray([
+        'startMinutes' => 0,
+        'endMinutes' => 15,
+        'label' => '0 - 15 minutes',
+        'price' => 2250.75,
+        'currency' => (string) config('app.currency', 'SYP'),
+    ]);
 });
 
 it('rejects calculated cleaning values supplied by the client when updating an order', function (): void {
@@ -349,6 +365,11 @@ it('returns estimated cleaning price from backend algorithm', function (): void 
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
+    CleaningExtendedTimePrice::query()
+        ->where('start_minutes', 16)
+        ->where('end_minutes', 30)
+        ->update(['price' => 4500.25]);
+
     $response = postJson('/api/v1/user/cleaning/orders/estimate-price', [
         'propertyType' => 'apartment',
         'propertyDetails' => [
@@ -364,6 +385,9 @@ it('returns estimated cleaning price from backend algorithm', function (): void 
     $response->assertOk()->assertJsonStructure([
         'size' => ['estimatedSqm', 'estimatedHours', 'sizeTier'],
         'pricing' => ['basePrice', 'travelFee', 'addonsTotal', 'distanceKm', 'adminMargin', 'isPricingFinal', 'totalPrice', 'currency'],
+        'extendedTimeRanges' => [
+            '*' => ['id', 'startMinutes', 'endMinutes', 'label', 'price', 'currency'],
+        ],
         'algorithmVersion',
     ]);
 
@@ -377,6 +401,13 @@ it('returns estimated cleaning price from backend algorithm', function (): void 
     expect((float) $response->json('pricing.adminMargin'))->toBe(0.0);
     expect((bool) $response->json('pricing.isPricingFinal'))->toBeFalse();
     expect((float) $response->json('pricing.totalPrice'))->toBe(920.0);
+    expect($response->json('extendedTimeRanges.1'))->toMatchArray([
+        'startMinutes' => 16,
+        'endMinutes' => 30,
+        'label' => '16 - 30 minutes',
+        'price' => 4500.25,
+        'currency' => (string) config('app.currency', 'SYP'),
+    ]);
     expect((string) $response->json('algorithmVersion'))->toBe(UserCleaningOrderEstimationService::ALGORITHM_VERSION);
 });
 

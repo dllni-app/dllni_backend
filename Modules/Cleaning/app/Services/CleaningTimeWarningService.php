@@ -6,6 +6,7 @@ namespace Modules\Cleaning\Services;
 
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
+use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningTimeWarningResponse;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningTimeWarning;
@@ -54,15 +55,33 @@ final class CleaningTimeWarningService
 
     public function reject(CleaningTimeWarning $warning, ?string $message = null): CleaningTimeWarning
     {
-        return DB::transaction(static function () use ($warning, $message) {
+        return DB::transaction(static function () use ($warning, $message): CleaningTimeWarning {
+            $warning = CleaningTimeWarning::query()
+                ->lockForUpdate()
+                ->findOrFail($warning->id);
+
             if ($warning->worker_responded_at !== null) {
                 throw new InvalidArgumentException('Extension request has already been responded to.');
             }
+
+            $booking = $warning->booking;
+            if (! $booking instanceof CleaningBooking) {
+                throw new InvalidArgumentException('Extension request booking is invalid.');
+            }
+
+            $booking = CleaningBooking::query()
+                ->lockForUpdate()
+                ->findOrFail($booking->id);
 
             $warning->update([
                 'worker_response' => CleaningTimeWarningResponse::CommitCurrentTime,
                 'worker_responded_at' => now(),
                 'worker_reject_message' => $message,
+            ]);
+
+            $booking->update([
+                'status' => CleaningBookingStatus::Completed,
+                'work_finished_at' => $booking->work_finished_at ?? now(),
             ]);
 
             return $warning->fresh();

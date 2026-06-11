@@ -24,6 +24,8 @@ it('returns the configured price for each fixed cleaning extension minute range'
             'startMinutes' => $startMinutes,
             'endMinutes' => $endMinutes,
             'label' => "{$startMinutes} - {$endMinutes} minutes",
+            'price' => $price,
+            'currency' => (string) config('app.currency', 'SYP'),
         ])
         ->and($quote['calculatedExtensionPrice'])->toBe($price);
 })->with([
@@ -38,3 +40,21 @@ it('returns the configured price for each fixed cleaning extension minute range'
 it('fails validation when cleaning extension minutes exceed 90', function (): void {
     app(CleaningExtendedTimePricingService::class)->quote(91);
 })->throws(ValidationException::class);
+
+it('returns all fixed cleaning extension ranges with configured database prices', function (): void {
+    CleaningExtendedTimePrice::query()
+        ->where('start_minutes', 46)
+        ->where('end_minutes', 60)
+        ->update(['price' => 9876.5]);
+
+    $ranges = app(CleaningExtendedTimePricingService::class)->ranges();
+
+    expect($ranges)->toHaveCount(6)
+        ->and($ranges[3])->toMatchArray([
+            'startMinutes' => 46,
+            'endMinutes' => 60,
+            'label' => '46 - 60 minutes',
+            'price' => 9876.5,
+            'currency' => (string) config('app.currency', 'SYP'),
+        ]);
+});

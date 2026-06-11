@@ -72,10 +72,27 @@ Fixed minute ranges:
 Important Flutter rules:
 
 - Send `additionalMinutes` as an integer from `0` to `90`.
-- Prefer offering only the configured ranges in the UI, for example 15, 30, 45, 60, 75, 90 minutes.
+- Prefer rendering the selectable values from `extendedTimeRanges` returned by the estimate/generate endpoints.
 - The backend returns the matched range and calculated price.
 - Display the returned price from `extensionPricing.calculatedExtensionPrice` or warning `additionalAmount`.
 - Do not derive the final price from an hourly rate or from local app constants.
+
+Estimate/generate responses now include the DB-managed ranges:
+
+```json
+{
+  "extendedTimeRanges": [
+    {
+      "id": 2,
+      "startMinutes": 16,
+      "endMinutes": 30,
+      "label": "16 - 30 minutes",
+      "price": 4500,
+      "currency": "SYP"
+    }
+  ]
+}
+```
 
 ## Customer App API
 
@@ -139,7 +156,9 @@ Success response shape:
       "id": 2,
       "startMinutes": 16,
       "endMinutes": 30,
-      "label": "16 - 30 minutes"
+      "label": "16 - 30 minutes",
+      "price": 4500,
+      "currency": "SYP"
     },
     "calculatedExtensionPrice": 4500,
     "currency": "SYP"
