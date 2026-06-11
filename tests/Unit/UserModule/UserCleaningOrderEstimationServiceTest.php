@@ -314,3 +314,21 @@ it('normalizes balcony from room size breakdown', function (): void {
     expect($details['room_size_breakdown']['balcony']['small'])->toBe(2);
     expect($details['room_size_breakdown']['balcony']['medium'])->toBe(1);
 });
+
+it('normalizes partial room size breakdown by filling missing room types and buckets with zero', function (): void {
+    $service = app(UserCleaningOrderEstimationService::class);
+
+    $details = $service->normalizePropertyDetailsForStorage('villa', [
+        'room_size_breakdown' => [
+            'bedroom' => ['large' => 1],
+            'bathroom' => ['medium' => 1],
+        ],
+    ]);
+
+    expect($details['rooms'])->toBe(1);
+    expect($details['bathrooms'])->toBe(1);
+    expect($details['kitchens'])->toBe(0);
+    expect($details['room_size_breakdown']['bedroom']['small'])->toBe(0);
+    expect($details['room_size_breakdown']['bedroom']['large'])->toBe(1);
+    expect($details['room_size_breakdown']['living_room']['medium'])->toBe(0);
+});

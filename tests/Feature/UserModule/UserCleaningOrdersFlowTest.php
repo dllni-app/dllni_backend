@@ -560,6 +560,98 @@ it('creates order with room_size_breakdown and persists normalized breakdown-der
     expect($response->json('order.propertyDetails.room_size_breakdown.bedroom.large'))->toBe(1);
 });
 
+it('accepts partial room_size_breakdown for estimate-price and treats missing counts as zero', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $preferredWorker = Worker::factory()->create([
+        'home_address' => 'Preferred Worker Home',
+        'home_latitude' => 36.205,
+        'home_longitude' => 37.12,
+    ]);
+
+    $response = postJson('/api/v1/user/cleaning/orders/estimate-price', [
+        'propertyType' => 'villa',
+        'propertyDetails' => [
+            'bedrooms' => 2,
+            'rooms' => 1,
+            'bathrooms' => 1,
+            'balconies' => 0,
+            'living_room_size' => 'small',
+            'room_size_breakdown' => [
+                'bedroom' => [
+                    'large' => 1,
+                ],
+                'bathroom' => [
+                    'medium' => 1,
+                ],
+            ],
+            'cleaning_mode' => 'deep',
+        ],
+        'addressLatitude' => 36.2001697,
+        'addressLongitude' => 37.1169824,
+        'assignmentMode' => 'preferred_worker',
+        'preferredWorkerId' => $preferredWorker->id,
+        'numberOfWorkers' => 1,
+        'workerRoomAssignments' => [
+            [
+                'workerSlot' => 1,
+                'preferredWorkerId' => $preferredWorker->id,
+                'rooms' => [
+                    ['roomKey' => 'bedroom.large.1', 'roomType' => 'bedroom', 'roomSize' => 'large'],
+                    ['roomKey' => 'bathroom.medium.1', 'roomType' => 'bathroom', 'roomSize' => 'medium'],
+                ],
+            ],
+        ],
+    ]);
+
+    $response->assertOk();
+    expect(collect($response->json('workerRoomAssignments.0.rooms'))->pluck('roomKey')->all())->toBe([
+        'bathroom.medium.1',
+        'bedroom.large.1',
+    ]);
+});
+
+it('creates order with partial room_size_breakdown and persists zero-filled normalized breakdown', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $response = postJson('/api/v1/user/cleaning/orders', [
+        'propertyType' => 'villa',
+        'propertyDetails' => [
+            'address' => 'Aleppo - New Aleppo',
+            'location_name' => 'Villa',
+            'bedrooms' => 2,
+            'rooms' => 1,
+            'bathrooms' => 1,
+            'balconies' => 0,
+            'living_room_size' => 'small',
+            'room_size_breakdown' => [
+                'bedroom' => [
+                    'large' => 1,
+                ],
+                'bathroom' => [
+                    'medium' => 1,
+                ],
+            ],
+            'cleaning_mode' => 'deep',
+        ],
+        'scheduledDate' => now()->addDay()->format('Y-m-d'),
+        'scheduledTime' => '10:00',
+        'termsAccepted' => true,
+    ]);
+
+    $response->assertCreated();
+    expect($response->json('order.propertyDetails.bedrooms'))->toBe(2);
+    expect($response->json('order.propertyDetails.rooms'))->toBe(1);
+    expect($response->json('order.propertyDetails.bathrooms'))->toBe(1);
+    expect($response->json('order.propertyDetails.kitchens'))->toBe(0);
+    expect($response->json('order.propertyDetails.living_room_size'))->toBe('small');
+    expect($response->json('order.propertyDetails.room_size_breakdown.bedroom.small'))->toBe(0);
+    expect($response->json('order.propertyDetails.room_size_breakdown.bedroom.large'))->toBe(1);
+    expect($response->json('order.propertyDetails.room_size_breakdown.kitchen.medium'))->toBe(0);
+});
+
 it('creates team order with worker room assignments and persists planned slots', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
@@ -691,7 +783,24 @@ it('validates room_size_breakdown shape and rejects invalid bucket keys', functi
         ],
     ])->assertUnprocessable()->assertJsonValidationErrors([
         'propertyDetails.room_size_breakdown.bedroom',
-        'propertyDetails.room_size_breakdown.bedroom.small',
+    ]);
+});
+
+it('validates provided partial room_size_breakdown bucket values', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    postJson('/api/v1/user/cleaning/orders/estimate-price', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'room_size_breakdown' => [
+                'bedroom' => ['large' => -1],
+                'bathroom' => ['medium' => 1.5],
+            ],
+        ],
+    ])->assertUnprocessable()->assertJsonValidationErrors([
+        'propertyDetails.room_size_breakdown.bedroom.large',
+        'propertyDetails.room_size_breakdown.bathroom.medium',
     ]);
 });
 

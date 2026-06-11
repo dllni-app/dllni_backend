@@ -616,7 +616,7 @@ final class UserCleaningOrderEstimationService
         foreach ($types as $type) {
             $roomTypeCounts = Arr::get($value, $type);
             if (! is_array($roomTypeCounts)) {
-                return null;
+                $roomTypeCounts = [];
             }
 
             $normalized[$type] = [];
