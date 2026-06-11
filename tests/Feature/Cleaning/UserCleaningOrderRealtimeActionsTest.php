@@ -27,7 +27,7 @@ beforeEach(function () {
     ]);
 });
 
-it('confirms start verification with a 4-digit code', function () {
+it('confirms start verification with a 4-digit code and waits for worker start confirmation', function () {
     Event::fake([CleaningBookingTrackingUpdated::class, ArrivalVerified::class]);
 
     $customer = User::factory()->create(['email' => 'customer-start-verify@example.com']);
@@ -59,11 +59,12 @@ it('confirms start verification with a 4-digit code', function () {
     ]);
 
     $response->assertOk();
-    expect($response->json('data.status'))->toBe('in_progress');
+    expect($response->json('data.status'))->toBe('awaiting_worker_start_confirmation');
     expect($response->json('message'))->toBeString();
     $this->assertDatabaseHas('cleaning_bookings', [
         'id' => $booking->id,
-        'status' => CleaningBookingStatus::InProgress->value,
+        'status' => CleaningBookingStatus::AwaitingWorkerStartConfirmation->value,
+        'work_started_at' => null,
     ]);
     $this->assertDatabaseHas('booking_security_codes', [
         'booking_id' => $booking->id,
@@ -72,12 +73,13 @@ it('confirms start verification with a 4-digit code', function () {
 
     Event::assertDispatched(CleaningBookingTrackingUpdated::class, function (CleaningBookingTrackingUpdated $event) use ($booking): bool {
         return $event->cleaningBookingId === $booking->id
-            && $event->tracking['status'] === CleaningBookingStatus::InProgress->value;
+            && $event->tracking['status'] === CleaningBookingStatus::AwaitingWorkerStartConfirmation->value;
     });
 
     Event::assertDispatched(ArrivalVerified::class, function (ArrivalVerified $event) use ($booking, $worker): bool {
         return $event->cleaningBookingId === $booking->id
-            && $event->workerId === $worker->id;
+            && $event->workerId === $worker->id
+            && $event->status === CleaningBookingStatus::AwaitingWorkerStartConfirmation->value;
     });
 });
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Http\Controllers\API;
 
 use App\Enums\GenderPreference;
+use App\Enums\WorkerPreferredWorkType;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Database\Eloquent\Builder;
@@ -15,6 +16,7 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningTimeWarning;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
+use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class WorkerHomepageController
 {
@@ -129,6 +131,14 @@ final class WorkerHomepageController
             ->where('status', CleaningBookingStatus::Pending)
             ->whereDate('scheduled_date', '>=', $today)
             ->where(fn ($q) => $q->whereNull('worker_id')->orWhere('worker_id', $worker->id))
+            ->when(
+                $this->preferredWorkType($worker) === WorkerPreferredWorkType::Cleaning,
+                fn (Builder $query): Builder => $query->where('property_type', '!=', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
+            )
+            ->when(
+                $this->preferredWorkType($worker) === WorkerPreferredWorkType::Events,
+                fn (Builder $query): Builder => $query->where('property_type', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
+            )
             ->whereDoesntHave('workerAssignments', fn (Builder $assignments) => $assignments
                 ->where('worker_id', $worker->id)
                 ->where('status', 'accepted'))
@@ -289,6 +299,13 @@ final class WorkerHomepageController
         }
 
         return max(0.0, round((float) ($booking->total_price ?? 0) - (float) ($booking->admin_margin_amount ?? 0), 2));
+    }
+
+    private function preferredWorkType(object $worker): WorkerPreferredWorkType
+    {
+        return $worker->preferred_work_type instanceof WorkerPreferredWorkType
+            ? $worker->preferred_work_type
+            : WorkerPreferredWorkType::tryFrom((string) ($worker->preferred_work_type ?? WorkerPreferredWorkType::Both->value)) ?? WorkerPreferredWorkType::Both;
     }
 
     private function bookingAdminAmount(CleaningBooking $booking, int $workerId): float

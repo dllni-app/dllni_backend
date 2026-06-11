@@ -10,6 +10,7 @@ use Illuminate\Support\Arr;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingRoom;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
+use Modules\User\Services\UserCleaningOrderEstimationService;
 
 /**
  * @mixin CleaningBooking
@@ -39,6 +40,7 @@ final class CleaningBookingResource extends JsonResource
             'status' => $orderStatus,
             'order_status' => $orderStatus,
             'worker_order_status' => $workerOrderStatus,
+            'type' => $this->property_type === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE ? 'events' : 'cleaning',
             'required_workers_count' => $teamSummary['required'],
             'accepted_workers_count' => $teamSummary['accepted'],
             'pending_workers_count' => $teamSummary['remaining'],

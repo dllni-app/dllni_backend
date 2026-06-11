@@ -15,11 +15,12 @@ This document covers **customer-only** HTTP actions that pair with worker lifecy
 2. Worker **start travel** Ã¢â€ â€™ still `worker_assigned`, `startedTravelAt` set.
 3. Worker **arrive** Ã¢â€ â€™ status becomes **`awaiting_start_verification`**, `arrivedAt` set. Server broadcasts gate + tracking events (see Ã‚Â§4).
 4. Worker calls **`GET /api/v1/cleaning-bookings/{id}/security-code`** (worker token) and reads the **4-digit** code to the customer.
-5. Customer submits **`POST Ã¢â‚¬Â¦/cleaning/orders/{order}/start-verification/confirm`** with `{ "code": "0123" }`. On success the booking becomes **`in_progress`** (work starts from the customer appÃ¢â‚¬â„¢s perspective). Server broadcasts **`ArrivalVerified`** and **`CleaningBookingTrackingUpdated`**.
-6. Worker finishes on site Ã¢â€ â€™ **`POST Ã¢â‚¬Â¦/cleaning-bookings/{id}/complete`** Ã¢â€ â€™ status **`awaiting_customer_completion`**, `workFinishedAt` set. Server broadcasts **`cleaning_order.awaiting_customer_completion`** and tracking.
-7. Customer either **confirms** completion, **rejects** (reopens job), or **requests extension** using the endpoints in Ã‚Â§3.
+5. Customer submits **`POST Ã¢â‚¬Â¦/cleaning/orders/{order}/start-verification/confirm`** with `{ "code": "0123" }`. On success the booking becomes **`awaiting_worker_start_confirmation`**; work does not start yet. Server broadcasts **`ArrivalVerified`** and **`CleaningBookingTrackingUpdated`**.
+6. Worker confirms start with **`POST Ã¢â‚¬Â¦/cleaning-bookings/{id}/start-work`**. When the required worker approvals are complete, the booking becomes **`in_progress`** and `workStartedAt` is set.
+7. Worker finishes on site Ã¢â€ â€™ **`POST Ã¢â‚¬Â¦/cleaning-bookings/{id}/complete`** Ã¢â€ â€™ status **`awaiting_customer_completion`**, `workFinishedAt` set. Server broadcasts **`cleaning_order.awaiting_customer_completion`** and tracking.
+8. Customer either **confirms** completion, **rejects** (reopens job), or **requests extension** using the endpoints in Ã‚Â§3.
 
-**Note:** While the worker app may still call **`POST Ã¢â‚¬Â¦/cleaning-bookings/{id}/start-work`** from `worker_assigned` without going through arrival + code (legacy compatibility), the recommended flow is: arrive Ã¢â€ â€™ code Ã¢â€ â€™ customer confirm. After the customer confirms the code, the booking is already `in_progress`; the worker should not call `start-work` again for that booking.
+**Note:** While the worker app may still call **`POST Ã¢â‚¬Â¦/cleaning-bookings/{id}/start-work`** from `worker_assigned` without going through arrival + code (legacy compatibility), the recommended flow is: arrive Ã¢â€ â€™ code Ã¢â€ â€™ customer confirm Ã¢â€ â€™ worker start confirm.
 
 ---
 
@@ -53,9 +54,9 @@ All paths are under **`/api/v1/user`**. `{order}` is the cleaning booking **nume
 | ----- | ---- | ----- |
 | code | string | Required; exactly **4** digits (`0-9`). |
 
-**Valid booking status:** `awaiting_start_verification` only.
+**Valid booking status:** `awaiting_start_verification` for first verification; duplicate submissions may return the current booking while already in `awaiting_worker_start_confirmation`.
 
-**Behavior:** Verifies the code against the latest `booking_security_codes` row (HMAC-SHA256 with `APP_KEY`, TTL, attempt counter). On match, marks the code consumed and sets booking to **`in_progress`**, sets `workStartedAt` and `customerConfirmedAt`.
+**Behavior:** Verifies the code against the latest `booking_security_codes` row (HMAC-SHA256 with `APP_KEY`, TTL, attempt counter). On match, marks the code consumed and sets booking to **`awaiting_worker_start_confirmation`**, sets `customerConfirmedAt`, and leaves `workStartedAt` null until worker start confirmation.
 
 **Errors:**
 
@@ -114,6 +115,7 @@ String values on booking `status` (camelCase in JSON per API resources):
 | ----- | ----------------- |
 | `worker_assigned` | Worker assigned; may be en route. |
 | `awaiting_start_verification` | Worker arrived; waiting for customer 4-digit code. |
+| `awaiting_worker_start_confirmation` | Customer entered the correct code; waiting for worker to confirm start. |
 | `in_progress` | Service in progress. |
 | `awaiting_customer_completion` | Worker marked work finished; customer must confirm / reject / extend. |
 | `time_extension_requested` | Customer asked for more time from completion gate. |
@@ -140,7 +142,7 @@ String values on booking `status` (camelCase in JSON per API resources):
 | `WorkerArrived` | Worker taps arrive | cleaningBookingId, arrivedAt |
 | `cleaning_order.awaiting_start_verification` | After worker **arrive** | cleaningBookingId, workerId, status (`awaiting_start_verification`), expiresAt (ISO; security code expiry hint, may be null) |
 | `cleaning_order.awaiting_customer_completion` | After worker **complete** | cleaningBookingId, workerId, status (`awaiting_customer_completion`), expiresAt (server-chosen completion window hint) |
-| `ArrivalVerified` | After customer **start-verification confirm** | cleaningBookingId, workerId, arrivedAt, version |
+| `ArrivalVerified` | After customer **start-verification confirm** | cleaningBookingId, workerId, arrivedAt, status (`awaiting_worker_start_confirmation`), version |
 | `CompletionDecisionMade` | After customer completion **confirm** / **reject** / **extend-time** | cleaningBookingId, workerId, decision (`approved` \| `rejected` \| `extension_requested`), message, decidedAt, version |
 | `ServiceExtensionRequested` | When backend creates a cleaning time warning row for the booking | warningId, cleaningBookingId, workerId, requestedMinutes, additionalAmount, currency, version |
 

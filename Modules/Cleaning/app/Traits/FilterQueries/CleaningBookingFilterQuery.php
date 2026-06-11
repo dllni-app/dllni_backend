@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Traits\FilterQueries;
 
 use App\Enums\GenderPreference;
+use App\Enums\WorkerPreferredWorkType;
 use Illuminate\Database\Eloquent\Builder;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\User\Services\UserCleaningOrderEstimationService;
 use Spatie\QueryBuilder\AllowedFilter;
 use Spatie\QueryBuilder\AllowedSort;
 use Spatie\QueryBuilder\QueryBuilder;
@@ -92,16 +94,28 @@ trait CleaningBookingFilterQuery
             return $query->whereRaw('1 = 0');
         }
 
-        return $query->where(function (Builder $q) use ($worker): void {
+        $preferredWorkType = $worker->preferred_work_type instanceof WorkerPreferredWorkType
+            ? $worker->preferred_work_type
+            : WorkerPreferredWorkType::tryFrom((string) ($worker->preferred_work_type ?? WorkerPreferredWorkType::Both->value)) ?? WorkerPreferredWorkType::Both;
+
+        return $query->where(function (Builder $q) use ($worker, $preferredWorkType): void {
             $q->where('worker_id', $worker->id)
                 ->orWhereHas('workerAssignments', function (Builder $assignments) use ($worker): void {
                     $assignments
                         ->where('worker_id', $worker->id)
                         ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
                 })
-                ->orWhere(function (Builder $pending) use ($worker): void {
+                ->orWhere(function (Builder $pending) use ($worker, $preferredWorkType): void {
                     $pending->where('status', CleaningBookingStatus::Pending)
                         ->whereNull('worker_id')
+                        ->when(
+                            $preferredWorkType === WorkerPreferredWorkType::Cleaning,
+                            fn (Builder $query): Builder => $query->where('property_type', '!=', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
+                        )
+                        ->when(
+                            $preferredWorkType === WorkerPreferredWorkType::Events,
+                            fn (Builder $query): Builder => $query->where('property_type', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
+                        )
                         ->where(function (Builder $genderQuery) use ($worker): void {
                             $genderQuery
                                 ->whereNull('gender_preference')

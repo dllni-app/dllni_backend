@@ -32,7 +32,7 @@ final class LoginController
         }
 
         return response()->json([
-            'data' => UserResource::make($user->load('media')),
+            'data' => UserResource::make($user->load(['media', 'worker'])),
             'token' => $user->createToken('auth_token')->plainTextToken,
         ]);
     }

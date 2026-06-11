@@ -46,7 +46,7 @@ final class LoginVerifyController
         $token = $user->createToken('user-api')->plainTextToken;
 
         return response()->json([
-            'user' => UserResource::make($user),
+            'user' => UserResource::make($user->load('worker')),
             'token' => $token,
         ]);
     }

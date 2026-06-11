@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Workers\Tables;
 
+use App\Enums\WorkerPreferredWorkType;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\IconColumn;
@@ -33,6 +34,16 @@ final class WorkersTable
                 TextColumn::make('gender')
                     ->label(__('cleaning_admin.workers.fields.gender'))
                     ->searchable(),
+                TextColumn::make('preferred_work_type')
+                    ->label(__('cleaning_admin.workers.fields.preferred_work_type'))
+                    ->formatStateUsing(function ($state): string {
+                        $value = $state instanceof WorkerPreferredWorkType
+                            ? $state->value
+                            : (string) ($state ?? WorkerPreferredWorkType::Both->value);
+
+                        return WorkerPreferredWorkType::options()[$value] ?? $value;
+                    })
+                    ->badge(),
                 TextColumn::make('user.phone')
                     ->label(self::headerLabel(
                         __('cleaning_admin.workers.fields.phone'),

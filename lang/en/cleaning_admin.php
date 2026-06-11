@@ -91,6 +91,7 @@ return [
             'first_name' => 'First name',
             'user' => 'User',
             'gender' => 'Gender',
+            'preferred_work_type' => 'Preferred work type',
             'bio' => 'Bio',
             'home_address' => 'Home address',
             'home_latitude' => 'Home latitude',
@@ -116,6 +117,11 @@ return [
         'gender_options' => [
             'male' => 'Male',
             'female' => 'Female',
+        ],
+        'preferred_work_type_options' => [
+            'cleaning' => 'Cleaning',
+            'events' => 'Events',
+            'both' => 'Both',
         ],
         'reviews' => 'Customer Reviews',
         'customer_ratings' => 'Worker Ratings of Customers',
@@ -728,6 +734,7 @@ return [
             'pending' => 'Pending',
             'worker_assigned' => 'Worker assigned',
             'awaiting_start_verification' => 'Awaiting start verification',
+            'awaiting_worker_start_confirmation' => 'Awaiting worker start confirmation',
             'in_progress' => 'In progress',
             'awaiting_customer_completion' => 'Awaiting customer completion',
             'time_extension_requested' => 'Time extension requested',

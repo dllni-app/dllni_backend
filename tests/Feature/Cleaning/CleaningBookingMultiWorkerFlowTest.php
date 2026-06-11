@@ -173,14 +173,14 @@ it('moves to in progress only after the customer verifies start and all accepted
         'code' => $code,
     ])
         ->assertOk()
-        ->assertJsonPath('data.status', CleaningBookingStatus::AwaitingStartVerification->value)
+        ->assertJsonPath('data.status', CleaningBookingStatus::AwaitingWorkerStartConfirmation->value)
         ->assertJsonPath('data.start_approved_workers_count', 0)
         ->assertJsonPath('data.not_start_approved_workers_count', 2);
 
     Sanctum::actingAs($worker1User);
     postJson("/api/v1/cleaning-bookings/{$orderId}/start-work")
         ->assertOk()
-        ->assertJsonPath('data.status', CleaningBookingStatus::AwaitingStartVerification->value)
+        ->assertJsonPath('data.status', CleaningBookingStatus::AwaitingWorkerStartConfirmation->value)
         ->assertJsonPath('data.worker_order_status', CleaningBookingWorkerAssignmentStatus::StartApproved->value)
         ->assertJsonPath('data.start_approved_workers_count', 1)
         ->assertJsonPath('data.not_start_approved_workers_count', 1);

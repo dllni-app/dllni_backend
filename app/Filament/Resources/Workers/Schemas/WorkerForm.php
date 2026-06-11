@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Workers\Schemas;
 
+use App\Enums\WorkerPreferredWorkType;
 use Filament\Schemas\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -34,6 +35,11 @@ final class WorkerForm
                                 'female' => __('cleaning_admin.workers.gender_options.female'),
                             ])
                             ->nullable(),
+                        Select::make('preferred_work_type')
+                            ->label(__('cleaning_admin.workers.fields.preferred_work_type'))
+                            ->options(WorkerPreferredWorkType::options())
+                            ->default(WorkerPreferredWorkType::Both->value)
+                            ->required(),
                         TextInput::make('bio')
                             ->label(__('cleaning_admin.workers.fields.bio')),
                         Toggle::make('is_active')

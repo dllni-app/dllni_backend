@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\DayOfWeek;
+use App\Enums\WorkerPreferredWorkType;
 use App\Traits\FilterQueries\WorkerFilterQuery;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -24,6 +25,7 @@ final class Worker extends Model implements HasMedia
         'user_id',
         'first_name',
         'gender',
+        'preferred_work_type',
         'bio',
         'average_rating',
         'total_completed_jobs',
@@ -90,6 +92,7 @@ final class Worker extends Model implements HasMedia
             'average_rating' => 'decimal:2',
             'acceptance_rate' => 'decimal:2',
             'cancellation_rate' => 'decimal:2',
+            'preferred_work_type' => WorkerPreferredWorkType::class,
             'home_latitude' => 'decimal:8',
             'home_longitude' => 'decimal:8',
             'is_active' => 'boolean',

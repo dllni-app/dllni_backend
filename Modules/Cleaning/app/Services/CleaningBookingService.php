@@ -295,7 +295,10 @@ final class CleaningBookingService
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if ($booking->status === CleaningBookingStatus::AwaitingStartVerification) {
+            if (in_array($booking->status, [
+                CleaningBookingStatus::AwaitingStartVerification,
+                CleaningBookingStatus::AwaitingWorkerStartConfirmation,
+            ], true)) {
                 $securityCode = DB::table('booking_security_codes')
                     ->where('booking_id', $booking->id)
                     ->where('booking_type', $booking->getMorphClass())
@@ -313,18 +316,20 @@ final class CleaningBookingService
                     ->lockForUpdate()
                     ->first();
 
-                if (! $assignment) {
+                if (! $assignment && (int) $booking->worker_id !== (int) $worker->id) {
                     throw new InvalidArgumentException('Worker must accept the booking before approving start.');
                 }
 
-                if ($assignment->status === CleaningBookingWorkerAssignmentStatus::StartApproved) {
+                if ($assignment?->status === CleaningBookingWorkerAssignmentStatus::StartApproved) {
                     throw new InvalidArgumentException('Worker has already approved the booking start.');
                 }
 
-                $assignment->forceFill([
-                    'status' => CleaningBookingWorkerAssignmentStatus::StartApproved,
-                    'start_approved_at' => now(),
-                ])->save();
+                if ($assignment !== null) {
+                    $assignment->forceFill([
+                        'status' => CleaningBookingWorkerAssignmentStatus::StartApproved,
+                        'start_approved_at' => now(),
+                    ])->save();
+                }
 
                 $startApproved = CleaningBookingWorkerAssignment::query()
                     ->where('cleaning_booking_id', $booking->id)
@@ -334,7 +339,7 @@ final class CleaningBookingService
 
                 $required = max(1, (int) ($booking->number_of_workers ?? 1));
 
-                if ($startApproved >= $required) {
+                if ($assignment === null || $startApproved >= $required) {
                     $booking->update([
                         'status' => CleaningBookingStatus::InProgress,
                         'work_started_at' => now(),

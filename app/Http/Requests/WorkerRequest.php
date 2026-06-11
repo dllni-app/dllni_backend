@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Http\Requests;
 
 use App\Enums\DayOfWeek;
+use App\Enums\WorkerPreferredWorkType;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 final class WorkerRequest extends FormRequest
 {
@@ -23,6 +25,7 @@ final class WorkerRequest extends FormRequest
             'userId' => 'required|exists:users,id',
             'firstName' => 'nullable|string|max:255',
             'gender' => 'nullable|string|in:male,female',
+            'preferred_work_type' => ['sometimes', 'string', Rule::in(WorkerPreferredWorkType::values())],
             'bio' => 'nullable|string',
             'averageRating' => 'nullable|numeric',
             'totalCompletedJobs' => 'nullable|integer|min:0',

@@ -33,6 +33,7 @@ final class AuthController
             ])->save();
         }
 
+        $user->loadMissing('worker');
         $token = $user->createToken('api')->plainTextToken;
         $permissions = $user->getAllPermissions()->pluck('name')->values()->all();
 
@@ -64,6 +65,7 @@ final class AuthController
     public function me(Request $request): JsonResponse
     {
         $user = $request->user();
+        $user->loadMissing('worker');
         $permissions = $user->getAllPermissions()->pluck('name')->values()->all();
 
         return response()->json([

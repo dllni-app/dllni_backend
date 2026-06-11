@@ -18,6 +18,7 @@ final class ArrivalVerified implements ShouldBroadcastNow
         public int $cleaningBookingId,
         public ?int $workerId,
         public string $arrivedAt,
+        public string $status,
     ) {}
 
     /**
@@ -50,6 +51,7 @@ final class ArrivalVerified implements ShouldBroadcastNow
             'cleaningBookingId' => $this->cleaningBookingId,
             'workerId' => $this->workerId,
             'arrivedAt' => $this->arrivedAt,
+            'status' => $this->status,
             'version' => 1,
         ];
     }

@@ -494,6 +494,51 @@ it('returns 422 when start-work from non-worker_assigned status', function () {
     $response->assertUnprocessable();
 });
 
+it('starts work only after the customer verified the security code', function () {
+    Event::fake([CleaningBookingTrackingUpdated::class]);
+
+    $workerUser = User::factory()->create(['email' => 'worker-start-after-code@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'status' => CleaningBookingStatus::AwaitingWorkerStartConfirmation,
+        'arrived_at' => now()->subMinutes(2),
+        'customer_confirmed_at' => now()->subMinute(),
+    ]);
+
+    DB::table('booking_security_codes')->insert([
+        'booking_id' => $booking->id,
+        'booking_type' => $booking->getMorphClass(),
+        'code' => hash_hmac('sha256', '1234', (string) config('app.key')),
+        'code_hash' => hash_hmac('sha256', '1234', (string) config('app.key')),
+        'attempts' => 1,
+        'expires_at' => now()->addMinutes(10),
+        'consumed_at' => now()->subMinute(),
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $securityCodeResponse = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/security-code");
+    $securityCodeResponse->assertUnprocessable();
+
+    $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/start-work");
+
+    $response->assertOk();
+    expect($response->json('data.status'))->toBe(CleaningBookingStatus::InProgress->value);
+    $this->assertDatabaseHas('cleaning_bookings', [
+        'id' => $booking->id,
+        'status' => CleaningBookingStatus::InProgress->value,
+    ]);
+
+    Event::assertDispatched(CleaningBookingTrackingUpdated::class, function (CleaningBookingTrackingUpdated $event) use ($booking): bool {
+        return $event->cleaningBookingId === $booking->id
+            && $event->tracking['status'] === CleaningBookingStatus::InProgress->value;
+    });
+});
+
 it('returns security code for assigned booking', function () {
     $workerUser = User::factory()->create(['email' => 'worker-security@example.com']);
     $worker = Worker::factory()->create(['user_id' => $workerUser->id]);

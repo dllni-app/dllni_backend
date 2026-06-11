@@ -381,7 +381,10 @@ final class UserCleaningOrderService
 
     public function confirmStartVerification(CleaningBooking $booking, string $code): CleaningBooking
     {
-        if ($booking->status !== CleaningBookingStatus::AwaitingStartVerification) {
+        if (! in_array($booking->status, [
+            CleaningBookingStatus::AwaitingStartVerification,
+            CleaningBookingStatus::AwaitingWorkerStartConfirmation,
+        ], true)) {
             throw ValidationException::withMessages([
                 'status' => ['Order is not waiting for start verification.'],
             ]);
@@ -457,24 +460,9 @@ final class UserCleaningOrderService
                     'updated_at' => now(),
                 ]);
 
-            $assignmentCount = DB::table('cleaning_booking_worker_assignments')
-                ->where('cleaning_booking_id', $booking->id)
-                ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
-                ->count();
-            $startApproved = DB::table('cleaning_booking_worker_assignments')
-                ->where('cleaning_booking_id', $booking->id)
-                ->where('status', CleaningBookingWorkerAssignmentStatus::StartApproved->value)
-                ->count();
-            $required = max(1, (int) ($booking->number_of_workers ?? 1));
-            $shouldStartImmediately = $assignmentCount === 0
-                && $booking->worker_id !== null
-                && $required <= 1;
-
             $booking->update([
-                'status' => $shouldStartImmediately || $startApproved >= $required
-                    ? CleaningBookingStatus::InProgress
-                    : CleaningBookingStatus::AwaitingStartVerification,
-                'work_started_at' => $shouldStartImmediately || $startApproved >= $required ? now() : null,
+                'status' => CleaningBookingStatus::AwaitingWorkerStartConfirmation,
+                'work_started_at' => null,
                 'customer_confirmed_at' => now(),
             ]);
 
@@ -485,6 +473,7 @@ final class UserCleaningOrderService
                 $updated->id,
                 $updated->worker_id,
                 (string) $updated->arrived_at?->toIso8601String(),
+                (string) $updated->status?->value,
             ));
             $this->lifecycleNotifications->notifyWorker(
                 booking: $updated,

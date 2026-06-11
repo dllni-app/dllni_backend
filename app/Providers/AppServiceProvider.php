@@ -161,7 +161,7 @@ final class AppServiceProvider extends ServiceProvider
 
             if ($user->worker && $booking->workerAssignments()
                 ->where('worker_id', $user->worker->id)
-                ->where('status', CleaningBookingWorkerAssignmentStatus::Accepted->value)
+                ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
                 ->exists()) {
                 return true;
             }

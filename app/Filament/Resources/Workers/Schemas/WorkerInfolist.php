@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Workers\Schemas;
 
+use App\Enums\WorkerPreferredWorkType;
 use Filament\Infolists\Components\Grid;
 use Filament\Infolists\Components\Group;
 use Filament\Infolists\Components\ImageEntry;
@@ -32,6 +33,15 @@ final class WorkerInfolist
                                     ->schema([
                                         TextEntry::make('first_name')->label(__('cleaning_admin.workers.fields.name')),
                                         TextEntry::make('gender')->label(__('cleaning_admin.workers.fields.gender')),
+                                        TextEntry::make('preferred_work_type')
+                                            ->label(__('cleaning_admin.workers.fields.preferred_work_type'))
+                                            ->formatStateUsing(function ($state): string {
+                                                $value = $state instanceof WorkerPreferredWorkType
+                                                    ? $state->value
+                                                    : (string) ($state ?? WorkerPreferredWorkType::Both->value);
+
+                                                return WorkerPreferredWorkType::options()[$value] ?? $value;
+                                            }),
                                         TextEntry::make('user.phone')->label(__('cleaning_admin.workers.fields.phone')),
                                         TextEntry::make('home_address')->label(__('cleaning_admin.workers.fields.home_address'))->placeholder('-'),
                                         TextEntry::make('home_latitude')->label(__('cleaning_admin.workers.fields.home_latitude'))->placeholder('-'),
