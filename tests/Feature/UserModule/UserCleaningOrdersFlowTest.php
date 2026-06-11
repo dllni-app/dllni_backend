@@ -70,7 +70,15 @@ it('creates a cleaning order for authenticated user', function (): void {
     ]);
 
     $response->assertCreated()->assertJsonStructure([
-        'order' => ['id', 'customerId', 'status', 'totalPrice'],
+        'order' => [
+            'id',
+            'customerId',
+            'status',
+            'totalPrice',
+            'extendedTimeRanges' => [
+                '*' => ['id', 'startMinutes', 'endMinutes', 'label', 'price', 'currency'],
+            ],
+        ],
     ]);
 
     $orderId = (int) $response->json('order.id');
@@ -93,6 +101,13 @@ it('creates a cleaning order for authenticated user', function (): void {
     expect((float) $response->json('order.estimatedSqm'))->toBeGreaterThan(0);
     expect((float) $response->json('order.totalHours'))->toBeGreaterThan(0);
     expect($response->json('order.propertyDetails.cleaning_mode'))->toBe('regular');
+    expect($response->json('order.extendedTimeRanges.1'))->toMatchArray([
+        'startMinutes' => 16,
+        'endMinutes' => 30,
+        'label' => '16 - 30 minutes',
+        'price' => 4500.0,
+        'currency' => 'SYP',
+    ]);
 });
 
 it('creates a deep cleaning order and persists the mode in the response payload', function (): void {
@@ -222,9 +237,13 @@ it('shows own cleaning order and returns not found for another user order', func
     $mine = CleaningBooking::factory()->create(['customer_id' => $user->id]);
     $other = CleaningBooking::factory()->create(['customer_id' => User::factory()->create()->id]);
 
-    getJson("/api/v1/user/cleaning/orders/{$mine->id}")
+    $response = getJson("/api/v1/user/cleaning/orders/{$mine->id}")
         ->assertOk()
-        ->assertJsonPath('data.id', $mine->id);
+        ->assertJsonPath('data.id', $mine->id)
+        ->assertJsonPath('data.extendedTimeRanges.1.startMinutes', 16)
+        ->assertJsonPath('data.extendedTimeRanges.1.endMinutes', 30);
+
+    expect((float) $response->json('data.extendedTimeRanges.1.price'))->toBe(4500.0);
 
     getJson("/api/v1/user/cleaning/orders/{$other->id}")
         ->assertNotFound();

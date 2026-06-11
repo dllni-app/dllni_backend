@@ -10,6 +10,7 @@ use Illuminate\Support\Arr;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingRoom;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
+use Modules\Cleaning\Services\CleaningExtendedTimePricingService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 /**
@@ -63,6 +64,7 @@ final class CleaningBookingResource extends JsonResource
             'basePrice' => (float) $this->base_price,
             'addonsTotal' => (float) $this->addons_total,
             'extensionFeeTotal' => (float) ($this->extension_fee_total ?? 0),
+            'extendedTimeRanges' => app(CleaningExtendedTimePricingService::class)->ranges(),
             'travelFee' => (float) $this->travel_fee,
             'travelDistanceKm' => $this->travel_distance_km !== null ? (float) $this->travel_distance_km : null,
             'adminMargin' => (float) ($this->admin_margin_amount ?? 0),
