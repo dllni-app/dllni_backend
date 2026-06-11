@@ -12,8 +12,10 @@ final class CleaningDatabaseSeeder extends Seeder
     {
         $this->call([
             CleaningBillingPolicySeeder::class,
+            CleaningFinancialSettingsSeeder::class,
             CleaningWorkerRealDataSeeder::class,
             CleaningServiceSeeder::class,
+            CleaningBannerSeeder::class,
             CleaningBookingSeeder::class,
             EventBookingSeeder::class,
         ]);
