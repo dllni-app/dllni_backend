@@ -50,13 +50,14 @@ Owner/worker app action visibility:
 
 ## Backend Data Settings
 
-Extended-time pricing is configured in the backend admin panel, not in Flutter.
+Extended-time pricing is configured by the backend financial setting, not in Flutter.
 
 Current pricing source:
 
-- Table: `cleaning_extended_time_prices`
+- Table: `cleaning_financial_settings`
+- Field: `extension_rate_per_30_minutes`
 - Backend service: `CleaningExtendedTimePricingService`
-- Currency: `config('app.currency', 'SYP')`
+- Currency: `SYP`
 
 Fixed minute ranges:
 
@@ -69,6 +70,8 @@ Fixed minute ranges:
 | 61-75 minutes | `startMinutes = 61`, `endMinutes = 75` |
 | 76-90 minutes | `startMinutes = 76`, `endMinutes = 90` |
 
+Range prices are generated from `extension_rate_per_30_minutes`. With the seeded value `4500`, the 0-15 range is `2250`, 16-30 is `4500`, 31-45 is `6750`, and so on.
+
 Important Flutter rules:
 
 - Send `additionalMinutes` as an integer from `0` to `90`.
@@ -77,7 +80,7 @@ Important Flutter rules:
 - Display the returned price from `extensionPricing.calculatedExtensionPrice` or warning `additionalAmount`.
 - Do not derive the final price from an hourly rate or from local app constants.
 
-Estimate/generate responses now include the DB-managed ranges:
+Estimate/generate responses include the generated ranges:
 
 ```json
 {

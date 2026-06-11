@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
+use App\Models\BookingReview;
 use App\Models\CancellationPolicy;
 use App\Models\CleaningFinancialSetting;
-use App\Models\BookingReview;
 use App\Models\User;
 use App\Models\Worker;
 use Illuminate\Support\Carbon;
@@ -17,7 +17,6 @@ use Modules\Cleaning\Enums\ServiceCategory;
 use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
-use Modules\Cleaning\Models\CleaningExtendedTimePrice;
 use Modules\Cleaning\Models\CleaningService;
 use Modules\Cleaning\Models\ServicePricing;
 use Modules\User\Services\UserCleaningOrderEstimationService;
@@ -267,11 +266,6 @@ it('returns estimated size and time for cleaning order wizard', function (): voi
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
-    CleaningExtendedTimePrice::query()
-        ->where('start_minutes', 0)
-        ->where('end_minutes', 15)
-        ->update(['price' => 2250.75]);
-
     $response = postJson('/api/v1/user/cleaning/orders/estimate-size', [
         'propertyType' => 'house',
         'propertyDetails' => [
@@ -298,8 +292,8 @@ it('returns estimated size and time for cleaning order wizard', function (): voi
         'startMinutes' => 0,
         'endMinutes' => 15,
         'label' => '0 - 15 minutes',
-        'price' => 2250.75,
-        'currency' => (string) config('app.currency', 'SYP'),
+        'price' => 2250.0,
+        'currency' => 'SYP',
     ]);
 });
 
@@ -365,11 +359,6 @@ it('returns estimated cleaning price from backend algorithm', function (): void 
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
-    CleaningExtendedTimePrice::query()
-        ->where('start_minutes', 16)
-        ->where('end_minutes', 30)
-        ->update(['price' => 4500.25]);
-
     $response = postJson('/api/v1/user/cleaning/orders/estimate-price', [
         'propertyType' => 'apartment',
         'propertyDetails' => [
@@ -405,8 +394,8 @@ it('returns estimated cleaning price from backend algorithm', function (): void 
         'startMinutes' => 16,
         'endMinutes' => 30,
         'label' => '16 - 30 minutes',
-        'price' => 4500.25,
-        'currency' => (string) config('app.currency', 'SYP'),
+        'price' => 4500.0,
+        'currency' => 'SYP',
     ]);
     expect((string) $response->json('algorithmVersion'))->toBe(UserCleaningOrderEstimationService::ALGORITHM_VERSION);
 });

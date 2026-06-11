@@ -4,12 +4,25 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Services;
 
-use Illuminate\Support\Facades\DB;
+use App\Models\CleaningFinancialSetting;
 use Illuminate\Validation\ValidationException;
-use Modules\Cleaning\Models\CleaningExtendedTimePrice;
 
 final class CleaningExtendedTimePricingService
 {
+    private const CURRENCY = 'SYP';
+
+    /**
+     * @var array<int, array{start:int,end:int,sort:int}>
+     */
+    private const FIXED_RANGES = [
+        ['start' => 0, 'end' => 15, 'sort' => 1],
+        ['start' => 16, 'end' => 30, 'sort' => 2],
+        ['start' => 31, 'end' => 45, 'sort' => 3],
+        ['start' => 46, 'end' => 60, 'sort' => 4],
+        ['start' => 61, 'end' => 75, 'sort' => 5],
+        ['start' => 76, 'end' => 90, 'sort' => 6],
+    ];
+
     /**
      * @return array{
      *     requestedMinutes:int,
@@ -26,13 +39,8 @@ final class CleaningExtendedTimePricingService
             ]);
         }
 
-        $this->ensureFixedRanges();
-
-        $range = CleaningExtendedTimePrice::query()
-            ->where('start_minutes', '<=', $minutes)
-            ->where('end_minutes', '>=', $minutes)
-            ->orderBy('sort_order')
-            ->first();
+        $ratePerThirtyMinutes = $this->ratePerThirtyMinutes();
+        $range = $this->rangeForMinutes($minutes);
 
         if (! $range) {
             throw ValidationException::withMessages([
@@ -40,20 +48,20 @@ final class CleaningExtendedTimePricingService
             ]);
         }
 
-        $currency = (string) config('app.currency', 'SYP');
+        $price = $this->priceForRange($range, $ratePerThirtyMinutes);
 
         return [
             'requestedMinutes' => $minutes,
             'matchedRange' => [
-                'id' => (int) $range->id,
-                'startMinutes' => (int) $range->start_minutes,
-                'endMinutes' => (int) $range->end_minutes,
-                'label' => $range->label(),
-                'price' => round((float) $range->price, 2),
-                'currency' => $currency,
+                'id' => $range['sort'],
+                'startMinutes' => $range['start'],
+                'endMinutes' => $range['end'],
+                'label' => $this->label($range),
+                'price' => $price,
+                'currency' => self::CURRENCY,
             ],
-            'calculatedExtensionPrice' => round((float) $range->price, 2),
-            'currency' => $currency,
+            'calculatedExtensionPrice' => $price,
+            'currency' => self::CURRENCY,
         ];
     }
 
@@ -62,46 +70,58 @@ final class CleaningExtendedTimePricingService
      */
     public function ranges(): array
     {
-        $this->ensureFixedRanges();
+        $ratePerThirtyMinutes = $this->ratePerThirtyMinutes();
 
-        $currency = (string) config('app.currency', 'SYP');
-
-        return CleaningExtendedTimePrice::query()
-            ->orderBy('sort_order')
-            ->get()
-            ->map(static fn (CleaningExtendedTimePrice $range): array => [
-                'id' => (int) $range->id,
-                'startMinutes' => (int) $range->start_minutes,
-                'endMinutes' => (int) $range->end_minutes,
-                'label' => $range->label(),
-                'price' => round((float) $range->price, 2),
-                'currency' => $currency,
-            ])
-            ->all();
+        return array_map(fn (array $range): array => [
+            'id' => $range['sort'],
+            'startMinutes' => $range['start'],
+            'endMinutes' => $range['end'],
+            'label' => $this->label($range),
+            'price' => $this->priceForRange($range, $ratePerThirtyMinutes),
+            'currency' => self::CURRENCY,
+        ], self::FIXED_RANGES);
     }
 
-    public function ensureFixedRanges(): void
+    private function ratePerThirtyMinutes(): float
     {
-        $now = now();
+        $rate = (float) (CleaningFinancialSetting::query()->value('extension_rate_per_30_minutes') ?? 0);
 
-        foreach (CleaningExtendedTimePrice::FIXED_RANGES as $range) {
-            $exists = DB::table('cleaning_extended_time_prices')
-                ->where('start_minutes', $range['start'])
-                ->where('end_minutes', $range['end'])
-                ->exists();
-
-            if ($exists) {
-                continue;
-            }
-
-            DB::table('cleaning_extended_time_prices')->insert([
-                'start_minutes' => $range['start'],
-                'end_minutes' => $range['end'],
-                'price' => 0,
-                'sort_order' => $range['sort'],
-                'created_at' => $now,
-                'updated_at' => $now,
+        if ($rate <= 0) {
+            throw ValidationException::withMessages([
+                'extendedTimeRanges' => ['Cleaning extension rate is not configured.'],
             ]);
         }
+
+        return $rate;
+    }
+
+    /**
+     * @return array{start:int,end:int,sort:int}|null
+     */
+    private function rangeForMinutes(int $minutes): ?array
+    {
+        foreach (self::FIXED_RANGES as $range) {
+            if ($minutes >= $range['start'] && $minutes <= $range['end']) {
+                return $range;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array{start:int,end:int,sort:int}  $range
+     */
+    private function priceForRange(array $range, float $ratePerThirtyMinutes): float
+    {
+        return round(($ratePerThirtyMinutes / 30) * $range['end'], 2);
+    }
+
+    /**
+     * @param  array{start:int,end:int,sort:int}  $range
+     */
+    private function label(array $range): string
+    {
+        return "{$range['start']} - {$range['end']} minutes";
     }
 }

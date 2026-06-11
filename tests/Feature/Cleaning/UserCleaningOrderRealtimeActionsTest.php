@@ -12,20 +12,24 @@ use Modules\Cleaning\Events\ArrivalVerified;
 use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
 use Modules\Cleaning\Events\CompletionDecisionMade;
 use Modules\Cleaning\Events\ServiceExtensionRequested;
+use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
-use Modules\Cleaning\Models\CleaningExtendedTimePrice;
 
-/** @var \Illuminate\Foundation\Testing\TestCase $this */
-
+/** @var Illuminate\Foundation\Testing\TestCase $this */
 beforeEach(function () {
-    $this->billingPolicy = \Modules\Cleaning\Models\CleaningBillingPolicy::first() ?? \Modules\Cleaning\Models\CleaningBillingPolicy::create([
+    cleaningRealtimeBillingPolicy();
+});
+
+function cleaningRealtimeBillingPolicy(): CleaningBillingPolicy
+{
+    return CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
         'name' => 'Default',
         'billing_mode' => 'actual_working_time',
         'rules' => [],
         'is_active' => true,
         'is_default' => true,
     ]);
-});
+}
 
 it('confirms start verification with a 4-digit code and waits for worker start confirmation', function () {
     Event::fake([CleaningBookingTrackingUpdated::class, ArrivalVerified::class]);
@@ -38,7 +42,7 @@ it('confirms start verification with a 4-digit code and waits for worker start c
     $booking = CleaningBooking::factory()->create([
         'customer_id' => $customer->id,
         'worker_id' => $worker->id,
-        'billing_policy_id' => $this->billingPolicy->id,
+        'billing_policy_id' => cleaningRealtimeBillingPolicy()->id,
         'status' => CleaningBookingStatus::AwaitingStartVerification,
         'arrived_at' => now()->subMinutes(2),
     ]);
@@ -94,7 +98,7 @@ it('confirms completion for a waiting booking', function () {
     $booking = CleaningBooking::factory()->create([
         'customer_id' => $customer->id,
         'worker_id' => $worker->id,
-        'billing_policy_id' => $this->billingPolicy->id,
+        'billing_policy_id' => cleaningRealtimeBillingPolicy()->id,
         'status' => CleaningBookingStatus::AwaitingCustomerCompletion,
         'work_started_at' => now()->subHours(2),
         'work_finished_at' => now()->subMinutes(10),
@@ -132,7 +136,7 @@ it('rejects completion and reopens the booking', function () {
     $booking = CleaningBooking::factory()->create([
         'customer_id' => $customer->id,
         'worker_id' => $worker->id,
-        'billing_policy_id' => $this->billingPolicy->id,
+        'billing_policy_id' => cleaningRealtimeBillingPolicy()->id,
         'status' => CleaningBookingStatus::AwaitingCustomerCompletion,
         'work_started_at' => now()->subHours(2),
         'work_finished_at' => now()->subMinutes(10),
@@ -165,15 +169,10 @@ it('requests a completion extension', function () {
     $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($customer);
 
-    CleaningExtendedTimePrice::query()
-        ->where('start_minutes', 16)
-        ->where('end_minutes', 30)
-        ->update(['price' => 4500]);
-
     $booking = CleaningBooking::factory()->create([
         'customer_id' => $customer->id,
         'worker_id' => $worker->id,
-        'billing_policy_id' => $this->billingPolicy->id,
+        'billing_policy_id' => cleaningRealtimeBillingPolicy()->id,
         'status' => CleaningBookingStatus::AwaitingCustomerCompletion,
         'work_started_at' => now()->subHours(2),
         'work_finished_at' => now()->subMinutes(10),
@@ -229,7 +228,7 @@ it('rejects completion extension requests above 90 minutes', function () {
     $booking = CleaningBooking::factory()->create([
         'customer_id' => $customer->id,
         'worker_id' => $worker->id,
-        'billing_policy_id' => $this->billingPolicy->id,
+        'billing_policy_id' => cleaningRealtimeBillingPolicy()->id,
         'status' => CleaningBookingStatus::AwaitingCustomerCompletion,
     ]);
 

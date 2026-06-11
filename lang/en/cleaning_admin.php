@@ -390,21 +390,6 @@ return [
         ],
     ],
 
-    'extended_time_prices' => [
-        'nav_label' => 'Cleaning Extended Time Prices',
-        'title' => 'Cleaning Extended Time Prices',
-        'model' => 'Cleaning extended time price',
-        'plural' => 'Cleaning extended time prices',
-        'tooltip' => 'Fixed minute ranges and configurable prices for cleaning time extension requests.',
-        'subheading' => 'The minute ranges are fixed by the system. Only the price for each range can be updated.',
-        'fields' => [
-            'sort_order' => 'Order',
-            'start_minutes' => 'Start minutes',
-            'end_minutes' => 'End minutes',
-            'price' => 'Price',
-        ],
-    ],
-
     'filters' => [
         'search' => 'Search',
         'search_placeholder' => 'Search...',

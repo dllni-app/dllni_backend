@@ -55,12 +55,12 @@ Request body:
 ```
 
 Validation (`UserCleaningOrderCompletionExtendTimeRequest`):
-- `additionalMinutes`: required, integer, min 1, max 480.
+- `additionalMinutes`: required, integer, min 0, max 90.
 
 Behavior (`UserCleaningOrderService::requestCompletionExtension`):
 - Allowed only when booking status is `awaiting_customer_completion`.
-- Computes quote using dashboard setting `extension_rate_per_30_minutes`:
-  - `quotedAmount = round((extensionRatePer30Minutes / 30) * additionalMinutes, 2)`
+- Computes quote using fixed ranges generated from `cleaning_financial_settings.extension_rate_per_30_minutes`.
+  - With `extension_rate_per_30_minutes = 4500`, 0-15 minutes costs `2250`, 16-30 costs `4500`, 31-45 costs `6750`, and so on.
 - Creates a `cleaning_time_warnings` row with:
   - `customer_response=extend_time`, `customer_responded_at`, `sent_at`
   - `additional_minutes` (requested minutes)
