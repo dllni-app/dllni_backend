@@ -8,6 +8,7 @@ use App\Models\Worker;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
 
@@ -386,7 +387,7 @@ it('finalizes provisional pricing when worker accepts booking', function () {
         ->first();
 
     expect($assignment)->not->toBeNull();
-    expect($assignment?->status?->value)->toBe('accepted');
+    expect($assignment?->status?->value)->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value);
 });
 
 it('fails booking accept when worker home location is missing', function () {
