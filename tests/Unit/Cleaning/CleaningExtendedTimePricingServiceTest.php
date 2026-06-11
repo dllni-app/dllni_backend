@@ -31,7 +31,7 @@ it('returns the configured price for each fixed cleaning extension minute range'
         ->and($quote['matchedRange'])->toMatchArray([
             'startMinutes' => $startMinutes,
             'endMinutes' => $endMinutes,
-            'label' => "{$startMinutes} - {$endMinutes} minutes",
+            'label' => "من {$startMinutes} إلى {$endMinutes} دقيقة",
             'price' => $price,
             'currency' => 'SYP',
         ])
@@ -56,7 +56,7 @@ it('returns all fixed cleaning extension ranges from the configured financial se
         ->and($ranges[3])->toMatchArray([
             'startMinutes' => 46,
             'endMinutes' => 60,
-            'label' => '46 - 60 minutes',
+            'label' => 'من 46 إلى 60 دقيقة',
             'price' => 9000.0,
             'currency' => 'SYP',
         ]);

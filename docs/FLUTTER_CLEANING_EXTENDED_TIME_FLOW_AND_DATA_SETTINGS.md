@@ -63,12 +63,12 @@ Fixed minute ranges:
 
 | Range | Backend match |
 | --- | --- |
-| 0-15 minutes | `startMinutes = 0`, `endMinutes = 15` |
-| 16-30 minutes | `startMinutes = 16`, `endMinutes = 30` |
-| 31-45 minutes | `startMinutes = 31`, `endMinutes = 45` |
-| 46-60 minutes | `startMinutes = 46`, `endMinutes = 60` |
-| 61-75 minutes | `startMinutes = 61`, `endMinutes = 75` |
-| 76-90 minutes | `startMinutes = 76`, `endMinutes = 90` |
+| من 0 إلى 15 دقيقة | `startMinutes = 0`, `endMinutes = 15` |
+| من 16 إلى 30 دقيقة | `startMinutes = 16`, `endMinutes = 30` |
+| من 31 إلى 45 دقيقة | `startMinutes = 31`, `endMinutes = 45` |
+| من 46 إلى 60 دقيقة | `startMinutes = 46`, `endMinutes = 60` |
+| من 61 إلى 75 دقيقة | `startMinutes = 61`, `endMinutes = 75` |
+| من 76 إلى 90 دقيقة | `startMinutes = 76`, `endMinutes = 90` |
 
 Range prices are generated from `extension_rate_per_30_minutes`. With the seeded value `4500`, the 0-15 range is `2250`, 16-30 is `4500`, 31-45 is `6750`, and so on.
 
@@ -89,7 +89,7 @@ Estimate/generate responses include the generated ranges:
       "id": 2,
       "startMinutes": 16,
       "endMinutes": 30,
-      "label": "16 - 30 minutes",
+      "label": "من 16 إلى 30 دقيقة",
       "price": 4500,
       "currency": "SYP"
     }
@@ -159,7 +159,7 @@ Success response shape:
       "id": 2,
       "startMinutes": 16,
       "endMinutes": 30,
-      "label": "16 - 30 minutes",
+      "label": "من 16 إلى 30 دقيقة",
       "price": 4500,
       "currency": "SYP"
     },
@@ -426,7 +426,7 @@ Shared:
 ## QA Scenarios
 
 1. Worker completes booking, customer app receives/loads `awaiting_customer_completion`, and the extend-time button is visible.
-2. Customer requests `30` minutes and receives `status = time_extension_requested` plus `extensionPricing.matchedRange = 16 - 30 minutes`.
+2. Customer requests `30` minutes and receives `status = time_extension_requested` plus `extensionPricing.matchedRange.label = من 16 إلى 30 دقيقة`.
 3. Customer tries a value above `90` and receives `422`.
 4. Worker receives `ServiceExtensionRequested` with `warningId`, `requestedMinutes`, `additionalAmount`, and `currency`.
 5. Worker accepts once and booking totals increase by the quoted amount.

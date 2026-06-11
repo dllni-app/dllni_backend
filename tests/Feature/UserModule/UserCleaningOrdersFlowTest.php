@@ -104,7 +104,7 @@ it('creates a cleaning order for authenticated user', function (): void {
     expect($response->json('order.extendedTimeRanges.1'))->toMatchArray([
         'startMinutes' => 16,
         'endMinutes' => 30,
-        'label' => '16 - 30 minutes',
+        'label' => 'من 16 إلى 30 دقيقة',
         'price' => 4500.0,
         'currency' => 'SYP',
     ]);
@@ -310,7 +310,7 @@ it('returns estimated size and time for cleaning order wizard', function (): voi
     expect($response->json('extendedTimeRanges.0'))->toMatchArray([
         'startMinutes' => 0,
         'endMinutes' => 15,
-        'label' => '0 - 15 minutes',
+        'label' => 'من 0 إلى 15 دقيقة',
         'price' => 2250.0,
         'currency' => 'SYP',
     ]);
@@ -412,7 +412,7 @@ it('returns estimated cleaning price from backend algorithm', function (): void 
     expect($response->json('extendedTimeRanges.1'))->toMatchArray([
         'startMinutes' => 16,
         'endMinutes' => 30,
-        'label' => '16 - 30 minutes',
+        'label' => 'من 16 إلى 30 دقيقة',
         'price' => 4500.0,
         'currency' => 'SYP',
     ]);

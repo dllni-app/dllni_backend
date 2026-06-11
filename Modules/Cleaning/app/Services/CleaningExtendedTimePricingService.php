@@ -122,6 +122,6 @@ final class CleaningExtendedTimePricingService
      */
     private function label(array $range): string
     {
-        return "{$range['start']} - {$range['end']} minutes";
+        return "من {$range['start']} إلى {$range['end']} دقيقة";
     }
 }

@@ -188,7 +188,7 @@ it('requests a completion extension', function () {
     expect($response->json('extensionPricing.matchedRange'))->toMatchArray([
         'startMinutes' => 16,
         'endMinutes' => 30,
-        'label' => '16 - 30 minutes',
+        'label' => 'من 16 إلى 30 دقيقة',
     ]);
     expect((float) $response->json('extensionPricing.calculatedExtensionPrice'))->toBe(4500.0);
     expect((float) $response->json('data.extensionFeeTotal'))->toBe(0.0);
