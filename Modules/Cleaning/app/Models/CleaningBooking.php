@@ -50,6 +50,7 @@ final class CleaningBooking extends Model
         'status',
         'property_type',
         'property_details',
+        'cleaning_services',
         'address_latitude',
         'address_longitude',
         'estimated_sqm',
@@ -109,7 +110,7 @@ final class CleaningBooking extends Model
     public function acceptedWorkerAssignments(): HasMany
     {
         return $this->hasMany(CleaningBookingWorkerAssignment::class, 'cleaning_booking_id')
-            ->where('status', CleaningBookingWorkerAssignmentStatus::Accepted->value)
+            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
             ->orderBy('accepted_at')
             ->orderBy('id');
     }
@@ -184,6 +185,7 @@ final class CleaningBooking extends Model
             'gender_preference' => GenderPreference::class,
             'number_of_workers' => 'integer',
             'property_details' => 'array',
+            'cleaning_services' => 'array',
             'estimated_sqm' => 'decimal:2',
             'estimated_hours' => 'decimal:2',
             'scheduled_date' => 'date',
@@ -234,7 +236,7 @@ final class CleaningBooking extends Model
             $count = $this->acceptedWorkerAssignments->count();
         } elseif ($this->relationLoaded('workerAssignments')) {
             $count = $this->workerAssignments->filter(
-                static fn (CleaningBookingWorkerAssignment $assignment): bool => $assignment->status === CleaningBookingWorkerAssignmentStatus::Accepted
+                static fn (CleaningBookingWorkerAssignment $assignment): bool => in_array($assignment->status, CleaningBookingWorkerAssignmentStatus::acceptedStatuses(), true)
             )->count();
         } else {
             $count = $this->acceptedWorkerAssignments()->count();
@@ -256,24 +258,46 @@ final class CleaningBooking extends Model
         return max(0, max(1, (int) ($this->number_of_workers ?? 1)) - $this->acceptedWorkerCount());
     }
 
+    public function startApprovedWorkerCount(): int
+    {
+        if ($this->relationLoaded('workerAssignments')) {
+            return $this->workerAssignments->filter(
+                static fn (CleaningBookingWorkerAssignment $assignment): bool => $assignment->status === CleaningBookingWorkerAssignmentStatus::StartApproved
+            )->count();
+        }
+
+        return $this->workerAssignments()
+            ->where('status', CleaningBookingWorkerAssignmentStatus::StartApproved->value)
+            ->count();
+    }
+
+    public function notStartApprovedWorkerCount(): int
+    {
+        return max(0, max(1, (int) ($this->number_of_workers ?? 1)) - $this->startApprovedWorkerCount());
+    }
+
     public function isTeamFulfilled(): bool
     {
         return $this->acceptedWorkerCount() >= max(1, (int) ($this->number_of_workers ?? 1));
     }
 
     /**
-     * @return array{required:int, accepted:int, remaining:int, isFulfilled:bool}
+     * @return array{required:int, accepted:int, remaining:int, startApproved:int, notStartApproved:int, isFulfilled:bool, isStartApproved:bool}
      */
     public function workerAcceptanceSummary(): array
     {
         $required = max(1, (int) ($this->number_of_workers ?? 1));
         $accepted = $this->acceptedWorkerCount();
+        $startApproved = $this->startApprovedWorkerCount();
 
         return [
             'required' => $required,
             'accepted' => $accepted,
             'remaining' => max(0, $required - $accepted),
+            'startApproved' => $startApproved,
+            'notStartApproved' => max(0, $required - $startApproved),
             'isFulfilled' => $accepted >= $required,
+            'isStartApproved' => $startApproved >= $required,
         ];
     }
 
@@ -290,7 +314,10 @@ final class CleaningBooking extends Model
             'requiredWorkers' => $summary['required'],
             'acceptedWorkers' => $summary['accepted'],
             'remainingWorkers' => $summary['remaining'],
+            'startApprovedWorkers' => $summary['startApproved'],
+            'notStartApprovedWorkers' => $summary['notStartApproved'],
             'isFulfilled' => $summary['isFulfilled'],
+            'isStartApproved' => $summary['isStartApproved'],
             'status' => $this->status?->value ?? $this->status,
             'updatedAt' => $this->updated_at?->toIso8601String(),
         ];
@@ -343,6 +370,7 @@ final class CleaningBooking extends Model
             'worker_id' => $workerId,
             'status' => CleaningBookingWorkerAssignmentStatus::Accepted,
             'accepted_at' => $this->updated_at ?? $this->created_at ?? now(),
+            'start_approved_at' => null,
             'room_count' => 1,
             'rooms_weight' => 0,
             'service_share_amount' => $payout,

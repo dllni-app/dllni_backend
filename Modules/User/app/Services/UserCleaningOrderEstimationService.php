@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\User\Services;
 
+use App\Models\CleaningFinancialSetting;
 use App\Models\Worker;
 use Illuminate\Support\Arr;
 use InvalidArgumentException;
@@ -14,7 +15,7 @@ use Modules\Cleaning\Services\CleaningPricingCalculator;
 
 final class UserCleaningOrderEstimationService
 {
-    public const ALGORITHM_VERSION = '2026-06-03-v3';
+    public const ALGORITHM_VERSION = '2026-06-11-v4';
     public const EVENT_ASSISTANCE_PROPERTY_TYPE = 'event_assistance';
 
     /**
@@ -196,18 +197,11 @@ final class UserCleaningOrderEstimationService
             $guestCount = (int) ($normalizedDetails['guest_count'] ?? 0);
             $venueType = (string) ($normalizedDetails['venue_type'] ?? 'apartment');
             $eventType = (string) ($normalizedDetails['event_type'] ?? 'other');
-            $lines = $this->resolveEventAssistancePricingLines(
-                $this->normalizeServiceIds($serviceIds ?? []),
-                $venueType
-            );
+            $hours = (float) ($normalizedDetails['hours'] ?? 1.0);
 
-            $serviceMinHours = array_sum(array_map(
-                static fn (array $line): float => (float) $line['minHours'],
-                $lines
-            ));
             $estimatedSqm = max(25.0, $guestCount * 2.0);
-            $estimatedHours = max(1.0, $this->roundToHalfHour(max($serviceMinHours, $guestCount / 12.0)));
-            $recommendedTeamSize = $this->suggestedEventTeamSize($guestCount, count($lines));
+            $estimatedHours = max(1.0, $this->roundToHalfHour($hours));
+            $recommendedTeamSize = $this->suggestedEventTeamSize($guestCount);
 
             return [
                 'estimatedSqm' => $estimatedSqm,
@@ -218,7 +212,8 @@ final class UserCleaningOrderEstimationService
                     'eventType' => $eventType,
                     'guestCount' => $guestCount,
                     'venueType' => $venueType,
-                    'selectedServiceCount' => count($lines),
+                    'customService' => $normalizedDetails['custom_service'] ?? null,
+                    'hours' => $estimatedHours,
                     'suggestedTeamSize' => $recommendedTeamSize,
                 ],
             ];
@@ -280,17 +275,14 @@ final class UserCleaningOrderEstimationService
         );
 
         if ($this->isEventAssistanceType($normalizedInput['propertyType'])) {
-            $venueType = (string) ($normalizedInput['propertyDetails']['venue_type'] ?? 'apartment');
-            $lines = $this->resolveEventAssistancePricingLines($normalizedInput['serviceIds'], $venueType);
-            $basePrice = round(array_sum(array_map(
-                static fn (array $line): float => (float) $line['totalPrice'],
-                $lines
-            )), 2);
+            $hourlyRate = $this->eventOrderHourlyRate();
+            $eventHours = max(1.0, $this->roundToHalfHour((float) ($normalizedInput['propertyDetails']['hours'] ?? 1.0)));
+            $basePrice = round($hourlyRate * $eventHours, 2);
+            $lines = [];
             $addonsTotal = 0.0;
             $estimation = $this->estimate(
                 $normalizedInput['propertyType'],
                 $normalizedInput['propertyDetails'],
-                $normalizedInput['serviceIds']
             );
         } else {
             $estimation = $this->estimate($normalizedInput['propertyType'], $normalizedInput['propertyDetails']);
@@ -338,6 +330,8 @@ final class UserCleaningOrderEstimationService
             'totalPrice' => $pricing['totalPrice'],
             'currency' => (string) config('app.currency', 'SYP'),
             'serviceLines' => $lines,
+            'eventHourlyRate' => isset($hourlyRate) ? $hourlyRate : null,
+            'eventHours' => isset($eventHours) ? $eventHours : null,
             'recommendation' => $estimation['recommendation'] ?? null,
         ];
     }
@@ -457,66 +451,15 @@ final class UserCleaningOrderEstimationService
         return $normalized;
     }
 
-    /**
-     * @param  array<int, int>  $serviceIds
-     * @return array<int, array{cleaningServiceId:int,name:string,description:?string,price:float,quantity:float,unitPrice:float,totalPrice:float,minHours:float}>
-     */
-    private function resolveEventAssistancePricingLines(array $serviceIds, string $venueType): array
+    private function eventOrderHourlyRate(): float
     {
-        if ($serviceIds === []) {
-            throw new InvalidArgumentException('At least one event assistance service must be selected.');
+        $ratePerThirtyMinutes = (float) (CleaningFinancialSetting::query()->value('extension_rate_per_30_minutes') ?? 0);
+
+        if ($ratePerThirtyMinutes <= 0) {
+            throw new InvalidArgumentException('Event assistance hourly rate is not configured.');
         }
 
-        $services = CleaningService::query()
-            ->whereIn('id', $serviceIds)
-            ->where('is_active', true)
-            ->where('category', ServiceCategory::EventAssistance->value)
-            ->with(['pricing' => fn ($query) => $query->orderBy('id')])
-            ->get()
-            ->keyBy('id');
-
-        if ($services->count() !== count($serviceIds)) {
-            throw new InvalidArgumentException('One or more selected event assistance services are invalid.');
-        }
-
-        $lines = [];
-
-        foreach ($serviceIds as $serviceId) {
-            $service = $services->get($serviceId);
-
-            if (! $service instanceof CleaningService) {
-                throw new InvalidArgumentException('One or more selected event assistance services are invalid.');
-            }
-
-            $pricing = $service->pricing
-                ->firstWhere('property_type', $venueType);
-
-            if (! $pricing instanceof ServicePricing) {
-                $pricing = $service->pricing->first();
-            }
-
-            if (! $pricing instanceof ServicePricing) {
-                throw new InvalidArgumentException("No pricing configured for event assistance service [{$service->name}].");
-            }
-
-            $servicePrice = (float) ($service->price ?? 0);
-            $unitPrice = $servicePrice > 0
-                ? round($servicePrice, 2)
-                : round((float) $pricing->base_price, 2);
-
-            $lines[] = [
-                'cleaningServiceId' => (int) $service->id,
-                'name' => (string) $service->name,
-                'description' => $service->description,
-                'price' => $unitPrice,
-                'quantity' => 1.0,
-                'unitPrice' => $unitPrice,
-                'totalPrice' => $unitPrice,
-                'minHours' => round((float) ($pricing->min_hours ?? 0), 2),
-            ];
-        }
-
-        return $lines;
+        return round($ratePerThirtyMinutes * 2, 2);
     }
 
     /**
@@ -628,9 +571,15 @@ final class UserCleaningOrderEstimationService
         $specialRequirement = Arr::has($propertyDetails, 'specialRequirement')
             ? mb_trim((string) Arr::get($propertyDetails, 'specialRequirement'))
             : null;
+        $customService = Arr::has($propertyDetails, 'customService')
+            ? mb_trim((string) Arr::get($propertyDetails, 'customService'))
+            : mb_trim((string) Arr::get($propertyDetails, 'custom_service', ''));
         $notes = Arr::has($propertyDetails, 'notes')
             ? mb_trim((string) Arr::get($propertyDetails, 'notes'))
             : null;
+        $hours = is_numeric(Arr::get($propertyDetails, 'hours'))
+            ? $this->roundToHalfHour((float) Arr::get($propertyDetails, 'hours'))
+            : 1.0;
 
         return array_filter([
             'address' => $address !== '' ? $address : null,
@@ -638,14 +587,16 @@ final class UserCleaningOrderEstimationService
             'event_type' => $eventType,
             'guest_count' => max(0, (int) Arr::get($propertyDetails, 'guestCount', Arr::get($propertyDetails, 'guest_count', 0))),
             'venue_type' => $venueType,
+            'custom_service' => $customService !== '' ? $customService : null,
+            'hours' => max(1.0, min(24.0, $hours)),
             'special_requirement' => $specialRequirement !== '' ? $specialRequirement : null,
             'notes' => $notes !== '' ? $notes : null,
         ], static fn (mixed $value): bool => $value !== null);
     }
 
-    private function suggestedEventTeamSize(int $guestCount, int $serviceCount): int
+    private function suggestedEventTeamSize(int $guestCount): int
     {
-        return max(1, (int) ceil($guestCount / 10) + max(0, $serviceCount - 1));
+        return max(1, (int) ceil($guestCount / 10));
     }
 
     /**

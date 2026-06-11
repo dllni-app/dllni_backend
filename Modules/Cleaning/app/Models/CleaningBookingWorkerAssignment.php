@@ -19,6 +19,7 @@ final class CleaningBookingWorkerAssignment extends Model
         'worker_id',
         'status',
         'accepted_at',
+        'start_approved_at',
         'room_count',
         'rooms_weight',
         'service_share_amount',
@@ -43,6 +44,7 @@ final class CleaningBookingWorkerAssignment extends Model
         return [
             'status' => CleaningBookingWorkerAssignmentStatus::class,
             'accepted_at' => 'datetime',
+            'start_approved_at' => 'datetime',
             'room_count' => 'integer',
             'rooms_weight' => 'decimal:2',
             'service_share_amount' => 'decimal:2',

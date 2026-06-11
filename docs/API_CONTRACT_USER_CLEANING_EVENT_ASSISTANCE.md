@@ -1,7 +1,7 @@
 # API Contract: User Cleaning Event Assistance (`propertyType=event_assistance`)
 
 ## Purpose
-This contract guides Flutter implementation of the new **event assistance** flow using existing cleaning order APIs.
+This contract guides Flutter implementation of the **event/private occasion** flow using existing cleaning order APIs.
 
 - Base path: `/api/v1/user/cleaning/orders`
 - Auth: `Authorization: Bearer <token>`
@@ -13,7 +13,21 @@ Event assistance mode is enabled by:
 
 - `propertyType = "event_assistance"`
 
-When this mode is used, backend applies service-based pricing from `cleaning_services` + `service_pricing` and persists data in `cleaning_bookings`.
+When this mode is used:
+
+- The user describes the requested help manually in `propertyDetails.customService`.
+- The user selects the booked duration in `propertyDetails.hours`.
+- Pricing is **time-based only**: `basePrice = eventHourlyRate × hours`.
+- `serviceIds` are **not used** and must not be sent.
+- No `cleaning_services` / `service_pricing` rows affect event order totals.
+
+## Hourly Rate Source
+The hourly rate is read from dashboard financial settings:
+
+- `cleaning_financial_settings.extension_rate_per_30_minutes`
+- API exposes it as `pricing.eventHourlyRate = extension_rate_per_30_minutes × 2`
+
+Regular cleaning orders are unchanged.
 
 ## Supported Endpoints
 
@@ -45,7 +59,11 @@ When this mode is used, backend applies service-based pricing from `cleaning_ser
 - `propertyDetails.eventType`: `family_dinner | birthday | large_gathering | funeral | other`
 - `propertyDetails.guestCount`: integer >= 1
 - `propertyDetails.venueType`: `apartment | villa | house | office | studio`
-- `serviceIds`: non-empty array of `cleaning_services.id`
+- `propertyDetails.customService`: string, max 255
+- `propertyDetails.hours`: number, 1..24 (half-hour increments after normalization)
+
+## Prohibited fields
+- `serviceIds` (for event assistance only)
 
 ## Optional fields
 - `genderPreference`: `any | male | female`
@@ -55,8 +73,8 @@ When this mode is used, backend applies service-based pricing from `cleaning_ser
 - existing scheduling/location fields remain unchanged where relevant (`scheduledDate`, `scheduledTime`, `addressLatitude`, `addressLongitude`, ...)
 
 ## Important constraints
-- For `propertyType=event_assistance`, every selected service id must belong to an active `cleaning_services` row with `category=event_assistance`.
 - Coupon is **not** supported in this phase.
+- Do not send `room_size_breakdown`, `cleaning_mode`, or `workerRoomAssignments` for event assistance.
 
 ---
 
@@ -69,9 +87,10 @@ When this mode is used, backend applies service-based pricing from `cleaning_ser
   "propertyDetails": {
     "eventType": "birthday",
     "guestCount": 45,
-    "venueType": "apartment"
-  },
-  "serviceIds": [12, 15]
+    "venueType": "apartment",
+    "customService": "تجهيز طاولات الضيافة وتنظيف بعد المناسبة",
+    "hours": 4
+  }
 }
 ```
 
@@ -85,10 +104,11 @@ When this mode is used, backend applies service-based pricing from `cleaning_ser
     "eventType": "family_dinner",
     "guestCount": 40,
     "venueType": "apartment",
+    "customService": "مساعدة يدوية في تجهيز الضيافة",
+    "hours": 5,
     "specialRequirement": "Male helpers only",
     "notes": "Call before arrival"
   },
-  "serviceIds": [12, 15],
   "scheduledDate": "2026-05-26",
   "scheduledTime": "18:30",
   "genderPreference": "male",
@@ -104,9 +124,10 @@ When this mode is used, backend applies service-based pricing from `cleaning_ser
     "eventType": "large_gathering",
     "guestCount": 60,
     "venueType": "apartment",
+    "customService": "دعم إضافي لمنطقة الضيافة",
+    "hours": 6,
     "notes": "Need early arrival"
-  },
-  "serviceIds": [15, 20]
+  }
 }
 ```
 
@@ -114,65 +135,48 @@ When this mode is used, backend applies service-based pricing from `cleaning_ser
 
 ## Response Additions for Event Assistance
 
-Estimate endpoints now include a recommendation block:
+Estimate endpoints include:
 
 ```json
 {
+  "size": {
+    "estimatedSqm": 90,
+    "estimatedHours": 4,
+    "sizeTier": "medium"
+  },
+  "pricing": {
+    "basePrice": 1200,
+    "addonsTotal": 0,
+    "travelFee": 0,
+    "adminMargin": 0,
+    "totalPrice": 1200,
+    "currency": "SYP",
+    "eventHourlyRate": 300,
+    "eventHours": 4,
+    "serviceLines": []
+  },
   "recommendation": {
     "eventType": "birthday",
     "guestCount": 45,
     "venueType": "apartment",
-    "selectedServiceCount": 2,
-    "suggestedTeamSize": 6
-  }
-}
-```
-
-Price estimate includes service pricing breakdown:
-
-```json
-{
-  "pricing": {
-    "basePrice": 550,
-    "addonsTotal": 0,
-    "travelFee": 0,
-    "adminMargin": 0,
-    "totalPrice": 550,
-    "currency": "SYP",
-    "serviceLines": [
-      {
-        "cleaningServiceId": 12,
-        "name": "Event serving support",
-        "quantity": 1,
-        "unitPrice": 300,
-        "totalPrice": 300,
-        "minHours": 3
-      },
-      {
-        "cleaningServiceId": 15,
-        "name": "Event cleanup support",
-        "quantity": 1,
-        "unitPrice": 250,
-        "totalPrice": 250,
-        "minHours": 2
-      }
-    ]
-  }
+    "customService": "تجهيز طاولات الضيافة وتنظيف بعد المناسبة",
+    "hours": 4,
+    "suggestedTeamSize": 5
+  },
+  "algorithmVersion": "2026-06-11-v4"
 }
 ```
 
 Create/update responses continue returning `order` (`CleaningBookingResource`) and now reflect:
 - `propertyType = "event_assistance"`
-- event metadata in `order.propertyDetails`
-- persisted `genderPreference`
-- `numberOfWorkers` (auto-suggested if not provided)
-- related `services` when loaded
+- `propertyDetails.custom_service`
+- `propertyDetails.hours`
+- `totalHours` / `estimatedHours` aligned with selected hours
+- `order.services` remains empty for event assistance orders
 
 ---
 
 ## Validation/Error Contract
-
-## 422 examples
 
 ### Missing required event fields
 ```json
@@ -181,18 +185,29 @@ Create/update responses continue returning `order` (`CleaningBookingResource`) a
   "errors": {
     "propertyDetails.eventType": ["..."],
     "propertyDetails.venueType": ["..."],
-    "serviceIds": ["..."]
+    "propertyDetails.customService": ["..."],
+    "propertyDetails.hours": ["..."]
   }
 }
 ```
 
-### Invalid/non-event service IDs
+### Sending serviceIds on event assistance
+```json
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "serviceIds": ["The service ids field is prohibited."]
+  }
+}
+```
+
+### Hourly rate not configured in dashboard
 ```json
 {
   "message": "The given data was invalid.",
   "errors": {
     "pricing": [
-      "One or more selected event assistance services are invalid."
+      "Event assistance hourly rate is not configured."
     ]
   }
 }
@@ -203,7 +218,15 @@ Create/update responses continue returning `order` (`CleaningBookingResource`) a
 ## Flutter Implementation Notes
 - Reuse existing cleaning order data sources/repositories.
 - Branch request payloads by `propertyType`:
-  - normal cleaning: existing payload (and optional `serviceIds` as documented in `API_CONTRACT_USER_CLEANING_REGULAR_SERVICES.md`)
-  - event assistance: include `eventType`, `guestCount`, `venueType`, `serviceIds`
+  - normal cleaning: existing payload (optional `serviceIds`)
+  - event assistance: send `customService` + `hours`; do **not** send `serviceIds`
+- Use `pricing.eventHourlyRate` and `pricing.eventHours` to render the price breakdown.
 - Use `recommendation.suggestedTeamSize` as default UI worker count when user does not override.
 - Keep lifecycle calls unchanged (`cancel`, `start-verification`, `completion/*`, `review`).
+
+## Flutter files to update (reference only; backend does not change Flutter)
+- `lib/features/cl_main/domain/usecases/estimate_cleaning_price_use_case.dart`
+- `lib/features/cl_main/domain/usecases/create_cleaning_order_use_case.dart`
+- `lib/features/cl_main/view/screens/cl_main_occasion_description_screen.dart`
+- `lib/features/cl_main/view/screens/cl_main_occasion_schedule_screen.dart`
+- `lib/features/cl_main/view/data/cl_main_route_args.dart`

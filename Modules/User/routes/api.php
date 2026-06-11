@@ -107,6 +107,7 @@ use Modules\User\Http\Controllers\API\UserRestaurantOrderStoreController;
 use Modules\User\Http\Controllers\API\UserRestaurantProductsSearchController;
 use Modules\User\Http\Controllers\API\UserRestaurantProductsByCategoryController;
 use Modules\User\Http\Controllers\API\UserRestaurantProductsWithOffersController;
+use Modules\User\Http\Controllers\API\UserSosController;
 use Modules\User\Http\Controllers\API\UserSupermarketCartItemDestroyController;
 use Modules\User\Http\Controllers\API\UserSupermarketCartItemStoreController;
 use Modules\User\Http\Controllers\API\UserSupermarketCartItemUpdateController;
@@ -202,6 +203,8 @@ Route::prefix('v1/user')->group(function (): void {
         Route::patch('notifications/read-all', UserNotificationsMarkAllAsReadController::class);
         Route::patch('notifications/{id}/read', UserNotificationsMarkAsReadController::class);
         Route::put('notifications/token', RegisterFcmTokenController::class);
+
+        Route::post('sos', UserSosController::class);
 
         Route::get('addresses', UserAddressIndexController::class);
         Route::post('addresses', UserAddressStoreController::class);

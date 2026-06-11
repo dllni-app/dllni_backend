@@ -19,7 +19,7 @@ final class UserCleaningOrderCompletionConfirmController
             ->findOrFail($order);
 
         $updated = $service->confirmCompletion($model);
-        $updated->load(['worker.user', 'timeWarnings', 'disputes', 'services', 'addons', 'billingPolicy']);
+        $updated->load(['worker.user', 'timeWarnings', 'disputes', 'addons', 'billingPolicy']);
 
         return CleaningBookingResource::make($updated)->additional([
             'message' => __('Completion confirmed successfully.'),

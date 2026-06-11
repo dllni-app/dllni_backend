@@ -22,7 +22,6 @@ final class UserCleaningOrdersController
                 'workerAssignments.worker.user',
                 'timeWarnings',
                 'disputes',
-                'services',
                 'addons',
                 'billingPolicy',
             ])

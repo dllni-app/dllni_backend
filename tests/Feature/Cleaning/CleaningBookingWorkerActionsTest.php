@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
 use Modules\Cleaning\Events\CleaningOrderAwaitingCustomerCompletion;
 use Modules\Cleaning\Events\CleaningOrderAwaitingStartVerification;
@@ -51,10 +52,21 @@ it('accepts a cleaning booking when status is pending (worker takes order)', fun
 
     $response->assertOk();
     expect($response->json('data.status'))->toBe('worker_assigned');
+    expect($response->json('data.order_status'))->toBe(CleaningBookingStatus::WorkerAssigned->value);
+    expect($response->json('data.worker_order_status'))->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value);
+    expect($response->json('data.required_workers_count'))->toBe(1);
+    expect($response->json('data.accepted_workers_count'))->toBe(1);
+    expect($response->json('data.pending_workers_count'))->toBe(0);
+    expect($response->json('data.myAssignment.status'))->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value);
     $this->assertDatabaseHas('cleaning_bookings', [
         'id' => $booking->id,
         'status' => CleaningBookingStatus::WorkerAssigned->value,
         'worker_id' => $worker->id,
+    ]);
+    $this->assertDatabaseHas('cleaning_booking_worker_assignments', [
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $worker->id,
+        'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
     ]);
 
     Event::assertDispatched(CleaningBookingTrackingUpdated::class, function (CleaningBookingTrackingUpdated $event) use ($booking, $worker): bool {

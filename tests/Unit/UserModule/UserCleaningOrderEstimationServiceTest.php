@@ -132,38 +132,11 @@ it('returns provisional pricing when preferred worker is not selected', function
     expect($pricing['totalPrice'])->toBe(920.0);
 });
 
-it('computes event assistance estimate and service-based pricing', function (): void {
-    $serviceA = CleaningService::query()->create([
-        'name' => 'Event service A',
-        'slug' => 'event-service-a-'.fake()->unique()->numerify('###'),
-        'category' => ServiceCategory::EventAssistance->value,
-        'description' => 'A',
-        'is_active' => true,
-    ]);
-    $serviceB = CleaningService::query()->create([
-        'name' => 'Event service B',
-        'slug' => 'event-service-b-'.fake()->unique()->numerify('###'),
-        'category' => ServiceCategory::EventAssistance->value,
-        'description' => 'B',
-        'is_active' => true,
-    ]);
-
-    ServicePricing::query()->create([
-        'cleaning_service_id' => $serviceA->id,
-        'property_type' => 'apartment',
-        'living_room_size' => null,
-        'base_price' => 300,
-        'price_per_sqm' => null,
-        'min_hours' => 3,
-    ]);
-    ServicePricing::query()->create([
-        'cleaning_service_id' => $serviceB->id,
-        'property_type' => 'villa',
-        'living_room_size' => null,
-        'base_price' => 250,
-        'price_per_sqm' => null,
-        'min_hours' => 2,
-    ]);
+it('computes event assistance estimate and hourly pricing', function (): void {
+    CleaningFinancialSetting::query()->updateOrCreate(
+        ['id' => 1],
+        ['extension_rate_per_30_minutes' => 150]
+    );
 
     $service = app(UserCleaningOrderEstimationService::class);
 
@@ -171,7 +144,9 @@ it('computes event assistance estimate and service-based pricing', function (): 
         'eventType' => 'birthday',
         'guestCount' => 45,
         'venueType' => 'apartment',
-    ], [$serviceA->id, $serviceB->id]);
+        'customService' => 'Manual event support',
+        'hours' => 4,
+    ]);
 
     $pricing = $service->price(
         'event_assistance',
@@ -179,18 +154,20 @@ it('computes event assistance estimate and service-based pricing', function (): 
             'eventType' => 'birthday',
             'guestCount' => 45,
             'venueType' => 'apartment',
+            'customService' => 'Manual event support',
+            'hours' => 4,
         ],
         null,
         null,
-        null,
-        [$serviceA->id, $serviceB->id],
     );
 
-    expect($estimation['recommendation']['suggestedTeamSize'])->toBe(6);
-    expect($estimation['estimatedHours'])->toBe(5.0);
-    expect($pricing['basePrice'])->toBe(550.0);
-    expect($pricing['totalPrice'])->toBe(550.0);
-    expect($pricing['serviceLines'])->toHaveCount(2);
+    expect($estimation['recommendation']['suggestedTeamSize'])->toBe(5);
+    expect($estimation['estimatedHours'])->toBe(4.0);
+    expect($pricing['basePrice'])->toBe(1200.0);
+    expect($pricing['totalPrice'])->toBe(1200.0);
+    expect($pricing['eventHourlyRate'])->toBe(300.0);
+    expect($pricing['eventHours'])->toBe(4.0);
+    expect($pricing['serviceLines'])->toHaveCount(0);
 });
 
 it('includes selected regular cleaning services in addons pricing', function (): void {

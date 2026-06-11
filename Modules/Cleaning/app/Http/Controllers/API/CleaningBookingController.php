@@ -12,6 +12,7 @@ use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 use Modules\Cleaning\Data\CleaningBookingData;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Http\Requests\CleaningBookingAcceptRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingCancelRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingLocationRequest;
@@ -39,7 +40,6 @@ final class CleaningBookingController
                 'preferredWorker.user',
                 'rooms.assignedWorker.user',
                 'workerAssignments.worker.user',
-                'services',
                 'addons',
                 'billingPolicy',
                 'timeWarnings',
@@ -268,11 +268,16 @@ final class CleaningBookingController
             abort(403, 'User must have an associated worker.');
         }
 
-        if ($booking->worker_id !== null && $booking->worker_id !== $worker->id) {
+        $hasWorkerAssignment = $booking->workerAssignments()
+            ->where('worker_id', $worker->id)
+            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
+            ->exists();
+
+        if ($booking->worker_id !== null && $booking->worker_id !== $worker->id && ! $hasWorkerAssignment) {
             abort(403, 'Booking is assigned to another worker.');
         }
 
-        if ($requireOwnership && $booking->worker_id === null) {
+        if ($requireOwnership && $booking->worker_id === null && ! $hasWorkerAssignment) {
             abort(403, 'Booking must be assigned to worker for this action.');
         }
     }
@@ -285,7 +290,6 @@ final class CleaningBookingController
             'preferredWorker.user',
             'rooms.assignedWorker.user',
             'workerAssignments.worker.user',
-            'services',
             'addons',
             'billingPolicy',
             'timeWarnings',

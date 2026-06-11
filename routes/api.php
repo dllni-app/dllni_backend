@@ -18,6 +18,7 @@ use App\Http\Controllers\API\UserController;
 use App\Http\Controllers\API\UserNotificationController;
 use App\Http\Controllers\API\WorkerController;
 use Illuminate\Support\Facades\Route;
+use Modules\User\Http\Controllers\API\UserSosController;
 
 Route::post('login', [UserAuthController::class, 'login']);
 Route::middleware(['auth:sanctum'])->post('logout', [UserAuthController::class, 'logout']);
@@ -32,6 +33,10 @@ Route::prefix('dashboard')->group(function (): void {
 });
 
 Route::apiResource('users', UserController::class);
+
+Route::middleware(['auth:sanctum'])->prefix('user')->group(function (): void {
+    Route::post('sos', UserSosController::class);
+});
 
 Route::prefix('v1/deep-links')->group(function (): void {
     Route::post('resolve', ResolveDeepLinkController::class);

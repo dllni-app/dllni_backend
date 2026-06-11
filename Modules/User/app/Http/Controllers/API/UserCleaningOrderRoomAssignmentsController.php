@@ -28,7 +28,6 @@ final class UserCleaningOrderRoomAssignmentsController
             'workerAssignments.worker.user',
             'timeWarnings',
             'disputes',
-            'services',
             'addons',
             'billingPolicy',
         ]);

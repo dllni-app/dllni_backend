@@ -12,7 +12,6 @@ use Illuminate\Support\Str;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
-use Modules\Cleaning\Models\CleaningService;
 
 final class CleaningBookingSeeder extends Seeder
 {
@@ -31,9 +30,8 @@ final class CleaningBookingSeeder extends Seeder
         $worker = Worker::first();
         $cancellationPolicy = CancellationPolicy::where('module', 'cleaning')->where('is_default', true)->first();
         $billingPolicy = CleaningBillingPolicy::where('is_default', true)->first();
-        $standardService = CleaningService::where('slug', 'standard-apartment-cleaning')->first();
 
-        if (! $worker || ! $billingPolicy || ! $standardService) {
+        if (! $worker || ! $billingPolicy) {
             return;
         }
 
@@ -73,6 +71,7 @@ final class CleaningBookingSeeder extends Seeder
                     'kitchens' => 1,
                     'living_room_size' => 'medium',
                 ],
+                'cleaning_services' => ['تنظيف الشقة المعياري'],
                 'estimated_sqm' => 85,
                 'estimated_hours' => 3.5,
                 'scheduled_date' => $scheduledDate,

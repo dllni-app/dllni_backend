@@ -17,6 +17,7 @@ trait SosAlertFilterQuery
             ->allowedFilters([
                 AllowedFilter::exact('status'),
                 AllowedFilter::exact('emergencyType', 'emergency_type'),
+                AllowedFilter::exact('source'),
             ])
             ->allowedSorts([
                 AllowedSort::field('triggeredAt', 'triggered_at'),

@@ -28,6 +28,7 @@ The backend keeps the existing booking lifecycle. The only state change is that 
 - `roomAssignments` are the source of truth for per-room ownership.
 - Customer room assignment is allowed before `in_progress`.
 - Worker room claim is allowed only after the worker has accepted and while the booking is still `pending`.
+- Do not use the top-level booking `status` alone for worker screens. Use `worker_order_status` or `myAssignment.status` for the authenticated worker.
 
 ---
 
@@ -115,28 +116,46 @@ Validation notes:
 - `roomAssignments`
 - `myAssignment`
 - `worker_assignment` alias for `myAssignment`
+- `order_status`: the real global cleaning booking status
+- `worker_order_status`: the authenticated worker's status for this booking
+- `required_workers_count`
+- `accepted_workers_count`
+- `pending_workers_count`
+- `start_approved_workers_count`
+- `not_start_approved_workers_count`
 
-Example response:
+Customer-side example after one of two workers accepted:
 
 ```json
 {
   "id": 123,
   "status": "pending",
+  "order_status": "pending",
+  "worker_order_status": "pending",
   "workerId": null,
   "assignmentMode": "open_count",
   "numberOfWorkers": 2,
+  "required_workers_count": 2,
+  "accepted_workers_count": 1,
+  "pending_workers_count": 1,
+  "start_approved_workers_count": 0,
+  "not_start_approved_workers_count": 2,
   "workerAcceptance": {
     "required": 2,
     "accepted": 1,
     "remaining": 1,
-    "isFulfilled": false
+    "startApproved": 0,
+    "notStartApproved": 2,
+    "isFulfilled": false,
+    "isStartApproved": false
   },
   "workerAssignments": [
     {
-      "id": 9001,![alt text](image-3.png)
+      "id": 9001,
       "workerId": 44,
-      "status": "accepted",
+      "status": "accepted_waiting_for_order_start",
       "acceptedAt": "2026-06-03T18:30:00+03:00",
+      "startApprovedAt": null,
       "roomCount": 1,
       "roomsWeight": 1.5,
       "serviceShareAmount": 18000,
@@ -157,6 +176,34 @@ Example response:
       }
     }
   ],
+  "myAssignment": null,
+  "worker_assignment": null
+}
+```
+
+Worker-side example for the accepted worker while the global order is still `pending`:
+
+```json
+{
+  "id": 123,
+  "status": "pending",
+  "order_status": "pending",
+  "worker_order_status": "accepted_waiting_for_order_start",
+  "workerId": null,
+  "required_workers_count": 2,
+  "accepted_workers_count": 1,
+  "pending_workers_count": 1,
+  "start_approved_workers_count": 0,
+  "not_start_approved_workers_count": 2,
+  "workerAcceptance": {
+    "required": 2,
+    "accepted": 1,
+    "remaining": 1,
+    "startApproved": 0,
+    "notStartApproved": 2,
+    "isFulfilled": false,
+    "isStartApproved": false
+  },
   "roomAssignments": [
     {
       "id": 501,
@@ -182,8 +229,9 @@ Example response:
   "myAssignment": {
     "id": 9001,
     "workerId": 44,
-    "status": "accepted",
+    "status": "accepted_waiting_for_order_start",
     "acceptedAt": "2026-06-03T18:30:00+03:00",
+    "startApprovedAt": null,
     "roomCount": 1,
     "roomsWeight": 1.5,
     "serviceShareAmount": 18000,
@@ -196,8 +244,9 @@ Example response:
   "worker_assignment": {
     "id": 9001,
     "workerId": 44,
-    "status": "accepted",
+    "status": "accepted_waiting_for_order_start",
     "acceptedAt": "2026-06-03T18:30:00+03:00",
+    "startApprovedAt": null,
     "roomCount": 1,
     "roomsWeight": 1.5,
     "serviceShareAmount": 18000,
@@ -268,15 +317,56 @@ Rules:
 - `roomIds` is optional.
 - If provided, the backend claims those rooms during acceptance.
 - If the required worker count is not yet met, the booking stays `pending`.
+- The accepting worker row becomes `accepted_waiting_for_order_start`; duplicate accepts are rejected.
 - When the required count is met, the backend finalizes the booking to `worker_assigned` and auto-balances any remaining unassigned rooms.
+
+### Customer confirms start verification
+`POST /api/v1/user/cleaning/orders/{order}/start-verification/confirm`
+
+Payload:
+
+```json
+{
+  "code": "1234"
+}
+```
+
+Rules:
+- The booking must be `awaiting_start_verification`.
+- For current assignment-backed bookings, successful code verification does not immediately start work unless every required worker has already approved start.
+- Accepted worker rows move to `awaiting_start_verification`.
+- The global booking remains `awaiting_start_verification` while `not_start_approved_workers_count > 0`.
+- Legacy single-worker bookings without assignment rows still move directly to `in_progress` for backward compatibility.
+
+### Worker approves start
+`POST /api/v1/cleaning-bookings/{id}/start-work`
+
+Rules:
+- The worker must have accepted the booking.
+- The customer must already have verified the start code.
+- The worker row moves to `start_approved` and gets `startApprovedAt`.
+- If any required worker has not approved, the global booking remains `awaiting_start_verification`.
+- When all required workers have approved, the global booking moves to `in_progress`.
 
 ---
 
 ## State Model
 - `pending` means the order is still searching when accepted workers are fewer than required.
 - `worker_assigned` means the required team is complete and the booking can move through the existing travel/start/completion lifecycle.
+- `awaiting_start_verification` means the customer has verified/approved the start but one or more workers may still need to approve start.
+- `in_progress` is only reached after all required assignment-backed workers are `start_approved`.
 - `worker_id` remains the primary legacy worker pointer.
 - Accepted workers are still visible through the booking resource and worker-facing screens while the booking is `pending`.
+
+Worker-order statuses:
+- `pending`
+- `accepted_waiting_for_order_start`
+- `awaiting_start_verification`
+- `start_approved`
+- `rejected`
+- `withdrawn`
+- `cancelled`
+- `accepted` can appear on legacy rows and should be treated as accepted.
 
 ---
 
@@ -287,12 +377,16 @@ Rules:
 - `open_count` mode should show a worker-count selector.
 - Render `pending` + incomplete team as "searching for workers".
 - Show accepted workers, remaining slots, and room ownership in order details.
+- During start verification, show `not_start_approved_workers_count` as the number of workers still needed before work begins.
 - Send `assignmentMode` and `numberOfWorkers` on create, update, and estimate requests.
 - Use `PATCH /room-assignments` for customer room edits.
 - Refetch the booking when `cleaning_booking.team_updated` is received.
 
 ### Worker app
 - Show accepted count, remaining count, and current worker participation on pending bookings.
+- After accepting, render `worker_order_status = accepted_waiting_for_order_start` instead of showing the worker their order as plain `pending`.
+- When `worker_order_status = awaiting_start_verification`, call `POST /api/v1/cleaning-bookings/{id}/start-work` to approve start.
+- If `worker_order_status = start_approved`, keep the worker in a waiting UI until the global `order_status` becomes `in_progress`.
 - Allow room selection on accept, and separate room claiming while the booking is still pending.
 - Keep travel/start/completion disabled until the booking is `worker_assigned`.
 - Use `workerAmount` from worker assignments for earnings and transactions.

@@ -107,8 +107,9 @@ final class CleaningBookingTeamService
                 $assignment = CleaningBookingWorkerAssignment::query()->create([
                     'cleaning_booking_id' => $booking->id,
                     'worker_id' => $worker->id,
-                    'status' => CleaningBookingWorkerAssignmentStatus::Accepted->value,
+                    'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
                     'accepted_at' => now(),
+                    'start_approved_at' => null,
                     'room_count' => 0,
                     'rooms_weight' => 0,
                     'service_share_amount' => 0,
@@ -118,9 +119,14 @@ final class CleaningBookingTeamService
                     'currency' => (string) config('app.currency', 'SYP'),
                 ]);
             } else {
+                if (in_array($assignment->status, CleaningBookingWorkerAssignmentStatus::acceptedStatuses(), true)) {
+                    throw new InvalidArgumentException('Worker has already accepted this booking.');
+                }
+
                 $assignment->forceFill([
-                    'status' => CleaningBookingWorkerAssignmentStatus::Accepted,
+                    'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart,
                     'accepted_at' => $assignment->accepted_at ?? now(),
+                    'start_approved_at' => null,
                 ])->save();
             }
 
@@ -136,7 +142,6 @@ final class CleaningBookingTeamService
                 'preferredWorker.user',
                 'rooms.assignedWorker.user',
                 'workerAssignments.worker.user',
-                'services',
                 'addons',
                 'billingPolicy',
                 'timeWarnings',
@@ -175,7 +180,6 @@ final class CleaningBookingTeamService
                 'preferredWorker.user',
                 'rooms.assignedWorker.user',
                 'workerAssignments.worker.user',
-                'services',
                 'addons',
                 'billingPolicy',
                 'timeWarnings',
@@ -210,6 +214,7 @@ final class CleaningBookingTeamService
                     'travel_fee' => 0,
                     'admin_margin_amount' => 0,
                     'worker_amount' => 0,
+                    'start_approved_at' => null,
                 ])->save();
             }
 
@@ -237,7 +242,6 @@ final class CleaningBookingTeamService
                 'preferredWorker.user',
                 'rooms.assignedWorker.user',
                 'workerAssignments.worker.user',
-                'services',
                 'addons',
                 'billingPolicy',
                 'timeWarnings',
@@ -296,7 +300,6 @@ final class CleaningBookingTeamService
                 'preferredWorker.user',
                 'rooms.assignedWorker.user',
                 'workerAssignments.worker.user',
-                'services',
                 'addons',
                 'billingPolicy',
                 'timeWarnings',
@@ -315,7 +318,7 @@ final class CleaningBookingTeamService
 
         $assignmentQuery = CleaningBookingWorkerAssignment::query()
             ->where('cleaning_booking_id', $booking->id)
-            ->where('status', CleaningBookingWorkerAssignmentStatus::Accepted)
+            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
             ->lockForUpdate();
 
         $rooms = $roomQuery->get()->values();
@@ -430,7 +433,6 @@ final class CleaningBookingTeamService
             'preferredWorker.user',
             'rooms.assignedWorker.user',
             'workerAssignments.worker.user',
-            'services',
             'addons',
             'billingPolicy',
             'timeWarnings',
@@ -457,6 +459,8 @@ final class CleaningBookingTeamService
             'requiredWorkers' => $required,
             'acceptedWorkers' => $accepted,
             'remainingWorkers' => max(0, $required - $accepted),
+            'startApprovedWorkers' => $booking->startApprovedWorkerCount(),
+            'notStartApprovedWorkers' => $booking->notStartApprovedWorkerCount(),
             'isFulfilled' => $accepted >= $required,
             'status' => $booking->status?->value ?? $booking->status,
             'updatedAt' => now()->toIso8601String(),
@@ -524,6 +528,10 @@ final class CleaningBookingTeamService
             throw new InvalidArgumentException('Booking cannot be accepted in current status.');
         }
 
+        if (! in_array($booking->status, [CleaningBookingStatus::Pending, CleaningBookingStatus::WorkerAssigned], true)) {
+            throw new InvalidArgumentException('Booking cannot be accepted in current status.');
+        }
+
         if ($booking->assignment_mode instanceof CleaningAssignmentMode && $booking->assignment_mode === CleaningAssignmentMode::PreferredWorker && (int) $booking->preferred_worker_id !== $worker->id) {
             throw new InvalidArgumentException('Booking is reserved for a different preferred worker.');
         }
@@ -570,7 +578,7 @@ final class CleaningBookingTeamService
         return CleaningBookingWorkerAssignment::query()
             ->where('cleaning_booking_id', $bookingId)
             ->where('worker_id', $workerId)
-            ->where('status', CleaningBookingWorkerAssignmentStatus::Accepted)
+            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
             ->first();
     }
 
@@ -581,13 +589,13 @@ final class CleaningBookingTeamService
     {
         if ($booking !== null && $booking->relationLoaded('workerAssignments')) {
             return $booking->workerAssignments->filter(
-                static fn (CleaningBookingWorkerAssignment $assignment): bool => $assignment->status === CleaningBookingWorkerAssignmentStatus::Accepted
+                static fn (CleaningBookingWorkerAssignment $assignment): bool => in_array($assignment->status, CleaningBookingWorkerAssignmentStatus::acceptedStatuses(), true)
             )->values();
         }
 
         return CleaningBookingWorkerAssignment::query()
             ->where('cleaning_booking_id', $bookingId)
-            ->where('status', CleaningBookingWorkerAssignmentStatus::Accepted)
+            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
             ->get();
     }
 

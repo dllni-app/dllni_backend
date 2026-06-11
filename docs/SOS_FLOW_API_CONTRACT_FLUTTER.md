@@ -11,10 +11,52 @@ This contract documents the currently implemented SOS API endpoints in `Dllni_ba
 
 | Method | Path | Purpose |
 |---|---|---|
+| POST | `/user/sos` | Create a user SOS for a restaurant order |
 | GET | `/sos-alerts` | List SOS alerts (paginated) |
 | GET | `/sos-alerts/{id}` | Get single SOS alert details |
 
-## 1) List SOS Alerts
+## 1) Create User SOS
+
+### Request
+`POST /api/v1/user/sos`
+
+Compatibility alias: `POST /api/user/sos`
+
+### Body
+```json
+{
+  "order_id": 1,
+  "message": "The worker did not arrive and I need urgent help."
+}
+```
+
+### Validation
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `order_id` | integer | Yes | Must exist in `orders.id` and belong to the authenticated user |
+| `message` | string | Yes | Trimmed, non-empty, max `1000` characters |
+
+### Success Response (201)
+```json
+{
+  "success": true,
+  "message": "SOS request sent successfully.",
+  "data": {
+    "id": 1,
+    "order_id": 1,
+    "message": "The worker did not arrive and I need urgent help.",
+    "status": "pending",
+    "created_at": "2026-06-11T00:00:00.000000Z"
+  }
+}
+```
+
+### Error Cases
+- `401 Unauthorized`: Missing/invalid token
+- `403 Forbidden`: The order exists but does not belong to the authenticated user
+- `422 Unprocessable Entity`: Missing/invalid `order_id` or empty/too-long `message`
+
+## 2) List SOS Alerts
 
 ### Request
 `GET /api/v1/sos-alerts`
@@ -23,8 +65,9 @@ This contract documents the currently implemented SOS API endpoints in `Dllni_ba
 | Param | Type | Required | Notes |
 |---|---|---|---|
 | `perPage` | integer | No | Range: `1..100`, default pagination size from backend is `10` |
-| `filter[status]` | string | No | `triggered` \| `acknowledged` \| `resolved` |
+| `filter[status]` | string | No | `pending` \| `triggered` \| `acknowledged` \| `resolved` |
 | `filter[emergencyType]` | string | No | `safety_threat` \| `medical_emergency` \| `severe_conflict` |
+| `filter[source]` | string | No | `booking` \| `user` |
 | `sort` | string | No | `triggeredAt` \| `-triggeredAt` \| `createdAt` \| `-createdAt` |
 
 ### Success Response (200)
@@ -33,9 +76,13 @@ This contract documents the currently implemented SOS API endpoints in `Dllni_ba
   "data": [
     {
       "id": 15,
+      "userId": null,
+      "orderId": null,
       "bookingId": 987,
       "bookingType": "Modules\\Cleaning\\app\\Models\\CleaningBooking",
       "emergencyType": "medical_emergency",
+      "message": null,
+      "source": "booking",
       "status": "triggered",
       "latitude": 33.5138,
       "longitude": 36.2765,
@@ -66,7 +113,7 @@ This contract documents the currently implemented SOS API endpoints in `Dllni_ba
 }
 ```
 
-## 2) Show SOS Alert
+## 3) Show SOS Alert
 
 ### Request
 `GET /api/v1/sos-alerts/{id}`
@@ -76,9 +123,13 @@ This contract documents the currently implemented SOS API endpoints in `Dllni_ba
 {
   "data": {
     "id": 15,
+    "userId": null,
+    "orderId": null,
     "bookingId": 987,
     "bookingType": "Modules\\Cleaning\\app\\Models\\CleaningBooking",
     "emergencyType": "medical_emergency",
+    "message": null,
+    "source": "booking",
     "status": "acknowledged",
     "latitude": 33.5138,
     "longitude": 36.2765,
@@ -97,9 +148,13 @@ This contract documents the currently implemented SOS API endpoints in `Dllni_ba
 | Field | Type | Nullable | Description |
 |---|---|---|---|
 | `id` | integer | No | SOS alert ID |
+| `userId` | integer | Yes | User who submitted a user SOS |
+| `orderId` | integer | Yes | Restaurant order linked to a user SOS |
 | `bookingId` | integer | Yes | Related booking ID |
 | `bookingType` | string | Yes | Polymorphic booking model class |
 | `emergencyType` | string | Yes | Emergency category enum |
+| `message` | string | Yes | User-entered SOS issue description |
+| `source` | string | Yes | `booking` for existing booking SOS, `user` for user-created SOS |
 | `status` | string | Yes | SOS status enum |
 | `latitude` | number | No | Float latitude |
 | `longitude` | number | No | Float longitude |
@@ -110,7 +165,7 @@ This contract documents the currently implemented SOS API endpoints in `Dllni_ba
 | `updatedAt` | string | No | Datetime, format `YYYY-MM-DD HH:mm:ss` |
 
 ## Enums
-- `status`: `triggered`, `acknowledged`, `resolved`
+- `status`: `pending`, `triggered`, `acknowledged`, `resolved`
 - `emergencyType`: `safety_threat`, `medical_emergency`, `severe_conflict`
 
 ## Error Cases
@@ -121,10 +176,16 @@ This contract documents the currently implemented SOS API endpoints in `Dllni_ba
 ## Flutter Integration Notes
 - Parse `latitude`/`longitude` as `double`.
 - `triggeredAt`, `resolvedAt`, `createdAt`, `updatedAt` are not ISO 8601; parse with `yyyy-MM-dd HH:mm:ss`.
+- `POST /user/sos` returns `created_at` as ISO 8601.
 - `booking` is polymorphic and may vary by booking type; treat it as dynamic/map.
-- Current backend exposes SOS as read-only (no create/acknowledge/resolve endpoints in this API surface).
+- User SOS creation is order-bound and requires an authenticated user who owns the selected restaurant order.
 
 ## Source of Truth (Code)
+- `Modules/User/routes/api.php` (`POST /api/v1/user/sos`)
+- `routes/api.php` (`POST /api/user/sos` compatibility alias)
+- `Modules/User/app/Http/Controllers/API/UserSosController.php`
+- `Modules/User/app/Http/Requests/UserSosStoreRequest.php`
+- `Modules/User/app/Http/Resources/UserSosResource.php`
 - `routes/api.php` (`/api/v1/sos-alerts` resource: `index`, `show`)
 - `app/Http/Controllers/API/SosAlertController.php`
 - `app/Http/Resources/SosAlertResource.php`

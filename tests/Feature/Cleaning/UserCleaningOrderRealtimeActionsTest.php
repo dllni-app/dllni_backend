@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use App\Models\User;
 use App\Models\Worker;
-use App\Models\CleaningFinancialSetting;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Laravel\Sanctum\Sanctum;
@@ -14,6 +13,7 @@ use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
 use Modules\Cleaning\Events\CompletionDecisionMade;
 use Modules\Cleaning\Events\ServiceExtensionRequested;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningExtendedTimePrice;
 
 /** @var \Illuminate\Foundation\Testing\TestCase $this */
 
@@ -163,10 +163,10 @@ it('requests a completion extension', function () {
     $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($customer);
 
-    CleaningFinancialSetting::query()->updateOrCreate(
-        ['id' => 1],
-        ['extension_rate_per_30_minutes' => 4500]
-    );
+    CleaningExtendedTimePrice::query()
+        ->where('start_minutes', 16)
+        ->where('end_minutes', 30)
+        ->update(['price' => 4500]);
 
     $booking = CleaningBooking::factory()->create([
         'customer_id' => $customer->id,
@@ -183,6 +183,13 @@ it('requests a completion extension', function () {
 
     $response->assertOk();
     expect($response->json('data.status'))->toBe('time_extension_requested');
+    expect($response->json('extensionPricing.requestedMinutes'))->toBe(30);
+    expect($response->json('extensionPricing.matchedRange'))->toMatchArray([
+        'startMinutes' => 16,
+        'endMinutes' => 30,
+        'label' => '16 - 30 minutes',
+    ]);
+    expect((float) $response->json('extensionPricing.calculatedExtensionPrice'))->toBe(4500.0);
     expect((float) $response->json('data.extensionFeeTotal'))->toBe(0.0);
     $this->assertDatabaseHas('cleaning_bookings', [
         'id' => $booking->id,
@@ -209,4 +216,28 @@ it('requests a completion extension', function () {
             && $event->additionalAmount === 4500.0
             && $event->currency === (string) config('app.currency', 'SYP');
     });
+});
+
+it('rejects completion extension requests above 90 minutes', function () {
+    $customer = User::factory()->create(['email' => 'customer-complete-extend-too-long@example.com']);
+    $workerUser = User::factory()->create(['email' => 'worker-complete-extend-too-long@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($customer);
+
+    $booking = CleaningBooking::factory()->create([
+        'customer_id' => $customer->id,
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'status' => CleaningBookingStatus::AwaitingCustomerCompletion,
+    ]);
+
+    $response = $this->postJson("/api/v1/user/cleaning/orders/{$booking->id}/completion/extend-time", [
+        'additionalMinutes' => 91,
+    ]);
+
+    $response->assertUnprocessable();
+    $this->assertDatabaseMissing('cleaning_time_warnings', [
+        'booking_id' => $booking->id,
+        'additional_minutes' => 91,
+    ]);
 });

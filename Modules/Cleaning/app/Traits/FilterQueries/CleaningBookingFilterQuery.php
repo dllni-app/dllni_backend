@@ -97,7 +97,7 @@ trait CleaningBookingFilterQuery
                 ->orWhereHas('workerAssignments', function (Builder $assignments) use ($worker): void {
                     $assignments
                         ->where('worker_id', $worker->id)
-                        ->where('status', CleaningBookingWorkerAssignmentStatus::Accepted->value);
+                        ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
                 })
                 ->orWhere(function (Builder $pending) use ($worker): void {
                     $pending->where('status', CleaningBookingStatus::Pending)

@@ -112,6 +112,11 @@ final class User extends Authenticatable implements FilamentUser, HasMedia
         return $this->hasMany(\Modules\Resturants\Models\Order::class);
     }
 
+    public function sosAlerts(): HasMany
+    {
+        return $this->hasMany(SosAlert::class);
+    }
+
     public function restaurantGroupOrders(): HasMany
     {
         return $this->hasMany(\Modules\Resturants\Models\RestaurantGroupOrder::class);

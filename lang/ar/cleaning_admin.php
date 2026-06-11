@@ -377,6 +377,21 @@ return [
         ],
     ],
 
+    'extended_time_prices' => [
+        'nav_label' => 'Cleaning Extended Time Prices',
+        'title' => 'Cleaning Extended Time Prices',
+        'model' => 'Cleaning extended time price',
+        'plural' => 'Cleaning extended time prices',
+        'tooltip' => 'Fixed minute ranges and configurable prices for cleaning time extension requests.',
+        'subheading' => 'The minute ranges are fixed by the system. Only the price for each range can be updated.',
+        'fields' => [
+            'sort_order' => 'Order',
+            'start_minutes' => 'Start minutes',
+            'end_minutes' => 'End minutes',
+            'price' => 'Price',
+        ],
+    ],
+
     'filters' => [
         'search' => 'Ã˜Â¨Ã˜Â­Ã˜Â«',
         'search_placeholder' => 'Ã˜Â§Ã˜Â¨Ã˜Â­Ã˜Â«Ã¢â‚¬Â¦',
@@ -708,7 +723,7 @@ return [
         ],
         'service_category' => [
             'cleaning' => 'Ã˜ÂªÃ™â€ Ã˜Â¸Ã™Å Ã™Â',
-            'event_assisent' => 'Ã™â€¦Ã˜Â³Ã˜Â§Ã˜Â¹Ã˜Â¯Ã˜Â© Ã™â€¦Ã™â€ Ã˜Â§Ã˜Â³Ã˜Â¨Ã˜Â§Ã˜Âª',
+            'event_assistance' => 'Ã™â€¦Ã˜Â³Ã˜Â§Ã˜Â¹Ã˜Â¯Ã˜Â© Ã™â€¦Ã™â€ Ã˜Â§Ã˜Â³Ã˜Â¨Ã˜Â§Ã˜Âª',
         ],
         'room_type' => [
             'bedroom' => 'غرفة نوم',

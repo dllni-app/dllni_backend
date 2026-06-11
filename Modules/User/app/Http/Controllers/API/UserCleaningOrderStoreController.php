@@ -22,7 +22,6 @@ final class UserCleaningOrderStoreController
             'workerAssignments.worker.user',
             'timeWarnings',
             'disputes',
-            'services',
             'addons',
             'billingPolicy',
         ]);

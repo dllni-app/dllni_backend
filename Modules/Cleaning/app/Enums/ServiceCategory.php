@@ -7,7 +7,7 @@ namespace Modules\Cleaning\Enums;
 enum ServiceCategory: string
 {
     case Cleaning = 'cleaning';
-    case EventAssistance = 'event_assisent';
+    case EventAssistance = 'event_assistance';
 
     public function label(): string
     {

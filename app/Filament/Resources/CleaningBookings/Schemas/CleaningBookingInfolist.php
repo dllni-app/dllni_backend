@@ -41,12 +41,10 @@ final class CleaningBookingInfolist
                         TextEntry::make('property_details.event_type')->label('Event type')->placeholder('-'),
                         TextEntry::make('property_details.guest_count')->label('Guest count')->placeholder('-'),
                         TextEntry::make('property_details.venue_type')->label('Venue type')->placeholder('-'),
+                        TextEntry::make('property_details.custom_service')->label('Custom service')->placeholder('-'),
+                        TextEntry::make('property_details.hours')->label('Booked hours')->placeholder('-'),
                         TextEntry::make('property_details.special_requirement')->label('Special requirement')->placeholder('-'),
                         TextEntry::make('property_details.notes')->label('Notes')->placeholder('-'),
-                        TextEntry::make('event_services')
-                            ->label('Selected services')
-                            ->state(fn ($record): string => $record->services()->pluck('name')->implode(', '))
-                            ->placeholder('-'),
                     ])
                     ->columns(2)
                     ->visible(fn ($record): bool => $record->property_type === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE),

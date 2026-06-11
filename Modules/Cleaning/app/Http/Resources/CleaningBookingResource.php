@@ -20,6 +20,9 @@ final class CleaningBookingResource extends JsonResource
     {
         $normalizedPropertyDetails = $this->normalizedPropertyDetails();
         $myAssignment = $this->serializeMyAssignment($request);
+        $orderStatus = $this->status?->value ?? $this->status;
+        $workerOrderStatus = $this->workerOrderStatus($myAssignment, $orderStatus);
+        $teamSummary = $this->workerAcceptanceSummary();
 
         return [
             'id' => $this->id,
@@ -33,9 +36,17 @@ final class CleaningBookingResource extends JsonResource
             'cancellationPolicyId' => $this->cancellation_policy_id,
             'billingPolicyId' => $this->billing_policy_id,
             'bookingNumber' => $this->booking_number,
-            'status' => $this->status?->value ?? $this->status,
+            'status' => $orderStatus,
+            'order_status' => $orderStatus,
+            'worker_order_status' => $workerOrderStatus,
+            'required_workers_count' => $teamSummary['required'],
+            'accepted_workers_count' => $teamSummary['accepted'],
+            'pending_workers_count' => $teamSummary['remaining'],
+            'start_approved_workers_count' => $teamSummary['startApproved'],
+            'not_start_approved_workers_count' => $teamSummary['notStartApproved'],
             'propertyType' => $this->property_type,
             'propertyDetails' => $normalizedPropertyDetails,
+            'cleaning_services' => $this->normalizedCleaningServices(),
             'addressLatitude' => $this->address_latitude !== null ? (float) $this->address_latitude : null,
             'addressLongitude' => $this->address_longitude !== null ? (float) $this->address_longitude : null,
             'locationName' => Arr::get($normalizedPropertyDetails, 'location_name') ?? Arr::get($normalizedPropertyDetails, 'address') ?? $this->property_type,
@@ -87,7 +98,6 @@ final class CleaningBookingResource extends JsonResource
             }),
             'myAssignment' => $myAssignment,
             'worker_assignment' => $myAssignment,
-            'services' => $this->whenLoaded('services'),
             'addons' => $this->whenLoaded('addons'),
             'billingPolicy' => $this->whenLoaded('billingPolicy'),
             'timeWarnings' => $this->whenLoaded('timeWarnings'),
@@ -116,6 +126,28 @@ final class CleaningBookingResource extends JsonResource
         }
 
         return $propertyDetails;
+    }
+
+    /**
+     * @return array<int, string>|null
+     */
+    private function normalizedCleaningServices(): ?array
+    {
+        if (! is_array($this->cleaning_services)) {
+            return null;
+        }
+
+        $services = array_values(array_filter(
+            array_map(
+                static fn (mixed $service): ?string => is_string($service) && mb_trim($service) !== ''
+                    ? mb_trim($service)
+                    : null,
+                $this->cleaning_services
+            ),
+            static fn (?string $service): bool => $service !== null
+        ));
+
+        return $services !== [] ? $services : null;
     }
 
     private function normalizeCleaningMode(string $cleaningMode): string
@@ -166,6 +198,7 @@ final class CleaningBookingResource extends JsonResource
             'workerId' => $assignment->worker_id,
             'status' => $assignment->status?->value ?? $assignment->status,
             'acceptedAt' => $assignment->accepted_at?->toIso8601String(),
+            'startApprovedAt' => $assignment->start_approved_at?->toIso8601String(),
             'roomCount' => (int) $assignment->room_count,
             'roomsWeight' => (float) $assignment->rooms_weight,
             'serviceShareAmount' => (float) $assignment->service_share_amount,
@@ -256,5 +289,18 @@ final class CleaningBookingResource extends JsonResource
         }
 
         return $this->serializeWorkerAssignment($assignment);
+    }
+
+    private function workerOrderStatus(?array $myAssignment, ?string $orderStatus): ?string
+    {
+        if (in_array($orderStatus, ['cancelled', 'completed', 'in_progress', 'awaiting_customer_completion', 'time_extension_requested'], true)) {
+            return $orderStatus;
+        }
+
+        if ($myAssignment !== null && isset($myAssignment['status'])) {
+            return (string) $myAssignment['status'];
+        }
+
+        return $orderStatus;
     }
 }

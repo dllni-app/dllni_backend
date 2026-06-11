@@ -14,7 +14,7 @@ final class SosAlertController
     public function index(SosAlertFilterRequest $request): AnonymousResourceCollection
     {
         $alerts = SosAlert::getQuery()
-            ->with(['booking'])
+            ->with(['booking', 'user', 'order'])
             ->paginate($request->get('perPage', 10));
 
         return SosAlertResource::collection($alerts);
@@ -22,7 +22,7 @@ final class SosAlertController
 
     public function show(SosAlert $sos_alert): SosAlertResource
     {
-        $sos_alert->load(['booking']);
+        $sos_alert->load(['booking', 'user', 'order']);
 
         return SosAlertResource::make($sos_alert);
     }

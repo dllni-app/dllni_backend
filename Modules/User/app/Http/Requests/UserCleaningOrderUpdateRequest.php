@@ -22,10 +22,11 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
     public function rules(): array
     {
         $eventPayloadRequested = $this->shouldValidateEventPayload();
+        $isEventAssistance = $this->isEventAssistanceContext();
 
         return [
             'propertyType' => ['sometimes', 'string', Rule::in(UserCleaningOrderEstimationService::PROPERTY_TYPES)],
-            'propertyDetails' => ['sometimes', 'array:address,location_name,bedrooms,rooms,bathrooms,kitchens,balconies,living_room_size,cleaning_mode,room_size_breakdown,eventType,guestCount,venueType,specialRequirement,notes'],
+            'propertyDetails' => ['sometimes', 'array:address,location_name,bedrooms,rooms,bathrooms,kitchens,balconies,living_room_size,cleaning_mode,room_size_breakdown,eventType,guestCount,venueType,customService,hours,specialRequirement,notes'],
             'propertyDetails.address' => ['sometimes', 'string', 'max:500'],
             'propertyDetails.location_name' => ['nullable', 'string', 'max:255'],
             'propertyDetails.bedrooms' => ['nullable', 'integer', 'min:0', 'max:20'],
@@ -59,10 +60,14 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
             'propertyDetails.eventType' => [Rule::requiredIf($eventPayloadRequested), 'string', Rule::in(UserCleaningOrderEstimationService::EVENT_TYPES)],
             'propertyDetails.guestCount' => [Rule::requiredIf($eventPayloadRequested), 'integer', 'min:1', 'max:5000'],
             'propertyDetails.venueType' => [Rule::requiredIf($eventPayloadRequested), 'string', Rule::in($this->availableVenueTypes())],
+            'propertyDetails.customService' => [Rule::requiredIf($eventPayloadRequested), Rule::prohibitedIf(! $isEventAssistance), 'string', 'max:255'],
+            'propertyDetails.hours' => [Rule::requiredIf($eventPayloadRequested), Rule::prohibitedIf(! $isEventAssistance), 'numeric', 'min:1', 'max:24'],
             'propertyDetails.specialRequirement' => ['nullable', 'string', 'max:255'],
             'propertyDetails.notes' => ['nullable', 'string', 'max:2000'],
-            'serviceIds' => ['sometimes', 'array', 'min:1'],
-            'serviceIds.*' => ['integer', 'distinct', 'exists:cleaning_services,id'],
+            'cleaning_services' => ['sometimes', 'nullable', 'array'],
+            'cleaning_services.*' => ['string', 'max:255'],
+            'serviceIds' => ['prohibited'],
+            'serviceIds.*' => ['prohibited'],
             'scheduledDate' => ['sometimes', 'date', 'after_or_equal:today'],
             'scheduledTime' => ['sometimes', 'date_format:H:i'],
             'addressLatitude' => ['sometimes', 'numeric', 'between:-90,90'],
@@ -115,6 +120,15 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
         return mb_strtolower(mb_trim($assignmentMode));
     }
 
+    private function isEventAssistanceContext(): bool
+    {
+        if (mb_strtolower((string) $this->input('propertyType')) === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE) {
+            return true;
+        }
+
+        return $this->shouldValidateEventPayload();
+    }
+
     private function shouldValidateEventPayload(): bool
     {
         if (mb_strtolower((string) $this->input('propertyType')) === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE) {
@@ -123,7 +137,9 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
 
         return $this->has('propertyDetails.eventType')
             || $this->has('propertyDetails.guestCount')
-            || $this->has('propertyDetails.venueType');
+            || $this->has('propertyDetails.venueType')
+            || $this->has('propertyDetails.customService')
+            || $this->has('propertyDetails.hours');
     }
 
     /**

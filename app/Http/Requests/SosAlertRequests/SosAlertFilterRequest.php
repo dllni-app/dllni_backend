@@ -17,8 +17,9 @@ final class SosAlertFilterRequest extends FormRequest
     {
         return [
             'perPage' => 'sometimes|integer|min:1|max:100',
-            'filter.status' => 'sometimes|string|in:triggered,acknowledged,resolved',
+            'filter.status' => 'sometimes|string|in:pending,triggered,acknowledged,resolved',
             'filter.emergencyType' => 'sometimes|string|in:safety_threat,medical_emergency,severe_conflict',
+            'filter.source' => 'sometimes|string|in:booking,user',
             'sort' => 'sometimes|string|in:triggeredAt,-triggeredAt,createdAt,-createdAt',
         ];
     }
