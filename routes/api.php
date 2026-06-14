@@ -8,6 +8,7 @@ use App\Http\Controllers\API\CancellationPolicyController;
 use App\Http\Controllers\API\DisputeController;
 use App\Http\Controllers\DeepLinks\OpenDeepLinkController;
 use App\Http\Controllers\DeepLinks\ResolveDeepLinkController;
+use App\Http\Controllers\Test\MtnConcatenatedSmsTestController;
 use App\Http\Controllers\API\ServiceAddonController;
 use App\Http\Controllers\API\SystemAlertController;
 use App\Http\Controllers\DeepLinks\TrackDeepLinkEventController;
@@ -56,3 +57,9 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     Route::apiResource('travel-cost-configs', TravelCostConfigController::class);
     Route::get('cancellation-policy', [CancellationPolicyController::class, 'show']);
 });
+
+Route::prefix('v1/test')
+    ->middleware(['throttle:10,1'])
+    ->group(function (): void {
+        Route::post('mtn/concatenated-sms/send', MtnConcatenatedSmsTestController::class);
+    });

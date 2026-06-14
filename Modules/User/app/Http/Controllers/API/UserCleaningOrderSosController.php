@@ -12,25 +12,26 @@ use App\Models\SosAlert;
 use App\Models\SystemAlert;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Resturants\Models\Order;
 use Modules\User\Http\Requests\UserCleaningOrderSosStoreRequest;
 use Modules\User\Http\Resources\UserCleaningSosResource;
 
 final class UserCleaningOrderSosController
 {
-    public function __invoke(UserCleaningOrderSosStoreRequest $request, Order $order): JsonResponse
+    public function __invoke(UserCleaningOrderSosStoreRequest $request, CleaningBooking $order): JsonResponse
     {
         $data = $request->validated();
         $userId = (int) $request->user()->id;
 
-        abort_if((int) $order->user_id !== $userId, 403, 'You cannot create an SOS request for this order.');
+        abort_if((int) $order->customer_id !== $userId, 403, 'You cannot create an SOS request for this order.');
 
         $sos = DB::transaction(function () use ($data, $order, $userId): SosAlert {
             $sos = SosAlert::query()->create([
                 'user_id' => $userId,
                 'order_id' => $order->id,
                 'booking_id' => $order->id,
-                'booking_type' => Order::class,
+                'booking_type' => CleaningBooking::class,
                 'emergency_type' => $data['emergency_type'],
                 'message' => $data['message'],
                 'source' => 'user_cleaning_order',
@@ -42,7 +43,7 @@ final class UserCleaningOrderSosController
 
             SystemAlert::query()->create([
                 'booking_id' => $order->id,
-                'booking_type' => Order::class,
+                'booking_type' => CleaningBooking::class,
                 'alert_type' => AlertType::SOSTriggered->value,
                 'severity' => AlertSeverity::Critical->value,
                 'status' => SystemAlertStatus::New->value,
