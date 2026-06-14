@@ -28,7 +28,11 @@ final class SosAlert extends Model
         'latitude',
         'longitude',
         'triggered_at',
+        'acknowledged_at',
+        'acknowledged_by',
         'resolved_at',
+        'resolved_by',
+        'resolution_note',
     ];
 
     public function booking(): MorphTo
@@ -46,6 +50,16 @@ final class SosAlert extends Model
         return $this->belongsTo(Order::class);
     }
 
+    public function acknowledgedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'acknowledged_by');
+    }
+
+    public function resolvedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'resolved_by');
+    }
+
     public function casts(): array
     {
         return [
@@ -56,7 +70,11 @@ final class SosAlert extends Model
             'latitude' => 'decimal:8',
             'longitude' => 'decimal:8',
             'triggered_at' => 'datetime',
+            'acknowledged_at' => 'datetime',
             'resolved_at' => 'datetime',
+            'acknowledged_by' => 'integer',
+            'resolved_by' => 'integer',
+            'resolution_note' => 'string',
         ];
     }
 }

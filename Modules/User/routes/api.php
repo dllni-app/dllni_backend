@@ -205,7 +205,7 @@ Route::prefix('v1/user')->group(function (): void {
         Route::patch('notifications/{id}/read', UserNotificationsMarkAsReadController::class);
         Route::put('notifications/token', RegisterFcmTokenController::class);
 
-        Route::post('sos', UserSosController::class);
+        Route::post('sos', [UserSosController::class, 'store']);
 
         Route::get('addresses', UserAddressIndexController::class);
         Route::post('addresses', UserAddressStoreController::class);

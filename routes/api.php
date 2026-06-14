@@ -9,7 +9,6 @@ use App\Http\Controllers\API\DisputeController;
 use App\Http\Controllers\DeepLinks\OpenDeepLinkController;
 use App\Http\Controllers\DeepLinks\ResolveDeepLinkController;
 use App\Http\Controllers\API\ServiceAddonController;
-use App\Http\Controllers\API\SosAlertController;
 use App\Http\Controllers\API\SystemAlertController;
 use App\Http\Controllers\DeepLinks\TrackDeepLinkEventController;
 use App\Http\Controllers\API\TravelCostConfigController;
@@ -18,7 +17,6 @@ use App\Http\Controllers\API\UserController;
 use App\Http\Controllers\API\UserNotificationController;
 use App\Http\Controllers\API\WorkerController;
 use Illuminate\Support\Facades\Route;
-use Modules\User\Http\Controllers\API\UserSosController;
 
 Route::post('login', [UserAuthController::class, 'login']);
 Route::middleware(['auth:sanctum'])->post('logout', [UserAuthController::class, 'logout']);
@@ -33,10 +31,6 @@ Route::prefix('dashboard')->group(function (): void {
 });
 
 Route::apiResource('users', UserController::class);
-
-Route::middleware(['auth:sanctum'])->prefix('user')->group(function (): void {
-    Route::post('sos', UserSosController::class);
-});
 
 Route::prefix('v1/deep-links')->group(function (): void {
     Route::post('resolve', ResolveDeepLinkController::class);
@@ -58,7 +52,6 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     Route::post('disputes/{dispute}/messages', [DisputeController::class, 'storeMessage']);
     Route::apiResource('disputes', DisputeController::class);
     Route::apiResource('system-alerts', SystemAlertController::class)->only(['index', 'show', 'update']);
-    Route::apiResource('sos-alerts', SosAlertController::class)->only(['index', 'show']);
     Route::apiResource('service-addons', ServiceAddonController::class);
     Route::apiResource('travel-cost-configs', TravelCostConfigController::class);
     Route::get('cancellation-policy', [CancellationPolicyController::class, 'show']);
