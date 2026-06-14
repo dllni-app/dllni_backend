@@ -83,6 +83,7 @@ Route::prefix('v1')->group(function () {
         Route::post('cleaning-bookings/{cleaning_booking}/rooms/claim', [CleaningBookingController::class, 'claimRooms'])->name('cleaning-bookings.rooms.claim');
         Route::post('cleaning-bookings/{cleaning_booking}/reject', [CleaningBookingController::class, 'reject'])->name('cleaning-bookings.reject');
         Route::get('cleaning-bookings/{cleaning_booking}/security-code', [CleaningBookingController::class, 'securityCode'])->name('cleaning-bookings.security-code');
+        Route::post('cleaning-bookings/{cleaning_booking}/sos', [CleaningBookingController::class, 'sos'])->name('cleaning-bookings.sos');
         Route::post('cleaning-bookings/{cleaning_booking}/start-travel', [CleaningBookingController::class, 'startTravel'])->name('cleaning-bookings.start-travel');
         Route::post('cleaning-bookings/{cleaning_booking}/location', [CleaningBookingController::class, 'updateLocation'])->name('cleaning-bookings.location');
         Route::post('cleaning-bookings/{cleaning_booking}/arrive', [CleaningBookingController::class, 'arrive'])->name('cleaning-bookings.arrive');

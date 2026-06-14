@@ -4,10 +4,17 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Http\Controllers\API;
 
+use App\Enums\AlertSeverity;
+use App\Enums\AlertType;
+use App\Enums\SOSStatus;
+use App\Enums\SystemAlertStatus;
+use App\Models\SosAlert;
+use App\Models\SystemAlert;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 use Modules\Cleaning\Data\CleaningBookingData;
@@ -15,6 +22,7 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Http\Requests\CleaningBookingAcceptRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingCancelRequest;
+use Modules\Cleaning\Http\Requests\CleaningBookingSosRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingLocationRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingRoomClaimRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingRejectRequest;
@@ -23,6 +31,7 @@ use Modules\Cleaning\Http\Requests\CleaningBookingRequests\CleaningBookingFilter
 use Modules\Cleaning\Http\Resources\CleaningBookingResource;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Services\CleaningBookingService;
+use Modules\User\Http\Resources\UserCleaningSosResource;
 use Throwable;
 
 final class CleaningBookingController
@@ -95,6 +104,50 @@ final class CleaningBookingController
                 'expiresAt' => $generated['expiresAt'],
             ],
         ]);
+    }
+
+    public function sos(CleaningBookingSosRequest $request, CleaningBooking $cleaning_booking): JsonResponse
+    {
+        $sos = DB::transaction(function () use ($request, $cleaning_booking): SosAlert {
+            $sos = SosAlert::query()->create([
+                'user_id' => $request->user()?->id,
+                'booking_id' => $cleaning_booking->id,
+                'booking_type' => CleaningBooking::class,
+                'emergency_type' => $request->validated('emergency_type'),
+                'message' => $request->validated('message'),
+                'source' => 'booking',
+                'status' => SOSStatus::Triggered->value,
+                'latitude' => $request->validated('latitude'),
+                'longitude' => $request->validated('longitude'),
+                'triggered_at' => now(),
+            ]);
+
+            SystemAlert::query()->create([
+                'booking_id' => $cleaning_booking->id,
+                'booking_type' => CleaningBooking::class,
+                'alert_type' => AlertType::SOSTriggered->value,
+                'severity' => AlertSeverity::Critical->value,
+                'status' => SystemAlertStatus::New->value,
+                'payload' => [
+                    'source' => 'cleaning_worker_sos',
+                    'sos_alert_id' => $sos->id,
+                    'user_id' => $request->user()?->id,
+                    'booking_id' => $cleaning_booking->id,
+                    'message' => $request->validated('message'),
+                    'emergency_type' => $request->validated('emergency_type'),
+                    'latitude' => $request->validated('latitude'),
+                    'longitude' => $request->validated('longitude'),
+                ],
+            ]);
+
+            return $sos;
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Cleaning booking SOS request sent successfully.',
+            'data' => UserCleaningSosResource::make($sos)->resolve($request),
+        ], 201);
     }
 
     /** @throws Throwable */
