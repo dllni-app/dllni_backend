@@ -8,12 +8,16 @@ use App\Models\Dispute;
 use App\Models\MasterProduct;
 use App\Models\User;
 use App\Models\Worker;
+use App\Notifications\Channels\CachedFcmChannel;
+use App\Services\Notifications\CachedFirebaseMessagingClient;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
+use Illuminate\Notifications\ChannelManager;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
@@ -60,6 +64,8 @@ final class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->app->singleton(CachedFirebaseMessagingClient::class);
+
         // override default language path so our root lang/ directory is used
         // (instead of resources/lang).  This must happen before the translator
         // loads any files, so register() is the right spot.
@@ -93,6 +99,16 @@ final class AppServiceProvider extends ServiceProvider
         $this->bootRestaurantPolicies();
         $this->bootSupermarketPolicies();
         $this->bootDeliveryPolicies();
+        $this->bootCachedFcmChannel();
+    }
+
+    private function bootCachedFcmChannel(): void
+    {
+        Notification::resolved(function (ChannelManager $service): void {
+            $service->extend('fcm', function ($app): CachedFcmChannel {
+                return new CachedFcmChannel($app->make(CachedFirebaseMessagingClient::class));
+            });
+        });
     }
 
     private function bootDeliveryPolicies(): void
