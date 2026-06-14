@@ -52,7 +52,7 @@ final class UserCleaningOrderSosController
                     'sos_alert_id' => $sos->id,
                     'user_id' => $userId,
                     'order_id' => $order->id,
-                    'order_number' => $order->order_number,
+                    'order_number' => $order->booking_number,
                     'message' => $data['message'],
                     'emergency_type' => $data['emergency_type'],
                     'latitude' => $data['latitude'],
