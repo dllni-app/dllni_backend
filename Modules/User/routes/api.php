@@ -58,6 +58,7 @@ use Modules\User\Http\Controllers\API\UserCleaningOrderCompletionRejectControlle
 use Modules\User\Http\Controllers\API\UserCleaningOrderReviewController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderEstimatePriceController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderEstimateSizeController;
+use Modules\User\Http\Controllers\API\UserCleaningOrderSosController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderRoomAssignmentsController;
 use Modules\User\Http\Controllers\API\UserCleaningOrdersController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderShowController;
@@ -239,6 +240,7 @@ Route::prefix('v1/user')->group(function (): void {
         Route::patch('cleaning/orders/{order}', UserCleaningOrderUpdateController::class);
         Route::patch('cleaning/orders/{order}/room-assignments', UserCleaningOrderRoomAssignmentsController::class);
         Route::post('cleaning/orders/{order}/cancel', UserCleaningOrderCancelController::class);
+        Route::post('cleaning/orders/{order}/sos', UserCleaningOrderSosController::class);
         Route::post('cleaning/orders/{order}/start-verification/confirm', UserCleaningOrderStartVerificationConfirmController::class)
             ->middleware('throttle:cleaning-start-verification');
         Route::post('cleaning/orders/{order}/completion/confirm', UserCleaningOrderCompletionConfirmController::class);
