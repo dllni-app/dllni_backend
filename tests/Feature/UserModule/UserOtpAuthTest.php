@@ -16,7 +16,6 @@ it('registers and verifies account via otp', function (): void {
     // Act (register)
     $registerResponse = $this->postJson('/api/v1/user/register', [
         'name' => 'Test User',
-        'email' => 'test.user@example.com',
         'phone' => $phone,
         'password' => 'password123',
     ]);

@@ -23,7 +23,7 @@ final class RegisterUserService
         return DB::transaction(function () use ($data): CarbonImmutable {
             $user = User::create([
                 'name' => $data['name'],
-                'email' => $data['email'],
+                'email' => null,
                 'phone' => $data['phone'],
                 'password' => $data['password'],
             ]);

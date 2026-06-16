@@ -28,7 +28,7 @@ use Spatie\Permission\Traits\HasRoles;
 /**
  * @property-read int $id
  * @property-read string $name
- * @property-read string $email
+ * @property-read string|null $email
  * @property-read string|null $phone
  * @property-read UserModuleType|null $module_type
  * @property-read CarbonInterface|null $email_verified_at
