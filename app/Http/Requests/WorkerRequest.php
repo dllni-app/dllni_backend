@@ -25,6 +25,7 @@ final class WorkerRequest extends FormRequest
             'userId' => 'required|exists:users,id',
             'firstName' => 'nullable|string|max:255',
             'gender' => 'nullable|string|in:male,female',
+            'birthday' => 'nullable|date',
             'preferred_work_type' => ['sometimes', 'string', Rule::in(WorkerPreferredWorkType::values())],
             'bio' => 'nullable|string',
             'averageRating' => 'nullable|numeric',

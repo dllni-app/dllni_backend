@@ -21,6 +21,7 @@ final class WorkerFactory extends Factory
         return [
             'user_id' => User::factory(),
             'first_name' => fake()->firstName(),
+            'birthday' => fake()->optional()->date(),
             'preferred_work_type' => WorkerPreferredWorkType::Both,
             'bio' => fake()->optional()->paragraph(),
             'average_rating' => fake()->randomFloat(2, 3, 5),

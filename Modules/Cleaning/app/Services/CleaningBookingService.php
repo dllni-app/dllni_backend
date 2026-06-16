@@ -113,6 +113,15 @@ final class CleaningBookingService
                 fromStatus: $fromStatus,
                 occurredAt: $updated->updated_at?->toIso8601String(),
             );
+        } else {
+            $this->lifecycleNotifications->notifyCustomer(
+                booking: $updated,
+                canonicalType: 'cleaning.booking.worker_confirmed',
+                action: 'worker_confirmed',
+                actorRole: 'worker',
+                fromStatus: $fromStatus,
+                occurredAt: $updated->updated_at?->toIso8601String(),
+            );
         }
 
         return $updated;

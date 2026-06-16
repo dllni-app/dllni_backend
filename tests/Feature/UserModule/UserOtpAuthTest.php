@@ -2,12 +2,16 @@
 
 declare(strict_types=1);
 
+use App\Jobs\Sms\SendRegistrationSmsJob;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Queue;
+use App\Models\SmsMessage;
 
 it('registers and verifies account via otp', function (): void {
     // Arrange
     $phone = '+963944000111';
+    Queue::fake();
 
     // Act (register)
     $registerResponse = $this->postJson('/api/v1/user/register', [
@@ -20,6 +24,24 @@ it('registers and verifies account via otp', function (): void {
     // Assert (register)
     $registerResponse->assertOk()->assertJsonStructure(['message', 'expiresAt']);
     $this->assertDatabaseHas('users', ['phone' => $phone]);
+
+    $user = User::query()->where('phone', $phone)->firstOrFail();
+    $smsMessage = SmsMessage::query()
+        ->where('smsable_type', $user->getMorphClass())
+        ->where('smsable_id', $user->id)
+        ->firstOrFail();
+
+    $this->assertDatabaseHas('sms_messages', [
+        'id' => $smsMessage->id,
+        'provider' => 'mtn',
+        'gsm' => '963944000111',
+        'status' => 'pending',
+        'lang' => 0,
+    ]);
+
+    Queue::assertPushed(SendRegistrationSmsJob::class, function (SendRegistrationSmsJob $job) use ($smsMessage): bool {
+        return $job->smsMessageId === $smsMessage->id;
+    });
 
     // Arrange (get otp from cache in testing)
     $otp = Cache::get(sprintf('user_otp_plain:%s:%s', 'register', $phone));

@@ -14,6 +14,7 @@ use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -115,6 +116,11 @@ final class User extends Authenticatable implements FilamentUser, HasMedia
     public function sosAlerts(): HasMany
     {
         return $this->hasMany(SosAlert::class);
+    }
+
+    public function smsMessages(): MorphMany
+    {
+        return $this->morphMany(SmsMessage::class, 'smsable');
     }
 
     public function restaurantGroupOrders(): HasMany

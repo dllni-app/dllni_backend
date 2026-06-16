@@ -468,6 +468,32 @@ it('updates worker profile home location fields', function () {
     expect((float) $response->json('data.homeLongitude'))->toBe(36.2765);
 });
 
+it('updates worker birthday from worker profile and returns it in the response', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-profile-birthday-update@example.com']);
+    $worker = Worker::factory()->create([
+        'user_id' => $workerUser->id,
+        'is_active' => true,
+        'home_address' => 'Worker Home',
+        'home_latitude' => 33.4,
+        'home_longitude' => 36.2,
+    ]);
+    Sanctum::actingAs($workerUser);
+
+    $response = $this->putJson('/api/v1/cleaning/worker/account/profile', [
+        'birthday' => '1990-03-15',
+    ]);
+
+    $response->assertOk();
+    expect($response->json('data.birthday'))->toBe('1990-03-15');
+
+    $worker->refresh();
+    expect($worker->birthday?->toDateString())->toBe('1990-03-15');
+    expect(\Illuminate\Support\Facades\DB::table('workers')
+        ->where('id', $worker->id)
+        ->whereDate('birthday', '1990-03-15')
+        ->exists())->toBeTrue();
+});
+
 it('updates worker preferred work type from worker profile', function () {
     $workerUser = User::factory()->create(['email' => 'worker-profile-preference-update@example.com']);
     Worker::factory()->create([

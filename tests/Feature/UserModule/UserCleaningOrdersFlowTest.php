@@ -7,6 +7,7 @@ use App\Models\CancellationPolicy;
 use App\Models\CleaningFinancialSetting;
 use App\Models\User;
 use App\Models\Worker;
+use App\Enums\WorkerPreferredWorkType;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -372,6 +373,62 @@ it('returns previously worked cleaning workers for current user', function (): v
     $response->assertOk();
     expect($response->json('workers'))->toHaveCount(1);
     expect((int) $response->json('workers.0.workerId'))->toBe($worker->id);
+});
+
+it('filters previous workers by booking type so cleaning-only workers do not appear for event assistance', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $cleaningWorker = Worker::factory()->create([
+        'preferred_work_type' => WorkerPreferredWorkType::Cleaning,
+    ]);
+    $eventWorker = Worker::factory()->create([
+        'preferred_work_type' => WorkerPreferredWorkType::Events,
+    ]);
+
+    CleaningBooking::factory()->create([
+        'customer_id' => $user->id,
+        'worker_id' => $cleaningWorker->id,
+        'status' => CleaningBookingStatus::Completed->value,
+    ]);
+    CleaningBooking::factory()->create([
+        'customer_id' => $user->id,
+        'worker_id' => $eventWorker->id,
+        'status' => CleaningBookingStatus::Completed->value,
+    ]);
+
+    $response = getJson('/api/v1/user/cleaning/orders/previous-workers?propertyType=event_assistance');
+
+    $response->assertOk();
+    expect(collect($response->json('workers'))->pluck('workerId')->all())->toBe([$eventWorker->id]);
+});
+
+it('filters previous workers by regular cleaning type so event-only workers do not appear', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $cleaningWorker = Worker::factory()->create([
+        'preferred_work_type' => WorkerPreferredWorkType::Cleaning,
+    ]);
+    $eventWorker = Worker::factory()->create([
+        'preferred_work_type' => WorkerPreferredWorkType::Events,
+    ]);
+
+    CleaningBooking::factory()->create([
+        'customer_id' => $user->id,
+        'worker_id' => $cleaningWorker->id,
+        'status' => CleaningBookingStatus::Completed->value,
+    ]);
+    CleaningBooking::factory()->create([
+        'customer_id' => $user->id,
+        'worker_id' => $eventWorker->id,
+        'status' => CleaningBookingStatus::Completed->value,
+    ]);
+
+    $response = getJson('/api/v1/user/cleaning/orders/previous-workers?propertyType=apartment');
+
+    $response->assertOk();
+    expect(collect($response->json('workers'))->pluck('workerId')->all())->toBe([$cleaningWorker->id]);
 });
 
 it('returns estimated cleaning price from backend algorithm', function (): void {

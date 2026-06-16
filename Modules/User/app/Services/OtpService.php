@@ -8,6 +8,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use Modules\User\Data\OtpIssueData;
 use Modules\User\Enums\OtpPurpose;
 use Modules\User\Models\UserOtp;
 use Modules\User\Services\SmsOtp\SmsOtpProvider;
@@ -19,6 +20,15 @@ final class OtpService
     ) {}
 
     public function send(string $phone, OtpPurpose $purpose): CarbonImmutable
+    {
+        $issued = $this->issue($phone, $purpose);
+
+        $this->provider->sendOtp($phone, $issued->code, $purpose);
+
+        return $issued->expiresAt;
+    }
+
+    public function issue(string $phone, OtpPurpose $purpose): OtpIssueData
     {
         $code = (string) random_int(100000, 999999);
         $expiresAt = CarbonImmutable::now()->addMinutes(5);
@@ -36,9 +46,10 @@ final class OtpService
             Cache::put($this->plainOtpCacheKey($phone, $purpose), $code, $expiresAt);
         }
 
-        $this->provider->sendOtp($phone, $code, $purpose);
-
-        return $expiresAt;
+        return new OtpIssueData(
+            code: $code,
+            expiresAt: $expiresAt,
+        );
     }
 
     public function verify(string $phone, OtpPurpose $purpose, string $code): void

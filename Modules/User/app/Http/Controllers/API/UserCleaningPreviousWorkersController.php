@@ -4,18 +4,21 @@ declare(strict_types=1);
 
 namespace Modules\User\Http\Controllers\API;
 
+use App\Enums\WorkerPreferredWorkType;
 use App\Models\Worker;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\User\Http\Requests\UserCleaningPreviousWorkersRequest;
 
 final class UserCleaningPreviousWorkersController
 {
-    public function __invoke(): JsonResponse
+    public function __invoke(UserCleaningPreviousWorkersRequest $request): JsonResponse
     {
         $userId = Auth::id();
+        $propertyType = $request->validated('propertyType');
 
         $history = CleaningBooking::query()
             ->where('customer_id', $userId)
@@ -36,6 +39,13 @@ final class UserCleaningPreviousWorkersController
             ->withCount('customerRatings')
             ->whereIn('id', $history->pluck('worker_id')->all())
             ->get()
+            ->filter(function (Worker $worker) use ($propertyType): bool {
+                if (! is_string($propertyType) || $propertyType === '') {
+                    return true;
+                }
+
+                return $worker->preferred_work_type?->matchesPropertyType($propertyType) ?? true;
+            })
             ->keyBy('id');
 
         $payload = $history
