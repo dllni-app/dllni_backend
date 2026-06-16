@@ -30,12 +30,12 @@ final class CleaningWorkerResource extends Resource
 
     public static function getNavigationGroup(): ?string
     {
-        return 'Cleaning Management';
+        return __('cleaning_admin.nav_groups.operations');
     }
 
     public static function getNavigationLabel(): string
     {
-        return 'Cleaning Workers';
+        return __('cleaning_admin.workers.nav_label');
     }
 
     public static function form(Schema $schema): Schema
@@ -68,4 +68,3 @@ final class CleaningWorkerResource extends Resource
         ];
     }
 }
-

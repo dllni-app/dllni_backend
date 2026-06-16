@@ -22,6 +22,8 @@ final class CleaningTimeWarningObserver
                 $booking->id,
                 $booking->worker_id,
                 $timeWarning->additional_minutes,
+                $timeWarning->quoted_amount !== null ? (float) $timeWarning->quoted_amount : null,
+                $timeWarning->quoted_currency,
             ));
         }
 

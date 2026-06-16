@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Notifications\Core;
 
 use Illuminate\Notifications\DatabaseNotification;
+use InvalidArgumentException;
 
 final class NotificationFeedNormalizer
 {
@@ -43,7 +44,7 @@ final class NotificationFeedNormalizer
             ? $data['canonical_type']
             : $this->registry->canonicalFromLegacy($legacyType);
 
-        $definition = $canonicalType !== null ? $this->registry->definition($canonicalType) : null;
+        $definition = $this->resolveDefinition($canonicalType);
 
         $module = $this->resolveModule($data, $definition, $notificationClass);
         $icon = $this->resolveIcon($data, $module);
@@ -51,6 +52,7 @@ final class NotificationFeedNormalizer
         $priority = (string) ($data['priority'] ?? ($definition['priority'] ?? 'normal'));
         $title = (string) ($data['title'] ?? '');
         $body = (string) ($data['body'] ?? '');
+        $message = (string) ($data['message'] ?? $body);
         $normalizedData = $this->extractData($data);
 
         return [
@@ -63,8 +65,25 @@ final class NotificationFeedNormalizer
             'priority' => $priority,
             'title' => $title,
             'body' => $body,
+            'message' => $message,
             'data' => $normalizedData,
         ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function resolveDefinition(?string $canonicalType): ?array
+    {
+        if ($canonicalType === null || $canonicalType === '') {
+            return null;
+        }
+
+        try {
+            return $this->registry->definition($canonicalType);
+        } catch (InvalidArgumentException) {
+            return null;
+        }
     }
 
     /**
@@ -93,6 +112,10 @@ final class NotificationFeedNormalizer
 
         if (str_contains($notificationClass, '\\Resturants\\') || str_contains($notificationClass, '\\Restaurant\\')) {
             return 'restaurant';
+        }
+
+        if (str_contains($notificationClass, '\\Delivery\\')) {
+            return 'delivery';
         }
 
         return null;
@@ -159,6 +182,7 @@ final class NotificationFeedNormalizer
             'priority',
             'title',
             'body',
+            'message',
         ];
 
         $normalized = [];
@@ -171,6 +195,42 @@ final class NotificationFeedNormalizer
             $normalized[$key] = $value;
         }
 
-        return $normalized;
+        return $this->normalizeRoutingData($normalized);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function normalizeRoutingData(array $data): array
+    {
+        $deepLinkTarget = null;
+        if (is_string($data['deep_link_target'] ?? null) && $data['deep_link_target'] !== '') {
+            $deepLinkTarget = $data['deep_link_target'];
+        } elseif (is_string($data['deepLinkTarget'] ?? null) && $data['deepLinkTarget'] !== '') {
+            $deepLinkTarget = $data['deepLinkTarget'];
+        }
+
+        if (is_string($deepLinkTarget) && $deepLinkTarget !== '') {
+            $data['deep_link_target'] = $deepLinkTarget;
+            $data['deepLinkTarget'] = $deepLinkTarget;
+        }
+
+        if (! isset($data['args']) && is_string($deepLinkTarget) && $deepLinkTarget !== '') {
+            $routeArgs = ['route' => $deepLinkTarget];
+
+            foreach (['bookingId', 'orderId', 'timeWarningId', 'disputeId', 'action', 'status'] as $key) {
+                if (array_key_exists($key, $data)) {
+                    $routeArgs[$key] = $data[$key];
+                }
+            }
+
+            $encoded = json_encode($routeArgs, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if (is_string($encoded)) {
+                $data['args'] = $encoded;
+            }
+        }
+
+        return $data;
     }
 }

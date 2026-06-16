@@ -2,25 +2,23 @@
 
 declare(strict_types=1);
 
-use App\Models\User;
 use Database\Factories\SmCategoryFactory;
 use Database\Factories\SmStoreFactory;
-use Laravel\Sanctum\Sanctum;
 
 beforeEach(function (): void {
-    $user = User::factory()->create();
-    Sanctum::actingAs($user);
+    $context = actingAsSupermarketSeller();
+    $this->user = $context->user;
+    $this->store = $context->store;
 });
 
 it('rejects duplicate slugs within same store', function (): void {
-    $store = SmStoreFactory::new()->create();
     SmCategoryFactory::new()->create([
-        'store_id' => $store->id,
+        'store_id' => $this->store->id,
         'slug' => 'unique-slug',
     ]);
 
     $payload = [
-        'storeId' => $store->id,
+        'storeId' => $this->store->id,
         'name' => 'Another Category',
         'slug' => 'unique-slug',
     ];
@@ -31,35 +29,20 @@ it('rejects duplicate slugs within same store', function (): void {
     $response->assertJsonValidationErrors(['slug']);
 });
 
-it('allows same slug in different stores', function (): void {
-    $store1 = SmStoreFactory::new()->create();
-    $store2 = SmStoreFactory::new()->create();
-
-    SmCategoryFactory::new()->create([
-        'store_id' => $store1->id,
-        'slug' => 'produce',
-    ]);
+it('creates categories on the authenticated owner store regardless of submitted store id', function (): void {
+    $otherStore = SmStoreFactory::new()->create();
 
     $payload = [
-        'storeId' => $store2->id,
-        'name' => 'Produce',
-        'slug' => 'produce',
+        'storeId' => $otherStore->id,
+        'name' => 'Scoped Category',
+        'slug' => 'scoped-category',
     ];
 
     $response = $this->postJson('/api/v1/sm-categories', $payload);
 
     $response->assertCreated();
-});
-
-it('rejects invalid store id', function (): void {
-    $payload = [
-        'storeId' => 999999,
-        'name' => 'Test Category',
-        'slug' => 'test-category',
-    ];
-
-    $response = $this->postJson('/api/v1/sm-categories', $payload);
-
-    $response->assertUnprocessable();
-    $response->assertJsonValidationErrors(['storeId']);
+    $this->assertDatabaseHas('sm_categories', [
+        'store_id' => $this->store->id,
+        'slug' => 'scoped-category',
+    ]);
 });

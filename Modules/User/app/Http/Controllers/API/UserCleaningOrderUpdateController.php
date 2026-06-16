@@ -19,7 +19,16 @@ final class UserCleaningOrderUpdateController
             ->findOrFail($order);
 
         $updated = $service->update($model, $request->validated());
-        $updated->load(['worker.user', 'timeWarnings', 'disputes', 'services', 'addons', 'billingPolicy']);
+        $updated->load([
+            'worker.user',
+            'preferredWorker.user',
+            'rooms.assignedWorker.user',
+            'workerAssignments.worker.user',
+            'timeWarnings',
+            'disputes',
+            'addons',
+            'billingPolicy',
+        ]);
 
         return response()->json([
             'order' => CleaningBookingResource::make($updated),

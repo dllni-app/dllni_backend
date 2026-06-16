@@ -20,6 +20,7 @@ final class CleaningServiceData extends Data
         public ?string $slug,
         public ?string $category,
         public ?string $description,
+        public ?float $price,
         public ?bool $isActive,
     ) {}
 }

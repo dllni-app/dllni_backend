@@ -18,8 +18,8 @@ final class TravelCostConfigsTable
             ->columns([
                 TextColumn::make('name')->label('الاسم')->searchable(),
                 TextColumn::make('max_km')->label('أقصى كم (كم)'),
-                TextColumn::make('cost_per_km')->label('سعر الكيلومتر')->money('SAR'),
-                TextColumn::make('fixed_fee')->label('الحد الأدنى لرسوم التنقل')->money('SAR'),
+                TextColumn::make('cost_per_km')->label('سعر الكيلومتر')->money(config('app.currency', 'SYP')),
+                TextColumn::make('fixed_fee')->label('الحد الأدنى لرسوم التنقل')->money(config('app.currency', 'SYP')),
                 IconColumn::make('is_active')->label('نشط')->boolean(),
             ])
             ->recordActions([

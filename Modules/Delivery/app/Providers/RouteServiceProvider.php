@@ -1,0 +1,34 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Modules\Delivery\Providers;
+
+use Illuminate\Foundation\Support\Providers\RouteServiceProvider as ServiceProvider;
+use Illuminate\Support\Facades\Route;
+
+final class RouteServiceProvider extends ServiceProvider
+{
+    protected string $name = 'Delivery';
+
+    public function boot(): void
+    {
+        parent::boot();
+    }
+
+    public function map(): void
+    {
+        $this->mapApiRoutes();
+        $this->mapWebRoutes();
+    }
+
+    public function mapWebRoutes(): void
+    {
+        Route::middleware('web')->group(module_path($this->name, '/routes/web.php'));
+    }
+
+    public function mapApiRoutes(): void
+    {
+        Route::middleware('api')->prefix('api')->name('api.')->group(module_path($this->name, '/routes/api.php'));
+    }
+}

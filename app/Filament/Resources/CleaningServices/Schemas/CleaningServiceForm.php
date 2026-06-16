@@ -9,6 +9,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Schema;
+use Modules\Cleaning\Enums\ServiceCategory;
 
 final class CleaningServiceForm
 {
@@ -16,17 +17,23 @@ final class CleaningServiceForm
     {
         return $schema
             ->components([
-                TextInput::make('name')->required(),
-                TextInput::make('slug')->required()->unique(ignoreRecord: true),
-                Select::make('category')
-                    ->options([
-                        'home' => 'Home',
-                        'office' => 'Office',
-                        'event' => 'Event',
-                    ])
+                TextInput::make('name')
+                    ->label(__('cleaning_admin.cleaning_services.fields.name'))
                     ->required(),
-                Textarea::make('description'),
-                Toggle::make('is_active')->default(true),
+                Select::make('category')
+                    ->label(__('cleaning_admin.cleaning_services.fields.category'))
+                    ->options(collect(ServiceCategory::cases())->mapWithKeys(fn (ServiceCategory $category): array => [$category->value => $category->label()])->all())
+                    ->required(),
+                Textarea::make('description')
+                    ->label(__('cleaning_admin.cleaning_services.fields.description')),
+                TextInput::make('price')
+                    ->label(__('cleaning_admin.cleaning_services.fields.price'))
+                    ->required()
+                    ->numeric()
+                    ->minValue(0),
+                Toggle::make('is_active')
+                    ->label(__('cleaning_admin.cleaning_services.fields.is_active'))
+                    ->default(true),
             ]);
     }
 }

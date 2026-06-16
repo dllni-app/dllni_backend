@@ -1,541 +1,541 @@
 {
-    "info": {
-        "_postman_id": "de4c6e5b-6a1b-44d4-b4ea-0f4f5df8f003",
-        "name": "Dllni - Cleaning Worker Module",
-        "description": "## Base URL and Prefix\n- Collection variable `{{baseUrl}}` defaults to `http://Dllni.test`.\n- Prefix: `/api/v1`.\n\n## Authentication\n- All endpoints here require Sanctum token.\n- Header: `Authorization: Bearer {{token}}`.\n\n## Worker Scope\n- Most endpoints require an authenticated user with linked worker profile (`user.worker`).\n- If no worker exists, API may return `403`.\n\n## Props Format\n- Pagination: `perPage`, `page`.\n- Filters: `filter[field]=value` (AND semantics).\n- Validation errors: `{ \"message\": string, \"errors\": { \"field\": [string] } }`.\n\n## Common Status Values\n- booking statuses often include: `pending`, `worker_assigned`, `in_progress`, `completed`, `cancelled`.",
-        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  "info": {
+    "_postman_id": "de4c6e5b-6a1b-44d4-b4ea-0f4f5df8f003",
+    "name": "Dllni - Cleaning Worker Module",
+    "description": "## Base URL and Prefix\n- Collection variable `{{baseUrl}}` defaults to `http://Dllni.test`.\n- Prefix: `/api/v1`.\n\n## Authentication\n- All endpoints here require Sanctum token.\n- Header: `Authorization: Bearer {{token}}`.\n\n## Worker Scope\n- Most endpoints require an authenticated user with linked worker profile (`user.worker`).\n- If no worker exists, API may return `403`.\n\n## Props Format\n- Pagination: `perPage`, `page`.\n- Filters: `filter[field]=value` (AND semantics).\n- Validation errors: `{ \"message\": string, \"errors\": { \"field\": [string] } }`.\n\n## Common Status Values\n- booking statuses often include: `pending`, `worker_assigned`, `in_progress`, `completed`, `cancelled`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://Dllni.test"
     },
-    "variable": [
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "bookingId",
+      "value": "1"
+    },
+    {
+      "key": "warningId",
+      "value": "1"
+    }
+  ],
+  "item": [
+    {
+      "name": "Worker Home",
+      "item": [
         {
-            "key": "baseUrl",
-            "value": "http://Dllni.test"
+          "name": "Worker homepage metrics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cleaning/worker/homepage",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cleaning",
+                "worker",
+                "homepage"
+              ]
+            },
+            "description": "Top-level worker dashboard stats for homepage cards."
+          },
+          "response": [
+            {
+              "name": "200 OK - homepage",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"date\": \"2026-04-07\",\n  \"totalBookings\": 42,\n  \"todayCount\": 2,\n  \"completedCount\": 35,\n  \"pendingCount\": 5,\n  \"inProgressCount\": 1,\n  \"cancelledCount\": 1,\n  \"totalEarnings\": 5250,\n  \"todayEarnings\": 450,\n  \"earningsChangePercent\": 15,\n  \"newOrdersCount\": 3,\n  \"pendingExtensionRequestsCount\": 1\n}"
+            }
+          ]
         },
         {
-            "key": "token",
-            "value": ""
-        },
-        {
-            "key": "bookingId",
-            "value": "1"
-        },
-        {
-            "key": "warningId",
-            "value": "1"
+          "name": "Worker weekly statistics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cleaning/worker/statistics",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cleaning",
+                "worker",
+                "statistics"
+              ]
+            },
+            "description": "Weekly chart payload used by worker analytics card."
+          },
+          "response": [
+            {
+              "name": "200 OK - statistics",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"range\": \"this_week\",\n  \"summary\": {\n    \"totalBookings\": 50,\n    \"totalEarnings\": 5000,\n    \"confirmedCount\": 30,\n    \"cancelledCount\": 10,\n    \"disputedCount\": 2\n  },\n  \"chart\": [\n    { \"date\": \"2026-04-05\", \"confirmed\": 3, \"cancelled\": 1, \"disputed\": 0 },\n    { \"date\": \"2026-04-06\", \"confirmed\": 5, \"cancelled\": 0, \"disputed\": 1 }\n  ]\n}"
+            }
+          ]
         }
-    ],
-    "item": [
+      ]
+    },
+    {
+      "name": "Bookings",
+      "item": [
         {
-            "name": "Worker Home",
-            "item": [
+          "name": "List bookings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending&perPage=20&page=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cleaning-bookings"
+              ],
+              "query": [
                 {
-                    "name": "Worker homepage metrics",
-                    "request": {
-                        "method": "GET",
-                        "header": [
-                            {
-                                "key": "Accept",
-                                "value": "application/json"
-                            },
-                            {
-                                "key": "Authorization",
-                                "value": "Bearer {{token}}"
-                            }
-                        ],
-                        "url": {
-                            "raw": "{{baseUrl}}/api/v1/cleaning/worker/homepage",
-                            "host": [
-                                "{{baseUrl}}"
-                            ],
-                            "path": [
-                                "api",
-                                "v1",
-                                "cleaning",
-                                "worker",
-                                "homepage"
-                            ]
-                        },
-                        "description": "Top-level worker dashboard stats for homepage cards."
-                    },
-                    "response": [
-                        {
-                            "name": "200 OK - homepage",
-                            "status": "OK",
-                            "code": 200,
-                            "_postman_previewlanguage": "json",
-                            "header": [],
-                            "cookie": [],
-                            "body": "{\n  \"date\": \"2026-04-07\",\n  \"totalBookings\": 42,\n  \"todayCount\": 2,\n  \"completedCount\": 35,\n  \"pendingCount\": 5,\n  \"inProgressCount\": 1,\n  \"cancelledCount\": 1,\n  \"totalEarnings\": 5250,\n  \"todayEarnings\": 450,\n  \"earningsChangePercent\": 15,\n  \"newOrdersCount\": 3,\n  \"pendingExtensionRequestsCount\": 1\n}"
-                        }
-                    ]
+                  "key": "filter[forCurrentWorker]",
+                  "value": "1"
                 },
                 {
-                    "name": "Worker weekly statistics",
-                    "request": {
-                        "method": "GET",
-                        "header": [
-                            {
-                                "key": "Accept",
-                                "value": "application/json"
-                            },
-                            {
-                                "key": "Authorization",
-                                "value": "Bearer {{token}}"
-                            }
-                        ],
-                        "url": {
-                            "raw": "{{baseUrl}}/api/v1/cleaning/worker/statistics",
-                            "host": [
-                                "{{baseUrl}}"
-                            ],
-                            "path": [
-                                "api",
-                                "v1",
-                                "cleaning",
-                                "worker",
-                                "statistics"
-                            ]
-                        },
-                        "description": "Weekly chart payload used by worker analytics card."
-                    },
-                    "response": [
-                        {
-                            "name": "200 OK - statistics",
-                            "status": "OK",
-                            "code": 200,
-                            "_postman_previewlanguage": "json",
-                            "header": [],
-                            "cookie": [],
-                            "body": "{\n  \"range\": \"this_week\",\n  \"summary\": {\n    \"totalBookings\": 50,\n    \"totalEarnings\": 5000,\n    \"confirmedCount\": 30,\n    \"cancelledCount\": 10,\n    \"disputedCount\": 2\n  },\n  \"chart\": [\n    { \"date\": \"2026-04-05\", \"confirmed\": 3, \"cancelled\": 1, \"disputed\": 0 },\n    { \"date\": \"2026-04-06\", \"confirmed\": 5, \"cancelled\": 0, \"disputed\": 1 }\n  ]\n}"
-                        }
-                    ]
+                  "key": "filter[status]",
+                  "value": "pending"
+                },
+                {
+                  "key": "perPage",
+                  "value": "20"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
                 }
-            ]
+              ]
+            },
+            "description": "Paginated worker bookings list.\n\nUseful filters:\n- filter[forCurrentWorker]=1\n- filter[status]=pending|in_progress|completed|cancelled\n- filter[hasDispute]=1\n- filter[scheduledDate]=YYYY-MM-DD"
+          },
+          "response": [
+            {
+              "name": "200 OK - bookings page",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"data\": [\n    {\n      \"id\": 1,\n      \"bookingNumber\": \"CLN-0001\",\n      \"status\": \"pending\",\n      \"scheduledDate\": \"2026-04-07\",\n      \"scheduledTime\": \"10:00\",\n      \"locationName\": \"Home\",\n      \"numberOfRooms\": 3,\n      \"estimatedHours\": 2,\n      \"totalPrice\": 50,\n      \"customer\": {\n        \"id\": 88,\n        \"name\": \"Mariam\",\n        \"phone\": \"+963944009999\"\n      }\n    }\n  ],\n  \"links\": {\n    \"first\": \"http://Dllni.test/api/v1/cleaning-bookings?page=1\",\n    \"last\": \"http://Dllni.test/api/v1/cleaning-bookings?page=1\",\n    \"prev\": null,\n    \"next\": null\n  },\n  \"meta\": {\n    \"current_page\": 1,\n    \"per_page\": 20,\n    \"total\": 1\n  }\n}"
+            }
+          ]
         },
         {
-            "name": "Bookings",
-            "item": [
-                {
-                    "name": "List bookings",
-                    "request": {
-                        "method": "GET",
-                        "header": [
-                            {
-                                "key": "Accept",
-                                "value": "application/json"
-                            },
-                            {
-                                "key": "Authorization",
-                                "value": "Bearer {{token}}"
-                            }
-                        ],
-                        "url": {
-                            "raw": "{{baseUrl}}/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending&perPage=20&page=1",
-                            "host": [
-                                "{{baseUrl}}"
-                            ],
-                            "path": [
-                                "api",
-                                "v1",
-                                "cleaning-bookings"
-                            ],
-                            "query": [
-                                {
-                                    "key": "filter[forCurrentWorker]",
-                                    "value": "1"
-                                },
-                                {
-                                    "key": "filter[status]",
-                                    "value": "pending"
-                                },
-                                {
-                                    "key": "perPage",
-                                    "value": "20"
-                                },
-                                {
-                                    "key": "page",
-                                    "value": "1"
-                                }
-                            ]
-                        },
-                        "description": "Paginated worker bookings list.\n\nUseful filters:\n- filter[forCurrentWorker]=1\n- filter[status]=pending|in_progress|completed|cancelled\n- filter[hasDispute]=1\n- filter[scheduledDate]=YYYY-MM-DD"
-                    },
-                    "response": [
-                        {
-                            "name": "200 OK - bookings page",
-                            "status": "OK",
-                            "code": 200,
-                            "_postman_previewlanguage": "json",
-                            "header": [],
-                            "cookie": [],
-                            "body": "{\n  \"data\": [\n    {\n      \"id\": 1,\n      \"bookingNumber\": \"CLN-0001\",\n      \"status\": \"pending\",\n      \"scheduledDate\": \"2026-04-07\",\n      \"scheduledTime\": \"10:00\",\n      \"locationName\": \"Home\",\n      \"numberOfRooms\": 3,\n      \"estimatedHours\": 2,\n      \"totalPrice\": 50,\n      \"customer\": {\n        \"id\": 88,\n        \"name\": \"Mariam\",\n        \"phone\": \"+963944009999\"\n      }\n    }\n  ],\n  \"links\": {\n    \"first\": \"http://Dllni.test/api/v1/cleaning-bookings?page=1\",\n    \"last\": \"http://Dllni.test/api/v1/cleaning-bookings?page=1\",\n    \"prev\": null,\n    \"next\": null\n  },\n  \"meta\": {\n    \"current_page\": 1,\n    \"per_page\": 20,\n    \"total\": 1\n  }\n}"
-                        }
-                    ]
-                },
-                {
-                    "name": "Show booking",
-                    "request": {
-                        "method": "GET",
-                        "header": [
-                            {
-                                "key": "Accept",
-                                "value": "application/json"
-                            },
-                            {
-                                "key": "Authorization",
-                                "value": "Bearer {{token}}"
-                            }
-                        ],
-                        "url": {
-                            "raw": "{{baseUrl}}/api/v1/cleaning-bookings/{{bookingId}}",
-                            "host": [
-                                "{{baseUrl}}"
-                            ],
-                            "path": [
-                                "api",
-                                "v1",
-                                "cleaning-bookings",
-                                "{{bookingId}}"
-                            ]
-                        }
-                    },
-                    "response": []
-                },
-                {
-                    "name": "Accept booking",
-                    "request": {
-                        "method": "POST",
-                        "header": [
-                            {
-                                "key": "Accept",
-                                "value": "application/json"
-                            },
-                            {
-                                "key": "Authorization",
-                                "value": "Bearer {{token}}"
-                            }
-                        ],
-                        "url": {
-                            "raw": "{{baseUrl}}/api/v1/cleaning-bookings/{{bookingId}}/accept",
-                            "host": [
-                                "{{baseUrl}}"
-                            ],
-                            "path": [
-                                "api",
-                                "v1",
-                                "cleaning-bookings",
-                                "{{bookingId}}",
-                                "accept"
-                            ]
-                        },
-                        "description": "No body required. Valid from status pending."
-                    },
-                    "response": [
-                        {
-                            "name": "200 OK - accepted",
-                            "status": "OK",
-                            "code": 200,
-                            "_postman_previewlanguage": "json",
-                            "header": [],
-                            "cookie": [],
-                            "body": "{\n  \"data\": {\n    \"id\": 1,\n    \"status\": \"worker_assigned\"\n  }\n}"
-                        }
-                    ]
-                },
-                {
-                    "name": "Reject booking",
-                    "request": {
-                        "method": "POST",
-                        "header": [
-                            {
-                                "key": "Accept",
-                                "value": "application/json"
-                            },
-                            {
-                                "key": "Content-Type",
-                                "value": "application/json"
-                            },
-                            {
-                                "key": "Authorization",
-                                "value": "Bearer {{token}}"
-                            }
-                        ],
-                        "body": {
-                            "mode": "raw",
-                            "raw": "{\n  \"reason\": \"Not available at this time\"\n}"
-                        },
-                        "url": {
-                            "raw": "{{baseUrl}}/api/v1/cleaning-bookings/{{bookingId}}/reject",
-                            "host": [
-                                "{{baseUrl}}"
-                            ],
-                            "path": [
-                                "api",
-                                "v1",
-                                "cleaning-bookings",
-                                "{{bookingId}}",
-                                "reject"
-                            ]
-                        },
-                        "description": "Optional body prop:\n- reason: string (max 500)."
-                    },
-                    "response": []
-                },
-                {
-                    "name": "Start travel",
-                    "request": {
-                        "method": "POST",
-                        "header": [
-                            {
-                                "key": "Accept",
-                                "value": "application/json"
-                            },
-                            {
-                                "key": "Authorization",
-                                "value": "Bearer {{token}}"
-                            }
-                        ],
-                        "url": {
-                            "raw": "{{baseUrl}}/api/v1/cleaning-bookings/{{bookingId}}/start-travel",
-                            "host": [
-                                "{{baseUrl}}"
-                            ],
-                            "path": [
-                                "api",
-                                "v1",
-                                "cleaning-bookings",
-                                "{{bookingId}}",
-                                "start-travel"
-                            ]
-                        }
-                    },
-                    "response": []
-                },
-                {
-                    "name": "Arrive",
-                    "request": {
-                        "method": "POST",
-                        "header": [
-                            {
-                                "key": "Accept",
-                                "value": "application/json"
-                            },
-                            {
-                                "key": "Authorization",
-                                "value": "Bearer {{token}}"
-                            }
-                        ],
-                        "url": {
-                            "raw": "{{baseUrl}}/api/v1/cleaning-bookings/{{bookingId}}/arrive",
-                            "host": [
-                                "{{baseUrl}}"
-                            ],
-                            "path": [
-                                "api",
-                                "v1",
-                                "cleaning-bookings",
-                                "{{bookingId}}",
-                                "arrive"
-                            ]
-                        }
-                    },
-                    "response": []
-                },
-                {
-                    "name": "Start work",
-                    "request": {
-                        "method": "POST",
-                        "header": [
-                            {
-                                "key": "Accept",
-                                "value": "application/json"
-                            },
-                            {
-                                "key": "Authorization",
-                                "value": "Bearer {{token}}"
-                            }
-                        ],
-                        "url": {
-                            "raw": "{{baseUrl}}/api/v1/cleaning-bookings/{{bookingId}}/start-work",
-                            "host": [
-                                "{{baseUrl}}"
-                            ],
-                            "path": [
-                                "api",
-                                "v1",
-                                "cleaning-bookings",
-                                "{{bookingId}}",
-                                "start-work"
-                            ]
-                        }
-                    },
-                    "response": []
-                },
-                {
-                    "name": "Complete booking",
-                    "request": {
-                        "method": "POST",
-                        "header": [
-                            {
-                                "key": "Accept",
-                                "value": "application/json"
-                            },
-                            {
-                                "key": "Authorization",
-                                "value": "Bearer {{token}}"
-                            }
-                        ],
-                        "url": {
-                            "raw": "{{baseUrl}}/api/v1/cleaning-bookings/{{bookingId}}/complete",
-                            "host": [
-                                "{{baseUrl}}"
-                            ],
-                            "path": [
-                                "api",
-                                "v1",
-                                "cleaning-bookings",
-                                "{{bookingId}}",
-                                "complete"
-                            ]
-                        }
-                    },
-                    "response": []
-                }
-            ]
+          "name": "Show booking",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cleaning-bookings/{{bookingId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cleaning-bookings",
+                "{{bookingId}}"
+              ]
+            }
+          },
+          "response": []
         },
         {
-            "name": "Worker Account",
-            "item": [
-                {
-                    "name": "Get account profile",
-                    "request": {
-                        "method": "GET",
-                        "header": [
-                            {
-                                "key": "Accept",
-                                "value": "application/json"
-                            },
-                            {
-                                "key": "Authorization",
-                                "value": "Bearer {{token}}"
-                            }
-                        ],
-                        "url": {
-                            "raw": "{{baseUrl}}/api/v1/cleaning/worker/account/profile",
-                            "host": [
-                                "{{baseUrl}}"
-                            ],
-                            "path": [
-                                "api",
-                                "v1",
-                                "cleaning",
-                                "worker",
-                                "account",
-                                "profile"
-                            ]
-                        }
-                    },
-                    "response": []
-                },
-                {
-                    "name": "Update account profile",
-                    "request": {
-                        "method": "PUT",
-                        "header": [
-                            {
-                                "key": "Accept",
-                                "value": "application/json"
-                            },
-                            {
-                                "key": "Content-Type",
-                                "value": "application/json"
-                            },
-                            {
-                                "key": "Authorization",
-                                "value": "Bearer {{token}}"
-                            }
-                        ],
-                        "body": {
-                            "mode": "raw",
-                            "raw": "{\n  \"name\": \"Ahmad Mohammed\",\n  \"email\": \"worker@example.com\",\n  \"phone\": \"+963987654321\",\n  \"bio\": \"5 years of cleaning experience\",\n  \"isActive\": true\n}"
-                        },
-                        "url": {
-                            "raw": "{{baseUrl}}/api/v1/cleaning/worker/account/profile",
-                            "host": [
-                                "{{baseUrl}}"
-                            ],
-                            "path": [
-                                "api",
-                                "v1",
-                                "cleaning",
-                                "worker",
-                                "account",
-                                "profile"
-                            ]
-                        },
-                        "description": "JSON or multipart (when sending avatar file).\n\nProps:\n- name, email, phone, bio, avatar(file), isActive"
-                    },
-                    "response": [
-                        {
-                            "name": "200 OK - profile updated",
-                            "status": "OK",
-                            "code": 200,
-                            "_postman_previewlanguage": "json",
-                            "header": [],
-                            "cookie": [],
-                            "body": "{\n  \"id\": 12,\n  \"userId\": 34,\n  \"firstName\": \"Ahmad\",\n  \"avatar\": {\n    \"id\": 77,\n    \"url\": \"https://example.com/media/worker-avatar.jpg\"\n  },\n  \"isActive\": true,\n  \"user\": {\n    \"id\": 34,\n    \"name\": \"Ahmad Mohammed\",\n    \"email\": \"worker@example.com\",\n    \"phone\": \"+963987654321\"\n  },\n  \"zones\": [],\n  \"availability\": [],\n  \"createdAt\": \"2026-03-26 09:00:00\",\n  \"updatedAt\": \"2026-03-26 09:30:00\"\n}"
-                        }
-                    ]
-                },
-                {
-                    "name": "Update account password",
-                    "request": {
-                        "method": "PUT",
-                        "header": [
-                            {
-                                "key": "Accept",
-                                "value": "application/json"
-                            },
-                            {
-                                "key": "Content-Type",
-                                "value": "application/json"
-                            },
-                            {
-                                "key": "Authorization",
-                                "value": "Bearer {{token}}"
-                            }
-                        ],
-                        "body": {
-                            "mode": "raw",
-                            "raw": "{\n  \"currentPassword\": \"old-password\",\n  \"newPassword\": \"new-password-123\",\n  \"newPasswordConfirmation\": \"new-password-123\"\n}"
-                        },
-                        "url": {
-                            "raw": "{{baseUrl}}/api/v1/cleaning/worker/account/password",
-                            "host": [
-                                "{{baseUrl}}"
-                            ],
-                            "path": [
-                                "api",
-                                "v1",
-                                "cleaning",
-                                "worker",
-                                "account",
-                                "password"
-                            ]
-                        }
-                    },
-                    "response": [
-                        {
-                            "name": "200 OK - password updated",
-                            "status": "OK",
-                            "code": 200,
-                            "_postman_previewlanguage": "json",
-                            "header": [],
-                            "cookie": [],
-                            "body": "{\n  \"message\": \"Password updated successfully.\"\n}"
-                        }
-                    ]
-                }
-            ]
+          "name": "Accept booking",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cleaning-bookings/{{bookingId}}/accept",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cleaning-bookings",
+                "{{bookingId}}",
+                "accept"
+              ]
+            },
+            "description": "No body required.\n\nIf booking pricing is provisional (`isPricingFinal=false`), acceptance finalizes pricing using worker home location and customer coordinates.\n\nReturns updated booking resource including:\n- `travelDistanceKm`\n- `adminMargin`\n- `isPricingFinal`\n- finalized `totalPrice`"
+          },
+          "response": [
+            {
+              "name": "200 OK - accepted",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"id\": 1,\n    \"status\": \"worker_assigned\",\n    \"travelDistanceKm\": 11.119,\n    \"travelFee\": 111.19,\n    \"adminMargin\": 103.12,\n    \"isPricingFinal\": true,\n    \"totalPrice\": 1134.31\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Reject booking",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Not available at this time\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cleaning-bookings/{{bookingId}}/reject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cleaning-bookings",
+                "{{bookingId}}",
+                "reject"
+              ]
+            },
+            "description": "Optional body prop:\n- reason: string (max 500)."
+          },
+          "response": []
+        },
+        {
+          "name": "Start travel",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cleaning-bookings/{{bookingId}}/start-travel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cleaning-bookings",
+                "{{bookingId}}",
+                "start-travel"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Arrive",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cleaning-bookings/{{bookingId}}/arrive",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cleaning-bookings",
+                "{{bookingId}}",
+                "arrive"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Start work",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cleaning-bookings/{{bookingId}}/start-work",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cleaning-bookings",
+                "{{bookingId}}",
+                "start-work"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Complete booking",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cleaning-bookings/{{bookingId}}/complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cleaning-bookings",
+                "{{bookingId}}",
+                "complete"
+              ]
+            }
+          },
+          "response": []
         }
-    ]
+      ]
+    },
+    {
+      "name": "Worker Account",
+      "item": [
+        {
+          "name": "Get account profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cleaning/worker/account/profile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cleaning",
+                "worker",
+                "account",
+                "profile"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update account profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ahmad Mohammed\",\n  \"email\": \"worker@example.com\",\n  \"phone\": \"+963987654321\",\n  \"bio\": \"5 years of cleaning experience\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cleaning/worker/account/profile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cleaning",
+                "worker",
+                "account",
+                "profile"
+              ]
+            },
+            "description": "JSON or multipart (when sending avatar file).\n\nProps:\n- name, email, phone, bio, avatar(file), isActive"
+          },
+          "response": [
+            {
+              "name": "200 OK - profile updated",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"id\": 12,\n  \"userId\": 34,\n  \"firstName\": \"Ahmad\",\n  \"avatar\": {\n    \"id\": 77,\n    \"url\": \"https://example.com/media/worker-avatar.jpg\"\n  },\n  \"isActive\": true,\n  \"user\": {\n    \"id\": 34,\n    \"name\": \"Ahmad Mohammed\",\n    \"email\": \"worker@example.com\",\n    \"phone\": \"+963987654321\"\n  },\n  \"zones\": [],\n  \"availability\": [],\n  \"createdAt\": \"2026-03-26 09:00:00\",\n  \"updatedAt\": \"2026-03-26 09:30:00\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update account password",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"old-password\",\n  \"newPassword\": \"new-password-123\",\n  \"newPasswordConfirmation\": \"new-password-123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cleaning/worker/account/password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cleaning",
+                "worker",
+                "account",
+                "password"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK - password updated",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"message\": \"Password updated successfully.\"\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
 }

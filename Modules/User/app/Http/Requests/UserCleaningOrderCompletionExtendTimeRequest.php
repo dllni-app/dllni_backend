@@ -19,7 +19,7 @@ final class UserCleaningOrderCompletionExtendTimeRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'additionalMinutes' => ['nullable', 'integer', 'min:1', 'max:480'],
+            'additionalMinutes' => ['required', 'integer', 'min:0', 'max:90'],
         ];
     }
 }

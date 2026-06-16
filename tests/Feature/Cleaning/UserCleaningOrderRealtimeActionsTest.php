@@ -11,21 +11,27 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Events\ArrivalVerified;
 use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
 use Modules\Cleaning\Events\CompletionDecisionMade;
+use Modules\Cleaning\Events\ServiceExtensionRequested;
+use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
 
-/** @var \Illuminate\Foundation\Testing\TestCase $this */
-
+/** @var Illuminate\Foundation\Testing\TestCase $this */
 beforeEach(function () {
-    $this->billingPolicy = \Modules\Cleaning\Models\CleaningBillingPolicy::first() ?? \Modules\Cleaning\Models\CleaningBillingPolicy::create([
+    cleaningRealtimeBillingPolicy();
+});
+
+function cleaningRealtimeBillingPolicy(): CleaningBillingPolicy
+{
+    return CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
         'name' => 'Default',
         'billing_mode' => 'actual_working_time',
         'rules' => [],
         'is_active' => true,
         'is_default' => true,
     ]);
-});
+}
 
-it('confirms start verification with a 4-digit code', function () {
+it('confirms start verification with a 4-digit code and waits for worker start confirmation', function () {
     Event::fake([CleaningBookingTrackingUpdated::class, ArrivalVerified::class]);
 
     $customer = User::factory()->create(['email' => 'customer-start-verify@example.com']);
@@ -36,7 +42,7 @@ it('confirms start verification with a 4-digit code', function () {
     $booking = CleaningBooking::factory()->create([
         'customer_id' => $customer->id,
         'worker_id' => $worker->id,
-        'billing_policy_id' => $this->billingPolicy->id,
+        'billing_policy_id' => cleaningRealtimeBillingPolicy()->id,
         'status' => CleaningBookingStatus::AwaitingStartVerification,
         'arrived_at' => now()->subMinutes(2),
     ]);
@@ -57,11 +63,12 @@ it('confirms start verification with a 4-digit code', function () {
     ]);
 
     $response->assertOk();
-    expect($response->json('data.status'))->toBe('in_progress');
+    expect($response->json('data.status'))->toBe('awaiting_worker_start_confirmation');
     expect($response->json('message'))->toBeString();
     $this->assertDatabaseHas('cleaning_bookings', [
         'id' => $booking->id,
-        'status' => CleaningBookingStatus::InProgress->value,
+        'status' => CleaningBookingStatus::AwaitingWorkerStartConfirmation->value,
+        'work_started_at' => null,
     ]);
     $this->assertDatabaseHas('booking_security_codes', [
         'booking_id' => $booking->id,
@@ -70,12 +77,13 @@ it('confirms start verification with a 4-digit code', function () {
 
     Event::assertDispatched(CleaningBookingTrackingUpdated::class, function (CleaningBookingTrackingUpdated $event) use ($booking): bool {
         return $event->cleaningBookingId === $booking->id
-            && $event->tracking['status'] === CleaningBookingStatus::InProgress->value;
+            && $event->tracking['status'] === CleaningBookingStatus::AwaitingWorkerStartConfirmation->value;
     });
 
     Event::assertDispatched(ArrivalVerified::class, function (ArrivalVerified $event) use ($booking, $worker): bool {
         return $event->cleaningBookingId === $booking->id
-            && $event->workerId === $worker->id;
+            && $event->workerId === $worker->id
+            && $event->status === CleaningBookingStatus::AwaitingWorkerStartConfirmation->value;
     });
 });
 
@@ -90,7 +98,7 @@ it('confirms completion for a waiting booking', function () {
     $booking = CleaningBooking::factory()->create([
         'customer_id' => $customer->id,
         'worker_id' => $worker->id,
-        'billing_policy_id' => $this->billingPolicy->id,
+        'billing_policy_id' => cleaningRealtimeBillingPolicy()->id,
         'status' => CleaningBookingStatus::AwaitingCustomerCompletion,
         'work_started_at' => now()->subHours(2),
         'work_finished_at' => now()->subMinutes(10),
@@ -128,7 +136,7 @@ it('rejects completion and reopens the booking', function () {
     $booking = CleaningBooking::factory()->create([
         'customer_id' => $customer->id,
         'worker_id' => $worker->id,
-        'billing_policy_id' => $this->billingPolicy->id,
+        'billing_policy_id' => cleaningRealtimeBillingPolicy()->id,
         'status' => CleaningBookingStatus::AwaitingCustomerCompletion,
         'work_started_at' => now()->subHours(2),
         'work_finished_at' => now()->subMinutes(10),
@@ -154,7 +162,7 @@ it('rejects completion and reopens the booking', function () {
 });
 
 it('requests a completion extension', function () {
-    Event::fake([CompletionDecisionMade::class]);
+    Event::fake([CompletionDecisionMade::class, ServiceExtensionRequested::class]);
 
     $customer = User::factory()->create(['email' => 'customer-complete-extend@example.com']);
     $workerUser = User::factory()->create(['email' => 'worker-complete-extend@example.com']);
@@ -164,7 +172,7 @@ it('requests a completion extension', function () {
     $booking = CleaningBooking::factory()->create([
         'customer_id' => $customer->id,
         'worker_id' => $worker->id,
-        'billing_policy_id' => $this->billingPolicy->id,
+        'billing_policy_id' => cleaningRealtimeBillingPolicy()->id,
         'status' => CleaningBookingStatus::AwaitingCustomerCompletion,
         'work_started_at' => now()->subHours(2),
         'work_finished_at' => now()->subMinutes(10),
@@ -176,9 +184,24 @@ it('requests a completion extension', function () {
 
     $response->assertOk();
     expect($response->json('data.status'))->toBe('time_extension_requested');
+    expect($response->json('extensionPricing.requestedMinutes'))->toBe(30);
+    expect($response->json('extensionPricing.matchedRange'))->toMatchArray([
+        'startMinutes' => 16,
+        'endMinutes' => 30,
+        'label' => 'من 16 إلى 30 دقيقة',
+    ]);
+    expect((float) $response->json('extensionPricing.calculatedExtensionPrice'))->toBe(4500.0);
+    expect((float) $response->json('data.extensionFeeTotal'))->toBe(0.0);
     $this->assertDatabaseHas('cleaning_bookings', [
         'id' => $booking->id,
         'status' => CleaningBookingStatus::TimeExtensionRequested->value,
+    ]);
+    $this->assertDatabaseHas('cleaning_time_warnings', [
+        'booking_id' => $booking->id,
+        'customer_response' => 'extend_time',
+        'additional_minutes' => 30,
+        'quoted_amount' => 4500.00,
+        'quoted_currency' => (string) config('app.currency', 'SYP'),
     ]);
 
     Event::assertDispatched(CompletionDecisionMade::class, function (CompletionDecisionMade $event) use ($booking, $worker): bool {
@@ -186,4 +209,36 @@ it('requests a completion extension', function () {
             && $event->workerId === $worker->id
             && $event->decision === 'extension_requested';
     });
+
+    Event::assertDispatched(ServiceExtensionRequested::class, function (ServiceExtensionRequested $event) use ($booking, $worker): bool {
+        return $event->cleaningBookingId === $booking->id
+            && $event->workerId === $worker->id
+            && $event->requestedMinutes === 30
+            && $event->additionalAmount === 4500.0
+            && $event->currency === (string) config('app.currency', 'SYP');
+    });
+});
+
+it('rejects completion extension requests above 90 minutes', function () {
+    $customer = User::factory()->create(['email' => 'customer-complete-extend-too-long@example.com']);
+    $workerUser = User::factory()->create(['email' => 'worker-complete-extend-too-long@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($customer);
+
+    $booking = CleaningBooking::factory()->create([
+        'customer_id' => $customer->id,
+        'worker_id' => $worker->id,
+        'billing_policy_id' => cleaningRealtimeBillingPolicy()->id,
+        'status' => CleaningBookingStatus::AwaitingCustomerCompletion,
+    ]);
+
+    $response = $this->postJson("/api/v1/user/cleaning/orders/{$booking->id}/completion/extend-time", [
+        'additionalMinutes' => 91,
+    ]);
+
+    $response->assertUnprocessable();
+    $this->assertDatabaseMissing('cleaning_time_warnings', [
+        'booking_id' => $booking->id,
+        'additional_minutes' => 91,
+    ]);
 });

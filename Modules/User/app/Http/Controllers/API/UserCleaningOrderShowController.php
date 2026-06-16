@@ -14,7 +14,16 @@ final class UserCleaningOrderShowController
     {
         $model = CleaningBooking::query()
             ->where('customer_id', Auth::id())
-            ->with(['worker.user', 'timeWarnings', 'disputes', 'services', 'addons', 'billingPolicy'])
+            ->with([
+                'worker.user',
+                'preferredWorker.user',
+                'rooms.assignedWorker.user',
+                'workerAssignments.worker.user',
+                'timeWarnings',
+                'disputes',
+                'addons',
+                'billingPolicy',
+            ])
             ->findOrFail($order);
 
         return CleaningBookingResource::make($model);

@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
 use Modules\Cleaning\Events\CleaningOrderAwaitingCustomerCompletion;
 use Modules\Cleaning\Events\CleaningOrderAwaitingStartVerification;
@@ -30,23 +31,42 @@ it('accepts a cleaning booking when status is pending (worker takes order)', fun
     Event::fake([CleaningBookingTrackingUpdated::class]);
 
     $workerUser = User::factory()->create(['email' => 'worker-accept@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->create([
+        'user_id' => $workerUser->id,
+        'home_address' => 'Worker Home',
+        'home_latitude' => 33.6,
+        'home_longitude' => 36.3,
+    ]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
         'worker_id' => null,
         'billing_policy_id' => $this->billingPolicy->id,
         'status' => CleaningBookingStatus::Pending,
+        'gender_preference' => 'any',
+        'address_latitude' => 33.5,
+        'address_longitude' => 36.3,
     ]);
 
     $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/accept");
 
     $response->assertOk();
     expect($response->json('data.status'))->toBe('worker_assigned');
+    expect($response->json('data.order_status'))->toBe(CleaningBookingStatus::WorkerAssigned->value);
+    expect($response->json('data.worker_order_status'))->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value);
+    expect($response->json('data.required_workers_count'))->toBe(1);
+    expect($response->json('data.accepted_workers_count'))->toBe(1);
+    expect($response->json('data.pending_workers_count'))->toBe(0);
+    expect($response->json('data.myAssignment.status'))->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value);
     $this->assertDatabaseHas('cleaning_bookings', [
         'id' => $booking->id,
         'status' => CleaningBookingStatus::WorkerAssigned->value,
         'worker_id' => $worker->id,
+    ]);
+    $this->assertDatabaseHas('cleaning_booking_worker_assignments', [
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $worker->id,
+        'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
     ]);
 
     Event::assertDispatched(CleaningBookingTrackingUpdated::class, function (CleaningBookingTrackingUpdated $event) use ($booking, $worker): bool {
@@ -65,6 +85,8 @@ it('returns 422 when accept from non-pending status', function () {
         'worker_id' => $worker->id,
         'billing_policy_id' => $this->billingPolicy->id,
         'status' => CleaningBookingStatus::WorkerAssigned,
+        'scheduled_date' => now()->format('Y-m-d'),
+        'scheduled_time' => now()->addHour()->format('H:i'),
     ]);
 
     $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/accept");
@@ -112,6 +134,8 @@ it('rejects a cleaning booking', function () {
         'worker_id' => $worker->id,
         'billing_policy_id' => $this->billingPolicy->id,
         'status' => CleaningBookingStatus::WorkerAssigned,
+        'scheduled_date' => now()->format('Y-m-d'),
+        'scheduled_time' => now()->addHour()->format('H:i'),
     ]);
 
     $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/reject", [
@@ -119,11 +143,16 @@ it('rejects a cleaning booking', function () {
     ]);
 
     $response->assertOk();
-    expect($response->json('data.status'))->toBe('cancelled');
+    expect($response->json('data.status'))->toBe('pending');
     $this->assertDatabaseHas('cleaning_bookings', [
         'id' => $booking->id,
-        'status' => CleaningBookingStatus::Cancelled->value,
-        'cancellation_reason' => 'Schedule conflict',
+        'status' => CleaningBookingStatus::Pending->value,
+        'worker_id' => null,
+    ]);
+    $this->assertDatabaseHas('cleaning_booking_worker_rejections', [
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $worker->id,
+        'reason' => 'Schedule conflict',
     ]);
 });
 
@@ -138,6 +167,8 @@ it('starts travel for a cleaning booking (sets started_travel_at, status stays w
         'worker_id' => $worker->id,
         'billing_policy_id' => $this->billingPolicy->id,
         'status' => CleaningBookingStatus::WorkerAssigned,
+        'scheduled_date' => now()->format('Y-m-d'),
+        'scheduled_time' => now()->addHour()->format('H:i'),
     ]);
 
     $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/start-travel");
@@ -198,6 +229,8 @@ it('returns 422 when completing booking not in progress', function () {
         'worker_id' => $worker->id,
         'billing_policy_id' => $this->billingPolicy->id,
         'status' => CleaningBookingStatus::WorkerAssigned,
+        'scheduled_date' => now()->format('Y-m-d'),
+        'scheduled_time' => now()->addHour()->format('H:i'),
     ]);
 
     $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/complete");
@@ -263,15 +296,52 @@ it('rejects a cleaning booking without reason (uses default)', function () {
         'worker_id' => $worker->id,
         'billing_policy_id' => $this->billingPolicy->id,
         'status' => CleaningBookingStatus::WorkerAssigned,
+        'scheduled_date' => now()->format('Y-m-d'),
+        'scheduled_time' => now()->addHour()->format('H:i'),
     ]);
 
     $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/reject", []);
 
     $response->assertOk();
-    expect($response->json('data.status'))->toBe('cancelled');
+    expect($response->json('data.status'))->toBe('pending');
     $this->assertDatabaseHas('cleaning_bookings', [
         'id' => $booking->id,
-        'status' => CleaningBookingStatus::Cancelled->value,
+        'status' => CleaningBookingStatus::Pending->value,
+        'worker_id' => null,
+    ]);
+    $this->assertDatabaseHas('cleaning_booking_worker_rejections', [
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $worker->id,
+    ]);
+});
+
+it('allows worker to reject a pending unassigned booking', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-reject-pending@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => null,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'status' => CleaningBookingStatus::Pending,
+        'scheduled_date' => now()->format('Y-m-d'),
+        'scheduled_time' => now()->addHour()->format('H:i'),
+    ]);
+
+    $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/reject", [
+        'reason' => 'Cannot take this booking',
+    ]);
+
+    $response->assertOk();
+    $response->assertJsonPath('data.status', 'pending');
+    $this->assertDatabaseHas('cleaning_booking_worker_rejections', [
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $worker->id,
+        'reason' => 'Cannot take this booking',
+    ]);
+    $this->assertDatabaseHas('cleaning_bookings', [
+        'id' => $booking->id,
+        'status' => CleaningBookingStatus::Pending->value,
     ]);
 });
 
@@ -422,6 +492,51 @@ it('returns 422 when start-work from non-worker_assigned status', function () {
     $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/start-work");
 
     $response->assertUnprocessable();
+});
+
+it('starts work only after the customer verified the security code', function () {
+    Event::fake([CleaningBookingTrackingUpdated::class]);
+
+    $workerUser = User::factory()->create(['email' => 'worker-start-after-code@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'status' => CleaningBookingStatus::AwaitingWorkerStartConfirmation,
+        'arrived_at' => now()->subMinutes(2),
+        'customer_confirmed_at' => now()->subMinute(),
+    ]);
+
+    DB::table('booking_security_codes')->insert([
+        'booking_id' => $booking->id,
+        'booking_type' => $booking->getMorphClass(),
+        'code' => hash_hmac('sha256', '1234', (string) config('app.key')),
+        'code_hash' => hash_hmac('sha256', '1234', (string) config('app.key')),
+        'attempts' => 1,
+        'expires_at' => now()->addMinutes(10),
+        'consumed_at' => now()->subMinute(),
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $securityCodeResponse = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/security-code");
+    $securityCodeResponse->assertUnprocessable();
+
+    $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/start-work");
+
+    $response->assertOk();
+    expect($response->json('data.status'))->toBe(CleaningBookingStatus::InProgress->value);
+    $this->assertDatabaseHas('cleaning_bookings', [
+        'id' => $booking->id,
+        'status' => CleaningBookingStatus::InProgress->value,
+    ]);
+
+    Event::assertDispatched(CleaningBookingTrackingUpdated::class, function (CleaningBookingTrackingUpdated $event) use ($booking): bool {
+        return $event->cleaningBookingId === $booking->id
+            && $event->tracking['status'] === CleaningBookingStatus::InProgress->value;
+    });
 });
 
 it('returns security code for assigned booking', function () {

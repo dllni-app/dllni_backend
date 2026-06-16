@@ -2,23 +2,22 @@
 
 declare(strict_types=1);
 
-use App\Models\User;
 use Database\Factories\MasterProductFactory;
 use Database\Factories\SmCategoryFactory;
 use Database\Factories\SmProductFactory;
-use Database\Factories\SmStoreFactory;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
-use Laravel\Sanctum\Sanctum;
 use Modules\Supermarket\Models\SmProduct;
 
 beforeEach(function (): void {
-    $user = User::factory()->create();
-    Sanctum::actingAs($user);
+    $context = actingAsSupermarketSeller();
+    $this->user = $context->user;
+    $this->store = $context->store;
 });
 
 it('lists products', function (): void {
-    SmProductFactory::new()->count(3)->create();
+    SmProductFactory::new()->count(3)->create(['store_id' => $this->store->id]);
+    SmProductFactory::new()->count(2)->create();
 
     $response = $this->getJson('/api/v1/sm-products?perPage=10');
 
@@ -27,7 +26,7 @@ it('lists products', function (): void {
 });
 
 it('shows a product', function (): void {
-    $product = SmProductFactory::new()->create();
+    $product = SmProductFactory::new()->create(['store_id' => $this->store->id]);
 
     $response = $this->getJson("/api/v1/sm-products/{$product->id}");
 
@@ -36,11 +35,10 @@ it('shows a product', function (): void {
 });
 
 it('creates a product', function (): void {
-    $store = SmStoreFactory::new()->create();
-    $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+    $category = SmCategoryFactory::new()->create(['store_id' => $this->store->id]);
 
     $payload = [
-        'storeId' => $store->id,
+        'storeId' => $this->store->id,
         'categoryId' => $category->id,
         'name' => 'Test Product',
         'sourceType' => 'manual',
@@ -54,18 +52,17 @@ it('creates a product', function (): void {
     $response->assertCreated();
     $this->assertDatabaseHas('sm_products', [
         'name' => 'Test Product',
-        'store_id' => $store->id,
+        'store_id' => $this->store->id,
     ]);
 });
 
 it('derives category from master product on create when masterProductId is provided', function (): void {
-    $store = SmStoreFactory::new()->create();
     $masterProduct = MasterProductFactory::new()->create([
         'name' => 'Olive Oil',
     ]);
 
     $payload = [
-        'storeId' => $store->id,
+        'storeId' => $this->store->id,
         'masterProductId' => $masterProduct->id,
         'name' => 'Olive Oil',
         'sourceType' => 'catalog_search',
@@ -78,20 +75,20 @@ it('derives category from master product on create when masterProductId is provi
 
     $response->assertCreated();
     $this->assertDatabaseHas('sm_categories', [
-        'store_id' => $store->id,
+        'store_id' => $this->store->id,
         'slug' => 'master-product-' . $masterProduct->id,
         'name' => 'Olive Oil',
     ]);
 
     $this->assertDatabaseHas('sm_products', [
-        'store_id' => $store->id,
+        'store_id' => $this->store->id,
         'master_product_id' => $masterProduct->id,
         'name' => 'Olive Oil',
     ]);
 });
 
 it('updates a product', function (): void {
-    $product = SmProductFactory::new()->create(['name' => 'Old Name']);
+    $product = SmProductFactory::new()->create(['store_id' => $this->store->id, 'name' => 'Old Name']);
 
     $payload = ['name' => 'New Name'];
 
@@ -105,7 +102,7 @@ it('updates a product', function (): void {
 });
 
 it('deletes a product', function (): void {
-    $product = SmProductFactory::new()->create();
+    $product = SmProductFactory::new()->create(['store_id' => $this->store->id]);
 
     $response = $this->deleteJson("/api/v1/sm-products/{$product->id}");
 
@@ -114,8 +111,8 @@ it('deletes a product', function (): void {
 });
 
 it('filters by low stock', function (): void {
-    SmProductFactory::new()->create(['stock_quantity' => 5, 'low_stock_threshold' => 10]);
-    SmProductFactory::new()->create(['stock_quantity' => 100, 'low_stock_threshold' => 10]);
+    SmProductFactory::new()->create(['store_id' => $this->store->id, 'stock_quantity' => 5, 'low_stock_threshold' => 10]);
+    SmProductFactory::new()->create(['store_id' => $this->store->id, 'stock_quantity' => 100, 'low_stock_threshold' => 10]);
 
     $response = $this->getJson('/api/v1/sm-products?filter[lowStock]=1');
 
@@ -124,8 +121,8 @@ it('filters by low stock', function (): void {
 });
 
 it('returns available products count', function (): void {
-    SmProductFactory::new()->count(3)->create(['is_available' => true]);
-    SmProductFactory::new()->count(2)->create(['is_available' => false]);
+    SmProductFactory::new()->count(3)->create(['store_id' => $this->store->id, 'is_available' => true]);
+    SmProductFactory::new()->count(2)->create(['store_id' => $this->store->id, 'is_available' => false]);
 
     $response = $this->getJson('/api/v1/sm-products/available-count');
 
@@ -136,11 +133,10 @@ it('returns available products count', function (): void {
 it('creates a product with multiple images', function (): void {
     Storage::fake('public');
 
-    $store = SmStoreFactory::new()->create();
-    $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+    $category = SmCategoryFactory::new()->create(['store_id' => $this->store->id]);
 
     $response = $this->post('/api/v1/sm-products', [
-        'storeId' => $store->id,
+        'storeId' => $this->store->id,
         'categoryId' => $category->id,
         'name' => 'Product With Image',
         'sourceType' => 'manual',
@@ -168,7 +164,7 @@ it('creates a product with multiple images', function (): void {
 it('replaces product images on update', function (): void {
     Storage::fake('public');
 
-    $product = SmProductFactory::new()->create();
+    $product = SmProductFactory::new()->create(['store_id' => $this->store->id]);
 
     $this->post("/api/v1/sm-products/{$product->id}?_method=PUT", [
         'images' => [
@@ -199,8 +195,7 @@ it('imports products from csv with required columns', function (): void {
         $this->markTestSkipped('FastExcel is not installed.');
     }
 
-    $store = SmStoreFactory::new()->create();
-    $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+    $category = SmCategoryFactory::new()->create(['store_id' => $this->store->id]);
 
     $csv = <<<'CSV'
 name,description,image
@@ -209,7 +204,7 @@ Bread,Daily baked,
 CSV;
 
     $response = $this->post('/api/v1/sm-products/import', [
-        'storeId' => $store->id,
+        'storeId' => $this->store->id,
         'categoryId' => $category->id,
         'file' => UploadedFile::fake()->createWithContent('products.csv', $csv),
     ], [
@@ -222,7 +217,7 @@ CSV;
         ->assertJsonPath('failedRows', []);
 
     $this->assertDatabaseHas('sm_products', [
-        'store_id' => $store->id,
+        'store_id' => $this->store->id,
         'category_id' => $category->id,
         'name' => 'Apple',
         'source_type' => 'bulk_import',
@@ -234,15 +229,13 @@ it('imports products without categoryId by creating default store category', fun
         $this->markTestSkipped('FastExcel is not installed.');
     }
 
-    $store = SmStoreFactory::new()->create();
-
     $csv = <<<'CSV'
 name,description,image
 Apple,Fresh and crispy,
 CSV;
 
     $response = $this->post('/api/v1/sm-products/import', [
-        'storeId' => $store->id,
+        'storeId' => $this->store->id,
         'file' => UploadedFile::fake()->createWithContent('products.csv', $csv),
     ], [
         'Accept' => 'application/json',
@@ -254,13 +247,13 @@ CSV;
         ->assertJsonPath('failedRows', []);
 
     $this->assertDatabaseHas('sm_categories', [
-        'store_id' => $store->id,
+        'store_id' => $this->store->id,
         'slug' => 'default-products',
         'name' => 'Default Products',
     ]);
 
     $this->assertDatabaseHas('sm_products', [
-        'store_id' => $store->id,
+        'store_id' => $this->store->id,
         'name' => 'Apple',
         'source_type' => 'bulk_import',
     ]);
@@ -271,8 +264,7 @@ it('validates required import columns for csv upload', function (): void {
         $this->markTestSkipped('FastExcel is not installed.');
     }
 
-    $store = SmStoreFactory::new()->create();
-    $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+    $category = SmCategoryFactory::new()->create(['store_id' => $this->store->id]);
 
     $csv = <<<'CSV'
 name,description
@@ -280,7 +272,7 @@ Apple,Missing image column
 CSV;
 
     $response = $this->post('/api/v1/sm-products/import', [
-        'storeId' => $store->id,
+        'storeId' => $this->store->id,
         'categoryId' => $category->id,
         'file' => UploadedFile::fake()->createWithContent('products.csv', $csv),
     ], [

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\API\RegisterFcmTokenController;
 use App\Http\Middleware\RedirectBrowserDeepLinkApiRequests;
 use Modules\User\Http\Controllers\API\DiscoverRestaurantsController;
 use Modules\User\Http\Controllers\API\LoginController;
@@ -54,13 +55,17 @@ use Modules\User\Http\Controllers\API\UserCleaningOrderCancelController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderCompletionConfirmController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderCompletionExtendTimeController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderCompletionRejectController;
+use Modules\User\Http\Controllers\API\UserCleaningOrderReviewController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderEstimatePriceController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderEstimateSizeController;
+use Modules\User\Http\Controllers\API\UserCleaningOrderSosController;
+use Modules\User\Http\Controllers\API\UserCleaningOrderRoomAssignmentsController;
 use Modules\User\Http\Controllers\API\UserCleaningOrdersController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderShowController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderStartVerificationConfirmController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderStoreController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderUpdateController;
+use Modules\User\Http\Controllers\API\UserCleaningBannersController;
 use Modules\User\Http\Controllers\API\UserCleaningPreviousWorkersController;
 use Modules\User\Http\Controllers\API\UserCouponAvailabilityCheckController;
 use Modules\User\Http\Controllers\API\UserMarketingOfferShowController;
@@ -103,6 +108,7 @@ use Modules\User\Http\Controllers\API\UserRestaurantOrderStoreController;
 use Modules\User\Http\Controllers\API\UserRestaurantProductsSearchController;
 use Modules\User\Http\Controllers\API\UserRestaurantProductsByCategoryController;
 use Modules\User\Http\Controllers\API\UserRestaurantProductsWithOffersController;
+use Modules\User\Http\Controllers\API\UserSosController;
 use Modules\User\Http\Controllers\API\UserSupermarketCartItemDestroyController;
 use Modules\User\Http\Controllers\API\UserSupermarketCartItemStoreController;
 use Modules\User\Http\Controllers\API\UserSupermarketCartItemUpdateController;
@@ -159,6 +165,10 @@ Route::prefix('v1/user')->group(function (): void {
         Route::get('suggested-products', UserRestaurantHomeSuggestedProductsController::class);
     });
 
+    Route::prefix('cleaning/home')->group(function (): void {
+        Route::get('banners', UserCleaningBannersController::class);
+    });
+
     Route::get('restaurants/products/with-offers', UserRestaurantProductsWithOffersController::class);
     Route::get('restaurants/products/search', UserRestaurantProductsSearchController::class);
     Route::get('restaurants/products/by-category/{category}', UserRestaurantProductsByCategoryController::class);
@@ -193,6 +203,9 @@ Route::prefix('v1/user')->group(function (): void {
         Route::get('notifications', UserNotificationsIndexController::class);
         Route::patch('notifications/read-all', UserNotificationsMarkAllAsReadController::class);
         Route::patch('notifications/{id}/read', UserNotificationsMarkAsReadController::class);
+        Route::put('notifications/token', RegisterFcmTokenController::class);
+
+        Route::post('sos', [UserSosController::class, 'store']);
 
         Route::get('addresses', UserAddressIndexController::class);
         Route::post('addresses', UserAddressStoreController::class);
@@ -225,12 +238,15 @@ Route::prefix('v1/user')->group(function (): void {
         Route::post('cleaning/orders/estimate-price', UserCleaningOrderEstimatePriceController::class);
         Route::get('cleaning/orders/{order}', UserCleaningOrderShowController::class);
         Route::patch('cleaning/orders/{order}', UserCleaningOrderUpdateController::class);
+        Route::patch('cleaning/orders/{order}/room-assignments', UserCleaningOrderRoomAssignmentsController::class);
         Route::post('cleaning/orders/{order}/cancel', UserCleaningOrderCancelController::class);
+        Route::post('cleaning/orders/{order}/sos', UserCleaningOrderSosController::class);
         Route::post('cleaning/orders/{order}/start-verification/confirm', UserCleaningOrderStartVerificationConfirmController::class)
             ->middleware('throttle:cleaning-start-verification');
         Route::post('cleaning/orders/{order}/completion/confirm', UserCleaningOrderCompletionConfirmController::class);
         Route::post('cleaning/orders/{order}/completion/reject', UserCleaningOrderCompletionRejectController::class);
         Route::post('cleaning/orders/{order}/completion/extend-time', UserCleaningOrderCompletionExtendTimeController::class);
+        Route::post('cleaning/orders/{order}/review', UserCleaningOrderReviewController::class);
 
         Route::get('orders', UserOrdersIndexController::class);
         Route::get('orders/slots', UserOrderSlotsController::class);

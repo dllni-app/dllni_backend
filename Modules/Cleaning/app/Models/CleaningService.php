@@ -18,6 +18,7 @@ final class CleaningService extends Model
         'slug',
         'category',
         'description',
+        'price',
         'is_active',
     ];
 
@@ -30,6 +31,7 @@ final class CleaningService extends Model
     {
         return [
             'category' => ServiceCategory::class,
+            'price' => 'decimal:2',
             'is_active' => 'boolean',
         ];
     }

@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Auth;
 
+use App\Http\Requests\Concerns\ResolvesFcmToken;
 use Illuminate\Foundation\Http\FormRequest;
 
 final class UserLoginRequest extends FormRequest
 {
+    use ResolvesFcmToken;
+
     public function authorize(): bool
     {
         return true;
@@ -21,6 +24,14 @@ final class UserLoginRequest extends FormRequest
         return [
             'phone' => 'required|string',
             'password' => 'required|string',
+            'fcmToken' => ['nullable', 'string', 'min:16', 'max:4096'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'fcmToken' => $this->resolveFcmToken(),
+        ]);
     }
 }

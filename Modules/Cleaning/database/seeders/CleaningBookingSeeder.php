@@ -12,16 +12,16 @@ use Illuminate\Support\Str;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
-use Modules\Cleaning\Models\CleaningService;
 
 final class CleaningBookingSeeder extends Seeder
 {
     public function run(): void
     {
-        $customer = User::firstOrCreate(
+        $customer = User::updateOrCreate(
             ['email' => 'cleaning.customer@dllni.sy'],
             [
-                'name' => 'ع�.�S�" ا�"ت�?ظ�Sف',
+                'name' => 'عميل التنظيف التجريبي',
+                'phone' => '+963944120190',
                 'password' => bcrypt('password'),
                 'email_verified_at' => now(),
             ]
@@ -30,9 +30,8 @@ final class CleaningBookingSeeder extends Seeder
         $worker = Worker::first();
         $cancellationPolicy = CancellationPolicy::where('module', 'cleaning')->where('is_default', true)->first();
         $billingPolicy = CleaningBillingPolicy::where('is_default', true)->first();
-        $standardService = CleaningService::where('slug', 'standard-apartment-cleaning')->first();
 
-        if (! $worker || ! $billingPolicy || ! $standardService) {
+        if (! $worker || ! $billingPolicy) {
             return;
         }
 
@@ -46,8 +45,8 @@ final class CleaningBookingSeeder extends Seeder
 
         for ($i = 0; $i < 5; $i++) {
             $scheduledDate = now()->addDays($i);
-            $basePrice = fake()->randomFloat(2, 55, 90);
-            $travelFee = fake()->randomFloat(2, 5, 15);
+            $basePrice = 55 + ($i * 8);
+            $travelFee = 8 + ($i * 2);
             $totalPrice = $basePrice + $travelFee;
 
             $bookingNumber = 'CLN-'.mb_strtoupper(Str::random(6)).'-'.$i;
@@ -58,17 +57,21 @@ final class CleaningBookingSeeder extends Seeder
             CleaningBooking::create([
                 'customer_id' => $customer->id,
                 'worker_id' => $worker->id,
+                'number_of_workers' => 1,
                 'cancellation_policy_id' => $cancellationPolicy?->id,
                 'billing_policy_id' => $billingPolicy->id,
                 'booking_number' => $bookingNumber,
                 'status' => $statuses[$i],
                 'property_type' => 'apartment',
                 'property_details' => [
+                    'location_name' => 'شقة تجريبية',
+                    'address' => 'حلب - الجميلية',
                     'bedrooms' => 2,
                     'bathrooms' => 1,
                     'kitchens' => 1,
                     'living_room_size' => 'medium',
                 ],
+                'cleaning_services' => ['تنظيف الشقة المعياري'],
                 'estimated_sqm' => 85,
                 'estimated_hours' => 3.5,
                 'scheduled_date' => $scheduledDate,
@@ -80,9 +83,9 @@ final class CleaningBookingSeeder extends Seeder
                 'cancellation_fee' => 0,
                 'total_price' => $totalPrice,
                 'terms_accepted' => true,
-                'work_started_at' => in_array($statuses[$i], ['completed', 'in_progress']) ? $scheduledDate->copy()->setTime(10, 0) : null,
+                'work_started_at' => in_array($statuses[$i], ['completed', 'in_progress'], true) ? $scheduledDate->copy()->setTime(10, 0) : null,
                 'work_finished_at' => $statuses[$i] === 'completed' ? $scheduledDate->copy()->setTime(13, 30) : null,
-                'customer_confirmed_at' => in_array($statuses[$i], ['completed', 'in_progress']) ? $scheduledDate->copy()->setTime(13, 35) : null,
+                'customer_confirmed_at' => in_array($statuses[$i], ['completed', 'in_progress'], true) ? $scheduledDate->copy()->setTime(13, 35) : null,
             ]);
         }
     }

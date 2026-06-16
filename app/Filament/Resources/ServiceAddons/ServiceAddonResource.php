@@ -29,7 +29,7 @@ final class ServiceAddonResource extends Resource
 
     public static function getNavigationGroup(): ?string
     {
-        return __('cleaning_admin.nav_groups.settings');
+        return __('cleaning_admin.nav_groups.operations');
     }
 
     public static function getNavigationLabel(): string
@@ -40,6 +40,16 @@ final class ServiceAddonResource extends Resource
     public static function getNavigationTooltip(): ?string
     {
         return __('cleaning_admin.service_addons.tooltip');
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('cleaning_admin.service_addons.model');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('cleaning_admin.service_addons.plural');
     }
 
     public static function form(Schema $schema): Schema

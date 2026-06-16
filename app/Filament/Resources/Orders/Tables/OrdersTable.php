@@ -41,7 +41,7 @@ final class OrdersTable
                 TextColumn::make('preparing_at')->label('تحضير')->dateTime('Y-m-d H:i')->placeholder('—'),
                 TextColumn::make('completed_at')->label('إكمال')->dateTime('Y-m-d H:i')->placeholder('—'),
                 TextColumn::make('cancelled_at')->label('إلغاء')->dateTime('Y-m-d H:i')->placeholder('—'),
-                TextColumn::make('total_amount')->label('المجموع')->money('SAR'),
+                TextColumn::make('total_amount')->label('المجموع')->money(config('app.currency', 'SYP')),
                 TextColumn::make('created_at')->label('التاريخ')->dateTime('Y-m-d H:i')->sortable(),
             ])
             ->filters([

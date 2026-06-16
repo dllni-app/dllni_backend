@@ -16,7 +16,7 @@ final class StoreOwnerMasterProductSearchRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'index' => ['required', 'string', 'min:1', 'max:255', 'regex:/.*\\S.*/'],
+            'index' => ['sometimes', 'string', 'max:255'],
             'perPage' => ['sometimes', 'integer', 'min:1', 'max:50'],
             'page' => ['sometimes', 'integer', 'min:1'],
         ];

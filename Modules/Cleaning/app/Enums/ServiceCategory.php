@@ -8,5 +8,9 @@ enum ServiceCategory: string
 {
     case Cleaning = 'cleaning';
     case EventAssistance = 'event_assistance';
-    case Other = 'other';
+
+    public function label(): string
+    {
+        return __('cleaning_admin.enums.service_category.'.$this->value);
+    }
 }

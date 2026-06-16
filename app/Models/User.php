@@ -112,6 +112,11 @@ final class User extends Authenticatable implements FilamentUser, HasMedia
         return $this->hasMany(\Modules\Resturants\Models\Order::class);
     }
 
+    public function sosAlerts(): HasMany
+    {
+        return $this->hasMany(SosAlert::class);
+    }
+
     public function restaurantGroupOrders(): HasMany
     {
         return $this->hasMany(\Modules\Resturants\Models\RestaurantGroupOrder::class);
@@ -184,6 +189,13 @@ final class User extends Authenticatable implements FilamentUser, HasMedia
 
     public function canAccessPanel(Panel $panel): bool
     {
+        if ($panel->getId() === 'company') {
+            return $this->hasAnyRole([
+                'delivery_company_admin',
+                'delivery_company_staff',
+            ]);
+        }
+
         return $this->hasAnyRole([
             'admin',
             'Super Admin',

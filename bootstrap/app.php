@@ -18,6 +18,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // for unauthenticated API requests (they should return 401 instead).
         $middleware->redirectGuestsTo(fn () => null);
 
+        $middleware->appendToGroup('api', [
+            App\Http\Middleware\SyncFcmTokenFromHeader::class,
+        ]);
+
         $middleware->alias([
             'dashboard.admin' => App\Http\Middleware\EnsureDashboardAdmin::class,
         ]);

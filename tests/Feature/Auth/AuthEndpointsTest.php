@@ -35,6 +35,33 @@ it('dashboard: logs in with email and password and returns user, permissions and
     expect($response->json('token'))->toBeString();
 });
 
+it('dashboard: stores fcm token during login', function (): void {
+    $response = $this->postJson('/api/dashboard/login', [
+        'email' => 'admin@admin.com',
+        'password' => 'password',
+        'fcm_token' => 'dashboard_fcm_token_1234567890',
+    ]);
+
+    $response->assertOk();
+
+    $admin = User::query()->where('email', 'admin@admin.com')->firstOrFail();
+    expect($admin->fresh()->fcm_token)->toBe('dashboard_fcm_token_1234567890');
+});
+
+it('dashboard: stores fcm token from fcm-token header during login', function (): void {
+    $response = $this->withHeaders([
+        'fcm-token' => 'dashboard_header_fcm_token_1234567890',
+    ])->postJson('/api/dashboard/login', [
+        'email' => 'admin@admin.com',
+        'password' => 'password',
+    ]);
+
+    $response->assertOk();
+
+    $admin = User::query()->where('email', 'admin@admin.com')->firstOrFail();
+    expect($admin->fresh()->fcm_token)->toBe('dashboard_header_fcm_token_1234567890');
+});
+
 it('dashboard: returns validation error when login credentials are invalid', function (): void {
     $response = $this->postJson('/api/dashboard/login', [
         'email' => 'admin@admin.com',
@@ -116,6 +143,39 @@ it('user: logs in with phone and password and returns user and token', function 
         ]);
     expect($response->json('user.phone'))->toBe('+962791234567');
     expect($response->json('token'))->toBeString();
+});
+
+it('user: stores fcm token during login', function (): void {
+    $user = User::factory()->create([
+        'phone' => '+962791234568',
+        'password' => bcrypt('secret'),
+    ]);
+
+    $response = $this->postJson('/api/login', [
+        'phone' => '+962791234568',
+        'password' => 'secret',
+        'fcm_token' => 'user_fcm_token_1234567890',
+    ]);
+
+    $response->assertOk();
+    expect($user->fresh()->fcm_token)->toBe('user_fcm_token_1234567890');
+});
+
+it('user: stores fcm token from fcm-token header during login', function (): void {
+    $user = User::factory()->create([
+        'phone' => '+962791234569',
+        'password' => bcrypt('secret'),
+    ]);
+
+    $response = $this->withHeaders([
+        'fcm-token' => 'user_header_fcm_token_1234567890',
+    ])->postJson('/api/login', [
+        'phone' => '+962791234569',
+        'password' => 'secret',
+    ]);
+
+    $response->assertOk();
+    expect($user->fresh()->fcm_token)->toBe('user_header_fcm_token_1234567890');
 });
 
 it('user: cleaning worker login includes workerId for realtime channels', function (): void {

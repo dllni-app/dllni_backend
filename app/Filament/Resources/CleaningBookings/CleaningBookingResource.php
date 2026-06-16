@@ -41,6 +41,16 @@ final class CleaningBookingResource extends Resource
         return __('cleaning_admin.cleaning_bookings.tooltip');
     }
 
+    public static function getModelLabel(): string
+    {
+        return __('cleaning_admin.cleaning_bookings.model');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('cleaning_admin.cleaning_bookings.plural');
+    }
+
     public static function form(Schema $schema): Schema
     {
         return CleaningBookingForm::configure($schema);

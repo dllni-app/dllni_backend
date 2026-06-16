@@ -1,8 +1,23 @@
 <x-filament-hub.page-shell>
     <x-filament::section :heading="__('supermarket_admin.hub.title')" :description="__('supermarket_admin.hub.description')">
+        <x-filament-hub.filter-toolbar
+            search-model="search"
+            :search-placeholder="__('supermarket_admin.filters.search_placeholder')"
+            status-model="focus"
+            :status-options="$filterOptions['focus']"
+        />
+    </x-filament::section>
+
+    <x-filament::section :heading="__('supermarket_admin.hub.title')" :description="__('supermarket_admin.metrics.description')">
         <x-filament-hub.kpi-grid columns="md:grid-cols-2 xl:grid-cols-4">
             @foreach ($overviewKpis as $metric)
-                <x-filament-hub.kpi-stat :label="$metric['label']" :value="$metric['value']" :hint="$metric['hint'] ?? null" />
+                <x-filament-hub.kpi-stat
+                    :label="$metric['label']"
+                    :value="$metric['value']"
+                    :hint="$metric['hint'] ?? null"
+                    :tone="$metric['tone'] ?? 'neutral'"
+                    format-value-as-integer
+                />
             @endforeach
         </x-filament-hub.kpi-grid>
     </x-filament::section>
@@ -12,8 +27,13 @@
             @foreach ($workflowSections as $section)
                 <x-filament-hub.lane-card :title="$section['title']" :description="$section['description'] ?? null">
                     @foreach ($section['links'] as $link)
-                        <x-filament-hub.workflow-link :label="$link['label']" :url="$link['url']"
-                            :badge="$link['badge'] ?? null" />
+                        <x-filament-hub.workflow-link
+                            :label="$link['label']"
+                            :url="$link['url']"
+                            :badge="$link['badge'] ?? null"
+                            :tone="$link['tone'] ?? 'neutral'"
+                            :action-emphasis="(bool) ($link['actionEmphasis'] ?? false)"
+                        />
                     @endforeach
                 </x-filament-hub.lane-card>
             @endforeach
@@ -25,8 +45,13 @@
         <x-filament-hub.lane-grid columns="md:grid-cols-2">
             <x-filament-hub.lane-card :title="__('supermarket_admin.reference.card_title')" :description="null">
                 @foreach ($referenceLinks as $link)
-                    <x-filament-hub.workflow-link :label="$link['label']" :url="$link['url']"
-                        :badge="$link['badge'] ?? null" />
+                    <x-filament-hub.workflow-link
+                        :label="$link['label']"
+                        :url="$link['url']"
+                        :badge="$link['badge'] ?? null"
+                        :tone="$link['tone'] ?? 'neutral'"
+                        :action-emphasis="(bool) ($link['actionEmphasis'] ?? false)"
+                    />
                 @endforeach
             </x-filament-hub.lane-card>
         </x-filament-hub.lane-grid>
@@ -43,8 +68,12 @@
                     @endif
                     <x-filament-hub.queue-grid class="mt-4">
                         @foreach ($group['queues'] as $queue)
-                            <x-filament-hub.queue-card :title="$queue['title']" :count="$queue['count']"
-                                :items="$queue['items'] ?? []" :empty-message="$queue['emptyMessage']" />
+                            <x-filament-hub.queue-card
+                                :title="$queue['title']"
+                                :count="$queue['count']"
+                                :items="$queue['items'] ?? []"
+                                :empty-message="$queue['emptyMessage']"
+                            />
                         @endforeach
                     </x-filament-hub.queue-grid>
                 </div>
@@ -59,8 +88,10 @@
         @else
             <div class="space-y-2">
                 @foreach ($recentActivity as $activity)
-                    <x-filament-hub.info-row :title="$activity['order_number'] ?? 'â€”'"
-                        :subtitle="($activity['store_name'] ?? 'â€”').' â€¢ '.($activity['customer_name'] ?? 'â€”').' â€¢ '.number_format((float) ($activity['order_total'] ?? 0), 2)" />
+                    <x-filament-hub.info-row
+                        :title="$activity['order_number'] ?? '—'"
+                        :subtitle="($activity['store_name'] ?? '—').' • '.($activity['customer_name'] ?? '—').' • '.\App\Filament\Support\AdminUiFormatter::formatCurrency((float) ($activity['order_total'] ?? 0))"
+                    />
                 @endforeach
             </div>
         @endif

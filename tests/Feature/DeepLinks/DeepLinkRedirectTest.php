@@ -10,6 +10,7 @@ use function Pest\Laravel\get;
 use function Pest\Laravel\getJson;
 
 it('redirects canonical restaurant links to configured landing url', function (): void {
+    config()->set('deep_links.canonical_host', 'dllni.mustafafares.com');
     config()->set('deep_links.web_landing_url', 'https://dllni.mustafafares.com/open');
 
     Restaurant::factory()->create([
@@ -62,6 +63,7 @@ it('redirects /open to invalid fallback when deep link cannot be resolved', func
 });
 
 it('redirects canonical product links', function (): void {
+    config()->set('deep_links.canonical_host', 'dllni.mustafafares.com');
     config()->set('deep_links.web_landing_url', 'https://dllni.mustafafares.com/open');
 
     $restaurant = Restaurant::factory()->create(['is_active' => true]);

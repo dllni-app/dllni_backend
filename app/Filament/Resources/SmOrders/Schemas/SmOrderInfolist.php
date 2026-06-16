@@ -33,8 +33,8 @@ final class SmOrderInfolist
                         TextEntry::make('ready_for_pickup_at')->label(__('supermarket_admin.infolist.ready_at'))->dateTime('Y-m-d H:i')->placeholder('—'),
                         TextEntry::make('picked_up_at')->label(__('supermarket_admin.infolist.picked_up_at'))->dateTime('Y-m-d H:i')->placeholder('—'),
                         TextEntry::make('customer_pickup_confirmed_at')->label(__('supermarket_admin.infolist.customer_confirmed'))->dateTime('Y-m-d H:i')->placeholder('—'),
-                        TextEntry::make('total_amount')->label(__('supermarket_admin.infolist.total_amount'))->money(config('app.currency', 'IQD')),
-                        TextEntry::make('cancellation_fee_amount')->label(__('supermarket_admin.infolist.cancellation_fee'))->money(config('app.currency', 'IQD'))->placeholder('—'),
+                        TextEntry::make('total_amount')->label(__('supermarket_admin.infolist.total_amount'))->money(config('app.currency', 'SYP')),
+                        TextEntry::make('cancellation_fee_amount')->label(__('supermarket_admin.infolist.cancellation_fee'))->money(config('app.currency', 'SYP'))->placeholder('—'),
                     ])
                     ->columns(2),
                 Section::make(__('supermarket_admin.infolist.status_timeline'))

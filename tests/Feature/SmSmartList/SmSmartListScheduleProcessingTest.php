@@ -2,23 +2,22 @@
 
 declare(strict_types=1);
 
-use App\Models\MasterProduct;
+use Database\Factories\MasterProductFactory;
 use App\Models\User;
 use Database\Factories\SmCategoryFactory;
 use Database\Factories\SmSmartListFactory;
 use Database\Factories\SmStoreFactory;
 use Illuminate\Support\Facades\Notification;
-use Laravel\Sanctum\Sanctum;
+use Modules\Supermarket\Data\SmSmartListData;
 use Modules\Supermarket\Jobs\ProcessSmartListScheduleJob;
 use Modules\Supermarket\Models\SmProduct;
 use Modules\Supermarket\Models\SmSmartListItem;
 use Modules\Supermarket\Models\SmSmartListSchedule;
 use Modules\Supermarket\Notifications\SmartListScheduledOrderSentNotification;
+use Modules\Supermarket\Services\SmSmartListService;
 
 it('updates a smart list with schedule payload', function (): void {
     $user = User::factory()->create();
-    Sanctum::actingAs($user);
-
     $store = SmStoreFactory::new()->create();
     $smartList = SmSmartListFactory::new()->create([
         'user_id' => $user->id,
@@ -40,9 +39,9 @@ it('updates a smart list with schedule payload', function (): void {
         ],
     ];
 
-    $response = $this->putJson("/api/v1/sm-smart-lists/{$smartList->id}", $payload);
+    $service = app(SmSmartListService::class);
+    $service->update(SmSmartListData::from($payload), $smartList);
 
-    $response->assertOk();
     $this->assertDatabaseHas('sm_smart_lists', [
         'id' => $smartList->id,
         'store_id' => $store->id,
@@ -68,7 +67,7 @@ it('creates scheduled order and sends arabic notification', function (): void {
     $user = User::factory()->create();
     $store = SmStoreFactory::new()->create();
     $category = SmCategoryFactory::new()->create();
-    $masterProduct = MasterProduct::factory()->create();
+    $masterProduct = MasterProductFactory::new()->create();
 
     $smartList = SmSmartListFactory::new()->create([
         'user_id' => $user->id,

@@ -19,6 +19,8 @@ final class WorkerResource extends JsonResource
             'id' => $this->id,
             'userId' => $this->user_id,
             'firstName' => $this->first_name,
+            'gender' => $this->gender,
+            'preferred_work_type' => $this->preferred_work_type?->value ?? $this->preferred_work_type ?? 'both',
             'avatar' => $this->when(
                 $this->relationLoaded('media') && $this->getFirstMedia('avatar'),
                 fn () => MediaResource::make($this->getFirstMedia('avatar'))
@@ -34,8 +36,8 @@ final class WorkerResource extends JsonResource
             'isSuspended' => $this->is_suspended,
             'suspendedUntil' => $this->suspended_until?->toDateTimeString(),
             'homeAddress' => $this->home_address,
-            'homeLatitude' => (float) $this->home_latitude,
-            'homeLongitude' => (float) $this->home_longitude,
+            'homeLatitude' => $this->home_latitude !== null ? (float) $this->home_latitude : null,
+            'homeLongitude' => $this->home_longitude !== null ? (float) $this->home_longitude : null,
             'defaultWorkingHours' => $this->resource->getNormalizedDefaultWorkingHours(),
             'user' => $this->whenLoaded('user', fn () => [
                 'id' => $this->user->id,

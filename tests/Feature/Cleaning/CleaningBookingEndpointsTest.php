@@ -3,10 +3,13 @@
 declare(strict_types=1);
 
 use App\Models\User;
+use App\Models\CleaningFinancialSetting;
 use App\Models\Worker;
+use App\Enums\WorkerPreferredWorkType;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
 
@@ -52,6 +55,7 @@ it('creates a cleaning booking', function () {
         'propertyType' => 'apartment',
         'scheduledDate' => now()->addDays(2)->format('Y-m-d'),
         'scheduledTime' => '10:00',
+        'numberOfWorkers' => 3,
         'totalHours' => 3,
         'basePrice' => 80,
         'travelFee' => 10,
@@ -62,9 +66,11 @@ it('creates a cleaning booking', function () {
     $response = $this->postJson('/api/v1/cleaning-bookings', $payload);
 
     $response->assertCreated();
+    expect($response->json('data.numberOfWorkers'))->toBe(3);
     $this->assertDatabaseHas('cleaning_bookings', [
         'booking_number' => $payload['bookingNumber'],
         'customer_id' => $customer->id,
+        'number_of_workers' => 3,
     ]);
 });
 
@@ -79,6 +85,7 @@ it('shows a cleaning booking', function () {
 
     $booking = CleaningBooking::factory()->create([
         'billing_policy_id' => $billingPolicy->id,
+        'number_of_workers' => 2,
     ]);
 
     $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}");
@@ -86,6 +93,7 @@ it('shows a cleaning booking', function () {
     $response->assertOk();
     expect($response->json('data.id'))->toBe($booking->id);
     expect($response->json('data.bookingNumber'))->toBe($booking->booking_number);
+    expect($response->json('data.numberOfWorkers'))->toBe(2);
 });
 
 it('updates a cleaning booking', function () {
@@ -110,6 +118,7 @@ it('updates a cleaning booking', function () {
         'propertyType' => $booking->property_type,
         'scheduledDate' => $booking->scheduled_date->format('Y-m-d'),
         'scheduledTime' => $booking->scheduled_time,
+        'numberOfWorkers' => 4,
         'totalHours' => (float) $booking->total_hours,
         'basePrice' => (float) $booking->base_price,
         'travelFee' => (float) $booking->travel_fee,
@@ -121,7 +130,9 @@ it('updates a cleaning booking', function () {
     $this->assertDatabaseHas('cleaning_bookings', [
         'id' => $booking->id,
         'status' => CleaningBookingStatus::WorkerAssigned->value,
+        'number_of_workers' => 4,
     ]);
+    expect($response->json('data.numberOfWorkers'))->toBe(4);
 });
 
 it('deletes a cleaning booking', function () {
@@ -194,17 +205,205 @@ it('returns pending unassigned bookings for worker when forCurrentWorker and sta
         'worker_id' => null,
         'billing_policy_id' => $billingPolicy->id,
         'status' => CleaningBookingStatus::Pending,
+        'gender_preference' => 'any',
     ]);
     CleaningBooking::factory()->create([
         'worker_id' => null,
         'billing_policy_id' => $billingPolicy->id,
         'status' => CleaningBookingStatus::Pending,
+        'gender_preference' => 'any',
     ]);
 
     $response = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
 
     $response->assertOk();
     expect($response->json('data'))->toBeArray()->toHaveCount(2);
+});
+
+it('returns only cleaning available bookings for cleaning preferred workers', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-cleaning-preference@example.com']);
+    Worker::factory()->create([
+        'user_id' => $workerUser->id,
+        'preferred_work_type' => WorkerPreferredWorkType::Cleaning,
+    ]);
+    Sanctum::actingAs($workerUser);
+
+    $billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
+        'name' => 'Default',
+        'billing_mode' => 'actual_working_time',
+        'rules' => [],
+        'is_active' => true,
+        'is_default' => true,
+    ]);
+
+    CleaningBooking::factory()->create([
+        'worker_id' => null,
+        'billing_policy_id' => $billingPolicy->id,
+        'status' => CleaningBookingStatus::Pending,
+        'gender_preference' => 'any',
+        'property_type' => 'apartment',
+    ]);
+    CleaningBooking::factory()->create([
+        'worker_id' => null,
+        'billing_policy_id' => $billingPolicy->id,
+        'status' => CleaningBookingStatus::Pending,
+        'gender_preference' => 'any',
+        'property_type' => 'event_assistance',
+    ]);
+
+    $response = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
+
+    $response->assertOk();
+    expect($response->json('data'))->toHaveCount(1);
+    expect($response->json('data.0.propertyType'))->toBe('apartment');
+    expect($response->json('data.0.type'))->toBe('cleaning');
+});
+
+it('returns only event available bookings for events preferred workers', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-events-preference@example.com']);
+    Worker::factory()->create([
+        'user_id' => $workerUser->id,
+        'preferred_work_type' => WorkerPreferredWorkType::Events,
+    ]);
+    Sanctum::actingAs($workerUser);
+
+    $billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
+        'name' => 'Default',
+        'billing_mode' => 'actual_working_time',
+        'rules' => [],
+        'is_active' => true,
+        'is_default' => true,
+    ]);
+
+    CleaningBooking::factory()->create([
+        'worker_id' => null,
+        'billing_policy_id' => $billingPolicy->id,
+        'status' => CleaningBookingStatus::Pending,
+        'gender_preference' => 'any',
+        'property_type' => 'apartment',
+    ]);
+    CleaningBooking::factory()->create([
+        'worker_id' => null,
+        'billing_policy_id' => $billingPolicy->id,
+        'status' => CleaningBookingStatus::Pending,
+        'gender_preference' => 'any',
+        'property_type' => 'event_assistance',
+    ]);
+
+    $response = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
+
+    $response->assertOk();
+    expect($response->json('data'))->toHaveCount(1);
+    expect($response->json('data.0.propertyType'))->toBe('event_assistance');
+    expect($response->json('data.0.type'))->toBe('events');
+});
+
+it('returns cleaning and event available bookings for both preferred workers', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-both-preference@example.com']);
+    Worker::factory()->create([
+        'user_id' => $workerUser->id,
+        'preferred_work_type' => WorkerPreferredWorkType::Both,
+    ]);
+    Sanctum::actingAs($workerUser);
+
+    $billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
+        'name' => 'Default',
+        'billing_mode' => 'actual_working_time',
+        'rules' => [],
+        'is_active' => true,
+        'is_default' => true,
+    ]);
+
+    CleaningBooking::factory()->create([
+        'worker_id' => null,
+        'billing_policy_id' => $billingPolicy->id,
+        'status' => CleaningBookingStatus::Pending,
+        'gender_preference' => 'any',
+        'property_type' => 'apartment',
+    ]);
+    CleaningBooking::factory()->create([
+        'worker_id' => null,
+        'billing_policy_id' => $billingPolicy->id,
+        'status' => CleaningBookingStatus::Pending,
+        'gender_preference' => 'any',
+        'property_type' => 'event_assistance',
+    ]);
+
+    $response = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
+
+    $response->assertOk();
+    expect($response->json('data'))->toHaveCount(2);
+    expect(collect($response->json('data'))->pluck('type')->sort()->values()->all())
+        ->toBe(['cleaning', 'events']);
+});
+
+it('filters cleaning bookings by multiple statuses for current worker', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-multi-status@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
+        'name' => 'Default',
+        'billing_mode' => 'actual_working_time',
+        'rules' => [],
+        'is_active' => true,
+        'is_default' => true,
+    ]);
+
+    CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $billingPolicy->id,
+        'status' => CleaningBookingStatus::InProgress,
+    ]);
+    CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $billingPolicy->id,
+        'status' => CleaningBookingStatus::AwaitingStartVerification,
+    ]);
+    CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $billingPolicy->id,
+        'status' => CleaningBookingStatus::Completed,
+    ]);
+    CleaningBooking::factory()->create([
+        'billing_policy_id' => $billingPolicy->id,
+        'status' => CleaningBookingStatus::InProgress,
+    ]);
+
+    $response = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=in_progress,awaiting_start_verification');
+
+    $response->assertOk();
+    expect($response->json('data'))->toBeArray()->toHaveCount(2);
+    expect(collect($response->json('data'))->pluck('status')->sort()->values()->all())
+        ->toBe([
+            CleaningBookingStatus::AwaitingStartVerification->value,
+            CleaningBookingStatus::InProgress->value,
+        ]);
+});
+
+it('filters cleaning bookings by property type', function () {
+    $billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
+        'name' => 'Default',
+        'billing_mode' => 'actual_working_time',
+        'rules' => [],
+        'is_active' => true,
+        'is_default' => true,
+    ]);
+
+    CleaningBooking::factory()->create([
+        'billing_policy_id' => $billingPolicy->id,
+        'property_type' => 'event_assistance',
+    ]);
+    CleaningBooking::factory()->create([
+        'billing_policy_id' => $billingPolicy->id,
+        'property_type' => 'apartment',
+    ]);
+
+    $response = $this->getJson('/api/v1/cleaning-bookings?filter[propertyType]=event_assistance');
+
+    $response->assertOk();
+    expect($response->json('data'))->toHaveCount(1);
+    expect($response->json('data.0.propertyType'))->toBe('event_assistance');
 });
 
 it('returns worker profile when user has worker', function () {
@@ -217,8 +416,24 @@ it('returns worker profile when user has worker', function () {
     $response->assertOk();
     expect($response->json('data.id'))->toBe($worker->id);
     expect($response->json('data.firstName'))->toBe('Ahmed');
+    expect($response->json('data.preferred_work_type'))->toBe('both');
     expect($response->json('data.user.id'))->toBe($workerUser->id);
     expect($response->json('data.user.phone'))->toBe('+963991234567');
+});
+
+it('defaults existing style worker records to both preferred work type', function () {
+    $workerUser = User::factory()->create(['email' => 'profile-worker-default-preference@example.com']);
+    $worker = Worker::query()->create([
+        'user_id' => $workerUser->id,
+        'first_name' => 'Default Preference Worker',
+    ]);
+    Sanctum::actingAs($workerUser);
+
+    $response = $this->getJson('/api/v1/cleaning/worker/profile');
+
+    $response->assertOk();
+    expect($worker->fresh()->preferred_work_type)->toBe(WorkerPreferredWorkType::Both);
+    expect($response->json('data.preferred_work_type'))->toBe('both');
 });
 
 it('returns 403 for worker profile when user has no worker', function () {
@@ -228,6 +443,148 @@ it('returns 403 for worker profile when user has no worker', function () {
     $response = $this->getJson('/api/v1/cleaning/worker/profile');
 
     $response->assertForbidden();
+});
+
+it('updates worker profile home location fields', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-profile-update@example.com']);
+    Worker::factory()->create([
+        'user_id' => $workerUser->id,
+        'is_active' => true,
+        'home_address' => 'Old Home',
+        'home_latitude' => 33.4,
+        'home_longitude' => 36.2,
+    ]);
+    Sanctum::actingAs($workerUser);
+
+    $response = $this->putJson('/api/v1/cleaning/worker/account/profile', [
+        'homeAddress' => 'Damascus, Al Mazzeh',
+        'homeLatitude' => 33.5138,
+        'homeLongitude' => 36.2765,
+    ]);
+
+    $response->assertOk();
+    expect($response->json('data.homeAddress'))->toBe('Damascus, Al Mazzeh');
+    expect((float) $response->json('data.homeLatitude'))->toBe(33.5138);
+    expect((float) $response->json('data.homeLongitude'))->toBe(36.2765);
+});
+
+it('updates worker preferred work type from worker profile', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-profile-preference-update@example.com']);
+    Worker::factory()->create([
+        'user_id' => $workerUser->id,
+        'preferred_work_type' => WorkerPreferredWorkType::Both,
+        'is_active' => true,
+        'home_address' => 'Worker Home',
+        'home_latitude' => 33.4,
+        'home_longitude' => 36.2,
+    ]);
+    Sanctum::actingAs($workerUser);
+
+    $response = $this->putJson('/api/v1/cleaning/worker/account/profile', [
+        'preferred_work_type' => 'cleaning',
+    ]);
+
+    $response->assertOk();
+    expect($response->json('data.preferred_work_type'))->toBe('cleaning');
+});
+
+it('rejects invalid worker preferred work type from worker profile', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-profile-preference-invalid@example.com']);
+    Worker::factory()->create([
+        'user_id' => $workerUser->id,
+        'is_active' => true,
+        'home_address' => 'Worker Home',
+        'home_latitude' => 33.4,
+        'home_longitude' => 36.2,
+    ]);
+    Sanctum::actingAs($workerUser);
+
+    $response = $this->putJson('/api/v1/cleaning/worker/account/profile', [
+        'preferred_work_type' => 'restaurants',
+    ]);
+
+    $response->assertUnprocessable();
+    $response->assertJsonValidationErrors('preferred_work_type');
+});
+
+it('finalizes provisional pricing when worker accepts booking', function () {
+    CleaningFinancialSetting::query()->updateOrCreate(
+        ['id' => 1],
+        [
+            'default_commission_rate' => 10,
+            'commission_type' => 'percent',
+            'commission_fixed_amount' => null,
+            'travel_per_km' => 10,
+            'travel_distance_start_point' => 'worker_home',
+        ]
+    );
+
+    $workerUser = User::factory()->create(['email' => 'worker-accept-finalize@example.com']);
+    $worker = Worker::factory()->create([
+        'user_id' => $workerUser->id,
+        'home_address' => 'Worker Home',
+        'home_latitude' => 33.6,
+        'home_longitude' => 36.3,
+        'is_active' => true,
+    ]);
+    Sanctum::actingAs($workerUser);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => null,
+        'status' => CleaningBookingStatus::Pending,
+        'gender_preference' => 'any',
+        'address_latitude' => 33.5,
+        'address_longitude' => 36.3,
+        'base_price' => 920,
+        'addons_total' => 0,
+        'travel_fee' => 0,
+        'travel_distance_km' => null,
+        'admin_margin_amount' => 0,
+        'total_price' => 920,
+        'is_pricing_final' => false,
+    ]);
+
+    $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/accept");
+
+    $response->assertOk()
+        ->assertJsonPath('data.status', CleaningBookingStatus::WorkerAssigned->value)
+        ->assertJsonPath('data.isPricingFinal', true);
+
+    $booking->refresh();
+    expect($booking->worker_id)->toBe($worker->id);
+    expect((bool) $booking->is_pricing_final)->toBeTrue();
+
+    $assignment = Modules\Cleaning\Models\CleaningBookingWorkerAssignment::query()
+        ->where('cleaning_booking_id', $booking->id)
+        ->where('worker_id', $worker->id)
+        ->first();
+
+    expect($assignment)->not->toBeNull();
+    expect($assignment?->status?->value)->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value);
+});
+
+it('fails booking accept when worker home location is missing', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-accept-missing-home@example.com']);
+    Worker::factory()->create([
+        'user_id' => $workerUser->id,
+        'home_address' => null,
+        'home_latitude' => null,
+        'home_longitude' => null,
+        'is_active' => true,
+    ]);
+    Sanctum::actingAs($workerUser);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => null,
+        'status' => CleaningBookingStatus::Pending,
+        'address_latitude' => 33.5,
+        'address_longitude' => 36.3,
+        'is_pricing_final' => false,
+    ]);
+
+    $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/accept");
+
+    $response->assertUnprocessable()->assertJsonValidationErrors(['status']);
 });
 
 it('returns worker homepage stats for authenticated worker', function () {
@@ -285,6 +642,11 @@ it('returns zeros for worker homepage when user has no worker', function () {
     expect($response->json('earningsChangePercent'))->toBe(0);
     expect($response->json('newOrdersCount'))->toBe(0);
     expect($response->json('pendingExtensionRequestsCount'))->toBe(0);
+    expect((float) $response->json('amountSummary.workerAmount'))->toBe(0.0);
+    expect((float) $response->json('amountSummary.adminAmount'))->toBe(0.0);
+    expect((float) $response->json('amountSummary.grossInvoicesAmount'))->toBe(0.0);
+    expect($response->json('bookingsWeeklyChart'))->toBeArray()->toHaveCount(7);
+    expect($response->json('invoicesFourWeeksChart'))->toBeArray()->toHaveCount(4);
 });
 
 it('returns worker homepage with todayEarnings newOrdersCount and pendingExtensionRequestsCount', function () {
@@ -313,6 +675,7 @@ it('returns worker homepage with todayEarnings newOrdersCount and pendingExtensi
         'billing_policy_id' => $billingPolicy->id,
         'status' => CleaningBookingStatus::Pending,
         'scheduled_date' => now()->addDays(1),
+        'gender_preference' => 'any',
     ]);
 
     $bookingForWarning = CleaningBooking::factory()->create([
@@ -336,6 +699,60 @@ it('returns worker homepage with todayEarnings newOrdersCount and pendingExtensi
     expect((float) $response->json('earningsChangePercent'))->toBe(100.0);
     expect($response->json('newOrdersCount'))->toBeGreaterThanOrEqual(1);
     expect($response->json('pendingExtensionRequestsCount'))->toBe(1);
+    expect((float) $response->json('amountSummary.workerAmount'))->toBe(200.0);
+    expect((float) $response->json('amountSummary.adminAmount'))->toBe(0.0);
+    expect((float) $response->json('amountSummary.grossInvoicesAmount'))->toBe(200.0);
+    expect($response->json('bookingsWeeklyChart'))->toBeArray()->toHaveCount(7);
+    expect($response->json('invoicesFourWeeksChart'))->toBeArray()->toHaveCount(4);
+});
+
+it('returns worker homepage chart and amount summary blocks for the owner dashboard screen', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-homepage-owner-dashboard@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
+        'name' => 'Default',
+        'billing_mode' => 'actual_working_time',
+        'rules' => [],
+        'is_active' => true,
+        'is_default' => true,
+    ]);
+
+    $today = now()->startOfDay();
+    $monday = $today->copy()->startOfWeek(Carbon\Carbon::MONDAY);
+
+    CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $billingPolicy->id,
+        'status' => CleaningBookingStatus::Completed,
+        'scheduled_date' => $monday->copy()->format('Y-m-d'),
+        'total_price' => 1000,
+        'admin_margin_amount' => 200,
+    ]);
+    CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $billingPolicy->id,
+        'status' => CleaningBookingStatus::WorkerAssigned,
+        'scheduled_date' => $monday->copy()->addDay()->format('Y-m-d'),
+    ]);
+
+    $response = $this->getJson('/api/v1/cleaning/worker/homepage');
+
+    $response->assertOk();
+    expect((float) $response->json('amountSummary.workerAmount'))->toBe(800.0);
+    expect((float) $response->json('amountSummary.adminAmount'))->toBe(200.0);
+    expect((float) $response->json('amountSummary.grossInvoicesAmount'))->toBe(1000.0);
+
+    $bookingsWeeklyChart = $response->json('bookingsWeeklyChart');
+    expect($bookingsWeeklyChart)->toBeArray()->toHaveCount(7);
+    expect((int) $bookingsWeeklyChart[0]['bookingsCount'])->toBeGreaterThanOrEqual(1);
+
+    $invoicesChart = $response->json('invoicesFourWeeksChart');
+    expect($invoicesChart)->toBeArray()->toHaveCount(4);
+    $invoiceSum = collect($invoicesChart)->sum(fn ($item) => (float) ($item['invoiceAmount'] ?? 0));
+    expect((float) $invoiceSum)->toBeGreaterThanOrEqual(800.0);
+    expect((float) $response->json('amountSummary.grossInvoicesAmount'))->toBe(1000.0);
 });
 
 it('returns working hours for authenticated worker', function () {
@@ -480,4 +897,22 @@ it('returns worker account status and updates active flag', function () {
 
     $worker->refresh();
     expect($worker->is_active)->toBeFalse();
+});
+
+it('rejects activating worker account status without home location', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-status-home-required@example.com']);
+    Worker::factory()->create([
+        'user_id' => $workerUser->id,
+        'is_active' => false,
+        'home_address' => null,
+        'home_latitude' => null,
+        'home_longitude' => null,
+    ]);
+    Sanctum::actingAs($workerUser);
+
+    $response = $this->patchJson('/api/v1/cleaning/worker/account/status', [
+        'isActive' => true,
+    ]);
+
+    $response->assertUnprocessable()->assertJsonValidationErrors(['isActive']);
 });

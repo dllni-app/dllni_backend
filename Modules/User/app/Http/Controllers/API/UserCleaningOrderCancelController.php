@@ -19,7 +19,7 @@ final class UserCleaningOrderCancelController
             ->findOrFail($order);
 
         $cancelled = $service->cancel($model, $request->validated('reason'));
-        $cancelled->load(['worker.user', 'timeWarnings', 'disputes', 'services', 'addons', 'billingPolicy']);
+        $cancelled->load(['worker.user', 'timeWarnings', 'disputes', 'addons', 'billingPolicy']);
 
         return response()->json([
             'order' => CleaningBookingResource::make($cancelled),

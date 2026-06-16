@@ -49,7 +49,7 @@ final class StoreOwnerEmployeeUpdateController
             }
 
             if (isset($validated['permissionIds']) && $staff->user) {
-                $staff->user->syncPermissions($validated['permissionIds']);
+                $staff->user->permissions()->sync($validated['permissionIds']);
             }
         });
 

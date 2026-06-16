@@ -60,9 +60,9 @@ final class PricingRelationManager extends RelationManager
             ->columns([
                 TextColumn::make('property_type')->label('نوع العقار'),
                 TextColumn::make('living_room_size')->label('حجم المعيشة'),
-                TextColumn::make('base_price')->label('سعر الساعة')->money('SAR'),
+                TextColumn::make('base_price')->label('سعر الساعة')->money(config('app.currency', 'SYP')),
                 TextColumn::make('min_hours')->label('الحد الأدنى ساعات'),
-                TextColumn::make('price_per_sqm')->label('سعر المتر')->money('SAR'),
+                TextColumn::make('price_per_sqm')->label('سعر المتر')->money(config('app.currency', 'SYP')),
             ])
             ->headerActions([
                 $this->createAction(),

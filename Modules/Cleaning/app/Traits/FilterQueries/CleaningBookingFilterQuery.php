@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Traits\FilterQueries;
 
+use App\Enums\GenderPreference;
+use App\Enums\WorkerPreferredWorkType;
 use Illuminate\Database\Eloquent\Builder;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\User\Services\UserCleaningOrderEstimationService;
 use Spatie\QueryBuilder\AllowedFilter;
 use Spatie\QueryBuilder\AllowedSort;
 use Spatie\QueryBuilder\QueryBuilder;
@@ -17,12 +21,13 @@ trait CleaningBookingFilterQuery
     {
         return QueryBuilder::for(CleaningBooking::class)
             ->allowedFilters([
-                AllowedFilter::exact('status'),
+                AllowedFilter::scope('status'),
                 AllowedFilter::scope('scheduledDateFrom'),
                 AllowedFilter::scope('scheduledDateTo'),
                 AllowedFilter::scope('scheduledDate'),
                 AllowedFilter::exact('customerId', 'customer_id'),
                 AllowedFilter::exact('workerId', 'worker_id'),
+                AllowedFilter::exact('propertyType', 'property_type'),
                 AllowedFilter::scope('forCurrentWorker'),
                 AllowedFilter::scope('hasDispute'),
             ])
@@ -33,6 +38,33 @@ trait CleaningBookingFilterQuery
                 AllowedSort::field('totalPrice', 'total_price'),
             ])
             ->defaultSort('-created_at');
+    }
+
+    public function scopeStatus(Builder $query, string ...$values): Builder
+    {
+        $statuses = [];
+        foreach ($values as $value) {
+            foreach (explode(',', $value) as $status) {
+                $normalized = trim($status);
+                if ($normalized === '') {
+                    continue;
+                }
+
+                $statuses[] = $normalized;
+            }
+        }
+
+        $statuses = array_values(array_unique($statuses));
+
+        if ($statuses === []) {
+            return $query;
+        }
+
+        if (count($statuses) === 1) {
+            return $query->where('status', $statuses[0]);
+        }
+
+        return $query->whereIn('status', $statuses);
     }
 
     public function scopeScheduledDateFrom(Builder $query, string $date): Builder
@@ -62,11 +94,35 @@ trait CleaningBookingFilterQuery
             return $query->whereRaw('1 = 0');
         }
 
-        return $query->where(function (Builder $q) use ($worker): void {
+        $preferredWorkType = $worker->preferred_work_type instanceof WorkerPreferredWorkType
+            ? $worker->preferred_work_type
+            : WorkerPreferredWorkType::tryFrom((string) ($worker->preferred_work_type ?? WorkerPreferredWorkType::Both->value)) ?? WorkerPreferredWorkType::Both;
+
+        return $query->where(function (Builder $q) use ($worker, $preferredWorkType): void {
             $q->where('worker_id', $worker->id)
-                ->orWhere(function (Builder $pending): void {
+                ->orWhereHas('workerAssignments', function (Builder $assignments) use ($worker): void {
+                    $assignments
+                        ->where('worker_id', $worker->id)
+                        ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
+                })
+                ->orWhere(function (Builder $pending) use ($worker, $preferredWorkType): void {
                     $pending->where('status', CleaningBookingStatus::Pending)
-                        ->whereNull('worker_id');
+                        ->whereNull('worker_id')
+                        ->when(
+                            $preferredWorkType === WorkerPreferredWorkType::Cleaning,
+                            fn (Builder $query): Builder => $query->where('property_type', '!=', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
+                        )
+                        ->when(
+                            $preferredWorkType === WorkerPreferredWorkType::Events,
+                            fn (Builder $query): Builder => $query->where('property_type', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
+                        )
+                        ->where(function (Builder $genderQuery) use ($worker): void {
+                            $genderQuery
+                                ->whereNull('gender_preference')
+                                ->orWhere('gender_preference', GenderPreference::Any->value)
+                                ->orWhere('gender_preference', $worker->gender);
+                        })
+                        ->whereDoesntHave('rejections', fn (Builder $rejections) => $rejections->where('worker_id', $worker->id));
                 });
         });
     }

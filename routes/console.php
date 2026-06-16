@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Services\RestaurantSystemAlertGenerator;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
+use Modules\Delivery\Jobs\RecoverDriverTrustScoreJob;
 use Modules\Supermarket\Jobs\DispatchDueSmartListSchedulesJob;
 use Modules\Supermarket\Services\OpenFoodFactsMasterProductImportService;
 use Modules\User\Jobs\ProcessExpiredRestaurantGroupOrdersJob;
@@ -38,6 +39,16 @@ Artisan::command('restaurants:process-group-orders', function (): int {
 })->purpose('Dispatch processing for expired restaurant group orders');
 
 Schedule::command('restaurants:process-group-orders')->everyMinute();
+
+Artisan::command('delivery:recover-driver-trust', function (): int {
+    RecoverDriverTrustScoreJob::dispatch();
+
+    $this->info('Delivery driver trust recovery job dispatched.');
+
+    return 0;
+})->purpose('Recover delivery driver trust scores for eligible drivers');
+
+Schedule::command('delivery:recover-driver-trust')->daily();
 
 Artisan::command(
     'supermarket:import-openfoodfacts-master-products {source?} {--country=en:syria} {--limit=} {--chunk=500} {--skip-images} {--dry-run}',

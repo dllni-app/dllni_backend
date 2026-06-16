@@ -1,0 +1,27 @@
+<?php
+
+declare(strict_types=1);
+
+return [
+    'pricing' => [
+        'base_fee' => (float) env('DELIVERY_BASE_FEE', 5000),
+        'per_km_rate' => (float) env('DELIVERY_PER_KM_RATE', 1000),
+        'minimum_fee' => (float) env('DELIVERY_MINIMUM_FEE', 5000),
+        'default_currency' => env('DELIVERY_DEFAULT_CURRENCY', 'SYP'),
+    ],
+    'dispatch' => [
+        'stale_location_minutes' => (int) env('DELIVERY_STALE_LOCATION_MINUTES', 5),
+        'offer_timeout_seconds' => (int) env('DELIVERY_OFFER_TIMEOUT_SECONDS', 30),
+        'max_search_radius_km' => (float) env('DELIVERY_MAX_SEARCH_RADIUS_KM', 15),
+        'max_attempts_per_order' => (int) env('DELIVERY_MAX_ATTEMPTS_PER_ORDER', 20),
+    ],
+    'trust' => [
+        'default_score' => (int) env('DELIVERY_DRIVER_DEFAULT_TRUST_SCORE', 100),
+        'max_score' => (int) env('DELIVERY_DRIVER_MAX_TRUST_SCORE', 100),
+        'daily_recovery_points' => (int) env('DELIVERY_DRIVER_DAILY_RECOVERY_POINTS', 1),
+        'dispute_penalty' => (int) env('DELIVERY_DRIVER_DISPUTE_PENALTY', 10),
+    ],
+    'financial' => [
+        'dispute_penalty_amount' => (float) env('DELIVERY_DISPUTE_PENALTY_AMOUNT', 0),
+    ],
+];

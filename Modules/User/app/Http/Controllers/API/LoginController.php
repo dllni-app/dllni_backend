@@ -24,8 +24,15 @@ final class LoginController
             ]);
         }
 
+        $fcmToken = $request->validated('fcmToken');
+        if (is_string($fcmToken) && $fcmToken !== '') {
+            $user->forceFill([
+                'fcm_token' => $fcmToken,
+            ])->save();
+        }
+
         return response()->json([
-            'data' => UserResource::make($user->load('media')),
+            'data' => UserResource::make($user->load(['media', 'worker'])),
             'token' => $user->createToken('auth_token')->plainTextToken,
         ]);
     }

@@ -35,8 +35,8 @@ final class SmProductsTable
                     ->label(__('supermarket_admin.form.product_source'))
                     ->formatStateUsing(fn ($state) => $state ? __('supermarket_admin.enums.product_source.'.$state->value) : '—')
                     ->sortable(),
-                TextColumn::make('price')->label(__('supermarket_admin.form.price'))->money(config('app.currency', 'IQD'))->sortable(),
-                TextColumn::make('discounted_price')->label(__('supermarket_admin.form.discounted_price'))->money(config('app.currency', 'IQD'))->placeholder('—')->sortable(),
+                TextColumn::make('price')->label(__('supermarket_admin.form.price'))->money(config('app.currency', 'SYP'))->sortable(),
+                TextColumn::make('discounted_price')->label(__('supermarket_admin.form.discounted_price'))->money(config('app.currency', 'SYP'))->placeholder('—')->sortable(),
                 TextColumn::make('stock_quantity')->label(__('supermarket_admin.form.stock_quantity'))->sortable(),
                 TextColumn::make('low_stock_threshold')->label(__('supermarket_admin.form.low_stock_threshold'))->sortable(),
                 TextColumn::make('expires_at')->label(__('supermarket_admin.form.expires_at'))->dateTime('Y-m-d')->placeholder('—')->sortable(),

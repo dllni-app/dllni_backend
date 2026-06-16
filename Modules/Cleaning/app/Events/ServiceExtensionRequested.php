@@ -19,6 +19,8 @@ final class ServiceExtensionRequested implements ShouldBroadcastNow
         public int $cleaningBookingId,
         public ?int $workerId,
         public ?int $requestedMinutes,
+        public ?float $additionalAmount,
+        public ?string $currency,
     ) {}
 
     /**
@@ -52,6 +54,8 @@ final class ServiceExtensionRequested implements ShouldBroadcastNow
             'cleaningBookingId' => $this->cleaningBookingId,
             'workerId' => $this->workerId,
             'requestedMinutes' => $this->requestedMinutes,
+            'additionalAmount' => $this->additionalAmount,
+            'currency' => $this->currency,
             'version' => 1,
         ];
     }

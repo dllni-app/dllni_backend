@@ -47,16 +47,28 @@ final class WorkerAccountProfileController
             MediaHelper::updateMedia($request->file('avatar'), $worker, 'avatar');
         }
 
+        $workerUpdates = [];
         if (array_key_exists('bio', $validated)) {
-            $worker->update([
-                'bio' => $validated['bio'],
-            ]);
+            $workerUpdates['bio'] = $validated['bio'];
+        }
+        if (array_key_exists('preferred_work_type', $validated)) {
+            $workerUpdates['preferred_work_type'] = $validated['preferred_work_type'];
+        }
+        if (array_key_exists('isActive', $validated)) {
+            $workerUpdates['is_active'] = (bool) $validated['isActive'];
+        }
+        if (array_key_exists('homeAddress', $validated)) {
+            $workerUpdates['home_address'] = $validated['homeAddress'];
+        }
+        if (array_key_exists('homeLatitude', $validated)) {
+            $workerUpdates['home_latitude'] = $validated['homeLatitude'];
+        }
+        if (array_key_exists('homeLongitude', $validated)) {
+            $workerUpdates['home_longitude'] = $validated['homeLongitude'];
         }
 
-        if (array_key_exists('isActive', $validated)) {
-            $worker->update([
-                'is_active' => (bool) $validated['isActive'],
-            ]);
+        if ($workerUpdates !== []) {
+            $worker->update($workerUpdates);
         }
 
         return WorkerResource::make($worker->fresh()->load(['user', 'zones', 'availability', 'media']));

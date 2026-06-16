@@ -3,12 +3,13 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\API\AuthController;
+use App\Http\Controllers\API\AppDownloadController;
 use App\Http\Controllers\API\CancellationPolicyController;
 use App\Http\Controllers\API\DisputeController;
 use App\Http\Controllers\DeepLinks\OpenDeepLinkController;
 use App\Http\Controllers\DeepLinks\ResolveDeepLinkController;
+use App\Http\Controllers\Test\MtnConcatenatedSmsTestController;
 use App\Http\Controllers\API\ServiceAddonController;
-use App\Http\Controllers\API\SosAlertController;
 use App\Http\Controllers\API\SystemAlertController;
 use App\Http\Controllers\DeepLinks\TrackDeepLinkEventController;
 use App\Http\Controllers\API\TravelCostConfigController;
@@ -41,6 +42,10 @@ Route::prefix('v1/deep-links')->group(function (): void {
         ->name('api.deep-links.open');
 });
 
+Route::prefix('v1/apps')->group(function (): void {
+    Route::get('download', AppDownloadController::class);
+});
+
 Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     Route::get('notifications', [UserNotificationController::class, 'index'])->name('notifications.index');
     Route::patch('notifications/{id}/read', [UserNotificationController::class, 'markAsRead'])->name('notifications.markAsRead');
@@ -48,8 +53,13 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     Route::post('disputes/{dispute}/messages', [DisputeController::class, 'storeMessage']);
     Route::apiResource('disputes', DisputeController::class);
     Route::apiResource('system-alerts', SystemAlertController::class)->only(['index', 'show', 'update']);
-    Route::apiResource('sos-alerts', SosAlertController::class)->only(['index', 'show']);
     Route::apiResource('service-addons', ServiceAddonController::class);
     Route::apiResource('travel-cost-configs', TravelCostConfigController::class);
     Route::get('cancellation-policy', [CancellationPolicyController::class, 'show']);
 });
+
+Route::prefix('v1/test')
+    ->middleware(['throttle:10,1'])
+    ->group(function (): void {
+        Route::post('mtn/concatenated-sms/send', MtnConcatenatedSmsTestController::class);
+    });

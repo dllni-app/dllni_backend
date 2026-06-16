@@ -35,11 +35,18 @@ final class LoginVerifyController
             $request->validated('otp'),
         );
 
+        $fcmToken = $request->validated('fcmToken');
+        if (is_string($fcmToken) && $fcmToken !== '') {
+            $user->forceFill([
+                'fcm_token' => $fcmToken,
+            ])->save();
+        }
+
         $user->tokens()->where('name', 'user-api')->delete();
         $token = $user->createToken('user-api')->plainTextToken;
 
         return response()->json([
-            'user' => UserResource::make($user),
+            'user' => UserResource::make($user->load('worker')),
             'token' => $token,
         ]);
     }

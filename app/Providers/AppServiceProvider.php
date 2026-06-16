@@ -8,22 +8,32 @@ use App\Models\Dispute;
 use App\Models\MasterProduct;
 use App\Models\User;
 use App\Models\Worker;
+use App\Notifications\Channels\CachedFcmChannel;
+use App\Services\Notifications\CachedFirebaseMessagingClient;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
+use Illuminate\Notifications\ChannelManager;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
+use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Delivery\Models\DeliveryCompany;
+use Modules\Delivery\Models\DeliveryDriver;
+use Modules\Delivery\Models\DeliveryOrder;
+use Modules\Delivery\Policies\DeliveryDriverPolicy;
+use Modules\Delivery\Policies\DeliveryOrderPolicy;
 use Modules\Resturants\Models\Category;
 use Modules\Resturants\Models\Offer;
 use Modules\Resturants\Models\Order;
-use Modules\Resturants\Models\RestaurantGroupOrder;
-use Modules\Resturants\Models\RestaurantGroupOrderParticipant;
 use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
+use Modules\Resturants\Models\RestaurantGroupOrder;
+use Modules\Resturants\Models\RestaurantGroupOrderParticipant;
 use Modules\Resturants\Models\RestaurantOrderDispute;
 use Modules\Resturants\Policies\OrderPolicy;
 use Modules\Resturants\Policies\RestaurantOrderDisputePolicy;
@@ -54,6 +64,8 @@ final class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->app->singleton(CachedFirebaseMessagingClient::class);
+
         // override default language path so our root lang/ directory is used
         // (instead of resources/lang).  This must happen before the translator
         // loads any files, so register() is the right spot.
@@ -78,7 +90,7 @@ final class AppServiceProvider extends ServiceProvider
             $userId = $request->user()?->id ?? 'guest';
             $orderId = (string) $request->route('order');
 
-            return Limit::perMinute(5)->by($userId . '|' . $orderId);
+            return Limit::perMinute(5)->by($userId.'|'.$orderId);
         });
 
         $this->bootModelsDefaults();
@@ -86,6 +98,23 @@ final class AppServiceProvider extends ServiceProvider
         $this->bootBroadcastChannels();
         $this->bootRestaurantPolicies();
         $this->bootSupermarketPolicies();
+        $this->bootDeliveryPolicies();
+        $this->bootCachedFcmChannel();
+    }
+
+    private function bootCachedFcmChannel(): void
+    {
+        Notification::resolved(function (ChannelManager $service): void {
+            $service->extend('fcm', function ($app): CachedFcmChannel {
+                return new CachedFcmChannel($app->make(CachedFirebaseMessagingClient::class));
+            });
+        });
+    }
+
+    private function bootDeliveryPolicies(): void
+    {
+        Gate::policy(DeliveryOrder::class, DeliveryOrderPolicy::class);
+        Gate::policy(DeliveryDriver::class, DeliveryDriverPolicy::class);
     }
 
     private function bootRestaurantPolicies(): void
@@ -146,6 +175,13 @@ final class AppServiceProvider extends ServiceProvider
                 return true;
             }
 
+            if ($user->worker && $booking->workerAssignments()
+                ->where('worker_id', $user->worker->id)
+                ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
+                ->exists()) {
+                return true;
+            }
+
             return false;
         }, ['guards' => ['sanctum']]);
 
@@ -176,6 +212,9 @@ final class AppServiceProvider extends ServiceProvider
             'marketing_offer' => MarketingOffer::class,
             'cleaning_booking' => CleaningBooking::class,
             'event_booking' => \Modules\Cleaning\Models\EventBooking::class,
+            'delivery_company' => DeliveryCompany::class,
+            'delivery_driver' => DeliveryDriver::class,
+            'delivery_order' => DeliveryOrder::class,
         ]);
     }
 

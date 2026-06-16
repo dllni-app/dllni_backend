@@ -8,10 +8,14 @@ use App\Models\User;
 use Database\Seeders\Permissions\RestaurantOwnerEmployeePermissionsSeeder;
 use Illuminate\Database\Seeder;
 use Modules\Cleaning\Database\Seeders\CleaningBillingPolicySeeder;
+use Modules\Cleaning\Database\Seeders\CleaningBannerSeeder;
+use Modules\Cleaning\Database\Seeders\CleaningFinancialSettingsSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningBookingSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningServiceSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningWorkerArabicDataSeeder;
 use Modules\Cleaning\Database\Seeders\EventBookingSeeder;
+use Modules\Delivery\Database\Seeders\DeliveryPermissionsSeeder;
+use Modules\Delivery\Database\Seeders\DeliveryModuleDataSeeder;
 use Modules\Resturants\Database\Seeders\RestaurantSeeder;
 use Modules\Supermarket\Database\Seeders\SupermarketDatabaseSeeder;
 
@@ -30,6 +34,8 @@ final class DatabaseSeeder extends Seeder
         $this->call([
             VerifiedUserSeeder::class,
             DashboardPermissionsSeeder::class,
+            DeliveryPermissionsSeeder::class,
+            DeliveryModuleDataSeeder::class,
             RestaurantOwnerEmployeePermissionsSeeder::class,
             TeamRoleTemplatesSeeder::class,
             AdminUserSeeder::class,
@@ -43,7 +49,9 @@ final class DatabaseSeeder extends Seeder
             TravelCostConfigSeeder::class,
             WorkerSeeder::class,
             CleaningBillingPolicySeeder::class,
+            CleaningFinancialSettingsSeeder::class,
             CleaningServiceSeeder::class,
+            CleaningBannerSeeder::class,
             RestaurantSeeder::class,
             CleaningBookingSeeder::class,
             CleaningWorkerArabicDataSeeder::class,

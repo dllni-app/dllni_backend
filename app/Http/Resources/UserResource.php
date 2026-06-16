@@ -31,6 +31,10 @@ final class UserResource extends JsonResource
                 $this->relationLoaded('worker'),
                 fn () => $this->worker?->id
             ),
+            'workerPreferredWorkType' => $this->when(
+                $this->relationLoaded('worker'),
+                fn () => $this->worker?->preferred_work_type?->value ?? $this->worker?->preferred_work_type ?? 'both'
+            ),
             'emailVerifiedAt' => $this->email_verified_at,
             'primaryImage' => MediaResource::make($this->whenLoaded('media', fn () => $this->getFirstMedia('primary-image'))),
             'images' => MediaResource::collection($this->whenLoaded('media', fn () => $this->getMedia('images'))),

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\DayOfWeek;
+use App\Enums\WorkerPreferredWorkType;
 use App\Traits\FilterQueries\WorkerFilterQuery;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -23,6 +24,8 @@ final class Worker extends Model implements HasMedia
     protected $fillable = [
         'user_id',
         'first_name',
+        'gender',
+        'preferred_work_type',
         'bio',
         'average_rating',
         'total_completed_jobs',
@@ -40,6 +43,7 @@ final class Worker extends Model implements HasMedia
         'home_latitude',
         'home_longitude',
         'default_working_hours',
+        'security_deposit_status',
     ];
 
     public function user(): BelongsTo
@@ -72,12 +76,23 @@ final class Worker extends Model implements HasMedia
         return $this->hasMany(WorkerCustomerRating::class);
     }
 
+    public function deposit()
+    {
+        return $this->hasOne(CleaningWorkerDeposit::class);
+    }
+
+    public function depositTransactions(): HasMany
+    {
+        return $this->hasMany(CleaningDepositTransaction::class);
+    }
+
     public function casts(): array
     {
         return [
             'average_rating' => 'decimal:2',
             'acceptance_rate' => 'decimal:2',
             'cancellation_rate' => 'decimal:2',
+            'preferred_work_type' => WorkerPreferredWorkType::class,
             'home_latitude' => 'decimal:8',
             'home_longitude' => 'decimal:8',
             'is_active' => 'boolean',
@@ -87,6 +102,7 @@ final class Worker extends Model implements HasMedia
             'featured_until' => 'datetime',
             'suspended_until' => 'datetime',
             'default_working_hours' => 'array',
+            'security_deposit_status' => 'string',
         ];
     }
 

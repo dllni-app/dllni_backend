@@ -52,9 +52,18 @@ final class CleaningServiceProvider extends ServiceProvider
         $viewPath = resource_path('views/modules/'.$this->nameLower);
         $sourcePath = module_path($this->name, 'resources/views');
 
-        $this->publishes([$sourcePath => $viewPath], ['views', $this->nameLower.'-module-views']);
+        if (is_dir($sourcePath)) {
+            $this->publishes([$sourcePath => $viewPath], ['views', $this->nameLower.'-module-views']);
+        }
 
-        $this->loadViewsFrom(array_merge($this->getPublishableViewPaths(), [$sourcePath]), $this->nameLower);
+        $paths = $this->getPublishableViewPaths();
+        if (is_dir($sourcePath)) {
+            $paths[] = $sourcePath;
+        }
+
+        if ($paths !== []) {
+            $this->loadViewsFrom($paths, $this->nameLower);
+        }
 
         Blade::componentNamespace(config('modules.namespace').'\\'.$this->name.'\\View\\Components', $this->nameLower);
     }

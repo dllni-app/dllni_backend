@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Notifications\Cleaning;
 
+use App\Notifications\Concerns\UsesPushNotificationQueue;
 use App\Notifications\Core\NotificationPayloadBuilder;
 use DevKandil\NotiFire\FcmMessage;
 use Illuminate\Bus\Queueable;
@@ -14,12 +15,14 @@ use Modules\Cleaning\Models\CleaningBooking;
 final class NewOrderRequestNotification extends Notification implements ShouldQueue
 {
     use Queueable;
+    use UsesPushNotificationQueue;
     private const string CanonicalType = 'cleaning.booking.new_order_request';
 
     public function __construct(
         private readonly CleaningBooking $booking
     ) {
-        $this->onQueue('notifications');
+        $this->afterCommit();
+        $this->assignPushNotificationQueue();
     }
 
     /**
@@ -42,6 +45,11 @@ final class NewOrderRequestNotification extends Notification implements ShouldQu
             ],
             extraData: [
                 'bookingId' => (int) $this->booking->id,
+                'orderId' => (int) $this->booking->id,
+                'status' => (string) $this->booking->status->value,
+                'action' => 'new_order_request',
+                'deep_link_target' => 'cleaning_booking_details',
+                'occurred_at' => $this->booking->created_at?->toIso8601String() ?? now()->toIso8601String(),
             ],
         );
     }
@@ -55,6 +63,11 @@ final class NewOrderRequestNotification extends Notification implements ShouldQu
             ],
             extraData: [
                 'bookingId' => (int) $this->booking->id,
+                'orderId' => (int) $this->booking->id,
+                'status' => (string) $this->booking->status->value,
+                'action' => 'new_order_request',
+                'deep_link_target' => 'cleaning_booking_details',
+                'occurred_at' => $this->booking->created_at?->toIso8601String() ?? now()->toIso8601String(),
             ],
         );
     }

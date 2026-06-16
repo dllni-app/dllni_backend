@@ -120,6 +120,11 @@ final class Order extends Model
         return $this->morphMany(\App\Models\SystemAlert::class, 'booking', 'booking_type', 'booking_id');
     }
 
+    public function sosAlerts(): MorphMany
+    {
+        return $this->morphMany(\App\Models\SosAlert::class, 'booking', 'booking_type', 'booking_id');
+    }
+
     protected static function newFactory(): OrderFactory
     {
         return OrderFactory::new();

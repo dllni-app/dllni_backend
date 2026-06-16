@@ -7,6 +7,7 @@ namespace Modules\User\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrdersIndexRequest extends FormRequest
 {
@@ -30,6 +31,7 @@ final class UserCleaningOrdersIndexRequest extends FormRequest
             'page' => ['sometimes', 'integer', 'min:1'],
             'filter.status' => ['sometimes', 'string', Rule::in($statuses)],
             'filter.scheduledDate' => ['sometimes', 'date'],
+            'filter.propertyType' => ['sometimes', 'string', Rule::in(UserCleaningOrderEstimationService::PROPERTY_TYPES)],
             'sort' => ['sometimes', 'string', 'in:scheduledDate,-scheduledDate,createdAt,-createdAt,status,-status,totalPrice,-totalPrice'],
         ];
     }

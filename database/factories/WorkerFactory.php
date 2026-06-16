@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Enums\WorkerPreferredWorkType;
 use App\Models\User;
 use App\Models\Worker;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -20,6 +21,7 @@ final class WorkerFactory extends Factory
         return [
             'user_id' => User::factory(),
             'first_name' => fake()->firstName(),
+            'preferred_work_type' => WorkerPreferredWorkType::Both,
             'bio' => fake()->optional()->paragraph(),
             'average_rating' => fake()->randomFloat(2, 3, 5),
             'total_completed_jobs' => fake()->numberBetween(0, 200),

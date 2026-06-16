@@ -25,6 +25,9 @@ final class CleaningTimeWarning extends Model
         'customer_responded_at',
         'worker_responded_at',
         'additional_minutes',
+        'quoted_amount',
+        'quoted_currency',
+        'price_applied_at',
         'worker_reject_message',
     ];
 
@@ -41,6 +44,8 @@ final class CleaningTimeWarning extends Model
             'sent_at' => 'datetime',
             'customer_responded_at' => 'datetime',
             'worker_responded_at' => 'datetime',
+            'quoted_amount' => 'decimal:2',
+            'price_applied_at' => 'datetime',
         ];
     }
 }

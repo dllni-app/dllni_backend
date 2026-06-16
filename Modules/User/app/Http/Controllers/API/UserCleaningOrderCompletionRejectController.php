@@ -19,7 +19,7 @@ final class UserCleaningOrderCompletionRejectController
             ->findOrFail($order);
 
         $updated = $service->rejectCompletion($model);
-        $updated->load(['worker.user', 'timeWarnings', 'disputes', 'services', 'addons', 'billingPolicy']);
+        $updated->load(['worker.user', 'timeWarnings', 'disputes', 'addons', 'billingPolicy']);
 
         return CleaningBookingResource::make($updated)->additional([
             'message' => __('Completion rejection sent successfully.'),

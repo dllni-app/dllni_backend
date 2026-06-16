@@ -59,7 +59,7 @@ final class RestaurantOwnerEmployeeUpdateController
             }
 
             if (isset($validated['permissionIds']) && $employee->user) {
-                $employee->user->syncPermissions($validated['permissionIds']);
+                $employee->user->permissions()->sync($validated['permissionIds']);
             }
         });
 

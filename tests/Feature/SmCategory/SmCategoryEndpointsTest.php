@@ -2,18 +2,17 @@
 
 declare(strict_types=1);
 
-use App\Models\User;
 use Database\Factories\SmCategoryFactory;
 use Database\Factories\SmStoreFactory;
-use Laravel\Sanctum\Sanctum;
 
 beforeEach(function (): void {
-    $user = User::factory()->create();
-    Sanctum::actingAs($user);
+    $context = actingAsSupermarketSeller();
+    $this->user = $context->user;
+    $this->store = $context->store;
 });
 
 it('lists categories', function (): void {
-    SmCategoryFactory::new()->count(3)->create();
+    SmCategoryFactory::new()->count(3)->create(['store_id' => $this->store->id]);
 
     $response = $this->getJson('/api/v1/sm-categories?perPage=10');
 
@@ -22,7 +21,7 @@ it('lists categories', function (): void {
 });
 
 it('shows a category', function (): void {
-    $category = SmCategoryFactory::new()->create();
+    $category = SmCategoryFactory::new()->create(['store_id' => $this->store->id]);
 
     $response = $this->getJson("/api/v1/sm-categories/{$category->id}");
 
@@ -31,10 +30,8 @@ it('shows a category', function (): void {
 });
 
 it('creates a category', function (): void {
-    $store = SmStoreFactory::new()->create();
-
     $payload = [
-        'storeId' => $store->id,
+        'storeId' => $this->store->id,
         'name' => 'Fresh Produce',
         'slug' => 'fresh-produce',
         'sortOrder' => 1,
@@ -45,12 +42,13 @@ it('creates a category', function (): void {
     $response->assertCreated();
     $this->assertDatabaseHas('sm_categories', [
         'slug' => 'fresh-produce',
-        'store_id' => $store->id,
+        'store_id' => $this->store->id,
     ]);
 });
 
 it('updates a category', function (): void {
     $category = SmCategoryFactory::new()->create([
+        'store_id' => $this->store->id,
         'name' => 'Old Name',
         'slug' => 'old-name',
     ]);
@@ -71,7 +69,7 @@ it('updates a category', function (): void {
 });
 
 it('deletes a category', function (): void {
-    $category = SmCategoryFactory::new()->create();
+    $category = SmCategoryFactory::new()->create(['store_id' => $this->store->id]);
 
     $response = $this->deleteJson("/api/v1/sm-categories/{$category->id}");
 

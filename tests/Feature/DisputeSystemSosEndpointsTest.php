@@ -26,6 +26,14 @@ it('lists system alerts', function () {
 it('lists sos alerts', function () {
     $response = $this->getJson('/api/v1/sos-alerts');
 
-    $response->assertOk();
-    expect($response->json('data'))->toBeArray();
+    $response->assertNotFound();
+});
+
+it('does not expose the legacy sos alias', function () {
+    $response = $this->postJson('/api/user/sos', [
+        'order_id' => 1,
+        'message' => 'I need urgent help.',
+    ]);
+
+    $response->assertNotFound();
 });

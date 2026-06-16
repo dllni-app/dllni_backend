@@ -89,36 +89,50 @@ final class SmProductController
         return response()->json($result, Response::HTTP_CREATED);
     }
 
-    public function show(SmProduct $product): SmProductResource
+    public function show(?SmProduct $smProduct = null, ?SmProduct $product = null): SmProductResource
     {
-        $this->assertStoreOwnerProductBelongsToOwner($product);
+        $resolved = $this->resolveBoundProduct($smProduct, $product);
+        $this->assertStoreOwnerProductBelongsToOwner($resolved);
 
-        return SmProductResource::make($product->load('store', 'category', 'media', 'offerProducts.offer', 'masterProduct.media'));
+        return SmProductResource::make($resolved->load('store', 'category', 'media', 'offerProducts.offer', 'masterProduct.media'));
     }
 
-    public function update(SmProductRequest $request, SmProduct $product): SmProductResource
+    public function update(SmProductRequest $request, ?SmProduct $smProduct = null, ?SmProduct $product = null): SmProductResource
     {
-        $this->assertStoreOwnerProductBelongsToOwner($product);
+        $resolved = $this->resolveBoundProduct($smProduct, $product);
+        $this->assertStoreOwnerProductBelongsToOwner($resolved);
 
         $updatedProduct = $this->service->update(
             SmProductData::from($request->validated()),
-            $product,
+            $resolved,
             $this->extractImages($request)
         );
 
         return SmProductResource::make($updatedProduct->load('store', 'category', 'media', 'offerProducts.offer', 'masterProduct.media'));
     }
 
-    public function destroy(SmProduct $product): Response
+    public function destroy(?SmProduct $smProduct = null, ?SmProduct $product = null): Response
     {
-        $this->assertStoreOwnerProductBelongsToOwner($product);
+        $resolved = $this->resolveBoundProduct($smProduct, $product);
+        $this->assertStoreOwnerProductBelongsToOwner($resolved);
 
-        $productName = $product->name ?? $product->getAttribute('name');
-        $storeId = (int) $product->store_id;
-        $product->delete();
+        $productName = $resolved->name ?? $resolved->getAttribute('name');
+        $storeId = (int) $resolved->store_id;
+        $resolved->delete();
         $this->activityLogService->logSmProductDeleted($productName, $storeId);
 
         return response()->noContent();
+    }
+
+    private function resolveBoundProduct(?SmProduct $smProduct, ?SmProduct $product): SmProduct
+    {
+        $resolved = $smProduct ?? $product;
+
+        if ($resolved === null) {
+            abort(Response::HTTP_NOT_FOUND);
+        }
+
+        return $resolved;
     }
 
     private function assertStoreOwnerProductBelongsToOwner(SmProduct $product): void

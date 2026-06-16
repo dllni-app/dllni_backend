@@ -106,3 +106,38 @@ it('resets password using otp flow', function (): void {
     // Assert
     $confirmResponse->assertOk()->assertJsonPath('message', 'تم إعادة تعيين كلمة المرور.');
 });
+
+it('stores fcm token during v1 user login', function (): void {
+    $phone = '+963944000444';
+    $user = User::factory()->create([
+        'phone' => $phone,
+        'password' => bcrypt('secret123'),
+    ]);
+
+    $response = $this->postJson('/api/v1/user/login', [
+        'phone' => $phone,
+        'password' => 'secret123',
+        'fcm_token' => 'v1_user_fcm_token_1234567890',
+    ]);
+
+    $response->assertOk()->assertJsonStructure(['data', 'token']);
+    expect($user->fresh()->fcm_token)->toBe('v1_user_fcm_token_1234567890');
+});
+
+it('stores fcm token from fcm-token header during v1 user login', function (): void {
+    $phone = '+963944000445';
+    $user = User::factory()->create([
+        'phone' => $phone,
+        'password' => bcrypt('secret123'),
+    ]);
+
+    $response = $this->withHeaders([
+        'fcm-token' => 'v1_user_header_fcm_token_1234567890',
+    ])->postJson('/api/v1/user/login', [
+        'phone' => $phone,
+        'password' => 'secret123',
+    ]);
+
+    $response->assertOk()->assertJsonStructure(['data', 'token']);
+    expect($user->fresh()->fcm_token)->toBe('v1_user_header_fcm_token_1234567890');
+});

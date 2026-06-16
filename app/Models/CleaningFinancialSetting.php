@@ -15,11 +15,13 @@ final class CleaningFinancialSetting extends Model
         'commission_fixed_amount',
         'travel_markup_type',
         'travel_markup_value',
+        'travel_per_km',
         'travel_distance_start_point',
         'coverage_thresholds',
         'time_billing_mode',
         'min_billable_minutes',
         'time_warning_minutes_before_end',
+        'extension_rate_per_30_minutes',
     ];
 
     public function casts(): array
@@ -29,6 +31,8 @@ final class CleaningFinancialSetting extends Model
             'vat_rate' => 'decimal:2',
             'commission_fixed_amount' => 'decimal:2',
             'travel_markup_value' => 'decimal:2',
+            'travel_per_km' => 'decimal:2',
+            'extension_rate_per_30_minutes' => 'decimal:2',
             'coverage_thresholds' => 'array',
         ];
     }

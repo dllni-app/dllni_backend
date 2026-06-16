@@ -21,24 +21,24 @@ final class WorkerSeeder extends Seeder
             [
                 'email' => 'worker1@dllni.sy',
                 'first_name' => 'سارة',
-                'bio' => '�.�?ظفة �.حترفة بخبرة أ�fثر �.�? 5 س�?�^ات. �.تخصصة ف�S ا�"ت�?ظ�Sف ا�"ع�.�S�, �^ا�"�.�?تجات ا�"صد�S�,ة �"�"ب�Sئة.',
-                'address' => 'ح�"ب - ا�"ج�.�S�"�Sة - شارع ف�Sص�"',
+                'bio' => 'عاملة تنظيف محترفة بخبرة أكثر من 5 سنوات، متخصصة في التنظيف العميق واستخدام المنتجات الصديقة للبيئة.',
+                'address' => 'حلب - الجميلية - شارع فيصل',
                 'lat' => 36.2127,
                 'lng' => 37.1456,
             ],
             [
                 'email' => 'worker2@dllni.sy',
-                'first_name' => 'أح�.د',
-                'bio' => '�.�^ث�^�, �^�.�?ضبط. ذ�^ خبرة ف�S �.ساعدة ا�"�.�?اسبات �^ا�"تج�.عات ا�"�fب�Sرة.',
-                'address' => 'ح�"ب - ا�"ح�.دا�?�Sة - شارع ا�"�,دس',
+                'first_name' => 'أحمد',
+                'bio' => 'عامل موثوق ومنضبط، لديه خبرة في مساعدة المناسبات والتجمعات الكبيرة.',
+                'address' => 'حلب - الحمدانية - شارع القدس',
                 'lat' => 36.1795,
                 'lng' => 37.1082,
             ],
             [
                 'email' => 'worker3@dllni.sy',
-                'first_name' => '�"�S�"�?',
-                'bio' => '�.�?ظفة ت�?ت�. با�"تفاص�S�". �.تاحة �"�"ت�?ظ�Sف ا�"د�^ر�S �^ا�"�.رة ا�"�^احدة.',
-                'address' => 'ح�"ب - ا�"سر�Sا�? ا�"جد�Sدة - شارع تشر�S�?',
+                'first_name' => 'ليلى',
+                'bio' => 'عاملة تنظيف تهتم بالتفاصيل، متاحة للتنظيف الدوري والتنظيف لمرة واحدة.',
+                'address' => 'حلب - السريان الجديدة - شارع تشرين',
                 'lat' => 36.2168,
                 'lng' => 37.1317,
             ],
@@ -50,7 +50,7 @@ final class WorkerSeeder extends Seeder
             $user = User::firstOrCreate(
                 ['email' => $data['email']],
                 [
-                    'name' => $data['first_name'].' عا�.�"',
+                    'name' => $data['first_name'].' عامل تنظيف',
                     'phone' => $phone,
                     'module_type' => UserModuleType::CleaningWorker,
                     'password' => bcrypt('password'),
@@ -59,6 +59,7 @@ final class WorkerSeeder extends Seeder
             );
 
             $user->forceFill([
+                'name' => $data['first_name'].' عامل تنظيف',
                 'phone' => $phone,
                 'module_type' => UserModuleType::CleaningWorker,
                 'phone_verified_at' => now(),
@@ -80,19 +81,23 @@ final class WorkerSeeder extends Seeder
                     'home_address' => $data['address'],
                     'home_latitude' => $data['lat'],
                     'home_longitude' => $data['lng'],
-                    'default_working_hours' => [
-                        'monday' => ['09:00', '18:00'],
-                        'tuesday' => ['09:00', '18:00'],
-                        'wednesday' => ['09:00', '18:00'],
-                        'thursday' => ['09:00', '18:00'],
-                        'friday' => ['09:00', '18:00'],
-                        'saturday' => ['10:00', '16:00'],
-                    ],
+                    'default_working_hours' => self::defaultWorkingHours(),
                 ]
             );
 
-            WorkerZone::firstOrCreate(
-                ['worker_id' => $worker->id, 'name' => 'ا�"�.�?ط�,ة ا�"أساس�Sة'],
+            $worker->forceFill([
+                'first_name' => $data['first_name'],
+                'bio' => $data['bio'],
+                'is_active' => true,
+                'is_suspended' => false,
+                'home_address' => $data['address'],
+                'home_latitude' => $data['lat'],
+                'home_longitude' => $data['lng'],
+                'default_working_hours' => self::defaultWorkingHours(),
+            ])->save();
+
+            WorkerZone::updateOrCreate(
+                ['worker_id' => $worker->id, 'name' => 'المنطقة الأساسية'],
                 [
                     'polygon' => [
                         ['lat' => $data['lat'] - 0.05, 'lng' => $data['lng'] - 0.05],
@@ -125,5 +130,17 @@ final class WorkerSeeder extends Seeder
                 "worker-{$worker->id}-avatar"
             );
         }
+    }
+
+    private static function defaultWorkingHours(): array
+    {
+        return [
+            'monday' => ['09:00', '18:00'],
+            'tuesday' => ['09:00', '18:00'],
+            'wednesday' => ['09:00', '18:00'],
+            'thursday' => ['09:00', '18:00'],
+            'friday' => ['09:00', '18:00'],
+            'saturday' => ['10:00', '16:00'],
+        ];
     }
 }

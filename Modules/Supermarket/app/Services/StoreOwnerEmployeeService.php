@@ -57,7 +57,7 @@ final class StoreOwnerEmployeeService
                 ]);
             }
 
-            $user->syncPermissions($permissionIds);
+            $user->permissions()->sync($permissionIds);
 
             /** @var SmStoreStaff $staff */
             $staff = SmStoreStaff::query()->updateOrCreate(

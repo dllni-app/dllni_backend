@@ -10,7 +10,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Modules\Resturants\Models\Restaurant;
 use Modules\Resturants\Models\RestaurantStaff;
-use Spatie\Permission\Models\Permission;
 
 final class RestaurantOwnerEmployeeService
 {
@@ -59,7 +58,7 @@ final class RestaurantOwnerEmployeeService
                 ]);
             }
 
-            $user->syncPermissions(Permission::query()->findMany($permissionIds));
+            $user->permissions()->sync($permissionIds);
 
             /** @var RestaurantStaff $staff */
             $staff = RestaurantStaff::updateOrCreate(

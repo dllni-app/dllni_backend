@@ -9,4 +9,5 @@ enum UserModuleType: string
     case CleaningWorker = 'cleaning_worker';
     case RestaurantSeller = 'restaurant_seller';
     case SupermarketSeller = 'supermarket_seller';
+    case DeliveryDriver = 'delivery_driver';
 }
