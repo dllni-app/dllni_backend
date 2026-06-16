@@ -7,6 +7,8 @@ namespace App\Models;
 use App\Enums\DayOfWeek;
 use App\Enums\WorkerPreferredWorkType;
 use App\Traits\FilterQueries\WorkerFilterQuery;
+use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -25,6 +27,7 @@ final class Worker extends Model implements HasMedia
         'user_id',
         'first_name',
         'gender',
+        'birthday',
         'preferred_work_type',
         'bio',
         'average_rating',
@@ -92,6 +95,7 @@ final class Worker extends Model implements HasMedia
             'average_rating' => 'decimal:2',
             'acceptance_rate' => 'decimal:2',
             'cancellation_rate' => 'decimal:2',
+            'birthday' => 'date',
             'preferred_work_type' => WorkerPreferredWorkType::class,
             'home_latitude' => 'decimal:8',
             'home_longitude' => 'decimal:8',
@@ -152,5 +156,135 @@ final class Worker extends Model implements HasMedia
         }
 
         return ['available' => false, 'data' => []];
+    }
+
+    public function isAvailableForBooking(?CleaningBooking $booking): bool
+    {
+        if (! $booking instanceof CleaningBooking) {
+            return false;
+        }
+
+        $dateTime = $this->bookingDateTime($booking);
+
+        if (! $dateTime instanceof CarbonInterface) {
+            return false;
+        }
+
+        return $this->isAvailableAt($dateTime);
+    }
+
+    public function isAvailableAt(CarbonInterface $dateTime): bool
+    {
+        $dayKey = mb_strtolower($dateTime->format('l'));
+        $dayHours = $this->getNormalizedDefaultWorkingHours()[$dayKey] ?? ['available' => false, 'data' => []];
+
+        if (! (bool) ($dayHours['available'] ?? false)) {
+            return false;
+        }
+
+        $targetMinutes = $this->minutesFromTime($dateTime->format('H:i'));
+        if ($targetMinutes === null) {
+            return false;
+        }
+
+        foreach ($dayHours['data'] as $period) {
+            if (! is_array($period)) {
+                continue;
+            }
+
+            [$from, $to] = $this->timeRangeFromPeriod($period);
+
+            if ($from === null || $to === null) {
+                continue;
+            }
+
+            if ($this->isWithinWorkingPeriod($targetMinutes, $from, $to)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function bookingDateTime(CleaningBooking $booking): ?CarbonInterface
+    {
+        if ($booking->scheduled_date === null || $booking->scheduled_time === null) {
+            return null;
+        }
+
+        $scheduledDate = $booking->scheduled_date instanceof CarbonInterface
+            ? $booking->scheduled_date->toDateString()
+            : (string) $booking->scheduled_date;
+        $scheduledTime = mb_trim((string) $booking->scheduled_time);
+
+        if ($scheduledDate === '' || $scheduledTime === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($scheduledDate.' '.$scheduledTime, config('app.timezone'));
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * @param  array<string, string>  $period
+     * @return array{0: ?string, 1: ?string}
+     */
+    private function timeRangeFromPeriod(array $period): array
+    {
+        if (isset($period['from'], $period['to']) && is_string($period['from']) && is_string($period['to'])) {
+            return [$period['from'], $period['to']];
+        }
+
+        $from = array_key_first($period);
+        if (! is_string($from)) {
+            return [null, null];
+        }
+
+        $to = $period[$from] ?? null;
+        if (! is_string($to)) {
+            return [null, null];
+        }
+
+        return [$from, $to];
+    }
+
+    private function isWithinWorkingPeriod(int $targetMinutes, string $from, string $to): bool
+    {
+        $startMinutes = $this->minutesFromTime($from);
+        $endMinutes = $this->minutesFromTime($to);
+
+        if ($startMinutes === null || $endMinutes === null) {
+            return false;
+        }
+
+        if ($startMinutes === $endMinutes) {
+            return true;
+        }
+
+        if ($endMinutes > $startMinutes) {
+            return $targetMinutes >= $startMinutes && $targetMinutes <= $endMinutes;
+        }
+
+        return $targetMinutes >= $startMinutes || $targetMinutes <= $endMinutes;
+    }
+
+    private function minutesFromTime(string $time): ?int
+    {
+        foreach (['H:i', 'H:i:s'] as $format) {
+            try {
+                $parsed = Carbon::createFromFormat($format, $time);
+
+                if ($parsed instanceof CarbonInterface) {
+                    return $parsed->hour * 60 + $parsed->minute;
+                }
+            } catch (\Throwable) {
+                continue;
+            }
+        }
+
+        return null;
     }
 }

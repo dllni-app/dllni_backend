@@ -110,6 +110,19 @@ return [
                 ],
             ],
         ],
+        'cleaning.booking.worker_confirmed' => [
+            'legacy_type' => 'worker_confirmed',
+            'module' => 'cleaning',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'en' => [
+                    'title' => 'Worker confirmed',
+                    'body' => 'A worker confirmed booking :booking_number.',
+                ],
+            ],
+        ],
         'cleaning.booking.worker_started_travel' => [
             'legacy_type' => 'worker_started_travel',
             'module' => 'cleaning',

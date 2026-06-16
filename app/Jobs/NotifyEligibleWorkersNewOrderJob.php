@@ -7,6 +7,7 @@ namespace App\Jobs;
 use App\Enums\GenderPreference;
 use App\Models\Worker;
 use App\Notifications\Cleaning\NewOrderRequestNotification;
+use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Modules\Cleaning\Enums\CleaningAssignmentMode;
@@ -33,6 +34,7 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
             return;
         }
 
+        $bookingDateTime = $this->bookingDateTime($booking);
         $assignmentMode = $booking->resolvedAssignmentMode();
         $rejectedWorkerIds = $booking->rejections()->pluck('worker_id')->map(static fn (mixed $workerId): int => (int) $workerId)->all();
         $acceptedWorkerIds = $booking->workerAssignments()
@@ -56,7 +58,7 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
                 ->with('user')
                 ->first();
 
-            if ($worker?->user) {
+            if ($worker?->user && $this->isWorkerAvailable($worker, $bookingDateTime)) {
                 $worker->user->notify(new NewOrderRequestNotification($booking));
             }
 
@@ -80,9 +82,31 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
             ->get();
 
         foreach ($workers as $worker) {
-            if ($worker->user) {
+            if ($worker->user && $this->isWorkerAvailable($worker, $bookingDateTime)) {
                 $worker->user->notify(new NewOrderRequestNotification($booking));
             }
+        }
+    }
+
+    private function isWorkerAvailable(Worker $worker, ?Carbon $bookingDateTime): bool
+    {
+        if ($bookingDateTime === null) {
+            return false;
+        }
+
+        return $worker->isAvailableAt($bookingDateTime);
+    }
+
+    private function bookingDateTime(CleaningBooking $booking): ?Carbon
+    {
+        if ($booking->scheduled_date === null || $booking->scheduled_time === null) {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($booking->scheduled_date->format('Y-m-d').' '.trim((string) $booking->scheduled_time), config('app.timezone'));
+        } catch (\Throwable) {
+            return null;
         }
     }
 }

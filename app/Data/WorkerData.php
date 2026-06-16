@@ -19,6 +19,7 @@ final class WorkerData extends Data
         public ?int $userId,
         public ?string $firstName,
         public ?string $gender,
+        public ?string $birthday,
         public ?string $preferred_work_type,
         public ?string $bio,
         public ?float $averageRating,
