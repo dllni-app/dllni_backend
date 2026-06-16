@@ -9,6 +9,15 @@ use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Support\Facades\Http;
 use Modules\User\Services\Sms\SmsMessageBuilder;
 
+it('builds registration otp sms in arabic for english locale too', function (): void {
+    $payload = app(SmsMessageBuilder::class)->registrationOtp('123456', 'en');
+
+    expect($payload)->toBe([
+        'message' => 'رمز التحقق الخاص بك: 123456',
+        'lang' => 0,
+    ]);
+});
+
 it('sends registration sms from the queued job', function (): void {
     $user = User::factory()->create([
         'phone' => '+963944000111',

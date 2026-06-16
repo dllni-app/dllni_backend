@@ -6,6 +6,7 @@ namespace App\Services\Notifications;
 
 use DevKandil\NotiFire\Enums\MessagePriority;
 use DevKandil\NotiFire\FcmMessage;
+use Closure;
 use Exception;
 use Google_Client;
 use Illuminate\Support\Facades\Cache;
@@ -14,6 +15,10 @@ use Illuminate\Support\Facades\Log;
 
 final class CachedFirebaseMessagingClient
 {
+    public function __construct(
+        private readonly ?Closure $accessTokenResolver = null,
+    ) {}
+
     /**
      * @param  array<string, mixed>|null  $rawMessage
      */
@@ -189,52 +194,60 @@ final class CachedFirebaseMessagingClient
             $apiUrl = 'https://fcm.googleapis.com/v1/projects/'.$projectId.'/messages:send';
         }
 
-        $accessToken = $this->getGoogleAccessToken();
-        $retryTimes = (int) config('notifications.fcm.retry_times', 2);
-        $retrySleepMs = (int) config('notifications.fcm.retry_sleep_ms', 100);
+        $response = $this->sendRequest(
+            apiUrl: $apiUrl,
+            fields: $fields,
+            accessToken: $this->getGoogleAccessToken(),
+        );
 
-        return Http::withHeaders([
-            'Authorization' => 'Bearer '.$accessToken,
-            'Content-Type' => 'application/json',
-        ])
-            ->timeout((int) config('notifications.fcm.http_timeout', 10))
-            ->connectTimeout((int) config('notifications.fcm.http_connect_timeout', 5))
-            ->retry($retryTimes, $retrySleepMs, throw: false)
-            ->post($apiUrl, $fields);
+        if (! $this->shouldRefreshAccessToken($response)) {
+            return $response;
+        }
+
+        $this->clearCachedGoogleAccessToken();
+
+        $this->logPushEvent('warning', 'Retrying FCM push with a fresh Google access token after auth failure', [
+            'http_status' => $response->status(),
+            'error_status' => $this->extractApiErrorStatus($response->json()),
+        ]);
+
+        return $this->sendRequest(
+            apiUrl: $apiUrl,
+            fields: $fields,
+            accessToken: $this->getGoogleAccessToken(forceRefresh: true),
+        );
     }
 
-    private function getGoogleAccessToken(): string
+    private function getGoogleAccessToken(bool $forceRefresh = false): string
     {
-        $cacheKey = (string) config('notifications.fcm.oauth_cache_key', 'fcm.google_access_token');
+        $cacheEnabled = $this->oauthCacheEnabled();
+        $cacheKey = $this->oauthCacheKey();
 
-        /** @var string|null $cached */
-        $cached = Cache::get($cacheKey);
+        if ($cacheEnabled && ! $forceRefresh) {
+            /** @var string|null $cached */
+            $cached = Cache::get($cacheKey);
 
-        if (is_string($cached) && $cached !== '') {
-            return $cached;
+            if (is_string($cached) && $cached !== '') {
+                return $cached;
+            }
         }
 
-        $credentialsFilePath = config('fcm.credentials_path');
-
-        if (! is_string($credentialsFilePath) || ! file_exists($credentialsFilePath)) {
-            throw new Exception('Firebase credentials file not found at: '.$credentialsFilePath);
+        if ($cacheEnabled && $forceRefresh) {
+            Cache::forget($cacheKey);
         }
 
-        $client = new Google_Client;
-        $client->setAuthConfig($credentialsFilePath);
-        $client->addScope('https://www.googleapis.com/auth/firebase.messaging');
-        $client->refreshTokenWithAssertion();
-        $token = $client->getAccessToken();
-
+        $token = $this->fetchGoogleAccessToken();
         if (! is_array($token) || ! is_string($token['access_token'] ?? null)) {
             throw new Exception('Failed to obtain Google access token for FCM.');
         }
 
-        $expiresIn = (int) ($token['expires_in'] ?? 3600);
-        $margin = (int) config('notifications.fcm.oauth_cache_ttl_margin', 300);
-        $ttlSeconds = max(60, $expiresIn - $margin);
+        if ($cacheEnabled) {
+            $expiresIn = (int) ($token['expires_in'] ?? 3600);
+            $margin = (int) config('notifications.fcm.oauth_cache_ttl_margin', 300);
+            $ttlSeconds = max(60, $expiresIn - $margin);
 
-        Cache::put($cacheKey, $token['access_token'], now()->addSeconds($ttlSeconds));
+            Cache::put($cacheKey, $token['access_token'], now()->addSeconds($ttlSeconds));
+        }
 
         return $token['access_token'];
     }
@@ -276,6 +289,97 @@ final class CachedFirebaseMessagingClient
         }
 
         return $httpStatus === 404;
+    }
+
+    /**
+     * @param  array<string, mixed>  $fields
+     */
+    private function sendRequest(string $apiUrl, array $fields, string $accessToken): \Illuminate\Http\Client\Response
+    {
+        $retryTimes = (int) config('notifications.fcm.retry_times', 2);
+        $retrySleepMs = (int) config('notifications.fcm.retry_sleep_ms', 100);
+
+        return Http::withHeaders([
+            'Authorization' => 'Bearer '.$accessToken,
+            'Content-Type' => 'application/json',
+        ])
+            ->timeout((int) config('notifications.fcm.http_timeout', 10))
+            ->connectTimeout((int) config('notifications.fcm.http_connect_timeout', 5))
+            ->retry($retryTimes, $retrySleepMs, throw: false)
+            ->post($apiUrl, $fields);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function fetchGoogleAccessToken(): array
+    {
+        if ($this->accessTokenResolver !== null) {
+            $token = ($this->accessTokenResolver)();
+
+            if (is_array($token)) {
+                return $token;
+            }
+
+            throw new Exception('Custom FCM access token resolver must return an array payload.');
+        }
+
+        $credentialsFilePath = config('fcm.credentials_path');
+
+        if (! is_string($credentialsFilePath) || ! file_exists($credentialsFilePath)) {
+            throw new Exception('Firebase credentials file not found at: '.$credentialsFilePath);
+        }
+
+        $client = new Google_Client;
+        $client->setAuthConfig($credentialsFilePath);
+        $client->addScope('https://www.googleapis.com/auth/firebase.messaging');
+        $client->refreshTokenWithAssertion();
+
+        $token = $client->getAccessToken();
+
+        return is_array($token) ? $token : [];
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $json
+     */
+    private function extractApiErrorStatus(?array $json): ?string
+    {
+        $status = $json['error']['status'] ?? null;
+
+        return is_string($status) && $status !== '' ? $status : null;
+    }
+
+    private function shouldRefreshAccessToken(\Illuminate\Http\Client\Response $response): bool
+    {
+        if (! $this->oauthCacheEnabled()) {
+            return false;
+        }
+
+        if (in_array($response->status(), [401, 403], true)) {
+            return true;
+        }
+
+        return in_array($this->extractApiErrorStatus($response->json()), ['UNAUTHENTICATED', 'PERMISSION_DENIED'], true);
+    }
+
+    private function clearCachedGoogleAccessToken(): void
+    {
+        if (! $this->oauthCacheEnabled()) {
+            return;
+        }
+
+        Cache::forget($this->oauthCacheKey());
+    }
+
+    private function oauthCacheEnabled(): bool
+    {
+        return (bool) config('notifications.fcm.oauth_cache_enabled', true);
+    }
+
+    private function oauthCacheKey(): string
+    {
+        return (string) config('notifications.fcm.oauth_cache_key', 'fcm.google_access_token');
     }
 
     /**
