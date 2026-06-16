@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Notifications\Cleaning;
 
-use App\Notifications\Concerns\UsesPushNotificationQueue;
 use App\Notifications\Core\NotificationPayloadBuilder;
 use DevKandil\NotiFire\FcmMessage;
 use Illuminate\Bus\Queueable;
@@ -15,7 +14,6 @@ use Modules\Cleaning\Models\CleaningBooking;
 final class BookingLifecycleNotification extends Notification implements ShouldQueue
 {
     use Queueable;
-    use UsesPushNotificationQueue;
 
     public function __construct(
         private readonly CleaningBooking $booking,
@@ -28,7 +26,6 @@ final class BookingLifecycleNotification extends Notification implements ShouldQ
         private readonly ?string $occurredAt = null,
     ) {
         $this->afterCommit();
-        $this->assignPushNotificationQueue();
     }
 
     /**

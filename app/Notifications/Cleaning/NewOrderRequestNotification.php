@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Notifications\Cleaning;
 
-use App\Notifications\Concerns\UsesPushNotificationQueue;
 use App\Notifications\Core\NotificationPayloadBuilder;
 use DevKandil\NotiFire\FcmMessage;
 use Illuminate\Bus\Queueable;
@@ -15,14 +14,13 @@ use Modules\Cleaning\Models\CleaningBooking;
 final class NewOrderRequestNotification extends Notification implements ShouldQueue
 {
     use Queueable;
-    use UsesPushNotificationQueue;
+
     private const string CanonicalType = 'cleaning.booking.new_order_request';
 
     public function __construct(
         private readonly CleaningBooking $booking
     ) {
         $this->afterCommit();
-        $this->assignPushNotificationQueue();
     }
 
     /**

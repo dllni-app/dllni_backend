@@ -1,6 +1,6 @@
 # Flutter Firebase Notification Latency Fixes
 
-This document describes required Flutter-side changes to reduce delayed or missed push notifications. Backend improvements (cached FCM OAuth, dedicated push queue, invalid token cleanup) only help when the app registers a valid FCM token and displays notifications reliably.
+This document describes required Flutter-side changes to reduce delayed or missed push notifications. Backend improvements (cached FCM OAuth and standard Laravel notifications) only help when the app registers a valid FCM token and displays notifications reliably.
 
 ## Affected apps
 
@@ -186,10 +186,10 @@ For each app (Android + iOS):
 1. Fresh install → login → confirm backend `users.fcm_token` updates within seconds (not after unrelated API calls).
 2. Trigger a high-priority push (cleaning new order, delivery offer).
 3. Measure:
-   - Backend queue processed on `push-notifications`
+   - Backend notification dispatch succeeds
    - Device receives notification in background and killed state
    - Foreground notification appears without long delay
-4. Revoke/reinstall app → confirm old token is cleared server-side and new token registers.
+4. Revoke/reinstall app → confirm the new token registers server-side and push delivery resumes for that device.
 5. iOS: confirm token in backend is FCM format (long string), not a short APNs device token only.
 
 ---
@@ -199,16 +199,9 @@ For each app (Android + iOS):
 Backend now:
 
 - Caches Google OAuth token for FCM HTTP v1 (avoids per-send OAuth refresh)
-- Routes push notifications to `push-notifications` queue
-- Clears invalid `users.fcm_token` on FCM `UNREGISTERED` / 404 responses
-- Logs push duration and HTTP status
+- Uses standard Laravel notifications through the package `fcm` channel
+- Preserves the existing notification payload keys and `users.fcm_token` routing
 
-**Production worker command:**
-
-```bash
-php artisan queue:work --queue=push-notifications,notifications,default
-```
-
-For production, prefer `QUEUE_CONNECTION=redis` with Supervisor managing multiple workers.
+For production, keep the queue workers that already process your normal Laravel notifications running alongside the app.
 
 Flutter must register valid FCM tokens promptly for these backend changes to improve delivery end-to-end.

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Notifications\Cleaning;
 
-use App\Notifications\Concerns\UsesPushNotificationQueue;
 use App\Notifications\Core\NotificationPayloadBuilder;
 use DevKandil\NotiFire\FcmMessage;
 use Illuminate\Bus\Queueable;
@@ -15,14 +14,13 @@ use Modules\Cleaning\Models\CleaningTimeWarning;
 final class ExtensionRequestNotification extends Notification implements ShouldQueue
 {
     use Queueable;
-    use UsesPushNotificationQueue;
+
     private const string CanonicalType = 'cleaning.booking.extension_request';
 
     public function __construct(
         private readonly CleaningTimeWarning $timeWarning
     ) {
         $this->afterCommit();
-        $this->assignPushNotificationQueue();
     }
 
     /**
