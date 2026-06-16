@@ -19,6 +19,24 @@ Route::view('/legal/user-app', 'user-app')->name('legal.user-app');
 Route::view('/legal/merchant-app', 'merchant-app')->name('legal.merchant-app');
 Route::view('/legal/delivery-app', 'delivery-app')->name('legal.delivery-app');
 Route::view('/legal/cleaning-worker-app', 'cleaning-worker-app')->name('legal.cleaning-worker-app');
+Route::get('/qa/firebase/browser-token', function (): View {
+    return view('qa.firebase-browser-token', [
+        'firebaseDebugConfig' => [
+            'webConfig' => [
+                'apiKey' => config('fcm.web.api_key'),
+                'authDomain' => config('fcm.web.auth_domain'),
+                'projectId' => config('fcm.web.project_id'),
+                'storageBucket' => config('fcm.web.storage_bucket'),
+                'messagingSenderId' => config('fcm.web.messaging_sender_id'),
+                'appId' => config('fcm.web.app_id'),
+                'measurementId' => config('fcm.web.measurement_id'),
+            ],
+            'vapidKey' => config('fcm.web.vapid_key'),
+            'serviceWorkerPath' => '/firebase-messaging-sw.js',
+            'registerEndpoint' => '/api/v1/user/notifications/token',
+        ],
+    ]);
+})->name('qa.firebase.browser-token');
 
 /**
  * Build Android Digital Asset Links payload.
