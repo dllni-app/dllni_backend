@@ -31,7 +31,27 @@ final class DatabaseSeeder extends Seeder
             ]
         );
 
-        $this->call([
+        $this->call($this->bootstrapSeeders());
+
+        if ($this->shouldSeedDemoData()) {
+            $this->call($this->demoSeeders());
+
+            if (filter_var((string) env('AI_DEV_DATASET', false), FILTER_VALIDATE_BOOL)) {
+                $this->call([
+                    AiDevelopmentDataSeeder::class,
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Production should only receive shared config and test user accounts.
+     *
+     * @return array<int, class-string>
+     */
+    private function bootstrapSeeders(): array
+    {
+        return [
             VerifiedUserSeeder::class,
             DashboardPermissionsSeeder::class,
             DeliveryPermissionsSeeder::class,
@@ -39,17 +59,28 @@ final class DatabaseSeeder extends Seeder
             RestaurantOwnerEmployeePermissionsSeeder::class,
             TeamRoleTemplatesSeeder::class,
             AdminUserSeeder::class,
-            CleaningWorkerAndSellerSeeder::class,
-            WorkerUserSeeder::class,
             CancellationPolicySeeder::class,
-            MasterProductSeeder::class,
-            RecipeSeeder::class,
             PropertyTypeConfigSeeder::class,
             ServiceAddonSeeder::class,
             TravelCostConfigSeeder::class,
-            WorkerSeeder::class,
             CleaningBillingPolicySeeder::class,
             CleaningFinancialSettingsSeeder::class,
+        ];
+    }
+
+    /**
+     * Demo data is intentionally excluded from production seeds.
+     *
+     * @return array<int, class-string>
+     */
+    private function demoSeeders(): array
+    {
+        return [
+            CleaningWorkerAndSellerSeeder::class,
+            WorkerUserSeeder::class,
+            MasterProductSeeder::class,
+            RecipeSeeder::class,
+            WorkerSeeder::class,
             CleaningServiceSeeder::class,
             CleaningBannerSeeder::class,
             RestaurantSeeder::class,
@@ -59,12 +90,11 @@ final class DatabaseSeeder extends Seeder
             SupermarketDatabaseSeeder::class,
             MarketingOfferSeeder::class,
             UserAppScenarioSeeder::class,
-        ]);
+        ];
+    }
 
-        if (filter_var((string) env('AI_DEV_DATASET', false), FILTER_VALIDATE_BOOL)) {
-            $this->call([
-                AiDevelopmentDataSeeder::class,
-            ]);
-        }
+    private function shouldSeedDemoData(): bool
+    {
+        return config('app.env') !== 'production';
     }
 }
