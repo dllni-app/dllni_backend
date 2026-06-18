@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\DayOfWeek;
+use App\Enums\UserModuleType;
 use App\Enums\WorkerPreferredWorkType;
 use App\Traits\FilterQueries\WorkerFilterQuery;
 use Carbon\Carbon;
@@ -108,6 +109,29 @@ final class Worker extends Model implements HasMedia
             'default_working_hours' => 'array',
             'security_deposit_status' => 'string',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::updated(function (self $worker): void {
+            if (! $worker->wasChanged('first_name')) {
+                return;
+            }
+
+            $user = $worker->user;
+
+            if (! $user || $user->module_type !== UserModuleType::CleaningWorker) {
+                return;
+            }
+
+            if ($user->name === $worker->first_name) {
+                return;
+            }
+
+            $user->forceFill([
+                'name' => $worker->first_name,
+            ])->saveQuietly();
+        });
     }
 
     /**

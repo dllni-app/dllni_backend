@@ -20,6 +20,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 final class WorkerResource extends Resource
@@ -68,6 +69,11 @@ final class WorkerResource extends Resource
     public static function table(Table $table): Table
     {
         return WorkersTable::configure($table);
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->with(['user', 'zones', 'trustLogs', 'deposit']);
     }
 
     public static function canViewAny(): bool

@@ -83,6 +83,25 @@ final class User extends Authenticatable implements FilamentUser, HasMedia
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::updated(function (self $user): void {
+            if (! $user->wasChanged('name') || $user->module_type !== UserModuleType::CleaningWorker) {
+                return;
+            }
+
+            $worker = $user->worker;
+
+            if (! $worker || $worker->first_name === $user->name) {
+                return;
+            }
+
+            $worker->forceFill([
+                'first_name' => $user->name,
+            ])->saveQuietly();
+        });
+    }
+
     public function worker(): HasOne
     {
         return $this->hasOne(Worker::class);

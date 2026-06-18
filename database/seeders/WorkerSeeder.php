@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Database\Seeders;
 
 use App\Enums\AvailabilityType;
+use App\Enums\GenderPreference;
 use App\Enums\UserModuleType;
 use App\Models\User;
 use App\Models\Worker;
@@ -20,6 +21,7 @@ final class WorkerSeeder extends Seeder
         $workers = [
             [
                 'email' => 'worker1@dllni.sy',
+                'gender' => GenderPreference::Female->value,
                 'first_name' => 'سارة',
                 'bio' => 'عاملة تنظيف محترفة بخبرة أكثر من 5 سنوات، متخصصة في التنظيف العميق واستخدام المنتجات الصديقة للبيئة.',
                 'address' => 'حلب - الجميلية - شارع فيصل',
@@ -28,6 +30,7 @@ final class WorkerSeeder extends Seeder
             ],
             [
                 'email' => 'worker2@dllni.sy',
+                'gender' => GenderPreference::Male->value,
                 'first_name' => 'أحمد',
                 'bio' => 'عامل موثوق ومنضبط، لديه خبرة في مساعدة المناسبات والتجمعات الكبيرة.',
                 'address' => 'حلب - الحمدانية - شارع القدس',
@@ -36,6 +39,7 @@ final class WorkerSeeder extends Seeder
             ],
             [
                 'email' => 'worker3@dllni.sy',
+                'gender' => GenderPreference::Female->value,
                 'first_name' => 'ليلى',
                 'bio' => 'عاملة تنظيف تهتم بالتفاصيل، متاحة للتنظيف الدوري والتنظيف لمرة واحدة.',
                 'address' => 'حلب - السريان الجديدة - شارع تشرين',
@@ -69,6 +73,7 @@ final class WorkerSeeder extends Seeder
                 ['user_id' => $user->id],
                 [
                     'first_name' => $data['first_name'],
+                    'gender' => $data['gender'],
                     'bio' => $data['bio'],
                     'average_rating' => fake()->randomFloat(2, 4.2, 5.0),
                     'total_completed_jobs' => fake()->numberBetween(50, 300),
@@ -87,6 +92,7 @@ final class WorkerSeeder extends Seeder
 
             $worker->forceFill([
                 'first_name' => $data['first_name'],
+                'gender' => $data['gender'],
                 'bio' => $data['bio'],
                 'is_active' => true,
                 'is_suspended' => false,

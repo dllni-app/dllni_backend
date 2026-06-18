@@ -42,7 +42,7 @@ final class CleaningBookingForm
                     ->searchable()
                     ->preload(),
                 Select::make('preferred_worker_id')
-                    ->label('العامل المفضل')
+                    ->label(__('cleaning_admin.booking.fields.preferred_worker'))
                     ->relationship(
                         name: 'preferredWorker',
                         titleAttribute: 'first_name',
@@ -65,12 +65,12 @@ final class CleaningBookingForm
                     ->seconds(false)
                     ->required(),
                 Select::make('billing_policy_id')
-                    ->label('سياسة الفوترة')
+                    ->label(__('cleaning_admin.booking.fields.billing_policy'))
                     ->relationship('billingPolicy', 'name')
                     ->searchable()
                     ->preload(),
                 Select::make('cancellation_policy_id')
-                    ->label('سياسة الإلغاء')
+                    ->label(__('cleaning_admin.booking.fields.cancellation_policy'))
                     ->relationship('cancellationPolicy', 'name')
                     ->searchable()
                     ->preload(),
@@ -85,7 +85,7 @@ final class CleaningBookingForm
                     ->disabled()
                     ->dehydrated(false),
                 TextInput::make('total_hours')
-                    ->label('إجمالي الساعات')
+                    ->label(__('cleaning_admin.booking.fields.total_hours'))
                     ->disabled()
                     ->dehydrated(false),
                 TextInput::make('base_price')
@@ -101,15 +101,15 @@ final class CleaningBookingForm
                     ->disabled()
                     ->dehydrated(false),
                 TextInput::make('travel_distance_km')
-                    ->label('Travel distance (km)')
+                    ->label(__('cleaning_admin.booking.fields.travel_distance_km'))
                     ->disabled()
                     ->dehydrated(false),
                 TextInput::make('admin_margin_amount')
-                    ->label('Admin margin')
+                    ->label(__('cleaning_admin.booking.fields.admin_margin_amount'))
                     ->disabled()
                     ->dehydrated(false),
                 Toggle::make('is_pricing_final')
-                    ->label('Pricing finalized')
+                    ->label(__('cleaning_admin.booking.fields.is_pricing_final'))
                     ->disabled()
                     ->dehydrated(false),
                 TextInput::make('total_price')

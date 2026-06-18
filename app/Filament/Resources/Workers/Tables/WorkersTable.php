@@ -26,13 +26,23 @@ final class WorkersTable
                     ))
                     ->sortable(),
                 TextColumn::make('first_name')
-                    ->label(self::headerLabel(
-                        __('cleaning_admin.workers.fields.name'),
-                        __('cleaning_admin.column_descriptions.first_name'),
-                    ))
+                    ->label(__('cleaning_admin.workers.fields.first_name'))
                     ->searchable(),
+                TextColumn::make('user.name')
+                    ->label(__('cleaning_admin.workers.fields.user_name'))
+                    ->searchable(),
+                TextColumn::make('birthday')
+                    ->label(__('cleaning_admin.workers.fields.birthday'))
+                    ->date('Y-m-d')
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('gender')
                     ->label(__('cleaning_admin.workers.fields.gender'))
+                    ->formatStateUsing(fn ($state): string => match ($state) {
+                        'male' => __('cleaning_admin.workers.gender_options.male'),
+                        'female' => __('cleaning_admin.workers.gender_options.female'),
+                        default => (string) ($state ?? '-'),
+                    })
                     ->searchable(),
                 TextColumn::make('preferred_work_type')
                     ->label(__('cleaning_admin.workers.fields.preferred_work_type'))
@@ -49,6 +59,10 @@ final class WorkersTable
                         __('cleaning_admin.workers.fields.phone'),
                         __('cleaning_admin.column_descriptions.phone'),
                     )),
+                TextColumn::make('bio')
+                    ->label(__('cleaning_admin.workers.fields.bio'))
+                    ->limit(35)
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('home_address')
                     ->label(__('cleaning_admin.workers.fields.home_address'))
                     ->toggleable(isToggledHiddenByDefault: true),

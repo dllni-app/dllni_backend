@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Database\Seeders;
 
 use App\Enums\AvailabilityType;
+use App\Enums\GenderPreference;
 use App\Enums\UserModuleType;
 use App\Models\User;
 use App\Models\Worker;
@@ -43,7 +44,7 @@ final class WorkerUserSeeder extends Seeder
             ['user_id' => $user->id],
             [
                 'first_name' => 'عامل',
-                'bio' => 'عامل تنظيف للاستخدام في اختبارات الواجهة البرمجية والتطبيق.',
+                'gender' => GenderPreference::Male->value,
                 'average_rating' => 4.6,
                 'total_completed_jobs' => 50,
                 'trust_score' => 88,
@@ -66,6 +67,10 @@ final class WorkerUserSeeder extends Seeder
                 ],
             ]
         );
+
+        $worker->forceFill([
+            'gender' => GenderPreference::Male->value,
+        ])->save();
 
         WorkerZone::firstOrCreate(
             ['worker_id' => $worker->id, 'name' => 'حلب - الأشرفية'],
@@ -109,3 +114,4 @@ final class WorkerUserSeeder extends Seeder
         );
     }
 }
+

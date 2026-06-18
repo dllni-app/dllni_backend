@@ -7,6 +7,7 @@ namespace Modules\Cleaning\Database\Seeders;
 use App\Enums\UserModuleType;
 use App\Models\User;
 use App\Models\Worker;
+use App\Enums\GenderPreference;
 use App\Models\WorkerZone;
 use Illuminate\Database\Seeder;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
@@ -111,7 +112,7 @@ final class GeographicCoverageTestSeeder extends Seeder
             ['user_id' => $user->id],
             [
                 'first_name' => "عامل {$index}",
-                'bio' => 'بيانات اختبار واقعية لتغطية مناطق مدينة حلب.',
+                'gender' => $index % 2 === 0 ? GenderPreference::Female->value : GenderPreference::Male->value,
                 'average_rating' => 4.5,
                 'total_completed_jobs' => 120 + $index,
                 'trust_score' => 90,
@@ -234,3 +235,4 @@ final class GeographicCoverageTestSeeder extends Seeder
         }
     }
 }
+

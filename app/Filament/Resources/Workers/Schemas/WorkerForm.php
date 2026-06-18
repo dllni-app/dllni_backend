@@ -6,7 +6,9 @@ namespace App\Filament\Resources\Workers\Schemas;
 
 use App\Enums\WorkerPreferredWorkType;
 use Filament\Schemas\Components\Section;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Schema;
@@ -24,6 +26,7 @@ final class WorkerForm
                             ->label(__('cleaning_admin.workers.fields.user'))
                             ->relationship('user', 'name')
                             ->searchable()
+                            ->disabled(fn (string $operation): bool => $operation === 'edit')
                             ->required(),
                         TextInput::make('first_name')
                             ->label(__('cleaning_admin.workers.fields.first_name'))
@@ -40,16 +43,29 @@ final class WorkerForm
                             ->options(WorkerPreferredWorkType::options())
                             ->default(WorkerPreferredWorkType::Both->value)
                             ->required(),
-                        TextInput::make('bio')
+                        DatePicker::make('birthday')
+                            ->label(__('cleaning_admin.workers.fields.birthday'))
+                            ->native(false),
+                        Textarea::make('bio')
                             ->label(__('cleaning_admin.workers.fields.bio')),
                         Toggle::make('is_active')
                             ->label(__('cleaning_admin.workers.fields.is_active'))
                             ->default(true)
                             ->live(),
-                        TextInput::make('trust_score')->numeric()->default(100)->hidden(),
-                        TextInput::make('average_rating')->numeric()->default(0)->hidden(),
-                        Toggle::make('is_suspended')->default(false)->hidden(),
-                        Toggle::make('is_verified')->default(true)->hidden(),
+                    ]),
+                Section::make(__('cleaning_admin.workers.sections.account'))
+                    ->columns(2)
+                    ->schema([
+                        TextInput::make('user_phone')
+                            ->label(__('cleaning_admin.workers.fields.phone'))
+                            ->tel(),
+                        TextInput::make('user_password')
+                            ->label(__('cleaning_admin.workers.fields.password'))
+                            ->password()
+                            ->revealable()
+                            ->autocomplete('new-password')
+                            ->dehydrateStateUsing(fn (?string $state): ?string => blank($state) ? null : $state)
+                            ->dehydrated(fn (?string $state): bool => filled($state)),
                     ]),
             ]);
     }

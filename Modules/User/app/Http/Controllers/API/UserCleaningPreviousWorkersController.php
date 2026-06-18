@@ -59,6 +59,7 @@ final class UserCleaningPreviousWorkersController
                 return [
                     'workerId' => $worker->id,
                     'name' => $worker->first_name,
+                    'gender' => $worker->gender,
                     'avatarUrl' => $worker->getFirstMediaUrl('avatar') ?: $worker->user?->getFirstMediaUrl('primary-image') ?: null,
                     'description' => $worker->bio,
                     'ratings' => [

@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\Worker;
 use App\Models\WorkerAvailability;
 use App\Models\WorkerZone;
+use App\Enums\GenderPreference;
 use Database\Seeders\Support\SeederMedia;
 use Illuminate\Database\Seeder;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
@@ -43,7 +44,7 @@ final class CleaningWorkerRealDataSeeder extends Seeder
             ['user_id' => $user->id],
             [
                 'first_name' => 'ليلى',
-                'bio' => 'Experienced cleaner seeded for real-data testing.',
+                'gender' => GenderPreference::Female->value,
                 'average_rating' => 4.7,
                 'total_completed_jobs' => 78,
                 'trust_score' => 88,
@@ -164,3 +165,4 @@ final class CleaningWorkerRealDataSeeder extends Seeder
         }
     }
 }
+
