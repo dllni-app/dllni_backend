@@ -7,12 +7,17 @@ namespace Database\Seeders;
 use App\Enums\AvailabilityType;
 use App\Enums\GenderPreference;
 use App\Enums\UserModuleType;
+use App\Enums\WorkerPreferredWorkType;
+use App\Models\CleaningDepositSetting;
+use App\Models\CleaningWorkerDeposit;
 use App\Models\User;
 use App\Models\Worker;
 use App\Models\WorkerAvailability;
+use App\Models\WorkerTrustLog;
 use App\Models\WorkerZone;
 use Database\Seeders\Support\SeederMedia;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Schema;
 use Modules\Resturants\Enums\DiscountType;
 use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Enums\OrderType;
@@ -101,9 +106,67 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
             ]
         );
 
-        $worker->forceFill([
+        CleaningDepositSetting::firstOrCreate([], [
+            'minimum_deposit_amount' => 50000,
+            'is_enabled' => true,
+        ]);
+
+        $workerUpdates = [
+            'first_name' => 'Cleaning',
             'gender' => GenderPreference::Male->value,
-        ])->save();
+            'bio' => 'Cleaning worker for API testing.',
+            'average_rating' => 4.5,
+            'total_completed_jobs' => 100,
+            'trust_score' => 90,
+            'acceptance_rate' => 95.0,
+            'cancellation_rate' => 1.0,
+            'open_disputes_count' => 0,
+            'is_active' => true,
+            'is_suspended' => false,
+            'is_verified' => true,
+            'is_featured' => true,
+            'security_deposit_status' => 'active',
+            'home_address' => 'حلب - الحمدانية - شارع القدس',
+            'home_latitude' => 36.1795,
+            'home_longitude' => 37.1082,
+            'default_working_hours' => [
+                'sunday' => ['available' => false, 'data' => []],
+                'monday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
+                'tuesday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
+                'wednesday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
+                'thursday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
+                'friday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
+                'saturday' => ['available' => true, 'data' => [['10:00' => '16:00']]],
+            ],
+        ];
+
+        if (Schema::hasColumn('workers', 'birthday')) {
+            $workerUpdates['birthday'] = '1992-06-18';
+        }
+
+        if (Schema::hasColumn('workers', 'preferred_work_type')) {
+            $workerUpdates['preferred_work_type'] = WorkerPreferredWorkType::Both->value;
+        }
+
+        $worker->forceFill($workerUpdates)->save();
+
+        CleaningWorkerDeposit::updateOrCreate(
+            ['worker_id' => $worker->id],
+            [
+                'current_balance' => 75000,
+                'deposited_total' => 75000,
+                'withdrawn_total' => 0,
+                'is_active' => true,
+            ]
+        );
+
+        WorkerTrustLog::firstOrCreate(
+            [
+                'worker_id' => $worker->id,
+                'reason' => 'حساب تجريبي مكتمل البيانات لاختبار لوحة العامل.',
+            ],
+            ['score_delta' => 5]
+        );
 
         WorkerZone::firstOrCreate(
             ['worker_id' => $worker->id, 'name' => 'حلب - قطاع الحمدانية'],
@@ -848,4 +911,3 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
         ]);
     }
 }
-

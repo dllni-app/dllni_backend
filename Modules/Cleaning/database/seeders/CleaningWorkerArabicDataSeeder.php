@@ -6,13 +6,18 @@ namespace Modules\Cleaning\Database\Seeders;
 
 use App\Enums\DisputeCategory;
 use App\Enums\DisputeStatus;
+use App\Enums\WorkerPreferredWorkType;
 use App\Models\CancellationPolicy;
+use App\Models\CleaningDepositSetting;
+use App\Models\CleaningWorkerDeposit;
 use App\Models\Dispute;
 use App\Models\DisputeMessage;
 use App\Models\User;
 use App\Models\Worker;
+use App\Models\WorkerTrustLog;
 use Database\Seeders\Support\SeederMedia;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Schema;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningTimeWarningResponse;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
@@ -84,9 +89,9 @@ final class CleaningWorkerArabicDataSeeder extends Seeder
             return;
         }
 
-        $worker->user->update(['name' => 'رنا أحمد']);
-        $worker->update([
-            'first_name' => 'رنا',
+        $workerUpdates = [
+            'first_name' => 'رنا أحمد',
+            'gender' => 'female',
             'bio' => 'عاملة تنظيف ذات خبرة من التجارب داخل التطبيق.',
             'average_rating' => 4.8,
             'total_completed_jobs' => 120,
@@ -96,6 +101,9 @@ final class CleaningWorkerArabicDataSeeder extends Seeder
             'open_disputes_count' => 1,
             'is_active' => true,
             'is_suspended' => false,
+            'is_verified' => true,
+            'is_featured' => true,
+            'security_deposit_status' => 'active',
             'home_address' => 'حلب - الحمدانية',
             'home_latitude' => 36.1795,
             'home_longitude' => 37.1082,
@@ -108,7 +116,41 @@ final class CleaningWorkerArabicDataSeeder extends Seeder
                 'friday' => ['available' => false, 'data' => []],
                 'saturday' => ['available' => false, 'data' => []],
             ],
+        ];
+
+        if (Schema::hasColumn('workers', 'birthday')) {
+            $workerUpdates['birthday'] = '1994-02-14';
+        }
+
+        if (Schema::hasColumn('workers', 'preferred_work_type')) {
+            $workerUpdates['preferred_work_type'] = WorkerPreferredWorkType::Both->value;
+        }
+
+        $worker->forceFill($workerUpdates)->save();
+        $worker->user->update(['name' => 'رنا أحمد']);
+
+        CleaningDepositSetting::firstOrCreate([], [
+            'minimum_deposit_amount' => 50000,
+            'is_enabled' => true,
         ]);
+
+        CleaningWorkerDeposit::updateOrCreate(
+            ['worker_id' => $worker->id],
+            [
+                'current_balance' => 90000,
+                'deposited_total' => 90000,
+                'withdrawn_total' => 0,
+                'is_active' => true,
+            ]
+        );
+
+        WorkerTrustLog::firstOrCreate(
+            [
+                'worker_id' => $worker->id,
+                'reason' => 'بيانات العامل مكتملة ومراجعة من فريق التشغيل.',
+            ],
+            ['score_delta' => 8]
+        );
 
         SeederMedia::ensureSingleMedia(
             $worker,
