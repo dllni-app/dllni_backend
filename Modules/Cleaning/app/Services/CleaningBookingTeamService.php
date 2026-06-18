@@ -23,6 +23,8 @@ final class CleaningBookingTeamService
 {
     public function __construct(
         private readonly CleaningPricingCalculator $pricingCalculator,
+        private readonly DepositService $depositService,
+        private readonly WorkerTrustService $workerTrustService,
     ) {}
 
     public function normalizeAssignmentMode(?string $assignmentMode, ?int $preferredWorkerId, ?int $numberOfWorkers = null): string
@@ -96,6 +98,10 @@ final class CleaningBookingTeamService
             $booking = $this->lockBooking($booking->id);
 
             $this->ensureAcceptableBooking($booking, $worker);
+
+            if (! $this->depositService->isWorkerEligibleForDispatch($worker)) {
+                throw new InvalidArgumentException('Worker is not eligible to accept new requests.');
+            }
 
             $assignment = CleaningBookingWorkerAssignment::query()
                 ->where('cleaning_booking_id', $booking->id)
@@ -203,6 +209,9 @@ final class CleaningBookingTeamService
                 ->lockForUpdate()
                 ->first();
 
+            $hadAccepted = $assignment !== null
+                && in_array($assignment->status, CleaningBookingWorkerAssignmentStatus::acceptedStatuses(), true);
+
             if ($assignment !== null) {
                 $assignment->forceFill([
                     'status' => filled($reason)
@@ -235,6 +244,10 @@ final class CleaningBookingTeamService
                 ]);
 
             $booking = $this->recalculateBookingTeam($booking, finalizeBooking: false);
+
+            if ($hadAccepted) {
+                $this->workerTrustService->applyRejectAfterAcceptPenalty($worker, $booking);
+            }
 
             return $booking->fresh([
                 'customer',

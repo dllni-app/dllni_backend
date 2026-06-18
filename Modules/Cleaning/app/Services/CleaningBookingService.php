@@ -33,6 +33,7 @@ final class CleaningBookingService
         private readonly CleaningLifecycleNotificationService $lifecycleNotifications,
         private readonly CleaningBookingTeamService $teamService,
         private readonly WorkerTrustService $workerTrustService,
+        private readonly DepositService $depositService,
     ) {}
 
     public function store(CleaningBookingData $data): CleaningBooking
@@ -177,9 +178,14 @@ final class CleaningBookingService
     {
         $fromStatus = (string) $booking->status->value;
 
-        $updated = DB::transaction(static function () use ($booking) {
+        $updated = DB::transaction(function () use ($booking) {
             if ($booking->status !== CleaningBookingStatus::WorkerAssigned) {
                 throw new InvalidArgumentException('Booking cannot start travel in current status.');
+            }
+
+            $worker = Auth::user()?->worker;
+            if ($worker && ! $this->depositService->isWorkerEligibleToStartWork($worker)) {
+                throw new InvalidArgumentException('Worker deposit or trust requirements are not met.');
             }
 
             $booking->update(['started_travel_at' => now()]);
@@ -453,7 +459,7 @@ final class CleaningBookingService
                 'cancellation_reason' => $reason,
             ]);
 
-            $this->workerTrustService->applyBookingCancellationPenalty($worker);
+            $this->workerTrustService->applyBookingCancellationPenalty($worker, $booking);
 
             return $booking->fresh();
         });

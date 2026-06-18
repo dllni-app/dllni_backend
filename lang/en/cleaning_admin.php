@@ -120,6 +120,12 @@ return [
             'deposited_total' => 'Deposited Total',
             'withdrawn_total' => 'Withdrawn Total',
             'minimum_required' => 'Minimum Required',
+            'max_negative_balance' => 'Max Negative Balance',
+            'exceedance_amount' => 'Exceedance Amount',
+            'dispatch_eligibility' => 'Dispatch Eligibility',
+            'score_before' => 'Score Before',
+            'score_after' => 'Score After',
+            'booking_id' => 'Booking ID',
             'is_verified' => 'Verified',
             'is_featured' => 'Featured',
             'trust_score' => 'Trust Score',
@@ -139,6 +145,10 @@ return [
             'active' => 'Active',
             'insufficient_balance' => 'Insufficient balance',
             'missing_deposit' => 'Missing deposit',
+        ],
+        'eligibility' => [
+            'eligible' => 'Eligible',
+            'ineligible' => 'Ineligible',
         ],
         'gender_options' => [
             'male' => 'Male',
@@ -380,6 +390,7 @@ return [
             'travel_costs' => 'Travel Costs',
             'time_billing_policy' => 'Time Billing Policy',
             'coverage_thresholds' => 'Coverage Thresholds',
+            'worker_finance' => 'Worker Finance',
         ],
         'fields' => [
             'commission_type' => 'Commission type',
@@ -396,6 +407,11 @@ return [
             'extension_rate_per_30_minutes' => 'Extension rate per 30 minutes',
             'coverage_low' => 'Low coverage threshold',
             'coverage_ok' => 'Normal coverage threshold',
+            'minimum_deposit_amount' => 'Minimum deposit to start work',
+            'default_max_negative_balance' => 'Default max negative balance',
+            'trust_reject_after_accept_penalty' => 'Reject-after-accept trust penalty',
+            'trust_minimum_for_dispatch' => 'Minimum trust score for dispatch',
+            'worker_finance_enabled' => 'Enable worker finance rules',
         ],
         'options' => [
             'commission_percent' => 'Percentage',

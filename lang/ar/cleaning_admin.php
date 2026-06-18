@@ -426,6 +426,7 @@ return [
             'travel_costs' => 'تكاليف التنقل',
             'time_billing_policy' => 'سياسة فوترة الوقت',
             'coverage_thresholds' => 'عتبات التغطية',
+            'worker_finance' => 'مالية العاملين',
         ],
         'fields' => [
             'commission_type' => 'نوع العمولة',
@@ -442,6 +443,11 @@ return [
             'extension_rate_per_30_minutes' => 'سعر التمديد لكل 30 دقيقة',
             'coverage_low' => 'عتبة التغطية المنخفضة',
             'coverage_ok' => 'عتبة التغطية الطبيعية',
+            'minimum_deposit_amount' => 'الحد الأدنى للتأمين لبدء العمل',
+            'default_max_negative_balance' => 'الحد الأقصى الافتراضي للرصيد السالب',
+            'trust_reject_after_accept_penalty' => 'خصم الثقة عند الرفض بعد القبول',
+            'trust_minimum_for_dispatch' => 'الحد الأدنى لدرجة الثقة للإرسال',
+            'worker_finance_enabled' => 'تفعيل قواعد مالية العاملين',
         ],
         'options' => [
             'commission_percent' => 'نسبة مئوية',

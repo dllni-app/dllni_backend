@@ -4,22 +4,23 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Workers\Schemas;
 
-use App\Models\CleaningDepositSetting;
-use App\Models\CleaningWorkerDeposit;
 use App\Enums\WorkerPreferredWorkType;
 use App\Models\Worker;
-use Filament\Infolists\Components\Grid;
-use Filament\Infolists\Components\Group;
+use BackedEnum;
 use Filament\Infolists\Components\ImageEntry;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Services\DepositService;
 
 final class WorkerInfolist
 {
@@ -29,58 +30,100 @@ final class WorkerInfolist
 
         return $schema
             ->components([
-                Section::make(__('cleaning_admin.workers.sections.account'))
+                Grid::make(12)
                     ->schema([
-                        Grid::make(3)
+                        Section::make('ملخص العامل')
                             ->schema([
-                                ImageEntry::make('photo')
-                                    ->label('')
-                                    ->getStateUsing(fn ($record) => $record->getFirstMediaUrl('avatar') ?: null)
-                                    ->defaultImageUrl(fn () => 'https://ui-avatars.com/api/?name=W&background=random'),
-                                Group::make()
+                                Grid::make(6)
                                     ->schema([
-                                        TextEntry::make('user_id')
-                                            ->label(__('cleaning_admin.workers.fields.user'))
-                                            ->placeholder('-'),
-                                        TextEntry::make('user.name')
-                                            ->label(__('cleaning_admin.workers.fields.user_name'))
-                                            ->placeholder('-'),
-                                        TextEntry::make('user.phone')
-                                            ->label(__('cleaning_admin.workers.fields.phone'))
-                                            ->placeholder('-'),
-                                        TextEntry::make('user.password')
-                                            ->label(__('cleaning_admin.workers.fields.password'))
-                                            ->formatStateUsing(fn ($state): string => filled($state) ? '********' : '-')
-                                            ->placeholder('-'),
-                                    ])
-                                    ->columnSpan(2),
-                            ]),
-                    ]),
-                Section::make('الإحصائيات')
-                    ->schema([
-                        Grid::make(4)
+                                        ImageEntry::make('avatar_preview')
+                                            ->label('الصورة')
+                                            ->getStateUsing(fn (Worker $record): ?string => self::workerAvatarUrl($record))
+                                            ->defaultImageUrl(fn (Worker $record): string => self::workerAvatarUrl($record) ?? self::fallbackAvatarUrl($record))
+                                            ->circular()
+                                            ->imageHeight(96),
+                                        Group::make()
+                                            ->schema([
+                                                TextEntry::make('worker_display_name')
+                                                    ->label(__('cleaning_admin.workers.fields.name'))
+                                                    ->state(fn (Worker $record): string => $record->user?->name ?: $record->first_name)
+                                                    ->weight('bold')
+                                                    ->size('lg'),
+                                                TextEntry::make('account_status')
+                                                    ->label('حالة الحساب')
+                                                    ->state(fn (Worker $record): string => self::accountStatusLabel($record))
+                                                    ->badge()
+                                                    ->color(fn (mixed $state): string => self::accountStatusColor($state)),
+                                                TextEntry::make('verification_status')
+                                                    ->label(__('cleaning_admin.workers.fields.is_verified'))
+                                                    ->state(fn (Worker $record): string => $yesNo($record->is_verified))
+                                                    ->badge()
+                                                    ->color(fn (mixed $state): string => self::booleanColor($state)),
+                                                TextEntry::make('featured_status')
+                                                    ->label(__('cleaning_admin.workers.fields.is_featured'))
+                                                    ->state(fn (Worker $record): string => $yesNo($record->is_featured))
+                                                    ->badge()
+                                                    ->color(fn (mixed $state): string => self::booleanColor($state)),
+                                            ])
+                                            ->columns(4)
+                                            ->columnSpan(5),
+                                        TextEntry::make('trust_score_stat')
+                                            ->label(__('cleaning_admin.workers.fields.trust_score'))
+                                            ->state(fn (Worker $record): string => self::formatTrustScore($record))
+                                            ->suffix(' / 100')
+                                            ->icon(Heroicon::OutlinedShieldCheck)
+                                            ->weight('bold'),
+                                        TextEntry::make('total_completed_jobs_stat')
+                                            ->label(__('cleaning_admin.workers.fields.total_completed_jobs'))
+                                            ->state(fn (Worker $record): string => self::formatInteger($record->total_completed_jobs))
+                                            ->icon(Heroicon::OutlinedCheckCircle)
+                                            ->weight('bold'),
+                                        TextEntry::make('average_rating_stat')
+                                            ->label(__('cleaning_admin.workers.fields.average_rating'))
+                                            ->state(fn (Worker $record): string => self::formatDecimal($record->average_rating))
+                                            ->suffix(' / 5')
+                                            ->icon(Heroicon::OutlinedStar)
+                                            ->weight('bold'),
+                                        TextEntry::make('acceptance_rate_stat')
+                                            ->label(__('cleaning_admin.workers.fields.acceptance_rate'))
+                                            ->state(fn (Worker $record): string => self::formatDecimal($record->acceptance_rate))
+                                            ->suffix('%')
+                                            ->icon(Heroicon::OutlinedArrowTrendingUp)
+                                            ->weight('bold'),
+                                        TextEntry::make('cancellation_rate_stat')
+                                            ->label(__('cleaning_admin.workers.fields.cancellation_rate'))
+                                            ->state(fn (Worker $record): string => self::formatDecimal($record->cancellation_rate))
+                                            ->suffix('%')
+                                            ->icon(Heroicon::OutlinedArrowTrendingDown)
+                                            ->weight('bold'),
+                                        TextEntry::make('open_disputes_count_stat')
+                                            ->label(__('cleaning_admin.workers.fields.open_disputes_count'))
+                                            ->state(fn (Worker $record): string => self::formatInteger($record->open_disputes_count))
+                                            ->icon(Heroicon::OutlinedExclamationTriangle)
+                                            ->weight('bold'),
+                                    ]),
+                            ])
+                            ->columnSpanFull(),
+                        Section::make(__('cleaning_admin.workers.sections.account'))
                             ->schema([
-                                TextEntry::make('trust_score_stat')
-                                    ->label('درجة الثقة')
-                                    ->state(fn (Worker $record): string => self::formatTrustScore($record))
-                                    ->suffix('/ 100')
-                                    ->weight('bold'),
-                                TextEntry::make('total_completed_jobs_stat')
-                                    ->label('المهام المنجزة')
-                                    ->state(fn (Worker $record): string => self::formatInteger($record->total_completed_jobs))
-                                    ->weight('bold'),
-                                TextEntry::make('average_rating_stat')
-                                    ->label('متوسط التقييم')
-                                    ->state(fn (Worker $record): string => self::formatDecimal($record->average_rating))
-                                    ->suffix('/ 5'),
-                                TextEntry::make('open_disputes_count_stat')
-                                    ->label('النزاعات المفتوحة')
-                                    ->state(fn (Worker $record): string => self::formatInteger($record->open_disputes_count)),
-                            ]),
-                    ]),
-                Section::make(__('cleaning_admin.workers.sections.profile'))
-                    ->schema([
-                        Grid::make(3)
+                                TextEntry::make('user_id')
+                                    ->label(__('cleaning_admin.workers.fields.user'))
+                                    ->placeholder('-'),
+                                TextEntry::make('user.name')
+                                    ->label(__('cleaning_admin.workers.fields.user_name'))
+                                    ->placeholder('-'),
+                                TextEntry::make('user.email')
+                                    ->label('البريد الإلكتروني')
+                                    ->placeholder('-')
+                                    ->copyable(),
+                                TextEntry::make('user.phone')
+                                    ->label(__('cleaning_admin.workers.fields.phone'))
+                                    ->placeholder('-')
+                                    ->copyable(),
+                            ])
+                            ->columns(2)
+                            ->columnSpan(6),
+                        Section::make(__('cleaning_admin.workers.sections.profile'))
                             ->schema([
                                 TextEntry::make('first_name')
                                     ->label(__('cleaning_admin.workers.fields.first_name'))
@@ -95,102 +138,79 @@ final class WorkerInfolist
                                     ->placeholder('-'),
                                 TextEntry::make('preferred_work_type')
                                     ->label(__('cleaning_admin.workers.fields.preferred_work_type'))
-                                    ->formatStateUsing(fn ($state): string => self::formatPreferredWorkType($state))
+                                    ->state(fn (Worker $record): string => self::formatPreferredWorkType($record->preferred_work_type ?? null))
                                     ->placeholder('-'),
                                 TextEntry::make('bio')
                                     ->label(__('cleaning_admin.workers.fields.bio'))
                                     ->placeholder('-')
                                     ->columnSpanFull(),
-                                Group::make()
-                                    ->schema([
-                                        TextEntry::make('is_active')
-                                            ->label(__('cleaning_admin.workers.fields.is_active'))
-                                            ->formatStateUsing($yesNo),
-                                        TextEntry::make('is_suspended')
-                                            ->label(__('cleaning_admin.workers.fields.suspended'))
-                                            ->formatStateUsing($yesNo),
-                                        TextEntry::make('is_verified')
-                                            ->label(__('cleaning_admin.workers.fields.is_verified'))
-                                            ->formatStateUsing($yesNo),
-                                        TextEntry::make('is_featured')
-                                            ->label(__('cleaning_admin.workers.fields.is_featured'))
-                                            ->formatStateUsing($yesNo),
-                                    ])
-                                    ->columns(2)
-                                    ->columnSpanFull(),
-                            ]),
-                    ]),
-                Section::make(__('cleaning_admin.workers.sections.metrics'))
-                    ->schema([
-                        Grid::make(3)
-                            ->schema([
-                                TextEntry::make('average_rating')
-                                    ->label(__('cleaning_admin.workers.fields.average_rating'))
-                                    ->suffix(' / 5')
-                                    ->placeholder('-'),
-                                TextEntry::make('acceptance_rate')
-                                    ->label(__('cleaning_admin.workers.fields.acceptance_rate'))
-                                    ->suffix('%')
-                                    ->placeholder('-'),
-                                TextEntry::make('cancellation_rate')
-                                    ->label(__('cleaning_admin.workers.fields.cancellation_rate'))
-                                    ->suffix('%')
-                                    ->placeholder('-'),
-                            ]),
-                    ]),
-                Section::make('ملخص المبالغ')
-                    ->schema([
-                        Grid::make(4)
+                            ])
+                            ->columns(2)
+                            ->columnSpan(6),
+                        Section::make('ملخص المبالغ')
                             ->schema([
                                 TextEntry::make('gross_revenue')
-                                    ->label('إجمالي الإيرادات')
+                                    ->label(__('cleaning_admin.workers.fields.gross_revenue'))
                                     ->state(fn (Worker $record): string => self::money(self::financialSummary($record)['gross_revenue']))
                                     ->weight('bold'),
                                 TextEntry::make('worker_net_earnings')
-                                    ->label('صافي مستحقات العامل')
+                                    ->label(__('cleaning_admin.workers.fields.worker_net_earnings'))
                                     ->state(fn (Worker $record): string => self::money(self::financialSummary($record)['worker_net_earnings']))
                                     ->weight('bold'),
                                 TextEntry::make('admin_margin_total')
-                                    ->label('هامش الإدارة')
+                                    ->label(__('cleaning_admin.workers.fields.admin_margin_total'))
                                     ->state(fn (Worker $record): string => self::money(self::financialSummary($record)['admin_margin_total']))
                                     ->weight('bold'),
                                 TextEntry::make('completed_jobs_count')
-                                    ->label('عدد المهام المكتملة')
+                                    ->label(__('cleaning_admin.workers.fields.completed_jobs_count'))
                                     ->state(fn (Worker $record): string => self::formatInteger(self::financialSummary($record)['completed_jobs_count']))
                                     ->weight('bold'),
-                            ]),
-                    ]),
-                Section::make('ملخص التأمين')
-                    ->schema([
-                        Grid::make(4)
+                            ])
+                            ->columns(2)
+                            ->columnSpan(6),
+                        Section::make('ملخص التأمين')
                             ->schema([
                                 TextEntry::make('security_deposit_status')
-                                    ->label('حالة التأمين')
+                                    ->label(__('cleaning_admin.workers.fields.security_deposit_status'))
                                     ->badge()
                                     ->color(fn (mixed $state): string => self::depositStatusColor($state))
-                                    ->columnSpanFull()
                                     ->state(fn (Worker $record): string => self::depositStatusLabel($record)),
                                 TextEntry::make('current_balance')
-                                    ->label('الرصيد الحالي')
+                                    ->label(__('cleaning_admin.workers.fields.current_balance'))
                                     ->state(fn (Worker $record): string => self::money(self::depositSummary($record)['current_balance']))
                                     ->weight('bold'),
                                 TextEntry::make('deposited_total')
-                                    ->label('إجمالي الإيداع')
+                                    ->label(__('cleaning_admin.workers.fields.deposited_total'))
                                     ->state(fn (Worker $record): string => self::money(self::depositSummary($record)['deposited_total']))
                                     ->weight('bold'),
                                 TextEntry::make('withdrawn_total')
-                                    ->label('إجمالي السحب')
+                                    ->label(__('cleaning_admin.workers.fields.withdrawn_total'))
                                     ->state(fn (Worker $record): string => self::money(self::depositSummary($record)['withdrawn_total']))
                                     ->weight('bold'),
                                 TextEntry::make('minimum_required')
-                                    ->label('الحد الأدنى المطلوب')
+                                    ->label(__('cleaning_admin.workers.fields.minimum_required'))
                                     ->state(fn (Worker $record): string => self::money(self::depositSummary($record)['minimum_required']))
                                     ->weight('bold'),
-                            ]),
-                    ]),
-                Section::make(__('cleaning_admin.workers.sections.location'))
-                    ->schema([
-                        Grid::make(2)
+                                TextEntry::make('max_negative_balance')
+                                    ->label(__('cleaning_admin.workers.fields.max_negative_balance'))
+                                    ->state(fn (Worker $record): string => self::money(self::depositSummary($record)['max_negative_balance']))
+                                    ->weight('bold'),
+                                TextEntry::make('exceedance_amount')
+                                    ->label(__('cleaning_admin.workers.fields.exceedance_amount'))
+                                    ->state(fn (Worker $record): string => self::formatExceedance(self::depositSummary($record)['exceedance_amount']))
+                                    ->badge()
+                                    ->color(fn (Worker $record): string => self::depositSummary($record)['exceedance_amount'] !== null ? 'danger' : 'success'),
+                                TextEntry::make('dispatch_eligibility')
+                                    ->label(__('cleaning_admin.workers.fields.dispatch_eligibility'))
+                                    ->state(fn (Worker $record): string => self::depositSummary($record)['is_eligible_for_dispatch']
+                                        ? __('cleaning_admin.workers.eligibility.eligible')
+                                        : __('cleaning_admin.workers.eligibility.ineligible'))
+                                    ->badge()
+                                    ->color(fn (Worker $record): string => self::depositSummary($record)['is_eligible_for_dispatch'] ? 'success' : 'danger'),
+                            ])
+                            ->columns(2)
+                            ->columnSpan(6),
+                        Section::make(__('cleaning_admin.workers.sections.location'))
                             ->schema([
                                 TextEntry::make('home_address')
                                     ->label(__('cleaning_admin.workers.fields.home_address'))
@@ -212,36 +232,49 @@ final class WorkerInfolist
                                     ->placeholder('-'),
                                 TextEntry::make('default_working_hours')
                                     ->label(__('cleaning_admin.workers.fields.default_working_hours'))
-                                    ->formatStateUsing(fn ($state): string => self::formatWorkingHours($state))
+                                    ->state(fn (Worker $record): array => self::formatWorkingHours($record->default_working_hours))
+                                    ->listWithLineBreaks()
                                     ->columnSpanFull()
                                     ->placeholder('-'),
-                            ]),
-                    ]),
-                Section::make(__('cleaning_admin.workers.sections.trust_card'))
-                    ->schema([
-                        TextEntry::make('trust_score')
-                            ->label(__('cleaning_admin.workers.fields.trust_score'))
-                            ->suffix(' / 100')
-                            ->weight('bold'),
-                        RepeatableEntry::make('trustLogs')
-                            ->label(__('cleaning_admin.workers.fields.trust_log'))
-                            ->schema([
-                                TextEntry::make('reason')->label(__('cleaning_admin.workers.fields.reason')),
-                                TextEntry::make('score_delta')->label(__('cleaning_admin.workers.fields.score_delta'))->suffix(' points'),
-                                TextEntry::make('created_at')->label(__('cleaning_admin.workers.fields.date'))->dateTime('Y-m-d H:i'),
                             ])
-                            ->columns(3),
-                    ]),
-                Section::make(__('cleaning_admin.workers.sections.preferred_zones'))
-                    ->schema([
-                        RepeatableEntry::make('zones')
-                            ->label('')
+                            ->columns(2)
+                            ->columnSpan(6),
+                        Section::make(__('cleaning_admin.workers.sections.trust_card'))
                             ->schema([
-                                TextEntry::make('name')->label(__('cleaning_admin.workers.fields.zone')),
-                                TextEntry::make('is_active')->label(__('cleaning_admin.workers.fields.is_active'))->formatStateUsing($yesNo),
+                                TextEntry::make('trust_score')
+                                    ->label(__('cleaning_admin.workers.fields.trust_score'))
+                                    ->suffix(' / 100')
+                                    ->weight('bold'),
+                                RepeatableEntry::make('trustLogs')
+                                    ->label(__('cleaning_admin.workers.fields.trust_log'))
+                                    ->schema([
+                                        TextEntry::make('reason')->label(__('cleaning_admin.workers.fields.reason')),
+                                        TextEntry::make('score_before')->label(__('cleaning_admin.workers.fields.score_before')),
+                                        TextEntry::make('score_after')->label(__('cleaning_admin.workers.fields.score_after')),
+                                        TextEntry::make('score_delta')->label(__('cleaning_admin.workers.fields.score_delta'))->suffix(' points'),
+                                        TextEntry::make('cleaning_booking_id')->label(__('cleaning_admin.workers.fields.booking_id')),
+                                        TextEntry::make('created_at')->label(__('cleaning_admin.workers.fields.date'))->dateTime('Y-m-d H:i'),
+                                    ])
+                                    ->columns(3),
                             ])
-                            ->columns(2),
-                    ]),
+                            ->columnSpan(6),
+                        Section::make(__('cleaning_admin.workers.sections.preferred_zones'))
+                            ->schema([
+                                RepeatableEntry::make('zones')
+                                    ->label('')
+                                    ->schema([
+                                        TextEntry::make('name')->label(__('cleaning_admin.workers.fields.zone')),
+                                        TextEntry::make('is_active')
+                                            ->label(__('cleaning_admin.workers.fields.is_active'))
+                                            ->formatStateUsing($yesNo)
+                                            ->badge()
+                                            ->color(fn (mixed $state): string => self::booleanColor($state)),
+                                    ])
+                                    ->columns(2),
+                            ])
+                            ->columnSpan(6),
+                    ])
+                    ->columnSpanFull(),
             ]);
     }
 
@@ -265,13 +298,74 @@ final class WorkerInfolist
         return WorkerPreferredWorkType::options()[$value] ?? $value;
     }
 
-    private static function formatWorkingHours(mixed $state): string
+    /**
+     * @return array<int, string>
+     */
+    private static function formatWorkingHours(mixed $state): array
     {
         if (! is_array($state) || $state === []) {
-            return '-';
+            return [];
         }
 
-        return json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) ?: '-';
+        $dayLabels = [
+            'sunday' => 'الأحد',
+            'monday' => 'الإثنين',
+            'tuesday' => 'الثلاثاء',
+            'wednesday' => 'الأربعاء',
+            'thursday' => 'الخميس',
+            'friday' => 'الجمعة',
+            'saturday' => 'السبت',
+        ];
+
+        $lines = [];
+        foreach ($dayLabels as $day => $label) {
+            $dayHours = $state[$day] ?? null;
+            $ranges = self::workingHourRanges($dayHours);
+
+            $lines[] = $label.': '.($ranges === [] ? 'غير متاح' : implode('، ', $ranges));
+        }
+
+        return $lines;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private static function workingHourRanges(mixed $dayHours): array
+    {
+        if (! is_array($dayHours)) {
+            return [];
+        }
+
+        if (isset($dayHours['available']) && ! (bool) $dayHours['available']) {
+            return [];
+        }
+
+        $periods = isset($dayHours['data']) && is_array($dayHours['data'])
+            ? $dayHours['data']
+            : [$dayHours];
+
+        $ranges = [];
+        foreach ($periods as $period) {
+            if (! is_array($period)) {
+                continue;
+            }
+
+            if (isset($period['from'], $period['to'])) {
+                $ranges[] = $period['from'].' - '.$period['to'];
+
+                continue;
+            }
+
+            $from = array_key_first($period);
+            $to = is_string($from) ? ($period[$from] ?? null) : null;
+
+            if (is_string($from) && is_string($to)) {
+                $ranges[] = $from.' - '.$to;
+            }
+        }
+
+        return $ranges;
     }
 
     /**
@@ -313,7 +407,15 @@ final class WorkerInfolist
     }
 
     /**
-     * @return array{current_balance:float,deposited_total:float,withdrawn_total:float,minimum_required:float}
+     * @return array{
+     *     current_balance: float,
+     *     deposited_total: float,
+     *     withdrawn_total: float,
+     *     minimum_required: float,
+     *     max_negative_balance: float,
+     *     exceedance_amount: float|null,
+     *     is_eligible_for_dispatch: bool
+     * }
      */
     private static function depositSummary(Worker $worker): array
     {
@@ -323,15 +425,27 @@ final class WorkerInfolist
             return $cache[$worker->id];
         }
 
-        $deposit = $worker->deposit instanceof CleaningWorkerDeposit ? $worker->deposit : null;
-        $setting = CleaningDepositSetting::query()->first();
+        $worker->loadMissing('deposit');
+        $payload = app(DepositService::class)->depositStatusPayload($worker);
 
         return $cache[$worker->id] = [
-            'current_balance' => (float) ($deposit?->current_balance ?? 0),
-            'deposited_total' => (float) ($deposit?->deposited_total ?? 0),
-            'withdrawn_total' => (float) ($deposit?->withdrawn_total ?? 0),
-            'minimum_required' => (float) ($setting?->minimum_deposit_amount ?? 0),
+            'current_balance' => $payload['currentBalance'],
+            'deposited_total' => $payload['depositedTotal'],
+            'withdrawn_total' => $payload['withdrawnTotal'],
+            'minimum_required' => $payload['minimumRequired'],
+            'max_negative_balance' => $payload['maxNegativeBalance'],
+            'exceedance_amount' => $payload['exceedanceAmount'],
+            'is_eligible_for_dispatch' => $payload['isEligibleForNewRequests'],
         ];
+    }
+
+    private static function formatExceedance(?float $amount): string
+    {
+        if ($amount === null) {
+            return '-';
+        }
+
+        return self::money($amount);
     }
 
     private static function depositStatusLabel(Worker $worker): string
@@ -344,20 +458,62 @@ final class WorkerInfolist
             'active' => 'نشط',
             'insufficient_balance' => 'رصيد غير كافٍ',
             'missing_deposit' => 'لا يوجد تأمين',
+            'suspended' => 'معلق',
             default => $status,
         };
     }
 
     private static function depositStatusColor(mixed $state): string
     {
-        $value = $state instanceof \BackedEnum ? $state->value : (string) $state;
+        $value = $state instanceof BackedEnum ? $state->value : (string) $state;
 
         return match ($value) {
-            'active' => 'success',
-            'insufficient_balance' => 'warning',
-            'missing_deposit' => 'danger',
+            'active', 'نشط' => 'success',
+            'insufficient_balance', 'رصيد غير كافٍ' => 'warning',
+            'missing_deposit', 'لا يوجد تأمين', 'suspended', 'معلق' => 'danger',
             default => 'gray',
         };
+    }
+
+    private static function accountStatusLabel(Worker $worker): string
+    {
+        if ($worker->is_suspended) {
+            return 'معلق';
+        }
+
+        return $worker->is_active ? 'نشط' : 'غير نشط';
+    }
+
+    private static function accountStatusColor(mixed $state): string
+    {
+        return match ((string) $state) {
+            'نشط' => 'success',
+            'معلق' => 'danger',
+            default => 'gray',
+        };
+    }
+
+    private static function booleanColor(mixed $state): string
+    {
+        return (string) $state === __('cleaning_admin.boolean.yes') ? 'success' : 'gray';
+    }
+
+    private static function fallbackAvatarUrl(Worker $worker): string
+    {
+        $name = rawurlencode($worker->user?->name ?: $worker->first_name ?: 'Worker');
+
+        return "https://ui-avatars.com/api/?name={$name}&background=0f766e&color=ffffff";
+    }
+
+    private static function workerAvatarUrl(Worker $worker): ?string
+    {
+        $media = $worker->getFirstMedia('avatar');
+
+        if ($media === null) {
+            return null;
+        }
+
+        return '/storage/'.mb_ltrim($media->getPathRelativeToRoot(), '/');
     }
 
     private static function formatTrustScore(Worker $worker): string

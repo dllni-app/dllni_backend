@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Filament\Pages;
 
+use App\Models\CleaningDepositSetting;
 use App\Models\CleaningFinancialSetting;
 use BackedEnum;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Modules\Cleaning\Services\DepositService;
 
 final class FinancialSettings extends Page
 {
@@ -38,6 +40,16 @@ final class FinancialSettings extends Page
     public ?int $timeWarningMinutesBeforeEnd = null;
 
     public float $extensionRatePer30Minutes = 0.0;
+
+    public float $minimumDepositAmount = 0.0;
+
+    public float $defaultMaxNegativeBalance = 0.0;
+
+    public int $trustRejectAfterAcceptPenalty = 10;
+
+    public int $trustMinimumForDispatch = 0;
+
+    public bool $workerFinanceEnabled = true;
 
     protected static string|BackedEnum|null $navigationIcon = \Filament\Support\Icons\Heroicon::OutlinedCurrencyDollar;
 
@@ -107,6 +119,15 @@ final class FinancialSettings extends Page
         $this->minBillableMinutes = $setting->min_billable_minutes !== null ? (int) $setting->min_billable_minutes : null;
         $this->timeWarningMinutesBeforeEnd = $setting->time_warning_minutes_before_end !== null ? (int) $setting->time_warning_minutes_before_end : null;
         $this->extensionRatePer30Minutes = (float) ($setting->extension_rate_per_30_minutes ?? 0.0);
+
+        $depositSetting = CleaningDepositSetting::query()->first();
+        if ($depositSetting) {
+            $this->minimumDepositAmount = (float) $depositSetting->minimum_deposit_amount;
+            $this->defaultMaxNegativeBalance = (float) $depositSetting->default_max_negative_balance;
+            $this->trustRejectAfterAcceptPenalty = (int) $depositSetting->trust_reject_after_accept_penalty;
+            $this->trustMinimumForDispatch = (int) $depositSetting->trust_minimum_for_dispatch;
+            $this->workerFinanceEnabled = (bool) $depositSetting->is_enabled;
+        }
     }
 
     public function save(): void
@@ -125,6 +146,11 @@ final class FinancialSettings extends Page
             'minBillableMinutes' => ['nullable', 'integer', 'min:0'],
             'timeWarningMinutesBeforeEnd' => ['nullable', 'integer', 'min:0'],
             'extensionRatePer30Minutes' => ['required', 'numeric', 'min:0'],
+            'minimumDepositAmount' => ['required', 'numeric', 'min:0'],
+            'defaultMaxNegativeBalance' => ['required', 'numeric', 'min:0'],
+            'trustRejectAfterAcceptPenalty' => ['required', 'integer', 'min:0'],
+            'trustMinimumForDispatch' => ['required', 'integer', 'min:0', 'max:100'],
+            'workerFinanceEnabled' => ['required', 'boolean'],
         ]);
 
         CleaningFinancialSetting::query()->updateOrCreate(
@@ -148,6 +174,19 @@ final class FinancialSettings extends Page
                 'extension_rate_per_30_minutes' => $this->extensionRatePer30Minutes,
             ],
         );
+
+        CleaningDepositSetting::query()->updateOrCreate(
+            ['id' => CleaningDepositSetting::query()->orderBy('id')->value('id') ?? 1],
+            [
+                'minimum_deposit_amount' => $this->minimumDepositAmount,
+                'default_max_negative_balance' => $this->defaultMaxNegativeBalance,
+                'trust_reject_after_accept_penalty' => $this->trustRejectAfterAcceptPenalty,
+                'trust_minimum_for_dispatch' => $this->trustMinimumForDispatch,
+                'is_enabled' => $this->workerFinanceEnabled,
+            ],
+        );
+
+        app(DepositService::class)->syncAllWorkerDepositStatuses();
 
         Notification::make()
             ->title(__('cleaning_admin.financial.saved'))

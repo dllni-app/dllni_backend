@@ -7,12 +7,17 @@ namespace Database\Seeders;
 use App\Enums\AvailabilityType;
 use App\Enums\GenderPreference;
 use App\Enums\UserModuleType;
+use App\Enums\WorkerPreferredWorkType;
+use App\Models\CleaningDepositSetting;
+use App\Models\CleaningWorkerDeposit;
 use App\Models\User;
 use App\Models\Worker;
 use App\Models\WorkerAvailability;
+use App\Models\WorkerTrustLog;
 use App\Models\WorkerZone;
 use Database\Seeders\Support\SeederMedia;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Schema;
 
 final class WorkerSeeder extends Seeder
 {
@@ -27,6 +32,10 @@ final class WorkerSeeder extends Seeder
                 'address' => 'حلب - الجميلية - شارع فيصل',
                 'lat' => 36.2127,
                 'lng' => 37.1456,
+                'birthday' => '1993-04-12',
+                'preferred_work_type' => WorkerPreferredWorkType::Cleaning->value,
+                'deposit_balance' => 85000,
+                'trust_reason' => 'سجل حجوزات مكتملة بدون شكاوى خلال آخر شهر.',
             ],
             [
                 'email' => 'worker2@dllni.sy',
@@ -36,6 +45,10 @@ final class WorkerSeeder extends Seeder
                 'address' => 'حلب - الحمدانية - شارع القدس',
                 'lat' => 36.1795,
                 'lng' => 37.1082,
+                'birthday' => '1990-09-03',
+                'preferred_work_type' => WorkerPreferredWorkType::Events->value,
+                'deposit_balance' => 65000,
+                'trust_reason' => 'التزام جيد بمواعيد قبول الحجوزات.',
             ],
             [
                 'email' => 'worker3@dllni.sy',
@@ -45,8 +58,17 @@ final class WorkerSeeder extends Seeder
                 'address' => 'حلب - السريان الجديدة - شارع تشرين',
                 'lat' => 36.2168,
                 'lng' => 37.1317,
+                'birthday' => '1996-01-25',
+                'preferred_work_type' => WorkerPreferredWorkType::Both->value,
+                'deposit_balance' => 70000,
+                'trust_reason' => 'تقييمات عملاء مرتفعة وثابتة.',
             ],
         ];
+
+        CleaningDepositSetting::firstOrCreate([], [
+            'minimum_deposit_amount' => 50000,
+            'is_enabled' => true,
+        ]);
 
         foreach ($workers as $index => $data) {
             $phone = sprintf('+9639441201%02d', $index + 1);
@@ -90,17 +112,48 @@ final class WorkerSeeder extends Seeder
                 ]
             );
 
-            $worker->forceFill([
+            $workerUpdates = [
                 'first_name' => $data['first_name'],
                 'gender' => $data['gender'],
                 'bio' => $data['bio'],
+                'is_verified' => true,
+                'is_featured' => $index === 0,
                 'is_active' => true,
                 'is_suspended' => false,
+                'security_deposit_status' => 'active',
                 'home_address' => $data['address'],
                 'home_latitude' => $data['lat'],
                 'home_longitude' => $data['lng'],
                 'default_working_hours' => self::defaultWorkingHours(),
-            ])->save();
+            ];
+
+            if (Schema::hasColumn('workers', 'birthday')) {
+                $workerUpdates['birthday'] = $data['birthday'];
+            }
+
+            if (Schema::hasColumn('workers', 'preferred_work_type')) {
+                $workerUpdates['preferred_work_type'] = $data['preferred_work_type'];
+            }
+
+            $worker->forceFill($workerUpdates)->save();
+
+            CleaningWorkerDeposit::updateOrCreate(
+                ['worker_id' => $worker->id],
+                [
+                    'current_balance' => $data['deposit_balance'],
+                    'deposited_total' => $data['deposit_balance'],
+                    'withdrawn_total' => 0,
+                    'is_active' => true,
+                ]
+            );
+
+            WorkerTrustLog::firstOrCreate(
+                [
+                    'worker_id' => $worker->id,
+                    'reason' => $data['trust_reason'],
+                ],
+                ['score_delta' => 5]
+            );
 
             WorkerZone::updateOrCreate(
                 ['worker_id' => $worker->id, 'name' => 'المنطقة الأساسية'],

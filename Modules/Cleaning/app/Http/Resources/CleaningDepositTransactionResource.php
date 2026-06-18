@@ -19,6 +19,7 @@ final class CleaningDepositTransactionResource extends JsonResource
             'balanceAfter' => (float) $this->balance_after,
             'reference' => $this->reference,
             'notes' => $this->notes,
+            'cleaningBookingId' => $this->cleaning_booking_id,
             'createdAt' => $this->created_at?->toIso8601String(),
             'updatedAt' => $this->updated_at?->toIso8601String(),
         ];
