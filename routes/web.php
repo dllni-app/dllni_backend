@@ -2,12 +2,17 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\API\AppDownloadController;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\DeepLinks\OpenDeepLinkLandingController;
 use App\Http\Controllers\DeepLinks\OpenDeepLinkController;
 use App\Http\Controllers\DeepLinks\ShortLinkRedirectController;
+
+Route::prefix('v1/apps')->group(function (): void {
+    Route::get('download', AppDownloadController::class);
+});
 
 Route::get('/', fn(): View => view('welcome'));
 
