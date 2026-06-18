@@ -32,7 +32,8 @@ final class DepositManagementController
                 $worker,
                 (float) $validated['amount'],
                 $validated['reference'],
-                $validated['notes'] ?? null
+                $validated['notes'] ?? null,
+                auth()->id(),
             );
 
             return response()->json([
@@ -59,7 +60,8 @@ final class DepositManagementController
                 $worker,
                 (float) $validated['amount'],
                 $validated['reference'],
-                $validated['notes'] ?? null
+                $validated['notes'] ?? null,
+                auth()->id(),
             );
 
             return response()->json([
@@ -84,7 +86,7 @@ final class DepositManagementController
 
         $query = \App\Models\CleaningDepositTransaction::where('worker_id', $worker->id);
 
-        if ($type && in_array($type, ['deposit', 'withdrawal'])) {
+        if ($type && in_array($type, ['deposit', 'withdrawal', 'admin_fee'], true)) {
             $query->where('type', $type);
         }
 
@@ -103,42 +105,61 @@ final class DepositManagementController
 
     public function getSettings(): JsonResponse
     {
-        $settings = CleaningDepositSetting::first();
+        $settings = $this->resolveSettings();
 
-        if (! $settings) {
-            $settings = CleaningDepositSetting::create([
-                'minimum_deposit_amount' => 0,
-                'is_enabled' => true,
-            ]);
-        }
-
-        return response()->json([
-            'minimumDepositAmount' => (float) $settings->minimum_deposit_amount,
-            'isEnabled' => $settings->is_enabled,
-        ]);
+        return response()->json($this->settingsPayload($settings));
     }
 
     public function updateSettings(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'minimum_deposit_amount' => 'nullable|numeric|min:0',
+            'default_max_negative_balance' => 'nullable|numeric|min:0',
+            'trust_reject_after_accept_penalty' => 'nullable|integer|min:0',
+            'trust_minimum_for_dispatch' => 'nullable|integer|min:0|max:100',
             'is_enabled' => 'nullable|boolean',
         ]);
 
-        $settings = CleaningDepositSetting::firstOrCreate([], [
-            'minimum_deposit_amount' => 0,
-            'is_enabled' => true,
-        ]);
+        $settings = $this->resolveSettings();
 
         $settings->update(array_filter([
             'minimum_deposit_amount' => $validated['minimum_deposit_amount'] ?? null,
+            'default_max_negative_balance' => $validated['default_max_negative_balance'] ?? null,
+            'trust_reject_after_accept_penalty' => $validated['trust_reject_after_accept_penalty'] ?? null,
+            'trust_minimum_for_dispatch' => $validated['trust_minimum_for_dispatch'] ?? null,
             'is_enabled' => $validated['is_enabled'] ?? null,
-        ], static fn ($v) => $v !== null));
+        ], static fn ($value) => $value !== null));
+
+        $this->depositService->syncAllWorkerDepositStatuses();
 
         return response()->json([
             'message' => 'Settings updated successfully',
-            'minimumDepositAmount' => (float) $settings->minimum_deposit_amount,
-            'isEnabled' => $settings->is_enabled,
+            ...$this->settingsPayload($settings->fresh()),
         ]);
+    }
+
+    private function resolveSettings(): CleaningDepositSetting
+    {
+        return CleaningDepositSetting::query()->firstOrCreate([], [
+            'minimum_deposit_amount' => 0,
+            'default_max_negative_balance' => 0,
+            'is_enabled' => true,
+            'trust_reject_after_accept_penalty' => (int) config('cleaning.trust.reject_after_accept_penalty', 10),
+            'trust_minimum_for_dispatch' => 0,
+        ]);
+    }
+
+    /**
+     * @return array<string, bool|float|int>
+     */
+    private function settingsPayload(CleaningDepositSetting $settings): array
+    {
+        return [
+            'minimumDepositAmount' => (float) $settings->minimum_deposit_amount,
+            'defaultMaxNegativeBalance' => (float) $settings->default_max_negative_balance,
+            'trustRejectAfterAcceptPenalty' => (int) $settings->trust_reject_after_accept_penalty,
+            'trustMinimumForDispatch' => (int) $settings->trust_minimum_for_dispatch,
+            'isEnabled' => (bool) $settings->is_enabled,
+        ];
     }
 }

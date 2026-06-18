@@ -13,6 +13,7 @@ use Illuminate\Foundation\Queue\Queueable;
 use Modules\Cleaning\Enums\CleaningAssignmentMode;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Services\DepositService;
 
 final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
 {
@@ -33,6 +34,8 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
         if (! $booking) {
             return;
         }
+
+        $depositService = app(DepositService::class);
 
         $bookingDateTime = $this->bookingDateTime($booking);
         $assignmentMode = $booking->resolvedAssignmentMode();
@@ -58,7 +61,7 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
                 ->with('user')
                 ->first();
 
-            if ($worker?->user && $this->isWorkerAvailable($worker, $bookingDateTime)) {
+            if ($worker?->user && $this->isWorkerAvailable($worker, $bookingDateTime) && $depositService->isWorkerEligibleForDispatch($worker)) {
                 $worker->user->notify(new NewOrderRequestNotification($booking));
             }
 
@@ -82,7 +85,7 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
             ->get();
 
         foreach ($workers as $worker) {
-            if ($worker->user && $this->isWorkerAvailable($worker, $bookingDateTime)) {
+            if ($worker->user && $this->isWorkerAvailable($worker, $bookingDateTime) && $depositService->isWorkerEligibleForDispatch($worker)) {
                 $worker->user->notify(new NewOrderRequestNotification($booking));
             }
         }

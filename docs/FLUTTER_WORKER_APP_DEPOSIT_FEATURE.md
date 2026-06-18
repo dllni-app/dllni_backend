@@ -1,6 +1,6 @@
 # Security Deposit System - Flutter Integration Guide
 
-**Last Updated:** 2026-05-30  
+**Last Updated:** 2026-06-18  
 **Audience:** Flutter Developer (dllni_cleaning_owner_app)  
 **Domain:** `https://dllni.mustafafares.com`
 
@@ -8,15 +8,17 @@
 
 ## 1. Feature Overview
 
-The Security Deposit System prevents service overload by requiring cleaning workers to maintain a minimum security deposit. When a worker's total revenue exceeds their deposit amount, they're automatically blocked from accepting new requests.
+The Security Deposit System manages a worker trust account with a configurable balance floor. Workers must maintain enough deposit balance (and trust score) to receive new offers and start work. Admin fees are debited from the account when a customer confirms booking completion.
 
 ### Business Rules
 
-- Admin sets the minimum deposit amount via the Filament dashboard
-- Workers can't accept new requests if their completed revenue exceeds their current deposit balance
-- All deposit/withdrawal transactions are managed by admin only
-- Workers can view their deposit status and complete transaction history in the app
-- Transaction history shows all deposits and withdrawals with timestamps and references
+- Admin configures worker finance policy in Filament **Financial Settings** (minimum deposit, max negative balance, trust dispatch floor, reject-after-accept penalty)
+- Workers are blocked from new offers when `currentBalance < -maxNegativeBalance` or `trustScore < trustMinimumForDispatch`
+- Workers must meet `minimumRequired` balance to **start travel** / begin work
+- Rejecting a fresh offer does **not** reduce trust; rejecting **after accept** applies a trust penalty
+- Admin fee (`admin_fee` transaction type) is debited at customer-confirmed completion (does not increase `withdrawnTotal`)
+- All manual deposit/withdrawal transactions are recorded by admin only
+- Workers can view deposit status, eligibility, and full transaction history in the app
 
 ---
 
@@ -39,8 +41,9 @@ The Security Deposit System prevents service overload by requiring cleaning work
   "depositedTotal": 381.00,
   "withdrawnTotal": 180.50,
   "minimumRequired": 381.00,
+  "maxNegativeBalance": 200.00,
   "status": "insufficient_balance",
-  "exceedanceAmount": 100.50,
+  "exceedanceAmount": 50.00,
   "isEligibleForNewRequests": false,
   "createdAt": "2026-05-20T10:30:00Z",
   "updatedAt": "2026-05-30T14:22:00Z"
@@ -55,18 +58,21 @@ The Security Deposit System prevents service overload by requiring cleaning work
 | `currentBalance` | float | Current deposit balance in SYP |
 | `depositedTotal` | float | Total amount deposited (cumulative) |
 | `withdrawnTotal` | float | Total amount withdrawn (cumulative) |
-| `minimumRequired` | float | System-wide minimum deposit amount |
+| `minimumRequired` | float | Minimum balance required to start work |
+| `maxNegativeBalance` | float | Maximum allowed negative balance (account floor) |
 | `status` | string | "active" \| "insufficient_balance" \| "suspended" |
-| `exceedanceAmount` | float \| null | Amount by which revenue exceeds deposit (null if within limit) |
-| `isEligibleForNewRequests` | boolean | Whether worker can accept new requests |
+| `exceedanceAmount` | float \| null | Amount below the configured floor (null if within limit) |
+| `isEligibleForNewRequests` | boolean | Whether worker can receive new offers (balance floor + trust) |
 | `createdAt` | string | ISO 8601 timestamp of account creation |
 | `updatedAt` | string | ISO 8601 timestamp of last update |
 
 **Status Explanation:**
 
-- **active** - Revenue is within deposit limit, worker can accept requests
-- **insufficient_balance** - Revenue exceeds deposit, worker is blocked
+- **active** - Balance is within the configured floor and trust requirements are met
+- **insufficient_balance** - Balance is below the configured negative floor
 - **suspended** - Account administratively suspended
+
+**Homepage / profile additions:** `depositSummary` (same shape as deposit status), `isEligibleForNewRequests`, and `amountSummary.depositAccountBalance` (does not change the meaning of `workerAmount`, which remains worker earnings).
 
 ---
 
@@ -82,7 +88,7 @@ The Security Deposit System prevents service overload by requiring cleaning work
 |-------|------|---------|-------------|
 | `page` | int | 1 | Page number for pagination |
 | `perPage` | int | 20 | Records per page (max 100) |
-| `type` | string | - | Optional filter: "deposit" or "withdrawal" |
+| `type` | string | - | Optional filter: `deposit`, `withdrawal`, or `admin_fee` |
 
 **Example Request:**
 
@@ -132,7 +138,8 @@ GET /api/v1/cleaning/worker/account/deposit/transactions?page=1&perPage=20&type=
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | int | Transaction ID |
-| `type` | string | "deposit" (admin added) or "withdrawal" (admin removed) |
+| `type` | string | `deposit`, `withdrawal`, or `admin_fee` (booking settlement) |
+| `cleaningBookingId` | int \| null | Linked booking for `admin_fee` rows |
 | `amount` | float | Transaction amount in SYP |
 | `balanceBefore` | float | Balance immediately before transaction |
 | `balanceAfter` | float | Balance immediately after transaction |

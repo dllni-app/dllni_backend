@@ -53,11 +53,24 @@ it('persists extension_rate_per_30_minutes from financial settings page', functi
         ->set('minBillableMinutes', 30)
         ->set('timeWarningMinutesBeforeEnd', 10)
         ->set('extensionRatePer30Minutes', 4500.50)
+        ->set('minimumDepositAmount', 1500)
+        ->set('defaultMaxNegativeBalance', 250)
+        ->set('trustRejectAfterAcceptPenalty', 12)
+        ->set('trustMinimumForDispatch', 60)
+        ->set('workerFinanceEnabled', true)
         ->call('save')
         ->assertHasNoErrors();
 
     $this->assertDatabaseHas('cleaning_financial_settings', [
         'id' => 1,
         'extension_rate_per_30_minutes' => 4500.50,
+    ]);
+
+    $this->assertDatabaseHas('cleaning_deposit_settings', [
+        'minimum_deposit_amount' => 1500,
+        'default_max_negative_balance' => 250,
+        'trust_reject_after_accept_penalty' => 12,
+        'trust_minimum_for_dispatch' => 60,
+        'is_enabled' => true,
     ]);
 });

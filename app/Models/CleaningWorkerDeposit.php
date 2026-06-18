@@ -15,6 +15,8 @@ final class CleaningWorkerDeposit extends Model
         'current_balance',
         'deposited_total',
         'withdrawn_total',
+        'minimum_required',
+        'max_negative_balance',
         'is_active',
     ];
 
@@ -34,6 +36,8 @@ final class CleaningWorkerDeposit extends Model
             'current_balance' => 'decimal:2',
             'deposited_total' => 'decimal:2',
             'withdrawn_total' => 'decimal:2',
+            'minimum_required' => 'decimal:2',
+            'max_negative_balance' => 'decimal:2',
             'is_active' => 'boolean',
         ];
     }

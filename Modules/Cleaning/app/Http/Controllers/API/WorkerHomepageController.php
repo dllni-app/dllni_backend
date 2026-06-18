@@ -16,10 +16,15 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningTimeWarning;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
+use Modules\Cleaning\Services\DepositService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class WorkerHomepageController
 {
+    public function __construct(
+        private readonly DepositService $depositService,
+    ) {}
+
     public function __invoke(Request $request): JsonResponse
     {
         $worker = auth()->user()?->worker;
@@ -59,7 +64,10 @@ final class WorkerHomepageController
                     'workerAmount' => 0.0,
                     'adminAmount' => 0.0,
                     'grossInvoicesAmount' => 0.0,
+                    'depositAccountBalance' => 0.0,
                 ],
+                'isEligibleForNewRequests' => false,
+                'depositSummary' => null,
                 'bookingsWeeklyChart' => $this->emptyBookingsWeeklyChart($weekStart, $dayLabels),
                 'invoicesFourWeeksChart' => $this->emptyInvoicesFourWeeksChart($fourWeekStart),
             ]);
@@ -217,6 +225,9 @@ final class WorkerHomepageController
             ];
         }
 
+        $worker->loadMissing('deposit');
+        $depositSummary = $this->depositService->depositStatusPayload($worker);
+
         return response()->json([
             'date' => $today->format('Y-m-d'),
             'totalBookings' => $totalBookings,
@@ -230,12 +241,15 @@ final class WorkerHomepageController
             'earningsChangePercent' => $earningsChangePercent,
             'newOrdersCount' => $newOrdersCount,
             'pendingExtensionRequestsCount' => $pendingExtensionRequestsCount,
+            'isEligibleForNewRequests' => $depositSummary['isEligibleForNewRequests'],
+            'depositSummary' => $depositSummary,
             'amountSummary' => [
                 'period' => 'last_4_weeks',
                 'currency' => 'SYP',
                 'workerAmount' => round($workerAmount, 2),
                 'adminAmount' => round($adminAmount, 2),
                 'grossInvoicesAmount' => round($grossInvoicesAmount, 2),
+                'depositAccountBalance' => $depositSummary['currentBalance'],
             ],
             'bookingsWeeklyChart' => $bookingsWeeklyChart,
             'invoicesFourWeeksChart' => $invoicesFourWeeksChart,

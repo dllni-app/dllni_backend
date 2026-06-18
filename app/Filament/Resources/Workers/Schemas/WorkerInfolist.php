@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Workers\Schemas;
 
 use App\Enums\WorkerPreferredWorkType;
-use App\Models\CleaningDepositSetting;
-use App\Models\CleaningWorkerDeposit;
 use App\Models\Worker;
 use BackedEnum;
 use Filament\Infolists\Components\ImageEntry;
@@ -22,6 +20,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Services\DepositService;
 
 final class WorkerInfolist
 {
@@ -192,6 +191,22 @@ final class WorkerInfolist
                                     ->label(__('cleaning_admin.workers.fields.minimum_required'))
                                     ->state(fn (Worker $record): string => self::money(self::depositSummary($record)['minimum_required']))
                                     ->weight('bold'),
+                                TextEntry::make('max_negative_balance')
+                                    ->label(__('cleaning_admin.workers.fields.max_negative_balance'))
+                                    ->state(fn (Worker $record): string => self::money(self::depositSummary($record)['max_negative_balance']))
+                                    ->weight('bold'),
+                                TextEntry::make('exceedance_amount')
+                                    ->label(__('cleaning_admin.workers.fields.exceedance_amount'))
+                                    ->state(fn (Worker $record): string => self::formatExceedance(self::depositSummary($record)['exceedance_amount']))
+                                    ->badge()
+                                    ->color(fn (Worker $record): string => self::depositSummary($record)['exceedance_amount'] !== null ? 'danger' : 'success'),
+                                TextEntry::make('dispatch_eligibility')
+                                    ->label(__('cleaning_admin.workers.fields.dispatch_eligibility'))
+                                    ->state(fn (Worker $record): string => self::depositSummary($record)['is_eligible_for_dispatch']
+                                        ? __('cleaning_admin.workers.eligibility.eligible')
+                                        : __('cleaning_admin.workers.eligibility.ineligible'))
+                                    ->badge()
+                                    ->color(fn (Worker $record): string => self::depositSummary($record)['is_eligible_for_dispatch'] ? 'success' : 'danger'),
                             ])
                             ->columns(2)
                             ->columnSpan(6),
@@ -234,7 +249,10 @@ final class WorkerInfolist
                                     ->label(__('cleaning_admin.workers.fields.trust_log'))
                                     ->schema([
                                         TextEntry::make('reason')->label(__('cleaning_admin.workers.fields.reason')),
+                                        TextEntry::make('score_before')->label(__('cleaning_admin.workers.fields.score_before')),
+                                        TextEntry::make('score_after')->label(__('cleaning_admin.workers.fields.score_after')),
                                         TextEntry::make('score_delta')->label(__('cleaning_admin.workers.fields.score_delta'))->suffix(' points'),
+                                        TextEntry::make('cleaning_booking_id')->label(__('cleaning_admin.workers.fields.booking_id')),
                                         TextEntry::make('created_at')->label(__('cleaning_admin.workers.fields.date'))->dateTime('Y-m-d H:i'),
                                     ])
                                     ->columns(3),
@@ -389,7 +407,15 @@ final class WorkerInfolist
     }
 
     /**
-     * @return array{current_balance:float,deposited_total:float,withdrawn_total:float,minimum_required:float}
+     * @return array{
+     *     current_balance: float,
+     *     deposited_total: float,
+     *     withdrawn_total: float,
+     *     minimum_required: float,
+     *     max_negative_balance: float,
+     *     exceedance_amount: float|null,
+     *     is_eligible_for_dispatch: bool
+     * }
      */
     private static function depositSummary(Worker $worker): array
     {
@@ -399,15 +425,27 @@ final class WorkerInfolist
             return $cache[$worker->id];
         }
 
-        $deposit = $worker->deposit instanceof CleaningWorkerDeposit ? $worker->deposit : null;
-        $setting = CleaningDepositSetting::query()->first();
+        $worker->loadMissing('deposit');
+        $payload = app(DepositService::class)->depositStatusPayload($worker);
 
         return $cache[$worker->id] = [
-            'current_balance' => (float) ($deposit?->current_balance ?? 0),
-            'deposited_total' => (float) ($deposit?->deposited_total ?? 0),
-            'withdrawn_total' => (float) ($deposit?->withdrawn_total ?? 0),
-            'minimum_required' => (float) ($setting?->minimum_deposit_amount ?? 0),
+            'current_balance' => $payload['currentBalance'],
+            'deposited_total' => $payload['depositedTotal'],
+            'withdrawn_total' => $payload['withdrawnTotal'],
+            'minimum_required' => $payload['minimumRequired'],
+            'max_negative_balance' => $payload['maxNegativeBalance'],
+            'exceedance_amount' => $payload['exceedanceAmount'],
+            'is_eligible_for_dispatch' => $payload['isEligibleForNewRequests'],
         ];
+    }
+
+    private static function formatExceedance(?float $amount): string
+    {
+        if ($amount === null) {
+            return '-';
+        }
+
+        return self::money($amount);
     }
 
     private static function depositStatusLabel(Worker $worker): string

@@ -27,6 +27,7 @@ use Modules\Cleaning\Services\CleaningExtendedTimePricingService;
 use Modules\Cleaning\Support\WorkerRoomAssignmentPlanner;
 use Modules\Cleaning\Services\CleaningBookingTeamService;
 use Modules\Cleaning\Services\CleaningLifecycleNotificationService;
+use Modules\Cleaning\Services\DepositService;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 final class UserCleaningOrderService
@@ -38,6 +39,7 @@ final class UserCleaningOrderService
         private CleaningBookingTeamService $teamService,
         private CleaningLifecycleNotificationService $lifecycleNotifications,
         private CleaningExtendedTimePricingService $extendedTimePricing,
+        private DepositService $depositService,
     ) {}
 
     public function store(User $user, array $validated): CleaningBooking
@@ -498,12 +500,40 @@ final class UserCleaningOrderService
             ]);
         }
 
-        $booking->update([
-            'status' => CleaningBookingStatus::Completed,
-            'customer_confirmed_at' => now(),
-        ]);
+        $updated = DB::transaction(function () use ($booking): CleaningBooking {
+            $booking->update([
+                'status' => CleaningBookingStatus::Completed,
+                'customer_confirmed_at' => now(),
+            ]);
 
-        $updated = $booking->fresh();
+            $freshBooking = $booking->fresh([
+                'workerAssignments.worker',
+            ]);
+
+            if ($freshBooking === null) {
+                return $booking;
+            }
+
+            foreach ($freshBooking->workerAssignments as $assignment) {
+                $status = $assignment->status instanceof CleaningBookingWorkerAssignmentStatus
+                    ? $assignment->status->value
+                    : (string) $assignment->status;
+
+                if (! in_array($status, CleaningBookingWorkerAssignmentStatus::acceptedValues(), true)) {
+                    continue;
+                }
+
+                $worker = $assignment->worker;
+                $adminFee = (float) $assignment->admin_margin_amount;
+
+                if ($worker instanceof \App\Models\Worker && $adminFee > 0) {
+                    $this->depositService->recordAdminFeeDebit($worker, $freshBooking, $adminFee);
+                }
+            }
+
+            return $freshBooking;
+        });
+
         $this->dispatchTrackingUpdate($updated);
         BroadcastAfterResponse::send(new CompletionDecisionMade(
             $updated->id,
