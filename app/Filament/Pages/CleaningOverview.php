@@ -412,7 +412,7 @@ final class CleaningOverview extends Page
 
             return [
                 'date' => $dateKey,
-                'label' => $date->format('D'),
+                'label' => $date->locale(app()->getLocale())->isoFormat('ddd'),
                 'bookings' => (int) ($bookingCountsByDay[$dateKey] ?? 0),
                 'alerts' => (int) ($alertCountsByDay[$dateKey] ?? 0),
             ];

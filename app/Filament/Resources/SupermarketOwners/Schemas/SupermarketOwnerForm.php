@@ -15,12 +15,12 @@ final class SupermarketOwnerForm
     {
         return $schema
             ->components([
-                TextInput::make('name')->label('Name')->required(),
-                TextInput::make('email')->label('Email')->email()->required()->unique(ignoreRecord: true),
-                TextInput::make('phone')->label('Phone'),
+                TextInput::make('name')->label('الاسم')->required(),
+                TextInput::make('email')->label('البريد الإلكتروني')->email()->required()->unique(ignoreRecord: true),
+                TextInput::make('phone')->label('رقم الهاتف'),
                 Hidden::make('module_type')->default(UserModuleType::SupermarketSeller->value)->dehydrated(true),
                 TextInput::make('password')
-                    ->label('Password')
+                    ->label('كلمة المرور')
                     ->password()
                     ->dehydrateStateUsing(fn (?string $state): ?string => blank($state) ? null : $state)
                     ->dehydrated(fn (?string $state): bool => filled($state))

@@ -16,14 +16,14 @@ final class CleaningWorkersTable
     {
         return $table
             ->columns([
-                TextColumn::make('id')->sortable(),
-                TextColumn::make('first_name')->searchable(),
-                TextColumn::make('user.name')->searchable(),
-                TextColumn::make('user.phone'),
-                TextColumn::make('trust_score')->sortable(),
-                TextColumn::make('average_rating')->sortable(),
-                TextColumn::make('total_completed_jobs')->sortable(),
-                IconColumn::make('is_active')->boolean(),
+                TextColumn::make('id')->label(__('cleaning_admin.workers.fields.id'))->sortable(),
+                TextColumn::make('first_name')->label(__('cleaning_admin.workers.fields.first_name'))->searchable(),
+                TextColumn::make('user.name')->label(__('cleaning_admin.workers.fields.user_name'))->searchable(),
+                TextColumn::make('user.phone')->label(__('cleaning_admin.workers.fields.phone')),
+                TextColumn::make('trust_score')->label(__('cleaning_admin.workers.fields.trust_score'))->sortable(),
+                TextColumn::make('average_rating')->label(__('cleaning_admin.workers.fields.average_rating'))->sortable(),
+                TextColumn::make('total_completed_jobs')->label(__('cleaning_admin.workers.fields.total_completed_jobs'))->sortable(),
+                IconColumn::make('is_active')->label(__('cleaning_admin.workers.fields.is_active'))->boolean(),
             ])
             ->recordActions([
                 ViewAction::make(),

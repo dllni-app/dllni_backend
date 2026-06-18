@@ -19,11 +19,11 @@ final class CleaningWorkerDepositsResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBanknotes;
 
-    protected static string|UnitEnum|null $navigationGroup = 'Operations';
+    protected static string|UnitEnum|null $navigationGroup = 'العمليات';
 
     protected static ?int $navigationSort = 51;
 
-    protected static ?string $navigationLabel = 'Deposit Management';
+    protected static ?string $navigationLabel = 'إدارة التأمينات';
 
     public static function form(Schema $schema): Schema
     {
@@ -39,8 +39,8 @@ final class CleaningWorkerDepositsResource extends Resource
     {
         return $table
             ->columns([
-                TextColumn::make('worker.user.name')->label('Worker Name')->searchable(),
-                TextColumn::make('current_balance')->label('Current Balance')->sortable(),
+                TextColumn::make('worker.user.name')->label('اسم العامل')->searchable(),
+                TextColumn::make('current_balance')->label('الرصيد الحالي')->sortable(),
             ])
             ->defaultSort('updated_at', 'desc');
     }

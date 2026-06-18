@@ -38,6 +38,16 @@ final class CleaningWorkerResource extends Resource
         return __('cleaning_admin.workers.nav_label');
     }
 
+    public static function getModelLabel(): string
+    {
+        return __('cleaning_admin.workers.model');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('cleaning_admin.workers.plural');
+    }
+
     public static function form(Schema $schema): Schema
     {
         return WorkerForm::configure($schema);
