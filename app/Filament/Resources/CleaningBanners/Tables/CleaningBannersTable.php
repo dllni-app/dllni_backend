@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningBanners\Tables;
 
+use App\Filament\Resources\CleaningBanners\CleaningBannerResource;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\IconColumn;
@@ -50,8 +51,12 @@ final class CleaningBannersTable
                     ->label(__('cleaning_admin.cleaning_banners.filters.is_active')),
             ])
             ->recordActions([
-                ViewAction::make()->label(__('cleaning_admin.shared.actions.view')),
-                EditAction::make()->label(__('cleaning_admin.shared.actions.edit')),
+                ViewAction::make()
+                    ->label(__('cleaning_admin.shared.actions.view'))
+                    ->url(fn (CleaningBanner $record): string => CleaningBannerResource::getUrl('view', ['record' => $record])),
+                EditAction::make()
+                    ->label(__('cleaning_admin.shared.actions.edit'))
+                    ->url(fn (CleaningBanner $record): string => CleaningBannerResource::getUrl('edit', ['record' => $record])),
             ])
             ->modifyQueryUsing(fn ($query) => $query->orderBy('sort_order')->orderBy('id'));
     }

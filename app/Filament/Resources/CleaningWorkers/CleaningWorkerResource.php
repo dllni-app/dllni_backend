@@ -10,8 +10,8 @@ use App\Filament\Resources\CleaningWorkers\Pages\EditCleaningWorker;
 use App\Filament\Resources\CleaningWorkers\Pages\ListCleaningWorkers;
 use App\Filament\Resources\CleaningWorkers\Pages\ViewCleaningWorker;
 use App\Filament\Resources\CleaningWorkers\Schemas\CleaningWorkerForm;
+use App\Filament\Resources\CleaningWorkers\Tables\CleaningWorkersTable;
 use App\Filament\Resources\Users\Schemas\UserInfolist;
-use App\Filament\Resources\Users\Tables\UsersTable;
 use App\Models\User;
 use BackedEnum;
 use Filament\Resources\Resource;
@@ -50,7 +50,7 @@ final class CleaningWorkerResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return UsersTable::configure($table);
+        return CleaningWorkersTable::configure($table);
     }
 
     public static function getEloquentQuery(): Builder

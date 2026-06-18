@@ -7,6 +7,8 @@ namespace App\Filament\Resources\Disputes\Tables;
 use App\Enums\DisputeCategory;
 use App\Enums\DisputeResolution;
 use App\Enums\DisputeStatus;
+use App\Filament\Resources\Disputes\DisputeResource;
+use App\Models\Dispute;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
@@ -74,8 +76,12 @@ final class DisputesTable
                 SelectFilter::make('resolution')->label(__('cleaning_admin.disputes.fields.resolution'))->options(collect(DisputeResolution::cases())->mapWithKeys(fn ($c) => [$c->value => $c->label()])->all()),
             ])
             ->recordActions([
-                ViewAction::make()->label(__('cleaning_admin.shared.actions.view')),
-                EditAction::make()->label(__('cleaning_admin.shared.actions.edit')),
+                ViewAction::make()
+                    ->label(__('cleaning_admin.shared.actions.view'))
+                    ->url(fn (Dispute $record): string => DisputeResource::getUrl('view', ['record' => $record])),
+                EditAction::make()
+                    ->label(__('cleaning_admin.shared.actions.edit'))
+                    ->url(fn (Dispute $record): string => DisputeResource::getUrl('edit', ['record' => $record])),
             ]);
     }
 

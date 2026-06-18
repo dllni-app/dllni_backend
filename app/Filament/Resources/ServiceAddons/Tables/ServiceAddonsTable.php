@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\ServiceAddons\Tables;
 
+use App\Filament\Resources\ServiceAddons\ServiceAddonResource;
+use App\Models\ServiceAddon;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Support\Enums\FontWeight;
@@ -51,8 +53,12 @@ final class ServiceAddonsTable
                     ->label(__('cleaning_admin.service_addons.filters.is_active')),
             ])
             ->recordActions([
-                ViewAction::make()->label(__('cleaning_admin.shared.actions.view')),
-                EditAction::make()->label(__('cleaning_admin.shared.actions.edit')),
+                ViewAction::make()
+                    ->label(__('cleaning_admin.shared.actions.view'))
+                    ->url(fn (ServiceAddon $record): string => ServiceAddonResource::getUrl('view', ['record' => $record])),
+                EditAction::make()
+                    ->label(__('cleaning_admin.shared.actions.edit'))
+                    ->url(fn (ServiceAddon $record): string => ServiceAddonResource::getUrl('edit', ['record' => $record])),
             ]);
     }
 
