@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Modules\User\Http\Requests;
 
+use App\Http\Requests\Concerns\NormalizesPhoneInput;
 use Illuminate\Foundation\Http\FormRequest;
 
 final class VerifyAccountRequest extends FormRequest
 {
+    use NormalizesPhoneInput;
+
     public function authorize(): bool
     {
         return true;
@@ -22,5 +25,12 @@ final class VerifyAccountRequest extends FormRequest
             'phone' => 'required|string|max:32|exists:users,phone',
             'otp' => 'required|string|min:4|max:12',
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'phone' => $this->normalizePhoneInput($this->input('phone')),
+        ]);
     }
 }
