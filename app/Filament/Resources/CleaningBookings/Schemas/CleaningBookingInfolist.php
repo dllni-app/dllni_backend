@@ -36,15 +36,15 @@ final class CleaningBookingInfolist
                         TextEntry::make('scheduled_time')->label(__('cleaning_admin.booking.fields.scheduled_time')),
                     ])
                     ->columns(2),
-                Section::make('Event assistance details')
+                Section::make(__('cleaning_admin.booking.sections.event_details'))
                     ->schema([
-                        TextEntry::make('property_details.event_type')->label('Event type')->placeholder('-'),
-                        TextEntry::make('property_details.guest_count')->label('Guest count')->placeholder('-'),
-                        TextEntry::make('property_details.venue_type')->label('Venue type')->placeholder('-'),
-                        TextEntry::make('property_details.custom_service')->label('Custom service')->placeholder('-'),
-                        TextEntry::make('property_details.hours')->label('Booked hours')->placeholder('-'),
-                        TextEntry::make('property_details.special_requirement')->label('Special requirement')->placeholder('-'),
-                        TextEntry::make('property_details.notes')->label('Notes')->placeholder('-'),
+                        TextEntry::make('property_details.event_type')->label(__('cleaning_admin.booking.fields.event_type'))->placeholder('-'),
+                        TextEntry::make('property_details.guest_count')->label(__('cleaning_admin.booking.fields.guest_count'))->placeholder('-'),
+                        TextEntry::make('property_details.venue_type')->label(__('cleaning_admin.booking.fields.venue_type'))->placeholder('-'),
+                        TextEntry::make('property_details.custom_service')->label(__('cleaning_admin.booking.fields.custom_service'))->placeholder('-'),
+                        TextEntry::make('property_details.hours')->label(__('cleaning_admin.booking.fields.hours'))->placeholder('-'),
+                        TextEntry::make('property_details.special_requirement')->label(__('cleaning_admin.booking.fields.special_requirement'))->placeholder('-'),
+                        TextEntry::make('property_details.notes')->label(__('cleaning_admin.booking.fields.notes'))->placeholder('-'),
                     ])
                     ->columns(2)
                     ->visible(fn ($record): bool => $record->property_type === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE),
@@ -53,9 +53,9 @@ final class CleaningBookingInfolist
                         TextEntry::make('base_price')->label(__('cleaning_admin.booking.fields.base_price'))->money(config('app.currency', 'SYP')),
                         TextEntry::make('addons_total')->label(__('cleaning_admin.booking.fields.addons_total'))->money(config('app.currency', 'SYP')),
                         TextEntry::make('travel_fee')->label(__('cleaning_admin.booking.fields.travel_fee'))->money(config('app.currency', 'SYP')),
-                        TextEntry::make('travel_distance_km')->label('Travel distance (km)')->placeholder('-'),
-                        TextEntry::make('admin_margin_amount')->label('Admin margin')->money(config('app.currency', 'SYP')),
-                        TextEntry::make('is_pricing_final')->label('Pricing finalized')->formatStateUsing($yesNo),
+                        TextEntry::make('travel_distance_km')->label(__('cleaning_admin.booking.fields.travel_distance_km'))->placeholder('-'),
+                        TextEntry::make('admin_margin_amount')->label(__('cleaning_admin.booking.fields.admin_margin_amount'))->money(config('app.currency', 'SYP')),
+                        TextEntry::make('is_pricing_final')->label(__('cleaning_admin.booking.fields.is_pricing_final'))->formatStateUsing($yesNo),
                         TextEntry::make('total_price')->label(__('cleaning_admin.booking.fields.total_price'))->money(config('app.currency', 'SYP')),
                     ])
                     ->columns(2),

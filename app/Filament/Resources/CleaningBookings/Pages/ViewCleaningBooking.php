@@ -18,7 +18,7 @@ final class ViewCleaningBooking extends ViewRecord
     {
         $actions = [
             Action::make('view_dispute')
-                ->label('عرض النزاع')
+                ->label(__('cleaning_admin.booking.actions.view_dispute'))
                 ->url(fn () => $this->record->disputes()->first()
                     ? DisputeResource::getUrl('view', ['record' => $this->record->disputes()->first()])
                     : '#')

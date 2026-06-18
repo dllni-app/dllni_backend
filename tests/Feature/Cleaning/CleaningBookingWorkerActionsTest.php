@@ -242,7 +242,10 @@ it('cancels a cleaning booking', function () {
     Event::fake([CleaningBookingTrackingUpdated::class]);
 
     $workerUser = User::factory()->create(['email' => 'worker-cancel@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->create([
+        'user_id' => $workerUser->id,
+        'trust_score' => 100,
+    ]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -262,12 +265,45 @@ it('cancels a cleaning booking', function () {
         'status' => CleaningBookingStatus::Cancelled->value,
         'cancellation_reason' => 'Emergency',
     ]);
+    expect($worker->refresh()->trust_score)->toBe(90);
+    $this->assertDatabaseHas('worker_trust_logs', [
+        'worker_id' => $worker->id,
+        'reason' => 'booking_cancelled_by_worker',
+        'score_delta' => -10,
+    ]);
 
     Event::assertDispatched(CleaningBookingTrackingUpdated::class, function (CleaningBookingTrackingUpdated $event) use ($booking): bool {
         return $event->cleaningBookingId === $booking->id
             && $event->tracking['status'] === CleaningBookingStatus::Cancelled->value
             && $event->tracking['cancelledAt'] !== null;
     });
+});
+
+it('deducts trust score when worker cancels a confirmed cleaning booking', function (): void {
+    $workerUser = User::factory()->create(['email' => 'worker-cancel-confirmed@example.com']);
+    $worker = Worker::factory()->create([
+        'user_id' => $workerUser->id,
+        'trust_score' => 100,
+    ]);
+    Sanctum::actingAs($workerUser);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'status' => CleaningBookingStatus::WorkerAssigned,
+    ]);
+
+    $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/cancel", [
+        'reason' => 'Emergency',
+    ]);
+
+    $response->assertOk();
+    expect($worker->refresh()->trust_score)->toBe(90);
+    $this->assertDatabaseHas('worker_trust_logs', [
+        'worker_id' => $worker->id,
+        'reason' => 'booking_cancelled_by_worker',
+        'score_delta' => -10,
+    ]);
 });
 
 it('returns 403 when worker tries to cancel booking not assigned to them', function () {

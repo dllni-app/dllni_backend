@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Modules\Delivery\Notifications;
 
-use App\Notifications\Concerns\UsesPushNotificationQueue;
 use App\Notifications\Core\NotificationPayloadBuilder;
 use DevKandil\NotiFire\FcmMessage;
 use Illuminate\Bus\Queueable;
@@ -14,7 +13,6 @@ use Illuminate\Notifications\Notification;
 final class DeliveryCanonicalNotification extends Notification implements ShouldQueue
 {
     use Queueable;
-    use UsesPushNotificationQueue;
 
     /**
      * @param  array<string, scalar|null>  $templateContext
@@ -26,7 +24,6 @@ final class DeliveryCanonicalNotification extends Notification implements Should
         private readonly array $extraData = [],
     ) {
         $this->afterCommit();
-        $this->assignPushNotificationQueue();
     }
 
     /**

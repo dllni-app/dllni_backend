@@ -32,6 +32,7 @@ final class CleaningBookingService
     public function __construct(
         private readonly CleaningLifecycleNotificationService $lifecycleNotifications,
         private readonly CleaningBookingTeamService $teamService,
+        private readonly WorkerTrustService $workerTrustService,
     ) {}
 
     public function store(CleaningBookingData $data): CleaningBooking
@@ -431,7 +432,12 @@ final class CleaningBookingService
     {
         $fromStatus = (string) $booking->status->value;
 
-        $updated = DB::transaction(static function () use ($booking, $reason) {
+        $updated = DB::transaction(function () use ($booking, $reason) {
+            $worker = Auth::user()?->worker;
+            if (! $worker) {
+                throw new InvalidArgumentException('User must have an associated worker.');
+            }
+
             $allowedStatuses = [
                 CleaningBookingStatus::WorkerAssigned,
                 CleaningBookingStatus::InProgress,
@@ -446,6 +452,8 @@ final class CleaningBookingService
                 'cancelled_at' => now(),
                 'cancellation_reason' => $reason,
             ]);
+
+            $this->workerTrustService->applyBookingCancellationPenalty($worker);
 
             return $booking->fresh();
         });

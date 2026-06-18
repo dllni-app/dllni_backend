@@ -39,13 +39,13 @@ final class SystemAlertsTable
                     ->label(__('cleaning_admin.system_alerts.fields.booking_type'))
                     ->formatStateUsing(fn (?string $state): string => BookingMorphTypeLabel::resolve($state)),
                 TextColumn::make('booking.customer.name')
-                    ->label('User')
+                    ->label(__('cleaning_admin.system_alerts.fields.user'))
                     ->placeholder('-'),
                 TextColumn::make('booking.order_number')
-                    ->label('Order')
+                    ->label(__('cleaning_admin.system_alerts.fields.order'))
                     ->placeholder('-'),
                 TextColumn::make('payload.message')
-                    ->label('Message')
+                    ->label(__('cleaning_admin.system_alerts.fields.message'))
                     ->placeholder('-')
                     ->limit(60)
                     ->wrap(),

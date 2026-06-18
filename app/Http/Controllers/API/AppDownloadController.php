@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\File;
 
 final class AppDownloadController
 {
-    public function __invoke(AppDownloadRequest $request): Response|JsonResponse
+    public function __invoke(AppDownloadRequest $request)
     {
         $appType = AppDownloadType::from((string) $request->validated('appType'));
         $relativeFilePath = config("app_downloads.files.{$appType->value}");

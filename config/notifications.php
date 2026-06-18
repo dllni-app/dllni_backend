@@ -3,21 +3,6 @@
 declare(strict_types=1);
 
 return [
-
-    /*
-    |--------------------------------------------------------------------------
-    | Push Notification Queue
-    |--------------------------------------------------------------------------
-    |
-    | Queued notifications that include FCM push should use this queue so
-    | workers can prioritize them ahead of general background jobs.
-    |
-    | Recommended worker command:
-    | php artisan queue:work --queue=push-notifications,notifications,default
-    |
-    */
-    'push_queue' => env('NOTIFICATIONS_PUSH_QUEUE', 'push-notifications'),
-
     /*
     |--------------------------------------------------------------------------
     | FCM HTTP Client
