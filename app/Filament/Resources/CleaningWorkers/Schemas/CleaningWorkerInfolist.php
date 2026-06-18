@@ -9,6 +9,9 @@ use Filament\Infolists\Components\ImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Facades\DB;
+use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 
 final class CleaningWorkerInfolist
 {
@@ -68,9 +71,9 @@ final class CleaningWorkerInfolist
                 ->columns(4)
                 ->schema([
                     TextEntry::make('total_completed_jobs')->label('المهام المنجزة')->formatStateUsing(fn ($state): string => self::number($state)),
-                    TextEntry::make('gross_revenue')->label('إجمالي الإيرادات')->state(fn (Worker $record): string => self::money(self::grossRevenue($record))),
-                    TextEntry::make('worker_net_earnings')->label('صافي مستحقات العامل')->state(fn (Worker $record): string => self::money(self::grossRevenue($record))),
-                    TextEntry::make('admin_margin_total')->label('هامش الإدارة')->state(fn (): string => self::money(0)),
+                    TextEntry::make('gross_revenue')->label('إجمالي الإيرادات')->state(fn (Worker $record): string => self::money(self::financialSummary($record)['gross_revenue'])),
+                    TextEntry::make('worker_net_earnings')->label('صافي مستحقات العامل')->state(fn (Worker $record): string => self::money(self::financialSummary($record)['worker_net_earnings'])),
+                    TextEntry::make('admin_margin_total')->label('هامش الإدارة')->state(fn (Worker $record): string => self::money(self::financialSummary($record)['admin_margin_total'])),
                 ]),
             Section::make('التأمين والأهلية')
                 ->description('القيم المالية المطلوبة لتحديد قدرة العامل على استقبال الطلبات.')
@@ -142,7 +145,7 @@ final class CleaningWorkerInfolist
 
     private static function preferredWorkTypeLabel(mixed $state): string
     {
-        $value = is_object($state) && property_exists($state, 'value') ? $state->value : (string) $state;
+        $value = $state instanceof \BackedEnum ? $state->value : (string) $state;
         return match ($value) {
             'cleaning' => 'تنظيف',
             'events' => 'مناسبات',
@@ -151,9 +154,27 @@ final class CleaningWorkerInfolist
         };
     }
 
-    private static function grossRevenue(Worker $worker): float
+    /** @return array{gross_revenue: float, worker_net_earnings: float, admin_margin_total: float} */
+    private static function financialSummary(Worker $worker): array
     {
-        return (float) $worker->cleaningBookings()->where('status', 'completed')->sum('total_price');
+        $assignmentTotals = CleaningBookingWorkerAssignment::query()
+            ->where('worker_id', $worker->id)
+            ->selectRaw('COALESCE(SUM(service_share_amount + travel_fee + admin_margin_amount), 0) as gross_total')
+            ->selectRaw('COALESCE(SUM(worker_amount), 0) as worker_total')
+            ->selectRaw('COALESCE(SUM(admin_margin_amount), 0) as admin_total')
+            ->first();
+
+        $legacyGross = (float) CleaningBooking::query()
+            ->where('worker_id', $worker->id)
+            ->whereDoesntHave('workerAssignments', fn ($query) => $query->where('worker_id', $worker->id))
+            ->where('status', 'completed')
+            ->sum('total_price');
+
+        return [
+            'gross_revenue' => (float) ($assignmentTotals?->gross_total ?? 0) + $legacyGross,
+            'worker_net_earnings' => (float) ($assignmentTotals?->worker_total ?? 0) + $legacyGross,
+            'admin_margin_total' => (float) ($assignmentTotals?->admin_total ?? 0),
+        ];
     }
 
     /** @return array<int, string> */
