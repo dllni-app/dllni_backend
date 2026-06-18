@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Modules\User\Http\Requests;
 
+use App\Http\Requests\Concerns\NormalizesPhoneInput;
 use Illuminate\Foundation\Http\FormRequest;
 
 final class RegisterRequest extends FormRequest
 {
+    use NormalizesPhoneInput;
+
     public function authorize(): bool
     {
         return true;
@@ -23,5 +26,12 @@ final class RegisterRequest extends FormRequest
             'phone' => 'required|string|max:32|unique:users,phone',
             'password' => 'required|string|min:8|max:255',
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'phone' => $this->normalizePhoneInput($this->input('phone')),
+        ]);
     }
 }

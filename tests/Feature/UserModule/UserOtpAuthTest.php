@@ -11,12 +11,13 @@ use App\Models\SmsMessage;
 it('registers and verifies account via otp', function (): void {
     // Arrange
     $phone = '+963944000111';
+    $spacedPhone = '+963 944 000 111';
     Queue::fake();
 
     // Act (register)
     $registerResponse = $this->postJson('/api/v1/user/register', [
         'name' => 'Test User',
-        'phone' => $phone,
+        'phone' => $spacedPhone,
         'password' => 'password123',
     ]);
 
@@ -130,13 +131,14 @@ it('resets password using otp flow', function (): void {
 
 it('stores fcm token during v1 user login', function (): void {
     $phone = '+963944000444';
+    $spacedPhone = '+963 944 000 444';
     $user = User::factory()->create([
         'phone' => $phone,
         'password' => bcrypt('secret123'),
     ]);
 
     $response = $this->postJson('/api/v1/user/login', [
-        'phone' => $phone,
+        'phone' => $spacedPhone,
         'password' => 'secret123',
         'fcm_token' => 'v1_user_fcm_token_1234567890',
     ]);
@@ -147,6 +149,7 @@ it('stores fcm token during v1 user login', function (): void {
 
 it('stores fcm token from fcm-token header during v1 user login', function (): void {
     $phone = '+963944000445';
+    $spacedPhone = '+963 944 000 445';
     $user = User::factory()->create([
         'phone' => $phone,
         'password' => bcrypt('secret123'),
@@ -155,7 +158,7 @@ it('stores fcm token from fcm-token header during v1 user login', function (): v
     $response = $this->withHeaders([
         'fcm-token' => 'v1_user_header_fcm_token_1234567890',
     ])->postJson('/api/v1/user/login', [
-        'phone' => $phone,
+        'phone' => $spacedPhone,
         'password' => 'secret123',
     ]);
 

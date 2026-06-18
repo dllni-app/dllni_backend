@@ -9,12 +9,17 @@ use App\Models\CleaningDepositTransaction;
 use App\Models\CleaningWorkerDeposit;
 use App\Models\Worker;
 use Exception;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use InvalidArgumentException;
 use Modules\Cleaning\Models\CleaningBooking;
 
 final class DepositService
 {
+    /** @var array<string, bool> */
+    private array $columnCache = [];
+
     public function recordDeposit(
         Worker $worker,
         float $amount,
@@ -73,7 +78,7 @@ final class DepositService
         float $amount,
         ?int $createdByAdminId = null
     ): ?CleaningDepositTransaction {
-        if ($amount <= 0) {
+        if ($amount <= 0 || ! $this->supportsAdminFeeTransactions()) {
             return null;
         }
 
@@ -323,13 +328,27 @@ final class DepositService
 
     private function settings(): CleaningDepositSetting
     {
-        return CleaningDepositSetting::query()->firstOrCreate([], [
+        $defaults = [
             'minimum_deposit_amount' => 0,
             'default_max_negative_balance' => 0,
             'is_enabled' => true,
             'trust_reject_after_accept_penalty' => (int) config('cleaning.trust.reject_after_accept_penalty', 10),
             'trust_minimum_for_dispatch' => 0,
-        ]);
+        ];
+
+        try {
+            $settings = CleaningDepositSetting::query()->firstOrCreate([], $this->onlyExistingColumns('cleaning_deposit_settings', $defaults));
+        } catch (QueryException) {
+            $settings = new CleaningDepositSetting();
+        }
+
+        foreach ($defaults as $column => $value) {
+            if (! array_key_exists($column, $settings->getAttributes())) {
+                $settings->setAttribute($column, $value);
+            }
+        }
+
+        return $settings;
     }
 
     /**
@@ -363,14 +382,14 @@ final class DepositService
                 ->first();
 
             if (! $deposit) {
-                $deposit = CleaningWorkerDeposit::query()->create([
+                $deposit = CleaningWorkerDeposit::query()->create($this->onlyExistingColumns('cleaning_worker_deposits', [
                     'worker_id' => $worker->id,
                     'current_balance' => 0,
                     'deposited_total' => 0,
                     'withdrawn_total' => 0,
                     'minimum_required' => $settings->minimum_deposit_amount,
                     'max_negative_balance' => $settings->default_max_negative_balance,
-                ]);
+                ]));
 
                 $deposit = CleaningWorkerDeposit::query()
                     ->whereKey($deposit->id)
@@ -389,7 +408,7 @@ final class DepositService
 
             $deposit->update(['current_balance' => $balanceAfter]);
 
-            $transaction = CleaningDepositTransaction::query()->create([
+            $transaction = CleaningDepositTransaction::query()->create($this->onlyExistingColumns('cleaning_deposit_transactions', [
                 'worker_id' => $worker->id,
                 'cleaning_booking_id' => $cleaningBookingId,
                 'created_by_admin_id' => $createdByAdminId,
@@ -399,11 +418,45 @@ final class DepositService
                 'balance_after' => $balanceAfter,
                 'reference' => $reference,
                 'notes' => $notes,
-            ]);
+            ]));
 
             $this->syncEligibilityStatus($worker->fresh(['deposit']));
 
             return $transaction;
         });
+    }
+
+    /**
+     * @param  array<string, mixed>  $values
+     * @return array<string, mixed>
+     */
+    private function onlyExistingColumns(string $table, array $values): array
+    {
+        return array_filter(
+            $values,
+            fn (string $column): bool => $this->hasColumn($table, $column),
+            ARRAY_FILTER_USE_KEY,
+        );
+    }
+
+    private function supportsAdminFeeTransactions(): bool
+    {
+        return $this->hasColumn('cleaning_deposit_transactions', 'cleaning_booking_id')
+            && $this->hasColumn('cleaning_deposit_transactions', 'created_by_admin_id');
+    }
+
+    private function hasColumn(string $table, string $column): bool
+    {
+        $key = $table.'.'.$column;
+
+        if (! array_key_exists($key, $this->columnCache)) {
+            try {
+                $this->columnCache[$key] = Schema::hasColumn($table, $column);
+            } catch (QueryException) {
+                $this->columnCache[$key] = false;
+            }
+        }
+
+        return $this->columnCache[$key];
     }
 }

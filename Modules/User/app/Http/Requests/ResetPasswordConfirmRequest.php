@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Modules\User\Http\Requests;
 
+use App\Http\Requests\Concerns\NormalizesPhoneInput;
 use Illuminate\Foundation\Http\FormRequest;
 
 final class ResetPasswordConfirmRequest extends FormRequest
 {
+    use NormalizesPhoneInput;
+
     public function authorize(): bool
     {
         return true;
@@ -23,5 +26,12 @@ final class ResetPasswordConfirmRequest extends FormRequest
             'otp' => 'required|string|min:4|max:12',
             'password' => 'required|string|min:8|max:255|confirmed',
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'phone' => $this->normalizePhoneInput($this->input('phone')),
+        ]);
     }
 }
