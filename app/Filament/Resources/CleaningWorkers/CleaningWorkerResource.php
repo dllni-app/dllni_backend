@@ -9,9 +9,9 @@ use App\Filament\Resources\CleaningWorkers\Pages\CreateCleaningWorker;
 use App\Filament\Resources\CleaningWorkers\Pages\EditCleaningWorker;
 use App\Filament\Resources\CleaningWorkers\Pages\ListCleaningWorkers;
 use App\Filament\Resources\CleaningWorkers\Pages\ViewCleaningWorker;
+use App\Filament\Resources\CleaningWorkers\Schemas\CleaningWorkerInfolist;
 use App\Filament\Resources\CleaningWorkers\Tables\CleaningWorkersTable;
 use App\Filament\Resources\Workers\Schemas\WorkerForm;
-use App\Filament\Resources\Workers\Schemas\WorkerInfolist;
 use App\Models\Worker;
 use BackedEnum;
 use Filament\Resources\Resource;
@@ -45,7 +45,7 @@ final class CleaningWorkerResource extends Resource
 
     public static function infolist(Schema $schema): Schema
     {
-        return WorkerInfolist::configure($schema);
+        return CleaningWorkerInfolist::configure($schema);
     }
 
     public static function table(Table $table): Table
