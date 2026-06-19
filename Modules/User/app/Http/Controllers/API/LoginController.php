@@ -8,11 +8,17 @@ use App\Http\Resources\UserResource;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
+use Modules\User\Enums\OtpPurpose;
 use Modules\User\Exceptions\AuthFlowException;
 use Modules\User\Http\Requests\LoginRequest;
+use Modules\User\Services\OtpService;
 
 final class LoginController
 {
+    public function __construct(
+        private readonly OtpService $otpService,
+    ) {}
+
     public function __invoke(LoginRequest $request): JsonResponse
     {
         $user = User::query()->where('phone', $request->validated('phone'))->first();
@@ -26,7 +32,16 @@ final class LoginController
         }
 
         if ($user->phone_verified_at === null) {
-            throw AuthFlowException::phoneVerificationRequired((string) $user->phone);
+            $expiresAt = $this->otpService->send((string) $user->phone, OtpPurpose::Register);
+
+            throw AuthFlowException::phoneVerificationRequired(
+                (string) $user->phone,
+                [
+                    'next_action' => 'verify_phone',
+                    'otp_sent' => true,
+                    'expiresAt' => $expiresAt->toIso8601String(),
+                ],
+            );
         }
 
         $fcmToken = $request->validated('fcmToken');
