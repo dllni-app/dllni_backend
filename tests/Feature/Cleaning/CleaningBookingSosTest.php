@@ -38,6 +38,7 @@ it('creates a cleaning booking sos without a permissions gate', function (): voi
         'user_id' => $user->id,
         'booking_id' => $booking->id,
         'booking_type' => CleaningBooking::class,
+        'order_id' => null,
         'emergency_type' => EmergencyType::MedicalEmergency->value,
         'message' => 'I need immediate help at the booking location.',
         'source' => 'booking',

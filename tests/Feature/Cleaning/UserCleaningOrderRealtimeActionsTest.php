@@ -207,7 +207,9 @@ it('requests a completion extension', function () {
     Event::assertDispatched(CompletionDecisionMade::class, function (CompletionDecisionMade $event) use ($booking, $worker): bool {
         return $event->cleaningBookingId === $booking->id
             && $event->workerId === $worker->id
-            && $event->decision === 'extension_requested';
+            && $event->decision === 'extension_requested'
+            && $event->status === CleaningBookingStatus::TimeExtensionRequested->value
+            && $event->warningId !== null;
     });
 
     Event::assertDispatched(ServiceExtensionRequested::class, function (ServiceExtensionRequested $event) use ($booking, $worker): bool {
