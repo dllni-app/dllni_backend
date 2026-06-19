@@ -10,6 +10,7 @@ use App\Enums\SOSStatus;
 use App\Enums\SystemAlertStatus;
 use App\Models\SosAlert;
 use App\Models\SystemAlert;
+use App\Models\Worker;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
@@ -31,13 +32,15 @@ use Modules\Cleaning\Http\Requests\CleaningBookingRequests\CleaningBookingFilter
 use Modules\Cleaning\Http\Resources\CleaningBookingResource;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Services\CleaningBookingService;
+use Modules\Cleaning\Services\DepositService;
 use Modules\User\Http\Resources\UserCleaningSosResource;
 use Throwable;
 
 final class CleaningBookingController
 {
     public function __construct(
-        private CleaningBookingService $cleaningBookingService
+        private CleaningBookingService $cleaningBookingService,
+        private readonly DepositService $depositService,
     ) {}
 
     public function index(CleaningBookingFilterRequest $request): AnonymousResourceCollection
@@ -56,7 +59,20 @@ final class CleaningBookingController
             ])
             ->paginate($request->get('perPage', 20));
 
-        return CleaningBookingResource::collection($bookings);
+        $collection = CleaningBookingResource::collection($bookings);
+        $worker = $request->user()?->worker;
+
+        if ($worker instanceof Worker) {
+            $worker->loadMissing('deposit');
+            $collection->additional([
+                'dispatchEligibility' => $this->newRequestEligibility(
+                    $worker,
+                    $this->depositService->depositStatusPayload($worker),
+                ),
+            ]);
+        }
+
+        return $collection;
     }
 
     /** @throws Throwable */
@@ -174,6 +190,11 @@ final class CleaningBookingController
     public function accept(CleaningBookingAcceptRequest $request, CleaningBooking $cleaning_booking): CleaningBookingResource|JsonResponse
     {
         $this->ensureWorkerCanActOnBooking($cleaning_booking, requireOwnership: false);
+        $eligibilityResponse = $this->blockedAcceptResponse();
+
+        if ($eligibilityResponse instanceof JsonResponse) {
+            return $eligibilityResponse;
+        }
 
         try {
             $booking = $this->cleaningBookingService->accept($cleaning_booking, $request->validated('roomIds'));
@@ -348,5 +369,90 @@ final class CleaningBookingController
             'timeWarnings',
             'disputes',
         ]);
+    }
+
+    private function blockedAcceptResponse(): ?JsonResponse
+    {
+        $worker = Auth::user()?->worker;
+
+        if (! $worker instanceof Worker) {
+            return null;
+        }
+
+        $worker->loadMissing('deposit');
+        $depositSummary = $this->depositService->depositStatusPayload($worker);
+        $eligibility = $this->newRequestEligibility($worker, $depositSummary);
+
+        if ((bool) $eligibility['canAcceptNewBookings']) {
+            return null;
+        }
+
+        return response()->json([
+            'message' => $eligibility['message'],
+            'code' => 'WORKER_NOT_ELIGIBLE_FOR_NEW_REQUESTS',
+            'errors' => [
+                'workerEligibility' => [
+                    [
+                        'code' => 'WORKER_NOT_ELIGIBLE_FOR_NEW_REQUESTS',
+                        'reasonCode' => $eligibility['reasonCode'],
+                        'message' => $eligibility['message'],
+                        'dispatchEligibility' => $eligibility,
+                    ],
+                ],
+            ],
+            'dispatchEligibility' => $eligibility,
+        ], Response::HTTP_UNPROCESSABLE_ENTITY);
+    }
+
+    /**
+     * @param  array<string, mixed>  $depositSummary
+     * @return array<string, mixed>
+     */
+    private function newRequestEligibility(Worker $worker, array $depositSummary): array
+    {
+        $canReceive = (bool) ($depositSummary['isEligibleForNewRequests'] ?? false);
+        $reasonCode = $this->eligibilityReasonCode($worker, $depositSummary, $canReceive);
+
+        return [
+            'canReceiveNewRequests' => $canReceive,
+            'canAcceptNewBookings' => $canReceive,
+            'reasonCode' => $reasonCode,
+            'message' => $this->eligibilityMessage($reasonCode),
+            'depositSummary' => $depositSummary,
+        ];
+    }
+
+    /** @param array<string, mixed> $depositSummary */
+    private function eligibilityReasonCode(Worker $worker, array $depositSummary, bool $canReceive): string
+    {
+        if (! $worker->is_active) {
+            return 'worker_inactive';
+        }
+
+        if ($worker->is_suspended) {
+            return 'worker_suspended';
+        }
+
+        if ($canReceive) {
+            return 'eligible';
+        }
+
+        if (($depositSummary['exceedanceAmount'] ?? null) !== null) {
+            return 'deposit_below_allowed_balance';
+        }
+
+        return 'trust_score_too_low';
+    }
+
+    private function eligibilityMessage(string $reasonCode): string
+    {
+        return match ($reasonCode) {
+            'eligible' => 'Your account can receive and accept new requests.',
+            'worker_inactive' => 'Your account is inactive. Reactivate your account to receive new requests.',
+            'worker_suspended' => 'Your account is suspended. Please contact support for more details.',
+            'deposit_below_allowed_balance' => 'Your deposit balance is below the allowed limit. Please recharge your deposit account to receive new requests.',
+            'trust_score_too_low' => 'Your trust score is below the minimum required to receive new requests.',
+            default => 'Your account cannot receive new requests right now.',
+        };
     }
 }
