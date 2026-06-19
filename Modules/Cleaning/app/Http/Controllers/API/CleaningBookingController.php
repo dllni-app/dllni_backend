@@ -23,6 +23,7 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Http\Requests\CleaningBookingAcceptRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingCancelRequest;
+use Modules\Cleaning\Http\Requests\CleaningBookingCompleteRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingSosRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingLocationRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingRoomClaimRequest;
@@ -303,12 +304,15 @@ final class CleaningBookingController
     }
 
     /** @throws Throwable */
-    public function complete(CleaningBooking $cleaning_booking): CleaningBookingResource|JsonResponse
+    public function complete(CleaningBookingCompleteRequest $request, CleaningBooking $cleaning_booking): CleaningBookingResource|JsonResponse
     {
         $this->ensureWorkerCanActOnBooking($cleaning_booking, requireOwnership: true);
 
         try {
-            $booking = $this->cleaningBookingService->complete($cleaning_booking);
+            $booking = $this->cleaningBookingService->complete(
+                $cleaning_booking,
+                $request->completionMessage(),
+            );
         } catch (InvalidArgumentException $e) {
             throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
         }
