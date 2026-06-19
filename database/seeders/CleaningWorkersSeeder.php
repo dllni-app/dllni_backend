@@ -59,7 +59,7 @@ final class CleaningWorkersSeeder extends Seeder
         [
             'email' => 'cleaning.worker2@dllni.sy',
             'name' => 'Cleaning Worker 2',
-            'phone' => '+963944100002',
+            'phone' => '+963944100004',
             'first_name' => 'Lina',
             'gender' => GenderPreference::Female->value,
             'bio' => 'Experienced cleaning worker for apartments and offices.',
@@ -88,7 +88,7 @@ final class CleaningWorkersSeeder extends Seeder
         [
             'email' => 'cleaning.worker3@dllni.sy',
             'name' => 'Cleaning Worker 3',
-            'phone' => '+963944100003',
+            'phone' => '+963944100005',
             'first_name' => 'Omar',
             'gender' => GenderPreference::Male->value,
             'bio' => 'Available for deep cleaning and one-time bookings.',
