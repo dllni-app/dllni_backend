@@ -8,8 +8,8 @@ use App\Http\Resources\UserResource;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\ValidationException;
 use Modules\User\Enums\OtpPurpose;
+use Modules\User\Exceptions\AuthFlowException;
 use Modules\User\Http\Requests\LoginVerifyRequest;
 use Modules\User\Services\OtpService;
 
@@ -21,12 +21,18 @@ final class LoginVerifyController
 
     public function __invoke(LoginVerifyRequest $request): JsonResponse
     {
-        $user = User::query()->where('phone', $request->validated('phone'))->firstOrFail();
+        $user = User::query()->where('phone', $request->validated('phone'))->first();
 
-        if (! Hash::check($request->validated('password'), $user->password)) {
-            throw ValidationException::withMessages([
-                'phone' => [__('auth.failed')],
-            ]);
+        if (! $user instanceof User || ! Hash::check($request->validated('password'), $user->password)) {
+            throw AuthFlowException::invalidCredentials();
+        }
+
+        if (! $this->isActive($user)) {
+            throw AuthFlowException::accountNotActive();
+        }
+
+        if ($user->phone_verified_at === null) {
+            throw AuthFlowException::phoneVerificationRequired((string) $user->phone);
         }
 
         $this->otpService->verify(
@@ -49,5 +55,30 @@ final class LoginVerifyController
             'user' => UserResource::make($user->load('worker')),
             'token' => $token,
         ]);
+    }
+
+    private function isActive(User $user): bool
+    {
+        $attributes = $user->getAttributes();
+
+        if (array_key_exists('is_active', $attributes)) {
+            return (bool) $attributes['is_active'];
+        }
+
+        if (array_key_exists('is_activated', $attributes)) {
+            return (bool) $attributes['is_activated'];
+        }
+
+        if (array_key_exists('active', $attributes)) {
+            return (bool) $attributes['active'];
+        }
+
+        $status = $attributes['status'] ?? $attributes['account_status'] ?? null;
+
+        if (is_string($status)) {
+            return in_array(strtolower($status), ['active', 'activated', 'enabled'], true);
+        }
+
+        return true;
     }
 }

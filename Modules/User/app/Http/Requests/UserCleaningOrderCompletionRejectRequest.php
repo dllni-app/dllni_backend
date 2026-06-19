@@ -19,7 +19,21 @@ final class UserCleaningOrderCompletionRejectRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'reason' => ['nullable', 'string', 'max:500'],
+            'reason' => ['nullable', 'string', 'max:1000'],
+            'message' => ['nullable', 'string', 'max:1000'],
         ];
+    }
+
+    public function completionRejectionMessage(): ?string
+    {
+        $message = $this->validated('message') ?? $this->validated('reason');
+
+        if (! is_string($message)) {
+            return null;
+        }
+
+        $message = mb_trim($message);
+
+        return $message !== '' ? $message : null;
     }
 }

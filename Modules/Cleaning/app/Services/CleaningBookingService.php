@@ -398,11 +398,14 @@ final class CleaningBookingService
         return $updated;
     }
 
-    public function complete(CleaningBooking $booking): CleaningBooking
+    public function complete(CleaningBooking $booking, ?string $completionMessage = null): CleaningBooking
     {
         $fromStatus = (string) $booking->status->value;
+        $completionMessage = is_string($completionMessage) && mb_trim($completionMessage) !== ''
+            ? mb_trim($completionMessage)
+            : null;
 
-        $updated = DB::transaction(static function () use ($booking) {
+        $updated = DB::transaction(static function () use ($booking, $completionMessage) {
             if ($booking->status !== CleaningBookingStatus::InProgress) {
                 throw new InvalidArgumentException('Booking must be in progress to mark completion.');
             }
@@ -410,16 +413,22 @@ final class CleaningBookingService
             $booking->update([
                 'status' => CleaningBookingStatus::AwaitingCustomerCompletion,
                 'work_finished_at' => now(),
+                'worker_completion_message' => $completionMessage,
+                'customer_completion_rejection_message' => null,
+                'completion_rejected_at' => null,
             ]);
 
-            return $booking->fresh();
+            return $booking->fresh(['customer', 'worker.user']);
         });
+
+        $expiresAt = now()->addMinutes(30)->toIso8601String();
 
         BroadcastAfterResponse::send(new CleaningOrderAwaitingCustomerCompletion(
             $updated->id,
             $updated->worker_id,
             (string) $updated->status?->value,
-            now()->addMinutes(30)->toIso8601String(),
+            $expiresAt,
+            $updated->worker_completion_message,
         ));
         $this->dispatchTrackingUpdate($updated);
         $this->lifecycleNotifications->notifyCustomer(
@@ -429,6 +438,14 @@ final class CleaningBookingService
             actorRole: 'worker',
             fromStatus: $fromStatus,
             occurredAt: $updated->work_finished_at?->toIso8601String() ?? $updated->updated_at?->toIso8601String(),
+            extraData: [
+                'completionMessage' => $updated->worker_completion_message,
+                'expiresAt' => $expiresAt,
+                'requiresCustomerAction' => true,
+            ],
+            templateContext: [
+                'completion_message' => $updated->worker_completion_message,
+            ],
         );
 
         return $updated;
@@ -494,6 +511,9 @@ final class CleaningBookingService
             'arrivedAt' => $booking->arrived_at?->toIso8601String(),
             'workStartedAt' => $booking->work_started_at?->toIso8601String(),
             'workFinishedAt' => $booking->work_finished_at?->toIso8601String(),
+            'workerCompletionMessage' => $booking->worker_completion_message,
+            'customerCompletionRejectionMessage' => $booking->customer_completion_rejection_message,
+            'completionRejectedAt' => $booking->completion_rejected_at?->toIso8601String(),
             'customerConfirmedAt' => $booking->customer_confirmed_at?->toIso8601String(),
             'cancelledAt' => $booking->cancelled_at?->toIso8601String(),
             'updatedAt' => now()->toIso8601String(),

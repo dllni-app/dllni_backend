@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Modules\User\Http\Requests;
+namespace Modules\Cleaning\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-final class UserCleaningOrderCompletionExtendTimeRequest extends FormRequest
+final class CleaningBookingCompleteRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -19,14 +19,14 @@ final class UserCleaningOrderCompletionExtendTimeRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'additionalMinutes' => ['required', 'integer', 'min:0', 'max:90'],
-            'message' => ['nullable', 'string', 'max:1000'],
+            'completionMessage' => ['nullable', 'string', 'max:1000'],
+            'completion_message' => ['nullable', 'string', 'max:1000'],
         ];
     }
 
-    public function customerMessage(): ?string
+    public function completionMessage(): ?string
     {
-        $message = $this->validated('message');
+        $message = $this->validated('completionMessage') ?? $this->validated('completion_message');
 
         if (! is_string($message)) {
             return null;

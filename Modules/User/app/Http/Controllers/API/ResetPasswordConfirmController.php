@@ -26,13 +26,12 @@ final class ResetPasswordConfirmController
 
         $user = User::query()->where('phone', $request->validated('phone'))->firstOrFail();
         $user->forceFill(['password' => $request->validated('password')])->save();
-
-        $user->tokens()->where('name', 'user-api')->delete();
-        $token = $user->createToken('user-api')->plainTextToken;
+        $user->tokens()->delete();
 
         return response()->json([
-            'message' => 'تم إعادة تعيين كلمة المرور.',
-            'token' => $token,
+            'success' => true,
+            'code' => 'PASSWORD_RESET_SUCCESS',
+            'message' => 'تم تغيير كلمة المرور بنجاح. يمكنك تسجيل الدخول الآن.',
         ]);
     }
 }

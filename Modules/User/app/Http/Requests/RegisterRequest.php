@@ -23,7 +23,7 @@ final class RegisterRequest extends FormRequest
     {
         return [
             'name' => 'required|string|max:255',
-            'phone' => 'required|string|max:32|unique:users,phone',
+            'phone' => 'required|string|max:32',
             'password' => 'required|string|min:8|max:255',
         ];
     }

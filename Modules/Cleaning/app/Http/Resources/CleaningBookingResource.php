@@ -7,6 +7,7 @@ namespace Modules\Cleaning\Http\Resources;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Arr;
+use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingRoom;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
@@ -74,6 +75,10 @@ final class CleaningBookingResource extends JsonResource
             'termsAccepted' => $this->terms_accepted,
             'workStartedAt' => $this->work_started_at?->toDateTimeString(),
             'workFinishedAt' => $this->work_finished_at?->toDateTimeString(),
+            'workerCompletionMessage' => $this->worker_completion_message,
+            'customerCompletionRejectionMessage' => $this->customer_completion_rejection_message,
+            'completionRejectedAt' => $this->completion_rejected_at?->toIso8601String(),
+            'completionRequest' => $this->completionRequestPayload(),
             'startedTravelAt' => $this->started_travel_at?->toDateTimeString(),
             'arrivedAt' => $this->arrived_at?->toDateTimeString(),
             'customerConfirmedAt' => $this->customer_confirmed_at?->toDateTimeString(),
@@ -293,6 +298,40 @@ final class CleaningBookingResource extends JsonResource
         }
 
         return $this->serializeWorkerAssignment($assignment);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function completionRequestPayload(): array
+    {
+        $status = $this->status instanceof CleaningBookingStatus
+            ? $this->status
+            : CleaningBookingStatus::tryFrom((string) $this->status);
+        $isAwaitingCustomerConfirmation = $status === CleaningBookingStatus::AwaitingCustomerCompletion;
+
+        return [
+            'isAwaitingCustomerConfirmation' => $isAwaitingCustomerConfirmation,
+            'message' => $this->worker_completion_message,
+            'requestedAt' => $this->work_finished_at?->toIso8601String(),
+            'expiresAt' => $isAwaitingCustomerConfirmation && $this->work_finished_at !== null
+                ? $this->work_finished_at->copy()->addMinutes(30)->toIso8601String()
+                : null,
+            'actions' => [
+                'canConfirm' => $isAwaitingCustomerConfirmation,
+                'canReject' => $isAwaitingCustomerConfirmation,
+                'canRequestExtension' => $isAwaitingCustomerConfirmation,
+            ],
+        ];
+    }
+
+    private function workerAssignmentForWorker(int $workerId): ?CleaningBookingWorkerAssignment
+    {
+        $assignment = $this->relationLoaded('workerAssignments')
+            ? $this->workerAssignments->firstWhere('worker_id', $workerId)
+            : $this->workerAssignments()->where('worker_id', $workerId)->first();
+
+        return $assignment instanceof CleaningBookingWorkerAssignment ? $assignment : null;
     }
 
     private function workerOrderStatus(?array $myAssignment, ?string $orderStatus): ?string

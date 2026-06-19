@@ -68,6 +68,7 @@ final class WorkerHomepageController
                 ],
                 'isEligibleForNewRequests' => false,
                 'depositSummary' => null,
+                'dispatchEligibility' => null,
                 'bookingsWeeklyChart' => $this->emptyBookingsWeeklyChart($weekStart, $dayLabels),
                 'invoicesFourWeeksChart' => $this->emptyInvoicesFourWeeksChart($fourWeekStart),
             ]);
@@ -227,6 +228,8 @@ final class WorkerHomepageController
 
         $worker->loadMissing('deposit');
         $depositSummary = $this->depositService->depositStatusPayload($worker);
+        $dispatchEligibility = $this->newRequestEligibility($worker, $depositSummary);
+        $canReceiveNewRequests = (bool) $dispatchEligibility['canReceiveNewRequests'];
 
         return response()->json([
             'date' => $today->format('Y-m-d'),
@@ -239,10 +242,11 @@ final class WorkerHomepageController
             'totalEarnings' => $totalEarnings,
             'todayEarnings' => $todayEarnings,
             'earningsChangePercent' => $earningsChangePercent,
-            'newOrdersCount' => $newOrdersCount,
+            'newOrdersCount' => $canReceiveNewRequests ? $newOrdersCount : 0,
             'pendingExtensionRequestsCount' => $pendingExtensionRequestsCount,
-            'isEligibleForNewRequests' => $depositSummary['isEligibleForNewRequests'],
+            'isEligibleForNewRequests' => $canReceiveNewRequests,
             'depositSummary' => $depositSummary,
+            'dispatchEligibility' => $dispatchEligibility,
             'amountSummary' => [
                 'period' => 'last_4_weeks',
                 'currency' => 'SYP',
@@ -338,5 +342,57 @@ final class WorkerHomepageController
     private function bookingGrossAmount(CleaningBooking $booking): float
     {
         return (float) ($booking->total_price ?? 0);
+    }
+
+    /**
+     * @param  array<string, mixed>  $depositSummary
+     * @return array<string, mixed>
+     */
+    private function newRequestEligibility(object $worker, array $depositSummary): array
+    {
+        $canReceive = (bool) ($depositSummary['isEligibleForNewRequests'] ?? false);
+        $reasonCode = $this->eligibilityReasonCode($worker, $depositSummary, $canReceive);
+
+        return [
+            'canReceiveNewRequests' => $canReceive,
+            'canAcceptNewBookings' => $canReceive,
+            'reasonCode' => $reasonCode,
+            'message' => $this->eligibilityMessage($reasonCode),
+            'depositSummary' => $depositSummary,
+        ];
+    }
+
+    /** @param array<string, mixed> $depositSummary */
+    private function eligibilityReasonCode(object $worker, array $depositSummary, bool $canReceive): string
+    {
+        if (! $worker->is_active) {
+            return 'worker_inactive';
+        }
+
+        if ($worker->is_suspended) {
+            return 'worker_suspended';
+        }
+
+        if ($canReceive) {
+            return 'eligible';
+        }
+
+        if (($depositSummary['exceedanceAmount'] ?? null) !== null) {
+            return 'deposit_below_allowed_balance';
+        }
+
+        return 'trust_score_too_low';
+    }
+
+    private function eligibilityMessage(string $reasonCode): string
+    {
+        return match ($reasonCode) {
+            'eligible' => 'Your account can receive and accept new requests.',
+            'worker_inactive' => 'Your account is inactive. Reactivate your account to receive new requests.',
+            'worker_suspended' => 'Your account is suspended. Please contact support for more details.',
+            'deposit_below_allowed_balance' => 'Your deposit balance is below the allowed limit. Please recharge your deposit account to receive new requests.',
+            'trust_score_too_low' => 'Your trust score is below the minimum required to receive new requests.',
+            default => 'Your account cannot receive new requests right now.',
+        };
     }
 }
