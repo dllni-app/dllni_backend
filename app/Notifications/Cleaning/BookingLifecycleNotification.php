@@ -15,6 +15,10 @@ final class BookingLifecycleNotification extends Notification implements ShouldQ
 {
     use Queueable;
 
+    /**
+     * @param  array<string, mixed>  $extraData
+     * @param  array<string, scalar|null>  $templateContext
+     */
     public function __construct(
         private readonly CleaningBooking $booking,
         private readonly string $canonicalType,
@@ -24,6 +28,8 @@ final class BookingLifecycleNotification extends Notification implements ShouldQ
         private readonly ?string $action = null,
         private readonly ?string $deepLinkTarget = null,
         private readonly ?string $occurredAt = null,
+        private readonly array $extraData = [],
+        private readonly array $templateContext = [],
     ) {
         $this->afterCommit();
     }
@@ -43,7 +49,7 @@ final class BookingLifecycleNotification extends Notification implements ShouldQ
     {
         return $this->payloadBuilder()->makeDatabasePayload(
             canonicalType: $this->canonicalType,
-            templateContext: $this->templateContext(),
+            templateContext: $this->resolvedTemplateContext(),
             extraData: $this->extraData(),
         );
     }
@@ -52,7 +58,7 @@ final class BookingLifecycleNotification extends Notification implements ShouldQ
     {
         return $this->payloadBuilder()->makeFcmMessage(
             canonicalType: $this->canonicalType,
-            templateContext: $this->templateContext(),
+            templateContext: $this->resolvedTemplateContext(),
             extraData: $this->extraData(),
         );
     }
@@ -60,16 +66,16 @@ final class BookingLifecycleNotification extends Notification implements ShouldQ
     /**
      * @return array<string, scalar|null>
      */
-    private function templateContext(): array
+    private function resolvedTemplateContext(): array
     {
-        return [
+        return array_merge([
             'booking_number' => (string) $this->booking->booking_number,
             'status' => (string) $this->booking->status->value,
             'from_status' => $this->fromStatus,
             'action' => $this->action,
             'actor_role' => $this->actorRole,
             'target_role' => $this->targetRole,
-        ];
+        ], $this->templateContext);
     }
 
     /**
@@ -82,7 +88,7 @@ final class BookingLifecycleNotification extends Notification implements ShouldQ
             ? 'cleaning_booking_details'
             : 'cleaning_order_details');
 
-        return array_filter([
+        return array_filter(array_merge([
             'bookingId' => (int) $this->booking->id,
             'orderId' => (int) $this->booking->id,
             'status' => (string) $this->booking->status->value,
@@ -93,7 +99,7 @@ final class BookingLifecycleNotification extends Notification implements ShouldQ
             'actorRole' => $this->actorRole,
             'targetRole' => $this->targetRole,
             'bookingNumber' => (string) $this->booking->booking_number,
-        ], fn (mixed $value): bool => $value !== null);
+        ], $this->extraData), fn (mixed $value): bool => $value !== null);
     }
 
     private function payloadBuilder(): NotificationPayloadBuilder
