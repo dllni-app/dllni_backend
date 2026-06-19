@@ -33,6 +33,7 @@ final class WorkerAccountStatusController
             'suspendedUntil' => $worker->suspended_until?->toDateTimeString(),
             'isEligibleForNewRequests' => $depositSummary['isEligibleForNewRequests'],
             'depositSummary' => $depositSummary,
+            'workerCanReceiveRequests' => $depositSummary['isEligibleForNewRequests'],
         ]);
     }
 
