@@ -39,7 +39,7 @@ final class RegisterController
             throw AuthFlowException::phoneVerificationRequired(
                 (string) $existingUser->phone,
                 [
-                    'next_action' => 'verify_phone',
+                    'next_action' => 'send_otp_then_verify_phone',
                     'otp_sent' => true,
                     'expiresAt' => $expiresAt->toIso8601String(),
                 ],
