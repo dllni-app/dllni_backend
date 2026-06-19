@@ -29,12 +29,13 @@ final class UserCleaningOrderCompletionExtendTimeController
         $updated = $result['booking'];
 
         if ($note !== null) {
-            CleaningTimeWarning::query()
+            $warning = CleaningTimeWarning::query()
                 ->where('booking_id', $updated->id)
                 ->where('booking_type', $updated->getMorphClass())
                 ->latest('id')
-                ->limit(1)
-                ->update(['customer_message' => $note]);
+                ->first();
+
+            $warning?->update(['customer_message' => $note]);
 
             BroadcastAfterResponse::send(new CompletionDecisionMade(
                 $updated->id,
