@@ -220,3 +220,94 @@ Route::prefix('v1/user')->group(function (): void {
         Route::get('favorites/restaurants', UserRestaurantFavoritesIndexController::class);
         Route::post('favorites/restaurants/{restaurant}', UserRestaurantFavoriteStoreController::class);
         Route::delete('favorites/restaurants/{restaurant}', UserRestaurantFavoriteDestroyController::class);
+
+        Route::get('favorites/supermarket/stores', UserSupermarketStoreFavoritesIndexController::class);
+        Route::post('favorites/supermarket/stores/{store}', UserSupermarketStoreFavoriteStoreController::class);
+        Route::delete('favorites/supermarket/stores/{store}', UserSupermarketStoreFavoriteDestroyController::class);
+
+        Route::get('favorites/supermarket/products', UserSupermarketProductFavoritesIndexController::class);
+        Route::post('favorites/supermarket/products/{product}', UserSupermarketProductFavoriteStoreController::class);
+        Route::delete('favorites/supermarket/products/{product}', UserSupermarketProductFavoriteDestroyController::class);
+
+        Route::get('favorites/products', UserProductFavoritesIndexController::class);
+        Route::post('favorites/products/{product}', UserProductFavoriteStoreController::class);
+        Route::delete('favorites/products/{product}', UserProductFavoriteDestroyController::class);
+
+        Route::get('cleaning/orders', UserCleaningOrdersController::class);
+        Route::post('cleaning/orders', UserCleaningOrderStoreController::class);
+        Route::post('cleaning/orders/estimate-size', UserCleaningOrderEstimateSizeController::class);
+        Route::get('cleaning/orders/previous-workers', UserCleaningPreviousWorkersController::class);
+        Route::post('cleaning/orders/estimate-price', UserCleaningOrderEstimatePriceController::class);
+        Route::get('cleaning/orders/{order}', UserCleaningOrderShowController::class);
+        Route::patch('cleaning/orders/{order}', UserCleaningOrderUpdateController::class);
+        Route::patch('cleaning/orders/{order}/room-assignments', UserCleaningOrderRoomAssignmentsController::class);
+        Route::post('cleaning/orders/{order}/cancel', UserCleaningOrderCancelController::class);
+        Route::post('cleaning/orders/{order}/sos', UserCleaningOrderSosController::class);
+        Route::post('cleaning/orders/{order}/start-verification/confirm', UserCleaningOrderStartVerificationConfirmController::class)
+            ->middleware('throttle:cleaning-start-verification');
+        Route::post('cleaning/orders/{order}/completion/confirm', UserCleaningOrderCompletionConfirmController::class);
+        Route::post('cleaning/orders/{order}/completion/reject', UserCleaningOrderCompletionRejectController::class);
+        Route::post('cleaning/orders/{order}/completion/extend-time', UserCleaningOrderCompletionExtendTimeController::class);
+        Route::post('cleaning/orders/{order}/review', UserCleaningOrderReviewController::class);
+
+        Route::get('orders', UserOrdersIndexController::class);
+        Route::get('orders/slots', UserOrderSlotsController::class);
+        Route::get('orders/{section}/{orderId}', UserOrderShowController::class);
+        Route::get('orders/{section}/{orderId}/tracking', UserOrderTrackingController::class);
+        Route::post('orders/{section}/{orderId}/cancel', UserOrderCancelController::class);
+        Route::post('orders/{section}/{orderId}/reorder', UserOrderReorderController::class);
+        Route::patch('orders/{section}/{orderId}/schedule', UserOrderScheduleController::class);
+
+        Route::get('restaurants/cart', UserRestaurantCartShowController::class);
+        Route::post('restaurants/cart/items', UserRestaurantCartItemStoreController::class);
+        Route::patch('restaurants/cart/items/{itemId}', UserRestaurantCartItemUpdateController::class);
+        Route::delete('restaurants/cart/items/{itemId}', UserRestaurantCartItemDestroyController::class);
+        Route::get('restaurants/cart/products-count', RestaurantCartProductsCountController::class);
+        Route::post('restaurants/checkout', UserRestaurantCheckoutController::class);
+        Route::post('restaurants/checkout/preview', UserRestaurantCheckoutPreviewController::class);
+        Route::post('restaurants/orders', UserRestaurantOrderStoreController::class);
+
+        Route::get('supermarket/cart', UserSupermarketCartShowController::class);
+        Route::post('supermarket/cart/items', UserSupermarketCartItemStoreController::class);
+        Route::patch('supermarket/cart/items/{itemId}', UserSupermarketCartItemUpdateController::class);
+        Route::delete('supermarket/cart/items/{itemId}', UserSupermarketCartItemDestroyController::class);
+        Route::get('supermarket/master-products/search', UserSupermarketMasterProductSearchController::class);
+        Route::get('supermarket/shopping-lists', UserSupermarketShoppingListIndexController::class);
+        Route::post('supermarket/shopping-lists', UserSupermarketShoppingListStoreController::class);
+        Route::get('supermarket/shopping-lists/{shoppingList}', UserSupermarketShoppingListShowController::class)->whereNumber('shoppingList');
+        Route::patch('supermarket/shopping-lists/{shoppingList}', UserSupermarketShoppingListUpdateController::class)->whereNumber('shoppingList');
+        Route::delete('supermarket/shopping-lists/{shoppingList}', UserSupermarketShoppingListDestroyController::class)->whereNumber('shoppingList');
+        Route::post('supermarket/shopping-lists/{shoppingList}/add-to-cart', UserSupermarketShoppingListAddToCartController::class)->whereNumber('shoppingList');
+        Route::post('supermarket/shopping-lists/{shoppingList}/items', UserSupermarketShoppingListItemStoreController::class)->whereNumber('shoppingList');
+        Route::patch('supermarket/shopping-lists/{shoppingList}/items/{item}', UserSupermarketShoppingListItemUpdateController::class)->whereNumber(['shoppingList', 'item']);
+        Route::delete('supermarket/shopping-lists/{shoppingList}/items/{item}', UserSupermarketShoppingListItemDestroyController::class)->whereNumber(['shoppingList', 'item']);
+        Route::post('supermarket/checkout/preview', UserSupermarketCheckoutPreviewController::class);
+        Route::post('supermarket/orders', UserSupermarketOrderStoreController::class);
+        Route::get('supermarket/orders/{order}/status', SmOrderStatusController::class)->whereNumber('order');
+
+        Route::get('restaurants/luck-box/options', RestaurantLuckBoxOptionsController::class);
+        Route::post('restaurants/luck-box/suggest', RestaurantLuckBoxSuggestController::class);
+        Route::get('restaurants/home/latest-ordered-products', UserRestaurantHomeLatestOrderedProductsController::class);
+        Route::post('restaurants/home/latest-ordered-products/reorder', UserRestaurantHomeReorderLatestOrderProductsController::class);
+
+        Route::post('restaurants/votes', RestaurantGroupVoteStoreController::class);
+        Route::get('restaurants/votes/active', RestaurantGroupVoteMyActiveController::class);
+        Route::post('restaurants/votes/{vote}/invite', RestaurantGroupVoteInviteUsersController::class)->whereNumber('vote');
+        Route::post('restaurants/votes/{vote}/ballots', RestaurantGroupVoteCastBallotController::class)->whereNumber('vote');
+        Route::post('restaurants/votes/{vote}/end', RestaurantGroupVoteEndController::class)->whereNumber('vote');
+
+        Route::post('restaurants/group-orders', RestaurantGroupOrderStoreController::class);
+        Route::post('restaurants/group-orders/join', RestaurantGroupOrderJoinController::class);
+        Route::get('restaurants/group-orders/active', RestaurantGroupOrderMyActiveController::class);
+        Route::get('restaurants/group-orders/{groupOrder}', RestaurantGroupOrderShowController::class)
+            ->whereNumber('groupOrder')
+            ->middleware(RedirectBrowserDeepLinkApiRequests::class);
+        Route::post('restaurants/group-orders/{groupOrder}/items', RestaurantGroupOrderItemStoreController::class)->whereNumber('groupOrder');
+        Route::patch('restaurants/group-orders/{groupOrder}/items/{itemId}', RestaurantGroupOrderItemUpdateController::class)->whereNumber(['groupOrder', 'itemId']);
+        Route::delete('restaurants/group-orders/{groupOrder}/items/{itemId}', RestaurantGroupOrderItemDestroyController::class)->whereNumber(['groupOrder', 'itemId']);
+        Route::post('restaurants/group-orders/{groupOrder}/submit', RestaurantGroupOrderSubmitController::class)->whereNumber('groupOrder');
+        Route::post('restaurants/group-orders/{groupOrder}/unsubmit', RestaurantGroupOrderUnsubmitController::class)->whereNumber('groupOrder');
+        Route::post('restaurants/group-orders/{groupOrder}/cancel', RestaurantGroupOrderCancelController::class)->whereNumber('groupOrder');
+        Route::post('restaurants/group-orders/{groupOrder}/place', RestaurantGroupOrderPlaceController::class)->whereNumber('groupOrder');
+    });
+});
