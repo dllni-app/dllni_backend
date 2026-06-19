@@ -91,21 +91,29 @@ trait CleaningBookingFilterQuery
         $worker = auth()->user()?->worker;
 
         if (! $worker) {
-            return $query->whereRaw('1 = 0');
+            return $query->where('id', -1);
         }
+
+        $canReceiveNewRequests = (bool) $worker->is_active && ! (bool) $worker->is_suspended;
 
         $preferredWorkType = $worker->preferred_work_type instanceof WorkerPreferredWorkType
             ? $worker->preferred_work_type
             : WorkerPreferredWorkType::tryFrom((string) ($worker->preferred_work_type ?? WorkerPreferredWorkType::Both->value)) ?? WorkerPreferredWorkType::Both;
 
-        return $query->where(function (Builder $q) use ($worker, $preferredWorkType): void {
+        return $query->where(function (Builder $q) use ($worker, $preferredWorkType, $canReceiveNewRequests): void {
             $q->where('worker_id', $worker->id)
                 ->orWhereHas('workerAssignments', function (Builder $assignments) use ($worker): void {
                     $assignments
                         ->where('worker_id', $worker->id)
                         ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
                 })
-                ->orWhere(function (Builder $pending) use ($worker, $preferredWorkType): void {
+                ->orWhere(function (Builder $pending) use ($worker, $preferredWorkType, $canReceiveNewRequests): void {
+                    if (! $canReceiveNewRequests) {
+                        $pending->where('id', -1);
+
+                        return;
+                    }
+
                     $pending->where('status', CleaningBookingStatus::Pending)
                         ->whereNull('worker_id')
                         ->when(
