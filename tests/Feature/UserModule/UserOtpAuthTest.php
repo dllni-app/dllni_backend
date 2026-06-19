@@ -90,8 +90,9 @@ it('returns login next action when registering an already verified phone', funct
 
 it('resends verification flow when registering an existing unverified phone', function (): void {
     $phone = '+963944000113';
+    Queue::fake();
 
-    User::factory()->create([
+    $user = User::factory()->create([
         'phone' => $phone,
         'phone_verified_at' => null,
         'password' => bcrypt('password123'),
@@ -110,12 +111,31 @@ it('resends verification flow when registering an existing unverified phone', fu
         ->assertJsonPath('data.phone', $phone)
         ->assertJsonPath('data.next_action', 'send_otp_then_verify_phone')
         ->assertJsonPath('data.otp_sent', true);
+
+    $smsMessage = SmsMessage::query()
+        ->where('smsable_type', $user->getMorphClass())
+        ->where('smsable_id', $user->id)
+        ->firstOrFail();
+
+    $this->assertDatabaseHas('sms_messages', [
+        'id' => $smsMessage->id,
+        'provider' => 'mtn',
+        'gsm' => '963944000113',
+        'status' => 'pending',
+        'lang' => 0,
+    ]);
+
+    Queue::assertPushed(SendRegistrationSmsJob::class, function (SendRegistrationSmsJob $job) use ($smsMessage): bool {
+        return $job->smsMessageId === $smsMessage->id;
+    });
 });
 
 it('resets password using otp flow', function (): void {
     // Arrange
     $phone = '+963944000333';
-    User::factory()->phoneVerified()->create([
+    Queue::fake();
+
+    $user = User::factory()->phoneVerified()->create([
         'phone' => $phone,
         'password' => bcrypt('old-password'),
     ]);
@@ -133,6 +153,15 @@ it('resets password using otp flow', function (): void {
         ->assertJsonPath('code', 'PASSWORD_RESET_OTP_SENT')
         ->assertJsonPath('data.phone', $phone)
         ->assertJsonPath('data.next_action', 'verify_reset_otp');
+
+    $smsMessage = SmsMessage::query()
+        ->where('smsable_type', $user->getMorphClass())
+        ->where('smsable_id', $user->id)
+        ->firstOrFail();
+
+    Queue::assertPushed(SendRegistrationSmsJob::class, function (SendRegistrationSmsJob $job) use ($smsMessage): bool {
+        return $job->smsMessageId === $smsMessage->id;
+    });
 
     // Arrange (get otp)
     $otp = Cache::get(sprintf('user_otp_plain:%s:%s', 'reset_password', $phone));
@@ -169,8 +198,9 @@ it('rejects login with invalid credentials using Arabic API code', function (): 
 
 it('rejects login when the phone is not verified', function (): void {
     $phone = '+963944000441';
+    Queue::fake();
 
-    User::factory()->create([
+    $user = User::factory()->create([
         'phone' => $phone,
         'phone_verified_at' => null,
         'password' => bcrypt('secret123'),
@@ -187,6 +217,15 @@ it('rejects login when the phone is not verified', function (): void {
         ->assertJsonPath('code', 'PHONE_VERIFICATION_REQUIRED')
         ->assertJsonPath('data.phone', $phone)
         ->assertJsonPath('data.next_action', 'verify_phone');
+
+    $smsMessage = SmsMessage::query()
+        ->where('smsable_type', $user->getMorphClass())
+        ->where('smsable_id', $user->id)
+        ->firstOrFail();
+
+    Queue::assertPushed(SendRegistrationSmsJob::class, function (SendRegistrationSmsJob $job) use ($smsMessage): bool {
+        return $job->smsMessageId === $smsMessage->id;
+    });
 
     expect($response->json('token'))->toBeNull();
 });
