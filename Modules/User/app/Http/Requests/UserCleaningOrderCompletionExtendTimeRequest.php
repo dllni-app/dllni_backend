@@ -20,6 +20,20 @@ final class UserCleaningOrderCompletionExtendTimeRequest extends FormRequest
     {
         return [
             'additionalMinutes' => ['required', 'integer', 'min:0', 'max:90'],
+            'message' => ['nullable', 'string', 'max:1000'],
         ];
+    }
+
+    public function customerMessage(): ?string
+    {
+        $message = $this->validated('message');
+
+        if (! is_string($message)) {
+            return null;
+        }
+
+        $message = mb_trim($message);
+
+        return $message !== '' ? $message : null;
     }
 }
