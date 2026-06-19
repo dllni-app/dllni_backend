@@ -108,7 +108,7 @@ it('resends verification flow when registering an existing unverified phone', fu
         ->assertJsonPath('success', false)
         ->assertJsonPath('code', 'PHONE_VERIFICATION_REQUIRED')
         ->assertJsonPath('data.phone', $phone)
-        ->assertJsonPath('data.next_action', 'verify_phone')
+        ->assertJsonPath('data.next_action', 'send_otp_then_verify_phone')
         ->assertJsonPath('data.otp_sent', true);
 });
 
@@ -126,7 +126,13 @@ it('resets password using otp flow', function (): void {
     ]);
 
     // Assert (always ok)
-    $requestResponse->assertOk()->assertJsonStructure(['message', 'expiresAt']);
+    $requestResponse
+        ->assertOk()
+        ->assertJsonStructure(['success', 'code', 'message', 'data', 'expiresAt'])
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('code', 'PASSWORD_RESET_OTP_SENT')
+        ->assertJsonPath('data.phone', $phone)
+        ->assertJsonPath('data.next_action', 'verify_reset_otp');
 
     // Arrange (get otp)
     $otp = Cache::get(sprintf('user_otp_plain:%s:%s', 'reset_password', $phone));
