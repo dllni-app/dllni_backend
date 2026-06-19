@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Services\DepositService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 use Spatie\QueryBuilder\AllowedFilter;
 use Spatie\QueryBuilder\AllowedSort;
@@ -94,7 +95,8 @@ trait CleaningBookingFilterQuery
             return $query->where('id', -1);
         }
 
-        $canReceiveNewRequests = (bool) $worker->is_active && ! (bool) $worker->is_suspended;
+        $worker->loadMissing('deposit');
+        $canReceiveNewRequests = app(DepositService::class)->isWorkerEligibleForNewRequests($worker);
 
         $preferredWorkType = $worker->preferred_work_type instanceof WorkerPreferredWorkType
             ? $worker->preferred_work_type
