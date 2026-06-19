@@ -10,6 +10,10 @@ use Modules\Cleaning\Models\CleaningBooking;
 
 final class CleaningLifecycleNotificationService
 {
+    /**
+     * @param  array<string, mixed>  $extraData
+     * @param  array<string, scalar|null>  $templateContext
+     */
     public function notifyCustomer(
         CleaningBooking $booking,
         string $canonicalType,
@@ -18,6 +22,8 @@ final class CleaningLifecycleNotificationService
         ?string $fromStatus = null,
         ?string $deepLinkTarget = null,
         ?string $occurredAt = null,
+        array $extraData = [],
+        array $templateContext = [],
     ): void {
         $customer = $booking->customer;
 
@@ -34,9 +40,15 @@ final class CleaningLifecycleNotificationService
             action: $action,
             deepLinkTarget: $deepLinkTarget ?? 'cleaning_order_details',
             occurredAt: $occurredAt,
+            extraData: $extraData,
+            templateContext: $templateContext,
         ));
     }
 
+    /**
+     * @param  array<string, mixed>  $extraData
+     * @param  array<string, scalar|null>  $templateContext
+     */
     public function notifyWorker(
         CleaningBooking $booking,
         string $canonicalType,
@@ -45,6 +57,8 @@ final class CleaningLifecycleNotificationService
         ?string $fromStatus = null,
         ?string $deepLinkTarget = null,
         ?string $occurredAt = null,
+        array $extraData = [],
+        array $templateContext = [],
     ): void {
         $workerUser = $booking->worker?->user;
 
@@ -61,6 +75,8 @@ final class CleaningLifecycleNotificationService
             action: $action,
             deepLinkTarget: $deepLinkTarget ?? 'cleaning_booking_details',
             occurredAt: $occurredAt,
+            extraData: $extraData,
+            templateContext: $templateContext,
         ));
     }
 }
