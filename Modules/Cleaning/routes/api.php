@@ -7,6 +7,7 @@ use App\Http\Controllers\API\UserNotificationController;
 use Illuminate\Support\Facades\Route;
 use Modules\Cleaning\Http\Controllers\API\CleaningBillingPolicyController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingController;
+use Modules\Cleaning\Http\Controllers\API\CleaningBookingDeliveryFeeController;
 use Modules\Cleaning\Http\Controllers\API\CleaningServiceController;
 use Modules\Cleaning\Http\Controllers\API\CleaningTimeWarningController;
 use Modules\Cleaning\Http\Controllers\API\DashboardOverviewController;
@@ -79,6 +80,7 @@ Route::prefix('v1')->group(function () {
         });
 
         // Booking endpoints (ordering)
+        Route::post('cleaning-bookings/{cleaning_booking}/delivery-fee', CleaningBookingDeliveryFeeController::class)->name('cleaning-bookings.delivery-fee');
         Route::post('cleaning-bookings/{cleaning_booking}/accept', [CleaningBookingController::class, 'accept'])->name('cleaning-bookings.accept');
         Route::post('cleaning-bookings/{cleaning_booking}/rooms/claim', [CleaningBookingController::class, 'claimRooms'])->name('cleaning-bookings.rooms.claim');
         Route::post('cleaning-bookings/{cleaning_booking}/reject', [CleaningBookingController::class, 'reject'])->name('cleaning-bookings.reject');

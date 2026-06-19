@@ -22,10 +22,13 @@ final class CleaningBookingResource extends JsonResource
     public function toArray(Request $request): array
     {
         $normalizedPropertyDetails = $this->normalizedPropertyDetails();
+        $propertyDetailsWithLabels = $this->propertyDetailsWithLabels($normalizedPropertyDetails);
         $myAssignment = $this->serializeMyAssignment($request);
         $orderStatus = $this->status?->value ?? $this->status;
         $workerOrderStatus = $this->workerOrderStatus($myAssignment, $orderStatus);
         $teamSummary = $this->workerAcceptanceSummary();
+        $address = $this->addressPayload($normalizedPropertyDetails);
+        $servicePrice = (float) ($this->base_price ?? 0);
 
         return [
             'id' => $this->id,
@@ -33,6 +36,7 @@ final class CleaningBookingResource extends JsonResource
             'workerId' => $this->worker_id,
             'preferredWorkerId' => $this->preferred_worker_id,
             'assignmentMode' => $this->resolvedAssignmentMode(),
+            'assignmentModeLabel' => $this->enumLabel('assignment_mode', $this->resolvedAssignmentMode()),
             'numberOfWorkers' => (int) ($this->number_of_workers ?? 1),
             'workerAcceptance' => $this->workerAcceptanceSummary(),
             'genderPreference' => $this->gender_preference?->value ?? $this->gender_preference,
@@ -40,8 +44,11 @@ final class CleaningBookingResource extends JsonResource
             'billingPolicyId' => $this->billing_policy_id,
             'bookingNumber' => $this->booking_number,
             'status' => $orderStatus,
+            'statusLabel' => $this->enumLabel('booking_status', $orderStatus),
             'order_status' => $orderStatus,
+            'order_status_label' => $this->enumLabel('booking_status', $orderStatus),
             'worker_order_status' => $workerOrderStatus,
+            'worker_order_status_label' => $this->enumLabel('booking_status', $workerOrderStatus),
             'type' => $this->property_type === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE ? 'events' : 'cleaning',
             'required_workers_count' => $teamSummary['required'],
             'accepted_workers_count' => $teamSummary['accepted'],
@@ -49,11 +56,15 @@ final class CleaningBookingResource extends JsonResource
             'start_approved_workers_count' => $teamSummary['startApproved'],
             'not_start_approved_workers_count' => $teamSummary['notStartApproved'],
             'propertyType' => $this->property_type,
-            'propertyDetails' => $normalizedPropertyDetails,
+            'propertyTypeLabel' => $this->enumLabel('property_type', $this->property_type),
+            'propertyDetails' => $propertyDetailsWithLabels,
+            'property_details' => $propertyDetailsWithLabels,
             'cleaning_services' => $this->normalizedCleaningServices(),
+            'services' => $this->servicesPayload(),
+            'address' => $address,
             'addressLatitude' => $this->address_latitude !== null ? (float) $this->address_latitude : null,
             'addressLongitude' => $this->address_longitude !== null ? (float) $this->address_longitude : null,
-            'locationName' => Arr::get($normalizedPropertyDetails, 'location_name') ?? Arr::get($normalizedPropertyDetails, 'address') ?? $this->property_type,
+            'locationName' => $address['fullAddress'] ?? Arr::get($normalizedPropertyDetails, 'location_name') ?? $this->property_type,
             'numberOfRooms' => Arr::get($normalizedPropertyDetails, 'bedrooms') ?? Arr::get($normalizedPropertyDetails, 'rooms'),
             'numberOfKitchens' => Arr::get($normalizedPropertyDetails, 'kitchens', 0),
             'numberOfBalconies' => Arr::get($normalizedPropertyDetails, 'balconies', 0),
@@ -62,16 +73,20 @@ final class CleaningBookingResource extends JsonResource
             'scheduledDate' => $this->scheduled_date?->format('Y-m-d'),
             'scheduledTime' => $this->scheduled_time,
             'totalHours' => (float) $this->total_hours,
-            'basePrice' => (float) $this->base_price,
+            'basePrice' => $servicePrice,
+            'servicePrice' => $servicePrice,
+            'service_price' => $servicePrice,
             'addonsTotal' => (float) $this->addons_total,
             'extensionFeeTotal' => (float) ($this->extension_fee_total ?? 0),
             'extendedTimeRanges' => app(CleaningExtendedTimePricingService::class)->ranges(),
             'travelFee' => (float) $this->travel_fee,
+            'deliveryFee' => (float) $this->travel_fee,
             'travelDistanceKm' => $this->travel_distance_km !== null ? (float) $this->travel_distance_km : null,
             'adminMargin' => (float) ($this->admin_margin_amount ?? 0),
             'isPricingFinal' => (bool) $this->is_pricing_final,
             'cancellationFee' => (float) $this->cancellation_fee,
             'totalPrice' => (float) $this->total_price,
+            'currency' => (string) config('app.currency', 'SYP'),
             'termsAccepted' => $this->terms_accepted,
             'workStartedAt' => $this->work_started_at?->toDateTimeString(),
             'workFinishedAt' => $this->work_finished_at?->toDateTimeString(),
@@ -137,6 +152,46 @@ final class CleaningBookingResource extends JsonResource
         return $propertyDetails;
     }
 
+    /** @param array<string, mixed> $propertyDetails */
+    private function propertyDetailsWithLabels(array $propertyDetails): array
+    {
+        foreach ([
+            'living_room_size' => 'living_room_size',
+            'room_size' => 'room_size',
+            'room_type' => 'room_type',
+            'cleaning_mode' => 'cleaning_mode',
+            'event_type' => 'event_type',
+            'venue_type' => 'venue_type',
+        ] as $key => $group) {
+            if (array_key_exists($key, $propertyDetails)) {
+                $propertyDetails[$key.'_label'] = $this->enumLabel($group, $propertyDetails[$key]);
+            }
+        }
+
+        return $propertyDetails;
+    }
+
+    /** @param array<string, mixed> $propertyDetails */
+    private function addressPayload(array $propertyDetails): array
+    {
+        $fullAddress = Arr::get($propertyDetails, 'full_address')
+            ?? Arr::get($propertyDetails, 'address')
+            ?? Arr::get($propertyDetails, 'location_name');
+
+        return [
+            'fullAddress' => $fullAddress,
+            'full_address' => $fullAddress,
+            'locationName' => Arr::get($propertyDetails, 'location_name'),
+            'location_name' => Arr::get($propertyDetails, 'location_name'),
+            'latitude' => $this->address_latitude !== null ? (float) $this->address_latitude : null,
+            'longitude' => $this->address_longitude !== null ? (float) $this->address_longitude : null,
+            'building' => Arr::get($propertyDetails, 'building'),
+            'floor' => Arr::get($propertyDetails, 'floor'),
+            'apartment' => Arr::get($propertyDetails, 'apartment'),
+            'notes' => Arr::get($propertyDetails, 'address_notes') ?? Arr::get($propertyDetails, 'notes'),
+        ];
+    }
+
     /**
      * @return array<int, string>|null
      */
@@ -157,6 +212,27 @@ final class CleaningBookingResource extends JsonResource
         ));
 
         return $services !== [] ? $services : null;
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function servicesPayload(): array
+    {
+        $services = $this->normalizedCleaningServices() ?? [];
+
+        return array_values(array_map(
+            static fn (string $service, int $index): array => [
+                'id' => null,
+                'name' => $service,
+                'quantity' => 1,
+                'unitPrice' => null,
+                'unit_price' => null,
+                'totalPrice' => null,
+                'total_price' => null,
+                'sort' => $index,
+            ],
+            $services,
+            array_keys($services),
+        ));
     }
 
     private function normalizeCleaningMode(string $cleaningMode): string
@@ -206,6 +282,7 @@ final class CleaningBookingResource extends JsonResource
             'id' => $assignment->id,
             'workerId' => $assignment->worker_id,
             'status' => $assignment->status?->value ?? $assignment->status,
+            'statusLabel' => $this->enumLabel('booking_status', $assignment->status?->value ?? $assignment->status),
             'acceptedAt' => $assignment->accepted_at?->toIso8601String(),
             'startApprovedAt' => $assignment->start_approved_at?->toIso8601String(),
             'roomCount' => (int) $assignment->room_count,
@@ -229,13 +306,16 @@ final class CleaningBookingResource extends JsonResource
             'id' => $room->id,
             'roomKey' => $room->room_key,
             'roomType' => $room->room_type,
+            'roomTypeLabel' => $this->enumLabel('room_type', $room->room_type),
             'roomSize' => $room->room_size,
+            'roomSizeLabel' => $this->enumLabel('room_size', $room->room_size),
             'displayLabel' => $room->display_label,
             'weight' => (float) $room->weight,
             'plannedWorkerSlot' => $room->planned_worker_slot !== null ? (int) $room->planned_worker_slot : null,
             'plannedPreferredWorkerId' => $room->planned_preferred_worker_id,
             'assignedWorkerId' => $room->assigned_worker_id,
             'assignmentSource' => $room->assignment_source?->value ?? $room->assignment_source,
+            'assignmentSourceLabel' => $this->enumLabel('assignment_source', $room->assignment_source?->value ?? $room->assignment_source),
             'assignedWorker' => $room->relationLoaded('assignedWorker') && $room->assignedWorker
                 ? $this->serializeWorker($room->assignedWorker)
                 : null,
@@ -266,7 +346,9 @@ final class CleaningBookingResource extends JsonResource
             $grouped[$slot]['rooms'][] = [
                 'roomKey' => $room->room_key,
                 'roomType' => $room->room_type,
+                'roomTypeLabel' => $this->enumLabel('room_type', $room->room_type),
                 'roomSize' => $room->room_size,
+                'roomSizeLabel' => $this->enumLabel('room_size', $room->room_size),
             ];
             $grouped[$slot]['roomsWeight'] = round($grouped[$slot]['roomsWeight'] + (float) $room->weight, 2);
         }
@@ -345,5 +427,95 @@ final class CleaningBookingResource extends JsonResource
         }
 
         return $orderStatus;
+    }
+
+    private function enumLabel(string $group, mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $normalized = mb_strtolower((string) $value);
+
+        return match ($group) {
+            'booking_status' => match ($normalized) {
+                'pending' => 'قيد الانتظار',
+                'accepted_waiting_for_order_start' => 'تم القبول بانتظار بدء الطلب',
+                'accepted_waiting_team' => 'تم القبول بانتظار اكتمال الفريق',
+                'worker_assigned' => 'تم تعيين العامل',
+                'awaiting_start_verification' => 'بانتظار تأكيد بدء العمل',
+                'in_progress' => 'قيد التنفيذ',
+                'awaiting_customer_completion' => 'بانتظار تأكيد العميل للإنهاء',
+                'time_extension_requested' => 'تم طلب تمديد الوقت',
+                'completed' => 'مكتمل',
+                'cancelled' => 'ملغي',
+                'rejected' => 'مرفوض',
+                'withdrawn' => 'منسحب',
+                default => $this->humanizeEnum($normalized),
+            },
+            'property_type' => match ($normalized) {
+                'apartment' => 'شقة',
+                'villa' => 'فيلا',
+                'house', 'home' => 'منزل',
+                'office' => 'مكتب',
+                'studio' => 'استوديو',
+                'event_assistance' => 'مساعدة مناسبة',
+                default => $this->humanizeEnum($normalized),
+            },
+            'living_room_size', 'room_size' => match ($normalized) {
+                'small' => 'صغيرة',
+                'medium' => 'متوسطة',
+                'large' => 'كبيرة',
+                'none' => 'لا يوجد',
+                default => $this->humanizeEnum($normalized),
+            },
+            'room_type' => match ($normalized) {
+                'bedroom' => 'غرفة نوم',
+                'bathroom' => 'حمام',
+                'living_room' => 'غرفة معيشة',
+                'kitchen' => 'مطبخ',
+                'balcony' => 'شرفة',
+                'hall' => 'صالة',
+                default => $this->humanizeEnum($normalized),
+            },
+            'cleaning_mode' => match ($normalized) {
+                'regular' => 'تنظيف عادي',
+                'deep' => 'تنظيف عميق',
+                default => $this->humanizeEnum($normalized),
+            },
+            'assignment_mode' => match ($normalized) {
+                'preferred_worker' => 'عامل محدد',
+                'open_count' => 'عدد عمال مفتوح',
+                default => $this->humanizeEnum($normalized),
+            },
+            'event_type' => match ($normalized) {
+                'family_dinner' => 'عشاء عائلي',
+                'birthday' => 'عيد ميلاد',
+                'large_gathering' => 'تجمع كبير',
+                'funeral' => 'عزاء',
+                'other' => 'أخرى',
+                default => $this->humanizeEnum($normalized),
+            },
+            'venue_type' => match ($normalized) {
+                'home' => 'منزل',
+                'hall' => 'قاعة',
+                'outdoor' => 'خارجي',
+                'office' => 'مكتب',
+                'other' => 'أخرى',
+                default => $this->humanizeEnum($normalized),
+            },
+            'assignment_source' => match ($normalized) {
+                'customer' => 'العميل',
+                'worker' => 'العامل',
+                'system' => 'النظام',
+                default => $this->humanizeEnum($normalized),
+            },
+            default => $this->humanizeEnum($normalized),
+        };
+    }
+
+    private function humanizeEnum(string $value): string
+    {
+        return str_replace('_', ' ', $value);
     }
 }
