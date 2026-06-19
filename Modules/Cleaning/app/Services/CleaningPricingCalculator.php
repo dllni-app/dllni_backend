@@ -37,11 +37,7 @@ final class CleaningPricingCalculator
         ?float $customerLongitude,
         Worker $worker,
     ): array {
-        if ($customerLatitude === null || $customerLongitude === null) {
-            throw new InvalidArgumentException('Customer location coordinates are required to finalize pricing.');
-        }
-
-        if ($worker->home_address === null || mb_trim($worker->home_address) === '') {
+        if ($worker->home_address === null || trim((string) $worker->home_address) === '') {
             throw new InvalidArgumentException('Worker home location is incomplete.');
         }
 
@@ -49,13 +45,38 @@ final class CleaningPricingCalculator
             throw new InvalidArgumentException('Worker home location is incomplete.');
         }
 
+        return $this->finalizedForCoordinates(
+            $basePrice,
+            $addonsTotal,
+            $customerLatitude,
+            $customerLongitude,
+            (float) $worker->home_latitude,
+            (float) $worker->home_longitude,
+        );
+    }
+
+    /**
+     * @return array{travelFee: float, distanceKm: float, adminMargin: float, totalPrice: float, isPricingFinal: bool}
+     */
+    public function finalizedForCoordinates(
+        float $basePrice,
+        float $addonsTotal,
+        ?float $customerLatitude,
+        ?float $customerLongitude,
+        float $originLatitude,
+        float $originLongitude,
+    ): array {
+        if ($customerLatitude === null || $customerLongitude === null) {
+            throw new InvalidArgumentException('Customer location coordinates are required to finalize pricing.');
+        }
+
         $basePrice = $this->roundMoney($basePrice);
         $addonsTotal = $this->roundMoney($addonsTotal);
         $distanceKm = round($this->haversineDistanceKm(
             (float) $customerLatitude,
             (float) $customerLongitude,
-            (float) $worker->home_latitude,
-            (float) $worker->home_longitude,
+            $originLatitude,
+            $originLongitude,
         ), 3);
 
         $financial = CleaningFinancialSetting::query()->first();
