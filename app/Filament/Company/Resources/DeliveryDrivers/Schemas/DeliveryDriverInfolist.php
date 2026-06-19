@@ -75,7 +75,7 @@ final class DeliveryDriverInfolist
                             ->placeholder('—'),
                     ])
                     ->columns(2),
-                Section::make('Trust history')
+                Section::make(__('delivery_company.drivers.sections.trust_history'))
                     ->schema([
                         RepeatableEntry::make('trustLogs')
                             ->label('')

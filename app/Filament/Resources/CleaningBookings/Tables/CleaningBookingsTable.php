@@ -189,8 +189,8 @@ final class CleaningBookingsTable
                 SelectFilter::make('assignment_mode')
                     ->label(__('cleaning_admin.booking.filters.assignment_mode'))
                     ->options([
-                        CleaningAssignmentMode::PreferredWorker->value => __('cleaning_admin.booking.enums.assignment_mode.preferred_worker'),
-                        CleaningAssignmentMode::OpenCount->value => __('cleaning_admin.booking.enums.assignment_mode.open_count'),
+                        CleaningAssignmentMode::PreferredWorker->value => __('cleaning_admin.enums.assignment_mode.preferred_worker'),
+                        CleaningAssignmentMode::OpenCount->value => __('cleaning_admin.enums.assignment_mode.open_count'),
                     ]),
                 Filter::make('has_dispute')
                     ->label(__('cleaning_admin.booking.filters.has_dispute'))
@@ -392,7 +392,7 @@ final class CleaningBookingsTable
     {
         $mode = $record->resolvedAssignmentMode();
 
-        return self::translatedValue('cleaning_admin.booking.enums.assignment_mode.', $mode);
+        return self::translatedValue('cleaning_admin.enums.assignment_mode.', $mode);
     }
 
     private static function assignmentModeColor(CleaningBooking $record): string

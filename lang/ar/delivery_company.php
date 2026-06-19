@@ -40,6 +40,7 @@ return [
             'dropoff_latitude' => 'خط عرض التسليم',
             'dropoff_longitude' => 'خط طول التسليم',
             'distance_km' => 'المسافة (كم)',
+            'distance_to_pickup_km' => 'مسافة الاستلام (كم)',
             'delivery_fee' => 'رسوم التوصيل',
             'currency' => 'العملة',
             'driver' => 'السائق',
@@ -90,6 +91,7 @@ return [
             'profile' => 'الملف الشخصي',
             'status' => 'الحالة',
             'trust' => 'الثقة',
+            'trust_history' => 'سجل الثقة',
             'location' => 'آخر موقع',
         ],
         'fields' => [

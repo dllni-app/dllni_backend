@@ -533,6 +533,7 @@ return [
             'customer_confirmed_at' => 'تأكيد العميل',
             'customer' => 'العميل',
             'worker' => 'العامل',
+            'primary_worker' => 'العامل الأساسي',
             'preferred_worker' => 'العامل المفضل',
             'number_of_workers' => 'عدد العاملين',
             'required_workers' => 'عدد العاملين المطلوب',

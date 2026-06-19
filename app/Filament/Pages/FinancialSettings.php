@@ -57,6 +57,11 @@ final class FinancialSettings extends Page
 
     protected static ?int $navigationSort = 20;
 
+    public function getMaxContentWidth(): ?string
+    {
+        return '7xl';
+    }
+
     public static function getNavigationGroup(): ?string
     {
         return __('cleaning_admin.nav_groups.operations');

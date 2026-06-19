@@ -25,41 +25,41 @@ final class SosAlertsTable
         return $table
             ->columns([
                 TextColumn::make('id')
-                    ->label('ID')
+                    ->label('المعرّف')
                     ->sortable(),
                 TextColumn::make('order.order_number')
-                    ->label('Order')
+                    ->label('الطلب')
                     ->placeholder('-')
                     ->url(fn (SosAlert $record): ?string => $record->order instanceof \Modules\Resturants\Models\Order
                         ? OrderResource::getUrl('view', ['record' => $record->order])
                         : null),
                 TextColumn::make('user.name')
-                    ->label('User')
+                    ->label('المستخدم')
                     ->placeholder('-')
                     ->url(fn (SosAlert $record): ?string => $record->user instanceof \App\Models\User
                         ? UserResource::getUrl('view', ['record' => $record->user])
                         : null),
                 TextColumn::make('message')
-                    ->label('Message preview')
+                    ->label('معاينة الرسالة')
                     ->limit(60)
                     ->wrap()
                     ->tooltip(fn (SosAlert $record): ?string => $record->message),
                 TextColumn::make('status')
                     ->badge()
-                    ->label('Status')
+                    ->label('الحالة')
                     ->color(fn (mixed $state): string => self::statusColor($state))
                     ->formatStateUsing(fn (mixed $state): string => self::statusLabel($state)),
                 TextColumn::make('triggered_at')
-                    ->label('Triggered at')
+                    ->label('وقت الإطلاق')
                     ->since()
                     ->sortable(),
                 TextColumn::make('acknowledged_at')
-                    ->label('Acknowledged at')
+                    ->label('وقت الاستلام')
                     ->since()
                     ->placeholder('-')
                     ->sortable(),
                 TextColumn::make('resolved_at')
-                    ->label('Resolved at')
+                    ->label('وقت الحل')
                     ->since()
                     ->placeholder('-')
                     ->sortable(),
@@ -70,8 +70,8 @@ final class SosAlertsTable
                     ->options(collect(SOSStatus::cases())->mapWithKeys(fn (SOSStatus $case): array => [$case->value => self::statusLabel($case)])->all()),
                 Filter::make('created_at')
                     ->form([
-                        \Filament\Forms\Components\DatePicker::make('from')->label('From'),
-                        \Filament\Forms\Components\DatePicker::make('to')->label('To'),
+                        \Filament\Forms\Components\DatePicker::make('from')->label('من'),
+                        \Filament\Forms\Components\DatePicker::make('to')->label('إلى'),
                     ])
                     ->query(function (Builder $query, array $data): Builder {
                         return $query
@@ -82,7 +82,7 @@ final class SosAlertsTable
             ->recordActions([
                 ViewAction::make(),
                 Action::make('acknowledge')
-                    ->label('Acknowledge')
+                    ->label('استلام')
                     ->icon('heroicon-o-hand-raised')
                     ->color('warning')
                     ->visible(fn (SosAlert $record): bool => self::isPending($record->status))
@@ -95,19 +95,19 @@ final class SosAlertsTable
                         ])->save();
 
                         Notification::make()
-                            ->title('SOS alert acknowledged')
+                            ->title('تم استلام تنبيه الطوارئ')
                             ->success()
                             ->send();
                     }),
                 Action::make('resolve')
-                    ->label('Resolve')
+                    ->label('حل')
                     ->icon('heroicon-o-check-circle')
                     ->color('success')
                     ->visible(fn (SosAlert $record): bool => ! self::isResolved($record->status))
                     ->requiresConfirmation()
                     ->form([
                         Textarea::make('resolution_note')
-                            ->label('Resolution note')
+                            ->label('ملاحظة الحل')
                             ->maxLength(1000),
                     ])
                     ->action(function (SosAlert $record, array $data): void {
@@ -121,7 +121,7 @@ final class SosAlertsTable
                         ])->save();
 
                         Notification::make()
-                            ->title('SOS alert resolved')
+                            ->title('تم حل تنبيه الطوارئ')
                             ->success()
                             ->send();
                     }),
@@ -131,9 +131,13 @@ final class SosAlertsTable
 
     private static function statusLabel(SOSStatus|string|null $status): string
     {
-        $status = self::normalizeStatus($status);
-
-        return $status?->value ?? '-';
+        return match (self::normalizeStatus($status)) {
+            SOSStatus::Pending => 'قيد الانتظار',
+            SOSStatus::Triggered => 'تم الإطلاق',
+            SOSStatus::Acknowledged => 'تم الاستلام',
+            SOSStatus::Resolved => 'تم الحل',
+            default => '-',
+        };
     }
 
     private static function statusColor(SOSStatus|string|null $status): string

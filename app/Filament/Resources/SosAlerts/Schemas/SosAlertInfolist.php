@@ -14,25 +14,26 @@ final class SosAlertInfolist
     public static function configure(Schema $schema): Schema
     {
         return $schema->components([
-            Section::make('SOS Alert Details')
+            Section::make('تفاصيل تنبيه الطوارئ')
                 ->schema([
-                    TextEntry::make('id')->label('ID'),
+                    TextEntry::make('id')->label('المعرّف'),
                     TextEntry::make('status')
+                        ->label('الحالة')
                         ->badge()
                         ->color(fn (mixed $state): string => self::statusColor($state))
                         ->formatStateUsing(fn (mixed $state): string => self::statusLabel($state)),
-                    TextEntry::make('source')->label('Source'),
-                    TextEntry::make('message')->label('Message')->columnSpanFull(),
-                    TextEntry::make('order.order_number')->label('Order')->placeholder('-'),
-                    TextEntry::make('user.name')->label('User')->placeholder('-'),
-                    TextEntry::make('triggered_at')->label('Triggered at')->dateTime()->placeholder('-'),
-                    TextEntry::make('acknowledged_at')->label('Acknowledged at')->dateTime()->placeholder('-'),
-                    TextEntry::make('acknowledgedBy.name')->label('Acknowledged by')->placeholder('-'),
-                    TextEntry::make('resolved_at')->label('Resolved at')->dateTime()->placeholder('-'),
-                    TextEntry::make('resolvedBy.name')->label('Resolved by')->placeholder('-'),
-                    TextEntry::make('resolution_note')->label('Resolution note')->columnSpanFull()->placeholder('-'),
-                    TextEntry::make('created_at')->label('Created at')->dateTime(),
-                    TextEntry::make('updated_at')->label('Updated at')->dateTime(),
+                    TextEntry::make('source')->label('المصدر'),
+                    TextEntry::make('message')->label('الرسالة')->columnSpanFull(),
+                    TextEntry::make('order.order_number')->label('الطلب')->placeholder('-'),
+                    TextEntry::make('user.name')->label('المستخدم')->placeholder('-'),
+                    TextEntry::make('triggered_at')->label('وقت الإطلاق')->dateTime()->placeholder('-'),
+                    TextEntry::make('acknowledged_at')->label('وقت الاستلام')->dateTime()->placeholder('-'),
+                    TextEntry::make('acknowledgedBy.name')->label('تم الاستلام بواسطة')->placeholder('-'),
+                    TextEntry::make('resolved_at')->label('وقت الحل')->dateTime()->placeholder('-'),
+                    TextEntry::make('resolvedBy.name')->label('تم الحل بواسطة')->placeholder('-'),
+                    TextEntry::make('resolution_note')->label('ملاحظة الحل')->columnSpanFull()->placeholder('-'),
+                    TextEntry::make('created_at')->label('تاريخ الإنشاء')->dateTime(),
+                    TextEntry::make('updated_at')->label('تاريخ التحديث')->dateTime(),
                 ])
                 ->columns(2),
         ]);
@@ -40,9 +41,13 @@ final class SosAlertInfolist
 
     private static function statusLabel(SOSStatus|string|null $status): string
     {
-        $status = self::normalizeStatus($status);
-
-        return $status?->value ?? '-';
+        return match (self::normalizeStatus($status)) {
+            SOSStatus::Pending => 'قيد الانتظار',
+            SOSStatus::Triggered => 'تم الإطلاق',
+            SOSStatus::Acknowledged => 'تم الاستلام',
+            SOSStatus::Resolved => 'تم الحل',
+            default => '-',
+        };
     }
 
     private static function statusColor(SOSStatus|string|null $status): string

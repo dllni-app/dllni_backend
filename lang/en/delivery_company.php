@@ -40,6 +40,7 @@ return [
             'dropoff_latitude' => 'Dropoff latitude',
             'dropoff_longitude' => 'Dropoff longitude',
             'distance_km' => 'Distance (km)',
+            'distance_to_pickup_km' => 'Distance to pickup (km)',
             'delivery_fee' => 'Delivery fee',
             'currency' => 'Currency',
             'driver' => 'Driver',
@@ -90,6 +91,7 @@ return [
             'profile' => 'Profile',
             'status' => 'Status',
             'trust' => 'Trust',
+            'trust_history' => 'Trust history',
             'location' => 'Latest location',
         ],
         'fields' => [

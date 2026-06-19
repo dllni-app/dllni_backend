@@ -19,7 +19,7 @@ final class ViewSosAlert extends ViewRecord
     {
         return [
             Action::make('acknowledge')
-                ->label('Acknowledge')
+                ->label('استلام')
                 ->icon('heroicon-o-hand-raised')
                 ->color('warning')
                 ->visible(fn (): bool => $this->record->status !== SOSStatus::Resolved)
@@ -39,19 +39,19 @@ final class ViewSosAlert extends ViewRecord
                     ]);
 
                     Notification::make()
-                        ->title('SOS alert acknowledged')
+                        ->title('تم استلام تنبيه الطوارئ')
                         ->success()
                         ->send();
                 }),
             Action::make('resolve')
-                ->label('Resolve')
+                ->label('حل')
                 ->icon('heroicon-o-check-circle')
                 ->color('success')
                 ->visible(fn (): bool => $this->record->status !== SOSStatus::Resolved)
                 ->requiresConfirmation()
                 ->form([
                     Textarea::make('resolution_note')
-                        ->label('Resolution note')
+                        ->label('ملاحظة الحل')
                         ->maxLength(1000),
                 ])
                 ->action(function (array $data): void {
@@ -73,7 +73,7 @@ final class ViewSosAlert extends ViewRecord
                     ]);
 
                     Notification::make()
-                        ->title('SOS alert resolved')
+                        ->title('تم حل تنبيه الطوارئ')
                         ->success()
                         ->send();
                 }),

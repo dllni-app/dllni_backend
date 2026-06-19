@@ -9,10 +9,10 @@ use App\Filament\Resources\CleaningWorkers\Pages\CreateCleaningWorker;
 use App\Filament\Resources\CleaningWorkers\Pages\EditCleaningWorker;
 use App\Filament\Resources\CleaningWorkers\Pages\ListCleaningWorkers;
 use App\Filament\Resources\CleaningWorkers\Pages\ViewCleaningWorker;
-use App\Filament\Resources\CleaningWorkers\Schemas\CleaningWorkerForm;
+use App\Filament\Resources\CleaningWorkers\Schemas\CleaningWorkerInfolist;
 use App\Filament\Resources\CleaningWorkers\Tables\CleaningWorkersTable;
-use App\Filament\Resources\Users\Schemas\UserInfolist;
-use App\Models\User;
+use App\Filament\Resources\Workers\Schemas\WorkerForm;
+use App\Models\Worker;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -22,7 +22,7 @@ use Illuminate\Database\Eloquent\Builder;
 
 final class CleaningWorkerResource extends Resource
 {
-    protected static ?string $model = User::class;
+    protected static ?string $model = Worker::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedWrenchScrewdriver;
 
@@ -38,14 +38,24 @@ final class CleaningWorkerResource extends Resource
         return __('cleaning_admin.workers.nav_label');
     }
 
+    public static function getModelLabel(): string
+    {
+        return __('cleaning_admin.workers.model');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('cleaning_admin.workers.plural');
+    }
+
     public static function form(Schema $schema): Schema
     {
-        return CleaningWorkerForm::configure($schema);
+        return WorkerForm::configure($schema);
     }
 
     public static function infolist(Schema $schema): Schema
     {
-        return UserInfolist::configure($schema);
+        return CleaningWorkerInfolist::configure($schema);
     }
 
     public static function table(Table $table): Table
@@ -55,7 +65,9 @@ final class CleaningWorkerResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->where('module_type', UserModuleType::CleaningWorker);
+        return parent::getEloquentQuery()
+            ->with(['user', 'zones', 'trustLogs', 'deposit'])
+            ->whereHas('user', fn (Builder $query): Builder => $query->where('module_type', UserModuleType::CleaningWorker));
     }
 
     public static function getPages(): array

@@ -107,7 +107,7 @@ final class DeliveryOrderInfolist
                                         ? __('delivery_company.orders.enums.attempt_status.'.$state)
                                         : '—'),
                                 TextEntry::make('attempt_no')->label('#'),
-                                TextEntry::make('distance_to_pickup_km')->label('km'),
+                                TextEntry::make('distance_to_pickup_km')->label(__('delivery_company.orders.fields.distance_to_pickup_km')),
                                 TextEntry::make('offered_at')->dateTime('Y-m-d H:i')->placeholder('—'),
                                 TextEntry::make('expires_at')->dateTime('Y-m-d H:i')->placeholder('—'),
                                 TextEntry::make('reject_reason')->placeholder('—'),
