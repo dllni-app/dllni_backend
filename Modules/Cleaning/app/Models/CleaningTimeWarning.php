@@ -20,6 +20,7 @@ final class CleaningTimeWarning extends Model
         'booking_id',
         'booking_type',
         'customer_response',
+        'customer_message',
         'worker_response',
         'sent_at',
         'customer_responded_at',
