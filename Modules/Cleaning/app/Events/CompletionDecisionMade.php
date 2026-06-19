@@ -52,11 +52,15 @@ final class CompletionDecisionMade implements ShouldBroadcastNow
     {
         return [
             'cleaningBookingId' => $this->cleaningBookingId,
+            'bookingId' => $this->cleaningBookingId,
+            'booking_id' => $this->cleaningBookingId,
             'workerId' => $this->workerId,
             'decision' => $this->decision,
             'message' => $this->message,
             'decidedAt' => $this->decidedAt,
+            'decided_at' => $this->decidedAt,
             'warningId' => $this->warningId,
+            'warning_id' => $this->warningId,
             'status' => $this->status,
             'version' => 1,
         ];

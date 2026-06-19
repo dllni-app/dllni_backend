@@ -125,6 +125,36 @@ final class CleaningBookingController
 
     public function sos(CleaningBookingSosRequest $request, CleaningBooking $cleaning_booking): JsonResponse
     {
+        $this->ensureWorkerCanActOnBooking($cleaning_booking, requireOwnership: true);
+
+        $status = $cleaning_booking->status instanceof CleaningBookingStatus
+            ? $cleaning_booking->status->value
+            : (string) $cleaning_booking->status;
+
+        if (in_array($status, [CleaningBookingStatus::Completed->value, CleaningBookingStatus::Cancelled->value], true)) {
+            throw ValidationException::withMessages([
+                'cleaning_booking' => ['Cannot create an SOS request for a completed or cancelled cleaning booking.'],
+            ]);
+        }
+
+        $userId = (int) $request->user()->id;
+
+        $activeSos = SosAlert::query()
+            ->where('user_id', $userId)
+            ->where('booking_id', $cleaning_booking->id)
+            ->where('booking_type', CleaningBooking::class)
+            ->whereIn('status', [SOSStatus::Triggered->value, SOSStatus::Acknowledged->value])
+            ->latest('id')
+            ->first();
+
+        if ($activeSos instanceof SosAlert) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Cleaning booking SOS request already exists.',
+                'data' => UserCleaningSosResource::make($activeSos)->resolve($request),
+            ]);
+        }
+
         $sos = DB::transaction(function () use ($request, $cleaning_booking): SosAlert {
             $sos = SosAlert::query()->create([
                 'user_id' => $request->user()?->id,

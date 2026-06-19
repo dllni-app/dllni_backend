@@ -75,7 +75,7 @@ final class CleaningTimeWarningService
                 $booking->id,
                 $booking->worker_id,
                 'extension_accepted',
-                null,
+                'تم قبول طلب تمديد الوقت.',
                 now()->toIso8601String(),
                 $warning->id,
                 CleaningBookingStatus::InProgress->value,
@@ -118,6 +118,7 @@ final class CleaningTimeWarningService
             $booking->update([
                 'status' => CleaningBookingStatus::Completed,
                 'work_finished_at' => $booking->work_finished_at ?? now(),
+                'customer_confirmed_at' => $booking->customer_confirmed_at ?? now(),
             ]);
 
             return $warning->fresh();
@@ -130,7 +131,7 @@ final class CleaningTimeWarningService
                 $booking->id,
                 $booking->worker_id,
                 'extension_rejected',
-                $message,
+                $message ?: 'تم رفض طلب تمديد الوقت وتم إنهاء الطلب.',
                 now()->toIso8601String(),
                 $warning->id,
                 CleaningBookingStatus::Completed->value,
