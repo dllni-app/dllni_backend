@@ -19,6 +19,7 @@ final class CleaningOrderAwaitingCustomerCompletion implements ShouldBroadcastNo
         public ?int $workerId,
         public string $status,
         public ?string $expiresAt = null,
+        public ?string $completionMessage = null,
     ) {}
 
     /**
@@ -46,6 +47,13 @@ final class CleaningOrderAwaitingCustomerCompletion implements ShouldBroadcastNo
             'workerId' => $this->workerId,
             'status' => $this->status,
             'expiresAt' => $this->expiresAt,
+            'completionMessage' => $this->completionMessage,
+            'requiresCustomerAction' => true,
+            'actions' => [
+                'confirm' => true,
+                'reject' => true,
+                'requestExtension' => true,
+            ],
         ];
     }
 }
