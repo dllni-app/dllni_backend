@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Modules\User\Services;
 
+use App\Jobs\Sms\SendRegistrationSmsJob;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
@@ -11,18 +13,18 @@ use Modules\User\Data\OtpIssueData;
 use Modules\User\Enums\OtpPurpose;
 use Modules\User\Exceptions\AuthFlowException;
 use Modules\User\Models\UserOtp;
-use Modules\User\Services\SmsOtp\SmsOtpProvider;
+use Modules\User\Services\Sms\SmsMessageBuilder;
 
 final class OtpService
 {
     public function __construct(
-        public SmsOtpProvider $provider,
+        private readonly SmsMessageBuilder $smsMessageBuilder,
     ) {}
 
     public function send(string $phone, OtpPurpose $purpose): CarbonImmutable
     {
         $issued = $this->issue($phone, $purpose);
-        $this->provider->sendOtp($phone, $issued->code, $purpose);
+        $this->queueSms($phone, $issued->code);
 
         return $issued->expiresAt;
     }
@@ -79,6 +81,46 @@ final class OtpService
         }
 
         $otp->update(['consumed_at' => CarbonImmutable::now()]);
+    }
+
+    private function queueSms(string $phone, string $code): void
+    {
+        $user = User::query()->where('phone', $phone)->first();
+
+        if (! $user instanceof User) {
+            return;
+        }
+
+        $smsPayload = $this->smsMessageBuilder->registrationOtp(
+            otp: $code,
+            locale: app()->getLocale(),
+        );
+
+        $smsMessage = $user->smsMessages()->create([
+            'provider' => 'mtn',
+            'gsm' => $this->normalizeGsm($phone),
+            'message' => $smsPayload['message'],
+            'lang' => $smsPayload['lang'],
+            'status' => 'pending',
+            'attempts_count' => 0,
+        ]);
+
+        SendRegistrationSmsJob::dispatch($smsMessage->id);
+    }
+
+    private function normalizeGsm(string $phone): string
+    {
+        $digits = preg_replace('/\D+/', '', $phone) ?? '';
+
+        if (str_starts_with($digits, '00')) {
+            $digits = ltrim($digits, '0');
+        }
+
+        if (str_starts_with($digits, '09')) {
+            return '963'.substr($digits, 1);
+        }
+
+        return $digits;
     }
 
     private function plainOtpCacheKey(string $phone, OtpPurpose $purpose): string
