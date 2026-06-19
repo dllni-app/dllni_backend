@@ -7,9 +7,9 @@ namespace Modules\User\Services;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\ValidationException;
 use Modules\User\Data\OtpIssueData;
 use Modules\User\Enums\OtpPurpose;
+use Modules\User\Exceptions\AuthFlowException;
 use Modules\User\Models\UserOtp;
 use Modules\User\Services\SmsOtp\SmsOtpProvider;
 
@@ -22,7 +22,6 @@ final class OtpService
     public function send(string $phone, OtpPurpose $purpose): CarbonImmutable
     {
         $issued = $this->issue($phone, $purpose);
-
         $this->provider->sendOtp($phone, $issued->code, $purpose);
 
         return $issued->expiresAt;
@@ -58,14 +57,15 @@ final class OtpService
             ->where('phone', $phone)
             ->where('purpose', $purpose->value)
             ->whereNull('consumed_at')
-            ->where('expires_at', '>', CarbonImmutable::now())
             ->orderByDesc('id')
             ->first();
 
         if (! $otp) {
-            throw ValidationException::withMessages([
-                'otp' => ['رمز التحقق غير صحيح أو منتهي الصلاحية.'],
-            ]);
+            throw AuthFlowException::otpInvalid();
+        }
+
+        if ($otp->expires_at->isPast()) {
+            throw AuthFlowException::otpExpired();
         }
 
         if (! Hash::check($code, $otp->code_hash)) {
@@ -75,9 +75,7 @@ final class OtpService
                 $otp->update(['consumed_at' => CarbonImmutable::now()]);
             }
 
-            throw ValidationException::withMessages([
-                'otp' => ['رمز التحقق غير صحيح أو منتهي الصلاحية.'],
-            ]);
+            throw AuthFlowException::otpInvalid();
         }
 
         $otp->update(['consumed_at' => CarbonImmutable::now()]);
