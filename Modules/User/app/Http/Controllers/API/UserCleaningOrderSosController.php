@@ -30,7 +30,10 @@ final class UserCleaningOrderSosController
             ->where('customer_id', $userId)
             ->firstOrFail();
 
-        $status = $booking->status?->value ?? $booking->status;
+        $status = $booking->status instanceof CleaningBookingStatus
+            ? $booking->status->value
+            : (string) $booking->status;
+
         if (in_array($status, [CleaningBookingStatus::Completed->value, CleaningBookingStatus::Cancelled->value], true)) {
             throw ValidationException::withMessages([
                 'order' => ['Cannot create an SOS request for a completed or cancelled cleaning order.'],
