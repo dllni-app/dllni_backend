@@ -26,6 +26,8 @@ final class ProductData extends Data
         public ?string $description,
         public ?float $price,
         public ?float $discountedPrice,
+        public ?string $discountType,
+        public ?float $discountValue,
         public ?bool $isAvailable,
         public ?int $stockQuantity,
         public ?int $lowStockThreshold,
