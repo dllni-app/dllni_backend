@@ -32,6 +32,8 @@ final class WorkerReviewController
 
         $query = $this->reviewsQuery($worker);
         $averageRating = (float) (clone $query)->avg('rating');
+        $totalCount = (clone $query)->count();
+        $ratingCounts = $this->ratingCounts($query);
         $paginator = $query
             ->with(['customer:id,name'])
             ->latest()
@@ -41,7 +43,9 @@ final class WorkerReviewController
             'data' => WorkerReviewResource::collection($paginator->getCollection())->resolve($request),
             'meta' => [
                 'averageRating' => round($averageRating, 1),
-                'totalCount' => $paginator->total(),
+                'totalCount' => $totalCount,
+                'ratingCounts' => $ratingCounts,
+                'rating_counts' => $ratingCounts,
                 'currentPage' => $paginator->currentPage(),
                 'lastPage' => $paginator->lastPage(),
                 'perPage' => $paginator->perPage(),
@@ -67,5 +71,16 @@ final class WorkerReviewController
                         });
                 });
             });
+    }
+
+    private function ratingCounts(Builder $query): array
+    {
+        $counts = [];
+
+        for ($rating = 1; $rating <= 5; $rating++) {
+            $counts[(string) $rating] = (clone $query)->where('rating', $rating)->count();
+        }
+
+        return $counts;
     }
 }
