@@ -6,16 +6,16 @@ namespace Modules\Cleaning\Http\Controllers\API;
 
 use App\Enums\GenderPreference;
 use App\Enums\WorkerPreferredWorkType;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
-use Modules\Cleaning\Models\CleaningTimeWarning;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
+use Modules\Cleaning\Models\CleaningTimeWarning;
 use Modules\Cleaning\Services\DepositService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
@@ -51,6 +51,7 @@ final class WorkerHomepageController
                 'todayCount' => 0,
                 'completedCount' => 0,
                 'pendingCount' => 0,
+                'confirmedCount' => 0,
                 'inProgressCount' => 0,
                 'cancelledCount' => 0,
                 'totalEarnings' => 0,
@@ -99,6 +100,11 @@ final class WorkerHomepageController
                 CleaningBookingStatus::Pending,
                 CleaningBookingStatus::WorkerAssigned,
             ])
+            ->whereDate('scheduled_date', '>=', $today)
+            ->count();
+
+        $confirmedCount = (clone $baseQuery)
+            ->where('status', CleaningBookingStatus::WorkerAssigned)
             ->whereDate('scheduled_date', '>=', $today)
             ->count();
 
@@ -237,6 +243,7 @@ final class WorkerHomepageController
             'todayCount' => $todayCount,
             'completedCount' => $completedCount,
             'pendingCount' => $pendingCount,
+            'confirmedCount' => $confirmedCount,
             'inProgressCount' => $inProgressCount,
             'cancelledCount' => $cancelledCount,
             'totalEarnings' => $totalEarnings,
@@ -260,10 +267,6 @@ final class WorkerHomepageController
         ]);
     }
 
-    /**
-     * @param  array<string, string>  $dayLabels
-     * @return array<int, array{date: string, dayKey: string, dayLabelAr: string, bookingsCount: int}>
-     */
     private function emptyBookingsWeeklyChart(Carbon $weekStart, array $dayLabels): array
     {
         $rows = [];
@@ -282,9 +285,6 @@ final class WorkerHomepageController
         return $rows;
     }
 
-    /**
-     * @return array<int, array{weekNumber: int, label: string, from: string, to: string, invoiceAmount: float, invoiceAmountThousands: float}>
-     */
     private function emptyInvoicesFourWeeksChart(Carbon $fourWeekStart): array
     {
         $rows = [];
@@ -344,10 +344,6 @@ final class WorkerHomepageController
         return (float) ($booking->total_price ?? 0);
     }
 
-    /**
-     * @param  array<string, mixed>  $depositSummary
-     * @return array<string, mixed>
-     */
     private function newRequestEligibility(object $worker, array $depositSummary): array
     {
         $canReceive = (bool) ($depositSummary['isEligibleForNewRequests'] ?? false);
@@ -362,7 +358,6 @@ final class WorkerHomepageController
         ];
     }
 
-    /** @param array<string, mixed> $depositSummary */
     private function eligibilityReasonCode(object $worker, array $depositSummary, bool $canReceive): string
     {
         if (! $worker->is_active) {
@@ -387,12 +382,12 @@ final class WorkerHomepageController
     private function eligibilityMessage(string $reasonCode): string
     {
         return match ($reasonCode) {
-            'eligible' => 'Your account can receive and accept new requests.',
-            'worker_inactive' => 'Your account is inactive. Reactivate your account to receive new requests.',
-            'worker_suspended' => 'Your account is suspended. Please contact support for more details.',
-            'deposit_below_allowed_balance' => 'Your deposit balance is below the allowed limit. Please recharge your deposit account to receive new requests.',
-            'trust_score_too_low' => 'Your trust score is below the minimum required to receive new requests.',
-            default => 'Your account cannot receive new requests right now.',
+            'eligible' => 'Account can receive and accept new requests.',
+            'worker_inactive' => 'Account is inactive.',
+            'worker_suspended' => 'Account status prevents new requests.',
+            'deposit_below_allowed_balance' => 'Deposit balance is below the allowed limit.',
+            'trust_score_too_low' => 'Trust score is below the required minimum.',
+            default => 'Account cannot receive new requests right now.',
         };
     }
 }
