@@ -179,6 +179,39 @@ return [
             'suspended' => 'Suspended',
             'average_rating' => 'Average rating',
         ],
+        'finance' => [
+            'group' => 'Financial actions',
+            'error' => 'The operation could not be completed',
+            'fields' => [
+                'amount' => 'Amount',
+                'signed_amount' => 'Amount (positive to credit, negative to debit)',
+                'date' => 'Date',
+                'notes' => 'Notes',
+            ],
+            'hints' => [
+                'signed_amount' => 'Use a positive value to increase the balance and a negative value to decrease it.',
+            ],
+            'deposit' => [
+                'label' => 'Record deposit',
+                'success' => 'Deposit recorded successfully',
+            ],
+            'settlement' => [
+                'label' => 'Record settlement',
+                'success' => 'Settlement recorded successfully',
+            ],
+            'refund' => [
+                'label' => 'Record refund',
+                'success' => 'Refund recorded successfully',
+            ],
+            'adjustment' => [
+                'label' => 'Manual adjustment',
+                'success' => 'Adjustment recorded successfully',
+            ],
+            'reactivate' => [
+                'label' => 'Reactivate account',
+                'success' => 'Account reactivated',
+            ],
+        ],
     ],
 
     'disputes' => [
@@ -409,9 +442,13 @@ return [
             'coverage_ok' => 'Normal coverage threshold',
             'minimum_deposit_amount' => 'Minimum deposit to start work',
             'default_max_negative_balance' => 'Default max negative balance',
+            'restriction_threshold_percent' => 'Worker restriction threshold (% of deposit)',
             'trust_reject_after_accept_penalty' => 'Reject-after-accept trust penalty',
             'trust_minimum_for_dispatch' => 'Minimum trust score for dispatch',
             'worker_finance_enabled' => 'Enable worker finance rules',
+        ],
+        'hints' => [
+            'restriction_threshold_percent' => 'A worker is automatically restricted once the commission owed reaches this share of their deposit.',
         ],
         'options' => [
             'commission_percent' => 'Percentage',
@@ -429,6 +466,53 @@ return [
         ],
         'actions' => [
             'save' => 'Save settings',
+        ],
+    ],
+
+    'transactions' => [
+        'nav_label' => 'Transactions',
+        'model' => 'Transaction',
+        'plural' => 'Transactions',
+        'fields' => [
+            'id' => 'ID',
+            'worker' => 'Worker',
+            'type' => 'Type',
+            'amount' => 'Amount',
+            'balance_before' => 'Balance before',
+            'balance_after' => 'Balance after',
+            'date' => 'Date',
+            'notes' => 'Notes',
+            'reference' => 'Reference',
+            'created_by' => 'Created by',
+        ],
+        'filters' => [
+            'from' => 'From',
+            'to' => 'To',
+        ],
+        'types' => [
+            'deposit' => 'Deposit',
+            'settlement' => 'Settlement',
+            'refund' => 'Refund',
+            'withdrawal' => 'Refund (legacy)',
+            'admin_fee' => 'Admin commission',
+            'adjustment' => 'Adjustment',
+        ],
+        'actions' => [
+            'export' => 'Export',
+        ],
+    ],
+
+    'report' => [
+        'nav_label' => 'Financial report',
+        'title' => 'Financial report',
+        'subtitle' => 'A complete overview of deposits, commissions, settlements and worker status.',
+        'metrics' => [
+            'deposits_held' => 'Total deposits held',
+            'outstanding_commissions' => 'Total outstanding commissions',
+            'settlements_received' => 'Total settlements received',
+            'deposit_refunds' => 'Total deposit refunds',
+            'active_workers' => 'Active workers',
+            'restricted_workers' => 'Restricted workers',
         ],
     ],
 

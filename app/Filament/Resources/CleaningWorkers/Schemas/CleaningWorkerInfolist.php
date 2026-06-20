@@ -6,12 +6,14 @@ namespace App\Filament\Resources\CleaningWorkers\Schemas;
 
 use App\Models\Worker;
 use Filament\Infolists\Components\ImageEntry;
+use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
+use Modules\Cleaning\Services\DepositService;
 
 final class CleaningWorkerInfolist
 {
@@ -99,7 +101,106 @@ final class CleaningWorkerInfolist
                     TextEntry::make('home_longitude')->label('خط الطول')->placeholder('-'),
                     TextEntry::make('default_working_hours')->label('ساعات العمل الافتراضية')->state(fn (Worker $record): array => self::workingHours($record->default_working_hours))->listWithLineBreaks()->columnSpanFull(),
                 ]),
+            Section::make('الملخص المالي')
+                ->description('نظرة مالية كاملة على التأمين وعمولات الإدارة والتسويات.')
+                ->columns(4)
+                ->schema([
+                    TextEntry::make('fin_current_deposit')->label('قيمة التأمين الحالية')
+                        ->state(fn (Worker $record): string => self::money(self::summary($record)['currentDeposit'])),
+                    TextEntry::make('fin_completed_jobs')->label('إجمالي المهام المنجزة')
+                        ->state(fn (Worker $record): string => self::number(self::summary($record)['completedJobs'])),
+                    TextEntry::make('fin_total_revenue')->label('إجمالي الإيرادات')
+                        ->state(fn (Worker $record): string => self::money(self::summary($record)['totalRevenue'])),
+                    TextEntry::make('fin_commission_due')->label('عمولة الإدارة المستحقة')
+                        ->state(fn (Worker $record): string => self::money(self::summary($record)['commissionDue'])),
+                    TextEntry::make('fin_total_settled')->label('إجمالي المبالغ المسددة')
+                        ->state(fn (Worker $record): string => self::money(self::summary($record)['totalSettled'])),
+                    TextEntry::make('fin_remaining')->label('الرصيد المتبقي من التأمين')
+                        ->state(fn (Worker $record): string => self::money(self::summary($record)['remainingBalance'])),
+                    TextEntry::make('fin_utilization')->label('نسبة استهلاك التأمين')
+                        ->state(fn (Worker $record): string => self::decimal(self::summary($record)['utilizationPercent']).'%'),
+                    TextEntry::make('fin_status')->label('حالة الحساب')
+                        ->state(fn (Worker $record): string => self::accountStatusLabel(self::summary($record)['status']))
+                        ->badge()
+                        ->color(fn (Worker $record): string => self::accountStatusColor(self::summary($record)['status'])),
+                ]),
+            Section::make('سجل المعاملات المالية')
+                ->description('جميع عمليات الإيداع والتسوية والاسترداد والتعديلات وعمولات الإدارة.')
+                ->schema([
+                    RepeatableEntry::make('depositTransactions')
+                        ->hiddenLabel()
+                        ->state(fn (Worker $record) => $record->depositTransactions()->with('createdByAdmin')->latest()->limit(100)->get())
+                        ->schema([
+                            TextEntry::make('type')->label('النوع')
+                                ->badge()
+                                ->color(fn ($state): string => self::txTypeColor((string) $state))
+                                ->formatStateUsing(fn ($state): string => self::txTypeLabel((string) $state)),
+                            TextEntry::make('amount')->label('المبلغ')->money('SYP'),
+                            TextEntry::make('balance_after')->label('الرصيد بعد')->money('SYP'),
+                            TextEntry::make('created_at')->label('التاريخ')->dateTime('Y-m-d H:i'),
+                            TextEntry::make('notes')->label('ملاحظات')->placeholder('-'),
+                            TextEntry::make('createdByAdmin.name')->label('بواسطة')->placeholder('—'),
+                        ])
+                        ->columns(3),
+                ]),
         ]);
+    }
+
+    /** @var array<int, array<string, mixed>> */
+    private static array $summaryCache = [];
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function summary(Worker $worker): array
+    {
+        return self::$summaryCache[$worker->id] ??= app(DepositService::class)->financialSummary($worker);
+    }
+
+    private static function accountStatusLabel(string $status): string
+    {
+        return match ($status) {
+            'active' => 'نشط',
+            'restricted' => 'مقيّد',
+            'suspended' => 'موقوف',
+            'inactive' => 'غير نشط',
+            default => $status,
+        };
+    }
+
+    private static function accountStatusColor(string $status): string
+    {
+        return match ($status) {
+            'active' => 'success',
+            'restricted' => 'danger',
+            'suspended' => 'warning',
+            default => 'gray',
+        };
+    }
+
+    private static function txTypeLabel(string $type): string
+    {
+        return match ($type) {
+            'deposit' => 'إيداع',
+            'settlement' => 'تسوية',
+            'refund' => 'استرداد',
+            'withdrawal' => 'استرداد (سابق)',
+            'admin_fee' => 'عمولة الإدارة',
+            'adjustment' => 'تعديل',
+            default => $type,
+        };
+    }
+
+    private static function txTypeColor(string $type): string
+    {
+        return match ($type) {
+            'deposit' => 'success',
+            'settlement' => 'primary',
+            'refund', 'withdrawal' => 'warning',
+            'admin_fee' => 'danger',
+            'adjustment' => 'gray',
+            default => 'gray',
+        };
     }
 
     private static function fallbackAvatarUrl(Worker $worker): string

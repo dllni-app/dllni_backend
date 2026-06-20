@@ -7,9 +7,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Modules\Cleaning\Models\CleaningBooking;
+use Spatie\Activitylog\Models\Concerns\LogsActivity;
+use Spatie\Activitylog\Support\LogOptions;
 
 final class CleaningDepositTransaction extends Model
 {
+    use LogsActivity;
+
     protected $fillable = [
         'worker_id',
         'cleaning_booking_id',
@@ -21,6 +25,14 @@ final class CleaningDepositTransaction extends Model
         'reference',
         'notes',
     ];
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logFillable()
+            ->logOnlyDirty()
+            ->dontLogEmptyChanges();
+    }
 
     public function worker(): BelongsTo
     {

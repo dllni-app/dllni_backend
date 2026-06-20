@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Spatie\Activitylog\Models\Concerns\LogsActivity;
+use Spatie\Activitylog\Support\LogOptions;
 
 final class CleaningFinancialSetting extends Model
 {
+    use LogsActivity;
+
     protected $fillable = [
         'default_commission_rate',
         'vat_rate',
@@ -35,5 +39,13 @@ final class CleaningFinancialSetting extends Model
             'extension_rate_per_30_minutes' => 'decimal:2',
             'coverage_thresholds' => 'array',
         ];
+    }
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logFillable()
+            ->logOnlyDirty()
+            ->dontLogEmptyChanges();
     }
 }

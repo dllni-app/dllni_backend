@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use InvalidArgumentException;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 
 final class DepositService
 {
@@ -72,6 +73,89 @@ final class DepositService
         );
     }
 
+    /**
+     * Record a settlement payment: the worker pays down accumulated admin
+     * commission. This increases the deposit balance (reducing the amount owed)
+     * without changing the deposit principal.
+     */
+    public function recordSettlement(
+        Worker $worker,
+        float $amount,
+        string $reference,
+        ?string $notes = null,
+        ?int $createdByAdminId = null
+    ): CleaningDepositTransaction {
+        if ($amount <= 0) {
+            throw new InvalidArgumentException('Settlement amount must be greater than zero.');
+        }
+
+        return $this->mutateBalance(
+            worker: $worker,
+            type: 'settlement',
+            amount: $amount,
+            reference: $reference,
+            notes: $notes,
+            createdByAdminId: $createdByAdminId,
+        );
+    }
+
+    /**
+     * Record a deposit refund: money returned from the deposit balance to the
+     * worker. Decreases the balance and tracks it as withdrawn principal.
+     */
+    public function recordRefund(
+        Worker $worker,
+        float $amount,
+        string $reference,
+        ?string $notes = null,
+        ?int $createdByAdminId = null
+    ): CleaningDepositTransaction {
+        if ($amount <= 0) {
+            throw new InvalidArgumentException('Refund amount must be greater than zero.');
+        }
+
+        if (! $this->canWithdraw($worker, $amount)) {
+            throw new Exception('Insufficient deposit balance for refund.');
+        }
+
+        return $this->mutateBalance(
+            worker: $worker,
+            type: 'refund',
+            amount: $amount,
+            reference: $reference,
+            notes: $notes,
+            createdByAdminId: $createdByAdminId,
+            onBalanceChange: static function (CleaningWorkerDeposit $deposit, float $amount): void {
+                $deposit->withdrawn_total = (float) $deposit->withdrawn_total + $amount;
+            },
+        );
+    }
+
+    /**
+     * Record a manual adjustment. A positive amount credits the balance, a
+     * negative amount debits it.
+     */
+    public function recordAdjustment(
+        Worker $worker,
+        float $signedAmount,
+        string $reference,
+        ?string $notes = null,
+        ?int $createdByAdminId = null
+    ): CleaningDepositTransaction {
+        if ($signedAmount === 0.0) {
+            throw new InvalidArgumentException('Adjustment amount cannot be zero.');
+        }
+
+        return $this->mutateBalance(
+            worker: $worker,
+            type: 'adjustment',
+            amount: $signedAmount,
+            reference: $reference,
+            notes: $notes,
+            createdByAdminId: $createdByAdminId,
+        );
+    }
+
     public function recordAdminFeeDebit(
         Worker $worker,
         CleaningBooking $booking,
@@ -104,7 +188,7 @@ final class DepositService
     }
 
     /**
-     * @return array{minimumRequired: float, maxNegativeBalance: float}
+     * @return array{minimumRequired: float, maxNegativeBalance: float, restrictionThresholdPercent: float}
      */
     public function resolveLimits(Worker $worker): array
     {
@@ -114,7 +198,106 @@ final class DepositService
         return [
             'minimumRequired' => (float) ($deposit?->minimum_required ?? $settings->minimum_deposit_amount),
             'maxNegativeBalance' => (float) ($deposit?->max_negative_balance ?? $settings->default_max_negative_balance),
+            'restrictionThresholdPercent' => (float) ($settings->restriction_threshold_percent ?? 80),
         ];
+    }
+
+    /**
+     * The minimum balance a worker must keep before being restricted.
+     *
+     * Driven by the commission-utilization threshold: a worker is restricted
+     * once owed commission consumes `threshold%` of their deposit principal,
+     * i.e. when balance drops to `depositBase × (1 − threshold%)`. The absolute
+     * max-negative-balance floor is kept as a secondary safety net.
+     */
+    public function restrictionFloor(Worker $worker): float
+    {
+        $limits = $this->resolveLimits($worker);
+        $deposit = $worker->deposit;
+
+        $depositBase = $deposit
+            ? max(0.0, (float) $deposit->deposited_total - (float) $deposit->withdrawn_total)
+            : 0.0;
+
+        $utilizationFloor = $depositBase * (1 - ($limits['restrictionThresholdPercent'] / 100));
+        $absoluteFloor = -$limits['maxNegativeBalance'];
+
+        return max($utilizationFloor, $absoluteFloor);
+    }
+
+    /**
+     * Complete financial overview for a worker profile / reporting.
+     *
+     * @return array{
+     *     currentDeposit: float, depositedTotal: float, completedJobs: int,
+     *     totalRevenue: float, totalCommission: float, commissionDue: float,
+     *     totalSettled: float, totalRefunded: float, remainingBalance: float,
+     *     restrictionThresholdPercent: float, utilizationPercent: float, status: string
+     * }
+     */
+    public function financialSummary(Worker $worker): array
+    {
+        $worker->loadMissing('deposit');
+        $deposit = $worker->deposit;
+
+        $depositedTotal = (float) ($deposit?->deposited_total ?? 0);
+        $withdrawnTotal = (float) ($deposit?->withdrawn_total ?? 0);
+        $currentBalance = (float) ($deposit?->current_balance ?? 0);
+        $depositBase = max(0.0, $depositedTotal - $withdrawnTotal);
+
+        $sums = CleaningDepositTransaction::query()
+            ->where('worker_id', $worker->id)
+            ->selectRaw("COALESCE(SUM(CASE WHEN type = 'admin_fee' THEN amount ELSE 0 END), 0) as admin_fee_total")
+            ->selectRaw("COALESCE(SUM(CASE WHEN type = 'settlement' THEN amount ELSE 0 END), 0) as settlement_total")
+            ->selectRaw("COALESCE(SUM(CASE WHEN type IN ('refund', 'withdrawal') THEN amount ELSE 0 END), 0) as refund_total")
+            ->first();
+
+        $commissionTotal = (float) ($sums?->admin_fee_total ?? 0);
+        $settledTotal = (float) ($sums?->settlement_total ?? 0);
+        $refundedTotal = (float) ($sums?->refund_total ?? 0);
+        $commissionDue = max(0.0, $commissionTotal - $settledTotal);
+
+        $revenue = (float) CleaningBookingWorkerAssignment::query()
+            ->where('worker_id', $worker->id)
+            ->sum(DB::raw('COALESCE(service_share_amount, 0) + COALESCE(travel_fee, 0) + COALESCE(admin_margin_amount, 0)'));
+
+        $thresholdPercent = $this->resolveLimits($worker)['restrictionThresholdPercent'];
+        $utilization = $depositBase > 0 ? round($commissionDue / $depositBase * 100, 1) : 0.0;
+
+        return [
+            'currentDeposit' => round($depositBase, 2),
+            'depositedTotal' => round($depositedTotal, 2),
+            'completedJobs' => (int) ($worker->total_completed_jobs ?? 0),
+            'totalRevenue' => round($revenue, 2),
+            'totalCommission' => round($commissionTotal, 2),
+            'commissionDue' => round($commissionDue, 2),
+            'totalSettled' => round($settledTotal, 2),
+            'totalRefunded' => round($refundedTotal, 2),
+            'remainingBalance' => round($currentBalance, 2),
+            'restrictionThresholdPercent' => $thresholdPercent,
+            'utilizationPercent' => $utilization,
+            'status' => $this->resolveAccountStatus($worker),
+        ];
+    }
+
+    /**
+     * The spec-facing account status: active | restricted | inactive | suspended.
+     */
+    public function resolveAccountStatus(Worker $worker): string
+    {
+        if (! $worker->is_active) {
+            return 'inactive';
+        }
+
+        if ($worker->is_suspended) {
+            return 'suspended';
+        }
+
+        if ($this->isFinanceEnabled() && $this->calculateExceedance($worker) !== null) {
+            return 'restricted';
+        }
+
+        return 'active';
     }
 
     public function calculateExceedance(Worker $worker): ?float
@@ -128,8 +311,7 @@ final class DepositService
             return null;
         }
 
-        $limits = $this->resolveLimits($worker);
-        $floorBalance = -$limits['maxNegativeBalance'];
+        $floorBalance = $this->restrictionFloor($worker);
         $currentBalance = (float) $deposit->current_balance;
 
         if ($currentBalance >= $floorBalance) {
@@ -169,10 +351,7 @@ final class DepositService
             return true;
         }
 
-        $limits = $this->resolveLimits($worker);
-        $floorBalance = -$limits['maxNegativeBalance'];
-
-        return (float) $deposit->current_balance >= $floorBalance;
+        return (float) $deposit->current_balance >= $this->restrictionFloor($worker);
     }
 
     public function isWorkerEligibleToStartWork(Worker $worker): bool
@@ -196,9 +375,7 @@ final class DepositService
             return $limits['minimumRequired'] <= 0;
         }
 
-        $floorBalance = -$limits['maxNegativeBalance'];
-
-        if ((float) $deposit->current_balance < $floorBalance) {
+        if ((float) $deposit->current_balance < $this->restrictionFloor($worker)) {
             return false;
         }
 
@@ -331,6 +508,7 @@ final class DepositService
         $defaults = [
             'minimum_deposit_amount' => 0,
             'default_max_negative_balance' => 0,
+            'restriction_threshold_percent' => 80,
             'is_enabled' => true,
             'trust_reject_after_accept_penalty' => (int) config('cleaning.trust.reject_after_accept_penalty', 10),
             'trust_minimum_for_dispatch' => 0,
@@ -398,7 +576,9 @@ final class DepositService
             }
 
             $balanceBefore = (float) $deposit->current_balance;
-            $balanceAfter = $type === 'deposit'
+            // Credits add to the balance; an adjustment carries a signed amount.
+            // Everything else (withdrawal, refund, admin_fee) debits the balance.
+            $balanceAfter = in_array($type, ['deposit', 'settlement', 'adjustment'], true)
                 ? $balanceBefore + $amount
                 : $balanceBefore - $amount;
 

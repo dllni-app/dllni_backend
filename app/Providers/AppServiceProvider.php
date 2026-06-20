@@ -207,6 +207,10 @@ final class AppServiceProvider extends ServiceProvider
             'delivery_company' => DeliveryCompany::class,
             'delivery_driver' => DeliveryDriver::class,
             'delivery_order' => DeliveryOrder::class,
+            'cleaning_worker_deposit' => \App\Models\CleaningWorkerDeposit::class,
+            'cleaning_deposit_transaction' => \App\Models\CleaningDepositTransaction::class,
+            'cleaning_deposit_setting' => \App\Models\CleaningDepositSetting::class,
+            'cleaning_financial_setting' => \App\Models\CleaningFinancialSetting::class,
         ]);
     }
 

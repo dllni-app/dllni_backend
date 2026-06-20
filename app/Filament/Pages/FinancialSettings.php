@@ -45,6 +45,8 @@ final class FinancialSettings extends Page
 
     public float $defaultMaxNegativeBalance = 0.0;
 
+    public float $restrictionThresholdPercent = 80.0;
+
     public int $trustRejectAfterAcceptPenalty = 10;
 
     public int $trustMinimumForDispatch = 0;
@@ -129,6 +131,7 @@ final class FinancialSettings extends Page
         if ($depositSetting) {
             $this->minimumDepositAmount = (float) $depositSetting->minimum_deposit_amount;
             $this->defaultMaxNegativeBalance = (float) $depositSetting->default_max_negative_balance;
+            $this->restrictionThresholdPercent = (float) ($depositSetting->restriction_threshold_percent ?? 80);
             $this->trustRejectAfterAcceptPenalty = (int) $depositSetting->trust_reject_after_accept_penalty;
             $this->trustMinimumForDispatch = (int) $depositSetting->trust_minimum_for_dispatch;
             $this->workerFinanceEnabled = (bool) $depositSetting->is_enabled;
@@ -153,6 +156,7 @@ final class FinancialSettings extends Page
             'extensionRatePer30Minutes' => ['required', 'numeric', 'min:0'],
             'minimumDepositAmount' => ['required', 'numeric', 'min:0'],
             'defaultMaxNegativeBalance' => ['required', 'numeric', 'min:0'],
+            'restrictionThresholdPercent' => ['required', 'numeric', 'min:0', 'max:100'],
             'trustRejectAfterAcceptPenalty' => ['required', 'integer', 'min:0'],
             'trustMinimumForDispatch' => ['required', 'integer', 'min:0', 'max:100'],
             'workerFinanceEnabled' => ['required', 'boolean'],
@@ -185,6 +189,7 @@ final class FinancialSettings extends Page
             [
                 'minimum_deposit_amount' => $this->minimumDepositAmount,
                 'default_max_negative_balance' => $this->defaultMaxNegativeBalance,
+                'restriction_threshold_percent' => $this->restrictionThresholdPercent,
                 'trust_reject_after_accept_penalty' => $this->trustRejectAfterAcceptPenalty,
                 'trust_minimum_for_dispatch' => $this->trustMinimumForDispatch,
                 'is_enabled' => $this->workerFinanceEnabled,

@@ -127,6 +127,12 @@
                 @error('defaultMaxNegativeBalance') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
             </label>
             <label class="flex flex-col gap-1">
+                <span class="text-sm">{{ __('cleaning_admin.financial.fields.restriction_threshold_percent') }}</span>
+                <input type="number" min="0" max="100" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="restrictionThresholdPercent">
+                <span class="text-xs text-gray-500 dark:text-gray-400">{{ __('cleaning_admin.financial.hints.restriction_threshold_percent') }}</span>
+                @error('restrictionThresholdPercent') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
+            </label>
+            <label class="flex flex-col gap-1">
                 <span class="text-sm">{{ __('cleaning_admin.financial.fields.trust_reject_after_accept_penalty') }}</span>
                 <input type="number" min="0" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="trustRejectAfterAcceptPenalty">
                 @error('trustRejectAfterAcceptPenalty') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror

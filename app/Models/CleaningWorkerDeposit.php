@@ -7,9 +7,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Spatie\Activitylog\Models\Concerns\LogsActivity;
+use Spatie\Activitylog\Support\LogOptions;
 
 final class CleaningWorkerDeposit extends Model
 {
+    use LogsActivity;
+
     protected $fillable = [
         'worker_id',
         'current_balance',
@@ -19,6 +23,14 @@ final class CleaningWorkerDeposit extends Model
         'max_negative_balance',
         'is_active',
     ];
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logFillable()
+            ->logOnlyDirty()
+            ->dontLogEmptyChanges();
+    }
 
     public function worker(): BelongsTo
     {

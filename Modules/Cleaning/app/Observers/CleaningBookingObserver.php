@@ -7,10 +7,14 @@ namespace Modules\Cleaning\Observers;
 use App\Jobs\NotifyEligibleWorkersNewOrderJob;
 use App\Models\User;
 use App\Models\BookingStatusLog;
+use App\Models\Worker;
 use App\Notifications\Cleaning\BookingLifecycleNotification;
 use BackedEnum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
+use Modules\Cleaning\Services\DepositService;
+use Throwable;
 
 final class CleaningBookingObserver
 {
@@ -56,10 +60,55 @@ final class CleaningBookingObserver
                 'to_status' => $booking->status->value,
             ]);
 
+            if ($booking->status === CleaningBookingStatus::Completed) {
+                $this->chargeAdminCommission($booking);
+            }
+
             return;
         }
 
         $this->notifyLifecycleUpdated($booking, $fromStatusValue);
+    }
+
+    /**
+     * Charge the admin commission as a deposit liability for every worker who
+     * completed this booking. Uses the precomputed admin margin per accepted
+     * assignment, falling back to the legacy single-worker booking margin.
+     * Idempotent per (worker, booking) via DepositService guards.
+     */
+    private function chargeAdminCommission(CleaningBooking $booking): void
+    {
+        try {
+            $depositService = app(DepositService::class);
+
+            $assignments = $booking->acceptedWorkerAssignments()
+                ->with('worker.deposit')
+                ->get();
+
+            if ($assignments->isNotEmpty()) {
+                $assignments->each(function (CleaningBookingWorkerAssignment $assignment) use ($depositService, $booking): void {
+                    $worker = $assignment->worker;
+                    $amount = (float) ($assignment->admin_margin_amount ?? 0);
+
+                    if ($worker instanceof Worker && $amount > 0) {
+                        $depositService->recordAdminFeeDebit($worker, $booking, $amount);
+                    }
+                });
+
+                return;
+            }
+
+            // Legacy single-worker booking without team assignments.
+            $worker = $booking->worker;
+            $amount = (float) ($booking->admin_margin_amount ?? 0);
+
+            if ($worker instanceof Worker && $amount > 0) {
+                $depositService->recordAdminFeeDebit($worker, $booking, $amount);
+            }
+        } catch (Throwable $exception) {
+            // Never block the booking lifecycle on a commission-charge failure.
+            report($exception);
+        }
     }
 
     private function notifyLifecycleCreated(CleaningBooking $booking): void

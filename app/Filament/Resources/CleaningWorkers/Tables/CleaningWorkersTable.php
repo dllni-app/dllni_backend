@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningWorkers\Tables;
 
+use App\Filament\Resources\CleaningWorkers\Support\WorkerDepositActions;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\IconColumn;
@@ -28,6 +29,7 @@ final class CleaningWorkersTable
             ->recordActions([
                 ViewAction::make(),
                 EditAction::make(),
+                ...WorkerDepositActions::make(),
             ]);
     }
 }

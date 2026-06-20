@@ -190,6 +190,39 @@ return [
             'suspended' => 'الموقوفون',
             'average_rating' => 'متوسط التقييم',
         ],
+        'finance' => [
+            'group' => 'الإجراءات المالية',
+            'error' => 'تعذّر تنفيذ العملية',
+            'fields' => [
+                'amount' => 'المبلغ',
+                'signed_amount' => 'المبلغ (موجب للإضافة، سالب للخصم)',
+                'date' => 'التاريخ',
+                'notes' => 'ملاحظات',
+            ],
+            'hints' => [
+                'signed_amount' => 'استخدم قيمة موجبة لزيادة الرصيد وقيمة سالبة لخصمه.',
+            ],
+            'deposit' => [
+                'label' => 'تسجيل إيداع',
+                'success' => 'تم تسجيل الإيداع بنجاح',
+            ],
+            'settlement' => [
+                'label' => 'تسجيل تسوية',
+                'success' => 'تم تسجيل التسوية بنجاح',
+            ],
+            'refund' => [
+                'label' => 'تسجيل استرداد',
+                'success' => 'تم تسجيل الاسترداد بنجاح',
+            ],
+            'adjustment' => [
+                'label' => 'تعديل يدوي',
+                'success' => 'تم تسجيل التعديل بنجاح',
+            ],
+            'reactivate' => [
+                'label' => 'إعادة تفعيل الحساب',
+                'success' => 'تمت إعادة تفعيل الحساب',
+            ],
+        ],
     ],
 
     'disputes' => [
@@ -445,9 +478,13 @@ return [
             'coverage_ok' => 'عتبة التغطية الطبيعية',
             'minimum_deposit_amount' => 'الحد الأدنى للتأمين لبدء العمل',
             'default_max_negative_balance' => 'الحد الأقصى الافتراضي للرصيد السالب',
+            'restriction_threshold_percent' => 'حد تقييد العامل (% من التأمين)',
             'trust_reject_after_accept_penalty' => 'خصم الثقة عند الرفض بعد القبول',
             'trust_minimum_for_dispatch' => 'الحد الأدنى لدرجة الثقة للإرسال',
             'worker_finance_enabled' => 'تفعيل قواعد مالية العاملين',
+        ],
+        'hints' => [
+            'restriction_threshold_percent' => 'يتم تقييد العامل تلقائياً عندما تبلغ العمولة المستحقة هذه النسبة من قيمة تأمينه.',
         ],
         'options' => [
             'commission_percent' => 'نسبة مئوية',
@@ -465,6 +502,53 @@ return [
         ],
         'actions' => [
             'save' => 'حفظ الإعدادات',
+        ],
+    ],
+
+    'transactions' => [
+        'nav_label' => 'المعاملات المالية',
+        'model' => 'معاملة مالية',
+        'plural' => 'المعاملات المالية',
+        'fields' => [
+            'id' => 'المعرّف',
+            'worker' => 'العامل',
+            'type' => 'النوع',
+            'amount' => 'المبلغ',
+            'balance_before' => 'الرصيد قبل',
+            'balance_after' => 'الرصيد بعد',
+            'date' => 'التاريخ',
+            'notes' => 'ملاحظات',
+            'reference' => 'المرجع',
+            'created_by' => 'بواسطة',
+        ],
+        'filters' => [
+            'from' => 'من',
+            'to' => 'إلى',
+        ],
+        'types' => [
+            'deposit' => 'إيداع',
+            'settlement' => 'تسوية',
+            'refund' => 'استرداد',
+            'withdrawal' => 'استرداد (سابق)',
+            'admin_fee' => 'عمولة الإدارة',
+            'adjustment' => 'تعديل',
+        ],
+        'actions' => [
+            'export' => 'تصدير',
+        ],
+    ],
+
+    'report' => [
+        'nav_label' => 'التقرير المالي',
+        'title' => 'التقرير المالي',
+        'subtitle' => 'نظرة شاملة على التأمينات والعمولات والتسويات وحالة العاملين.',
+        'metrics' => [
+            'deposits_held' => 'إجمالي التأمينات المحتجزة',
+            'outstanding_commissions' => 'إجمالي العمولات المستحقة',
+            'settlements_received' => 'إجمالي التسويات المستلمة',
+            'deposit_refunds' => 'إجمالي مبالغ الاسترداد',
+            'active_workers' => 'العاملون النشطون',
+            'restricted_workers' => 'العاملون المقيّدون',
         ],
     ],
 

@@ -15,6 +15,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Cleaning\Models\CleaningBooking;
+use Spatie\Activitylog\Models\Concerns\LogsActivity;
+use Spatie\Activitylog\Support\LogOptions;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 
@@ -22,7 +24,16 @@ final class Worker extends Model implements HasMedia
 {
     use HasFactory;
     use InteractsWithMedia;
+    use LogsActivity;
     use WorkerFilterQuery;
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logOnly(['is_active', 'is_suspended', 'security_deposit_status'])
+            ->logOnlyDirty()
+            ->dontLogEmptyChanges();
+    }
 
     protected $fillable = [
         'user_id',
