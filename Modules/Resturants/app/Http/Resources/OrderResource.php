@@ -10,9 +10,6 @@ use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Models\Order;
 use Modules\Delivery\Support\DeliveryPresentation;
 
-/**
- * @mixin Order
- */
 final class OrderResource extends JsonResource
 {
     private const STATUS_ARABIC = [
@@ -66,6 +63,7 @@ final class OrderResource extends JsonResource
                 'id' => $this->user->id,
                 'name' => $this->user->name,
                 'email' => $this->user->email,
+                'phone' => $this->user->phone,
             ]),
             'restaurant' => $this->whenLoaded('restaurant', fn () => [
                 'id' => $this->restaurant->id,
