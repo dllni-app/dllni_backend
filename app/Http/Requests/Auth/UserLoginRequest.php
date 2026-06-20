@@ -26,7 +26,7 @@ final class UserLoginRequest extends FormRequest
         return [
             'phone' => ['required', 'string'],
             'password' => ['required', 'string'],
-            'moduleType' => ['required', 'string', Rule::enum(UserModuleType::class)],
+            'moduleType' => ['nullable', 'string', Rule::enum(UserModuleType::class)],
             'fcmToken' => ['nullable', 'string', 'min:16', 'max:4096'],
         ];
     }
@@ -43,7 +43,6 @@ final class UserLoginRequest extends FormRequest
             'password.required' => 'كلمة المرور مطلوبة.',
             'password.string' => 'كلمة المرور يجب أن تكون نصاً.',
 
-            'moduleType.required' => 'نوع التطبيق مطلوب.',
             'moduleType.string' => 'نوع التطبيق يجب أن يكون نصاً.',
             'moduleType.enum' => 'نوع التطبيق غير صالح.',
 
