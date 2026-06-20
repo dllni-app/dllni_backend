@@ -16,14 +16,26 @@ use Illuminate\Validation\ValidationException;
 
 final class UserAuthController
 {
+    private const INVALID_CREDENTIALS_MESSAGE = 'رقم الهاتف أو كلمة المرور غير صحيحة.';
+    private const ACCOUNT_NOT_ACTIVE_MESSAGE = 'الحساب غير مفعل حالياً. يرجى التواصل مع الدعم.';
+    private const MODULE_ACCESS_DENIED_MESSAGE = 'هذا الحساب غير مصرح له بتسجيل الدخول إلى هذا التطبيق.';
+    private const LOGOUT_SUCCESS_MESSAGE = 'تم تسجيل الخروج بنجاح.';
+
     public function login(UserLoginRequest $request): JsonResponse
     {
         $user = User::query()->where('phone', $request->validated('phone'))->first();
 
-        if (! $user || ! Hash::check($request->validated('password'), $user->password)) {
-            throw ValidationException::withMessages([
-                'phone' => [__('auth.failed')],
-            ]);
+        if (! $user instanceof User || ! Hash::check($request->validated('password'), $user->password)) {
+            $this->throwValidationError('phone', self::INVALID_CREDENTIALS_MESSAGE);
+        }
+
+        if (! $user->is_active) {
+            $this->throwValidationError('phone', self::ACCOUNT_NOT_ACTIVE_MESSAGE);
+        }
+
+        $requestedModuleType = UserModuleType::from($request->validated('moduleType'));
+        if ($user->module_type !== $requestedModuleType) {
+            $this->throwValidationError('phone', self::MODULE_ACCESS_DENIED_MESSAGE);
         }
 
         $fcmToken = $request->validated('fcmToken');
@@ -54,7 +66,17 @@ final class UserAuthController
         $request->user()->currentAccessToken()->delete();
 
         return response()->json([
-            'message' => __('auth.logout'),
+            'message' => self::LOGOUT_SUCCESS_MESSAGE,
+        ]);
+    }
+
+    /**
+     * @throws ValidationException
+     */
+    private function throwValidationError(string $field, string $message): never
+    {
+        throw ValidationException::withMessages([
+            $field => [$message],
         ]);
     }
 }
