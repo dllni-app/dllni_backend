@@ -14,13 +14,13 @@ use InvalidArgumentException;
 use Modules\Cleaning\Data\CleaningBookingData;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
+use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
 use Modules\Cleaning\Events\CleaningOrderAwaitingCustomerCompletion;
 use Modules\Cleaning\Events\CleaningOrderAwaitingStartVerification;
 use Modules\Cleaning\Events\WorkerArrived;
 use Modules\Cleaning\Events\WorkerLocationUpdated;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
-use Modules\Cleaning\Support\CleaningBookingTrackingBroadcaster;
 use Modules\Cleaning\Services\CleaningBookingTeamService;
 
 final class CleaningBookingService
@@ -34,7 +34,6 @@ final class CleaningBookingService
         private readonly CleaningBookingTeamService $teamService,
         private readonly WorkerTrustService $workerTrustService,
         private readonly DepositService $depositService,
-        private readonly CleaningBookingTrackingBroadcaster $trackingBroadcaster,
     ) {}
 
     public function store(CleaningBookingData $data): CleaningBooking
@@ -106,7 +105,7 @@ final class CleaningBookingService
             return $this->teamService->acceptWorker($booking, $worker, $roomIds);
         });
 
-        $this->trackingBroadcaster->dispatch($updated);
+        $this->dispatchTrackingUpdate($updated);
         if ($updated->status === CleaningBookingStatus::WorkerAssigned) {
             $this->lifecycleNotifications->notifyCustomer(
                 booking: $updated,
@@ -139,7 +138,7 @@ final class CleaningBookingService
 
         $updated = $this->teamService->claimRooms($booking, $worker, $roomIds);
 
-        $this->trackingBroadcaster->dispatch($updated);
+        $this->dispatchTrackingUpdate($updated);
 
         return $updated;
     }
@@ -159,7 +158,7 @@ final class CleaningBookingService
 
         NotifyEligibleWorkersNewOrderJob::dispatch($updated->id);
 
-        $this->trackingBroadcaster->dispatch($updated);
+        $this->dispatchTrackingUpdate($updated);
 
         if ($updated->status === CleaningBookingStatus::Cancelled) {
             $this->lifecycleNotifications->notifyCustomer(
@@ -194,7 +193,7 @@ final class CleaningBookingService
             return $booking->fresh();
         });
 
-        $this->trackingBroadcaster->dispatch($updated);
+        $this->dispatchTrackingUpdate($updated);
         $this->lifecycleNotifications->notifyCustomer(
             booking: $updated,
             canonicalType: 'cleaning.booking.worker_started_travel',
@@ -286,7 +285,7 @@ final class CleaningBookingService
             (string) $updated->status?->value,
             $this->activeSecurityCodeExpiresAt($updated)?->toIso8601String(),
         ));
-        $this->trackingBroadcaster->dispatch($updated);
+        $this->dispatchTrackingUpdate($updated);
         $this->lifecycleNotifications->notifyCustomer(
             booking: $updated,
             canonicalType: 'cleaning.booking.worker_arrived',
@@ -394,7 +393,7 @@ final class CleaningBookingService
             ]);
         });
 
-        $this->trackingBroadcaster->dispatch($updated);
+        $this->dispatchTrackingUpdate($updated);
 
         return $updated;
     }
@@ -431,7 +430,7 @@ final class CleaningBookingService
             $expiresAt,
             $updated->worker_completion_message,
         ));
-        $this->trackingBroadcaster->dispatch($updated);
+        $this->dispatchTrackingUpdate($updated);
         $this->lifecycleNotifications->notifyCustomer(
             booking: $updated,
             canonicalType: 'cleaning.booking.completion_requested',
@@ -482,7 +481,7 @@ final class CleaningBookingService
             return $booking->fresh();
         });
 
-        $this->trackingBroadcaster->dispatch($updated);
+        $this->dispatchTrackingUpdate($updated);
         $this->lifecycleNotifications->notifyCustomer(
             booking: $updated,
             canonicalType: 'cleaning.booking.order_cancelled',
@@ -493,6 +492,32 @@ final class CleaningBookingService
         );
 
         return $updated;
+    }
+
+    private function dispatchTrackingUpdate(CleaningBooking $booking): void
+    {
+        BroadcastAfterResponse::send(new CleaningBookingTrackingUpdated($booking->id, [
+            'cleaningBookingId' => $booking->id,
+            'status' => $booking->status?->value,
+            'workerId' => $booking->worker_id,
+            'assignmentMode' => $booking->resolvedAssignmentMode(),
+            'requiredWorkers' => max(1, (int) ($booking->number_of_workers ?? 1)),
+            'acceptedWorkers' => $booking->acceptedWorkerCount(),
+            'remainingWorkers' => $booking->remainingWorkerCount(),
+            'startApprovedWorkers' => $booking->startApprovedWorkerCount(),
+            'notStartApprovedWorkers' => $booking->notStartApprovedWorkerCount(),
+            'isTeamFulfilled' => $booking->isTeamFulfilled(),
+            'startedTravelAt' => $booking->started_travel_at?->toIso8601String(),
+            'arrivedAt' => $booking->arrived_at?->toIso8601String(),
+            'workStartedAt' => $booking->work_started_at?->toIso8601String(),
+            'workFinishedAt' => $booking->work_finished_at?->toIso8601String(),
+            'workerCompletionMessage' => $booking->worker_completion_message,
+            'customerCompletionRejectionMessage' => $booking->customer_completion_rejection_message,
+            'completionRejectedAt' => $booking->completion_rejected_at?->toIso8601String(),
+            'customerConfirmedAt' => $booking->customer_confirmed_at?->toIso8601String(),
+            'cancelledAt' => $booking->cancelled_at?->toIso8601String(),
+            'updatedAt' => now()->toIso8601String(),
+        ]));
     }
 
     private function activeSecurityCodeExpiresAt(CleaningBooking $booking): ?\Carbon\CarbonInterface

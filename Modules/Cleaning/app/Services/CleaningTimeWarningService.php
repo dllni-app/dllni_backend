@@ -4,25 +4,18 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Services;
 
-use App\Support\Broadcast\BroadcastAfterResponse;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningTimeWarningResponse;
-use Modules\Cleaning\Events\CompletionDecisionMade;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningTimeWarning;
-use Modules\Cleaning\Support\CleaningBookingTrackingBroadcaster;
 
 final class CleaningTimeWarningService
 {
-    public function __construct(
-        private readonly CleaningBookingTrackingBroadcaster $trackingBroadcaster,
-    ) {}
-
     public function accept(CleaningTimeWarning $warning, ?int $additionalMinutes = null): CleaningTimeWarning
     {
-        $warning = DB::transaction(function () use ($warning, $additionalMinutes): CleaningTimeWarning {
+        return DB::transaction(function () use ($warning, $additionalMinutes): CleaningTimeWarning {
             $warning = CleaningTimeWarning::query()
                 ->lockForUpdate()
                 ->findOrFail($warning->id);
@@ -39,10 +32,6 @@ final class CleaningTimeWarningService
             $booking = CleaningBooking::query()
                 ->lockForUpdate()
                 ->findOrFail($booking->id);
-
-            if ($booking->status !== CleaningBookingStatus::TimeExtensionRequested) {
-                throw new InvalidArgumentException('Booking is not waiting for an extension decision.');
-            }
 
             $quotedAmount = round((float) ($warning->quoted_amount ?? 0), 2);
 
@@ -60,34 +49,13 @@ final class CleaningTimeWarningService
                 'price_applied_at' => $warning->price_applied_at ?? now(),
             ]);
 
-            $booking->update([
-                'status' => CleaningBookingStatus::InProgress,
-                'work_finished_at' => null,
-            ]);
-
             return $warning->fresh();
         });
-
-        $booking = $warning->booking?->fresh();
-        if ($booking instanceof CleaningBooking) {
-            $this->trackingBroadcaster->dispatch($booking);
-            BroadcastAfterResponse::send(new CompletionDecisionMade(
-                $booking->id,
-                $booking->worker_id,
-                'extension_accepted',
-                'تم قبول طلب تمديد الوقت.',
-                now()->toIso8601String(),
-                $warning->id,
-                CleaningBookingStatus::InProgress->value,
-            ));
-        }
-
-        return $warning;
     }
 
     public function reject(CleaningTimeWarning $warning, ?string $message = null): CleaningTimeWarning
     {
-        $warning = DB::transaction(static function () use ($warning, $message): CleaningTimeWarning {
+        return DB::transaction(static function () use ($warning, $message): CleaningTimeWarning {
             $warning = CleaningTimeWarning::query()
                 ->lockForUpdate()
                 ->findOrFail($warning->id);
@@ -105,10 +73,6 @@ final class CleaningTimeWarningService
                 ->lockForUpdate()
                 ->findOrFail($booking->id);
 
-            if ($booking->status !== CleaningBookingStatus::TimeExtensionRequested) {
-                throw new InvalidArgumentException('Booking is not waiting for an extension decision.');
-            }
-
             $warning->update([
                 'worker_response' => CleaningTimeWarningResponse::CommitCurrentTime,
                 'worker_responded_at' => now(),
@@ -123,21 +87,5 @@ final class CleaningTimeWarningService
 
             return $warning->fresh();
         });
-
-        $booking = $warning->booking?->fresh();
-        if ($booking instanceof CleaningBooking) {
-            $this->trackingBroadcaster->dispatch($booking);
-            BroadcastAfterResponse::send(new CompletionDecisionMade(
-                $booking->id,
-                $booking->worker_id,
-                'extension_rejected',
-                $message ?: 'تم رفض طلب تمديد الوقت وتم إنهاء الطلب.',
-                now()->toIso8601String(),
-                $warning->id,
-                CleaningBookingStatus::Completed->value,
-            ));
-        }
-
-        return $warning;
     }
 }

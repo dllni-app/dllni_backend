@@ -5,12 +5,9 @@ declare(strict_types=1);
 use App\Models\User;
 use App\Models\Worker;
 use App\Jobs\NotifyWorkerExtensionRequestJob;
-use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
-use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
-use Modules\Cleaning\Events\CompletionDecisionMade;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningTimeWarning;
@@ -26,8 +23,6 @@ beforeEach(function () {
 });
 
 it('accepts an extension request', function () {
-    Event::fake([CleaningBookingTrackingUpdated::class, CompletionDecisionMade::class]);
-
     $workerUser = User::factory()->create(['email' => 'worker-ext-accept@example.com']);
     $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
@@ -35,10 +30,9 @@ it('accepts an extension request', function () {
     $booking = CleaningBooking::factory()->create([
         'worker_id' => $worker->id,
         'billing_policy_id' => $this->billingPolicy->id,
-        'status' => CleaningBookingStatus::TimeExtensionRequested,
+        'status' => CleaningBookingStatus::InProgress,
         'total_price' => 100.00,
         'extension_fee_total' => 0,
-        'work_finished_at' => now()->subMinutes(5),
     ]);
 
     $warning = CleaningTimeWarning::create([
@@ -69,29 +63,12 @@ it('accepts an extension request', function () {
     ]);
 
     $booking->refresh();
-    expect($booking->status)->toBe(CleaningBookingStatus::InProgress);
-    expect($booking->work_finished_at)->toBeNull();
     expect((float) $booking->extension_fee_total)->toBe(4500.0);
     expect((float) $booking->total_price)->toBe(4600.0);
     expect($warning->fresh()->price_applied_at)->not->toBeNull();
-
-    Event::assertDispatched(CompletionDecisionMade::class, function (CompletionDecisionMade $event) use ($booking, $warning, $worker): bool {
-        return $event->cleaningBookingId === $booking->id
-            && $event->workerId === $worker->id
-            && $event->decision === 'extension_accepted'
-            && $event->status === CleaningBookingStatus::InProgress->value
-            && $event->warningId === $warning->id;
-    });
-
-    Event::assertDispatched(CleaningBookingTrackingUpdated::class, function (CleaningBookingTrackingUpdated $event) use ($booking): bool {
-        return $event->cleaningBookingId === $booking->id
-            && $event->tracking['status'] === CleaningBookingStatus::InProgress->value;
-    });
 });
 
 it('rejects an extension request with message', function () {
-    Event::fake([CleaningBookingTrackingUpdated::class, CompletionDecisionMade::class]);
-
     $workerUser = User::factory()->create(['email' => 'worker-ext-reject@example.com']);
     $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
@@ -137,20 +114,6 @@ it('rejects an extension request with message', function () {
     expect($booking->status)->toBe(CleaningBookingStatus::Completed);
     expect($booking->work_finished_at)->not->toBeNull();
     expect($warning->fresh()->price_applied_at)->toBeNull();
-
-    Event::assertDispatched(CompletionDecisionMade::class, function (CompletionDecisionMade $event) use ($booking, $warning, $worker): bool {
-        return $event->cleaningBookingId === $booking->id
-            && $event->workerId === $worker->id
-            && $event->decision === 'extension_rejected'
-            && $event->status === CleaningBookingStatus::Completed->value
-            && $event->warningId === $warning->id
-            && $event->message === 'Sorry, I cannot extend.';
-    });
-
-    Event::assertDispatched(CleaningBookingTrackingUpdated::class, function (CleaningBookingTrackingUpdated $event) use ($booking): bool {
-        return $event->cleaningBookingId === $booking->id
-            && $event->tracking['status'] === CleaningBookingStatus::Completed->value;
-    });
 });
 
 it('returns 403 when extension request is not for worker booking', function () {
@@ -162,7 +125,7 @@ it('returns 403 when extension request is not for worker booking', function () {
     $booking = CleaningBooking::factory()->create([
         'worker_id' => $otherWorker->id,
         'billing_policy_id' => $this->billingPolicy->id,
-        'status' => CleaningBookingStatus::TimeExtensionRequested,
+        'status' => CleaningBookingStatus::InProgress,
     ]);
 
     $warning = CleaningTimeWarning::create([
@@ -210,7 +173,7 @@ it('accepts an extension request without additionalMinutes', function () {
     $booking = CleaningBooking::factory()->create([
         'worker_id' => $worker->id,
         'billing_policy_id' => $this->billingPolicy->id,
-        'status' => CleaningBookingStatus::TimeExtensionRequested,
+        'status' => CleaningBookingStatus::InProgress,
         'total_price' => 500.00,
     ]);
 
@@ -251,7 +214,7 @@ it('does not double-apply extension quote when accept is retried', function () {
     $booking = CleaningBooking::factory()->create([
         'worker_id' => $worker->id,
         'billing_policy_id' => $this->billingPolicy->id,
-        'status' => CleaningBookingStatus::TimeExtensionRequested,
+        'status' => CleaningBookingStatus::InProgress,
         'total_price' => 200.00,
         'extension_fee_total' => 0,
     ]);
@@ -291,7 +254,7 @@ it('rejects an extension request without message', function () {
     $booking = CleaningBooking::factory()->create([
         'worker_id' => $worker->id,
         'billing_policy_id' => $this->billingPolicy->id,
-        'status' => CleaningBookingStatus::TimeExtensionRequested,
+        'status' => CleaningBookingStatus::InProgress,
     ]);
 
     $warning = CleaningTimeWarning::create([
@@ -320,7 +283,7 @@ it('returns 403 when user has no worker on extension accept', function () {
 
     $booking = CleaningBooking::factory()->create([
         'billing_policy_id' => $this->billingPolicy->id,
-        'status' => CleaningBookingStatus::TimeExtensionRequested,
+        'status' => CleaningBookingStatus::InProgress,
     ]);
 
     $warning = CleaningTimeWarning::create([

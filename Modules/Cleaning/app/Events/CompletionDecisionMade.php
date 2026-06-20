@@ -20,8 +20,6 @@ final class CompletionDecisionMade implements ShouldBroadcastNow
         public string $decision,
         public ?string $message,
         public string $decidedAt,
-        public ?int $warningId = null,
-        public ?string $status = null,
     ) {}
 
     /**
@@ -58,10 +56,6 @@ final class CompletionDecisionMade implements ShouldBroadcastNow
             'decision' => $this->decision,
             'message' => $this->message,
             'decidedAt' => $this->decidedAt,
-            'decided_at' => $this->decidedAt,
-            'warningId' => $this->warningId,
-            'warning_id' => $this->warningId,
-            'status' => $this->status,
             'version' => 1,
         ];
     }
