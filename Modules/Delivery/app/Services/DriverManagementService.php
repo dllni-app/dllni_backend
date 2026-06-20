@@ -15,7 +15,7 @@ final class DriverManagementService
     public function suspend(DeliveryDriver $driver, string $reason, ?DateTimeInterface $until = null): DeliveryDriver
     {
         if ($driver->is_suspended) {
-            throw new InvalidArgumentException('Driver is already suspended.');
+            throw new InvalidArgumentException('السائق موقوف بالفعل.');
         }
 
         $driver->forceFill([
@@ -31,11 +31,11 @@ final class DriverManagementService
     public function unsuspend(DeliveryDriver $driver): DeliveryDriver
     {
         if (! $driver->is_suspended) {
-            throw new InvalidArgumentException('Driver is not suspended.');
+            throw new InvalidArgumentException('السائق غير موقوف.');
         }
 
         if ($driver->suspension_reason === DeliverySuspensionReason::Financial->value) {
-            throw new InvalidArgumentException('Financial suspensions can only be cleared after the company balance is below the limit.');
+            throw new InvalidArgumentException('لا يمكن إزالة الإيقاف المالي إلا بعد انخفاض رصيد الشركة عن الحد المسموح.');
         }
 
         $attributes = [
@@ -56,7 +56,7 @@ final class DriverManagementService
     public function activate(DeliveryDriver $driver): DeliveryDriver
     {
         if ($driver->is_active) {
-            throw new InvalidArgumentException('Driver is already active.');
+            throw new InvalidArgumentException('السائق نشط بالفعل.');
         }
 
         $driver->forceFill([
@@ -72,7 +72,7 @@ final class DriverManagementService
     public function deactivate(DeliveryDriver $driver): DeliveryDriver
     {
         if (! $driver->is_active) {
-            throw new InvalidArgumentException('Driver is already inactive.');
+            throw new InvalidArgumentException('السائق غير نشط بالفعل.');
         }
 
         $driver->forceFill([
