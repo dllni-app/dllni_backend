@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Resturants\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Str;
 use Modules\Resturants\Models\Restaurant;
 
 final class RestaurantRequest extends FormRequest
@@ -18,6 +19,7 @@ final class RestaurantRequest extends FormRequest
     {
         $restaurantRoute = $this->route('restaurant');
         $restaurantId = null;
+        $isOwnerProfileRoute = $this->is('api/v1/restaurant-owner/restaurant');
 
         if ($restaurantRoute instanceof Restaurant) {
             $restaurantId = $restaurantRoute->id;
@@ -26,16 +28,15 @@ final class RestaurantRequest extends FormRequest
         } else {
             $owner = auth()->user();
             if ($owner) {
-                /** @var Restaurant|null $ownedRestaurant */
                 $ownedRestaurant = $owner->restaurants()->first();
                 $restaurantId = $ownedRestaurant?->id;
             }
         }
 
         return [
-            'userId' => 'required|exists:users,id',
+            'userId' => $isOwnerProfileRoute ? 'nullable|exists:users,id' : 'required|exists:users,id',
             'name' => 'required|string|max:255',
-            'slug' => 'required|string|max:255|unique:restaurants,slug,'.$restaurantId,
+            'slug' => $isOwnerProfileRoute ? 'nullable|string|max:255|unique:restaurants,slug,'.$restaurantId : 'required|string|max:255|unique:restaurants,slug,'.$restaurantId,
             'description' => 'nullable|string|max:200',
             'address' => 'nullable|string|max:255',
             'city' => 'nullable|string|max:100',
@@ -70,7 +71,13 @@ final class RestaurantRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        $owner = auth()->user();
+        $ownedRestaurant = $owner?->restaurants()->first();
+        $name = $this->input('name', $ownedRestaurant?->name);
+
         $this->merge([
+            'userId' => $this->input('userId', $ownedRestaurant?->user_id ?? $owner?->id),
+            'slug' => $this->input('slug', $ownedRestaurant?->slug ?? ($name ? Str::slug((string) $name) : null)),
             'whatsappNumber' => $this->input('whatsappNumber', $this->input('whatsapp')),
             'facebookPageName' => $this->input('facebookPageName', $this->input('face')),
             'instagramUsername' => $this->input('instagramUsername', $this->input('instagram')),
