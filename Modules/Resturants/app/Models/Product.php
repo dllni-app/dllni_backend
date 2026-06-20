@@ -27,6 +27,8 @@ final class Product extends Model implements HasMedia
         'description',
         'price',
         'discounted_price',
+        'discount_type',
+        'discount_value',
         'is_available',
         'unavailable_until',
         'availability_note',
@@ -122,6 +124,8 @@ final class Product extends Model implements HasMedia
         return [
             'price' => 'decimal:2',
             'discounted_price' => 'decimal:2',
+            'discount_type' => 'string',
+            'discount_value' => 'decimal:2',
             'is_available' => 'boolean',
             'unavailable_until' => 'datetime',
             'availability_note' => 'string',
