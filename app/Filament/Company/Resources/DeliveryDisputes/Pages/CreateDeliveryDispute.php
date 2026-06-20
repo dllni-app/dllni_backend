@@ -43,7 +43,7 @@ final class CreateDeliveryDispute extends CreateRecord
 
         if (! $orderExists) {
             throw ValidationException::withMessages([
-                'booking_id' => 'The selected order does not belong to your company.',
+                'booking_id' => 'الطلب المحدد لا يتبع لشركتك.',
             ]);
         }
 
