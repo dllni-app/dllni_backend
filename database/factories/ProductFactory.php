@@ -30,6 +30,8 @@ final class ProductFactory extends Factory
             'description' => fake()->sentence(),
             'price' => $price,
             'discounted_price' => null,
+            'discount_type' => null,
+            'discount_value' => null,
             'is_available' => true,
             'stock_quantity' => fake()->numberBetween(10, 100),
             'low_stock_threshold' => 5,
