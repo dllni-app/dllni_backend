@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace App\Http\Resources;
 
+use App\Models\BookingReview;
 use App\Models\Worker;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
+use Modules\Cleaning\Models\CleaningBooking;
 
 /**
  * @mixin Worker
@@ -27,7 +31,7 @@ final class WorkerResource extends JsonResource
                 fn () => MediaResource::make($this->getFirstMedia('avatar'))
             ),
             'bio' => $this->bio,
-            'averageRating' => (float) $this->average_rating,
+            'averageRating' => $this->resolveCleaningAverageRating(),
             'totalCompletedJobs' => $this->total_completed_jobs,
             'trustScore' => $this->trust_score,
             'acceptanceRate' => (float) $this->acceptance_rate,
@@ -52,5 +56,27 @@ final class WorkerResource extends JsonResource
             'createdAt' => $this->created_at->toDateTimeString(),
             'updatedAt' => $this->updated_at->toDateTimeString(),
         ];
+    }
+
+    private function resolveCleaningAverageRating(): float
+    {
+        $average = BookingReview::query()
+            ->whereHasMorph('booking', [CleaningBooking::class], function (Builder $bookingQuery): void {
+                $bookingQuery->where(function (Builder $workerScope): void {
+                    $workerScope->where('worker_id', $this->id)
+                        ->orWhereHas('workerAssignments', function (Builder $assignmentQuery): void {
+                            $assignmentQuery
+                                ->where('worker_id', $this->id)
+                                ->where('status', CleaningBookingWorkerAssignmentStatus::Accepted->value);
+                        });
+                });
+            })
+            ->avg('rating');
+
+        if ($average !== null) {
+            return round((float) $average, 1);
+        }
+
+        return (float) $this->average_rating;
     }
 }

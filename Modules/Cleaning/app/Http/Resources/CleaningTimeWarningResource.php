@@ -15,10 +15,18 @@ final class CleaningTimeWarningResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $bookingStatus = null;
+
+        if ($this->relationLoaded('booking') && $this->booking !== null) {
+            $bookingStatus = $this->booking->status?->value ?? $this->booking->status;
+        }
+
         return [
             'id' => $this->id,
             'bookingId' => $this->booking_id,
             'bookingType' => $this->booking_type,
+            'bookingStatus' => $bookingStatus,
+            'booking_status' => $bookingStatus,
             'customerResponse' => $this->customer_response?->value ?? $this->customer_response,
             'workerResponse' => $this->worker_response?->value ?? $this->worker_response,
             'sentAt' => $this->sent_at?->toDateTimeString(),
