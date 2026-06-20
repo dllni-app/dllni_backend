@@ -21,12 +21,24 @@ final class SyncFcmTokenFromHeader
                 $user = Auth::guard('sanctum')->user();
             }
 
-            if ($user instanceof User && ($user->getAttributes()['fcm_token'] ?? null) !== $token) {
-                $user->forceFill(['fcm_token' => $token])->saveQuietly();
+            if ($user instanceof User) {
+                $this->claimTokenForUser($user, $token);
             }
         }
 
         return $next($request);
+    }
+
+    private function claimTokenForUser(User $user, string $token): void
+    {
+        User::query()
+            ->where('fcm_token', $token)
+            ->whereKeyNot($user->getKey())
+            ->update(['fcm_token' => null]);
+
+        if (($user->getAttributes()['fcm_token'] ?? null) !== $token) {
+            $user->forceFill(['fcm_token' => $token])->saveQuietly();
+        }
     }
 
     private function resolveToken(Request $request): ?string
