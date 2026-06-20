@@ -42,7 +42,7 @@ final class DeliveryOrderService
     public function create(DeliveryCompany $company, array $payload, ?int $createdByUserId = null): DeliveryOrder
     {
         if ($company->is_suspended) {
-            throw new InvalidArgumentException('Company is suspended and cannot create orders.');
+            throw new InvalidArgumentException('الشركة موقوفة ولا يمكنها إنشاء طلبات.');
         }
 
         $pricing = $this->pricingService->calculate(
@@ -77,11 +77,11 @@ final class DeliveryOrderService
                 order: $order,
                 from: null,
                 to: DeliveryOrderStatus::New,
-                note: 'Order created',
+                note: 'تم إنشاء الطلب',
             );
 
             $this->applyStatus($order, DeliveryOrderStatus::Dispatching, [
-                'note' => 'Pricing calculated and dispatch queued',
+                'note' => 'تم احتساب السعر وإضافة الطلب إلى قائمة التوزيع',
             ]);
 
             return $order->fresh();
@@ -99,7 +99,7 @@ final class DeliveryOrderService
             $currentStatus = DeliveryOrderStatus::tryFrom((string) $order->status);
 
             if (! in_array($currentStatus, [DeliveryOrderStatus::Stopped, DeliveryOrderStatus::Dispatching], true)) {
-                throw new InvalidArgumentException('Order cannot be retried from the current status.');
+                throw new InvalidArgumentException('لا يمكن إعادة محاولة توزيع الطلب من حالته الحالية.');
             }
 
             $order->assignmentAttempts()
@@ -117,7 +117,7 @@ final class DeliveryOrderService
                 order: $order,
                 from: $from,
                 to: DeliveryOrderStatus::Dispatching,
-                note: 'Dispatch retry requested',
+                note: 'تم طلب إعادة التوزيع',
             );
 
             return $order->fresh();
@@ -137,7 +137,7 @@ final class DeliveryOrderService
 
             $this->applyStatus($order, DeliveryOrderStatus::InProgress, [
                 'timestampColumn' => 'started_at',
-                'note' => 'Driver started delivery',
+                'note' => 'بدأ السائق عملية التوصيل',
                 'actorType' => 'delivery_driver',
                 'actorId' => $driverId,
             ]);
@@ -158,7 +158,7 @@ final class DeliveryOrderService
 
             $this->applyStatus($order, DeliveryOrderStatus::PickedUp, [
                 'timestampColumn' => 'picked_up_at',
-                'note' => 'Order picked up from sender',
+                'note' => 'تم استلام الطلب من المرسل',
                 'actorType' => 'delivery_driver',
                 'actorId' => $driverId,
             ]);
@@ -179,7 +179,7 @@ final class DeliveryOrderService
 
             $this->applyStatus($order, DeliveryOrderStatus::Delivered, [
                 'timestampColumn' => 'delivered_at',
-                'note' => 'Order delivered to recipient',
+                'note' => 'تم تسليم الطلب إلى المستلم',
                 'actorType' => 'delivery_driver',
                 'actorId' => $driverId,
             ]);
@@ -204,7 +204,7 @@ final class DeliveryOrderService
         }
 
         if ($order->status !== DeliveryOrderStatus::Delivered->value) {
-            throw new InvalidArgumentException('Order must be delivered before it can be completed.');
+            throw new InvalidArgumentException('يجب تسليم الطلب قبل إكماله.');
         }
 
         return DB::transaction(function () use ($order, $driverId): DeliveryOrder {
@@ -216,7 +216,7 @@ final class DeliveryOrderService
 
             $this->applyStatus($order, DeliveryOrderStatus::Completed, [
                 'timestampColumn' => 'completed_at',
-                'note' => 'Order completed',
+                'note' => 'تم إكمال الطلب',
                 'actorType' => $driverId !== null ? 'delivery_driver' : null,
                 'actorId' => $driverId,
             ]);
@@ -246,7 +246,7 @@ final class DeliveryOrderService
                 DeliveryOrderStatus::Completed,
                 DeliveryOrderStatus::Cancelled,
             ], true)) {
-                throw new InvalidArgumentException('Order cannot be cancelled from the current status.');
+                throw new InvalidArgumentException('لا يمكن إلغاء الطلب من حالته الحالية.');
             }
 
             $order->assignmentAttempts()
@@ -379,14 +379,14 @@ final class DeliveryOrderService
     private function assertAssignedDriver(DeliveryOrder $order, int $driverId): void
     {
         if ((int) $order->driver_id !== $driverId) {
-            throw new InvalidArgumentException('This order is not assigned to the current driver.');
+            throw new InvalidArgumentException('هذا الطلب غير مسند إلى السائق الحالي.');
         }
     }
 
     private function assertCurrentStatus(DeliveryOrder $order, DeliveryOrderStatus $expected): void
     {
         if ($order->status !== $expected->value) {
-            throw new InvalidArgumentException("Invalid status transition from {$order->status} to {$expected->value}.");
+            throw new InvalidArgumentException("انتقال حالة غير صالح من {$order->status} إلى {$expected->value}.");
         }
     }
 
