@@ -14,9 +14,14 @@ use Modules\Resturants\Models\Cart;
 use Modules\Resturants\Models\Order;
 use Modules\Resturants\Models\OrderItem;
 use Modules\Resturants\Models\PromoCode;
+use Modules\Resturants\Services\RestaurantOrderNotificationService;
 
 final class RestaurantCheckoutService
 {
+    public function __construct(
+        private readonly RestaurantOrderNotificationService $restaurantOrderNotificationService,
+    ) {}
+
     /**
      * Creates a single Order containing all cart items.
      * When items span multiple restaurants restaurant_id is set to null
@@ -111,6 +116,7 @@ final class RestaurantCheckoutService
             }
 
             $cart->delete();
+            $this->restaurantOrderNotificationService->orderCreated($order);
 
             return $order;
         });
