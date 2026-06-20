@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use Modules\Resturants\Enums\DiscountType;
 use Modules\Resturants\Models\Cart;
@@ -12,7 +13,7 @@ use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\PromoCode;
 use Modules\Resturants\Models\Restaurant;
 
-it('creates a single order from cart and clears the cart', function (): void {
+it('creates a single order from cart, clears the cart, and notifies the restaurant', function (): void {
     // Arrange
     $user = User::factory()->create();
     Sanctum::actingAs($user);
@@ -86,9 +87,23 @@ it('creates a single order from cart and clears the cart', function (): void {
 
     $this->assertDatabaseMissing('carts', ['id' => $cart->id]);
     $this->assertDatabaseCount('orders', 1);
+
+    $notification = DB::table('notifications')
+        ->where('notifiable_type', User::class)
+        ->where('notifiable_id', $restaurant->user_id)
+        ->where('type', 'restaurant.owner.order_created')
+        ->first();
+
+    expect($notification)->not->toBeNull();
+
+    $payload = json_decode((string) $notification->data, true, 512, JSON_THROW_ON_ERROR);
+
+    expect($payload['canonical_type'] ?? null)->toBe('restaurant.owner.order_created')
+        ->and((int) data_get($payload, 'data.orderId'))->toBe((int) $orderId)
+        ->and((int) data_get($payload, 'data.restaurantId'))->toBe((int) $restaurant->id);
 });
 
-it('creates ONE order even when cart has items from multiple restaurants', function (): void {
+it('creates ONE order even when cart has items from multiple restaurants and notifies each restaurant', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
@@ -139,4 +154,15 @@ it('creates ONE order even when cart has items from multiple restaurants', funct
         'user_id' => $user->id,
         'restaurant_id' => null,
     ]);
+
+    expect(DB::table('notifications')
+        ->where('notifiable_type', User::class)
+        ->where('notifiable_id', $restaurantA->user_id)
+        ->where('type', 'restaurant.owner.order_created')
+        ->exists())->toBeTrue()
+        ->and(DB::table('notifications')
+            ->where('notifiable_type', User::class)
+            ->where('notifiable_id', $restaurantB->user_id)
+            ->where('type', 'restaurant.owner.order_created')
+            ->exists())->toBeTrue();
 });
