@@ -43,9 +43,9 @@ final class UserLoginRequest extends FormRequest
             'password.required' => 'كلمة المرور مطلوبة.',
             'password.string' => 'كلمة المرور يجب أن تكون نصاً.',
 
-            'moduleType.required' => 'نوع التطبيق مطلوب.',
-            'moduleType.string' => 'نوع التطبيق يجب أن يكون نصاً.',
-            'moduleType.enum' => 'نوع التطبيق غير صالح.',
+            // 'moduleType.required' => 'نوع التطبيق مطلوب.',
+            // 'moduleType.string' => 'نوع التطبيق يجب أن يكون نصاً.',
+            // 'moduleType.enum' => 'نوع التطبيق غير صالح.',
 
             'fcmToken.string' => 'رمز الإشعارات يجب أن يكون نصاً.',
             'fcmToken.min' => 'رمز الإشعارات غير صالح.',
