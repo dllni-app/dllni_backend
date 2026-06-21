@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Models\User;
 use App\Models\Worker;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Laravel\Sanctum\Sanctum;
@@ -747,4 +748,32 @@ it('returns 422 when arrive before start travel', function () {
     $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/arrive");
 
     $response->assertUnprocessable();
+});
+
+it('hides active work timer after worker completes the booking', function () {
+    Carbon::setTestNow(Carbon::parse('2026-06-21 12:00:00'));
+
+    Event::fake([CleaningBookingTrackingUpdated::class, CleaningOrderAwaitingCustomerCompletion::class]);
+
+    $workerUser = User::factory()->create(['email' => 'worker-complete-timer@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'status' => CleaningBookingStatus::InProgress,
+        'work_started_at' => now()->subHours(3),
+        'total_hours' => 2,
+    ]);
+
+    $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/complete");
+
+    $response->assertOk();
+    expect($response->json('data.status'))->toBe('awaiting_customer_completion');
+    expect($response->json('data.shouldShowWorkTimer'))->toBeFalse();
+    expect($response->json('data.isWorkOverdue'))->toBeFalse();
+    expect($response->json('data.expectedFinishAt'))->not->toBeNull();
+
+    Carbon::setTestNow();
 });

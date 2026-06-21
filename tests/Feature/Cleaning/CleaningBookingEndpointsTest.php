@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\CleaningFinancialSetting;
 use App\Models\Worker;
 use App\Enums\WorkerPreferredWorkType;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
@@ -941,4 +942,132 @@ it('rejects activating worker account status without home location', function ()
     ]);
 
     $response->assertUnprocessable()->assertJsonValidationErrors(['isActive']);
+});
+
+describe('cleaning booking work timer', function () {
+    beforeEach(function () {
+        Carbon::setTestNow(Carbon::parse('2026-06-21 12:00:00'));
+
+        $this->billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
+            'name' => 'Default',
+            'billing_mode' => 'actual_working_time',
+            'rules' => [],
+            'is_active' => true,
+            'is_default' => true,
+        ]);
+    });
+
+    afterEach(function () {
+        Carbon::setTestNow();
+    });
+
+    it('returns remaining work seconds for active in progress booking', function () {
+        $booking = CleaningBooking::factory()->create([
+            'billing_policy_id' => $this->billingPolicy->id,
+            'status' => CleaningBookingStatus::InProgress,
+            'work_started_at' => now()->subMinutes(30),
+            'total_hours' => 2,
+            'estimated_hours' => 2,
+        ]);
+
+        $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}");
+
+        $response->assertOk();
+        expect($response->json('data.shouldShowWorkTimer'))->toBeTrue();
+        expect($response->json('data.isWorkOverdue'))->toBeFalse();
+        expect($response->json('data.remainingWorkSeconds'))->toBeGreaterThan(0);
+        expect($response->json('data.overdueWorkSeconds'))->toBe(0);
+        expect($response->json('data.expectedFinishAt'))->not->toBeNull();
+        expect($response->json('data.workTimer.source.startField'))->toBe('work_started_at');
+        expect($response->json('data.workTimer.source.durationField'))->toBe('total_hours');
+    });
+
+    it('returns overdue work seconds when active work exceeds expected duration', function () {
+        $booking = CleaningBooking::factory()->create([
+            'billing_policy_id' => $this->billingPolicy->id,
+            'status' => CleaningBookingStatus::InProgress,
+            'work_started_at' => now()->subHours(3),
+            'total_hours' => 2,
+            'estimated_hours' => 2,
+        ]);
+
+        $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}");
+
+        $response->assertOk();
+        expect($response->json('data.shouldShowWorkTimer'))->toBeTrue();
+        expect($response->json('data.isWorkOverdue'))->toBeTrue();
+        expect($response->json('data.remainingWorkSeconds'))->toBe(0);
+        expect($response->json('data.overdueWorkSeconds'))->toBeGreaterThan(0);
+    });
+
+    it('falls back to estimated hours when total hours is zero', function () {
+        $booking = CleaningBooking::factory()->create([
+            'billing_policy_id' => $this->billingPolicy->id,
+            'status' => CleaningBookingStatus::InProgress,
+            'work_started_at' => now()->subMinutes(30),
+            'total_hours' => 0,
+            'estimated_hours' => 2,
+        ]);
+
+        $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}");
+
+        $response->assertOk();
+        expect($response->json('data.workTimer.source.durationField'))->toBe('estimated_hours');
+        expect($response->json('data.expectedFinishAt'))->not->toBeNull();
+    });
+
+    it('falls back to arrived at when work started at is missing', function () {
+        $booking = CleaningBooking::factory()->create([
+            'billing_policy_id' => $this->billingPolicy->id,
+            'status' => CleaningBookingStatus::InProgress,
+            'work_started_at' => null,
+            'arrived_at' => now()->subMinutes(30),
+            'total_hours' => 0,
+            'estimated_hours' => 2,
+        ]);
+
+        $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}");
+
+        $response->assertOk();
+        expect($response->json('data.workTimer.source.startField'))->toBe('arrived_at');
+        expect($response->json('data.expectedFinishAt'))->not->toBeNull();
+    });
+
+    it('does not show active overdue state after awaiting customer completion', function () {
+        $booking = CleaningBooking::factory()->create([
+            'billing_policy_id' => $this->billingPolicy->id,
+            'status' => CleaningBookingStatus::AwaitingCustomerCompletion,
+            'work_started_at' => now()->subHours(3),
+            'total_hours' => 2,
+            'estimated_hours' => 2,
+        ]);
+
+        $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}");
+
+        $response->assertOk();
+        expect($response->json('data.shouldShowWorkTimer'))->toBeFalse();
+        expect($response->json('data.isWorkOverdue'))->toBeFalse();
+        expect($response->json('data.remainingWorkSeconds'))->toBe(0);
+        expect($response->json('data.overdueWorkSeconds'))->toBe(0);
+        expect($response->json('data.expectedFinishAt'))->not->toBeNull();
+    });
+
+    it('returns null-safe work timer payload when start or duration is missing', function () {
+        $booking = CleaningBooking::factory()->create([
+            'billing_policy_id' => $this->billingPolicy->id,
+            'status' => CleaningBookingStatus::InProgress,
+            'work_started_at' => null,
+            'arrived_at' => null,
+            'total_hours' => 0,
+            'estimated_hours' => 0,
+        ]);
+
+        $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}");
+
+        $response->assertOk();
+        expect($response->json('data.shouldShowWorkTimer'))->toBeFalse();
+        expect($response->json('data.expectedFinishAt'))->toBeNull();
+        expect($response->json('data.workTimer.remainingWorkSeconds'))->toBe(0);
+        expect($response->json('data.workTimer.overdueWorkSeconds'))->toBe(0);
+    });
 });

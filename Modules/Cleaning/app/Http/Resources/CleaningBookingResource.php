@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Http\Resources;
 
+use Carbon\CarbonInterface;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Arr;
@@ -29,6 +30,7 @@ final class CleaningBookingResource extends JsonResource
         $teamSummary = $this->workerAcceptanceSummary();
         $address = $this->addressPayload($normalizedPropertyDetails);
         $servicePrice = (float) ($this->base_price ?? 0);
+        $workTimer = $this->workTimerPayload((string) $orderStatus);
 
         return [
             'id' => $this->id,
@@ -128,6 +130,12 @@ final class CleaningBookingResource extends JsonResource
             'disputes' => $this->whenLoaded('disputes'),
             'createdAt' => $this->created_at->toDateTimeString(),
             'updatedAt' => $this->updated_at->toDateTimeString(),
+            'workTimer' => $workTimer,
+            'expectedFinishAt' => $workTimer['expectedFinishAt'],
+            'remainingWorkSeconds' => $workTimer['remainingWorkSeconds'],
+            'overdueWorkSeconds' => $workTimer['overdueWorkSeconds'],
+            'isWorkOverdue' => $workTimer['isWorkOverdue'],
+            'shouldShowWorkTimer' => $workTimer['shouldShowWorkTimer'],
         ];
     }
 
@@ -517,5 +525,79 @@ final class CleaningBookingResource extends JsonResource
     private function humanizeEnum(string $value): string
     {
         return str_replace('_', ' ', $value);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function workTimerPayload(string $orderStatus): array
+    {
+        $startAt = $this->workTimerStartAt();
+        $startField = $this->work_started_at !== null
+            ? 'work_started_at'
+            : ($this->arrived_at !== null ? 'arrived_at' : null);
+
+        $durationHours = null;
+        $durationField = null;
+        $totalHours = (float) ($this->total_hours ?? 0);
+        $estimatedHours = (float) ($this->estimated_hours ?? 0);
+
+        if ($totalHours > 0) {
+            $durationHours = $totalHours;
+            $durationField = 'total_hours';
+        } elseif ($estimatedHours > 0) {
+            $durationHours = $estimatedHours;
+            $durationField = 'estimated_hours';
+        }
+
+        $isTimerStatus = $this->isWorkTimerStatus($orderStatus);
+
+        if ($startAt === null || $durationHours === null) {
+            return [
+                'timerStartAt' => $startAt?->toIso8601String(),
+                'expectedFinishAt' => null,
+                'durationHours' => $durationHours,
+                'remainingWorkSeconds' => 0,
+                'overdueWorkSeconds' => 0,
+                'isWorkOverdue' => false,
+                'shouldShowWorkTimer' => false,
+                'source' => [
+                    'startField' => $startField,
+                    'durationField' => $durationField,
+                ],
+            ];
+        }
+
+        $expectedFinishAt = $startAt->copy()->addSeconds((int) round($durationHours * 3600));
+        $diffSeconds = now()->diffInSeconds($expectedFinishAt, false);
+        $remainingSeconds = max(0, $diffSeconds);
+        $overdueSeconds = max(0, -$diffSeconds);
+
+        return [
+            'timerStartAt' => $startAt->toIso8601String(),
+            'expectedFinishAt' => $expectedFinishAt->toIso8601String(),
+            'durationHours' => $durationHours,
+            'remainingWorkSeconds' => $isTimerStatus ? $remainingSeconds : 0,
+            'overdueWorkSeconds' => $isTimerStatus ? $overdueSeconds : 0,
+            'isWorkOverdue' => $isTimerStatus && $overdueSeconds > 0,
+            'shouldShowWorkTimer' => $isTimerStatus,
+            'source' => [
+                'startField' => $startField,
+                'durationField' => $durationField,
+            ],
+        ];
+    }
+
+    private function workTimerStartAt(): ?CarbonInterface
+    {
+        return $this->work_started_at ?? $this->arrived_at;
+    }
+
+    private function isWorkTimerStatus(?string $status): bool
+    {
+        return in_array($status, [
+            CleaningBookingStatus::InProgress->value,
+            CleaningBookingStatus::TimeExtensionRequested->value,
+        ], true);
     }
 }
