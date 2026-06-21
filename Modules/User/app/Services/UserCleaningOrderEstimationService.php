@@ -59,6 +59,18 @@ final class UserCleaningOrderEstimationService
         'other',
     ];
 
+    /**
+     * @var array<int, string>
+     */
+    private const ROOM_SIZE_BREAKDOWN_TYPES = [
+        'bedroom',
+        'bathroom',
+        'kitchen',
+        'living_room',
+        'balcony',
+        'corridor',
+    ];
+
     public function __construct(
         private readonly CleaningPricingCalculator $pricingCalculator,
     ) {}
@@ -109,7 +121,8 @@ final class UserCleaningOrderEstimationService
                 + $this->sumRoomTypeBuckets($normalizedBreakdown['bathroom'])
                 + $this->sumRoomTypeBuckets($normalizedBreakdown['kitchen'])
                 + $this->sumRoomTypeBuckets($normalizedBreakdown['living_room'])
-                + $this->sumRoomTypeBuckets($normalizedBreakdown['balcony']);
+                + $this->sumRoomTypeBuckets($normalizedBreakdown['balcony'])
+                + $this->sumRoomTypeBuckets($normalizedBreakdown['corridor']);
             $rooms = $this->sumRoomTypeBuckets($normalizedBreakdown['bedroom']);
             $bathrooms = $this->sumRoomTypeBuckets($normalizedBreakdown['bathroom']);
             $kitchens = $this->sumRoomTypeBuckets($normalizedBreakdown['kitchen']);
@@ -143,7 +156,7 @@ final class UserCleaningOrderEstimationService
 
     /**
      * @param  array<string, mixed>  $propertyDetails
-     * @return array{propertyType: string, propertyDetails: array{bedrooms: int, rooms: int, bathrooms: int, kitchens: int, balconies: int, living_room_size: string, cleaning_mode: string}, addressLatitude: ?float, addressLongitude: ?float, preferredWorkerId: ?int}
+     * @return array{propertyType: string, propertyDetails: array<string, mixed>, addressLatitude: ?float, addressLongitude: ?float, preferredWorkerId: ?int, serviceIds: array<int, int>}
      */
     public function pricingSnapshotInput(
         string $propertyType,
@@ -186,7 +199,7 @@ final class UserCleaningOrderEstimationService
 
     /**
      * @param  array<string, mixed>  $propertyDetails
-     * @return array{estimatedSqm: float, estimatedHours: float, sizeTier: string}
+     * @return array<string, mixed>
      */
     public function estimate(string $propertyType, array $propertyDetails, ?array $serviceIds = null): array
     {
@@ -255,7 +268,7 @@ final class UserCleaningOrderEstimationService
 
     /**
      * @param  array<string, mixed>  $propertyDetails
-     * @return array{basePrice: float, travelFee: float, addonsTotal: float, distanceKm: ?float, adminMargin: float, isPricingFinal: bool, totalPrice: float, currency: string}
+     * @return array<string, mixed>
      */
     public function price(
         string $propertyType,
@@ -609,11 +622,10 @@ final class UserCleaningOrderEstimationService
             return null;
         }
 
-        $types = ['bedroom', 'bathroom', 'kitchen', 'living_room', 'balcony'];
         $buckets = ['small', 'medium', 'large'];
         $normalized = [];
 
-        foreach ($types as $type) {
+        foreach (self::ROOM_SIZE_BREAKDOWN_TYPES as $type) {
             $roomTypeCounts = Arr::get($value, $type);
             if (! is_array($roomTypeCounts)) {
                 $roomTypeCounts = [];
