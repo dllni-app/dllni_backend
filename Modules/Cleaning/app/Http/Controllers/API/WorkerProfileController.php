@@ -23,7 +23,7 @@ final class WorkerProfileController
             abort(Response::HTTP_FORBIDDEN, 'User must have an associated worker.');
         }
 
-        $worker->load(['user', 'zones', 'availability', 'media', 'deposit']);
+        $worker->load(['user', 'zones.neighborhood', 'availability', 'media', 'deposit']);
 
         return WorkerResource::make($worker)->additional([
             'isEligibleForNewRequests' => $this->depositService->isWorkerEligibleForNewRequests($worker),

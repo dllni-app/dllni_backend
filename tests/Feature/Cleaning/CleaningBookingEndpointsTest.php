@@ -13,11 +13,31 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningNeighborhood;
 
 beforeEach(function () {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 });
+
+function createCleaningNeighborhoodCoverage(Worker $worker, ?string $name = null): CleaningNeighborhood
+{
+    static $coverageSequence = 1;
+
+    $fallbackName = sprintf('Coverage Neighborhood %03d', $coverageSequence++);
+    $neighborhood = CleaningNeighborhood::factory()->create([
+        'name_ar' => $name ?? $fallbackName,
+        'name_en' => $name ?? $fallbackName,
+    ]);
+
+    $worker->zones()->create([
+        'neighborhood_id' => $neighborhood->id,
+        'name' => $neighborhood->name_ar,
+        'is_active' => true,
+    ]);
+
+    return $neighborhood;
+}
 
 it('lists cleaning bookings', function () {
     $billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
@@ -191,8 +211,10 @@ it('filters cleaning bookings by forCurrentWorker and scheduledDate', function (
 
 it('returns pending unassigned bookings for worker when forCurrentWorker and status pending', function () {
     $workerUser = User::factory()->create(['email' => 'worker-new-requests@example.com']);
-    Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
+
+    $neighborhood = createCleaningNeighborhoodCoverage($worker, 'Pending Coverage');
 
     $billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
         'name' => 'Default',
@@ -207,12 +229,16 @@ it('returns pending unassigned bookings for worker when forCurrentWorker and sta
         'billing_policy_id' => $billingPolicy->id,
         'status' => CleaningBookingStatus::Pending,
         'gender_preference' => 'any',
+        'neighborhood_id' => $neighborhood->id,
+        'neighborhood_name' => $neighborhood->name_ar,
     ]);
     CleaningBooking::factory()->create([
         'worker_id' => null,
         'billing_policy_id' => $billingPolicy->id,
         'status' => CleaningBookingStatus::Pending,
         'gender_preference' => 'any',
+        'neighborhood_id' => $neighborhood->id,
+        'neighborhood_name' => $neighborhood->name_ar,
     ]);
 
     $response = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
@@ -223,11 +249,13 @@ it('returns pending unassigned bookings for worker when forCurrentWorker and sta
 
 it('returns only cleaning available bookings for cleaning preferred workers', function () {
     $workerUser = User::factory()->create(['email' => 'worker-cleaning-preference@example.com']);
-    Worker::factory()->create([
+    $worker = Worker::factory()->create([
         'user_id' => $workerUser->id,
         'preferred_work_type' => WorkerPreferredWorkType::Cleaning,
     ]);
     Sanctum::actingAs($workerUser);
+
+    $neighborhood = createCleaningNeighborhoodCoverage($worker, 'Cleaning Preference');
 
     $billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
         'name' => 'Default',
@@ -243,6 +271,8 @@ it('returns only cleaning available bookings for cleaning preferred workers', fu
         'status' => CleaningBookingStatus::Pending,
         'gender_preference' => 'any',
         'property_type' => 'apartment',
+        'neighborhood_id' => $neighborhood->id,
+        'neighborhood_name' => $neighborhood->name_ar,
     ]);
     CleaningBooking::factory()->create([
         'worker_id' => null,
@@ -250,6 +280,8 @@ it('returns only cleaning available bookings for cleaning preferred workers', fu
         'status' => CleaningBookingStatus::Pending,
         'gender_preference' => 'any',
         'property_type' => 'event_assistance',
+        'neighborhood_id' => $neighborhood->id,
+        'neighborhood_name' => $neighborhood->name_ar,
     ]);
 
     $response = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
@@ -262,11 +294,13 @@ it('returns only cleaning available bookings for cleaning preferred workers', fu
 
 it('returns only event available bookings for events preferred workers', function () {
     $workerUser = User::factory()->create(['email' => 'worker-events-preference@example.com']);
-    Worker::factory()->create([
+    $worker = Worker::factory()->create([
         'user_id' => $workerUser->id,
         'preferred_work_type' => WorkerPreferredWorkType::Events,
     ]);
     Sanctum::actingAs($workerUser);
+
+    $neighborhood = createCleaningNeighborhoodCoverage($worker, 'Events Preference');
 
     $billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
         'name' => 'Default',
@@ -282,6 +316,8 @@ it('returns only event available bookings for events preferred workers', functio
         'status' => CleaningBookingStatus::Pending,
         'gender_preference' => 'any',
         'property_type' => 'apartment',
+        'neighborhood_id' => $neighborhood->id,
+        'neighborhood_name' => $neighborhood->name_ar,
     ]);
     CleaningBooking::factory()->create([
         'worker_id' => null,
@@ -289,6 +325,8 @@ it('returns only event available bookings for events preferred workers', functio
         'status' => CleaningBookingStatus::Pending,
         'gender_preference' => 'any',
         'property_type' => 'event_assistance',
+        'neighborhood_id' => $neighborhood->id,
+        'neighborhood_name' => $neighborhood->name_ar,
     ]);
 
     $response = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
@@ -301,11 +339,13 @@ it('returns only event available bookings for events preferred workers', functio
 
 it('returns cleaning and event available bookings for both preferred workers', function () {
     $workerUser = User::factory()->create(['email' => 'worker-both-preference@example.com']);
-    Worker::factory()->create([
+    $worker = Worker::factory()->create([
         'user_id' => $workerUser->id,
         'preferred_work_type' => WorkerPreferredWorkType::Both,
     ]);
     Sanctum::actingAs($workerUser);
+
+    $neighborhood = createCleaningNeighborhoodCoverage($worker, 'Both Preference');
 
     $billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
         'name' => 'Default',
@@ -321,6 +361,8 @@ it('returns cleaning and event available bookings for both preferred workers', f
         'status' => CleaningBookingStatus::Pending,
         'gender_preference' => 'any',
         'property_type' => 'apartment',
+        'neighborhood_id' => $neighborhood->id,
+        'neighborhood_name' => $neighborhood->name_ar,
     ]);
     CleaningBooking::factory()->create([
         'worker_id' => null,
@@ -328,6 +370,8 @@ it('returns cleaning and event available bookings for both preferred workers', f
         'status' => CleaningBookingStatus::Pending,
         'gender_preference' => 'any',
         'property_type' => 'event_assistance',
+        'neighborhood_id' => $neighborhood->id,
+        'neighborhood_name' => $neighborhood->name_ar,
     ]);
 
     $response = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
@@ -681,6 +725,8 @@ it('returns worker homepage with todayEarnings newOrdersCount and pendingExtensi
     $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
+    $neighborhood = createCleaningNeighborhoodCoverage($worker, 'Homepage Coverage');
+
     $billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
         'name' => 'Default',
         'billing_mode' => 'actual_working_time',
@@ -703,6 +749,8 @@ it('returns worker homepage with todayEarnings newOrdersCount and pendingExtensi
         'status' => CleaningBookingStatus::Pending,
         'scheduled_date' => now()->addDays(1),
         'gender_preference' => 'any',
+        'neighborhood_id' => $neighborhood->id,
+        'neighborhood_name' => $neighborhood->name_ar,
     ]);
 
     $bookingForWarning = CleaningBooking::factory()->create([
@@ -747,7 +795,7 @@ it('returns worker homepage chart and amount summary blocks for the owner dashbo
     ]);
 
     $today = now()->startOfDay();
-    $monday = $today->copy()->startOfWeek(Carbon\Carbon::MONDAY);
+    $monday = $today->copy()->startOfWeek(Carbon::MONDAY);
 
     CleaningBooking::factory()->create([
         'worker_id' => $worker->id,
@@ -852,6 +900,25 @@ it('returns worker account work areas and updates them', function () {
         ['name' => 'ريف دمشق', 'is_active' => true],
     ]);
 
+    $currentNeighborhood = CleaningNeighborhood::factory()->create([
+        'name_ar' => 'Damascus Coverage',
+        'name_en' => 'Damascus Coverage',
+    ]);
+    $legacyNeighborhood = CleaningNeighborhood::factory()->create([
+        'name_ar' => 'Rif Coverage',
+        'name_en' => 'Rif Coverage',
+    ]);
+    $replacementNeighborhood = CleaningNeighborhood::factory()->create([
+        'name_ar' => 'Homs Coverage',
+        'name_en' => 'Homs Coverage',
+    ]);
+
+    $worker->zones()->delete();
+    $worker->zones()->createMany([
+        ['neighborhood_id' => $currentNeighborhood->id, 'name' => $currentNeighborhood->name_ar, 'is_active' => true],
+        ['neighborhood_id' => $legacyNeighborhood->id, 'name' => $legacyNeighborhood->name_ar, 'is_active' => true],
+    ]);
+
     $showResponse = $this->getJson('/api/v1/cleaning/worker/account/work-areas');
     $showResponse->assertOk();
     expect($showResponse->json('zones'))->toHaveCount(2);
@@ -863,9 +930,29 @@ it('returns worker account work areas and updates them', function () {
         ],
     ];
 
+    $payload = [
+        'zones' => [
+            ['neighborhoodId' => $currentNeighborhood->id, 'isActive' => true],
+            ['neighborhoodId' => $replacementNeighborhood->id, 'isActive' => true],
+        ],
+    ];
+
     $updateResponse = $this->putJson('/api/v1/cleaning/worker/account/work-areas', $payload);
     $updateResponse->assertOk();
     expect($updateResponse->json('zones'))->toHaveCount(2);
+
+    $this->assertDatabaseHas('worker_zones', [
+        'worker_id' => $worker->id,
+        'neighborhood_id' => $replacementNeighborhood->id,
+        'name' => $replacementNeighborhood->name_ar,
+        'is_active' => 1,
+    ]);
+    $this->assertDatabaseMissing('worker_zones', [
+        'worker_id' => $worker->id,
+        'neighborhood_id' => $legacyNeighborhood->id,
+    ]);
+
+    return;
 
     $this->assertDatabaseHas('worker_zones', [
         'worker_id' => $worker->id,

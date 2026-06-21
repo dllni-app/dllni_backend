@@ -145,6 +145,7 @@ final class WorkerHomepageController
         $newOrdersCount = CleaningBooking::query()
             ->where('status', CleaningBookingStatus::Pending)
             ->whereDate('scheduled_date', '>=', $today)
+            ->whereNotNull('neighborhood_id')
             ->where(fn ($q) => $q->whereNull('worker_id')->orWhere('worker_id', $worker->id))
             ->when(
                 $this->preferredWorkType($worker) === WorkerPreferredWorkType::Cleaning,
@@ -162,6 +163,13 @@ final class WorkerHomepageController
                     ->whereNull('gender_preference')
                     ->orWhere('gender_preference', GenderPreference::Any->value)
                     ->orWhere('gender_preference', $worker->gender);
+            })
+            ->whereExists(function ($sub) use ($worker): void {
+                $sub->selectRaw('1')
+                    ->from('worker_zones')
+                    ->whereColumn('worker_zones.neighborhood_id', 'cleaning_bookings.neighborhood_id')
+                    ->where('worker_zones.worker_id', $worker->id)
+                    ->where('worker_zones.is_active', true);
             })
             ->whereDoesntHave('rejections', fn ($q) => $q->where('worker_id', $worker->id))
             ->count();

@@ -5,10 +5,12 @@ declare(strict_types=1);
 use App\Enums\AlertSeverity;
 use App\Enums\AlertType;
 use App\Enums\SystemAlertStatus;
+use App\Filament\Pages\GeographicCoverage;
 use App\Filament\Pages\CleaningOverview;
 use App\Filament\Pages\RestaurantSectionHub;
 use App\Filament\Pages\SupermarketSectionHub;
 use App\Filament\Pages\SupermarketStatsPage;
+use App\Filament\Resources\CleaningNeighborhoods\CleaningNeighborhoodResource;
 use App\Filament\Resources\MasterProducts\MasterProductResource;
 use App\Filament\Resources\SmCategories\SmCategoryResource;
 use App\Filament\Resources\SmOrderDisputes\SmOrderDisputeResource;
@@ -70,6 +72,13 @@ it('allows an admin to load the restaurant section hub', function (): void {
 
 it('allows an admin to load the cleaning overview command center', function (): void {
     $this->get(CleaningOverview::getUrl([], isAbsolute: false))
+        ->assertSuccessful();
+});
+
+it('allows an admin to load cleaning neighborhoods and geographic coverage pages', function (): void {
+    $this->get(CleaningNeighborhoodResource::getUrl('index', [], isAbsolute: false))
+        ->assertSuccessful();
+    $this->get(GeographicCoverage::getUrl([], isAbsolute: false))
         ->assertSuccessful();
 });
 

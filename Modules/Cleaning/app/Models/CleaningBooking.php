@@ -53,6 +53,8 @@ final class CleaningBooking extends Model
         'cleaning_services',
         'address_latitude',
         'address_longitude',
+        'neighborhood_id',
+        'neighborhood_name',
         'estimated_sqm',
         'estimated_hours',
         'scheduled_date',
@@ -93,6 +95,11 @@ final class CleaningBooking extends Model
     public function preferredWorker(): BelongsTo
     {
         return $this->belongsTo(Worker::class, 'preferred_worker_id');
+    }
+
+    public function neighborhood(): BelongsTo
+    {
+        return $this->belongsTo(CleaningNeighborhood::class, 'neighborhood_id');
     }
 
     public function rooms(): HasMany
@@ -187,6 +194,7 @@ final class CleaningBooking extends Model
             'assignment_mode' => CleaningAssignmentMode::class,
             'gender_preference' => GenderPreference::class,
             'number_of_workers' => 'integer',
+            'neighborhood_id' => 'integer',
             'property_details' => 'array',
             'cleaning_services' => 'array',
             'estimated_sqm' => 'decimal:2',

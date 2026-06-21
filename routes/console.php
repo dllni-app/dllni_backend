@@ -5,10 +5,14 @@ declare(strict_types=1);
 use App\Services\RestaurantSystemAlertGenerator;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
+use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Services\CleaningNeighborhoodResolver;
 use Modules\Delivery\Jobs\RecoverDriverTrustScoreJob;
 use Modules\Supermarket\Jobs\DispatchDueSmartListSchedulesJob;
 use Modules\Supermarket\Services\OpenFoodFactsMasterProductImportService;
+use Modules\User\Models\UserAddress;
 use Modules\User\Jobs\ProcessExpiredRestaurantGroupOrdersJob;
+use App\Models\WorkerZone;
 
 Artisan::command('restaurant:generate-system-alerts', function (RestaurantSystemAlertGenerator $generator): int {
     $count = $generator->handle();
@@ -49,6 +53,142 @@ Artisan::command('delivery:recover-driver-trust', function (): int {
 })->purpose('Recover delivery driver trust scores for eligible drivers');
 
 Schedule::command('delivery:recover-driver-trust')->daily();
+
+Artisan::command('cleaning:map-legacy-zones-to-neighborhoods {--dry-run}', function (CleaningNeighborhoodResolver $resolver): int {
+    $dryRun = (bool) $this->option('dry-run');
+    $summary = [
+        'worker_zones_mapped' => 0,
+        'worker_zones_unmatched' => 0,
+        'user_addresses_mapped' => 0,
+        'user_addresses_unmatched' => 0,
+        'cleaning_bookings_mapped' => 0,
+        'cleaning_bookings_unmatched' => 0,
+    ];
+    $unmatched = [
+        'worker_zones' => [],
+        'user_addresses' => [],
+        'cleaning_bookings' => [],
+    ];
+
+    WorkerZone::query()
+        ->whereNull('neighborhood_id')
+        ->orderBy('id')
+        ->chunkById(100, function ($zones) use ($resolver, $dryRun, &$summary, &$unmatched): void {
+            foreach ($zones as $zone) {
+                $name = is_string($zone->name) ? mb_trim($zone->name) : '';
+                $neighborhood = $name !== '' ? $resolver->resolve(null, $name, activeOnly: false) : null;
+
+                if ($neighborhood === null) {
+                    $summary['worker_zones_unmatched']++;
+                    $unmatched['worker_zones'][] = ['id' => $zone->id, 'name' => $zone->name];
+
+                    continue;
+                }
+
+                $summary['worker_zones_mapped']++;
+
+                if (! $dryRun) {
+                    $zone->forceFill([
+                        'neighborhood_id' => $neighborhood->id,
+                        'name' => $neighborhood->name_ar,
+                    ])->save();
+                }
+            }
+        });
+
+    UserAddress::query()
+        ->whereNull('neighborhood_id')
+        ->whereNotNull('neighborhood')
+        ->orderBy('id')
+        ->chunkById(100, function ($addresses) use ($resolver, $dryRun, &$summary, &$unmatched): void {
+            foreach ($addresses as $address) {
+                $name = is_string($address->neighborhood) ? mb_trim($address->neighborhood) : '';
+                $neighborhood = $name !== '' ? $resolver->resolve(null, $name, activeOnly: false) : null;
+
+                if ($neighborhood === null) {
+                    $summary['user_addresses_unmatched']++;
+                    $unmatched['user_addresses'][] = ['id' => $address->id, 'name' => $address->neighborhood];
+
+                    continue;
+                }
+
+                $summary['user_addresses_mapped']++;
+
+                if (! $dryRun) {
+                    $address->forceFill([
+                        'neighborhood_id' => $neighborhood->id,
+                        'neighborhood' => $neighborhood->name_ar,
+                    ])->save();
+                }
+            }
+        });
+
+    CleaningBooking::query()
+        ->whereNull('neighborhood_id')
+        ->orderBy('id')
+        ->chunkById(100, function ($bookings) use ($resolver, $dryRun, &$summary, &$unmatched): void {
+            foreach ($bookings as $booking) {
+                $propertyDetails = is_array($booking->property_details) ? $booking->property_details : [];
+                $candidates = array_filter([
+                    is_string($booking->neighborhood_name) ? mb_trim($booking->neighborhood_name) : null,
+                    is_string($propertyDetails['address'] ?? null) ? mb_trim((string) $propertyDetails['address']) : null,
+                    is_string($propertyDetails['full_address'] ?? null) ? mb_trim((string) $propertyDetails['full_address']) : null,
+                ]);
+
+                $neighborhood = null;
+                foreach ($candidates as $candidate) {
+                    $neighborhood = $resolver->resolve(null, $candidate, activeOnly: false);
+
+                    if ($neighborhood !== null) {
+                        break;
+                    }
+                }
+
+                if ($neighborhood === null) {
+                    $summary['cleaning_bookings_unmatched']++;
+                    $unmatched['cleaning_bookings'][] = [
+                        'id' => $booking->id,
+                        'reference' => $booking->neighborhood_name ?: ($propertyDetails['address'] ?? null),
+                    ];
+
+                    continue;
+                }
+
+                $summary['cleaning_bookings_mapped']++;
+
+                if (! $dryRun) {
+                    $booking->forceFill([
+                        'neighborhood_id' => $neighborhood->id,
+                        'neighborhood_name' => $neighborhood->name_ar,
+                    ])->save();
+                }
+            }
+        });
+
+    $this->info($dryRun ? 'Legacy neighborhood mapping dry run completed.' : 'Legacy neighborhood mapping completed.');
+    foreach ($summary as $key => $value) {
+        $this->line(str_replace('_', ' ', $key).": {$value}");
+    }
+
+    foreach ($unmatched as $bucket => $rows) {
+        if ($rows === []) {
+            continue;
+        }
+
+        $this->newLine();
+        $this->warn(str_replace('_', ' ', $bucket).' unmatched preview:');
+
+        foreach (array_slice($rows, 0, 20) as $row) {
+            $this->line('- '.json_encode($row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        }
+
+        if (count($rows) > 20) {
+            $this->line('...and '.(count($rows) - 20).' more');
+        }
+    }
+
+    return 0;
+})->purpose('Map legacy worker zones, addresses, and bookings to seeded cleaning neighborhoods');
 
 Artisan::command(
     'supermarket:import-openfoodfacts-master-products {source?} {--country=en:syria} {--limit=} {--chunk=500} {--skip-images} {--dry-run}',

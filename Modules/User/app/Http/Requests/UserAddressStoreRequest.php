@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\User\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 final class UserAddressStoreRequest extends FormRequest
@@ -23,6 +24,12 @@ final class UserAddressStoreRequest extends FormRequest
             'label' => ['required', 'string', 'max:100'],
             'mobile' => ['nullable', 'string', 'max:32'],
             'city' => ['nullable', 'string', 'max:255'],
+            'neighborhoodId' => [
+                'sometimes',
+                'nullable',
+                'integer',
+                Rule::exists('cleaning_neighborhoods', 'id')->where('is_active', true),
+            ],
             'neighborhood' => ['nullable', 'string', 'max:255'],
             'street' => ['nullable', 'string', 'max:255'],
             'building' => ['nullable', 'string', 'max:255'],
@@ -40,12 +47,13 @@ final class UserAddressStoreRequest extends FormRequest
             $hasDetail = collect($this->only([
                 'mobile',
                 'city',
+                'neighborhoodId',
                 'neighborhood',
                 'street',
                 'building',
                 'floor',
                 'directions',
-            ]))->filter(fn (?string $v): bool => $v !== null && $v !== '')->isNotEmpty();
+            ]))->filter(fn ($v): bool => $v !== null && $v !== '')->isNotEmpty();
 
             if (! $hasDetail) {
                 $validator->errors()->add('city', 'Provide at least one address detail (city, neighborhood, street, building, floor, or directions).');

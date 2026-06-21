@@ -72,6 +72,13 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
             'scheduledTime' => ['sometimes', 'date_format:H:i'],
             'addressLatitude' => ['sometimes', 'numeric', 'between:-90,90'],
             'addressLongitude' => ['sometimes', 'numeric', 'between:-180,180'],
+            'neighborhoodId' => [
+                'sometimes',
+                'nullable',
+                'integer',
+                Rule::exists('cleaning_neighborhoods', 'id')->where('is_active', true),
+            ],
+            'neighborhood' => ['sometimes', 'nullable', 'string', 'max:255'],
             'preferredWorkerId' => ['sometimes', 'nullable', 'exists:workers,id'],
             'numberOfWorkers' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:20'],
             'assignmentMode' => ['sometimes', 'nullable', 'string', Rule::in(['preferred_worker', 'open_count'])],
