@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
+use App\Enums\AlertSeverity;
+use App\Enums\AlertType;
 use App\Enums\GenderPreference;
+use App\Enums\SystemAlertStatus;
+use App\Models\SystemAlert;
 use App\Models\Worker;
 use App\Notifications\Cleaning\NewOrderRequestNotification;
 use Carbon\Carbon;
@@ -46,8 +50,30 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
             ->map(static fn (mixed $workerId): int => (int) $workerId)
             ->all();
 
+        if ($booking->neighborhood_id === null) {
+            $this->createDispatchAlert(
+                $booking,
+                'missing_neighborhood',
+                'Booking cannot be dispatched because neighborhood is missing.',
+            );
+
+            return;
+        }
+
         if ($assignmentMode === CleaningAssignmentMode::PreferredWorker->value && $booking->preferred_worker_id !== null) {
             if (in_array((int) $booking->preferred_worker_id, $acceptedWorkerIds, true)) {
+                return;
+            }
+
+            $preferredWorker = Worker::query()->find($booking->preferred_worker_id);
+            if (! $preferredWorker?->hasActiveCoverageForNeighborhood((int) $booking->neighborhood_id)) {
+                $this->createDispatchAlert(
+                    $booking,
+                    'preferred_worker_outside_neighborhood',
+                    'Preferred worker does not cover the booking neighborhood.',
+                    ['preferredWorkerId' => (int) $booking->preferred_worker_id],
+                );
+
                 return;
             }
 
@@ -58,6 +84,7 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
                     $q->whereNull('is_suspended')->orWhere('is_suspended', false);
                 })
                 ->whereNotIn('id', $rejectedWorkerIds)
+                ->coversNeighborhood((int) $booking->neighborhood_id)
                 ->with('user')
                 ->first();
 
@@ -79,10 +106,20 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
                 fn ($query) => $query->where('gender', $booking->gender_preference->value)
             )
             ->whereNotIn('id', array_values(array_unique(array_merge($rejectedWorkerIds, $acceptedWorkerIds))))
-            ->whereHas('zones')
+            ->coversNeighborhood((int) $booking->neighborhood_id)
             ->with('user')
             ->limit(50)
             ->get();
+
+        if ($workers->isEmpty()) {
+            $this->createDispatchAlert(
+                $booking,
+                'no_neighborhood_coverage',
+                'No active workers cover the booking neighborhood.',
+            );
+
+            return;
+        }
 
         foreach ($workers as $worker) {
             if ($worker->user && $this->isWorkerAvailable($worker, $bookingDateTime) && $depositService->isWorkerEligibleForDispatch($worker)) {
@@ -111,5 +148,31 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function createDispatchAlert(CleaningBooking $booking, string $reasonCode, string $message, array $payload = []): void
+    {
+        SystemAlert::query()->updateOrCreate(
+            [
+                'booking_id' => $booking->id,
+                'booking_type' => $booking->getMorphClass(),
+                'alert_type' => AlertType::AnomalyDetected->value,
+            ],
+            [
+                'severity' => AlertSeverity::High->value,
+                'status' => SystemAlertStatus::New->value,
+                'payload' => array_merge([
+                    'source' => 'cleaning_neighborhood_dispatch',
+                    'reasonCode' => $reasonCode,
+                    'message' => $message,
+                    'bookingId' => $booking->id,
+                    'neighborhoodId' => $booking->neighborhood_id,
+                    'neighborhoodName' => $booking->neighborhood_name,
+                ], $payload),
+            ],
+        );
     }
 }

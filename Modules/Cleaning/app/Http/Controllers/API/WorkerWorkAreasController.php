@@ -8,10 +8,16 @@ use App\Models\Worker;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Modules\Cleaning\Http\Requests\WorkerWorkAreasRequest;
+use Modules\Cleaning\Services\CleaningNeighborhoodResolver;
 
 final class WorkerWorkAreasController
 {
+    public function __construct(
+        private readonly CleaningNeighborhoodResolver $neighborhoodResolver,
+    ) {}
+
     public function show(): JsonResponse
     {
         $worker = $this->worker();
@@ -22,11 +28,16 @@ final class WorkerWorkAreasController
 
         return response()->json([
             'zones' => $worker->zones()
-                ->orderBy('id')
-                ->get(['id', 'name', 'is_active'])
+                ->with('neighborhood')
+                ->orderBy('name')
+                ->get(['id', 'worker_id', 'neighborhood_id', 'name', 'is_active'])
                 ->map(fn ($zone): array => [
                     'id' => $zone->id,
+                    'neighborhoodId' => $zone->neighborhood_id !== null ? (int) $zone->neighborhood_id : null,
                     'name' => $zone->name,
+                    'cityName' => $zone->neighborhood?->city_name,
+                    'nameAr' => $zone->neighborhood?->name_ar,
+                    'nameEn' => $zone->neighborhood?->name_en,
                     'isActive' => (bool) $zone->is_active,
                 ])->all(),
         ]);
@@ -41,18 +52,46 @@ final class WorkerWorkAreasController
         }
 
         $zonesPayload = $request->validated()['zones'];
+        $resolvedZones = collect($zonesPayload)
+            ->map(function (array $zoneData, int $index): array {
+                $neighborhood = $this->neighborhoodResolver->resolve(
+                    isset($zoneData['neighborhoodId']) ? (int) $zoneData['neighborhoodId'] : null,
+                    $zoneData['name'] ?? null,
+                );
 
-        DB::transaction(function () use ($worker, $zonesPayload): void {
-            $requestedNames = collect($zonesPayload)
-                ->map(static fn (array $zone): string => (string) $zone['name'])
+                if ($neighborhood === null) {
+                    throw ValidationException::withMessages([
+                        "zones.{$index}.neighborhoodId" => ["\u{627}\u{644}\u{62d}\u{64a} \u{627}\u{644}\u{645}\u{62d}\u{62f}\u{62f} \u{63a}\u{64a}\u{631} \u{645}\u{648}\u{62c}\u{648}\u{62f} \u{623}\u{648} \u{63a}\u{64a}\u{631} \u{645}\u{641}\u{639}\u{644}."],
+                    ]);
+                }
+
+                return [
+                    'neighborhood' => $neighborhood,
+                    'isActive' => (bool) ($zoneData['isActive'] ?? true),
+                ];
+            })
+            ->keyBy(fn (array $zone): int => (int) $zone['neighborhood']->id)
+            ->values();
+
+        DB::transaction(function () use ($worker, $resolvedZones): void {
+            $selectedIds = $resolvedZones
+                ->map(fn (array $zone): int => (int) $zone['neighborhood']->id)
                 ->all();
 
-            $worker->zones()->whereNotIn('name', $requestedNames)->delete();
+            $worker->zones()
+                ->where(function ($query) use ($selectedIds): void {
+                    $query->whereNull('neighborhood_id')
+                        ->orWhereNotIn('neighborhood_id', $selectedIds);
+                })
+                ->delete();
 
-            foreach ($zonesPayload as $zoneData) {
+            foreach ($resolvedZones as $zoneData) {
                 $worker->zones()->updateOrCreate(
-                    ['name' => (string) $zoneData['name']],
-                    ['is_active' => (bool) ($zoneData['isActive'] ?? true)]
+                    ['neighborhood_id' => (int) $zoneData['neighborhood']->id],
+                    [
+                        'name' => (string) $zoneData['neighborhood']->name_ar,
+                        'is_active' => (bool) $zoneData['isActive'],
+                    ]
                 );
             }
         });

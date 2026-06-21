@@ -10,6 +10,7 @@ use Database\Factories\UserAddressFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Modules\Cleaning\Models\CleaningNeighborhood;
 
 /**
  * @property int $id
@@ -18,6 +19,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $mobile
  * @property string|null $city
  * @property string|null $neighborhood
+ * @property int|null $neighborhood_id
  * @property string|null $street
  * @property string|null $building
  * @property string|null $floor
@@ -39,6 +41,7 @@ final class UserAddress extends Model
         'mobile',
         'city',
         'neighborhood',
+        'neighborhood_id',
         'street',
         'building',
         'floor',
@@ -60,6 +63,7 @@ final class UserAddress extends Model
             'mobile' => 'string',
             'city' => 'string',
             'neighborhood' => 'string',
+            'neighborhood_id' => 'integer',
             'street' => 'string',
             'building' => 'string',
             'floor' => 'string',
@@ -75,6 +79,11 @@ final class UserAddress extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function neighborhood(): BelongsTo
+    {
+        return $this->belongsTo(CleaningNeighborhood::class, 'neighborhood_id');
     }
 
     public function resolveRouteBinding($value, $field = null): self

@@ -10,6 +10,7 @@ use App\Enums\WorkerPreferredWorkType;
 use App\Traits\FilterQueries\WorkerFilterQuery;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -69,6 +70,14 @@ final class Worker extends Model implements HasMedia
     public function zones(): HasMany
     {
         return $this->hasMany(WorkerZone::class);
+    }
+
+    public function scopeCoversNeighborhood(Builder $query, int $neighborhoodId): Builder
+    {
+        return $query->whereHas('zones', function (Builder $zones) use ($neighborhoodId): void {
+            $zones->where('worker_zones.is_active', true)
+                ->where('worker_zones.neighborhood_id', $neighborhoodId);
+        });
     }
 
     public function availability(): HasMany
@@ -206,6 +215,25 @@ final class Worker extends Model implements HasMedia
         }
 
         return $this->isAvailableAt($dateTime);
+    }
+
+    public function hasActiveCoverageForNeighborhood(?int $neighborhoodId): bool
+    {
+        if ($neighborhoodId === null) {
+            return false;
+        }
+
+        if ($this->relationLoaded('zones')) {
+            return $this->zones->contains(
+                fn (WorkerZone $zone): bool => (bool) $zone->is_active
+                    && (int) ($zone->neighborhood_id ?? 0) === $neighborhoodId
+            );
+        }
+
+        return $this->zones()
+            ->where('is_active', true)
+            ->where('neighborhood_id', $neighborhoodId)
+            ->exists();
     }
 
     public function isAvailableAt(CarbonInterface $dateTime): bool

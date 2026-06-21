@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Route;
 use Modules\Cleaning\Http\Controllers\API\CleaningBillingPolicyController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingDeliveryFeeController;
+use Modules\Cleaning\Http\Controllers\API\CleaningNeighborhoodController;
 use Modules\Cleaning\Http\Controllers\API\CleaningServiceController;
 use Modules\Cleaning\Http\Controllers\API\CleaningTimeWarningController;
 use Modules\Cleaning\Http\Controllers\API\DashboardOverviewController;
@@ -34,6 +35,9 @@ Route::prefix('v1')->group(function () {
 
     // Protected endpoints - auth required
     Route::middleware(['auth:sanctum'])->group(function (): void {
+        Route::get('cleaning/neighborhoods', [CleaningNeighborhoodController::class, 'index']);
+        Route::post('cleaning/neighborhoods/match', [CleaningNeighborhoodController::class, 'match']);
+
         // Worker dashboard and profile endpoints
         Route::get('cleaning/dashboard/overview', DashboardOverviewController::class);
         Route::get('cleaning/worker/homepage', WorkerHomepageController::class);

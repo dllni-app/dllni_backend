@@ -407,6 +407,37 @@ return [
         ],
     ],
 
+    'cleaning_neighborhoods' => [
+        'nav_label' => 'Neighborhoods',
+        'model' => 'Neighborhood',
+        'plural' => 'Neighborhoods',
+        'tooltip' => 'Manage the controlled Aleppo neighborhoods used for work areas, addresses, and dispatch.',
+        'sections' => [
+            'identity' => 'Neighborhood identity',
+            'map' => 'Map metadata',
+        ],
+        'fields' => [
+            'name_ar' => 'Arabic name',
+            'name_en' => 'English name',
+            'city_name' => 'City',
+            'aliases' => 'Aliases',
+            'sort_order' => 'Sort order',
+            'center_latitude' => 'Center latitude',
+            'center_longitude' => 'Center longitude',
+            'is_active' => 'Active',
+        ],
+        'filters' => [
+            'is_active' => 'Active',
+        ],
+        'actions' => [
+            'create' => 'Add neighborhood',
+            'activate' => 'Activate',
+            'deactivate' => 'Deactivate',
+            'activate_selected' => 'Activate selected',
+            'deactivate_selected' => 'Deactivate selected',
+        ],
+    ],
+
     'travel_cost_configs' => [
         'nav_label' => 'Travel Cost Rules',
         'tooltip' => 'Travel cost calculation rules: per km rate, minimum travel fee, distance start point (worker location / home address / system auto).',
@@ -675,31 +706,42 @@ return [
         ],
         'geographic_coverage' => [
             'title' => 'Geographic Coverage',
-            'description' => 'View demand vs worker coverage by geographic area to identify service gaps (low/good/high) and worker count per zone.',
-            'search_placeholder' => 'Search by zone name...',
+            'description' => 'Track worker coverage and booking pressure by mapped neighborhood, and surface legacy zones that still need mapping.',
+            'search_placeholder' => 'Search by neighborhood name...',
             'table_title' => 'Coverage Table',
-            'chart_title' => 'Demand vs Workers',
             'empty' => 'No coverage data found for the current filters.',
             'summary' => [
-                'workers_count' => 'Workers in displayed zones',
-                'high_pressure_count' => 'High-pressure zones',
-                'regions_count' => 'Displayed zones',
+                'neighborhoods_count' => 'Displayed neighborhoods',
+                'workers_count' => 'Active covered workers',
+                'pending_bookings_count' => 'Pending bookings',
+                'active_bookings_count' => 'Assigned / in-progress',
+                'uncovered_count' => 'Uncovered neighborhoods',
             ],
             'columns' => [
-                'zone' => 'Zone',
-                'demand_count' => 'Demand count',
+                'neighborhood' => 'Neighborhood',
+                'pending_bookings_count' => 'Pending bookings',
+                'active_bookings_count' => 'Assigned / in-progress',
                 'workers_count' => 'Workers count',
                 'coverage_ratio' => 'Coverage ratio',
             ],
             'levels' => [
+                'uncovered' => 'Uncovered',
                 'high' => 'High pressure',
                 'ok' => 'Balanced',
                 'low' => 'Low pressure',
             ],
-            'legends' => [
-                'demand' => 'Demand',
-                'workers' => 'Workers',
+            'legacy_unmapped_title' => 'Unmapped Legacy Zones',
+            'legacy_unmapped_description' => 'These work-area rows still rely on free-text names and should be mapped to a neighborhood.',
+            'legacy_warning' => ':count legacy zone names still need review.',
+            'legacy_empty' => 'No legacy zones are waiting for mapping.',
+            'legacy_columns' => [
+                'name' => 'Legacy zone name',
+                'zones_count' => 'Zone rows',
+                'workers_count' => 'Workers',
             ],
+        ],
+        'cleaning_neighborhoods' => [
+            'list' => 'Manage the seeded Aleppo neighborhoods used by worker coverage, customer addresses, and dispatch rules.',
         ],
         'cleaning_bookings' => [
             'list' => 'View and manage all cleaning bookings: booking #, customer, worker, date and time, status, total price, assign worker or cancel.',

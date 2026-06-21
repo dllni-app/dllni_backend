@@ -7,6 +7,7 @@ namespace Database\Seeders;
 use App\Models\User;
 use Database\Seeders\Permissions\RestaurantOwnerEmployeePermissionsSeeder;
 use Illuminate\Database\Seeder;
+use Modules\Cleaning\Database\Seeders\AleppoNeighborhoodSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningBillingPolicySeeder;
 use Modules\Cleaning\Database\Seeders\CleaningBannerSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningFinancialSettingsSeeder;
@@ -65,6 +66,7 @@ final class DatabaseSeeder extends Seeder
             TravelCostConfigSeeder::class,
             CleaningBillingPolicySeeder::class,
             CleaningFinancialSettingsSeeder::class,
+            AleppoNeighborhoodSeeder::class,
         ];
     }
 

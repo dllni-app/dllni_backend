@@ -9,6 +9,9 @@ use App\Models\WorkerZone;
 use BackedEnum;
 use Filament\Pages\Page;
 use Illuminate\Contracts\Support\Htmlable;
+use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningNeighborhood;
 
 final class GeographicCoverage extends Page
 {
@@ -36,6 +39,11 @@ final class GeographicCoverage extends Page
     }
 
     public static function getNavigationLabel(): string
+    {
+        return __('cleaning_admin.pages.geographic_coverage.title');
+    }
+
+    public function getTitle(): string|Htmlable
     {
         return __('cleaning_admin.pages.geographic_coverage.title');
     }
@@ -74,38 +82,61 @@ final class GeographicCoverage extends Page
     {
         $thresholds = CleaningFinancialSetting::query()->first()?->coverage_thresholds ?? ['low' => 3, 'ok' => 7];
         $days = max(7, (int) $this->dateRange);
+        $today = now()->toDateString();
+        $endDate = now()->addDays($days)->toDateString();
 
-        $rows = WorkerZone::query()
-            ->select('worker_zones.name')
-            ->selectRaw('COUNT(DISTINCT worker_zones.worker_id) AS workers_count')
-            ->selectRaw(
-                "(
-                    SELECT COUNT(*)
-                    FROM cleaning_bookings
-                    WHERE cleaning_bookings.scheduled_date >= CURDATE()
-                      AND cleaning_bookings.scheduled_date < DATE_ADD(CURDATE(), INTERVAL {$days} DAY)
-                      AND cleaning_bookings.status IN ('pending','worker_assigned','in_progress')
-                ) AS demand_count",
-            )
-            ->groupBy('worker_zones.name')
-            ->orderBy('worker_zones.name')
+        $rows = CleaningNeighborhood::query()
+            ->select(['id', 'city_name', 'name_ar', 'name_en', 'sort_order', 'is_active'])
+            ->addSelect([
+                'workers_count' => WorkerZone::query()
+                    ->selectRaw('COUNT(DISTINCT worker_id)')
+                    ->whereColumn('neighborhood_id', 'cleaning_neighborhoods.id')
+                    ->where('is_active', true),
+                'pending_bookings_count' => CleaningBooking::query()
+                    ->selectRaw('COUNT(*)')
+                    ->whereColumn('neighborhood_id', 'cleaning_neighborhoods.id')
+                    ->whereBetween('scheduled_date', [$today, $endDate])
+                    ->where('status', CleaningBookingStatus::Pending->value),
+                'active_bookings_count' => CleaningBooking::query()
+                    ->selectRaw('COUNT(*)')
+                    ->whereColumn('neighborhood_id', 'cleaning_neighborhoods.id')
+                    ->whereBetween('scheduled_date', [$today, $endDate])
+                    ->whereIn('status', [
+                        CleaningBookingStatus::WorkerAssigned->value,
+                        CleaningBookingStatus::InProgress->value,
+                    ]),
+            ])
+            ->orderBy('sort_order')
+            ->orderBy('name_ar')
+            ->orderBy('id')
             ->get()
-            ->map(function (object $row) use ($thresholds): array {
-                $workersCount = max((int) $row->workers_count, 1);
-                $ratio = (int) ceil(((int) $row->demand_count) / $workersCount);
-                $levelKey = 'ok';
+            ->map(function (CleaningNeighborhood $neighborhood) use ($thresholds): array {
+                $workersCount = (int) ($neighborhood->workers_count ?? 0);
+                $pendingBookingsCount = (int) ($neighborhood->pending_bookings_count ?? 0);
+                $activeBookingsCount = (int) ($neighborhood->active_bookings_count ?? 0);
+                $coverageLoad = $pendingBookingsCount + $activeBookingsCount;
+                $coverageRatio = $workersCount > 0
+                    ? round($coverageLoad / $workersCount, 1)
+                    : ($coverageLoad > 0 ? (float) $coverageLoad : 0.0);
 
-                if ($ratio >= (int) ($thresholds['ok'] ?? 7)) {
+                $levelKey = 'ok';
+                if ($workersCount === 0 && $coverageLoad > 0) {
+                    $levelKey = 'uncovered';
+                } elseif ($coverageRatio >= (float) ($thresholds['ok'] ?? 7)) {
                     $levelKey = 'high';
-                } elseif ($ratio <= (int) ($thresholds['low'] ?? 3)) {
+                } elseif ($coverageRatio <= (float) ($thresholds['low'] ?? 3)) {
                     $levelKey = 'low';
                 }
 
                 return [
-                    'zone' => (string) $row->name,
-                    'workers_count' => (int) $row->workers_count,
-                    'demand_count' => (int) $row->demand_count,
-                    'coverage_ratio' => $ratio,
+                    'id' => $neighborhood->id,
+                    'neighborhood' => $neighborhood->name_ar ?: $neighborhood->name_en,
+                    'city_name' => $neighborhood->city_name,
+                    'workers_count' => $workersCount,
+                    'pending_bookings_count' => $pendingBookingsCount,
+                    'active_bookings_count' => $activeBookingsCount,
+                    'coverage_load' => $coverageLoad,
+                    'coverage_ratio' => $coverageRatio,
                     'level_key' => $levelKey,
                     'level_label' => __('cleaning_admin.pages.geographic_coverage.levels.' . $levelKey),
                     'level_tone' => $this->mapLevelTone($levelKey),
@@ -113,21 +144,45 @@ final class GeographicCoverage extends Page
             })
             ->values();
 
-        $search = trim($this->search);
+        $search = mb_strtolower(trim($this->search));
         if ($search !== '') {
-            $rows = $rows->filter(fn (array $row): bool => str_contains(mb_strtolower($row['zone']), mb_strtolower($search)))->values();
+            $rows = $rows->filter(function (array $row) use ($search): bool {
+                return str_contains(mb_strtolower((string) $row['neighborhood']), $search)
+                    || str_contains(mb_strtolower((string) $row['city_name']), $search);
+            })->values();
         }
 
         if ($this->levelFilter !== 'all') {
             $rows = $rows->where('level_key', $this->levelFilter)->values();
         }
 
+        $legacyZoneNameExpression = "COALESCE(NULLIF(worker_zones.name, ''), '-')";
+
+        $legacyZones = WorkerZone::query()
+            ->whereNull('neighborhood_id')
+            ->selectRaw($legacyZoneNameExpression.' AS legacy_name')
+            ->selectRaw('COUNT(*) AS zones_count')
+            ->selectRaw('COUNT(DISTINCT worker_id) AS workers_count')
+            ->groupByRaw($legacyZoneNameExpression)
+            ->orderBy('legacy_name')
+            ->get()
+            ->map(fn (object $row): array => [
+                'name' => (string) $row->legacy_name,
+                'zones_count' => (int) $row->zones_count,
+                'workers_count' => (int) $row->workers_count,
+            ])
+            ->values();
+
         return [
             'rows' => $rows,
+            'legacyZones' => $legacyZones,
             'summary' => [
-                'regions_count' => $rows->count(),
-                'high_pressure_count' => $rows->where('level_key', 'high')->count(),
+                'neighborhoods_count' => $rows->count(),
                 'workers_count' => $rows->sum('workers_count'),
+                'pending_bookings_count' => $rows->sum('pending_bookings_count'),
+                'active_bookings_count' => $rows->sum('active_bookings_count'),
+                'uncovered_count' => $rows->where('level_key', 'uncovered')->count(),
+                'legacy_zones_count' => $legacyZones->count(),
             ],
             'filters' => [
                 'dateRange' => [
@@ -137,6 +192,7 @@ final class GeographicCoverage extends Page
                 ],
                 'levels' => [
                     'all' => __('cleaning_admin.filters.all_levels'),
+                    'uncovered' => __('cleaning_admin.pages.geographic_coverage.levels.uncovered'),
                     'high' => __('cleaning_admin.pages.geographic_coverage.levels.high'),
                     'ok' => __('cleaning_admin.pages.geographic_coverage.levels.ok'),
                     'low' => __('cleaning_admin.pages.geographic_coverage.levels.low'),
@@ -148,7 +204,7 @@ final class GeographicCoverage extends Page
     private function mapLevelTone(string $levelKey): string
     {
         return match ($levelKey) {
-            'high' => 'danger',
+            'uncovered', 'high' => 'danger',
             'low' => 'success',
             default => 'info',
         };

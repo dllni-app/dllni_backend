@@ -6,6 +6,7 @@ namespace Modules\User\Services;
 
 use Carbon\Carbon;
 use App\Enums\GenderPreference;
+use App\Models\Worker;
 use App\Support\Broadcast\BroadcastAfterResponse;
 use App\Models\BookingReview;
 use App\Models\CancellationPolicy;
@@ -21,9 +22,11 @@ use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
 use Modules\Cleaning\Events\CompletionDecisionMade;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningNeighborhood;
 use Modules\Cleaning\Models\CleaningTimeWarning;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Services\CleaningExtendedTimePricingService;
+use Modules\Cleaning\Services\CleaningNeighborhoodResolver;
 use Modules\Cleaning\Support\WorkerRoomAssignmentPlanner;
 use Modules\Cleaning\Services\CleaningBookingTeamService;
 use Modules\Cleaning\Services\CleaningLifecycleNotificationService;
@@ -33,6 +36,7 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 final class UserCleaningOrderService
 {
     private const MAX_SECURITY_CODE_ATTEMPTS = 5;
+    private const PREFERRED_WORKER_NEIGHBORHOOD_MESSAGE = "\u{645}\u{642}\u{62f}\u{645} \u{627}\u{644}\u{62e}\u{62f}\u{645}\u{629} \u{627}\u{644}\u{645}\u{62e}\u{62a}\u{627}\u{631} \u{644}\u{627} \u{64a}\u{639}\u{645}\u{644} \u{636}\u{645}\u{646} \u{627}\u{644}\u{62d}\u{64a} \u{627}\u{644}\u{645}\u{62d}\u{62f}\u{62f}.";
 
     public function __construct(
         private UserCleaningOrderEstimationService $estimationService,
@@ -40,6 +44,7 @@ final class UserCleaningOrderService
         private CleaningLifecycleNotificationService $lifecycleNotifications,
         private CleaningExtendedTimePricingService $extendedTimePricing,
         private DepositService $depositService,
+        private CleaningNeighborhoodResolver $neighborhoodResolver,
     ) {}
 
     public function store(User $user, array $validated): CleaningBooking
@@ -48,6 +53,7 @@ final class UserCleaningOrderService
             $normalizedPropertyType = $this->estimationService->normalizePropertyType((string) $validated['propertyType']);
             $normalizedPropertyDetails = $this->estimationService->normalizePropertyDetailsForStorage($normalizedPropertyType, (array) $validated['propertyDetails']);
             $resolvedAssignmentMode = $this->resolveAssignmentMode($validated);
+            $resolvedNeighborhood = $this->resolveNeighborhoodFromPayload($validated);
             $preferredWorkerPricing = $resolvedAssignmentMode === 'preferred_worker';
             $pricingPreferredWorkerId = $preferredWorkerPricing ? ($validated['preferredWorkerId'] ?? null) : null;
             $normalizedInput = $this->estimationService->pricingSnapshotInput(
@@ -102,6 +108,14 @@ final class UserCleaningOrderService
                 'isPricingFinal' => false,
                 'totalPrice' => round((float) $pricing['basePrice'] + (float) $pricing['addonsTotal'], 2),
             ];
+
+            if ($resolvedAssignmentMode === 'preferred_worker') {
+                $this->guardPreferredWorkerCoverage(
+                    $normalizedInput['preferredWorkerId'] !== null ? (int) $normalizedInput['preferredWorkerId'] : null,
+                    $resolvedNeighborhood,
+                );
+            }
+
             $booking = CleaningBooking::create([
                 'customer_id' => $user->id,
                 'worker_id' => null,
@@ -120,6 +134,8 @@ final class UserCleaningOrderService
                 'cleaning_services' => $this->normalizeCleaningServices($validated['cleaning_services'] ?? null),
                 'address_latitude' => $normalizedInput['addressLatitude'],
                 'address_longitude' => $normalizedInput['addressLongitude'],
+                'neighborhood_id' => $resolvedNeighborhood?->id,
+                'neighborhood_name' => $resolvedNeighborhood?->name_ar ?? ($validated['neighborhood'] ?? null),
                 'estimated_sqm' => $estimation['estimatedSqm'],
                 'estimated_hours' => $estimation['estimatedHours'],
                 'scheduled_date' => $validated['scheduledDate'],
@@ -165,6 +181,8 @@ final class UserCleaningOrderService
                 'propertyDetails',
                 'addressLatitude',
                 'addressLongitude',
+                'neighborhoodId',
+                'neighborhood',
                 'preferredWorkerId',
                 'assignmentMode',
                 'numberOfWorkers',
@@ -176,6 +194,7 @@ final class UserCleaningOrderService
 
             $updates = [];
             $pricingFieldsChanged = false;
+            $resolvedNeighborhood = $this->resolveNeighborhoodForUpdate($booking, $validated);
 
             if (array_key_exists('propertyType', $validated)) {
                 $updates['property_type'] = $this->estimationService->normalizePropertyType((string) $validated['propertyType']);
@@ -211,6 +230,11 @@ final class UserCleaningOrderService
             if (array_key_exists('addressLongitude', $validated)) {
                 $updates['address_longitude'] = $validated['addressLongitude'];
                 $pricingFieldsChanged = true;
+            }
+
+            if (array_key_exists('neighborhoodId', $validated) || array_key_exists('neighborhood', $validated)) {
+                $updates['neighborhood_id'] = $resolvedNeighborhood?->id;
+                $updates['neighborhood_name'] = $resolvedNeighborhood?->name_ar ?? ($validated['neighborhood'] ?? null);
             }
 
             if (array_key_exists('preferredWorkerId', $validated)) {
@@ -314,6 +338,18 @@ final class UserCleaningOrderService
                 ) {
                     $updates['number_of_workers'] = max(1, (int) ($estimation['recommendation']['suggestedTeamSize'] ?? $booking->number_of_workers ?? 1));
                 }
+            }
+
+            $effectiveAssignmentMode = (string) ($updates['assignment_mode'] ?? $booking->resolvedAssignmentMode());
+            $effectivePreferredWorkerId = array_key_exists('preferred_worker_id', $updates)
+                ? $updates['preferred_worker_id']
+                : $booking->preferred_worker_id;
+
+            if ($effectiveAssignmentMode === 'preferred_worker') {
+                $this->guardPreferredWorkerCoverage(
+                    $effectivePreferredWorkerId !== null ? (int) $effectivePreferredWorkerId : null,
+                    $resolvedNeighborhood,
+                );
             }
 
             if ($updates !== []) {
@@ -772,6 +808,60 @@ final class UserCleaningOrderService
         }
 
         return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function resolveNeighborhoodFromPayload(array $validated): ?CleaningNeighborhood
+    {
+        $neighborhoodId = array_key_exists('neighborhoodId', $validated) && $validated['neighborhoodId'] !== null
+            ? (int) $validated['neighborhoodId']
+            : null;
+        $neighborhoodName = array_key_exists('neighborhood', $validated) && is_string($validated['neighborhood'])
+            ? $validated['neighborhood']
+            : null;
+
+        return $this->neighborhoodResolver->resolve($neighborhoodId, $neighborhoodName);
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function resolveNeighborhoodForUpdate(CleaningBooking $booking, array $validated): ?CleaningNeighborhood
+    {
+        if (array_key_exists('neighborhoodId', $validated) || array_key_exists('neighborhood', $validated)) {
+            return $this->resolveNeighborhoodFromPayload($validated);
+        }
+
+        if ($booking->neighborhood_id !== null) {
+            return $this->neighborhoodResolver->findById((int) $booking->neighborhood_id, activeOnly: false);
+        }
+
+        if ($booking->neighborhood_name !== null && mb_trim((string) $booking->neighborhood_name) !== '') {
+            return $this->neighborhoodResolver->resolve(null, (string) $booking->neighborhood_name, activeOnly: false);
+        }
+
+        return null;
+    }
+
+    private function guardPreferredWorkerCoverage(?int $preferredWorkerId, ?CleaningNeighborhood $neighborhood): void
+    {
+        if ($preferredWorkerId === null || $neighborhood === null) {
+            return;
+        }
+
+        $worker = Worker::query()
+            ->with('zones')
+            ->find($preferredWorkerId);
+
+        if ($worker?->hasActiveCoverageForNeighborhood((int) $neighborhood->id)) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'preferredWorkerId' => [self::PREFERRED_WORKER_NEIGHBORHOOD_MESSAGE],
+        ]);
     }
 
     /**

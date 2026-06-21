@@ -6,10 +6,16 @@ namespace Modules\User\Services;
 
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Modules\Cleaning\Models\CleaningNeighborhood;
+use Modules\Cleaning\Services\CleaningNeighborhoodResolver;
 use Modules\User\Models\UserAddress;
 
 final class UserAddressService
 {
+    public function __construct(
+        private readonly CleaningNeighborhoodResolver $neighborhoodResolver,
+    ) {}
+
     /**
      * @param  array<string, mixed>  $data
      */
@@ -109,6 +115,13 @@ final class UserAddressService
                 }
             }
 
+            if (array_key_exists('neighborhoodId', $data) || array_key_exists('neighborhood', $data)) {
+                $neighborhood = $this->resolveNeighborhoodSnapshot($data);
+
+                $attributes['neighborhood_id'] = $neighborhood?->id;
+                $attributes['neighborhood'] = $neighborhood?->name_ar ?? ($data['neighborhood'] ?? null);
+            }
+
             if ($attributes !== []) {
                 $address->fill($attributes);
                 $address->save();
@@ -142,11 +155,14 @@ final class UserAddressService
      */
     private function locationAttributesFromPayload(array $data): array
     {
+        $neighborhood = $this->resolveNeighborhoodSnapshot($data);
+
         return [
             'label' => $data['label'],
             'mobile' => $data['mobile'] ?? null,
             'city' => $data['city'] ?? null,
-            'neighborhood' => $data['neighborhood'] ?? null,
+            'neighborhood_id' => $neighborhood?->id,
+            'neighborhood' => $neighborhood?->name_ar ?? ($data['neighborhood'] ?? null),
             'street' => $data['street'] ?? null,
             'building' => $data['building'] ?? null,
             'floor' => $data['floor'] ?? null,
@@ -178,5 +194,24 @@ final class UserAddressService
         }
 
         $first->update(['is_default' => true]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function resolveNeighborhoodSnapshot(array $data): ?CleaningNeighborhood
+    {
+        if (! array_key_exists('neighborhoodId', $data) && ! array_key_exists('neighborhood', $data)) {
+            return null;
+        }
+
+        $neighborhoodId = isset($data['neighborhoodId']) && $data['neighborhoodId'] !== null
+            ? (int) $data['neighborhoodId']
+            : null;
+        $neighborhoodName = isset($data['neighborhood']) && is_string($data['neighborhood'])
+            ? $data['neighborhood']
+            : null;
+
+        return $this->neighborhoodResolver->resolve($neighborhoodId, $neighborhoodName);
     }
 }

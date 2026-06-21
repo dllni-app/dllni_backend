@@ -6,6 +6,7 @@ namespace App\Http\Resources;
 
 use App\Models\BookingReview;
 use App\Models\Worker;
+use App\Models\WorkerZone;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -50,7 +51,10 @@ final class WorkerResource extends JsonResource
                 'email' => $this->user->email,
                 'phone' => $this->user->phone,
             ]),
-            'zones' => $this->whenLoaded('zones'),
+            'zones' => $this->whenLoaded('zones', fn () => $this->zones
+                ->map(fn (WorkerZone $zone): array => $this->serializeZone($zone))
+                ->values()
+                ->all()),
             'availability' => $this->whenLoaded('availability'),
             'trustLogs' => $this->whenLoaded('trustLogs'),
             'createdAt' => $this->created_at->toDateTimeString(),
@@ -78,5 +82,23 @@ final class WorkerResource extends JsonResource
         }
 
         return (float) $this->average_rating;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serializeZone(WorkerZone $zone): array
+    {
+        $neighborhood = $zone->relationLoaded('neighborhood') ? $zone->neighborhood : null;
+
+        return [
+            'id' => $zone->id,
+            'neighborhoodId' => $zone->neighborhood_id !== null ? (int) $zone->neighborhood_id : null,
+            'name' => $zone->name,
+            'nameAr' => $neighborhood?->name_ar,
+            'nameEn' => $neighborhood?->name_en,
+            'cityName' => $neighborhood?->city_name,
+            'isActive' => (bool) $zone->is_active,
+        ];
     }
 }
