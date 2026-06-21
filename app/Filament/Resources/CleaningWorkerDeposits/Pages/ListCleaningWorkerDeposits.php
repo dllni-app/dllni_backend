@@ -4,11 +4,20 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningWorkerDeposits\Pages;
 
+use App\Enums\UserModuleType;
 use App\Filament\Resources\CleaningWorkerDeposits\CleaningWorkerDepositsResource;
 use App\Filament\Resources\CleaningWorkerDeposits\Tables\CleaningTransactionsTable;
+use App\Models\Worker;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Textarea;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
+use Illuminate\Database\Eloquent\Builder;
+use Modules\Cleaning\Services\DepositService;
 use Rap2hpoutre\FastExcel\FastExcel;
+use Throwable;
 
 final class ListCleaningWorkerDeposits extends ListRecords
 {
@@ -17,6 +26,66 @@ final class ListCleaningWorkerDeposits extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('createTransaction')
+                ->label(__('cleaning_admin.transactions.actions.create'))
+                ->icon('heroicon-o-plus')
+                ->color('primary')
+                ->form([
+                    Select::make('worker_id')
+                        ->label(__('cleaning_admin.transactions.fields.worker'))
+                        ->options(fn (): array => self::workerOptions())
+                        ->searchable()
+                        ->required(),
+                    Select::make('type')
+                        ->label(__('cleaning_admin.transactions.fields.type'))
+                        ->options([
+                            'deposit' => __('cleaning_admin.transactions.types.deposit'),
+                            'settlement' => __('cleaning_admin.transactions.types.settlement'),
+                            'refund' => __('cleaning_admin.transactions.types.refund'),
+                            'adjustment' => __('cleaning_admin.transactions.types.adjustment'),
+                        ])
+                        ->default('deposit')
+                        ->required(),
+                    TextInput::make('amount')
+                        ->label(__('cleaning_admin.transactions.fields.amount'))
+                        ->numeric()
+                        ->required()
+                        ->helperText(__('cleaning_admin.transactions.hints.adjustment_amount')),
+                    Textarea::make('notes')
+                        ->label(__('cleaning_admin.transactions.fields.notes'))
+                        ->maxLength(1000),
+                ])
+                ->action(function (array $data): void {
+                    $worker = Worker::query()->find($data['worker_id']);
+
+                    if (! $worker instanceof Worker) {
+                        Notification::make()->title(__('cleaning_admin.transactions.actions.error'))->danger()->send();
+
+                        return;
+                    }
+
+                    $service = app(DepositService::class);
+                    $amount = (float) $data['amount'];
+                    $notes = isset($data['notes']) && trim((string) $data['notes']) !== '' ? trim((string) $data['notes']) : null;
+
+                    try {
+                        match ($data['type']) {
+                            'deposit' => $service->recordDeposit($worker, $amount, 'admin_manual', $notes, auth()->id()),
+                            'settlement' => $service->recordSettlement($worker, $amount, 'admin_manual', $notes, auth()->id()),
+                            'refund' => $service->recordRefund($worker, $amount, 'admin_manual', $notes, auth()->id()),
+                            'adjustment' => $service->recordAdjustment($worker, $amount, 'admin_manual', $notes, auth()->id()),
+                            default => null,
+                        };
+
+                        Notification::make()->title(__('cleaning_admin.transactions.actions.create_success'))->success()->send();
+                    } catch (Throwable $exception) {
+                        Notification::make()
+                            ->title(__('cleaning_admin.transactions.actions.error'))
+                            ->body($exception->getMessage())
+                            ->danger()
+                            ->send();
+                    }
+                }),
             Action::make('export')
                 ->label(__('cleaning_admin.transactions.actions.export'))
                 ->icon('heroicon-o-arrow-down-tray')
@@ -24,5 +93,20 @@ final class ListCleaningWorkerDeposits extends ListRecords
                 ->action(fn () => (new FastExcel(CleaningTransactionsTable::exportRows()))
                     ->download('cleaning-transactions-'.now()->format('Y-m-d').'.xlsx')),
         ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private static function workerOptions(): array
+    {
+        return Worker::query()
+            ->whereHas('user', fn (Builder $query) => $query->where('module_type', UserModuleType::CleaningWorker))
+            ->orderBy('first_name')
+            ->get()
+            ->mapWithKeys(fn (Worker $worker): array => [
+                $worker->id => ($worker->first_name ?: ('#'.$worker->id)).' (#'.$worker->id.')',
+            ])
+            ->all();
     }
 }

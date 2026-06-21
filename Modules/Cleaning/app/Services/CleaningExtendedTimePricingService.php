@@ -12,6 +12,9 @@ final class CleaningExtendedTimePricingService
     private const CURRENCY = 'SYP';
 
     /**
+     * Canonical 15-minute block boundaries (used as the fallback shape and to
+     * validate configured ranges).
+     *
      * @var array<int, array{start:int,end:int,sort:int}>
      */
     private const FIXED_RANGES = [
@@ -39,7 +42,6 @@ final class CleaningExtendedTimePricingService
             ]);
         }
 
-        $ratePerThirtyMinutes = $this->ratePerThirtyMinutes();
         $range = $this->rangeForMinutes($minutes);
 
         if (! $range) {
@@ -48,7 +50,7 @@ final class CleaningExtendedTimePricingService
             ]);
         }
 
-        $price = $this->priceForRange($range, $ratePerThirtyMinutes);
+        $price = (float) $range['price'];
 
         return [
             'requestedMinutes' => $minutes,
@@ -70,16 +72,68 @@ final class CleaningExtendedTimePricingService
      */
     public function ranges(): array
     {
-        $ratePerThirtyMinutes = $this->ratePerThirtyMinutes();
-
         return array_map(fn (array $range): array => [
             'id' => $range['sort'],
             'startMinutes' => $range['start'],
             'endMinutes' => $range['end'],
             'label' => $this->label($range),
-            'price' => $this->priceForRange($range, $ratePerThirtyMinutes),
+            'price' => (float) $range['price'],
             'currency' => self::CURRENCY,
+        ], $this->effectiveRanges());
+    }
+
+    /**
+     * Effective priced ranges: admin-configured prices when available,
+     * otherwise derived from the legacy per-30-minute rate (back-compat).
+     *
+     * @return array<int, array{start:int,end:int,sort:int,price:float}>
+     */
+    private function effectiveRanges(): array
+    {
+        $configured = $this->configuredRanges();
+
+        if ($configured !== []) {
+            return $configured;
+        }
+
+        $ratePerThirtyMinutes = $this->ratePerThirtyMinutes();
+
+        return array_map(fn (array $range): array => [
+            'start' => $range['start'],
+            'end' => $range['end'],
+            'sort' => $range['sort'],
+            'price' => round(($ratePerThirtyMinutes / 30) * $range['end'], 2),
         ], self::FIXED_RANGES);
+    }
+
+    /**
+     * @return array<int, array{start:int,end:int,sort:int,price:float}>
+     */
+    private function configuredRanges(): array
+    {
+        $ranges = CleaningFinancialSetting::query()->first()?->extension_ranges;
+
+        if (! is_array($ranges) || $ranges === []) {
+            return [];
+        }
+
+        $normalized = [];
+        $sort = 1;
+
+        foreach ($ranges as $range) {
+            if (! is_array($range) || ! isset($range['start'], $range['end'], $range['price'])) {
+                continue;
+            }
+
+            $normalized[] = [
+                'start' => (int) $range['start'],
+                'end' => (int) $range['end'],
+                'sort' => $sort++,
+                'price' => round((float) $range['price'], 2),
+            ];
+        }
+
+        return $normalized;
     }
 
     private function ratePerThirtyMinutes(): float
@@ -96,11 +150,11 @@ final class CleaningExtendedTimePricingService
     }
 
     /**
-     * @return array{start:int,end:int,sort:int}|null
+     * @return array{start:int,end:int,sort:int,price:float}|null
      */
     private function rangeForMinutes(int $minutes): ?array
     {
-        foreach (self::FIXED_RANGES as $range) {
+        foreach ($this->effectiveRanges() as $range) {
             if ($minutes >= $range['start'] && $minutes <= $range['end']) {
                 return $range;
             }
@@ -110,15 +164,7 @@ final class CleaningExtendedTimePricingService
     }
 
     /**
-     * @param  array{start:int,end:int,sort:int}  $range
-     */
-    private function priceForRange(array $range, float $ratePerThirtyMinutes): float
-    {
-        return round(($ratePerThirtyMinutes / 30) * $range['end'], 2);
-    }
-
-    /**
-     * @param  array{start:int,end:int,sort:int}  $range
+     * @param  array{start:int,end:int,sort:int,price?:float}  $range
      */
     private function label(array $range): string
     {

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\SosAlerts\Tables;
 
+use App\Enums\EmergencyType;
 use App\Enums\SOSStatus;
+use App\Enums\UserModuleType;
 use App\Filament\Resources\Orders\OrderResource;
 use App\Filament\Resources\Users\UserResource;
 use App\Models\SosAlert;
@@ -39,6 +41,16 @@ final class SosAlertsTable
                     ->url(fn (SosAlert $record): ?string => $record->user instanceof \App\Models\User
                         ? UserResource::getUrl('view', ['record' => $record->user])
                         : null),
+                TextColumn::make('reporter_role')
+                    ->label('نوع المُبلِّغ')
+                    ->badge()
+                    ->state(fn (SosAlert $record): string => self::roleLabel($record))
+                    ->color(fn (SosAlert $record): string => self::roleColor($record)),
+                TextColumn::make('emergency_type')
+                    ->label('نوع الطوارئ')
+                    ->badge()
+                    ->formatStateUsing(fn (mixed $state): string => self::emergencyLabel($state))
+                    ->color(fn (mixed $state): string => self::emergencyColor($state)),
                 TextColumn::make('message')
                     ->label('معاينة الرسالة')
                     ->limit(60)
@@ -68,6 +80,9 @@ final class SosAlertsTable
             ->filters([
                 SelectFilter::make('status')
                     ->options(collect(SOSStatus::cases())->mapWithKeys(fn (SOSStatus $case): array => [$case->value => self::statusLabel($case)])->all()),
+                SelectFilter::make('emergency_type')
+                    ->label('نوع الطوارئ')
+                    ->options(collect(\App\Enums\EmergencyType::cases())->mapWithKeys(fn (\App\Enums\EmergencyType $case): array => [$case->value => self::emergencyLabel($case)])->all()),
                 Filter::make('created_at')
                     ->form([
                         \Filament\Forms\Components\DatePicker::make('from')->label('من'),
@@ -168,5 +183,47 @@ final class SosAlertsTable
     private static function isResolved(SOSStatus|string|null $status): bool
     {
         return self::normalizeStatus($status) === SOSStatus::Resolved;
+    }
+
+    public static function roleLabel(SosAlert $record): string
+    {
+        $module = $record->user?->module_type;
+
+        return in_array($module, [UserModuleType::CleaningWorker, UserModuleType::DeliveryDriver], true)
+            ? 'عامل'
+            : 'مستخدم';
+    }
+
+    public static function roleColor(SosAlert $record): string
+    {
+        $module = $record->user?->module_type;
+
+        return in_array($module, [UserModuleType::CleaningWorker, UserModuleType::DeliveryDriver], true)
+            ? 'info'
+            : 'gray';
+    }
+
+    public static function emergencyLabel(EmergencyType|string|null $type): string
+    {
+        $type = $type instanceof EmergencyType ? $type : ($type !== null ? EmergencyType::tryFrom((string) $type) : null);
+
+        return match ($type) {
+            EmergencyType::SafetyThreat => 'تهديد للسلامة',
+            EmergencyType::MedicalEmergency => 'حالة طبية طارئة',
+            EmergencyType::SevereConflict => 'نزاع حاد',
+            default => '-',
+        };
+    }
+
+    public static function emergencyColor(EmergencyType|string|null $type): string
+    {
+        $type = $type instanceof EmergencyType ? $type : ($type !== null ? EmergencyType::tryFrom((string) $type) : null);
+
+        return match ($type) {
+            EmergencyType::SafetyThreat => 'danger',
+            EmergencyType::MedicalEmergency => 'warning',
+            EmergencyType::SevereConflict => 'primary',
+            default => 'gray',
+        };
     }
 }

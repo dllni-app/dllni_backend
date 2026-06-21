@@ -26,6 +26,7 @@ final class CleaningFinancialSetting extends Model
         'min_billable_minutes',
         'time_warning_minutes_before_end',
         'extension_rate_per_30_minutes',
+        'extension_ranges',
     ];
 
     public function casts(): array
@@ -38,6 +39,7 @@ final class CleaningFinancialSetting extends Model
             'travel_per_km' => 'decimal:2',
             'extension_rate_per_30_minutes' => 'decimal:2',
             'coverage_thresholds' => 'array',
+            'extension_ranges' => 'array',
         ];
     }
 

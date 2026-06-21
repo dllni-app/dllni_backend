@@ -136,7 +136,7 @@ final class CleaningWorkerInfolist
                                 ->color(fn ($state): string => self::txTypeColor((string) $state))
                                 ->formatStateUsing(fn ($state): string => self::txTypeLabel((string) $state)),
                             TextEntry::make('amount')->label('المبلغ')->money('SYP'),
-                            TextEntry::make('balance_after')->label('الرصيد بعد')->money('SYP'),
+                            TextEntry::make('balance_after')->label('الرصيد عند هذه العمولة')->money('SYP'),
                             TextEntry::make('created_at')->label('التاريخ')->dateTime('Y-m-d H:i'),
                             TextEntry::make('notes')->label('ملاحظات')->placeholder('-'),
                             TextEntry::make('createdByAdmin.name')->label('بواسطة')->placeholder('—'),

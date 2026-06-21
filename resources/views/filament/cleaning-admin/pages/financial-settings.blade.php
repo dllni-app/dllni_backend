@@ -38,75 +38,57 @@
 
     <x-filament::section :heading="__('cleaning_admin.financial.sections.travel_costs')">
         <div class="grid gap-4 md:grid-cols-2">
-            <label class="flex flex-col gap-1">
+            <div class="flex flex-col gap-1">
                 <span class="text-sm">{{ __('cleaning_admin.financial.fields.travel_markup_type') }}</span>
-                <select class="fi-select block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="travelMarkupType">
-                    <option value="fixed">{{ __('cleaning_admin.financial.options.travel_fixed') }}</option>
-                    <option value="percent">{{ __('cleaning_admin.financial.options.travel_percent') }}</option>
-                </select>
-                @error('travelMarkupType') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
-            </label>
-            <label class="flex flex-col gap-1">
-                <span class="text-sm">{{ __('cleaning_admin.financial.fields.travel_markup_value') }}</span>
-                <input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="travelMarkupValue">
-                @error('travelMarkupValue') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
-            </label>
+                <div class="flex items-center rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-600 dark:border-gray-600 dark:bg-gray-800/60 dark:text-gray-300">
+                    {{ __('cleaning_admin.financial.options.travel_fixed') }}
+                </div>
+            </div>
             <label class="flex flex-col gap-1">
                 <span class="text-sm">{{ __('cleaning_admin.financial.fields.travel_per_km') }}</span>
                 <input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="travelPerKm">
                 @error('travelPerKm') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
             </label>
-            <div class="flex flex-col gap-2">
-                <span class="text-sm font-medium">{{ __('cleaning_admin.financial.fields.travel_distance_start_point') }}</span>
-                <select class="fi-select block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="travelDistanceStartPoint">
-                    <option value="worker_home">{{ __('cleaning_admin.financial.options.worker_home') }}</option>
-                </select>
+            <div class="flex flex-col gap-1">
+                <span class="text-sm">{{ __('cleaning_admin.financial.fields.travel_distance_start_point') }}</span>
+                <div class="flex items-center rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-600 dark:border-gray-600 dark:bg-gray-800/60 dark:text-gray-300">
+                    {{ __('cleaning_admin.financial.options.worker_home') }}
+                </div>
             </div>
-        </div>
-    </x-filament::section>
-
-    <x-filament::section :heading="__('cleaning_admin.financial.sections.time_billing_policy')">
-        <div class="grid gap-4 md:grid-cols-2">
-            <div class="flex flex-col gap-2">
-                <span class="text-sm font-medium">{{ __('cleaning_admin.financial.fields.time_billing_mode') }}</span>
-                <select class="fi-select block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="timeBillingMode">
-                    <option value="full_booked">{{ __('cleaning_admin.financial.options.time_billing_full_booked') }}</option>
-                    <option value="actual">{{ __('cleaning_admin.financial.options.time_billing_actual') }}</option>
-                </select>
-                @error('timeBillingMode') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
-            </div>
-            @if($timeBillingMode === 'actual')
-                <label class="flex flex-col gap-1">
-                    <span class="text-sm">{{ __('cleaning_admin.financial.fields.min_billable_minutes') }}</span>
-                    <input type="number" min="0" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="minBillableMinutes" placeholder="{{ __('cleaning_admin.financial.placeholders.min_billable_minutes') }}">
-                    @error('minBillableMinutes') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
-                </label>
-            @endif
-            <label class="flex flex-col gap-1">
-                <span class="text-sm">{{ __('cleaning_admin.financial.fields.time_warning_minutes_before_end') }}</span>
-                <input type="number" min="0" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="timeWarningMinutesBeforeEnd" placeholder="{{ __('cleaning_admin.financial.placeholders.time_warning_minutes_before_end') }}">
-                @error('timeWarningMinutesBeforeEnd') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
-            </label>
-            <label class="flex flex-col gap-1">
-                <span class="text-sm">{{ __('cleaning_admin.financial.fields.extension_rate_per_30_minutes') }}</span>
-                <input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="extensionRatePer30Minutes" placeholder="{{ __('cleaning_admin.financial.placeholders.extension_rate_per_30_minutes') }}">
-                @error('extensionRatePer30Minutes') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
-            </label>
         </div>
     </x-filament::section>
 
     <x-filament::section :heading="__('cleaning_admin.financial.sections.coverage_thresholds')">
+        <p class="mb-4 text-sm text-gray-500 dark:text-gray-400">{{ __('cleaning_admin.financial.hints.coverage_thresholds') }}</p>
         <div class="grid gap-4 md:grid-cols-2">
             <label class="flex flex-col gap-1">
                 <span class="text-sm">{{ __('cleaning_admin.financial.fields.coverage_low') }}</span>
                 <input type="number" min="0" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="coverageLow">
+                <span class="text-xs text-gray-500 dark:text-gray-400">{{ __('cleaning_admin.financial.hints.coverage_low') }}</span>
                 @error('coverageLow') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
             </label>
             <label class="flex flex-col gap-1">
                 <span class="text-sm">{{ __('cleaning_admin.financial.fields.coverage_ok') }}</span>
                 <input type="number" min="0" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="coverageOk">
+                <span class="text-xs text-gray-500 dark:text-gray-400">{{ __('cleaning_admin.financial.hints.coverage_ok') }}</span>
                 @error('coverageOk') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
             </label>
+        </div>
+    </x-filament::section>
+
+    <x-filament::section :heading="__('cleaning_admin.financial.sections.time_extension')">
+        <p class="mb-4 text-sm text-gray-500 dark:text-gray-400">{{ __('cleaning_admin.financial.hints.time_extension') }}</p>
+        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            @foreach ($extensionRanges as $i => $range)
+                <label class="flex flex-col gap-1 rounded-xl border border-gray-200 p-3 dark:border-gray-700">
+                    <span class="text-sm font-medium">{{ __('cleaning_admin.financial.extension.range_label', ['start' => $range['start'], 'end' => $range['end']]) }}</span>
+                    <div class="flex items-center gap-2">
+                        <input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="extensionRanges.{{ $i }}.price">
+                        <span class="text-xs text-gray-500 dark:text-gray-400">SYP</span>
+                    </div>
+                    @error('extensionRanges.'.$i.'.price') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
+                </label>
+            @endforeach
         </div>
     </x-filament::section>
 
@@ -135,6 +117,7 @@
             <label class="flex flex-col gap-1">
                 <span class="text-sm">{{ __('cleaning_admin.financial.fields.trust_reject_after_accept_penalty') }}</span>
                 <input type="number" min="0" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="trustRejectAfterAcceptPenalty">
+                <span class="text-xs text-gray-500 dark:text-gray-400">{{ __('cleaning_admin.financial.hints.trust_reject_after_accept_penalty') }}</span>
                 @error('trustRejectAfterAcceptPenalty') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
             </label>
             <label class="flex flex-col gap-1">

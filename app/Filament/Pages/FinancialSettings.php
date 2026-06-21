@@ -33,6 +33,16 @@ final class FinancialSettings extends Page
 
     public int $coverageOk = 7;
 
+    /**
+     * Editable per-block extension prices.
+     *
+     * @var array<int, array{start:int, end:int, price:float}>
+     */
+    public array $extensionRanges = [];
+
+    /** Fixed 15-minute extension block boundaries. */
+    private const EXTENSION_BLOCKS = [[0, 15], [16, 30], [31, 45], [46, 60], [61, 75], [76, 90]];
+
     public string $timeBillingMode = 'actual';
 
     public ?int $minBillableMinutes = null;
@@ -108,6 +118,8 @@ final class FinancialSettings extends Page
     {
         $setting = CleaningFinancialSetting::query()->first();
 
+        $this->extensionRanges = $this->resolveExtensionRanges($setting);
+
         if (! $setting) {
             return;
         }
@@ -138,6 +150,28 @@ final class FinancialSettings extends Page
         }
     }
 
+    /**
+     * Resolve the editable extension blocks, pre-filling prices from saved
+     * config, then from the legacy per-30-minute rate, else 0.
+     *
+     * @return array<int, array{start:int, end:int, price:float}>
+     */
+    private function resolveExtensionRanges(?CleaningFinancialSetting $setting): array
+    {
+        $saved = collect(is_array($setting?->extension_ranges) ? $setting->extension_ranges : [])
+            ->mapWithKeys(fn (array $range): array => [((int) $range['start']).'-'.((int) $range['end']) => (float) ($range['price'] ?? 0)]);
+
+        $rate = (float) ($setting?->extension_rate_per_30_minutes ?? 0);
+
+        return array_map(function (array $block) use ($saved, $rate): array {
+            [$start, $end] = $block;
+            $key = $start.'-'.$end;
+            $price = $saved->get($key, $rate > 0 ? round($rate / 30 * $end, 2) : 0.0);
+
+            return ['start' => $start, 'end' => $end, 'price' => (float) $price];
+        }, self::EXTENSION_BLOCKS);
+    }
+
     public function save(): void
     {
         $this->validate([
@@ -154,6 +188,8 @@ final class FinancialSettings extends Page
             'minBillableMinutes' => ['nullable', 'integer', 'min:0'],
             'timeWarningMinutesBeforeEnd' => ['nullable', 'integer', 'min:0'],
             'extensionRatePer30Minutes' => ['required', 'numeric', 'min:0'],
+            'extensionRanges' => ['array'],
+            'extensionRanges.*.price' => ['required', 'numeric', 'min:0'],
             'minimumDepositAmount' => ['required', 'numeric', 'min:0'],
             'defaultMaxNegativeBalance' => ['required', 'numeric', 'min:0'],
             'restrictionThresholdPercent' => ['required', 'numeric', 'min:0', 'max:100'],
@@ -169,7 +205,7 @@ final class FinancialSettings extends Page
                 'vat_rate' => $this->vatRate,
                 'commission_type' => $this->commissionType,
                 'commission_fixed_amount' => $this->commissionType === 'fixed' ? $this->commissionFixedAmount : null,
-                'travel_markup_type' => $this->travelMarkupType,
+                'travel_markup_type' => 'fixed',
                 'travel_markup_value' => $this->travelMarkupValue,
                 'travel_per_km' => $this->travelPerKm,
                 'travel_distance_start_point' => 'worker_home',
@@ -181,6 +217,11 @@ final class FinancialSettings extends Page
                 'min_billable_minutes' => $this->minBillableMinutes,
                 'time_warning_minutes_before_end' => $this->timeWarningMinutesBeforeEnd,
                 'extension_rate_per_30_minutes' => $this->extensionRatePer30Minutes,
+                'extension_ranges' => array_map(static fn (array $range): array => [
+                    'start' => (int) $range['start'],
+                    'end' => (int) $range['end'],
+                    'price' => round((float) $range['price'], 2),
+                ], $this->extensionRanges),
             ],
         );
 

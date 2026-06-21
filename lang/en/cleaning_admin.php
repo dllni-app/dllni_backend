@@ -454,6 +454,7 @@ return [
             'travel_costs' => 'Travel Costs',
             'time_billing_policy' => 'Time Billing Policy',
             'coverage_thresholds' => 'Coverage Thresholds',
+            'time_extension' => 'Time Extension',
             'worker_finance' => 'Worker Finance',
         ],
         'fields' => [
@@ -480,6 +481,14 @@ return [
         ],
         'hints' => [
             'restriction_threshold_percent' => 'A worker is automatically restricted once the commission owed reaches this share of their deposit.',
+            'trust_reject_after_accept_penalty' => 'Number of points deducted from a worker\'s trust score when they reject a booking after having accepted it. A higher value penalizes such rejections more heavily.',
+            'coverage_thresholds' => 'An operational setting that classifies how many workers are available in an area (not a price). Used to decide whether an area\'s coverage is weak or acceptable.',
+            'coverage_low' => 'If available workers are at or below around this number, coverage is considered weak.',
+            'coverage_ok' => 'Once available workers reach around this number, coverage is considered acceptable.',
+            'time_extension' => 'Set the time-extension price for each block (every 15 minutes). The price is charged based on the block the extra minutes fall into.',
+        ],
+        'extension' => [
+            'range_label' => 'From :start to :end minutes',
         ],
         'options' => [
             'commission_percent' => 'Percentage',
@@ -530,7 +539,19 @@ return [
         ],
         'actions' => [
             'export' => 'Export',
+            'create' => 'Add transaction',
+            'create_success' => 'Transaction added successfully',
+            'error' => 'The operation could not be completed',
         ],
+        'hints' => [
+            'adjustment_amount' => 'Use a positive value to credit the balance and a negative value to debit it.',
+        ],
+    ],
+
+    'sos_notification' => [
+        'title' => 'New SOS alert',
+        'body' => 'A user submitted an SOS request that needs immediate attention.',
+        'view' => 'View alert',
     ],
 
     'report' => [

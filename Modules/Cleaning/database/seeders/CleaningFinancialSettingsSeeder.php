@@ -11,6 +11,22 @@ final class CleaningFinancialSettingsSeeder extends Seeder
 {
     private const EXTENSION_RATE_PER_30_MINUTES = 4500.00;
 
+    /**
+     * Per-range extension prices (15-minute blocks up to 90 minutes). Defaults
+     * mirror the historical derivation (rate / 30 × end-minute) so existing
+     * quotes stay identical; admins can now edit each block's price.
+     *
+     * @var array<int, array{start:int, end:int, price:float}>
+     */
+    private const EXTENSION_RANGES = [
+        ['start' => 0, 'end' => 15, 'price' => 2250.00],
+        ['start' => 16, 'end' => 30, 'price' => 4500.00],
+        ['start' => 31, 'end' => 45, 'price' => 6750.00],
+        ['start' => 46, 'end' => 60, 'price' => 9000.00],
+        ['start' => 61, 'end' => 75, 'price' => 11250.00],
+        ['start' => 76, 'end' => 90, 'price' => 13500.00],
+    ];
+
     public function run(): void
     {
         $this->seedFinancialSettings();
@@ -37,6 +53,7 @@ final class CleaningFinancialSettingsSeeder extends Seeder
                 'min_billable_minutes' => 30,
                 'time_warning_minutes_before_end' => 15,
                 'extension_rate_per_30_minutes' => self::EXTENSION_RATE_PER_30_MINUTES,
+                'extension_ranges' => self::EXTENSION_RANGES,
             ],
         );
     }
