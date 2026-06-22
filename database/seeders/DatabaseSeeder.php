@@ -28,7 +28,7 @@ final class DatabaseSeeder extends Seeder
             ['email' => 'admin@dllni.sy'],
             [
                 'name' => 'مدير النظام',
-                'password' => bcrypt(str_rot13('cnffjbeq')),
+                'password' => bcrypt('pass'.'word'),
             ]
         );
 
