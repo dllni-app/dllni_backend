@@ -391,7 +391,7 @@ final class UserCleaningOrderService
     {
         $fromStatus = (string) $booking->status->value;
 
-        if (! in_array($booking->status, [CleaningBookingStatus::Pending, CleaningBookingStatus::WorkerAssigned], true)) {
+        if (! in_array($booking->status, [CleaningBookingStatus::Pending, CleaningBookingStatus::WorkerAssigned , CleaningBookingStatus::AwaitingStartVerification], true)) {
             throw ValidationException::withMessages([
                 'order' => ['Order cannot be cancelled in current status.'],
             ]);
@@ -403,6 +403,7 @@ final class UserCleaningOrderService
             'cancellation_reason' => $reason,
         ]);
 
+        //TODO: add tag to order that cancelation is from the user if the CleaningBookingStatus::AwaitingStartVerification
         $updated = $booking->fresh();
         $this->dispatchTrackingUpdate($updated);
         $this->lifecycleNotifications->notifyWorker(
