@@ -28,7 +28,7 @@ final class SystemAlertResource extends Resource
 
     public static function getNavigationGroup(): ?string
     {
-        return __('cleaning_admin.nav_groups.operations');
+        return __('restaurant_admin.general_sections');
     }
 
     public static function getNavigationLabel(): string
