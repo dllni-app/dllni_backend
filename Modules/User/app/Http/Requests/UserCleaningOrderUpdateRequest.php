@@ -6,6 +6,7 @@ namespace Modules\User\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrderUpdateRequest extends FormRequest
@@ -73,6 +74,38 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
             'addonsTotal' => ['prohibited'],
             'totalPrice' => ['prohibited'],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            $assignmentMode = $this->normalizedAssignmentMode();
+            $preferredWorkerId = $this->input('preferredWorkerId');
+            $numberOfWorkers = $this->input('numberOfWorkers');
+
+            if ($assignmentMode === 'preferred_worker' && is_numeric($preferredWorkerId) && (int) $preferredWorkerId > 0 && $numberOfWorkers !== null && (int) $numberOfWorkers !== 1) {
+                $validator->errors()->add('numberOfWorkers', 'Selected worker mode only allows one worker.');
+            }
+
+            if ($assignmentMode === 'open_count' && $preferredWorkerId !== null) {
+                $validator->errors()->add('preferredWorkerId', 'Selected worker is not compatible with open count mode.');
+            }
+
+            if ($assignmentMode === null && $preferredWorkerId !== null && $numberOfWorkers !== null && (int) $numberOfWorkers !== 1) {
+                $validator->errors()->add('numberOfWorkers', 'This request mode only supports one worker.');
+            }
+        });
+    }
+
+    private function normalizedAssignmentMode(): ?string
+    {
+        $assignmentMode = $this->input('assignmentMode');
+
+        if (! is_string($assignmentMode) || mb_trim($assignmentMode) === '') {
+            return null;
+        }
+
+        return mb_strtolower(mb_trim($assignmentMode));
     }
 
     private function isEventAssistanceContext(): bool
