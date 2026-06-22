@@ -13,7 +13,9 @@ final class UserNotificationController
 {
     public function index(UserNotificationIndexRequest $request): AnonymousResourceCollection
     {
-        $query = auth()->user()->notifications()->getQuery();
+        $user = auth()->user();
+        $countUnread = $user->unreadNotifications()->count();
+        $query = $user->notifications()->getQuery();
 
         if ($request->boolean('filter.unread')) {
             $query->whereNull('read_at');
@@ -22,7 +24,10 @@ final class UserNotificationController
         $notifications = $query->orderByDesc('created_at')
             ->paginate($request->get('perPage', 10));
 
-        return UserNotificationResource::collection($notifications);
+        return UserNotificationResource::collection($notifications)
+            ->additional([
+                'countUnread' => $countUnread,
+            ]);
     }
 
     public function markAsRead(string $id): Response
