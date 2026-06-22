@@ -58,7 +58,7 @@ final class RestaurantGroupVoteService
         });
     }
 
-    public function castBallot(RestaurantGroupVote $vote, int $userId, int $optionId): RestaurantGroupVoteBallot
+    public function castBallot(RestaurantGroupVote $vote, int $userId, int $optionId): ?RestaurantGroupVoteBallot
     {
         $this->finalizeIfExpired($vote);
         $vote->refresh();
@@ -84,6 +84,17 @@ final class RestaurantGroupVoteService
             throw ValidationException::withMessages([
                 'optionId' => ['Invalid option for this vote.'],
             ]);
+        }
+
+        $existingBallot = RestaurantGroupVoteBallot::query()
+            ->where('vote_id', $vote->id)
+            ->where('user_id', $userId)
+            ->first();
+
+        if ($existingBallot !== null && (int) $existingBallot->option_id === $optionId) {
+            $existingBallot->delete();
+
+            return null;
         }
 
         /** @var RestaurantGroupVoteBallot $ballot */
@@ -216,8 +227,12 @@ final class RestaurantGroupVoteService
 
         $totalBallots = $vote->ballots->count();
         $countsByOption = $vote->ballots->groupBy('option_id')->map->count();
+        $currentUserBallot = $currentUserId !== null
+            ? $vote->ballots->first(fn (RestaurantGroupVoteBallot $ballot): bool => (int) $ballot->user_id === $currentUserId)
+            : null;
+        $currentUserOptionId = $currentUserBallot?->option_id !== null ? (int) $currentUserBallot->option_id : null;
 
-        $optionsPayload = $vote->options->map(function (RestaurantGroupVoteOption $option) use ($countsByOption, $totalBallots): array {
+        $optionsPayload = $vote->options->map(function (RestaurantGroupVoteOption $option) use ($countsByOption, $totalBallots, $currentUserOptionId): array {
             $count = (int) ($countsByOption->get($option->id) ?? 0);
             $percent = $totalBallots > 0 ? round(($count / $totalBallots) * 100, 1) : 0.0;
 
@@ -234,15 +249,18 @@ final class RestaurantGroupVoteService
                 'voteCount' => $count,
                 'percent' => $percent,
                 'unitPrice' => $price,
+                'isSelectedByCurrentUser' => $currentUserOptionId !== null && $currentUserOptionId === (int) $option->id,
             ];
         })->values()->all();
 
-        $votersPayload = $vote->ballots->sortBy('id')->values()->map(function (RestaurantGroupVoteBallot $ballot): array {
+        $fallbackUserName = "\u{0645}\u{0633}\u{062A}\u{062E}\u{062F}\u{0645} \u{0627}\u{0644}\u{062A}\u{0637}\u{0628}\u{064A}\u{0642}";
+
+        $votersPayload = $vote->ballots->sortBy('id')->values()->map(function (RestaurantGroupVoteBallot $ballot) use ($fallbackUserName): array {
             return [
                 'userId' => $ballot->user_id,
-                'name' => $ballot->user->name,
+                'name' => $ballot->user?->name ?: $fallbackUserName,
                 'optionId' => $ballot->option_id,
-                'optionLabel' => $ballot->option->label,
+                'optionLabel' => $ballot->option?->label,
             ];
         })->all();
 
@@ -258,10 +276,10 @@ final class RestaurantGroupVoteService
             }
         }
 
-        $invitedUsersPayload = $vote->invites->sortBy('id')->values()->map(function (RestaurantGroupVoteInvite $invite): array {
+        $invitedUsersPayload = $vote->invites->sortBy('id')->values()->map(function (RestaurantGroupVoteInvite $invite) use ($fallbackUserName): array {
             return [
                 'userId' => $invite->user_id,
-                'name' => $invite->user->name,
+                'name' => $invite->user?->name ?: $fallbackUserName,
             ];
         })->all();
 
@@ -292,6 +310,8 @@ final class RestaurantGroupVoteService
                 'creatorUserId' => $vote->user_id,
                 'isCreator' => $currentUserId !== null && $currentUserId === $vote->user_id,
                 'isInvited' => $isInvited,
+                'currentUserOptionId' => $currentUserOptionId,
+                'hasCurrentUserVoted' => $currentUserOptionId !== null,
                 'createdAt' => $vote->created_at->toIso8601String(),
             ],
             'options' => $optionsPayload,
