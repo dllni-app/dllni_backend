@@ -134,8 +134,8 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
 
         Route::get('employees', RestaurantOwnerEmployeeIndexController::class);
         Route::post('employees', RestaurantOwnerEmployeeStoreController::class);
-        Route::patch('employees/{user}', RestaurantOwnerEmployeeUpdateController::class);
-        Route::delete('employees/{user}', RestaurantOwnerEmployeeDestroyController::class);
+        Route::patch('employees/{employee}', RestaurantOwnerEmployeeUpdateController::class);
+        Route::delete('employees/{employee}', RestaurantOwnerEmployeeDestroyController::class);
 
         Route::get('permissions', RestaurantOwnerPermissionsController::class);
 
@@ -144,6 +144,7 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
         Route::patch('notifications/{notification}/read', RestaurantOwnerNotificationMarkReadController::class);
 
         Route::get('activity-logs', RestaurantOwnerActivityLogController::class);
+        Route::get('employees/activity', RestaurantOwnerActivityLogController::class);
     });
 
     Route::prefix('resturant-owner')->group(function () {
