@@ -26,7 +26,7 @@ final class WorkerForm
                             ->label(__('cleaning_admin.workers.fields.user'))
                             ->relationship('user', 'name')
                             ->searchable()
-                            ->disabled(fn (string $operation): bool => $operation === 'edit')
+                            ->visible(fn (string $operation): bool => $operation === 'create')
                             ->required(),
                         TextInput::make('first_name')
                             ->label(__('cleaning_admin.workers.fields.first_name'))
