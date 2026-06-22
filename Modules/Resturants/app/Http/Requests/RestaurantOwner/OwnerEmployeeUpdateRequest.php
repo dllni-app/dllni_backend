@@ -26,4 +26,26 @@ final class OwnerEmployeeUpdateRequest extends FormRequest
             'isActive' => 'sometimes|boolean',
         ];
     }
+
+    protected function prepareForValidation(): void
+    {
+        $permissionIds = $this->input('permissionIds', $this->input('permission_ids'));
+
+        if (is_string($permissionIds)) {
+            $decoded = json_decode($permissionIds, true);
+            $permissionIds = is_array($decoded)
+                ? $decoded
+                : array_filter(array_map('trim', explode(',', $permissionIds)));
+        }
+
+        $payload = [
+            'isActive' => $this->input('isActive', $this->input('is_active')),
+        ];
+
+        if ($permissionIds !== null) {
+            $payload['permissionIds'] = $permissionIds;
+        }
+
+        $this->merge($payload);
+    }
 }

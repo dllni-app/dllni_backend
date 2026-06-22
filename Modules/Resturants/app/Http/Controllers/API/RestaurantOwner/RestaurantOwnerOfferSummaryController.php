@@ -37,11 +37,13 @@ final class RestaurantOwnerOfferSummaryController
             ->get();
 
         $ordersCount = (int) $performance->sum('orders_count');
-        $revenueImpact = (float) $performance->sum('revenue_impact');
+        $revenueImpact = round((float) $performance->sum('revenue_impact'), 2);
         $totalSavings = 0.0;
 
         $topPerformance = $performance->sortByDesc('orders_count')->first();
         $topOffer = $topPerformance ? $offers->firstWhere('id', (int) $topPerformance->offer_id) : null;
+        $topRevenue = $topPerformance ? round((float) $topPerformance->revenue_impact, 2) : 0.0;
+        $topOrdersCount = $topPerformance ? (int) $topPerformance->orders_count : 0;
 
         return response()->json([
             'summary' => [
@@ -53,8 +55,10 @@ final class RestaurantOwnerOfferSummaryController
                 'topPerforming' => $topOffer ? [
                     'id' => $topOffer->id,
                     'name' => $topOffer->name,
-                    'ordersCount' => (int) $topPerformance->orders_count,
-                    'revenueImpact' => (float) $topPerformance->revenue_impact,
+                    'ordersCount' => $topOrdersCount,
+                    'usageCount' => $topOrdersCount,
+                    'revenueImpact' => $topRevenue,
+                    'generatedRevenue' => $topRevenue,
                 ] : null,
             ],
         ]);
