@@ -24,6 +24,9 @@ final class UserRestaurantExclusiveOfferResource extends JsonResource
         $distanceKm = array_key_exists('distanceKm', $offer->getAttributes())
             ? round((float) $offer->getAttribute('distanceKm'), 2)
             : null;
+        $urgency = $offer->listingUrgencyTag();
+        $urgencyValue = $urgency?->value;
+        $urgencyLabel = $urgency?->label();
 
         return [
             'offerId' => $offer->id,
@@ -33,7 +36,9 @@ final class UserRestaurantExclusiveOfferResource extends JsonResource
             'offerDescription' => $offer->name,
             'discountType' => $offer->discount_type?->value ?? $offer->discount_type,
             'discountValue' => $offer->discount_value !== null ? (float) $offer->discount_value : null,
-            'urgencyTag' => $offer->listingUrgencyTag()?->value,
+            'urgencyTag' => $urgencyLabel,
+            'urgencyTagKey' => $urgencyValue,
+            'urgencyTagLabel' => $urgencyLabel,
             'distanceKm' => $distanceKm,
             'distanceUnit' => $distanceKm !== null ? 'km' : null,
             'imageUrl' => $restaurant->getFirstMediaUrl('primary-image') ?: null,
