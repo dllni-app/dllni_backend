@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\SosAlerts\Schemas;
 
 use App\Enums\SOSStatus;
-use Filament\Infolists\Components\Section;
+use Filament\Infolists\Components\Grid;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Schema;
 
@@ -14,7 +14,7 @@ final class SosAlertInfolist
     public static function configure(Schema $schema): Schema
     {
         return $schema->components([
-            Section::make('تفاصيل تنبيه الطوارئ')
+            Grid::make(2)
                 ->schema([
                     TextEntry::make('id')->label('المعرّف'),
                     TextEntry::make('status')
@@ -34,8 +34,7 @@ final class SosAlertInfolist
                     TextEntry::make('resolution_note')->label('ملاحظة الحل')->columnSpanFull()->placeholder('-'),
                     TextEntry::make('created_at')->label('تاريخ الإنشاء')->dateTime(),
                     TextEntry::make('updated_at')->label('تاريخ التحديث')->dateTime(),
-                ])
-                ->columns(2),
+                ]),
         ]);
     }
 
