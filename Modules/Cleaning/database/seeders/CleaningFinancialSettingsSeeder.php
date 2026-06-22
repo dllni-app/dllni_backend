@@ -6,6 +6,7 @@ namespace Modules\Cleaning\Database\Seeders;
 
 use App\Models\CleaningFinancialSetting;
 use Illuminate\Database\Seeder;
+use Modules\Cleaning\Support\CleaningFinancialDefaults;
 
 final class CleaningFinancialSettingsSeeder extends Seeder
 {
@@ -54,6 +55,13 @@ final class CleaningFinancialSettingsSeeder extends Seeder
                 'time_warning_minutes_before_end' => 15,
                 'extension_rate_per_30_minutes' => self::EXTENSION_RATE_PER_30_MINUTES,
                 'extension_ranges' => self::EXTENSION_RANGES,
+                'cleaning_base_unit_price' => CleaningFinancialDefaults::BASE_UNIT_PRICE,
+                'cleaning_deep_multiplier' => CleaningFinancialDefaults::DEEP_CLEANING_MULTIPLIER,
+                'cleaning_area_margin_multiplier' => CleaningFinancialDefaults::AREA_MARGIN_MULTIPLIER,
+                'cleaning_setup_buffer_minutes' => CleaningFinancialDefaults::SETUP_BUFFER_MINUTES,
+                'cleaning_room_size_ranges' => CleaningFinancialDefaults::roomSizeRanges(),
+                'cleaning_room_pricing_units' => CleaningFinancialDefaults::roomPricingUnits(),
+                'cleaning_room_time_minutes' => CleaningFinancialDefaults::roomTimeMinutes(),
             ],
         );
     }
