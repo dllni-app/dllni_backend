@@ -27,6 +27,13 @@ final class CleaningBookingInfolist
                         TextEntry::make('status')->label(__('cleaning_admin.booking.fields.status'))->badge()->formatStateUsing(fn ($state) => $state?->label()),
                         TextEntry::make('terms_accepted')->label(__('cleaning_admin.booking.fields.terms_accepted'))->formatStateUsing($yesNo)->placeholder('-'),
                         TextEntry::make('cancelled_at')->label(__('cleaning_admin.booking.fields.cancelled_at'))->dateTime('Y-m-d H:i')->placeholder('-'),
+                        TextEntry::make('cancelled_by_role')
+                            ->label('مصدر الإلغاء')
+                            ->badge()
+                            ->formatStateUsing(fn ($state): string => self::cancellationSourceLabel($state))
+                            ->color(fn ($state): string => self::cancellationSourceColor($state))
+                            ->placeholder('-')
+                            ->visible(fn ($record): bool => filled($record->cancelled_by_role)),
                         TextEntry::make('cancellationPolicy.name')->label(__('cleaning_admin.booking.fields.cancellation_policy'))->placeholder('-'),
                         TextEntry::make('property_type')->label(__('cleaning_admin.booking.fields.property_type')),
                         TextEntry::make('number_of_workers')->label(__('cleaning_admin.booking.fields.number_of_workers')),
@@ -196,6 +203,28 @@ final class CleaningBookingInfolist
         return match ($record->resolvedAssignmentMode()) {
             CleaningAssignmentMode::PreferredWorker->value => 'info',
             CleaningAssignmentMode::OpenCount->value => 'primary',
+            default => 'gray',
+        };
+    }
+
+    private static function cancellationSourceLabel(mixed $state): string
+    {
+        $value = $state instanceof \BackedEnum ? $state->value : $state;
+
+        return match ((string) $value) {
+            'customer' => 'ألغاه العميل',
+            'worker' => 'ألغاه العامل',
+            default => '-',
+        };
+    }
+
+    private static function cancellationSourceColor(mixed $state): string
+    {
+        $value = $state instanceof \BackedEnum ? $state->value : $state;
+
+        return match ((string) $value) {
+            'customer' => 'danger',
+            'worker' => 'warning',
             default => 'gray',
         };
     }
