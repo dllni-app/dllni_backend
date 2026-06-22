@@ -15,8 +15,8 @@ beforeEach(function (): void {
 it('creates three cleaning worker users with linked worker records', function (): void {
     $expectedWorkers = [
         ['email' => 'cleaning.worker@dllni.sy', 'phone' => '+963944100001', 'first_name' => 'Cleaning'],
-        ['email' => 'cleaning.worker2@dllni.sy', 'phone' => '+963944100002', 'first_name' => 'Lina'],
-        ['email' => 'cleaning.worker3@dllni.sy', 'phone' => '+963944100003', 'first_name' => 'Omar'],
+        ['email' => 'cleaning.worker2@dllni.sy', 'phone' => '+963944100004', 'first_name' => 'Lina'],
+        ['email' => 'cleaning.worker3@dllni.sy', 'phone' => '+963944100005', 'first_name' => 'Omar'],
     ];
 
     foreach ($expectedWorkers as $expected) {
