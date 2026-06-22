@@ -16,9 +16,6 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
         return true;
     }
 
-    /**
-     * @return array<string, mixed>
-     */
     public function rules(): array
     {
         $eventPayloadRequested = $this->shouldValidateEventPayload();
@@ -26,19 +23,21 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
 
         return [
             'propertyType' => ['sometimes', 'string', Rule::in(UserCleaningOrderEstimationService::PROPERTY_TYPES)],
-            'propertyDetails' => ['sometimes', 'array:address,location_name,bedrooms,rooms,bathrooms,kitchens,balconies,living_room_size,cleaning_mode,room_size_breakdown,eventType,guestCount,venueType,customService,hours,specialRequirement,notes'],
+            'propertyDetails' => ['sometimes', 'array:address,location_name,bedrooms,rooms,bathrooms,toilets,kitchens,balconies,living_room_size,cleaning_mode,room_size_breakdown,eventType,guestCount,venueType,customService,hours,specialRequirement,notes'],
             'propertyDetails.address' => ['sometimes', 'string', 'max:500'],
             'propertyDetails.location_name' => ['nullable', 'string', 'max:255'],
             'propertyDetails.bedrooms' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.rooms' => ['nullable', 'integer', 'min:0', 'max:30'],
             'propertyDetails.bathrooms' => ['nullable', 'integer', 'min:0', 'max:20'],
+            'propertyDetails.toilets' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.kitchens' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.balconies' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.living_room_size' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::LIVING_ROOM_SIZES)],
             'propertyDetails.cleaning_mode' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::CLEANING_MODES)],
-            'propertyDetails.room_size_breakdown' => ['nullable', 'array:bedroom,bathroom,kitchen,living_room,balcony,corridor'],
+            'propertyDetails.room_size_breakdown' => ['nullable', 'array:bedroom,bathroom,toilet,kitchen,living_room,balcony,corridor'],
             'propertyDetails.room_size_breakdown.bedroom' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.bathroom' => ['sometimes', 'array:small,medium,large'],
+            'propertyDetails.room_size_breakdown.toilet' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.kitchen' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.living_room' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.balcony' => ['sometimes', 'array:small,medium,large'],
@@ -61,12 +60,7 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
             'scheduledTime' => ['sometimes', 'date_format:H:i'],
             'addressLatitude' => ['sometimes', 'numeric', 'between:-90,90'],
             'addressLongitude' => ['sometimes', 'numeric', 'between:-180,180'],
-            'neighborhoodId' => [
-                'sometimes',
-                'nullable',
-                'integer',
-                Rule::exists('cleaning_neighborhoods', 'id')->where('is_active', true),
-            ],
+            'neighborhoodId' => ['sometimes', 'nullable', 'integer', Rule::exists('cleaning_neighborhoods', 'id')->where('is_active', true)],
             'neighborhood' => ['sometimes', 'nullable', 'string', 'max:255'],
             'preferredWorkerId' => ['sometimes', 'nullable', 'exists:workers,id'],
             'numberOfWorkers' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:20'],
@@ -89,18 +83,16 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
             $preferredWorkerId = $this->input('preferredWorkerId');
             $numberOfWorkers = $this->input('numberOfWorkers');
 
-            if ($assignmentMode === 'preferred_worker' && is_numeric($preferredWorkerId) && (int) $preferredWorkerId > 0) {
-                if ($numberOfWorkers !== null && (int) $numberOfWorkers !== 1) {
-                    $validator->errors()->add('numberOfWorkers', 'Preferred worker mode only allows one worker.');
-                }
+            if ($assignmentMode === 'preferred_worker' && is_numeric($preferredWorkerId) && (int) $preferredWorkerId > 0 && $numberOfWorkers !== null && (int) $numberOfWorkers !== 1) {
+                $validator->errors()->add('numberOfWorkers', 'Selected worker mode only allows one worker.');
             }
 
             if ($assignmentMode === 'open_count' && $preferredWorkerId !== null) {
-                $validator->errors()->add('preferredWorkerId', 'Preferred worker cannot be used with open count mode.');
+                $validator->errors()->add('preferredWorkerId', 'Selected worker is not compatible with open count mode.');
             }
 
             if ($assignmentMode === null && $preferredWorkerId !== null && $numberOfWorkers !== null && (int) $numberOfWorkers !== 1) {
-                $validator->errors()->add('numberOfWorkers', 'Legacy preferred worker requests only support one worker.');
+                $validator->errors()->add('numberOfWorkers', 'This request mode only supports one worker.');
             }
         });
     }
@@ -138,9 +130,6 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
             || $this->has('propertyDetails.hours');
     }
 
-    /**
-     * @return array<int, string>
-     */
     private function availableVenueTypes(): array
     {
         return array_values(array_filter(

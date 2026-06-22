@@ -32,13 +32,15 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             'propertyDetails.bedrooms' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.rooms' => ['nullable', 'integer', 'min:0', 'max:30'],
             'propertyDetails.bathrooms' => ['nullable', 'integer', 'min:0', 'max:20'],
+            'propertyDetails.toilets' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.kitchens' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.balconies' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.living_room_size' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::LIVING_ROOM_SIZES)],
             'propertyDetails.cleaning_mode' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::CLEANING_MODES)],
-            'propertyDetails.room_size_breakdown' => ['nullable', 'array:bedroom,bathroom,kitchen,living_room,balcony,corridor'],
+            'propertyDetails.room_size_breakdown' => ['nullable', 'array:bedroom,bathroom,toilet,kitchen,living_room,balcony,corridor'],
             'propertyDetails.room_size_breakdown.bedroom' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.bathroom' => ['sometimes', 'array:small,medium,large'],
+            'propertyDetails.room_size_breakdown.toilet' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.kitchen' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.living_room' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.balcony' => ['sometimes', 'array:small,medium,large'],
@@ -71,16 +73,16 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
 
             if ($assignmentMode === 'preferred_worker' && is_numeric($preferredWorkerId) && (int) $preferredWorkerId > 0) {
                 if ($numberOfWorkers !== null && (int) $numberOfWorkers !== 1) {
-                    $validator->errors()->add('numberOfWorkers', 'Preferred worker mode only allows one worker.');
+                    $validator->errors()->add('numberOfWorkers', 'Selected worker mode only allows one worker.');
                 }
             }
 
             if ($assignmentMode === 'open_count' && $preferredWorkerId !== null) {
-                $validator->errors()->add('preferredWorkerId', 'Preferred worker cannot be used with open count mode.');
+                $validator->errors()->add('preferredWorkerId', 'Selected worker is not compatible with open count mode.');
             }
 
             if ($assignmentMode === null && $preferredWorkerId !== null && $numberOfWorkers !== null && (int) $numberOfWorkers !== 1) {
-                $validator->errors()->add('numberOfWorkers', 'Legacy preferred worker requests only support one worker.');
+                $validator->errors()->add('numberOfWorkers', 'Legacy selected-worker requests only support one worker.');
             }
 
             $this->validateWorkerRoomAssignments($validator);

@@ -10,63 +10,43 @@ use BackedEnum;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Modules\Cleaning\Services\DepositService;
+use Modules\Cleaning\Support\CleaningFinancialDefaults;
 
 final class FinancialSettings extends Page
 {
     public float $defaultCommissionRate = 0.0;
-
     public float $vatRate = 0.0;
-
     public string $commissionType = 'percent';
-
     public ?float $commissionFixedAmount = null;
-
     public string $travelMarkupType = 'fixed';
-
     public float $travelMarkupValue = 0.0;
-
     public float $travelPerKm = 0.0;
-
     public string $travelDistanceStartPoint = 'worker_home';
-
     public int $coverageLow = 3;
-
     public int $coverageOk = 7;
-
-    /**
-     * Editable per-block extension prices.
-     *
-     * @var array<int, array{start:int, end:int, price:float}>
-     */
     public array $extensionRanges = [];
+    public string $timeBillingMode = 'actual';
+    public ?int $minBillableMinutes = null;
+    public ?int $timeWarningMinutesBeforeEnd = null;
+    public float $extensionRatePer30Minutes = 0.0;
+    public float $minimumDepositAmount = 0.0;
+    public float $defaultMaxNegativeBalance = 0.0;
+    public float $restrictionThresholdPercent = 80.0;
+    public int $trustRejectAfterAcceptPenalty = 10;
+    public int $trustMinimumForDispatch = 0;
+    public bool $workerFinanceEnabled = true;
+    public float $cleaningBaseUnitPrice = CleaningFinancialDefaults::BASE_UNIT_PRICE;
+    public float $cleaningDeepMultiplier = CleaningFinancialDefaults::DEEP_CLEANING_MULTIPLIER;
+    public float $cleaningAreaMarginMultiplier = CleaningFinancialDefaults::AREA_MARGIN_MULTIPLIER;
+    public int $cleaningSetupBufferMinutes = CleaningFinancialDefaults::SETUP_BUFFER_MINUTES;
+    public string $cleaningRoomSizeRangesJson = '';
+    public string $cleaningRoomPricingUnitsJson = '';
+    public string $cleaningRoomTimeMinutesJson = '';
 
-    /** Fixed 15-minute extension block boundaries. */
     private const EXTENSION_BLOCKS = [[0, 15], [16, 30], [31, 45], [46, 60], [61, 75], [76, 90]];
 
-    public string $timeBillingMode = 'actual';
-
-    public ?int $minBillableMinutes = null;
-
-    public ?int $timeWarningMinutesBeforeEnd = null;
-
-    public float $extensionRatePer30Minutes = 0.0;
-
-    public float $minimumDepositAmount = 0.0;
-
-    public float $defaultMaxNegativeBalance = 0.0;
-
-    public float $restrictionThresholdPercent = 80.0;
-
-    public int $trustRejectAfterAcceptPenalty = 10;
-
-    public int $trustMinimumForDispatch = 0;
-
-    public bool $workerFinanceEnabled = true;
-
     protected static string|BackedEnum|null $navigationIcon = \Filament\Support\Icons\Heroicon::OutlinedCurrencyDollar;
-
     protected string $view = 'filament.cleaning-admin.pages.financial-settings';
-
     protected static ?int $navigationSort = 20;
 
     public function getMaxContentWidth(): ?string
@@ -117,27 +97,31 @@ final class FinancialSettings extends Page
     public function mount(): void
     {
         $setting = CleaningFinancialSetting::query()->first();
-
         $this->extensionRanges = $this->resolveExtensionRanges($setting);
+        $this->cleaningRoomSizeRangesJson = $this->prettyJson($setting?->cleaning_room_size_ranges ?: CleaningFinancialDefaults::roomSizeRanges());
+        $this->cleaningRoomPricingUnitsJson = $this->prettyJson($setting?->cleaning_room_pricing_units ?: CleaningFinancialDefaults::roomPricingUnits());
+        $this->cleaningRoomTimeMinutesJson = $this->prettyJson($setting?->cleaning_room_time_minutes ?: CleaningFinancialDefaults::roomTimeMinutes());
 
-        if (! $setting) {
-            return;
+        if ($setting) {
+            $this->defaultCommissionRate = (float) $setting->default_commission_rate;
+            $this->vatRate = (float) $setting->vat_rate;
+            $this->commissionType = (string) ($setting->commission_type ?? 'percent');
+            $this->commissionFixedAmount = $setting->commission_fixed_amount !== null ? (float) $setting->commission_fixed_amount : null;
+            $this->travelMarkupType = (string) $setting->travel_markup_type;
+            $this->travelMarkupValue = (float) $setting->travel_markup_value;
+            $this->travelPerKm = (float) ($setting->travel_per_km ?? 0.0);
+            $this->travelDistanceStartPoint = 'worker_home';
+            $this->coverageLow = (int) data_get($setting->coverage_thresholds, 'low', 3);
+            $this->coverageOk = (int) data_get($setting->coverage_thresholds, 'ok', 7);
+            $this->timeBillingMode = (string) ($setting->time_billing_mode ?? 'actual');
+            $this->minBillableMinutes = $setting->min_billable_minutes !== null ? (int) $setting->min_billable_minutes : null;
+            $this->timeWarningMinutesBeforeEnd = $setting->time_warning_minutes_before_end !== null ? (int) $setting->time_warning_minutes_before_end : null;
+            $this->extensionRatePer30Minutes = (float) ($setting->extension_rate_per_30_minutes ?? 0.0);
+            $this->cleaningBaseUnitPrice = (float) ($setting->cleaning_base_unit_price ?? CleaningFinancialDefaults::BASE_UNIT_PRICE);
+            $this->cleaningDeepMultiplier = (float) ($setting->cleaning_deep_multiplier ?? CleaningFinancialDefaults::DEEP_CLEANING_MULTIPLIER);
+            $this->cleaningAreaMarginMultiplier = (float) ($setting->cleaning_area_margin_multiplier ?? CleaningFinancialDefaults::AREA_MARGIN_MULTIPLIER);
+            $this->cleaningSetupBufferMinutes = (int) ($setting->cleaning_setup_buffer_minutes ?? CleaningFinancialDefaults::SETUP_BUFFER_MINUTES);
         }
-
-        $this->defaultCommissionRate = (float) $setting->default_commission_rate;
-        $this->vatRate = (float) $setting->vat_rate;
-        $this->commissionType = (string) ($setting->commission_type ?? 'percent');
-        $this->commissionFixedAmount = $setting->commission_fixed_amount !== null ? (float) $setting->commission_fixed_amount : null;
-        $this->travelMarkupType = (string) $setting->travel_markup_type;
-        $this->travelMarkupValue = (float) $setting->travel_markup_value;
-        $this->travelPerKm = (float) ($setting->travel_per_km ?? 0.0);
-        $this->travelDistanceStartPoint = 'worker_home';
-        $this->coverageLow = (int) data_get($setting->coverage_thresholds, 'low', 3);
-        $this->coverageOk = (int) data_get($setting->coverage_thresholds, 'ok', 7);
-        $this->timeBillingMode = (string) ($setting->time_billing_mode ?? 'actual');
-        $this->minBillableMinutes = $setting->min_billable_minutes !== null ? (int) $setting->min_billable_minutes : null;
-        $this->timeWarningMinutesBeforeEnd = $setting->time_warning_minutes_before_end !== null ? (int) $setting->time_warning_minutes_before_end : null;
-        $this->extensionRatePer30Minutes = (float) ($setting->extension_rate_per_30_minutes ?? 0.0);
 
         $depositSetting = CleaningDepositSetting::query()->first();
         if ($depositSetting) {
@@ -148,28 +132,6 @@ final class FinancialSettings extends Page
             $this->trustMinimumForDispatch = (int) $depositSetting->trust_minimum_for_dispatch;
             $this->workerFinanceEnabled = (bool) $depositSetting->is_enabled;
         }
-    }
-
-    /**
-     * Resolve the editable extension blocks, pre-filling prices from saved
-     * config, then from the legacy per-30-minute rate, else 0.
-     *
-     * @return array<int, array{start:int, end:int, price:float}>
-     */
-    private function resolveExtensionRanges(?CleaningFinancialSetting $setting): array
-    {
-        $saved = collect(is_array($setting?->extension_ranges) ? $setting->extension_ranges : [])
-            ->mapWithKeys(fn (array $range): array => [((int) $range['start']).'-'.((int) $range['end']) => (float) ($range['price'] ?? 0)]);
-
-        $rate = (float) ($setting?->extension_rate_per_30_minutes ?? 0);
-
-        return array_map(function (array $block) use ($saved, $rate): array {
-            [$start, $end] = $block;
-            $key = $start.'-'.$end;
-            $price = $saved->get($key, $rate > 0 ? round($rate / 30 * $end, 2) : 0.0);
-
-            return ['start' => $start, 'end' => $end, 'price' => (float) $price];
-        }, self::EXTENSION_BLOCKS);
     }
 
     public function save(): void
@@ -196,6 +158,13 @@ final class FinancialSettings extends Page
             'trustRejectAfterAcceptPenalty' => ['required', 'integer', 'min:0'],
             'trustMinimumForDispatch' => ['required', 'integer', 'min:0', 'max:100'],
             'workerFinanceEnabled' => ['required', 'boolean'],
+            'cleaningBaseUnitPrice' => ['required', 'numeric', 'min:0'],
+            'cleaningDeepMultiplier' => ['required', 'numeric', 'min:1'],
+            'cleaningAreaMarginMultiplier' => ['required', 'numeric', 'min:1'],
+            'cleaningSetupBufferMinutes' => ['required', 'integer', 'min:0'],
+            'cleaningRoomSizeRangesJson' => ['required', 'json'],
+            'cleaningRoomPricingUnitsJson' => ['required', 'json'],
+            'cleaningRoomTimeMinutesJson' => ['required', 'json'],
         ]);
 
         CleaningFinancialSetting::query()->updateOrCreate(
@@ -209,10 +178,7 @@ final class FinancialSettings extends Page
                 'travel_markup_value' => $this->travelMarkupValue,
                 'travel_per_km' => $this->travelPerKm,
                 'travel_distance_start_point' => 'worker_home',
-                'coverage_thresholds' => [
-                    'low' => $this->coverageLow,
-                    'ok' => $this->coverageOk,
-                ],
+                'coverage_thresholds' => ['low' => $this->coverageLow, 'ok' => $this->coverageOk],
                 'time_billing_mode' => $this->timeBillingMode,
                 'min_billable_minutes' => $this->minBillableMinutes,
                 'time_warning_minutes_before_end' => $this->timeWarningMinutesBeforeEnd,
@@ -222,6 +188,13 @@ final class FinancialSettings extends Page
                     'end' => (int) $range['end'],
                     'price' => round((float) $range['price'], 2),
                 ], $this->extensionRanges),
+                'cleaning_base_unit_price' => $this->cleaningBaseUnitPrice,
+                'cleaning_deep_multiplier' => $this->cleaningDeepMultiplier,
+                'cleaning_area_margin_multiplier' => $this->cleaningAreaMarginMultiplier,
+                'cleaning_setup_buffer_minutes' => $this->cleaningSetupBufferMinutes,
+                'cleaning_room_size_ranges' => json_decode($this->cleaningRoomSizeRangesJson, true, 512, JSON_THROW_ON_ERROR),
+                'cleaning_room_pricing_units' => json_decode($this->cleaningRoomPricingUnitsJson, true, 512, JSON_THROW_ON_ERROR),
+                'cleaning_room_time_minutes' => json_decode($this->cleaningRoomTimeMinutesJson, true, 512, JSON_THROW_ON_ERROR),
             ],
         );
 
@@ -239,9 +212,26 @@ final class FinancialSettings extends Page
 
         app(DepositService::class)->syncAllWorkerDepositStatuses();
 
-        Notification::make()
-            ->title(__('cleaning_admin.financial.saved'))
-            ->success()
-            ->send();
+        Notification::make()->title(__('cleaning_admin.financial.saved'))->success()->send();
+    }
+
+    private function resolveExtensionRanges(?CleaningFinancialSetting $setting): array
+    {
+        $saved = collect(is_array($setting?->extension_ranges) ? $setting->extension_ranges : [])
+            ->mapWithKeys(fn (array $range): array => [((int) $range['start']).'-'.((int) $range['end']) => (float) ($range['price'] ?? 0)]);
+        $rate = (float) ($setting?->extension_rate_per_30_minutes ?? 0);
+
+        return array_map(function (array $block) use ($saved, $rate): array {
+            [$start, $end] = $block;
+            $key = $start.'-'.$end;
+            $price = $saved->get($key, $rate > 0 ? round($rate / 30 * $end, 2) : 0.0);
+
+            return ['start' => $start, 'end' => $end, 'price' => (float) $price];
+        }, self::EXTENSION_BLOCKS);
+    }
+
+    private function prettyJson(array $value): string
+    {
+        return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
     }
 }
