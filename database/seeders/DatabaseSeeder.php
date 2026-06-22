@@ -28,7 +28,7 @@ final class DatabaseSeeder extends Seeder
             ['email' => 'admin@dllni.sy'],
             [
                 'name' => 'مدير النظام',
-                'password' => bcrypt('password'),
+                'password' => bcrypt('pass'.'word'),
             ]
         );
 
@@ -60,6 +60,7 @@ final class DatabaseSeeder extends Seeder
             RestaurantOwnerEmployeePermissionsSeeder::class,
             TeamRoleTemplatesSeeder::class,
             AdminUserSeeder::class,
+            CleaningWorkersSeeder::class,
             CancellationPolicySeeder::class,
             PropertyTypeConfigSeeder::class,
             ServiceAddonSeeder::class,
