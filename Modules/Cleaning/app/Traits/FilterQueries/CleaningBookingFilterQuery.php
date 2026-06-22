@@ -109,6 +109,18 @@ trait CleaningBookingFilterQuery
                         ->where('worker_id', $worker->id)
                         ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
                 })
+                ->orWhere(function (Builder $preferred) use ($worker, $canReceiveNewRequests): void {
+                    if (! $canReceiveNewRequests) {
+                        $preferred->where('id', -1);
+
+                        return;
+                    }
+
+                    $preferred->where('status', CleaningBookingStatus::Pending)
+                        ->whereNull('worker_id')
+                        ->where('preferred_worker_id', $worker->id)
+                        ->whereDoesntHave('rejections', fn (Builder $rejections) => $rejections->where('worker_id', $worker->id));
+                })
                 ->orWhere(function (Builder $pending) use ($worker, $preferredWorkType, $canReceiveNewRequests): void {
                     if (! $canReceiveNewRequests) {
                         $pending->where('id', -1);
@@ -118,6 +130,7 @@ trait CleaningBookingFilterQuery
 
                     $pending->where('status', CleaningBookingStatus::Pending)
                         ->whereNull('worker_id')
+                        ->whereNull('preferred_worker_id')
                         ->whereNotNull('neighborhood_id')
                         ->when(
                             $preferredWorkType === WorkerPreferredWorkType::Cleaning,
