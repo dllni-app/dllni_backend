@@ -47,6 +47,12 @@ final class CleaningBookingsTable
                     ->badge()
                     ->color(fn ($state): string => self::statusColor($state))
                     ->formatStateUsing(fn ($state): string => self::statusLabel($state)),
+                TextColumn::make('cancelled_by_role')
+                    ->label(self::headerLabel('مصدر الإلغاء', 'يوضح إذا كان العميل هو من ألغى الطلب.'))
+                    ->badge()
+                    ->color(fn ($state): string => self::cancellationSourceColor($state))
+                    ->formatStateUsing(fn ($state): string => self::cancellationSourceLabel($state))
+                    ->placeholder('-'),
                 TextColumn::make('assignment_mode')
                     ->label(self::headerLabel(
                         __('cleaning_admin.booking.fields.assignment_mode'),
@@ -359,6 +365,28 @@ final class CleaningBookingsTable
         }
 
         return CleaningBookingStatus::tryFrom($status);
+    }
+
+    private static function cancellationSourceLabel(mixed $state): string
+    {
+        $value = $state instanceof \BackedEnum ? $state->value : $state;
+
+        return match ((string) $value) {
+            'customer' => 'ألغاه العميل',
+            'worker' => 'ألغاه العامل',
+            default => '-',
+        };
+    }
+
+    private static function cancellationSourceColor(mixed $state): string
+    {
+        $value = $state instanceof \BackedEnum ? $state->value : $state;
+
+        return match ((string) $value) {
+            'customer' => 'danger',
+            'worker' => 'warning',
+            default => 'gray',
+        };
     }
 
     private static function money(mixed $amount): string
