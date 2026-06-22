@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Modules\User\Http\Requests;
 
+use App\Models\Worker;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
+use Modules\Cleaning\Services\DepositService;
 use Modules\User\Http\Requests\Concerns\ValidatesWorkerRoomAssignments;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
@@ -109,6 +111,14 @@ final class UserCleaningOrderStoreRequest extends FormRequest
                 $validator->errors()->add('numberOfWorkers', 'Legacy preferred worker requests only support one worker.');
             }
 
+            if ($this->usesPreferredWorker($assignmentMode, $preferredWorkerId, $numberOfWorkers)) {
+                $worker = Worker::query()->with(['user', 'deposit'])->find((int) $preferredWorkerId);
+
+                if (! $worker instanceof Worker || ! $this->canReceivePreferredWorkerOrder($worker)) {
+                    $validator->errors()->add('preferredWorkerId', 'Selected worker cannot receive new cleaning requests.');
+                }
+            }
+
             $this->validateWorkerRoomAssignments($validator);
         });
     }
@@ -138,5 +148,25 @@ final class UserCleaningOrderStoreRequest extends FormRequest
             UserCleaningOrderEstimationService::PROPERTY_TYPES,
             static fn (string $type): bool => $type !== UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE
         ));
+    }
+
+    private function usesPreferredWorker(?string $assignmentMode, mixed $preferredWorkerId, mixed $numberOfWorkers): bool
+    {
+        if (! is_numeric($preferredWorkerId) || (int) $preferredWorkerId <= 0) {
+            return false;
+        }
+
+        if ($assignmentMode === 'preferred_worker') {
+            return true;
+        }
+
+        return $assignmentMode === null && ($numberOfWorkers === null || (int) $numberOfWorkers === 1);
+    }
+
+    private function canReceivePreferredWorkerOrder(Worker $worker): bool
+    {
+        return $worker->user !== null
+            && (bool) $worker->user->is_active
+            && app(DepositService::class)->isWorkerEligibleForDispatch($worker);
     }
 }

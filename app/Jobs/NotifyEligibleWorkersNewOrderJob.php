@@ -45,7 +45,7 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
         $assignmentMode = $booking->resolvedAssignmentMode();
         $rejectedWorkerIds = $booking->rejections()->pluck('worker_id')->map(static fn (mixed $workerId): int => (int) $workerId)->all();
         $acceptedWorkerIds = $booking->workerAssignments()
-            ->where('status', CleaningBookingWorkerAssignmentStatus::Accepted->value)
+            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
             ->pluck('worker_id')
             ->map(static fn (mixed $workerId): int => (int) $workerId)
             ->all();
@@ -83,13 +83,16 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
                 ->where(function ($q) {
                     $q->whereNull('is_suspended')->orWhere('is_suspended', false);
                 })
+                ->whereHas('user', function ($query): void {
+                    $query->where('is_active', true);
+                })
                 ->whereNotIn('id', $rejectedWorkerIds)
                 ->coversNeighborhood((int) $booking->neighborhood_id)
-                ->with('user')
+                ->with(['user', 'deposit'])
                 ->first();
 
-            if ($worker?->user && $this->isWorkerAvailable($worker, $bookingDateTime) && $depositService->isWorkerEligibleForDispatch($worker)) {
-                $worker->user->notify(new NewOrderRequestNotification($booking));
+            if ($worker instanceof Worker && $this->isDispatchable($worker, $bookingDateTime, $depositService)) {
+                $worker->user?->notify(new NewOrderRequestNotification($booking));
             }
 
             return;
@@ -100,6 +103,9 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
             ->where(function ($q) {
                 $q->whereNull('is_suspended')->orWhere('is_suspended', false);
             })
+            ->whereHas('user', function ($query): void {
+                $query->where('is_active', true);
+            })
             ->when(
                 $booking->gender_preference instanceof GenderPreference
                     && $booking->gender_preference !== GenderPreference::Any,
@@ -107,7 +113,7 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
             )
             ->whereNotIn('id', array_values(array_unique(array_merge($rejectedWorkerIds, $acceptedWorkerIds))))
             ->coversNeighborhood((int) $booking->neighborhood_id)
-            ->with('user')
+            ->with(['user', 'deposit'])
             ->limit(50)
             ->get();
 
@@ -122,10 +128,18 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
         }
 
         foreach ($workers as $worker) {
-            if ($worker->user && $this->isWorkerAvailable($worker, $bookingDateTime) && $depositService->isWorkerEligibleForDispatch($worker)) {
-                $worker->user->notify(new NewOrderRequestNotification($booking));
+            if ($this->isDispatchable($worker, $bookingDateTime, $depositService)) {
+                $worker->user?->notify(new NewOrderRequestNotification($booking));
             }
         }
+    }
+
+    private function isDispatchable(Worker $worker, ?Carbon $bookingDateTime, DepositService $depositService): bool
+    {
+        return $worker->user !== null
+            && (bool) $worker->user->is_active
+            && $this->isWorkerAvailable($worker, $bookingDateTime)
+            && $depositService->isWorkerEligibleForDispatch($worker);
     }
 
     private function isWorkerAvailable(Worker $worker, ?Carbon $bookingDateTime): bool
