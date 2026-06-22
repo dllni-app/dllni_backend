@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Resturants\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Str;
 use Modules\Resturants\Models\Restaurant;
 
 final class RestaurantRequest extends FormRequest
@@ -32,10 +33,13 @@ final class RestaurantRequest extends FormRequest
             }
         }
 
+        $isCreate = $this->isMethod('post');
+        $requiredOnCreate = $isCreate ? 'required' : 'sometimes';
+
         return [
-            'userId' => 'required|exists:users,id',
-            'name' => 'required|string|max:255',
-            'slug' => 'required|string|max:255|unique:restaurants,slug,'.$restaurantId,
+            'userId' => [$requiredOnCreate, 'integer', 'exists:users,id'],
+            'name' => [$requiredOnCreate, 'string', 'max:255'],
+            'slug' => [$requiredOnCreate, 'string', 'max:255', 'unique:restaurants,slug,'.$restaurantId],
             'description' => 'nullable|string|max:200',
             'address' => 'nullable|string|max:255',
             'city' => 'nullable|string|max:100',
@@ -70,12 +74,35 @@ final class RestaurantRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        $ownerRestaurant = null;
+        $owner = auth()->user();
+
+        if ($owner) {
+            /** @var Restaurant|null $ownerRestaurant */
+            $ownerRestaurant = $owner->restaurants()->first();
+        }
+
+        $name = $this->input('name', $ownerRestaurant?->name);
+        $slug = $this->input('slug');
+
+        if (! is_string($slug) || trim($slug) === '') {
+            $slug = is_string($name) && trim($name) !== '' ? Str::slug($name) : null;
+        }
+
+        if (! is_string($slug) || trim($slug) === '') {
+            $slug = $ownerRestaurant?->slug ?: 'restaurant-'.($ownerRestaurant?->id ?? Str::lower(Str::random(8)));
+        }
+
         $this->merge([
+            'userId' => $this->input('userId', $this->input('user_id', $ownerRestaurant?->user_id ?? auth()->id())),
+            'name' => $name,
+            'slug' => $slug,
             'whatsappNumber' => $this->input('whatsappNumber', $this->input('whatsapp')),
             'facebookPageName' => $this->input('facebookPageName', $this->input('face')),
             'instagramUsername' => $this->input('instagramUsername', $this->input('instagram')),
             'latitude' => $this->input('latitude', $this->input('lat')),
             'longitude' => $this->input('longitude', $this->input('long')),
+            'locationDetails' => $this->input('locationDetails', $this->input('location_details')),
         ]);
 
         if ($this->hasFile('image') && ! $this->hasFile('primaryImage')) {
