@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Modules\User\Http\Requests;
 
+use App\Models\Worker;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
+use Modules\Cleaning\Services\DepositService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrderUpdateRequest extends FormRequest
@@ -16,9 +18,6 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
         return true;
     }
 
-    /**
-     * @return array<string, mixed>
-     */
     public function rules(): array
     {
         $eventPayloadRequested = $this->shouldValidateEventPayload();
@@ -61,12 +60,7 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
             'scheduledTime' => ['sometimes', 'date_format:H:i'],
             'addressLatitude' => ['sometimes', 'numeric', 'between:-90,90'],
             'addressLongitude' => ['sometimes', 'numeric', 'between:-180,180'],
-            'neighborhoodId' => [
-                'sometimes',
-                'nullable',
-                'integer',
-                Rule::exists('cleaning_neighborhoods', 'id')->where('is_active', true),
-            ],
+            'neighborhoodId' => ['sometimes', 'nullable', 'integer', Rule::exists('cleaning_neighborhoods', 'id')->where('is_active', true)],
             'neighborhood' => ['sometimes', 'nullable', 'string', 'max:255'],
             'preferredWorkerId' => ['sometimes', 'nullable', 'exists:workers,id'],
             'numberOfWorkers' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:20'],
@@ -89,10 +83,8 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
             $preferredWorkerId = $this->input('preferredWorkerId');
             $numberOfWorkers = $this->input('numberOfWorkers');
 
-            if ($assignmentMode === 'preferred_worker' && is_numeric($preferredWorkerId) && (int) $preferredWorkerId > 0) {
-                if ($numberOfWorkers !== null && (int) $numberOfWorkers !== 1) {
-                    $validator->errors()->add('numberOfWorkers', 'Preferred worker mode only allows one worker.');
-                }
+            if ($assignmentMode === 'preferred_worker' && is_numeric($preferredWorkerId) && (int) $preferredWorkerId > 0 && $numberOfWorkers !== null && (int) $numberOfWorkers !== 1) {
+                $validator->errors()->add('numberOfWorkers', 'Preferred worker mode only allows one worker.');
             }
 
             if ($assignmentMode === 'open_count' && $preferredWorkerId !== null) {
@@ -102,50 +94,47 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
             if ($assignmentMode === null && $preferredWorkerId !== null && $numberOfWorkers !== null && (int) $numberOfWorkers !== 1) {
                 $validator->errors()->add('numberOfWorkers', 'Legacy preferred worker requests only support one worker.');
             }
+
+            if ($this->usesPreferredWorker($assignmentMode, $preferredWorkerId, $numberOfWorkers)) {
+                $worker = Worker::query()->with(['user', 'deposit'])->find((int) $preferredWorkerId);
+
+                if (! $worker instanceof Worker || $worker->user === null || ! (bool) $worker->user->is_active || ! app(DepositService::class)->isWorkerEligibleForDispatch($worker)) {
+                    $validator->errors()->add('preferredWorkerId', 'Selected worker is not eligible for new cleaning requests.');
+                }
+            }
         });
     }
 
     private function normalizedAssignmentMode(): ?string
     {
         $assignmentMode = $this->input('assignmentMode');
-
-        if (! is_string($assignmentMode) || mb_trim($assignmentMode) === '') {
-            return null;
-        }
-
-        return mb_strtolower(mb_trim($assignmentMode));
+        return is_string($assignmentMode) && mb_trim($assignmentMode) !== '' ? mb_strtolower(mb_trim($assignmentMode)) : null;
     }
 
     private function isEventAssistanceContext(): bool
     {
-        if (mb_strtolower((string) $this->input('propertyType')) === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE) {
-            return true;
-        }
-
-        return $this->shouldValidateEventPayload();
+        return mb_strtolower((string) $this->input('propertyType')) === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE || $this->shouldValidateEventPayload();
     }
 
     private function shouldValidateEventPayload(): bool
     {
-        if (mb_strtolower((string) $this->input('propertyType')) === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE) {
-            return true;
-        }
-
-        return $this->has('propertyDetails.eventType')
+        return mb_strtolower((string) $this->input('propertyType')) === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE
+            || $this->has('propertyDetails.eventType')
             || $this->has('propertyDetails.guestCount')
             || $this->has('propertyDetails.venueType')
             || $this->has('propertyDetails.customService')
             || $this->has('propertyDetails.hours');
     }
 
-    /**
-     * @return array<int, string>
-     */
     private function availableVenueTypes(): array
     {
-        return array_values(array_filter(
-            UserCleaningOrderEstimationService::PROPERTY_TYPES,
-            static fn (string $type): bool => $type !== UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE
-        ));
+        return array_values(array_filter(UserCleaningOrderEstimationService::PROPERTY_TYPES, static fn (string $type): bool => $type !== UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE));
+    }
+
+    private function usesPreferredWorker(?string $assignmentMode, mixed $preferredWorkerId, mixed $numberOfWorkers): bool
+    {
+        return is_numeric($preferredWorkerId)
+            && (int) $preferredWorkerId > 0
+            && ($assignmentMode === 'preferred_worker' || ($assignmentMode === null && ($numberOfWorkers === null || (int) $numberOfWorkers === 1)));
     }
 }
