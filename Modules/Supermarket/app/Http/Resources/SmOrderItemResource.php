@@ -15,9 +15,8 @@ final class SmOrderItemResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $product = $this->whenLoaded('product');
+        $product = $this->resource->relationLoaded('product') ? $this->product : null;
         $isAvailableInStock = $product !== null
-            && $product !== false
             && (bool) $product->is_available
             && (int) $product->stock_quantity >= (int) $this->quantity;
 
