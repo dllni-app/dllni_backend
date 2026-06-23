@@ -43,9 +43,7 @@ final class SmStoreData extends Data
         public ?string $phone,
         #[Email, Max(255)]
         public ?string $email,
-        #[Max(255)]
         public ?string $cover,
-        #[Max(255)]
         public ?string $logo,
         #[MapOutputName('average_rating'), Numeric, Min(0)]
         public ?float $averageRating,
