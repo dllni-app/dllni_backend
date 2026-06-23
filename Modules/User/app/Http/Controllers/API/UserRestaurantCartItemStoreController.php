@@ -23,17 +23,16 @@ final class UserRestaurantCartItemStoreController
             modifierIds: $request->input('modifierIds', []),
             substituteProductId: $request->input('substituteProductId'),
             note: $request->input('specialInstructions') ?? $request->input('note'),
+            quantityMode: $request->input('quantityMode', 'increment'),
         );
 
         return response()->json([
-            'message' => $result['operation'] === 'updated'
-                ? 'Item updated in cart.'
-                : 'Item added to cart.',
+            'message' => $result['message'],
             'cartId' => $result['cartId'],
             'itemId' => $result['itemId'],
             'quantity' => $result['quantity'],
-            'operation' => $result['operation'],
             'cartProductsCount' => $result['cartProductsCount'],
-        ], $result['operation'] === 'updated' ? 200 : 201);
+            'operation' => $result['operation'],
+        ], $result['operation'] === 'created' ? 201 : 200);
     }
 }

@@ -2,63 +2,88 @@
 
 ## Scope
 
-This contract documents the restaurant cart behavior needed by the Flutter user app after the cart duplicate fix.
+This contract documents the backend behavior for restaurant cart item add/update and product-details cart quantity. It is intended for the Flutter user app.
 
-Base authenticated prefix:
+Base path:
 
 ```text
 /api/v1/user
 ```
 
-All cart write endpoints require `Authorization: Bearer <token>`.
+Authentication:
 
-## 1. Add or Update Cart Item
+- Cart write/read endpoints require `Authorization: Bearer <token>`.
+- Product details can be opened by guests, but `cartQuantity` is only meaningful when the request includes a valid Sanctum token.
+
+## Business Rules
+
+1. A cart line is considered the same line when these values match after normalization:
+   - `productId`
+   - sorted unique `modifierIds`
+   - `substituteProductId`
+   - normalized `specialInstructions` / `note`
+2. Adding the same line again does not create a duplicate row.
+3. Adding the same product with different modifiers, substitute, or note creates a separate line.
+4. `cartQuantity` is an integer quantity, not a boolean.
+5. `cartQuantity = 0` means the product is not currently in the authenticated user's restaurant cart.
+6. PATCH quantity updates preserve existing modifiers, substitute, and note unless those fields are explicitly sent.
+
+## 1. Add or Upsert Restaurant Cart Item
+
+### Endpoint
 
 ```http
 POST /api/v1/user/restaurants/cart/items
 ```
-
-### Purpose
-
-Adds a restaurant product to the current user's cart. If the same cart line already exists, the backend updates that existing line instead of creating a duplicate.
-
-### Matching Rule
-
-A cart item is considered the same line when all these values match after normalization:
-
-| Field | Rule |
-|---|---|
-| `productId` | Same product. |
-| `modifierIds` | Same sorted unique modifier IDs. Different order still matches. |
-| `substituteProductId` | Same substitute product or both `null`. |
-| `specialInstructions` / `note` | Same normalized text. Empty string is treated as `null`. |
-
-Same product with different modifiers or different notes remains a separate cart line.
 
 ### Request Body
 
 ```json
 {
   "productId": 2,
-  "quantity": 3,
-  "modifierIds": [10, 11],
+  "quantity": 1,
+  "quantityMode": "increment",
+  "modifierIds": [],
   "substituteProductId": null,
-  "specialInstructions": "No onions"
+  "specialInstructions": ""
 }
 ```
 
-### Validation
+### Fields
 
-| Field | Type | Required | Rules |
-|---|---:|---:|---|
-| `productId` | int | Yes | Must exist in `products`. |
-| `quantity` | int | Yes | Min `1`, max `50`. |
-| `modifierIds` | int[] | No | Max 30. Every ID must exist and must be allowed for the selected product. |
-| `substituteProductId` | int/null | No | Must exist in `products` when sent. |
-| `specialInstructions` | string/null | No | Max 1000 characters. |
-| `note` | string/null | No | Legacy alias for `specialInstructions`. |
+| Field | Type | Required | Rules | Notes |
+|---|---:|---:|---|---|
+| `productId` | int | Yes | existing product id | Product must be linked to a restaurant. |
+| `quantity` | int | Yes | `1..50` | Used according to `quantityMode`. |
+| `quantityMode` | string | No | `increment` or `set` | Defaults to `increment` for backward compatibility. |
+| `modifierIds` | int[] | No | max 30, existing modifier ids | Must be allowed for the product. Order does not matter. |
+| `substituteProductId` | int/null | No | existing product id or null | Part of cart-line identity. |
+| `specialInstructions` | string/null | No | max 1000 | Preferred Flutter field. Empty string is normalized to null. |
+| `note` | string/null | No | max 1000 | Backward-compatible alias. `specialInstructions` wins when both are sent. |
 
-### Response: New Line Created
+### Quantity Modes
+
+#### `increment` default
+
+Use this for quick-add buttons or when the user is adding more units.
+
+If the same line already exists:
+
+```text
+new quantity = current cart line quantity + request quantity
+```
+
+#### `set`
+
+Use this from product details when the backend already returned `product.cartQuantity` and the quantity picker represents the final desired quantity.
+
+If the same line already exists:
+
+```text
+new quantity = request quantity
+```
+
+### Created Response
 
 Status: `201 Created`
 
@@ -67,13 +92,13 @@ Status: `201 Created`
   "message": "Item added to cart.",
   "cartId": 1,
   "itemId": 57,
-  "quantity": 3,
-  "operation": "created",
-  "cartProductsCount": 8
+  "quantity": 1,
+  "cartProductsCount": 1,
+  "operation": "created"
 }
 ```
 
-### Response: Existing Line Updated
+### Updated Response
 
 Status: `200 OK`
 
@@ -83,50 +108,54 @@ Status: `200 OK`
   "cartId": 1,
   "itemId": 57,
   "quantity": 3,
-  "operation": "updated",
-  "cartProductsCount": 8
+  "cartProductsCount": 3,
+  "operation": "updated"
 }
 ```
 
-### Flutter Notes
+### Flutter Guidance
 
-- Treat `quantity` as the final quantity of the matching cart line.
-- Use `operation` only for UX text if needed.
-- Use `cartProductsCount` to refresh the cart badge without an extra request, or continue using the existing count endpoint.
-- Existing parsing of `message`, `cartId`, and `itemId` remains backward compatible.
+Product details flow:
 
-## 2. Update Cart Item Quantity / Options
+1. Read `product.cartQuantity` from product details.
+2. If `cartQuantity > 0`, initialize the quantity picker with that value.
+3. When submitting from details, send `quantityMode: "set"`.
+4. If `cartQuantity == 0`, initialize the picker with `1`. Sending `set` is still safe because the line will be created.
+
+Quick-add flow:
+
+- Send no `quantityMode`, or send `quantityMode: "increment"`.
+
+## 2. Update Restaurant Cart Item Quantity
+
+### Endpoint
 
 ```http
 PATCH /api/v1/user/restaurants/cart/items/{itemId}
 ```
 
-### Purpose
-
-Updates an existing cart item.
-
-### Request Body: Quantity Only
+### Request Body: quantity only
 
 ```json
 {
-  "quantity": 4
+  "quantity": 7
 }
 ```
 
-When only `quantity` is sent, backend keeps the existing modifiers, substitute product, and note.
+This updates only the quantity. Existing modifiers, substitute product, and note remain unchanged.
 
-### Request Body: Update Options
+### Optional Full Update Body
 
 ```json
 {
-  "quantity": 4,
-  "modifierIds": [10],
+  "quantity": 7,
+  "modifierIds": [12, 15],
   "substituteProductId": null,
-  "specialInstructions": "Extra spicy"
+  "specialInstructions": "No onion"
 }
 ```
 
-When `modifierIds`, `substituteProductId`, or `specialInstructions` / `note` are sent, only the sent fields are changed.
+Only explicitly sent optional fields are replaced.
 
 ### Response
 
@@ -147,19 +176,20 @@ Status: `200 OK`
         "id": 57,
         "productId": 2,
         "name": "Product Name",
-        "quantity": 4,
+        "primaryImageUrl": null,
+        "images": [],
+        "quantity": 7,
         "unitPrice": 32,
-        "totalPrice": 128,
-        "modifierIds": [10],
+        "totalPrice": 224,
+        "modifierIds": [12],
         "substituteProductId": null,
-        "note": "Extra spicy"
+        "note": null
       }
     ],
     "merchantGroups": [],
-    "productsCount": 4,
     "amounts": {
-      "subtotal": 128,
-      "total": 128
+      "subtotal": 224,
+      "total": 224
     }
   }
 }
@@ -167,76 +197,140 @@ Status: `200 OK`
 
 ## 3. Product Details Cart Quantity
 
+### Endpoint
+
 ```http
 GET /api/v1/user/products/{productId}
 ```
 
-### Purpose
-
-Returns product details. When the user is authenticated, the product object includes the current quantity of this product in the user's cart.
-
-### Response Addition
+### Authenticated Response
 
 ```json
 {
   "product": {
     "id": 2,
+    "restaurantId": 5,
+    "categoryId": 8,
     "name": "Product Name",
+    "description": "...",
     "price": 30,
+    "discountedPrice": null,
     "isFavorite": false,
-    "cartQuantity": 3
+    "cartQuantity": 3,
+    "isAvailable": true,
+    "isAvailableNow": true,
+    "availabilityMode": "always",
+    "unavailableUntil": null,
+    "availabilityNote": null,
+    "stockQuantity": null,
+    "lowStockThreshold": null,
+    "preparationTime": null,
+    "isFeatured": false,
+    "primaryImage": "https://...",
+    "images": [],
+    "createdAt": "2026-06-23 20:00:00",
+    "updatedAt": "2026-06-23 20:00:00"
   },
-  "shareUrl": "...",
+  "shareUrl": "https://...",
   "modifierGroups": []
 }
 ```
 
-### Rules
+### Guest Response
 
-| Case | `cartQuantity` |
-|---|---:|
-| Product is not in cart | `0` |
-| Product exists once in cart | The line quantity. |
-| Product exists in multiple cart lines with different modifiers/notes | Sum of all quantities for the same product. |
-| Guest / unauthenticated request | `0` |
-
-### Flutter Details Page Behavior
-
-- If `cartQuantity > 0`, initialize the quantity selector with `cartQuantity`.
-- If `cartQuantity == 0`, initialize the quantity selector with `1`.
-- Button label suggestion:
-  - `cartQuantity > 0`: `تحديث السلة`
-  - `cartQuantity == 0`: `إضافة إلى السلة`
-
-## 4. Cart Products Count
-
-```http
-GET /api/v1/user/restaurants/cart/products-count
-```
-
-Response remains unchanged:
+For guest/no-token requests:
 
 ```json
 {
-  "productsCount": 8
+  "product": {
+    "id": 2,
+    "cartQuantity": 0
+  }
 }
 ```
 
-`productsCount` is the sum of item quantities, not the number of cart rows.
+## 4. Validation Errors
 
-## Error Responses
+Status: `422 Unprocessable Entity`
 
-Validation errors return `422`:
+Example:
 
 ```json
 {
-  "message": "The given data was invalid.",
+  "message": "The selected product id is invalid.",
   "errors": {
-    "modifierIds": [
-      "Some modifiers are not allowed for this product."
+    "productId": [
+      "The selected product id is invalid."
     ]
   }
 }
 ```
 
-Unauthorized requests return `401` for protected cart endpoints.
+Common validation cases:
+
+- Invalid product id.
+- Quantity less than 1 or greater than 50.
+- `quantityMode` is not `increment` or `set`.
+- Modifier id does not exist.
+- Modifier id exists but is not allowed for the selected product.
+
+## 5. Flutter Model Changes
+
+### AddRestaurantCartItemModel
+
+Add optional fields while keeping old fields:
+
+```dart
+class AddRestaurantCartItemModel {
+  final String? message;
+  final int? cartId;
+  final int? itemId;
+  final int? quantity;
+  final int? cartProductsCount;
+  final String? operation; // created | updated
+}
+```
+
+### AddRestaurantCartItemParams
+
+Add optional field:
+
+```dart
+final String quantityMode; // increment | set
+```
+
+Default recommendation:
+
+```dart
+quantityMode = 'increment'
+```
+
+For product details submit:
+
+```dart
+quantityMode = 'set'
+```
+
+### RestaurantProductDetailsProduct
+
+Add:
+
+```dart
+final int cartQuantity;
+```
+
+Parse from:
+
+```dart
+json['cartQuantity'] ?? json['cart_quantity']
+```
+
+## 6. QA Scenarios
+
+1. Open product details for a product not in cart: `cartQuantity = 0`.
+2. Add product with quantity 1: line created, `cartProductsCount = 1`.
+3. Add same product again with default `increment`: one line remains, quantity becomes 2.
+4. Open product details again: `cartQuantity = 2`.
+5. Submit product details with quantity 5 and `quantityMode = set`: one line remains, quantity becomes 5.
+6. PATCH cart item quantity only: modifiers remain unchanged.
+7. Add same product with a different modifier: a second cart line is created.
