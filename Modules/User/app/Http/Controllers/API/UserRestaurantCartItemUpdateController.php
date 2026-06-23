@@ -16,14 +16,18 @@ final class UserRestaurantCartItemUpdateController
 
     public function __invoke(UserRestaurantCartItemUpdateRequest $request, int $itemId): JsonResponse
     {
+        $hasNote = $request->has('specialInstructions') || $request->has('note');
+
         return response()->json([
             'data' => $this->carts->updateItem(
                 userId: (int) $request->user()->id,
                 itemId: $itemId,
                 quantity: (int) $request->integer('quantity'),
-                modifierIds: $request->input('modifierIds', []),
+                modifierIds: $request->has('modifierIds') ? $request->input('modifierIds', []) : null,
                 substituteProductId: $request->input('substituteProductId'),
-                note: $request->input('note'),
+                note: $request->input('specialInstructions') ?? $request->input('note'),
+                replaceSubstituteProduct: $request->has('substituteProductId'),
+                replaceNote: $hasNote,
             ),
         ]);
     }
