@@ -23,16 +23,7 @@ final class UserSupermarketCartService
             ->first();
 
         if (! $cart) {
-            return [
-                'id' => null,
-                'merchant' => null,
-                'items' => [],
-                'merchantGroups' => [],
-                'amounts' => [
-                    'subtotal' => 0.0,
-                    'total' => 0.0,
-                ],
-            ];
+            return $this->emptyCartPayload();
         }
 
         return $this->toPayload($cart);
@@ -165,13 +156,7 @@ final class UserSupermarketCartService
             if ($freshCart && $freshCart->items->isEmpty()) {
                 $freshCart->delete();
 
-                return [
-                    'id' => null,
-                    'merchant' => null,
-                    'items' => [],
-                    'merchantGroups' => [],
-                    'amounts' => ['subtotal' => 0.0, 'total' => 0.0],
-                ];
+                return $this->emptyCartPayload();
             }
 
             return $this->toPayload($freshCart ?? $cart);
@@ -181,6 +166,29 @@ final class UserSupermarketCartService
     private function resolveActiveCart(int $userId): SmCart
     {
         return SmCart::firstOrCreate(['user_id' => $userId]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function emptyCartPayload(): array
+    {
+        return [
+            'id' => null,
+            'merchant' => null,
+            'items' => [],
+            'merchantGroups' => [],
+            'isMultiMerchant' => false,
+            'checkout' => [
+                'canPlaceOrder' => false,
+                'blockedReason' => 'empty_cart',
+                'message' => 'Cart is empty.',
+            ],
+            'amounts' => [
+                'subtotal' => 0.0,
+                'total' => 0.0,
+            ],
+        ];
     }
 
     /**
@@ -221,18 +229,23 @@ final class UserSupermarketCartService
             ->flatMap(fn (array $group) => $group['items'])
             ->values();
 
-        $legacyMerchant = null;
-        if ($merchantGroups->count() === 1) {
-            $legacyMerchant = $merchantGroups->first()['merchant'] ?? null;
-        }
-
+        $primaryMerchant = $merchantGroups->first()['merchant'] ?? null;
+        $isMultiMerchant = $merchantGroups->count() > 1;
         $grandSubtotal = (float) $merchantGroups->sum(fn (array $group): float => $group['amounts']['subtotal']);
 
         return [
             'id' => $cart->id,
-            'merchant' => $legacyMerchant,
+            'merchant' => $primaryMerchant,
             'items' => $legacyItems->all(),
             'merchantGroups' => $merchantGroups->all(),
+            'isMultiMerchant' => $isMultiMerchant,
+            'checkout' => [
+                'canPlaceOrder' => ! $isMultiMerchant,
+                'blockedReason' => $isMultiMerchant ? 'mixed_supermarket_cart' : null,
+                'message' => $isMultiMerchant
+                    ? 'Supermarket checkout supports one store at a time. Remove products from other stores or place separate orders.'
+                    : null,
+            ],
             'amounts' => [
                 'subtotal' => round($grandSubtotal, 2),
                 'total' => round($grandSubtotal, 2),
