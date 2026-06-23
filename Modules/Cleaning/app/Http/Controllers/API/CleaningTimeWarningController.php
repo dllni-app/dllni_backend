@@ -32,7 +32,7 @@ final class CleaningTimeWarningController
         $filters = (array) $request->input('filter', []);
         $worker = $request->user()?->worker;
 
-        if ($worker !== null && ! array_key_exists('forCurrentWorker', $filters)) {
+        if ($worker !== null) {
             $warnings
                 ->where('booking_type', 'cleaning_booking')
                 ->whereHasMorph('booking', [CleaningBooking::class], function (Builder $query) use ($worker) {
