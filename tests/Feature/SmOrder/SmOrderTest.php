@@ -5,6 +5,8 @@ declare(strict_types=1);
 use App\Models\User;
 use App\Enums\UserModuleType;
 use Database\Factories\SmOrderFactory;
+use Database\Factories\SmOrderItemFactory;
+use Database\Factories\SmProductFactory;
 use Database\Factories\SmStoreFactory;
 use Laravel\Sanctum\Sanctum;
 
@@ -29,6 +31,51 @@ it('lists orders', function (): void {
 
     $response->assertOk();
     expect($response->json('data'))->toHaveCount(3);
+});
+
+it('returns item stock availability on listed orders', function (): void {
+    $availableProduct = SmProductFactory::new()->create([
+        'store_id' => $this->store->id,
+        'is_available' => true,
+        'stock_quantity' => 10,
+    ]);
+    $outOfStockProduct = SmProductFactory::new()->create([
+        'store_id' => $this->store->id,
+        'is_available' => true,
+        'stock_quantity' => 1,
+    ]);
+    $unavailableProduct = SmProductFactory::new()->create([
+        'store_id' => $this->store->id,
+        'is_available' => false,
+        'stock_quantity' => 10,
+    ]);
+
+    $order = SmOrderFactory::new()->create([
+        'store_id' => $this->store->id,
+    ]);
+
+    SmOrderItemFactory::new()->create([
+        'order_id' => $order->id,
+        'product_id' => $availableProduct->id,
+        'quantity' => 2,
+    ]);
+    SmOrderItemFactory::new()->create([
+        'order_id' => $order->id,
+        'product_id' => $outOfStockProduct->id,
+        'quantity' => 2,
+    ]);
+    SmOrderItemFactory::new()->create([
+        'order_id' => $order->id,
+        'product_id' => $unavailableProduct->id,
+        'quantity' => 2,
+    ]);
+
+    $response = $this->getJson('/api/v1/sm-orders?perPage=10');
+
+    $response->assertOk()
+        ->assertJsonPath('data.0.items.0.isAvailableInStock', true)
+        ->assertJsonPath('data.0.items.1.isAvailableInStock', false)
+        ->assertJsonPath('data.0.items.2.isAvailableInStock', false);
 });
 
 it('creates an order', function (): void {
