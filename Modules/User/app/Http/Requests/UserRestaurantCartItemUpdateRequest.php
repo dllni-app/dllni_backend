@@ -21,6 +21,7 @@ final class UserRestaurantCartItemUpdateRequest extends FormRequest
             'modifierIds.*' => ['integer', 'exists:modifiers,id'],
             'substituteProductId' => ['sometimes', 'nullable', 'integer', 'exists:products,id'],
             'note' => ['sometimes', 'nullable', 'string', 'max:1000'],
+            'specialInstructions' => ['sometimes', 'nullable', 'string', 'max:1000'],
         ];
     }
 }
