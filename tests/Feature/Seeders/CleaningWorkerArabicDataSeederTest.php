@@ -6,7 +6,7 @@ use App\Models\User;
 use Database\Seeders\CancellationPolicySeeder;
 use Database\Seeders\CleaningWorkersSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningBillingPolicySeeder;
-use Modules\Cleaning\Database\Seeders\CleaningWorkerArabicDataSeeder;
+use Modules\Cleaning\Database\Seeders\CleaningWorkerExtensionScenarioSeeder;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningTimeWarningResponse;
 use Modules\Cleaning\Models\CleaningBooking;
@@ -15,7 +15,7 @@ beforeEach(function (): void {
     $this->seed(CleaningWorkersSeeder::class);
     $this->seed(CancellationPolicySeeder::class);
     $this->seed(CleaningBillingPolicySeeder::class);
-    $this->seed(CleaningWorkerArabicDataSeeder::class);
+    $this->seed(CleaningWorkerExtensionScenarioSeeder::class);
 });
 
 it('seeds pending extension requests for every known cleaning worker account', function (): void {
@@ -42,8 +42,8 @@ it('seeds pending extension requests for every known cleaning worker account', f
     }
 });
 
-it('keeps the Arabic worker scenario seeder idempotent', function (): void {
-    $this->seed(CleaningWorkerArabicDataSeeder::class);
+it('keeps the extension scenario seeder idempotent', function (): void {
+    $this->seed(CleaningWorkerExtensionScenarioSeeder::class);
 
     foreach (['CLN-AR-W1', 'CLN-AR-W2', 'CLN-AR-W3'] as $prefix) {
         expect(CleaningBooking::where('booking_number', $prefix.'-EXT-0001')->count())->toBe(1);
