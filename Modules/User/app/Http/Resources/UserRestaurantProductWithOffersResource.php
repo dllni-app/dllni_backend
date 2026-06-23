@@ -49,6 +49,7 @@ final class UserRestaurantProductWithOffersResource extends JsonResource
             'isFavorite' => (bool) ($attributes['isFavoritedByUser'] ?? false),
             'isMostOrdered' => $popularOrdersCount >= UserRestaurantProductPopularityService::mostOrderedMinOrders(),
             'popularOrdersCount' => $popularOrdersCount,
+            'cartQuantity' => (int) ($attributes['cartQuantity'] ?? 0),
             'primaryImageUrl' => $product->getFirstMediaUrl('primary-image') ?: null,
             'restaurant' => $product->relationLoaded('restaurant') && $product->restaurant !== null ? [
                 'id' => $product->restaurant->id,
