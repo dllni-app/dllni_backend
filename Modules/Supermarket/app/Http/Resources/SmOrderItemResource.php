@@ -15,6 +15,12 @@ final class SmOrderItemResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $product = $this->whenLoaded('product');
+        $isAvailableInStock = $product !== null
+            && $product !== false
+            && (bool) $product->is_available
+            && (int) $product->stock_quantity >= (int) $this->quantity;
+
         return [
             'id' => $this->id,
             'orderId' => $this->order_id,
@@ -25,6 +31,7 @@ final class SmOrderItemResource extends JsonResource
             'unitPrice' => $this->unit_price,
             'totalPrice' => $this->total_price,
             'productName' => $this->product_name,
+            'isAvailableInStock' => $isAvailableInStock,
             'createdAt' => $this->created_at?->toDateTimeString(),
             'updatedAt' => $this->updated_at?->toDateTimeString(),
         ];
