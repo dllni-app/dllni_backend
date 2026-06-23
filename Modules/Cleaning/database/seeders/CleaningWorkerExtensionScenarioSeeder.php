@@ -7,8 +7,8 @@ namespace Modules\Cleaning\Database\Seeders;
 use App\Models\CancellationPolicy;
 use App\Models\User;
 use App\Models\Worker;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Carbon;
 use Modules\Cleaning\Enums\CleaningAssignmentMode;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningTimeWarningResponse;
@@ -60,7 +60,7 @@ final class CleaningWorkerExtensionScenarioSeeder extends Seeder
         ];
     }
 
-    private function seedRows(Worker $worker, User $customer, CleaningBillingPolicy $billingPolicy, ?CancellationPolicy $policy, array $row, Carbon $date): void
+    private function seedRows(Worker $worker, User $customer, CleaningBillingPolicy $billingPolicy, ?CancellationPolicy $policy, array $row, CarbonInterface $date): void
     {
         $cases = [
             ['suffix' => 'EXT', 'status' => CleaningBookingStatus::TimeExtensionRequested, 'day' => 0, 'time' => '10:00', 'price' => 120, 'pending_warning' => true],
@@ -79,7 +79,7 @@ final class CleaningWorkerExtensionScenarioSeeder extends Seeder
         }
     }
 
-    private function booking(Worker $worker, User $customer, CleaningBillingPolicy $billingPolicy, ?CancellationPolicy $policy, array $row, array $case, Carbon $date): CleaningBooking
+    private function booking(Worker $worker, User $customer, CleaningBillingPolicy $billingPolicy, ?CancellationPolicy $policy, array $row, array $case, CarbonInterface $date): CleaningBooking
     {
         $status = $case['status'];
         $assigned = $case['assigned'] ?? true;
@@ -151,12 +151,12 @@ final class CleaningWorkerExtensionScenarioSeeder extends Seeder
         );
     }
 
-    private function workStartedAt(CleaningBookingStatus $status, Carbon $date): ?Carbon
+    private function workStartedAt(CleaningBookingStatus $status, CarbonInterface $date): ?CarbonInterface
     {
         return in_array($status, [CleaningBookingStatus::InProgress, CleaningBookingStatus::TimeExtensionRequested, CleaningBookingStatus::Completed], true) ? $date->copy()->setTime(10, 0) : null;
     }
 
-    private function workFinishedAt(CleaningBookingStatus $status, Carbon $date): ?Carbon
+    private function workFinishedAt(CleaningBookingStatus $status, CarbonInterface $date): ?CarbonInterface
     {
         return match ($status) {
             CleaningBookingStatus::TimeExtensionRequested => $date->copy()->setTime(13, 0),
@@ -165,17 +165,17 @@ final class CleaningWorkerExtensionScenarioSeeder extends Seeder
         };
     }
 
-    private function startedTravelAt(CleaningBookingStatus $status, Carbon $date): ?Carbon
+    private function startedTravelAt(CleaningBookingStatus $status, CarbonInterface $date): ?CarbonInterface
     {
         return in_array($status, [CleaningBookingStatus::WorkerAssigned, CleaningBookingStatus::InProgress, CleaningBookingStatus::TimeExtensionRequested, CleaningBookingStatus::Completed], true) ? $date->copy()->setTime(9, 30) : null;
     }
 
-    private function arrivedAt(CleaningBookingStatus $status, Carbon $date): ?Carbon
+    private function arrivedAt(CleaningBookingStatus $status, CarbonInterface $date): ?CarbonInterface
     {
         return in_array($status, [CleaningBookingStatus::InProgress, CleaningBookingStatus::TimeExtensionRequested, CleaningBookingStatus::Completed], true) ? $date->copy()->setTime(9, 50) : null;
     }
 
-    private function customerConfirmedAt(CleaningBookingStatus $status, Carbon $date): ?Carbon
+    private function customerConfirmedAt(CleaningBookingStatus $status, CarbonInterface $date): ?CarbonInterface
     {
         return match ($status) {
             CleaningBookingStatus::InProgress, CleaningBookingStatus::TimeExtensionRequested => $date->copy()->setTime(10, 0),
