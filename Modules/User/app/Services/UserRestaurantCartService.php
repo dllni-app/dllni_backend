@@ -13,9 +13,6 @@ use Modules\Resturants\Models\Product;
 
 final class UserRestaurantCartService
 {
-    /**
-     * @return array<string, mixed>
-     */
     public function show(int $userId): array
     {
         $cart = Cart::query()
@@ -39,10 +36,6 @@ final class UserRestaurantCartService
         return $this->toPayload($cart);
     }
 
-    /**
-     * @param  array<int>  $modifierIds
-     * @return array<string, mixed>
-     */
     public function addItem(
         int $userId,
         int $productId,
@@ -64,86 +57,123 @@ final class UserRestaurantCartService
 
             $cart = $this->resolveActiveCart($userId);
 
+            $modifierIds = $this->normalizeModifierIds($modifierIds);
             $modifiers = $this->validatedModifiers($product, $modifierIds);
-            $modifierTotal = (float) $modifiers->sum(fn (Modifier $modifier): float => (float) ($modifier->price ?? 0));
-            $basePrice = (float) ($product->discounted_price ?? $product->price ?? 0);
-            $unitPrice = $basePrice + $modifierTotal;
+            $note = $this->normalizeNote($note);
+            $unitPrice = $this->calculateUnitPrice($product, $modifiers);
+            $operation = 'created';
 
-            $item = CartItem::query()->create([
-                'cart_id' => $cart->id,
-                'product_id' => $product->id,
-                'substitute_product_id' => $substituteProductId,
-                'quantity' => $quantity,
-                'unit_price' => $unitPrice,
-                'total_price' => $unitPrice * $quantity,
-                'special_instructions' => $note,
-            ]);
+            $item = $this->findMatchingItem(
+                cartId: (int) $cart->id,
+                productId: (int) $product->id,
+                modifierIds: $modifierIds,
+                substituteProductId: $substituteProductId,
+                note: $note,
+            );
 
-            if ($modifiers->isNotEmpty()) {
-                $item->modifiers()->attach(
-                    $modifiers->mapWithKeys(fn (Modifier $modifier): array => [
-                        $modifier->id => ['price' => (float) ($modifier->price ?? 0)],
-                    ])->all()
-                );
+            if ($item) {
+                $operation = 'updated';
+                $item->update([
+                    'quantity' => $quantity,
+                    'unit_price' => $unitPrice,
+                    'total_price' => $unitPrice * $quantity,
+                ]);
+            } else {
+                $item = CartItem::query()->create([
+                    'cart_id' => $cart->id,
+                    'product_id' => $product->id,
+                    'substitute_product_id' => $substituteProductId,
+                    'quantity' => $quantity,
+                    'unit_price' => $unitPrice,
+                    'total_price' => $unitPrice * $quantity,
+                    'special_instructions' => $note,
+                ]);
             }
+
+            $item->modifiers()->sync(
+                $modifiers->mapWithKeys(fn (Modifier $modifier): array => [
+                    $modifier->id => ['price' => (float) ($modifier->price ?? 0)],
+                ])->all()
+            );
+
+            $freshCart = $cart->fresh(['items.product.restaurant.media', 'items.product.media', 'items.modifiers']);
 
             return [
                 'cartId' => $cart->id,
                 'itemId' => $item->id,
-                'cart' => $this->toPayload($cart->fresh(['items.product.restaurant.media', 'items.product.media', 'items.modifiers'])),
+                'quantity' => (int) $item->quantity,
+                'operation' => $operation,
+                'cartProductsCount' => (int) ($freshCart?->items->sum('quantity') ?? 0),
+                'cart' => $this->toPayload($freshCart ?? $cart),
             ];
         });
     }
 
-    /**
-     * @param  array<int>  $modifierIds
-     * @return array<string, mixed>
-     */
     public function updateItem(
         int $userId,
         int $itemId,
         int $quantity,
-        array $modifierIds = [],
+        ?array $modifierIds = null,
         ?int $substituteProductId = null,
         ?string $note = null,
+        bool $replaceSubstituteProduct = true,
+        bool $replaceNote = true,
     ): array {
-        return DB::transaction(function () use ($userId, $itemId, $quantity, $modifierIds, $substituteProductId, $note): array {
+        return DB::transaction(function () use ($userId, $itemId, $quantity, $modifierIds, $substituteProductId, $note, $replaceSubstituteProduct, $replaceNote): array {
             $item = CartItem::query()
                 ->whereKey($itemId)
                 ->whereHas('cart', fn ($q) => $q->where('user_id', $userId))
-                ->with(['product.modifierGroups.modifiers', 'cart'])
+                ->with(['product.modifierGroups.modifiers', 'cart', 'modifiers'])
+                ->lockForUpdate()
                 ->firstOrFail();
 
             $product = $item->product;
-            $modifiers = $this->validatedModifiers($product, $modifierIds);
-            $modifierTotal = (float) $modifiers->sum(fn (Modifier $modifier): float => (float) ($modifier->price ?? 0));
-            $basePrice = (float) ($product->discounted_price ?? $product->price ?? 0);
-            $unitPrice = $basePrice + $modifierTotal;
+            $cart = $item->cart;
+            $nextModifierIds = $modifierIds === null
+                ? $this->normalizeModifierIds($item->modifiers->pluck('id')->all())
+                : $this->normalizeModifierIds($modifierIds);
+            $nextSubstituteProductId = $replaceSubstituteProduct
+                ? $substituteProductId
+                : ($item->substitute_product_id !== null ? (int) $item->substitute_product_id : null);
+            $nextNote = $replaceNote ? $this->normalizeNote($note) : $this->normalizeNote($item->special_instructions);
 
-            $item->update([
+            $modifiers = $this->validatedModifiers($product, $nextModifierIds);
+            $unitPrice = $this->calculateUnitPrice($product, $modifiers);
+
+            $matchingItem = $this->findMatchingItem(
+                cartId: (int) $cart->id,
+                productId: (int) $product->id,
+                modifierIds: $nextModifierIds,
+                substituteProductId: $nextSubstituteProductId,
+                note: $nextNote,
+                exceptItemId: (int) $item->id,
+            );
+
+            $targetItem = $matchingItem ?: $item;
+            $targetItem->update([
                 'quantity' => $quantity,
-                'substitute_product_id' => $substituteProductId,
+                'substitute_product_id' => $nextSubstituteProductId,
                 'unit_price' => $unitPrice,
                 'total_price' => $unitPrice * $quantity,
-                'special_instructions' => $note,
+                'special_instructions' => $nextNote,
             ]);
 
-            $item->modifiers()->detach();
-            if ($modifiers->isNotEmpty()) {
-                $item->modifiers()->attach(
+            if ($modifierIds !== null || $matchingItem) {
+                $targetItem->modifiers()->sync(
                     $modifiers->mapWithKeys(fn (Modifier $modifier): array => [
                         $modifier->id => ['price' => (float) ($modifier->price ?? 0)],
                     ])->all()
                 );
             }
 
-            return $this->toPayload($item->cart->fresh(['items.product.restaurant.media', 'items.product.media', 'items.modifiers']));
+            if ($matchingItem) {
+                $item->delete();
+            }
+
+            return $this->toPayload($cart->fresh(['items.product.restaurant.media', 'items.product.media', 'items.modifiers']));
         });
     }
 
-    /**
-     * @return array<string, mixed>
-     */
     public function deleteItem(int $userId, int $itemId): array
     {
         return DB::transaction(function () use ($userId, $itemId): array {
@@ -179,12 +209,9 @@ final class UserRestaurantCartService
         return Cart::firstOrCreate(['user_id' => $userId]);
     }
 
-    /**
-     * @return \Illuminate\Support\Collection<int, Modifier>
-     */
     private function validatedModifiers(Product $product, array $modifierIds)
     {
-        $modifierIds = array_values(array_unique(array_map('intval', $modifierIds)));
+        $modifierIds = $this->normalizeModifierIds($modifierIds);
 
         if ($modifierIds === []) {
             return collect();
@@ -205,9 +232,54 @@ final class UserRestaurantCartService
         return Modifier::query()->whereIn('id', $modifierIds)->get();
     }
 
-    /**
-     * @return array<string, mixed>
-     */
+    private function normalizeModifierIds(array $modifierIds): array
+    {
+        $modifierIds = array_values(array_unique(array_map('intval', $modifierIds)));
+        sort($modifierIds);
+
+        return $modifierIds;
+    }
+
+    private function normalizeNote(?string $note): ?string
+    {
+        $note = trim((string) preg_replace('/\s+/u', ' ', $note ?? ''));
+
+        return $note === '' ? null : $note;
+    }
+
+    private function calculateUnitPrice(Product $product, $modifiers): float
+    {
+        $modifierTotal = (float) $modifiers->sum(fn (Modifier $modifier): float => (float) ($modifier->price ?? 0));
+        $basePrice = (float) ($product->discounted_price ?? $product->price ?? 0);
+
+        return $basePrice + $modifierTotal;
+    }
+
+    private function findMatchingItem(
+        int $cartId,
+        int $productId,
+        array $modifierIds,
+        ?int $substituteProductId,
+        ?string $note,
+        ?int $exceptItemId = null,
+    ): ?CartItem {
+        $query = CartItem::query()
+            ->where('cart_id', $cartId)
+            ->where('product_id', $productId)
+            ->where('substitute_product_id', $substituteProductId)
+            ->where('special_instructions', $this->normalizeNote($note))
+            ->with('modifiers')
+            ->lockForUpdate();
+
+        if ($exceptItemId !== null) {
+            $query->whereKeyNot($exceptItemId);
+        }
+
+        return $query->get()->first(function (CartItem $item) use ($modifierIds): bool {
+            return $this->normalizeModifierIds($item->modifiers->pluck('id')->all()) === $this->normalizeModifierIds($modifierIds);
+        });
+    }
+
     private function toPayload(Cart $cart): array
     {
         $groupedItems = $cart->items->groupBy(fn (CartItem $item): int => (int) $item->product?->restaurant_id);
@@ -270,6 +342,7 @@ final class UserRestaurantCartService
             'merchant' => $legacyMerchant,
             'items' => $legacyItems->all(),
             'merchantGroups' => $merchantGroups->all(),
+            'productsCount' => (int) $legacyItems->sum('quantity'),
             'amounts' => [
                 'subtotal' => round($grandSubtotal, 2),
                 'total' => round($grandSubtotal, 2),
