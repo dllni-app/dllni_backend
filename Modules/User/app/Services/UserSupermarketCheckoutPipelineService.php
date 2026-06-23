@@ -29,7 +29,7 @@ final class UserSupermarketCheckoutPipelineService
     ): array {
         $cart = SmCart::query()
             ->where('user_id', $userId)
-            ->with(['items.product'])
+            ->with(['items.product.store'])
             ->first();
 
         if (! $cart || $cart->items->isEmpty()) {
@@ -79,7 +79,7 @@ final class UserSupermarketCheckoutPipelineService
         return DB::transaction(function () use ($userId, $receiveMode, $scheduledAt, $couponCode, $note): SmOrder {
             $cart = SmCart::query()
                 ->where('user_id', $userId)
-                ->with(['items.product'])
+                ->with(['items.product.store'])
                 ->first();
 
             if (! $cart || $cart->items->isEmpty()) {
