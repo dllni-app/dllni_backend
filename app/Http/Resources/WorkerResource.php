@@ -57,8 +57,8 @@ final class WorkerResource extends JsonResource
                 ->all()),
             'availability' => $this->whenLoaded('availability'),
             'trustLogs' => $this->whenLoaded('trustLogs'),
-            'createdAt' => $this->created_at->toDateTimeString(),
-            'updatedAt' => $this->updated_at->toDateTimeString(),
+            'createdAt' => $this->created_at?->toDateTimeString(),
+            'updatedAt' => $this->updated_at?->toDateTimeString(),
         ];
     }
 
