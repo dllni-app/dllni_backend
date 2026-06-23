@@ -26,9 +26,14 @@ final class UserRestaurantCartItemStoreController
         );
 
         return response()->json([
-            'message' => 'Item added to cart.',
+            'message' => $result['operation'] === 'updated'
+                ? 'Item updated in cart.'
+                : 'Item added to cart.',
             'cartId' => $result['cartId'],
             'itemId' => $result['itemId'],
-        ], 201);
+            'quantity' => $result['quantity'],
+            'operation' => $result['operation'],
+            'cartProductsCount' => $result['cartProductsCount'],
+        ], $result['operation'] === 'updated' ? 200 : 201);
     }
 }
