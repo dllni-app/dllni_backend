@@ -14,6 +14,7 @@ use Modules\Cleaning\Database\Seeders\CleaningFinancialSettingsSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningBookingSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningServiceSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningWorkerArabicDataSeeder;
+use Modules\Cleaning\Database\Seeders\CleaningWorkerExtensionScenarioSeeder;
 use Modules\Cleaning\Database\Seeders\EventBookingSeeder;
 use Modules\Delivery\Database\Seeders\DeliveryPermissionsSeeder;
 use Modules\Delivery\Database\Seeders\DeliveryModuleDataSeeder;
@@ -89,6 +90,7 @@ final class DatabaseSeeder extends Seeder
             RestaurantSeeder::class,
             CleaningBookingSeeder::class,
             CleaningWorkerArabicDataSeeder::class,
+            CleaningWorkerExtensionScenarioSeeder::class,
             EventBookingSeeder::class,
             SupermarketDatabaseSeeder::class,
             MarketingOfferSeeder::class,
