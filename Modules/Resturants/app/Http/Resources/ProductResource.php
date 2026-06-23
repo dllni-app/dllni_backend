@@ -26,6 +26,7 @@ final class ProductResource extends JsonResource
             'price' => $this->price ? (float) $this->price : null,
             'discountedPrice' => $this->discounted_price ? (float) $this->discounted_price : null,
             'isFavorite' => (bool) ($attrs['isFavoritedByUser'] ?? false),
+            'cartQuantity' => (int) ($attrs['cartQuantity'] ?? 0),
             'isAvailable' => $this->is_available,
             'isAvailableNow' => $this->isAvailableNow(),
             'availabilityMode' => $this->availabilityMode(),
