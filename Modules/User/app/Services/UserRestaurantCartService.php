@@ -14,9 +14,6 @@ use Modules\Resturants\Models\Product;
 
 final class UserRestaurantCartService
 {
-    /**
-     * @return array<string, mixed>
-     */
     public function show(int $userId): array
     {
         $cart = Cart::query()
@@ -31,10 +28,6 @@ final class UserRestaurantCartService
         return $this->toPayload($cart);
     }
 
-    /**
-     * @param  array<int>  $modifierIds
-     * @return array<string, mixed>
-     */
     public function addItem(
         int $userId,
         int $productId,
@@ -201,13 +194,14 @@ final class UserRestaurantCartService
                 $this->syncModifiers($item, $modifiers);
             }
 
-            return $this->toPayload($item->cart->fresh(['items.product.restaurant.media', 'items.product.media', 'items.modifiers']));
+            if ($matchingItem) {
+                $item->delete();
+            }
+
+            return $this->toPayload($cart->fresh(['items.product.restaurant.media', 'items.product.media', 'items.modifiers']));
         });
     }
 
-    /**
-     * @return array<string, mixed>
-     */
     public function deleteItem(int $userId, int $itemId): array
     {
         return DB::transaction(function () use ($userId, $itemId): array {
@@ -424,6 +418,7 @@ final class UserRestaurantCartService
             'merchant' => $legacyMerchant,
             'items' => $legacyItems->all(),
             'merchantGroups' => $merchantGroups->all(),
+            'productsCount' => (int) $legacyItems->sum('quantity'),
             'amounts' => [
                 'subtotal' => round($grandSubtotal, 2),
                 'total' => round($grandSubtotal, 2),
