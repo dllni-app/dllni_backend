@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Traits\FilterQueries;
 
 use Illuminate\Database\Eloquent\Builder;
+use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
+use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningTimeWarning;
 use Spatie\QueryBuilder\AllowedFilter;
 use Spatie\QueryBuilder\AllowedSort;
@@ -53,8 +55,13 @@ trait CleaningTimeWarningFilterQuery
         }
 
         return $query->where('booking_type', 'cleaning_booking')
-            ->whereHasMorph('booking', [\Modules\Cleaning\Models\CleaningBooking::class], function (Builder $q) use ($worker) {
-                $q->where('worker_id', $worker->id);
+            ->whereHasMorph('booking', [CleaningBooking::class], function (Builder $q) use ($worker) {
+                $q->where('worker_id', $worker->id)
+                    ->orWhereHas('workerAssignments', function (Builder $assignmentQuery) use ($worker) {
+                        $assignmentQuery
+                            ->where('worker_id', $worker->id)
+                            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
+                    });
             });
     }
 
