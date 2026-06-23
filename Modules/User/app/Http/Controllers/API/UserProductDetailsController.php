@@ -8,6 +8,7 @@ use App\Services\DeepLinks\CanonicalDeepLinkGenerator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Modules\Resturants\Http\Resources\ProductResource;
+use Modules\Resturants\Models\CartItem;
 use Modules\Resturants\Models\Favorite;
 use Modules\Resturants\Models\Product;
 
@@ -42,9 +43,16 @@ final class UserProductDetailsController
                 ->where('favorable_id', $model->id)
                 ->exists();
 
+            $cartQuantity = (int) CartItem::query()
+                ->where('product_id', $model->id)
+                ->whereHas('cart', fn ($query) => $query->where('user_id', $user->id))
+                ->sum('quantity');
+
             $model->setAttribute('isFavoritedByUser', $isFavorited);
+            $model->setAttribute('cartQuantity', $cartQuantity);
         } else {
             $model->setAttribute('isFavoritedByUser', false);
+            $model->setAttribute('cartQuantity', 0);
         }
 
         return response()->json([
