@@ -18,6 +18,7 @@ final class UserRestaurantCartItemStoreRequest extends FormRequest
         return [
             'productId' => ['required', 'integer', 'exists:products,id'],
             'quantity' => ['required', 'integer', 'min:1', 'max:50'],
+            'quantityMode' => ['sometimes', 'string', 'in:increment,set'],
             'modifierIds' => ['sometimes', 'array', 'max:30'],
             'modifierIds.*' => ['integer', 'exists:modifiers,id'],
             'substituteProductId' => ['sometimes', 'nullable', 'integer', 'exists:products,id'],
