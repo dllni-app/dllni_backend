@@ -18,6 +18,7 @@ final class CartItem extends Model
         'unit_price',
         'total_price',
         'special_instructions',
+        'signature_hash',
     ];
 
     protected $casts = [
