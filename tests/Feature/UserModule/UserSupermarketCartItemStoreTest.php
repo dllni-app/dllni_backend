@@ -8,7 +8,7 @@ use Database\Factories\SmProductFactory;
 use Database\Factories\SmStoreFactory;
 use Laravel\Sanctum\Sanctum;
 
-it('preserves items from multiple stores in the same supermarket cart', function (): void {
+it('preserves items from multiple stores in the same supermarket cart and exposes a primary merchant', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
@@ -43,16 +43,15 @@ it('preserves items from multiple stores in the same supermarket cart', function
         'quantity' => 2,
     ])->assertCreated();
 
-    // Same cart is reused
     expect($secondAddResponse->json('data.id'))->toBe($firstCartId);
-
-    // Two merchant groups exist
     expect($secondAddResponse->json('data.merchantGroups'))->toHaveCount(2);
+    expect($secondAddResponse->json('data.merchant.id'))->not->toBeNull();
+    expect($secondAddResponse->json('data.isMultiMerchant'))->toBeTrue();
+    expect($secondAddResponse->json('data.checkout.canPlaceOrder'))->toBeFalse();
+    expect($secondAddResponse->json('data.checkout.blockedReason'))->toBe('mixed_supermarket_cart');
 
-    // Only one cart in DB
     $this->assertDatabaseCount('sm_carts', 1);
 
-    // Both items exist
     $this->assertDatabaseHas('sm_cart_items', [
         'cart_id' => $firstCartId,
         'product_id' => $firstProduct->id,
