@@ -43,16 +43,19 @@ final class UserSupermarketCheckoutPipelineService
         );
 
         $storeIds = $cart->items->pluck('product.store_id')->filter()->unique();
-        $isSingleStore = $storeIds->count() === 1;
+        $storeId = (int) $storeIds->first();
 
-        $discount = $isSingleStore
-            ? $this->computeDiscount((int) $storeIds->first(), $couponCode, $subtotal)
-            : 0.0;
+        $discount = $this->computeDiscount($storeId, $couponCode, $subtotal);
 
         $serviceFee = 0.0;
         $total = max(0.0, $subtotal - $discount) + $serviceFee;
+        $store = $cart->items->first()?->product?->store;
 
         return [
+            'merchant' => [
+                'id' => $store?->id,
+                'name' => $store?->name,
+            ],
             'fulfillment' => [
                 'type' => 'pickup',
                 'receiveMode' => $receiveMode,
@@ -93,14 +96,11 @@ final class UserSupermarketCheckoutPipelineService
             );
 
             $storeIds = $cart->items->pluck('product.store_id')->filter()->unique();
-            $isSingleStore = $storeIds->count() === 1;
-            $storeId = $isSingleStore ? (int) $storeIds->first() : null;
+            $storeId = (int) $storeIds->first();
 
-            $coupon = $isSingleStore && $storeId !== null
-                ? $this->findCoupon($storeId, $couponCode, $subtotal)
-                : null;
+            $coupon = $this->findCoupon($storeId, $couponCode, $subtotal);
 
-            $discount = $coupon ? $this->computeDiscount((int) $storeId, $couponCode, $subtotal) : 0.0;
+            $discount = $coupon ? $this->computeDiscount($storeId, $couponCode, $subtotal) : 0.0;
             $serviceFee = 0.0;
             $total = max(0.0, $subtotal - $discount) + $serviceFee;
 
