@@ -34,27 +34,30 @@ return new class extends Migration
     private function userOnlyUniqueIndexes(): array
     {
         $rows = DB::select(<<<'SQL'
-            SELECT index_name, GROUP_CONCAT(column_name ORDER BY seq_in_index) AS columns_list
-            FROM information_schema.statistics
-            WHERE table_schema = DATABASE()
-              AND table_name = 'carts'
-              AND non_unique = 0
-              AND index_name <> 'PRIMARY'
-            GROUP BY index_name
+            SELECT INDEX_NAME AS index_name, GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) AS columns_list
+            FROM information_schema.STATISTICS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'carts'
+              AND NON_UNIQUE = 0
+              AND INDEX_NAME <> 'PRIMARY'
+            GROUP BY INDEX_NAME
             HAVING columns_list = 'user_id'
         SQL);
 
-        return array_map(static fn (object $row): string => (string) $row->index_name, $rows);
+        return array_values(array_filter(array_map(
+            static fn (object $row): ?string => isset($row->index_name) ? (string) $row->index_name : null,
+            $rows,
+        )));
     }
 
     private function indexExists(string $indexName): bool
     {
         $exists = DB::selectOne(<<<'SQL'
             SELECT 1 AS exists_flag
-            FROM information_schema.statistics
-            WHERE table_schema = DATABASE()
-              AND table_name = 'carts'
-              AND index_name = ?
+            FROM information_schema.STATISTICS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'carts'
+              AND INDEX_NAME = ?
             LIMIT 1
         SQL, [$indexName]);
 
