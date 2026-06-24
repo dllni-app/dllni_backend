@@ -35,23 +35,34 @@ final class UserSupermarketCartService
     public function addItem(int $userId, int $productId, int $quantity): array
     {
         return DB::transaction(function () use ($userId, $productId, $quantity): array {
-            $product = SmProduct::query()->findOrFail($productId);
-
-            if (! $product->store_id) {
-                throw ValidationException::withMessages([
-                    'productId' => ['The selected product is not linked to a store.'],
-                ]);
-            }
+            $product = SmProduct::query()
+                ->lockForUpdate()
+                ->findOrFail($productId);
 
             $cart = $this->resolveActiveCart($userId);
+            $existingItem = SmCartItem::query()
+                ->where('cart_id', $cart->id)
+                ->where('product_id', $product->id)
+                ->lockForUpdate()
+                ->first();
 
-            $unitPrice = (float) ($product->discounted_price ?? $product->price ?? 0);
-            SmCartItem::create([
-                'cart_id' => $cart->id,
-                'product_id' => $product->id,
-                'quantity' => $quantity,
-                'unit_price' => $unitPrice,
-            ]);
+            $targetQuantity = (int) ($existingItem?->quantity ?? 0) + $quantity;
+            $this->validateProductForCart($product, $targetQuantity);
+            $unitPrice = $this->unitPriceFor($product);
+
+            if ($existingItem) {
+                $existingItem->update([
+                    'quantity' => $targetQuantity,
+                    'unit_price' => $unitPrice,
+                ]);
+            } else {
+                SmCartItem::query()->create([
+                    'cart_id' => $cart->id,
+                    'product_id' => $product->id,
+                    'quantity' => $quantity,
+                    'unit_price' => $unitPrice,
+                ]);
+            }
 
             return $this->toPayload($cart->fresh(['items.product.store']));
         });
@@ -80,8 +91,17 @@ final class UserSupermarketCartService
             $productIds = array_keys($mergedQuantities);
             $products = SmProduct::query()
                 ->whereIn('id', $productIds)
+                ->lockForUpdate()
                 ->get()
                 ->keyBy('id');
+
+            $cart = $this->resolveActiveCart($userId);
+            $existingItems = SmCartItem::query()
+                ->where('cart_id', $cart->id)
+                ->whereIn('product_id', $productIds)
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('product_id');
 
             foreach ($mergedQuantities as $productId => $quantity) {
                 $product = $products->get($productId);
@@ -90,24 +110,29 @@ final class UserSupermarketCartService
                         'storeId' => ['One or more products do not belong to the selected store.'],
                     ]);
                 }
-                if (! $product->is_available) {
-                    throw ValidationException::withMessages([
-                        'productId' => ["Product {$productId} is not available."],
-                    ]);
-                }
-            }
 
-            $cart = $this->resolveActiveCart($userId);
+                $targetQuantity = (int) ($existingItems->get($productId)?->quantity ?? 0) + $quantity;
+                $this->validateProductForCart($product, $targetQuantity);
+            }
 
             foreach ($mergedQuantities as $productId => $quantity) {
                 $product = $products->get($productId);
-                $unitPrice = (float) ($product->discounted_price ?? $product->price ?? 0);
-                SmCartItem::create([
-                    'cart_id' => $cart->id,
-                    'product_id' => $productId,
-                    'quantity' => $quantity,
-                    'unit_price' => $unitPrice,
-                ]);
+                $existingItem = $existingItems->get($productId);
+                $unitPrice = $this->unitPriceFor($product);
+
+                if ($existingItem) {
+                    $existingItem->update([
+                        'quantity' => (int) $existingItem->quantity + $quantity,
+                        'unit_price' => $unitPrice,
+                    ]);
+                } else {
+                    SmCartItem::query()->create([
+                        'cart_id' => $cart->id,
+                        'product_id' => $productId,
+                        'quantity' => $quantity,
+                        'unit_price' => $unitPrice,
+                    ]);
+                }
             }
 
             return $this->toPayload($cart->fresh(['items.product.store']));
@@ -124,12 +149,19 @@ final class UserSupermarketCartService
                 ->whereKey($itemId)
                 ->whereHas('cart', fn ($q) => $q->where('user_id', $userId))
                 ->with(['product', 'cart'])
+                ->lockForUpdate()
                 ->firstOrFail();
 
-            $unitPrice = (float) ($item->product->discounted_price ?? $item->product->price ?? 0);
+            if (! $item->product) {
+                throw ValidationException::withMessages([
+                    'productId' => ['The selected product no longer exists.'],
+                ]);
+            }
+
+            $this->validateProductForCart($item->product, $quantity);
             $item->update([
                 'quantity' => $quantity,
-                'unit_price' => $unitPrice,
+                'unit_price' => $this->unitPriceFor($item->product),
             ]);
 
             return $this->toPayload($item->cart->fresh(['items.product.store']));
@@ -165,7 +197,33 @@ final class UserSupermarketCartService
 
     private function resolveActiveCart(int $userId): SmCart
     {
-        return SmCart::firstOrCreate(['user_id' => $userId]);
+        return SmCart::query()->firstOrCreate(['user_id' => $userId]);
+    }
+
+    private function unitPriceFor(SmProduct $product): float
+    {
+        return (float) ($product->discounted_price ?? $product->price ?? 0);
+    }
+
+    private function validateProductForCart(SmProduct $product, int $requestedQuantity): void
+    {
+        if (! $product->store_id) {
+            throw ValidationException::withMessages([
+                'productId' => ['The selected product is not linked to a store.'],
+            ]);
+        }
+
+        if (! $product->is_available) {
+            throw ValidationException::withMessages([
+                'productId' => ["Product {$product->id} is not available."],
+            ]);
+        }
+
+        if ((int) $product->stock_quantity < $requestedQuantity) {
+            throw ValidationException::withMessages([
+                'quantity' => ["Requested quantity for product {$product->id} exceeds available stock."],
+            ]);
+        }
     }
 
     /**
@@ -201,14 +259,26 @@ final class UserSupermarketCartService
         $merchantGroups = $groupedItems->map(function ($items): array {
             $store = $items->first()?->product?->store;
 
-            $mappedItems = $items->map(fn (SmCartItem $item): array => [
-                'id' => $item->id,
-                'productId' => $item->product_id,
-                'name' => $item->product?->name,
-                'quantity' => $item->quantity,
-                'unitPrice' => (float) ($item->unit_price ?? 0),
-                'totalPrice' => round((float) ($item->unit_price ?? 0) * (int) $item->quantity, 2),
-            ])->values();
+            $mappedItems = $items->map(function (SmCartItem $item) use ($store): array {
+                $product = $item->product;
+                $availableStock = (int) ($product?->stock_quantity ?? 0);
+                $isAvailableInStock = $product !== null
+                    && (bool) $product->is_available
+                    && $availableStock >= (int) $item->quantity;
+
+                return [
+                    'id' => $item->id,
+                    'productId' => $item->product_id,
+                    'merchantId' => $store?->id,
+                    'merchantName' => $store?->name,
+                    'name' => $product?->name,
+                    'quantity' => (int) $item->quantity,
+                    'unitPrice' => (float) ($item->unit_price ?? 0),
+                    'totalPrice' => round((float) ($item->unit_price ?? 0) * (int) $item->quantity, 2),
+                    'isAvailableInStock' => $isAvailableInStock,
+                    'availableStock' => $availableStock,
+                ];
+            })->values();
 
             $subtotal = (float) $mappedItems->sum('totalPrice');
 
@@ -229,9 +299,10 @@ final class UserSupermarketCartService
             ->flatMap(fn (array $group) => $group['items'])
             ->values();
 
-        $primaryMerchant = $merchantGroups->first()['merchant'] ?? null;
         $isMultiMerchant = $merchantGroups->count() > 1;
+        $primaryMerchant = $isMultiMerchant ? null : ($merchantGroups->first()['merchant'] ?? null);
         $grandSubtotal = (float) $merchantGroups->sum(fn (array $group): float => $group['amounts']['subtotal']);
+        $hasUnavailableItems = $legacyItems->contains(fn (array $item): bool => ! (bool) $item['isAvailableInStock']);
 
         return [
             'id' => $cart->id,
@@ -240,10 +311,10 @@ final class UserSupermarketCartService
             'merchantGroups' => $merchantGroups->all(),
             'isMultiMerchant' => $isMultiMerchant,
             'checkout' => [
-                'canPlaceOrder' => ! $isMultiMerchant,
-                'blockedReason' => $isMultiMerchant ? 'mixed_supermarket_cart' : null,
-                'message' => $isMultiMerchant
-                    ? 'Supermarket checkout supports one store at a time. Remove products from other stores or place separate orders.'
+                'canPlaceOrder' => ! $hasUnavailableItems,
+                'blockedReason' => $hasUnavailableItems ? 'out_of_stock' : null,
+                'message' => $hasUnavailableItems
+                    ? 'One or more supermarket cart items are unavailable or exceed available stock.'
                     : null,
             ],
             'amounts' => [
