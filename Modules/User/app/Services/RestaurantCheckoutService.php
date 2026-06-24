@@ -17,6 +17,10 @@ use Modules\Resturants\Models\PromoCode;
 
 final class RestaurantCheckoutService
 {
+    public function __construct(
+        private readonly RestaurantCartNormalizerService $cartNormalizer,
+    ) {}
+
     /**
      * Creates a single Order containing all cart items.
      * When items span multiple restaurants restaurant_id is set to null
@@ -34,10 +38,17 @@ final class RestaurantCheckoutService
         return DB::transaction(function () use ($userId, $orderType, $pickupMode, $pickupScheduledFor, $promoCode, $specialInstructions): Order {
             $cart = Cart::query()
                 ->where('user_id', $userId)
-                ->with(['items.product', 'items.modifiers'])
                 ->first();
 
-            if (! $cart || $cart->items->isEmpty()) {
+            if (! $cart) {
+                throw ValidationException::withMessages([
+                    'cart' => ['Cart is empty.'],
+                ]);
+            }
+
+            $cart = $this->cartNormalizer->normalize($cart);
+
+            if ($cart->items->isEmpty()) {
                 throw ValidationException::withMessages([
                     'cart' => ['Cart is empty.'],
                 ]);
