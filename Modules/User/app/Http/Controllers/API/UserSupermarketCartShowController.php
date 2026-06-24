@@ -14,12 +14,14 @@ final class UserSupermarketCartShowController
         private readonly UserSupermarketCartService $carts,
     ) {}
 
-    public function __invoke(Request $request): JsonResponse
+    public function __invoke(Request $request, ?int $cartId = null): JsonResponse
     {
+        $userId = (int) $request->user()->id;
+
         return response()->json([
-            'data' => $this->carts->show(
-                userId: (int) $request->user()->id,
-            ),
+            'data' => $cartId === null
+                ? $this->carts->list($userId)
+                : $this->carts->show($userId, $cartId),
         ]);
     }
 }
