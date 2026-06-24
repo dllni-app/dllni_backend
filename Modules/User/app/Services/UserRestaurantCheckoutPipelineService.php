@@ -23,6 +23,7 @@ final class UserRestaurantCheckoutPipelineService
      */
     public function preview(
         int $userId,
+        int $cartId,
         string $fulfillmentType,
         string $receiveMode,
         ?string $scheduledAt,
@@ -30,34 +31,32 @@ final class UserRestaurantCheckoutPipelineService
         ?string $note,
     ): array {
         $cart = Cart::query()
+            ->whereKey($cartId)
             ->where('user_id', $userId)
-            ->with(['items.product'])
-            ->first();
+            ->whereNotNull('restaurant_id')
+            ->with(['restaurant', 'items.product'])
+            ->firstOrFail();
 
-        if (! $cart || $cart->items->isEmpty()) {
+        if ($cart->items->isEmpty()) {
             throw ValidationException::withMessages([
                 'cart' => ['Cart is empty.'],
             ]);
         }
 
+        $this->assertCartItemsBelongToRestaurant($cart);
+
         $subtotal = (float) $cart->items->sum(fn ($item): float => (float) ($item->total_price ?? 0));
-
-        $restaurantIds = $cart->items
-            ->pluck('product.restaurant_id')
-            ->filter()
-            ->unique();
-
-        $isSingleMerchant = $restaurantIds->count() === 1;
-
-        $discount = $isSingleMerchant
-            ? $this->computeDiscount((int) $restaurantIds->first(), $couponCode, $subtotal)
-            : 0.0;
-
+        $discount = $this->computeDiscount((int) $cart->restaurant_id, $couponCode, $subtotal);
         $serviceFee = 0.0;
         $tax = 0.0;
         $total = max(0.0, $subtotal - $discount) + $serviceFee + $tax;
 
         return [
+            'cartId' => $cart->id,
+            'merchant' => [
+                'id' => $cart->restaurant?->id,
+                'name' => $cart->restaurant?->name,
+            ],
             'fulfillment' => [
                 'type' => $fulfillmentType,
                 'receiveMode' => $receiveMode,
@@ -76,14 +75,16 @@ final class UserRestaurantCheckoutPipelineService
 
     public function place(
         int $userId,
+        int $cartId,
         string $fulfillmentType,
         string $receiveMode,
         ?string $scheduledAt,
         ?string $couponCode,
         ?string $note,
     ): Order {
-        $order = $this->checkoutService->checkoutAll(
+        $order = $this->checkoutService->checkoutCart(
             userId: $userId,
+            cartId: $cartId,
             orderType: $fulfillmentType,
             pickupMode: $receiveMode === 'scheduled'
                 ? RestaurantPickupMode::ScheduledPickup->value
@@ -140,5 +141,18 @@ final class UserRestaurantCheckoutPipelineService
         }
 
         return round(min((float) $coupon->discount_value, $subtotal), 2);
+    }
+
+    private function assertCartItemsBelongToRestaurant(Cart $cart): void
+    {
+        $invalidItemExists = $cart->items->contains(
+            fn ($item): bool => (int) $item->product?->restaurant_id !== (int) $cart->restaurant_id
+        );
+
+        if ($invalidItemExists) {
+            throw ValidationException::withMessages([
+                'cart' => ['Cart contains items from another restaurant.'],
+            ]);
+        }
     }
 }
