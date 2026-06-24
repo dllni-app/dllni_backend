@@ -17,6 +17,11 @@ use Modules\User\Services\UserCleaningOrderService;
 
 final class UserCleaningOrderCancelController
 {
+    private const ARRIVAL_CANCEL_STATUSES = [
+        CleaningBookingStatus::AwaitingStartVerification,
+        CleaningBookingStatus::AwaitingWorkerStartConfirmation,
+    ];
+
     public function __invoke(
         UserCleaningOrderCancelRequest $request,
         int $order,
@@ -29,7 +34,7 @@ final class UserCleaningOrderCancelController
 
         $reason = $request->validated('reason');
 
-        $cancelled = $model->status === CleaningBookingStatus::AwaitingWorkerStartConfirmation
+        $cancelled = in_array($model->status, self::ARRIVAL_CANCEL_STATUSES, true)
             ? $this->cancelAfterWorkerArrival($model, $reason, $lifecycleNotifications)
             : $service->cancel($model, $reason);
 
