@@ -41,6 +41,29 @@ it('allows cancelling worker assigned cleaning orders', function (): void {
     ])->assertOk()->assertJsonPath('order.status', CleaningBookingStatus::Cancelled->value);
 });
 
+it('allows cancelling cleaning orders during arrival start verification', function (CleaningBookingStatus $status): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $order = CleaningBooking::factory()->create([
+        'customer_id' => $user->id,
+        'status' => $status->value,
+    ]);
+
+    postJson("/api/v1/user/cleaning/orders/{$order->id}/cancel", [
+        'reason' => 'Worker arrived but customer cancelled',
+    ])->assertOk()
+        ->assertJsonPath('order.status', CleaningBookingStatus::Cancelled->value)
+        ->assertJsonPath('order.cancelledByRole', 'customer');
+
+    expect($order->fresh())
+        ->status->toBe(CleaningBookingStatus::Cancelled)
+        ->cancellation_reason->toBe('Worker arrived but customer cancelled');
+})->with([
+    'awaiting start verification' => CleaningBookingStatus::AwaitingStartVerification,
+    'awaiting worker start confirmation' => CleaningBookingStatus::AwaitingWorkerStartConfirmation,
+]);
+
 it('rejects cancelling cleaning orders in non cancellable statuses', function (CleaningBookingStatus $status): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
@@ -54,8 +77,6 @@ it('rejects cancelling cleaning orders in non cancellable statuses', function (C
         'reason' => 'Too late',
     ])->assertUnprocessable()->assertJsonValidationErrors(['order']);
 })->with([
-    'awaiting start verification' => CleaningBookingStatus::AwaitingStartVerification,
-    'awaiting worker start confirmation' => CleaningBookingStatus::AwaitingWorkerStartConfirmation,
     'awaiting customer completion' => CleaningBookingStatus::AwaitingCustomerCompletion,
     'in progress' => CleaningBookingStatus::InProgress,
     'time extension requested' => CleaningBookingStatus::TimeExtensionRequested,
