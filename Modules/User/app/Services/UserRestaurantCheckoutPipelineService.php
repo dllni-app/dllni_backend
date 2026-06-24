@@ -16,6 +16,7 @@ final class UserRestaurantCheckoutPipelineService
 {
     public function __construct(
         private readonly RestaurantCheckoutService $checkoutService,
+        private readonly RestaurantCartNormalizerService $cartNormalizer,
     ) {}
 
     /**
@@ -31,10 +32,17 @@ final class UserRestaurantCheckoutPipelineService
     ): array {
         $cart = Cart::query()
             ->where('user_id', $userId)
-            ->with(['items.product'])
             ->first();
 
-        if (! $cart || $cart->items->isEmpty()) {
+        if (! $cart) {
+            throw ValidationException::withMessages([
+                'cart' => ['Cart is empty.'],
+            ]);
+        }
+
+        $cart = $this->cartNormalizer->normalize($cart);
+
+        if ($cart->items->isEmpty()) {
             throw ValidationException::withMessages([
                 'cart' => ['Cart is empty.'],
             ]);
