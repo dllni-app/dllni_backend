@@ -14,14 +14,25 @@ use Modules\Resturants\Models\Product;
 
 final class UserRestaurantCartService
 {
+    public function __construct(
+        private readonly RestaurantCartNormalizerService $normalizer,
+    ) {}
+
     public function show(int $userId): array
     {
         $cart = Cart::query()
             ->where('user_id', $userId)
-            ->with(['items.product.restaurant.media', 'items.product.media', 'items.modifiers'])
             ->first();
 
         if (! $cart) {
+            return $this->emptyCartPayload();
+        }
+
+        $cart = $this->normalizer->normalize($cart);
+
+        if ($cart->items->isEmpty()) {
+            $cart->delete();
+
             return $this->emptyCartPayload();
         }
 
@@ -48,7 +59,7 @@ final class UserRestaurantCartService
                 ]);
             }
 
-            $cart = $this->resolveActiveCart($userId);
+            $cart = $this->normalizer->normalize($this->resolveActiveCart($userId));
             $modifierIds = $this->normalizeModifierIds($modifierIds);
             $modifiers = $this->validatedModifiers($product, $modifierIds);
             $normalizedNote = $this->normalizeNote($note);
@@ -65,6 +76,7 @@ final class UserRestaurantCartService
                 ->where('cart_id', $cart->id)
                 ->where('signature_hash', $signatureHash)
                 ->with(['cart', 'modifiers'])
+                ->lockForUpdate()
                 ->first();
 
             $operation = 'created';
@@ -124,6 +136,7 @@ final class UserRestaurantCartService
                 ->whereKey($itemId)
                 ->whereHas('cart', fn ($q) => $q->where('user_id', $userId))
                 ->with(['product.modifierGroups.modifiers', 'cart', 'modifiers'])
+                ->lockForUpdate()
                 ->firstOrFail();
 
             $product = $item->product;
@@ -162,14 +175,17 @@ final class UserRestaurantCartService
                 ->where('signature_hash', $signatureHash)
                 ->whereKeyNot($item->id)
                 ->with(['cart', 'modifiers'])
+                ->lockForUpdate()
                 ->first();
 
             if ($targetItem) {
+                $mergedQuantity = (int) $targetItem->quantity + $quantity;
+
                 $targetItem->fill([
-                    'quantity' => $quantity,
+                    'quantity' => $mergedQuantity,
                     'substitute_product_id' => $nextSubstituteProductId,
                     'unit_price' => $unitPrice,
-                    'total_price' => $unitPrice * $quantity,
+                    'total_price' => $unitPrice * $mergedQuantity,
                     'special_instructions' => $nextNote,
                     'signature_hash' => $signatureHash,
                 ]);
@@ -177,7 +193,9 @@ final class UserRestaurantCartService
                 $this->syncModifiers($targetItem, $modifiers);
                 $item->delete();
 
-                return $this->toPayload($targetItem->cart->fresh(['items.product.restaurant.media', 'items.product.media', 'items.modifiers']));
+                $cart = $this->normalizer->normalize($targetItem->cart);
+
+                return $this->toPayload($cart);
             }
 
             $item->fill([
@@ -194,11 +212,9 @@ final class UserRestaurantCartService
                 $this->syncModifiers($item, $modifiers);
             }
 
-            if ($matchingItem) {
-                $item->delete();
-            }
+            $cart = $this->normalizer->normalize($item->cart);
 
-            return $this->toPayload($cart->fresh(['items.product.restaurant.media', 'items.product.media', 'items.modifiers']));
+            return $this->toPayload($cart);
         });
     }
 
@@ -209,20 +225,21 @@ final class UserRestaurantCartService
                 ->whereKey($itemId)
                 ->whereHas('cart', fn ($q) => $q->where('user_id', $userId))
                 ->with('cart')
+                ->lockForUpdate()
                 ->firstOrFail();
 
             $cart = $item->cart;
             $item->delete();
 
-            $freshCart = $cart->fresh(['items.product.restaurant.media', 'items.product.media', 'items.modifiers']);
+            $freshCart = $this->normalizer->normalize($cart);
 
-            if ($freshCart && $freshCart->items->isEmpty()) {
+            if ($freshCart->items->isEmpty()) {
                 $freshCart->delete();
 
                 return $this->emptyCartPayload();
             }
 
-            return $this->toPayload($freshCart ?? $cart);
+            return $this->toPayload($freshCart);
         });
     }
 
@@ -322,17 +339,21 @@ final class UserRestaurantCartService
      */
     private function cartMutationResponse(Cart $cart, CartItem $item, string $operation): array
     {
-        $freshCart = $cart->fresh(['items.product.restaurant.media', 'items.product.media', 'items.modifiers']);
-        $cartProductsCount = $freshCart ? (int) $freshCart->items->sum('quantity') : (int) $item->quantity;
+        $freshCart = $this->normalizer->normalize($cart);
+        $responseItem = $freshCart->items
+            ->first(fn (CartItem $cartItem): bool => (string) $cartItem->signature_hash === (string) $item->signature_hash)
+            ?? $item;
+
+        $cartProductsCount = (int) $freshCart->items->sum('quantity');
 
         return [
             'message' => $operation === 'created' ? 'Item added to cart.' : 'Item updated in cart.',
             'cartId' => $cart->id,
-            'itemId' => $item->id,
-            'quantity' => (int) $item->quantity,
+            'itemId' => $responseItem->id,
+            'quantity' => (int) $responseItem->quantity,
             'cartProductsCount' => $cartProductsCount,
             'operation' => $operation,
-            'cart' => $freshCart ? $this->toPayload($freshCart) : $this->emptyCartPayload(),
+            'cart' => $this->toPayload($freshCart),
         ];
     }
 
