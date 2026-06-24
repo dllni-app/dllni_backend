@@ -18,47 +18,42 @@ use Modules\Resturants\Models\PromoCode;
 final class RestaurantCheckoutService
 {
     /**
-     * Creates a single Order containing all cart items.
-     * When items span multiple restaurants restaurant_id is set to null
-     * (merchant context is preserved at the item level via product_id).
-     * The cart is fully deleted after the order is placed.
+     * Creates one Order from exactly one merchant-scoped cart.
+     * Every cart item must belong to the cart restaurant and the cart is deleted after checkout.
      */
-    public function checkoutAll(
+    public function checkoutCart(
         int $userId,
+        int $cartId,
         string $orderType,
         ?string $pickupMode = null,
         ?string $pickupScheduledFor = null,
         ?string $promoCode = null,
         ?string $specialInstructions = null,
     ): Order {
-        return DB::transaction(function () use ($userId, $orderType, $pickupMode, $pickupScheduledFor, $promoCode, $specialInstructions): Order {
+        return DB::transaction(function () use ($userId, $cartId, $orderType, $pickupMode, $pickupScheduledFor, $promoCode, $specialInstructions): Order {
             $cart = Cart::query()
+                ->whereKey($cartId)
                 ->where('user_id', $userId)
+                ->whereNotNull('restaurant_id')
                 ->with(['items.product', 'items.modifiers'])
-                ->first();
+                ->lockForUpdate()
+                ->firstOrFail();
 
-            if (! $cart || $cart->items->isEmpty()) {
+            if ($cart->items->isEmpty()) {
                 throw ValidationException::withMessages([
                     'cart' => ['Cart is empty.'],
                 ]);
             }
 
+            $this->assertCartItemsBelongToRestaurant($cart);
+
             $subtotal = (float) $cart->items->sum(fn ($item): float => (float) ($item->total_price ?? 0));
-
-            $restaurantIds = $cart->items
-                ->pluck('product.restaurant_id')
-                ->filter()
-                ->unique()
-                ->values();
-
-            $isSingleMerchant = $restaurantIds->count() === 1;
-            $restaurantId = $isSingleMerchant ? (int) $restaurantIds->first() : null;
+            $restaurantId = (int) $cart->restaurant_id;
 
             [$discountAmount, $promoCodeId] = $this->resolveDiscount(
                 $restaurantId,
                 $promoCode,
                 $subtotal,
-                $isSingleMerchant,
             );
 
             $taxAmount = 0.0;
@@ -119,9 +114,9 @@ final class RestaurantCheckoutService
     /**
      * @return array{float, int|null}
      */
-    private function resolveDiscount(?int $restaurantId, ?string $promoCode, float $subtotal, bool $isSingleMerchant): array
+    private function resolveDiscount(int $restaurantId, ?string $promoCode, float $subtotal): array
     {
-        if (! $isSingleMerchant || ! is_string($promoCode) || mb_trim($promoCode) === '' || $restaurantId === null) {
+        if (! is_string($promoCode) || mb_trim($promoCode) === '') {
             return [0.0, null];
         }
 
@@ -169,5 +164,18 @@ final class RestaurantCheckoutService
             DiscountType::FixedAmount => round(min((float) $promo->discount_value, $subtotal), 2),
             default => 0.0,
         };
+    }
+
+    private function assertCartItemsBelongToRestaurant(Cart $cart): void
+    {
+        $invalidItemExists = $cart->items->contains(
+            fn ($item): bool => (int) $item->product?->restaurant_id !== (int) $cart->restaurant_id
+        );
+
+        if ($invalidItemExists) {
+            throw ValidationException::withMessages([
+                'cart' => ['Cart contains items from another restaurant.'],
+            ]);
+        }
     }
 }

@@ -14,18 +14,39 @@ use Modules\Resturants\Models\Product;
 
 final class UserRestaurantCartService
 {
-    public function show(int $userId): array
+    private const CART_RELATIONS = [
+        'restaurant.media',
+        'items.product.media',
+        'items.modifiers',
+    ];
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function list(int $userId): array
+    {
+        return Cart::query()
+            ->where('user_id', $userId)
+            ->whereNotNull('restaurant_id')
+            ->with(self::CART_RELATIONS)
+            ->latest()
+            ->get()
+            ->filter(fn (Cart $cart): bool => $cart->items->isNotEmpty())
+            ->map(fn (Cart $cart): array => $this->toPayload($this->normalizeCart($cart)))
+            ->values()
+            ->all();
+    }
+
+    public function show(int $userId, int $cartId): array
     {
         $cart = Cart::query()
+            ->whereKey($cartId)
             ->where('user_id', $userId)
-            ->with(['items.product.restaurant.media', 'items.product.media', 'items.modifiers'])
-            ->first();
+            ->whereNotNull('restaurant_id')
+            ->with(self::CART_RELATIONS)
+            ->firstOrFail();
 
-        if (! $cart) {
-            return $this->emptyCartPayload();
-        }
-
-        return $this->toPayload($cart);
+        return $this->toPayload($this->normalizeCart($cart));
     }
 
     public function addItem(
@@ -48,7 +69,8 @@ final class UserRestaurantCartService
                 ]);
             }
 
-            $cart = $this->resolveActiveCart($userId);
+            $cart = $this->resolveActiveCart($userId, (int) $product->restaurant_id);
+            $cart = $this->normalizeCart($cart);
             $modifierIds = $this->normalizeModifierIds($modifierIds);
             $modifiers = $this->validatedModifiers($product, $modifierIds);
             $normalizedNote = $this->normalizeNote($note);
@@ -65,6 +87,7 @@ final class UserRestaurantCartService
                 ->where('cart_id', $cart->id)
                 ->where('signature_hash', $signatureHash)
                 ->with(['cart', 'modifiers'])
+                ->lockForUpdate()
                 ->first();
 
             $operation = 'created';
@@ -111,6 +134,7 @@ final class UserRestaurantCartService
      */
     public function updateItem(
         int $userId,
+        int $cartId,
         int $itemId,
         int $quantity,
         ?array $modifierIds = null,
@@ -119,14 +143,18 @@ final class UserRestaurantCartService
         bool $replaceSubstituteProduct = true,
         bool $replaceNote = true,
     ): array {
-        return DB::transaction(function () use ($userId, $itemId, $quantity, $modifierIds, $substituteProductId, $note, $replaceSubstituteProduct, $replaceNote): array {
+        return DB::transaction(function () use ($userId, $cartId, $itemId, $quantity, $modifierIds, $substituteProductId, $note, $replaceSubstituteProduct, $replaceNote): array {
             $item = CartItem::query()
                 ->whereKey($itemId)
+                ->where('cart_id', $cartId)
                 ->whereHas('cart', fn ($q) => $q->where('user_id', $userId))
                 ->with(['product.modifierGroups.modifiers', 'cart', 'modifiers'])
+                ->lockForUpdate()
                 ->firstOrFail();
 
             $product = $item->product;
+
+            $this->assertProductBelongsToCartRestaurant($item->cart, $product);
 
             $modifiers = $modifierIds === null
                 ? $item->modifiers
@@ -162,14 +190,17 @@ final class UserRestaurantCartService
                 ->where('signature_hash', $signatureHash)
                 ->whereKeyNot($item->id)
                 ->with(['cart', 'modifiers'])
+                ->lockForUpdate()
                 ->first();
 
             if ($targetItem) {
+                $mergedQuantity = (int) $targetItem->quantity + $quantity;
+
                 $targetItem->fill([
-                    'quantity' => $quantity,
+                    'quantity' => $mergedQuantity,
                     'substitute_product_id' => $nextSubstituteProductId,
                     'unit_price' => $unitPrice,
-                    'total_price' => $unitPrice * $quantity,
+                    'total_price' => $unitPrice * $mergedQuantity,
                     'special_instructions' => $nextNote,
                     'signature_hash' => $signatureHash,
                 ]);
@@ -177,7 +208,7 @@ final class UserRestaurantCartService
                 $this->syncModifiers($targetItem, $modifiers);
                 $item->delete();
 
-                return $this->toPayload($targetItem->cart->fresh(['items.product.restaurant.media', 'items.product.media', 'items.modifiers']));
+                return $this->toPayload($this->normalizeCart($targetItem->cart));
             }
 
             $item->fill([
@@ -194,41 +225,131 @@ final class UserRestaurantCartService
                 $this->syncModifiers($item, $modifiers);
             }
 
-            if ($matchingItem) {
-                $item->delete();
-            }
-
-            return $this->toPayload($cart->fresh(['items.product.restaurant.media', 'items.product.media', 'items.modifiers']));
+            return $this->toPayload($this->normalizeCart($item->cart));
         });
     }
 
-    public function deleteItem(int $userId, int $itemId): array
+    public function deleteItem(int $userId, int $cartId, int $itemId): array
     {
-        return DB::transaction(function () use ($userId, $itemId): array {
+        return DB::transaction(function () use ($userId, $cartId, $itemId): array {
             $item = CartItem::query()
                 ->whereKey($itemId)
+                ->where('cart_id', $cartId)
                 ->whereHas('cart', fn ($q) => $q->where('user_id', $userId))
                 ->with('cart')
+                ->lockForUpdate()
                 ->firstOrFail();
 
             $cart = $item->cart;
             $item->delete();
 
-            $freshCart = $cart->fresh(['items.product.restaurant.media', 'items.product.media', 'items.modifiers']);
+            $freshCart = $this->normalizeCart($cart);
 
-            if ($freshCart && $freshCart->items->isEmpty()) {
+            if ($freshCart->items->isEmpty()) {
                 $freshCart->delete();
 
                 return $this->emptyCartPayload();
             }
 
-            return $this->toPayload($freshCart ?? $cart);
+            return $this->toPayload($freshCart);
         });
     }
 
-    private function resolveActiveCart(int $userId): Cart
+    private function resolveActiveCart(int $userId, int $restaurantId): Cart
     {
-        return Cart::firstOrCreate(['user_id' => $userId]);
+        return Cart::firstOrCreate([
+            'user_id' => $userId,
+            'restaurant_id' => $restaurantId,
+        ]);
+    }
+
+    private function normalizeCart(Cart $cart): Cart
+    {
+        return DB::transaction(function () use ($cart): Cart {
+            $lockedCart = Cart::query()
+                ->whereKey($cart->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $items = CartItem::query()
+                ->where('cart_id', $lockedCart->id)
+                ->with(['product', 'modifiers'])
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            if ($items->isEmpty()) {
+                return $lockedCart->fresh(self::CART_RELATIONS) ?? $lockedCart;
+            }
+
+            $rows = $items->map(function (CartItem $item) use ($lockedCart): array {
+                $this->assertProductBelongsToCartRestaurant($lockedCart, $item->product);
+
+                $modifierIds = $item->modifiers
+                    ->pluck('id')
+                    ->map(fn ($id): int => (int) $id)
+                    ->unique()
+                    ->sort()
+                    ->values()
+                    ->all();
+
+                $signatureHash = $this->signatureHash(
+                    productId: (int) $item->product_id,
+                    modifierIds: $modifierIds,
+                    substituteProductId: $item->substitute_product_id === null ? null : (int) $item->substitute_product_id,
+                    note: $this->normalizeNote($item->special_instructions),
+                );
+
+                return [
+                    'item' => $item,
+                    'signature_hash' => $signatureHash,
+                    'quantity' => max(1, (int) $item->quantity),
+                ];
+            });
+
+            foreach ($rows->groupBy('signature_hash') as $signatureHash => $group) {
+                $keeperRow = $group->first(
+                    fn (array $row): bool => (string) $row['item']->signature_hash === (string) $signatureHash,
+                ) ?? $group->first();
+
+                /** @var CartItem $keeper */
+                $keeper = $keeperRow['item'];
+                $mergedQuantity = (int) $group->sum('quantity');
+                $unitPrice = (float) ($keeper->unit_price ?? 0);
+                $normalizedNote = $this->normalizeNote($keeper->special_instructions);
+
+                foreach ($group as $row) {
+                    /** @var CartItem $item */
+                    $item = $row['item'];
+
+                    if ((int) $item->id === (int) $keeper->id) {
+                        continue;
+                    }
+
+                    $item->modifiers()->detach();
+                    $item->delete();
+                }
+
+                $keeper->forceFill([
+                    'quantity' => $mergedQuantity,
+                    'unit_price' => $unitPrice,
+                    'total_price' => $unitPrice * $mergedQuantity,
+                    'signature_hash' => $signatureHash,
+                    'special_instructions' => $normalizedNote,
+                ])->save();
+            }
+
+            return $lockedCart->fresh(self::CART_RELATIONS) ?? $lockedCart;
+        });
+    }
+
+    private function assertProductBelongsToCartRestaurant(Cart $cart, ?Product $product): void
+    {
+        if (! $product || (int) $product->restaurant_id !== (int) $cart->restaurant_id) {
+            throw ValidationException::withMessages([
+                'cart' => ['Cart items must belong to the same restaurant as the cart.'],
+            ]);
+        }
     }
 
     /**
@@ -322,17 +443,20 @@ final class UserRestaurantCartService
      */
     private function cartMutationResponse(Cart $cart, CartItem $item, string $operation): array
     {
-        $freshCart = $cart->fresh(['items.product.restaurant.media', 'items.product.media', 'items.modifiers']);
-        $cartProductsCount = $freshCart ? (int) $freshCart->items->sum('quantity') : (int) $item->quantity;
+        $freshCart = $this->normalizeCart($cart);
+        $responseItem = $freshCart->items
+            ->first(fn (CartItem $cartItem): bool => (string) $cartItem->signature_hash === (string) $item->signature_hash)
+            ?? $item;
 
         return [
             'message' => $operation === 'created' ? 'Item added to cart.' : 'Item updated in cart.',
-            'cartId' => $cart->id,
-            'itemId' => $item->id,
-            'quantity' => (int) $item->quantity,
-            'cartProductsCount' => $cartProductsCount,
+            'cartId' => $freshCart->id,
+            'merchantId' => $freshCart->restaurant_id,
+            'itemId' => $responseItem->id,
+            'quantity' => (int) $responseItem->quantity,
+            'cartProductsCount' => (int) $freshCart->items->sum('quantity'),
             'operation' => $operation,
-            'cart' => $freshCart ? $this->toPayload($freshCart) : $this->emptyCartPayload(),
+            'cart' => $this->toPayload($freshCart),
         ];
     }
 
@@ -345,7 +469,7 @@ final class UserRestaurantCartService
             'id' => null,
             'merchant' => null,
             'items' => [],
-            'merchantGroups' => [],
+            'productsCount' => 0,
             'amounts' => [
                 'subtotal' => 0.0,
                 'total' => 0.0,
@@ -358,70 +482,44 @@ final class UserRestaurantCartService
      */
     private function toPayload(Cart $cart): array
     {
-        $groupedItems = $cart->items->groupBy(fn (CartItem $item): int => (int) $item->product?->restaurant_id);
+        $mappedItems = $cart->items->map(fn (CartItem $item): array => [
+            'id' => $item->id,
+            'productId' => $item->product_id,
+            'name' => $item->product?->name,
+            'primaryImageUrl' => $item->product !== null
+                ? ($item->product->getFirstMediaUrl('primary-image') ?: null)
+                : null,
+            'images' => $item->product !== null
+                ? $item->product->getMedia('images')->map(fn ($media) => $media->getUrl())->values()->all()
+                : [],
+            'quantity' => (int) $item->quantity,
+            'unitPrice' => (float) ($item->unit_price ?? 0),
+            'totalPrice' => (float) ($item->total_price ?? 0),
+            'modifierIds' => $item->modifiers->pluck('id')->map(fn ($id) => (int) $id)->values()->all(),
+            'substituteProductId' => $item->substitute_product_id,
+            'note' => $item->special_instructions,
+        ])->values();
 
-        $merchantGroups = $groupedItems->map(function ($items, int $restaurantId): array {
-            $restaurant = $items->first()?->product?->restaurant;
-
-            $mappedItems = $items->map(fn (CartItem $item): array => [
-                'id' => $item->id,
-                'productId' => $item->product_id,
-                'name' => $item->product?->name,
-                'primaryImageUrl' => $item->product !== null
-                    ? ($item->product->getFirstMediaUrl('primary-image') ?: null)
-                    : null,
-                'images' => $item->product !== null
-                    ? $item->product->getMedia('images')->map(fn ($media) => $media->getUrl())->values()->all()
-                    : [],
-                'quantity' => $item->quantity,
-                'unitPrice' => (float) ($item->unit_price ?? 0),
-                'totalPrice' => (float) ($item->total_price ?? 0),
-                'modifierIds' => $item->modifiers->pluck('id')->map(fn ($id) => (int) $id)->values()->all(),
-                'substituteProductId' => $item->substitute_product_id,
-                'note' => $item->special_instructions,
-            ])->values();
-
-            $subtotal = (float) $mappedItems->sum('totalPrice');
-
-            return [
-                'merchant' => [
-                    'id' => $restaurant?->id,
-                    'name' => $restaurant?->name,
-                    'primaryImageUrl' => $restaurant !== null
-                        ? ($restaurant->getFirstMediaUrl('primary-image') ?: null)
-                        : null,
-                    'bannerImageUrl' => $restaurant !== null
-                        ? ($restaurant->getFirstMediaUrl('banner-image') ?: null)
-                        : null,
-                ],
-                'items' => $mappedItems->all(),
-                'amounts' => [
-                    'subtotal' => round($subtotal, 2),
-                    'total' => round($subtotal, 2),
-                ],
-            ];
-        })->values();
-
-        $legacyItems = $merchantGroups
-            ->flatMap(fn (array $group) => $group['items'])
-            ->values();
-
-        $legacyMerchant = null;
-        if ($merchantGroups->count() === 1) {
-            $legacyMerchant = $merchantGroups->first()['merchant'] ?? null;
-        }
-
-        $grandSubtotal = (float) $merchantGroups->sum(fn (array $group): float => $group['amounts']['subtotal']);
+        $subtotal = (float) $mappedItems->sum('totalPrice');
+        $restaurant = $cart->restaurant;
 
         return [
             'id' => $cart->id,
-            'merchant' => $legacyMerchant,
-            'items' => $legacyItems->all(),
-            'merchantGroups' => $merchantGroups->all(),
-            'productsCount' => (int) $legacyItems->sum('quantity'),
+            'merchant' => [
+                'id' => $restaurant?->id,
+                'name' => $restaurant?->name,
+                'primaryImageUrl' => $restaurant !== null
+                    ? ($restaurant->getFirstMediaUrl('primary-image') ?: null)
+                    : null,
+                'bannerImageUrl' => $restaurant !== null
+                    ? ($restaurant->getFirstMediaUrl('banner-image') ?: null)
+                    : null,
+            ],
+            'items' => $mappedItems->all(),
+            'productsCount' => (int) $mappedItems->sum('quantity'),
             'amounts' => [
-                'subtotal' => round($grandSubtotal, 2),
-                'total' => round($grandSubtotal, 2),
+                'subtotal' => round($subtotal, 2),
+                'total' => round($subtotal, 2),
             ],
         ];
     }

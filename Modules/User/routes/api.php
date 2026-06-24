@@ -91,7 +91,6 @@ use Modules\User\Http\Controllers\API\UserRestaurantCartItemDestroyController;
 use Modules\User\Http\Controllers\API\UserRestaurantCartItemStoreController;
 use Modules\User\Http\Controllers\API\UserRestaurantCartItemUpdateController;
 use Modules\User\Http\Controllers\API\UserRestaurantCartShowController;
-use Modules\User\Http\Controllers\API\UserRestaurantCheckoutController;
 use Modules\User\Http\Controllers\API\UserRestaurantCheckoutPreviewController;
 use Modules\User\Http\Controllers\API\UserRestaurantDetailsController;
 use Modules\User\Http\Controllers\API\UserRestaurantFavoriteDestroyController;
@@ -258,19 +257,20 @@ Route::prefix('v1/user')->group(function (): void {
         Route::post('orders/{section}/{orderId}/reorder', UserOrderReorderController::class);
         Route::patch('orders/{section}/{orderId}/schedule', UserOrderScheduleController::class);
 
-        Route::get('restaurants/cart', UserRestaurantCartShowController::class);
+        Route::get('restaurants/carts', UserRestaurantCartShowController::class);
+        Route::get('restaurants/carts/{cartId}', UserRestaurantCartShowController::class)->whereNumber('cartId');
         Route::post('restaurants/cart/items', UserRestaurantCartItemStoreController::class);
-        Route::patch('restaurants/cart/items/{itemId}', UserRestaurantCartItemUpdateController::class);
-        Route::delete('restaurants/cart/items/{itemId}', UserRestaurantCartItemDestroyController::class);
+        Route::patch('restaurants/carts/{cartId}/items/{itemId}', UserRestaurantCartItemUpdateController::class)->whereNumber(['cartId', 'itemId']);
+        Route::delete('restaurants/carts/{cartId}/items/{itemId}', UserRestaurantCartItemDestroyController::class)->whereNumber(['cartId', 'itemId']);
         Route::get('restaurants/cart/products-count', RestaurantCartProductsCountController::class);
-        Route::post('restaurants/checkout', UserRestaurantCheckoutController::class);
-        Route::post('restaurants/checkout/preview', UserRestaurantCheckoutPreviewController::class);
-        Route::post('restaurants/orders', UserRestaurantOrderStoreController::class);
+        Route::post('restaurants/carts/{cartId}/checkout/preview', UserRestaurantCheckoutPreviewController::class)->whereNumber('cartId');
+        Route::post('restaurants/carts/{cartId}/orders', UserRestaurantOrderStoreController::class)->whereNumber('cartId');
 
-        Route::get('supermarket/cart', UserSupermarketCartShowController::class);
+        Route::get('supermarket/carts', UserSupermarketCartShowController::class);
+        Route::get('supermarket/carts/{cartId}', UserSupermarketCartShowController::class)->whereNumber('cartId');
         Route::post('supermarket/cart/items', UserSupermarketCartItemStoreController::class);
-        Route::patch('supermarket/cart/items/{itemId}', UserSupermarketCartItemUpdateController::class);
-        Route::delete('supermarket/cart/items/{itemId}', UserSupermarketCartItemDestroyController::class);
+        Route::patch('supermarket/carts/{cartId}/items/{itemId}', UserSupermarketCartItemUpdateController::class)->whereNumber(['cartId', 'itemId']);
+        Route::delete('supermarket/carts/{cartId}/items/{itemId}', UserSupermarketCartItemDestroyController::class)->whereNumber(['cartId', 'itemId']);
         Route::get('supermarket/master-products/search', UserSupermarketMasterProductSearchController::class);
         Route::get('supermarket/shopping-lists', UserSupermarketShoppingListIndexController::class);
         Route::post('supermarket/shopping-lists', UserSupermarketShoppingListStoreController::class);
@@ -281,8 +281,8 @@ Route::prefix('v1/user')->group(function (): void {
         Route::post('supermarket/shopping-lists/{shoppingList}/items', UserSupermarketShoppingListItemStoreController::class)->whereNumber('shoppingList');
         Route::patch('supermarket/shopping-lists/{shoppingList}/items/{item}', UserSupermarketShoppingListItemUpdateController::class)->whereNumber(['shoppingList', 'item']);
         Route::delete('supermarket/shopping-lists/{shoppingList}/items/{item}', UserSupermarketShoppingListItemDestroyController::class)->whereNumber(['shoppingList', 'item']);
-        Route::post('supermarket/checkout/preview', UserSupermarketCheckoutPreviewController::class);
-        Route::post('supermarket/orders', UserSupermarketOrderStoreController::class);
+        Route::post('supermarket/carts/{cartId}/checkout/preview', UserSupermarketCheckoutPreviewController::class)->whereNumber('cartId');
+        Route::post('supermarket/carts/{cartId}/orders', UserSupermarketOrderStoreController::class)->whereNumber('cartId');
         Route::get('supermarket/orders/{order}/status', SmOrderStatusController::class)->whereNumber('order');
 
         Route::get('restaurants/luck-box/options', RestaurantLuckBoxOptionsController::class);
