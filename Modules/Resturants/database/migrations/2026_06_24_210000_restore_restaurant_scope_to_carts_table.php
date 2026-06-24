@@ -24,23 +24,20 @@ return new class extends Migration
         $this->dropUserOnlyUniqueIndexIfPresent();
         $this->splitExistingCartsByRestaurant();
         $this->deleteEmptyOrUnscopedCarts();
-
-        Schema::table('carts', function (Blueprint $table): void {
-            $table->unique(['user_id', 'restaurant_id'], 'carts_user_restaurant_unique');
-        });
+        $this->createUserRestaurantUniqueIndexIfMissing();
     }
 
     public function down(): void
     {
-        Schema::table('carts', function (Blueprint $table): void {
-            $table->dropUnique('carts_user_restaurant_unique');
-        });
+        $this->dropIndexIfExists('carts_user_restaurant_unique');
 
         $this->mergeCartsBackToOnePerUser();
 
-        Schema::table('carts', function (Blueprint $table): void {
-            $table->unique('user_id');
-        });
+        if (! $this->indexExists('carts_user_id_unique')) {
+            Schema::table('carts', function (Blueprint $table): void {
+                $table->unique('user_id');
+            });
+        }
 
         if (Schema::hasColumn('carts', 'restaurant_id')) {
             Schema::table('carts', function (Blueprint $table): void {
@@ -52,13 +49,63 @@ return new class extends Migration
 
     private function dropUserOnlyUniqueIndexIfPresent(): void
     {
-        try {
-            Schema::table('carts', function (Blueprint $table): void {
-                $table->dropUnique(['user_id']);
-            });
-        } catch (Throwable) {
-            // Some environments may already have the new merchant-scoped index only.
+        foreach ($this->userOnlyUniqueIndexes() as $indexName) {
+            $this->dropIndexIfExists($indexName);
         }
+    }
+
+    private function createUserRestaurantUniqueIndexIfMissing(): void
+    {
+        if ($this->indexExists('carts_user_restaurant_unique')) {
+            return;
+        }
+
+        Schema::table('carts', function (Blueprint $table): void {
+            $table->unique(['user_id', 'restaurant_id'], 'carts_user_restaurant_unique');
+        });
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function userOnlyUniqueIndexes(): array
+    {
+        $rows = DB::select(<<<'SQL'
+            SELECT index_name, GROUP_CONCAT(column_name ORDER BY seq_in_index) AS columns_list
+            FROM information_schema.statistics
+            WHERE table_schema = DATABASE()
+              AND table_name = 'carts'
+              AND non_unique = 0
+              AND index_name <> 'PRIMARY'
+            GROUP BY index_name
+            HAVING columns_list = 'user_id'
+        SQL);
+
+        return array_map(static fn (object $row): string => (string) $row->index_name, $rows);
+    }
+
+    private function indexExists(string $indexName): bool
+    {
+        $exists = DB::selectOne(<<<'SQL'
+            SELECT 1 AS exists_flag
+            FROM information_schema.statistics
+            WHERE table_schema = DATABASE()
+              AND table_name = 'carts'
+              AND index_name = ?
+            LIMIT 1
+        SQL, [$indexName]);
+
+        return $exists !== null;
+    }
+
+    private function dropIndexIfExists(string $indexName): void
+    {
+        if (! $this->indexExists($indexName)) {
+            return;
+        }
+
+        $safeIndexName = str_replace('`', '``', $indexName);
+        DB::statement("ALTER TABLE `carts` DROP INDEX `{$safeIndexName}`");
     }
 
     private function splitExistingCartsByRestaurant(): void
