@@ -22,36 +22,40 @@ final class UserSupermarketCheckoutPipelineService
      */
     public function preview(
         int $userId,
+        int $cartId,
         string $receiveMode,
         ?string $scheduledAt,
         ?string $couponCode,
         ?string $note,
     ): array {
         $cart = SmCart::query()
+            ->whereKey($cartId)
             ->where('user_id', $userId)
-            ->with(['items.product.store'])
-            ->first();
+            ->whereNotNull('store_id')
+            ->with(['store', 'items.product.store'])
+            ->firstOrFail();
 
-        if (! $cart || $cart->items->isEmpty()) {
+        if ($cart->items->isEmpty()) {
             throw ValidationException::withMessages([
                 'cart' => ['Cart is empty.'],
             ]);
         }
 
+        $this->assertCartItemsBelongToStore($cart);
+
         $subtotal = (float) $cart->items->sum(
             fn ($item): float => (float) ($item->unit_price ?? 0) * (int) $item->quantity
         );
 
-        $storeIds = $cart->items->pluck('product.store_id')->filter()->unique();
-        $storeId = (int) $storeIds->first();
-
+        $storeId = (int) $cart->store_id;
         $discount = $this->computeDiscount($storeId, $couponCode, $subtotal);
 
         $serviceFee = 0.0;
         $total = max(0.0, $subtotal - $discount) + $serviceFee;
-        $store = $cart->items->first()?->product?->store;
+        $store = $cart->store;
 
         return [
+            'cartId' => $cart->id,
             'merchant' => [
                 'id' => $store?->id,
                 'name' => $store?->name,
@@ -74,30 +78,34 @@ final class UserSupermarketCheckoutPipelineService
 
     public function place(
         int $userId,
+        int $cartId,
         string $receiveMode,
         ?string $scheduledAt,
         ?string $couponCode,
         ?string $note,
     ): SmOrder {
-        return DB::transaction(function () use ($userId, $receiveMode, $scheduledAt, $couponCode, $note): SmOrder {
+        return DB::transaction(function () use ($userId, $cartId, $receiveMode, $scheduledAt, $couponCode, $note): SmOrder {
             $cart = SmCart::query()
+                ->whereKey($cartId)
                 ->where('user_id', $userId)
+                ->whereNotNull('store_id')
                 ->with(['items.product.store'])
-                ->first();
+                ->lockForUpdate()
+                ->firstOrFail();
 
-            if (! $cart || $cart->items->isEmpty()) {
+            if ($cart->items->isEmpty()) {
                 throw ValidationException::withMessages([
                     'cart' => ['Cart is empty.'],
                 ]);
             }
 
+            $this->assertCartItemsBelongToStore($cart);
+
             $subtotal = (float) $cart->items->sum(
                 fn ($item): float => (float) ($item->unit_price ?? 0) * (int) $item->quantity
             );
 
-            $storeIds = $cart->items->pluck('product.store_id')->filter()->unique();
-            $storeId = (int) $storeIds->first();
-
+            $storeId = (int) $cart->store_id;
             $coupon = $this->findCoupon($storeId, $couponCode, $subtotal);
 
             $discount = $coupon ? $this->computeDiscount($storeId, $couponCode, $subtotal) : 0.0;
@@ -197,5 +205,18 @@ final class UserSupermarketCheckoutPipelineService
         }
 
         return $coupon;
+    }
+
+    private function assertCartItemsBelongToStore(SmCart $cart): void
+    {
+        $invalidItemExists = $cart->items->contains(
+            fn ($item): bool => (int) $item->product?->store_id !== (int) $cart->store_id
+        );
+
+        if ($invalidItemExists) {
+            throw ValidationException::withMessages([
+                'cart' => ['Cart contains items from another store.'],
+            ]);
+        }
     }
 }
