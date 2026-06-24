@@ -9,19 +9,20 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Modules\Resturants\Enums\OrderStatus;
-use Modules\Resturants\Models\Cart;
-use Modules\Resturants\Models\CartItem;
 use Modules\Resturants\Models\Order;
 use Modules\Resturants\Models\OrderItem;
 use Modules\Resturants\Models\OrderStatusLog;
 use Modules\Supermarket\Enums\SmOrderStatus;
-use Modules\Supermarket\Models\SmCart;
-use Modules\Supermarket\Models\SmCartItem;
 use Modules\Supermarket\Models\SmOrder;
 use Modules\Supermarket\Models\SmOrderStatusLog;
 
 final class UserOrderHubService
 {
+    public function __construct(
+        private readonly UserRestaurantCartService $restaurantCarts,
+        private readonly UserSupermarketCartService $supermarketCarts,
+    ) {}
+
     /**
      * @return array{data: array<int, array<string, mixed>>, meta: array<string, mixed>, links: array<string, mixed>}
      */
@@ -186,37 +187,25 @@ final class UserOrderHubService
 
         if ($section === 'restaurant') {
             /** @var Order $order */
-            $cart = Cart::query()->firstOrCreate([
-                'user_id' => $userId,
-            ]);
-
             $count = 0;
-            foreach ($order->orderItems as $item) {
-                $cartItem = CartItem::query()->create([
-                    'cart_id' => $cart->id,
-                    'product_id' => $item->product_id,
-                    'substitute_product_id' => $item->substitute_product_id,
-                    'quantity' => $item->quantity,
-                    'unit_price' => $item->unit_price,
-                    'total_price' => $item->total_price,
-                    'special_instructions' => $item->special_instructions,
-                ]);
 
-                $modifierRows = DB::table('order_item_modifier')
+            foreach ($order->orderItems as $item) {
+                $modifierIds = DB::table('order_item_modifier')
                     ->where('order_item_id', $item->id)
-                    ->get(['modifier_id', 'price'])
-                    ->map(fn ($row): array => [
-                        'cart_item_id' => $cartItem->id,
-                        'modifier_id' => (int) $row->modifier_id,
-                        'price' => (float) $row->price,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ])
+                    ->pluck('modifier_id')
+                    ->map(fn ($id): int => (int) $id)
+                    ->values()
                     ->all();
 
-                if ($modifierRows !== []) {
-                    DB::table('cart_item_modifier')->insert($modifierRows);
-                }
+                $this->restaurantCarts->addItem(
+                    userId: $userId,
+                    productId: (int) $item->product_id,
+                    quantity: (int) $item->quantity,
+                    modifierIds: $modifierIds,
+                    substituteProductId: $item->substitute_product_id === null ? null : (int) $item->substitute_product_id,
+                    note: $item->special_instructions,
+                    quantityMode: 'increment',
+                );
 
                 $count++;
             }
@@ -225,18 +214,13 @@ final class UserOrderHubService
         }
 
         /** @var SmOrder $order */
-        $cart = SmCart::query()->firstOrCreate([
-            'user_id' => $userId,
-        ]);
-
         $count = 0;
         foreach ($order->items as $item) {
-            SmCartItem::query()->create([
-                'cart_id' => $cart->id,
-                'product_id' => $item->product_id,
-                'quantity' => $item->quantity,
-                'unit_price' => $item->unit_price,
-            ]);
+            $this->supermarketCarts->addItem(
+                userId: $userId,
+                productId: (int) $item->product_id,
+                quantity: (int) $item->quantity,
+            );
             $count++;
         }
 
