@@ -14,13 +14,14 @@ final class UserRestaurantCartItemUpdateController
         private readonly UserRestaurantCartService $carts,
     ) {}
 
-    public function __invoke(UserRestaurantCartItemUpdateRequest $request, int $itemId): JsonResponse
+    public function __invoke(UserRestaurantCartItemUpdateRequest $request, int $cartId, int $itemId): JsonResponse
     {
         $hasNote = $request->has('specialInstructions') || $request->has('note');
 
         return response()->json([
             'data' => $this->carts->updateItem(
                 userId: (int) $request->user()->id,
+                cartId: $cartId,
                 itemId: $itemId,
                 quantity: (int) $request->integer('quantity'),
                 modifierIds: $request->has('modifierIds') ? $request->input('modifierIds', []) : null,
