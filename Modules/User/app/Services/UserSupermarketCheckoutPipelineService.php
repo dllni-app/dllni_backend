@@ -71,7 +71,7 @@ final class UserSupermarketCheckoutPipelineService
                 $discount = (float) $couponSnapshot['discount'];
                 $serviceFee = 0.0;
 
-                $order = SmOrder::query()->create([
+                $order = SmOrder::unguarded(fn (): SmOrder => SmOrder::query()->create([
                     'customer_id' => $userId,
                     'store_id' => (int) $storeId,
                     'coupon_id' => $coupon?->id,
@@ -88,7 +88,7 @@ final class UserSupermarketCheckoutPipelineService
                     'service_fee' => $serviceFee,
                     'total_amount' => max(0.0, $subtotal - $discount) + $serviceFee,
                     'special_instructions' => $note,
-                ]);
+                ]));
 
                 foreach ($items as $item) {
                     SmOrderItem::query()->create([
@@ -132,10 +132,7 @@ final class UserSupermarketCheckoutPipelineService
 
     private function loadCart(int $userId): SmCart
     {
-        $cart = SmCart::query()
-            ->where('user_id', $userId)
-            ->with(['items.product.store'])
-            ->first();
+        $cart = SmCart::query()->where('user_id', $userId)->with(['items.product.store'])->first();
 
         if (! $cart || $cart->items->isEmpty()) {
             throw ValidationException::withMessages(['cart' => ['Cart is empty.']]);
