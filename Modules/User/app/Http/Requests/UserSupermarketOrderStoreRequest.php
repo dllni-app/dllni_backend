@@ -22,6 +22,9 @@ final class UserSupermarketOrderStoreRequest extends FormRequest
             'scheduledAt' => ['nullable', 'date', 'after:now'],
             'addressId' => ['sometimes', 'nullable', 'integer', 'exists:user_addresses,id'],
             'couponCode' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'merchantCoupons' => ['sometimes', 'array', 'max:100'],
+            'merchantCoupons.*.merchantId' => ['required_with:merchantCoupons', 'integer', 'exists:sm_stores,id'],
+            'merchantCoupons.*.couponCode' => ['required_with:merchantCoupons', 'string', 'max:50'],
             'note' => ['sometimes', 'nullable', 'string', 'max:1000'],
         ];
     }
