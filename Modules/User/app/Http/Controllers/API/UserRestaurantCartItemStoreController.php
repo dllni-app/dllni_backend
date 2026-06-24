@@ -29,10 +29,12 @@ final class UserRestaurantCartItemStoreController
         return response()->json([
             'message' => $result['message'],
             'cartId' => $result['cartId'],
+            'merchantId' => $result['merchantId'],
             'itemId' => $result['itemId'],
             'quantity' => $result['quantity'],
             'cartProductsCount' => $result['cartProductsCount'],
             'operation' => $result['operation'],
+            'data' => $result['cart'],
         ], $result['operation'] === 'created' ? 201 : 200);
     }
 }
