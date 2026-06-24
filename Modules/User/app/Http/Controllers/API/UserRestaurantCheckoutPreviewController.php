@@ -14,11 +14,12 @@ final class UserRestaurantCheckoutPreviewController
         private readonly UserRestaurantCheckoutPipelineService $checkout,
     ) {}
 
-    public function __invoke(UserRestaurantCheckoutPreviewRequest $request): JsonResponse
+    public function __invoke(UserRestaurantCheckoutPreviewRequest $request, int $cartId): JsonResponse
     {
         return response()->json([
             'data' => $this->checkout->preview(
                 userId: (int) $request->user()->id,
+                cartId: $cartId,
                 fulfillmentType: (string) $request->string('fulfillmentType'),
                 receiveMode: (string) $request->string('receiveMode'),
                 scheduledAt: $request->input('scheduledAt'),
