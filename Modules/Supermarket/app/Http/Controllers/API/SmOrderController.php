@@ -25,9 +25,10 @@ final class SmOrderController
     {
         $orders = SmOrder::getQuery()
             ->where('store_id', $request->integer('store_id'))
+            ->with(['items.product'])
             ->paginate($request->get('perPage', 20));
 
-        return SmOrderResource::collection($orders->load(['items']));
+        return SmOrderResource::collection($orders);
     }
 
     public function hourlyCount(Request $request): JsonResponse
@@ -41,7 +42,7 @@ final class SmOrderController
     {
         $order = $this->service->store(SmOrderData::from($request->validated()));
 
-        return SmOrderResource::make($order->load(['customer', 'store', 'coupon', 'items', 'statusLogs', 'disputes']));
+        return SmOrderResource::make($order->load(['customer', 'store', 'coupon', 'items.product', 'statusLogs', 'disputes']));
     }
 
     public function show(SmOrder $smOrder): SmOrderResource
@@ -53,7 +54,7 @@ final class SmOrderController
     {
         $order = $this->service->update(SmOrderData::from($request->validated()), $smOrder);
 
-        return SmOrderResource::make($order->load(['customer', 'store', 'coupon', 'items', 'statusLogs', 'disputes']));
+        return SmOrderResource::make($order->load(['customer', 'store', 'coupon', 'items.product', 'statusLogs', 'disputes']));
     }
 
     public function destroy(SmOrder $smOrder): Response
