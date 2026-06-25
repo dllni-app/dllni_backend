@@ -15,6 +15,7 @@ final class WorkerOrderSolvencyService
 {
     public const REASON_ELIGIBLE = 'eligible';
     public const REASON_INSUFFICIENT_COMMISSION_CAPACITY = 'insufficient_commission_capacity';
+    public const REASON_COMMISSION_UNAVAILABLE = 'commission_unavailable';
 
     public function __construct(
         private readonly CleaningPricingCalculator $pricingCalculator,
@@ -25,11 +26,28 @@ final class WorkerOrderSolvencyService
     {
         $worker->loadMissing('deposit');
         $capacity = $this->workerCapacitySummary($worker, (int) $booking->id);
-        $requiredCommission = $this->requiredCommissionForBookingAndWorker($booking, $worker);
-        $canReceive = $worker->is_active
+        $requiredCommission = 0.0;
+        $reasonCode = self::REASON_ELIGIBLE;
+        $message = 'Worker can cover this booking platform commission.';
+
+        try {
+            $requiredCommission = $this->requiredCommissionForBookingAndWorker($booking, $worker, $roomIds);
+        } catch (\Throwable $exception) {
+            report($exception);
+            $reasonCode = self::REASON_COMMISSION_UNAVAILABLE;
+            $message = 'Platform commission cannot be calculated for this worker and booking.';
+        }
+
+        $canReceive = $reasonCode === self::REASON_ELIGIBLE
+            && $worker->is_active
             && ! $worker->is_suspended
             && $this->depositService->isWorkerEligibleForDispatch($worker)
             && $capacity['availableCommissionCapacity'] >= $requiredCommission;
+
+        if (! $canReceive && $reasonCode === self::REASON_ELIGIBLE) {
+            $reasonCode = self::REASON_INSUFFICIENT_COMMISSION_CAPACITY;
+            $message = 'Worker balance and allowed negative limit do not cover this booking platform commission.';
+        }
 
         return array_merge($capacity, [
             'workerId' => (int) $worker->id,
@@ -37,19 +55,14 @@ final class WorkerOrderSolvencyService
             'requiredPlatformCommission' => round($requiredCommission, 2),
             'canReceiveOrder' => $canReceive,
             'canAcceptBooking' => $canReceive,
-            'reasonCode' => $canReceive ? self::REASON_ELIGIBLE : self::REASON_INSUFFICIENT_COMMISSION_CAPACITY,
+            'reasonCode' => $canReceive ? self::REASON_ELIGIBLE : $reasonCode,
+            'message' => $message,
         ]);
     }
 
     public function canWorkerReceiveBooking(Worker $worker, CleaningBooking $booking): bool
     {
-        try {
-            return (bool) $this->solvencyPayloadForBooking($worker, $booking)['canReceiveOrder'];
-        } catch (\Throwable $exception) {
-            report($exception);
-
-            return false;
-        }
+        return (bool) $this->solvencyPayloadForBooking($worker, $booking)['canReceiveOrder'];
     }
 
     public function assertWorkerCanAcceptBooking(Worker $worker, CleaningBooking $booking, ?array $roomIds = null): void
@@ -59,7 +72,7 @@ final class WorkerOrderSolvencyService
         $payload = $this->solvencyPayloadForBooking($worker->fresh(['deposit']) ?? $worker, $booking, $roomIds);
 
         if (! (bool) $payload['canAcceptBooking']) {
-            throw new InvalidArgumentException('Worker balance and allowed negative limit do not cover this booking platform commission.');
+            throw new InvalidArgumentException((string) ($payload['message'] ?? 'Worker cannot accept this booking.'));
         }
     }
 
