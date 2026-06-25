@@ -30,8 +30,7 @@ final class CleaningPriceAdjustmentRequestsTable
                     ->sortable(),
                 TextColumn::make('booking.booking_number')
                     ->label('رقم الحجز')
-                    ->searchable()
-                    ->sortable(),
+                    ->searchable(),
                 TextColumn::make('booking.customer.name')
                     ->label('العميل')
                     ->searchable()
@@ -99,12 +98,6 @@ final class CleaningPriceAdjustmentRequestsTable
                     ->label('حالة طلب التعديل')
                     ->options(collect(CleaningPriceAdjustmentRequestStatus::cases())->mapWithKeys(
                         fn (CleaningPriceAdjustmentRequestStatus $status): array => [$status->value => $status->label()]
-                    )->all()),
-                SelectFilter::make('booking_status')
-                    ->label('حالة الحجز')
-                    ->relationship('booking', 'status')
-                    ->options(collect(CleaningBookingStatus::cases())->mapWithKeys(
-                        fn (CleaningBookingStatus $status): array => [$status->value => $status->label()]
                     )->all()),
                 Filter::make('pending')
                     ->label('بانتظار المراجعة')
