@@ -63,3 +63,44 @@ it('preserves items from multiple stores in the same supermarket cart and expose
         'quantity' => 2,
     ]);
 });
+
+it('increments quantity when the same supermarket product is added again', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $store = SmStoreFactory::new()->create();
+    $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+    $product = SmProductFactory::new()->create([
+        'store_id' => $store->id,
+        'category_id' => $category->id,
+        'is_available' => true,
+        'price' => 10,
+    ]);
+
+    $firstAddResponse = $this->postJson('/api/v1/user/supermarket/cart/items', [
+        'productId' => $product->id,
+        'quantity' => 1,
+    ])->assertCreated();
+
+    $cartId = (int) $firstAddResponse->json('data.id');
+
+    $secondAddResponse = $this->postJson('/api/v1/user/supermarket/cart/items', [
+        'productId' => $product->id,
+        'quantity' => 2,
+    ])->assertCreated();
+
+    expect($secondAddResponse->json('data.id'))->toBe($cartId);
+    expect($secondAddResponse->json('data.items'))->toHaveCount(1);
+    expect($secondAddResponse->json('data.items.0.quantity'))->toBe(3);
+    expect($secondAddResponse->json('data.productsCount'))->toBe(3);
+    expect($secondAddResponse->json('data.isMultiMerchant'))->toBeFalse();
+    expect($secondAddResponse->json('data.checkout.canPlaceOrder'))->toBeTrue();
+
+    $this->assertDatabaseCount('sm_carts', 1);
+    $this->assertDatabaseCount('sm_cart_items', 1);
+    $this->assertDatabaseHas('sm_cart_items', [
+        'cart_id' => $cartId,
+        'product_id' => $product->id,
+        'quantity' => 3,
+    ]);
+});
