@@ -8,7 +8,10 @@ use Database\Factories\SmOrderFactory;
 use Database\Factories\SmOrderItemFactory;
 use Database\Factories\SmProductFactory;
 use Database\Factories\SmStoreFactory;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
+use Modules\Supermarket\Enums\SmOrderStatus;
 
 beforeEach(function (): void {
     $this->owner = User::factory()->create([
@@ -76,6 +79,42 @@ it('returns item stock availability on listed orders', function (): void {
         ->assertJsonPath('data.0.items.0.isAvailableInStock', true)
         ->assertJsonPath('data.0.items.1.isAvailableInStock', false)
         ->assertJsonPath('data.0.items.2.isAvailableInStock', false);
+});
+
+it('returns order details timing data on show response', function (): void {
+    Carbon::setTestNow(Carbon::parse('2026-06-23 14:45:00', 'UTC'));
+
+    $order = SmOrderFactory::new()->create([
+        'store_id' => $this->store->id,
+        'status' => SmOrderStatus::PickedUp->value,
+        'pickup_scheduled_for' => Carbon::parse('2026-06-23 15:00:00', 'UTC'),
+        'customer_pickup_confirmed_at' => Carbon::parse('2026-06-23 14:45:00', 'UTC'),
+    ]);
+
+    DB::table('sm_order_status_logs')->insert([
+        'order_id' => $order->id,
+        'from_status' => SmOrderStatus::ReadyForPickup->value,
+        'to_status' => SmOrderStatus::PickedUp->value,
+        'notes' => null,
+        'changed_by_user_id' => $this->owner->id,
+        'created_at' => Carbon::parse('2026-06-23 14:30:00', 'UTC'),
+        'updated_at' => Carbon::parse('2026-06-23 14:30:00', 'UTC'),
+    ]);
+
+    $response = $this->getJson("/api/v1/sm-orders/{$order->id}");
+
+    $response->assertOk()
+        ->assertJsonPath('data.order_details.current_status', 'out_for_delivery')
+        ->assertJsonPath('data.order_details.current_status_label', 'قيد التسليم')
+        ->assertJsonPath('data.order_details.status_elapsed_minutes', 15)
+        ->assertJsonPath('data.order_details.status_elapsed_text', '15 دقيقة')
+        ->assertJsonPath('data.order_details.expected_delivery_time', '3:00 م')
+        ->assertJsonPath('data.order_details.delivered_time', '2:45 م')
+        ->assertJsonPath('data.order_details.delivery_duration_minutes', 15)
+        ->assertJsonPath('data.order_details.delivery_duration_text', '15 دقيقة')
+        ->assertJsonPath('data.orderDetails.current_status', 'out_for_delivery');
+
+    Carbon::setTestNow();
 });
 
 it('creates an order', function (): void {
