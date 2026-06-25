@@ -88,30 +88,18 @@ final class RestaurantOwnerNotificationService
         }
     }
 
-    public function markAllAsRead(User $owner, Restaurant $restaurant, string $tab = 'all'): void
+    public function markAllAsRead(User $owner, Restaurant $restaurant): void
     {
-        $notifications = $this->ownerUserNotifications($owner)
-            ->filter(fn (DatabaseNotification $notification): bool => $tab === 'all' || $this->resolveCategory($notification->data) === $tab);
+        $owner->unreadNotifications->markAsRead();
 
-        foreach ($notifications as $notification) {
-            if (! $notification->read_at) {
-                $notification->markAsRead();
-            }
-        }
-
-        $alertsQuery = SystemAlert::query()
+        SystemAlert::query()
             ->where('status', SystemAlertStatus::New)
             ->where('booking_type', Order::class)
             ->whereIn(
                 'booking_id',
                 Order::query()->where('restaurant_id', $restaurant->id)->select('id')
-            );
-
-        if ($tab !== 'all' && $tab !== 'system') {
-            return;
-        }
-
-        $alertsQuery->update(['status' => SystemAlertStatus::Acknowledged->value]);
+            )
+            ->update(['status' => SystemAlertStatus::Acknowledged->value]);
     }
 
     /** @return EloquentCollection<int, DatabaseNotification> */
