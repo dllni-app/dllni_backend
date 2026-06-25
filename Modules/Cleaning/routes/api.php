@@ -95,7 +95,7 @@ Route::prefix('v1')->group(function () {
         Route::post('cleaning-bookings/{cleaning_booking}/arrive', [CleaningBookingController::class, 'arrive'])->name('cleaning-bookings.arrive');
         Route::post('cleaning-bookings/{cleaning_booking}/start-work', [CleaningBookingController::class, 'startWork'])->name('cleaning-bookings.start-work');
         Route::post('cleaning-bookings/{cleaning_booking}/complete', [CleaningBookingController::class, 'complete'])->name('cleaning-bookings.complete');
-        Route::post('cleaning-bookings/{cleaning_booking}/finish', [CleaningBookingController::class, 'finish'])->name('cleaning-bookings.finish');
+        Route::post('cleaning-bookings/{cleaning_booking}/finish', [CleaningBookingDeliveryFeeController::class, 'finish'])->name('cleaning-bookings.finish');
         Route::post('cleaning-bookings/{cleaning_booking}/cancel', [CleaningBookingController::class, 'cancel'])->name('cleaning-bookings.cancel');
         Route::apiResource('cleaning-bookings', CleaningBookingController::class);
         Route::apiResource('event-bookings', EventBookingController::class);
