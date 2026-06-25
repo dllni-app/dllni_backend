@@ -16,6 +16,9 @@ enum AlertType: string
 
     public function label(): string
     {
-        return __('cleaning_admin.enums.alert_type.'.$this->value);
+        return match ($this) {
+            self::PriceAdjustmentRequested => 'Price adjustment requested',
+            default => __('cleaning_admin.enums.alert_type.'.$this->value),
+        };
     }
 }
