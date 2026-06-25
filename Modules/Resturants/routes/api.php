@@ -36,6 +36,7 @@ use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerNotif
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerOffersController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerOffersIndexController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerOfferSummaryController;
+use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerOrderIndexController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerOrderItemDestroyController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerOrderItemStoreController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerOrderItemUpdateController;
@@ -115,6 +116,7 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
         Route::get('dashboard/top-selling-products', RestaurantOwnerTopSellingProductsController::class);
         Route::apiResource('restaurant-roles', RestaurantRoleController::class);
 
+        Route::get('orders', RestaurantOwnerOrderIndexController::class);
         Route::get('orders/{order}', RestaurantOwnerOrderShowController::class);
         Route::post('orders/{order}/items', RestaurantOwnerOrderItemStoreController::class);
         Route::patch('orders/{order}/items/{item}', RestaurantOwnerOrderItemUpdateController::class);
