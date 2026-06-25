@@ -19,6 +19,10 @@ enum CleaningBookingStatus: string
 
     public function label(): string
     {
+        if ($this === self::UnderDispute) {
+            return 'قيد النزاع';
+        }
+
         return __('cleaning_admin.enums.cleaning_booking_status.'.$this->value);
     }
 }
