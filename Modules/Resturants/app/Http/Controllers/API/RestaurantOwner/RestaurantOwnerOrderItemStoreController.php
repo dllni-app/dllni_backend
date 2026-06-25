@@ -49,7 +49,8 @@ final class RestaurantOwnerOrderItemStoreController
         );
 
         $updatedOrder->load([
-            'user',
+            'user.addresses',
+            'userAddress',
             'restaurant',
             'orderItems.product',
             'orderStatusLogs',
