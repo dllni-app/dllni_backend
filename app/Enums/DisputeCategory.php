@@ -10,6 +10,9 @@ enum DisputeCategory: string
     case PropertyDamage = 'property_damage';
     case Unprofessional = 'unprofessional';
     case BillingIssue = 'billing_issue';
+    case CustomerTermsViolation = 'customer_terms_violation';
+    case FinancialOrVerbalDispute = 'financial_or_verbal_dispute';
+    case ForceMajeure = 'force_majeure';
     case Other = 'other';
 
     public function label(): string
