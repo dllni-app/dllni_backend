@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Modules\Cleaning\Enums\CleaningPriceAdjustmentRequestStatus;
 
 final class CleaningBookingPriceAdjustmentRequest extends Model
 {
@@ -20,4 +21,15 @@ final class CleaningBookingPriceAdjustmentRequest extends Model
         'reviewed_by',
         'reviewed_at',
     ];
+
+    public function casts(): array
+    {
+        return [
+            'status' => CleaningPriceAdjustmentRequestStatus::class,
+            'old_total_price' => 'decimal:2',
+            'proposed_total_price' => 'decimal:2',
+            'admin_final_total_price' => 'decimal:2',
+            'reviewed_at' => 'datetime',
+        ];
+    }
 }
