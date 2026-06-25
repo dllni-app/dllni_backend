@@ -12,6 +12,7 @@ enum AlertType: string
     case TimeExpired = 'time_expired';
     case OverdueCompletion = 'overdue_completion';
     case AnomalyDetected = 'anomaly_detected';
+    case PriceAdjustmentRequested = 'price_adjustment_requested';
 
     public function label(): string
     {
