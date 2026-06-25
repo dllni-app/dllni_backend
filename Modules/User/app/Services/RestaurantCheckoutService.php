@@ -29,8 +29,9 @@ final class RestaurantCheckoutService
         ?string $pickupScheduledFor = null,
         ?string $promoCode = null,
         ?string $specialInstructions = null,
+        ?int $userAddressId = null,
     ): Order {
-        return DB::transaction(function () use ($userId, $cartId, $orderType, $pickupMode, $pickupScheduledFor, $promoCode, $specialInstructions): Order {
+        return DB::transaction(function () use ($userId, $cartId, $orderType, $pickupMode, $pickupScheduledFor, $promoCode, $specialInstructions, $userAddressId): Order {
             $cart = Cart::query()
                 ->whereKey($cartId)
                 ->where('user_id', $userId)
@@ -62,6 +63,7 @@ final class RestaurantCheckoutService
 
             $order = Order::create([
                 'user_id' => $userId,
+                'user_address_id' => $userAddressId,
                 'restaurant_id' => $restaurantId,
                 'promo_code_id' => $promoCodeId,
                 'order_number' => 'ORD-'.mb_strtoupper(Str::random(8)).'-'.random_int(1000, 9999),
