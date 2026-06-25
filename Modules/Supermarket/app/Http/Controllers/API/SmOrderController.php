@@ -25,7 +25,7 @@ final class SmOrderController
     {
         $orders = SmOrder::getQuery()
             ->where('store_id', $request->integer('store_id'))
-            ->with(['items.product'])
+            ->with(['items.product', 'statusLogs'])
             ->paginate($request->get('perPage', 20));
 
         return SmOrderResource::collection($orders);
