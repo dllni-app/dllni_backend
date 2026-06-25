@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Observers;
 
+use App\Jobs\ConvertPreferredCleaningBookingToOpenJob;
 use App\Jobs\NotifyEligibleWorkersNewOrderJob;
-use App\Models\User;
 use App\Models\BookingStatusLog;
+use App\Models\User;
 use App\Models\Worker;
 use App\Notifications\Cleaning\BookingLifecycleNotification;
 use BackedEnum;
+use Modules\Cleaning\Enums\CleaningAssignmentMode;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
@@ -29,11 +31,11 @@ final class CleaningBookingObserver
 
         if ($booking->status !== CleaningBookingStatus::Pending) {
             $this->notifyLifecycleCreated($booking);
-
             return;
         }
 
         NotifyEligibleWorkersNewOrderJob::dispatch($booking->id)->afterCommit();
+        $this->dispatchPreferredWorkerFallbackIfNeeded($booking);
         $this->notifyLifecycleCreated($booking);
     }
 
@@ -70,63 +72,56 @@ final class CleaningBookingObserver
         $this->notifyLifecycleUpdated($booking, $fromStatusValue);
     }
 
-    /**
-     * Charge the admin commission as a deposit liability for every worker who
-     * completed this booking. Uses the precomputed admin margin per accepted
-     * assignment, falling back to the legacy single-worker booking margin.
-     * Idempotent per (worker, booking) via DepositService guards.
-     */
     private function chargeAdminCommission(CleaningBooking $booking): void
     {
         try {
             $depositService = app(DepositService::class);
-
-            $assignments = $booking->acceptedWorkerAssignments()
-                ->with('worker.deposit')
-                ->get();
+            $assignments = $booking->acceptedWorkerAssignments()->with('worker.deposit')->get();
 
             if ($assignments->isNotEmpty()) {
                 $assignments->each(function (CleaningBookingWorkerAssignment $assignment) use ($depositService, $booking): void {
                     $worker = $assignment->worker;
                     $amount = (float) ($assignment->admin_margin_amount ?? 0);
-
                     if ($worker instanceof Worker && $amount > 0) {
                         $depositService->recordAdminFeeDebit($worker, $booking, $amount);
                     }
                 });
-
                 return;
             }
 
-            // Legacy single-worker booking without team assignments.
             $worker = $booking->worker;
             $amount = (float) ($booking->admin_margin_amount ?? 0);
-
             if ($worker instanceof Worker && $amount > 0) {
                 $depositService->recordAdminFeeDebit($worker, $booking, $amount);
             }
         } catch (Throwable $exception) {
-            // Never block the booking lifecycle on a commission-charge failure.
             report($exception);
         }
     }
 
+    private function dispatchPreferredWorkerFallbackIfNeeded(CleaningBooking $booking): void
+    {
+        if ($booking->resolvedAssignmentMode() !== CleaningAssignmentMode::PreferredWorker->value || $booking->preferred_worker_id === null) {
+            return;
+        }
+
+        $timeoutMinutes = max(1, (int) config('cleaning.preferred_worker_response_timeout_minutes', 20));
+        $fallbackRatio = max(0.1, min(1.0, (float) config('cleaning.preferred_worker_fallback_after_ratio', 0.5)));
+        $fallbackDelayMinutes = max(1, (int) ceil($timeoutMinutes * $fallbackRatio));
+
+        ConvertPreferredCleaningBookingToOpenJob::dispatch($booking->id)
+            ->delay(now()->addMinutes($fallbackDelayMinutes))
+            ->afterCommit();
+    }
+
     private function notifyLifecycleCreated(CleaningBooking $booking): void
     {
-        $this->notifyBothParties(
-            booking: $booking,
-            canonicalType: 'cleaning.booking.created',
-            fromStatus: null,
-        );
+        $this->notifyBothParties($booking, 'cleaning.booking.created', null);
     }
 
     private function notifyLifecycleUpdated(CleaningBooking $booking, ?string $fromStatus): void
     {
-        $this->notifyBothParties(
-            booking: $booking,
-            canonicalType: 'cleaning.booking.updated',
-            fromStatus: $fromStatus,
-        );
+        $this->notifyBothParties($booking, 'cleaning.booking.updated', $fromStatus);
     }
 
     private function notifyBothParties(CleaningBooking $booking, string $canonicalType, ?string $fromStatus): void
@@ -135,23 +130,11 @@ final class CleaningBookingObserver
         $workerUser = $booking->worker?->user;
 
         if ($customer instanceof User) {
-            $customer->notify(new BookingLifecycleNotification(
-                booking: $booking,
-                canonicalType: $canonicalType,
-                actorRole: 'worker',
-                targetRole: 'customer',
-                fromStatus: $fromStatus,
-            ));
+            $customer->notify(new BookingLifecycleNotification($booking, $canonicalType, 'worker', 'customer', $fromStatus));
         }
 
         if ($workerUser instanceof User) {
-            $workerUser->notify(new BookingLifecycleNotification(
-                booking: $booking,
-                canonicalType: $canonicalType,
-                actorRole: 'customer',
-                targetRole: 'worker',
-                fromStatus: $fromStatus,
-            ));
+            $workerUser->notify(new BookingLifecycleNotification($booking, $canonicalType, 'customer', 'worker', $fromStatus));
         }
     }
 }
