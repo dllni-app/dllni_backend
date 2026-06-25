@@ -113,11 +113,12 @@ final class CleaningBookingFinishService
             SystemAlert::query()->create([
                 'booking_id' => $booking->id,
                 'booking_type' => $booking->getMorphClass(),
-                'alert_type' => AlertType::CleaningBookingDispute->value,
+                'alert_type' => AlertType::AnomalyDetected->value,
                 'severity' => AlertSeverity::Critical->value,
                 'status' => SystemAlertStatus::New->value,
                 'payload' => [
                     'source' => 'cleaning_worker_finish_dispute',
+                    'alert_type' => 'cleaning_booking_dispute',
                     'dispute_id' => $dispute->id,
                     'worker_id' => $worker->id,
                     'user_id' => Auth::id(),
