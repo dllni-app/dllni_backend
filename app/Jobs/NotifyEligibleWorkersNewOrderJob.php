@@ -18,6 +18,7 @@ use Modules\Cleaning\Enums\CleaningAssignmentMode;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Services\DepositService;
+use Modules\Cleaning\Services\WorkerOrderSolvencyService;
 
 final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
 {
@@ -40,6 +41,7 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
         }
 
         $depositService = app(DepositService::class);
+        $solvencyService = app(WorkerOrderSolvencyService::class);
 
         $bookingDateTime = $this->bookingDateTime($booking);
         $assignmentMode = $booking->resolvedAssignmentMode();
@@ -85,12 +87,26 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
                 })
                 ->whereNotIn('id', $rejectedWorkerIds)
                 ->coversNeighborhood((int) $booking->neighborhood_id)
-                ->with('user')
+                ->with(['user', 'deposit'])
                 ->first();
 
-            if ($worker?->user && $this->isWorkerAvailable($worker, $bookingDateTime) && $depositService->isWorkerEligibleForDispatch($worker)) {
-                $worker->user->notify(new NewOrderRequestNotification($booking));
+            if (! $worker?->user || ! $this->isWorkerAvailable($worker, $bookingDateTime) || ! $depositService->isWorkerEligibleForDispatch($worker)) {
+                return;
             }
+
+            $solvency = $solvencyService->solvencyPayloadForBooking($worker, $booking);
+            if ((bool) $solvency['canReceiveOrder']) {
+                $worker->user->notify(new NewOrderRequestNotification($booking));
+
+                return;
+            }
+
+            $this->createDispatchAlert(
+                $booking,
+                'preferred_worker_insufficient_commission_capacity',
+                'Preferred worker cannot cover the platform commission for this booking.',
+                ['preferredWorkerId' => (int) $booking->preferred_worker_id, 'solvency' => $solvency],
+            );
 
             return;
         }
@@ -107,7 +123,7 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
             )
             ->whereNotIn('id', array_values(array_unique(array_merge($rejectedWorkerIds, $acceptedWorkerIds))))
             ->coversNeighborhood((int) $booking->neighborhood_id)
-            ->with('user')
+            ->with(['user', 'deposit'])
             ->limit(50)
             ->get();
 
@@ -121,10 +137,37 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
             return;
         }
 
+        $notifiedCount = 0;
+        $financiallyBlockedCount = 0;
+        $lastBlockedPayload = null;
+
         foreach ($workers as $worker) {
-            if ($worker->user && $this->isWorkerAvailable($worker, $bookingDateTime) && $depositService->isWorkerEligibleForDispatch($worker)) {
-                $worker->user->notify(new NewOrderRequestNotification($booking));
+            if (! $worker->user || ! $this->isWorkerAvailable($worker, $bookingDateTime) || ! $depositService->isWorkerEligibleForDispatch($worker)) {
+                continue;
             }
+
+            $solvency = $solvencyService->solvencyPayloadForBooking($worker, $booking);
+            if (! (bool) $solvency['canReceiveOrder']) {
+                $financiallyBlockedCount++;
+                $lastBlockedPayload = $solvency;
+
+                continue;
+            }
+
+            $worker->user->notify(new NewOrderRequestNotification($booking));
+            $notifiedCount++;
+        }
+
+        if ($notifiedCount === 0 && $financiallyBlockedCount > 0) {
+            $this->createDispatchAlert(
+                $booking,
+                'no_financially_solvent_workers',
+                'No eligible worker has enough balance or allowed negative limit to cover the booking platform commission.',
+                [
+                    'financiallyBlockedWorkersCount' => $financiallyBlockedCount,
+                    'lastBlockedSolvencyPayload' => $lastBlockedPayload,
+                ],
+            );
         }
     }
 
