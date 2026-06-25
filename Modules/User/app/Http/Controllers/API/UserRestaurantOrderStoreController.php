@@ -25,6 +25,7 @@ final class UserRestaurantOrderStoreController
             scheduledAt: $request->input('scheduledAt'),
             couponCode: $request->input('couponCode'),
             note: $request->input('note'),
+            addressId: $request->integer('addressId') ?: null,
         );
 
         return response()->json([

@@ -17,6 +17,7 @@ use Modules\Resturants\Enums\OrderType;
 use Modules\Resturants\Enums\RestaurantPickupMode;
 use Modules\Resturants\Models\RestaurantGroupOrder;
 use Modules\Resturants\Traits\FilterQueries\OrderFilterQuery;
+use Modules\User\Models\UserAddress;
 
 final class Order extends Model
 {
@@ -25,6 +26,7 @@ final class Order extends Model
 
     protected $fillable = [
         'user_id',
+        'user_address_id',
         'restaurant_id',
         'promo_code_id',
         'assigned_staff_id',
@@ -63,6 +65,11 @@ final class Order extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function userAddress(): BelongsTo
+    {
+        return $this->belongsTo(UserAddress::class, 'user_address_id');
     }
 
     public function restaurant(): BelongsTo
