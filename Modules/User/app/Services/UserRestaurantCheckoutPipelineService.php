@@ -11,6 +11,7 @@ use Modules\Resturants\Models\Cart;
 use Modules\Resturants\Models\Order;
 use Modules\Resturants\Models\OrderStatusLog;
 use Modules\Resturants\Models\PromoCode;
+use Modules\User\Models\UserAddress;
 
 final class UserRestaurantCheckoutPipelineService
 {
@@ -29,6 +30,7 @@ final class UserRestaurantCheckoutPipelineService
         ?string $scheduledAt,
         ?string $couponCode,
         ?string $note,
+        ?int $addressId = null,
     ): array {
         $cart = Cart::query()
             ->whereKey($cartId)
@@ -44,6 +46,7 @@ final class UserRestaurantCheckoutPipelineService
         }
 
         $this->assertCartItemsBelongToRestaurant($cart);
+        $address = $this->resolveUserAddress($userId, $addressId);
 
         $subtotal = (float) $cart->items->sum(fn ($item): float => (float) ($item->total_price ?? 0));
         $discount = $this->computeDiscount((int) $cart->restaurant_id, $couponCode, $subtotal);
@@ -61,6 +64,7 @@ final class UserRestaurantCheckoutPipelineService
                 'type' => $fulfillmentType,
                 'receiveMode' => $receiveMode,
                 'scheduledAt' => $scheduledAt,
+                'address' => $address ? $this->addressPayload($address) : null,
             ],
             'amounts' => [
                 'subtotal' => round($subtotal, 2),
@@ -81,7 +85,9 @@ final class UserRestaurantCheckoutPipelineService
         ?string $scheduledAt,
         ?string $couponCode,
         ?string $note,
+        ?int $addressId = null,
     ): Order {
+        $address = $this->resolveUserAddress($userId, $addressId);
         $order = $this->checkoutService->checkoutCart(
             userId: $userId,
             cartId: $cartId,
@@ -92,6 +98,7 @@ final class UserRestaurantCheckoutPipelineService
             pickupScheduledFor: $scheduledAt,
             promoCode: $couponCode,
             specialInstructions: $note,
+            userAddressId: $address?->id,
         );
 
         OrderStatusLog::query()->firstOrCreate([
@@ -102,7 +109,7 @@ final class UserRestaurantCheckoutPipelineService
             'note' => 'Order placed by customer.',
         ]);
 
-        return $order->fresh(['restaurant', 'orderItems.product', 'orderStatusLogs']);
+        return $order->fresh(['restaurant', 'userAddress', 'orderItems.product', 'orderStatusLogs']);
     }
 
     private function computeDiscount(int $restaurantId, ?string $couponCode, float $subtotal): float
@@ -141,6 +148,46 @@ final class UserRestaurantCheckoutPipelineService
         }
 
         return round(min((float) $coupon->discount_value, $subtotal), 2);
+    }
+
+    private function resolveUserAddress(int $userId, ?int $addressId): ?UserAddress
+    {
+        if ($addressId === null) {
+            return null;
+        }
+
+        $address = UserAddress::query()
+            ->whereKey($addressId)
+            ->where('user_id', $userId)
+            ->first();
+
+        if (! $address) {
+            throw ValidationException::withMessages([
+                'addressId' => ['The selected address does not belong to the authenticated user.'],
+            ]);
+        }
+
+        return $address;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function addressPayload(UserAddress $address): array
+    {
+        return [
+            'id' => $address->id,
+            'label' => $address->label,
+            'mobile' => $address->mobile,
+            'city' => $address->city,
+            'neighborhood' => $address->neighborhood,
+            'street' => $address->street,
+            'building' => $address->building,
+            'floor' => $address->floor,
+            'directions' => $address->directions,
+            'latitude' => $address->latitude !== null ? (float) $address->latitude : null,
+            'longitude' => $address->longitude !== null ? (float) $address->longitude : null,
+        ];
     }
 
     private function assertCartItemsBelongToRestaurant(Cart $cart): void
