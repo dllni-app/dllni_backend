@@ -13,7 +13,6 @@ use Modules\Supermarket\Models\SmProduct;
 final class UserSupermarketCartService
 {
     private const CART_RELATIONS = [
-        'store',
         'items.product.store',
     ];
 
@@ -24,7 +23,6 @@ final class UserSupermarketCartService
     {
         return SmCart::query()
             ->where('user_id', $userId)
-            ->whereNotNull('store_id')
             ->with(self::CART_RELATIONS)
             ->latest()
             ->get()
@@ -42,7 +40,6 @@ final class UserSupermarketCartService
         $cart = SmCart::query()
             ->whereKey($cartId)
             ->where('user_id', $userId)
-            ->whereNotNull('store_id')
             ->with(self::CART_RELATIONS)
             ->firstOrFail();
 
@@ -63,7 +60,13 @@ final class UserSupermarketCartService
                 ]);
             }
 
-            $cart = $this->normalizeCart($this->resolveActiveCart($userId, (int) $product->store_id));
+            if (! $product->is_available) {
+                throw ValidationException::withMessages([
+                    'productId' => ['The selected product is not available.'],
+                ]);
+            }
+
+            $cart = $this->normalizeCart($this->resolveActiveCart($userId));
             $unitPrice = (float) ($product->discounted_price ?? $product->price ?? 0);
 
             $item = SmCartItem::query()
@@ -130,7 +133,7 @@ final class UserSupermarketCartService
                 }
             }
 
-            $cart = $this->normalizeCart($this->resolveActiveCart($userId, $storeId));
+            $cart = $this->normalizeCart($this->resolveActiveCart($userId));
 
             foreach ($mergedQuantities as $productId => $quantity) {
                 $product = $products->get($productId);
@@ -175,8 +178,6 @@ final class UserSupermarketCartService
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $this->assertProductBelongsToCartStore($item->cart, $item->product);
-
             $unitPrice = (float) ($item->product->discounted_price ?? $item->product->price ?? 0);
             $item->update([
                 'quantity' => $quantity,
@@ -216,11 +217,10 @@ final class UserSupermarketCartService
         });
     }
 
-    private function resolveActiveCart(int $userId, int $storeId): SmCart
+    private function resolveActiveCart(int $userId): SmCart
     {
         return SmCart::firstOrCreate([
             'user_id' => $userId,
-            'store_id' => $storeId,
         ]);
     }
 
@@ -234,17 +234,13 @@ final class UserSupermarketCartService
 
             $items = SmCartItem::query()
                 ->where('cart_id', $lockedCart->id)
-                ->with('product')
+                ->with('product.store')
                 ->orderBy('id')
                 ->lockForUpdate()
                 ->get();
 
             if ($items->isEmpty()) {
                 return $lockedCart->fresh(self::CART_RELATIONS) ?? $lockedCart;
-            }
-
-            foreach ($items as $item) {
-                $this->assertProductBelongsToCartStore($lockedCart, $item->product);
             }
 
             foreach ($items->groupBy('product_id') as $productId => $group) {
@@ -267,15 +263,6 @@ final class UserSupermarketCartService
         });
     }
 
-    private function assertProductBelongsToCartStore(SmCart $cart, ?SmProduct $product): void
-    {
-        if (! $product || (int) $product->store_id !== (int) $cart->store_id) {
-            throw ValidationException::withMessages([
-                'cart' => ['Cart items must belong to the same store as the cart.'],
-            ]);
-        }
-    }
-
     /**
      * @return array<string, mixed>
      */
@@ -284,6 +271,12 @@ final class UserSupermarketCartService
         return [
             'id' => null,
             'merchant' => null,
+            'merchantGroups' => [],
+            'isMultiMerchant' => false,
+            'checkout' => [
+                'canPlaceOrder' => false,
+                'blockedReason' => 'empty_cart',
+            ],
             'items' => [],
             'productsCount' => 0,
             'amounts' => [
@@ -298,24 +291,45 @@ final class UserSupermarketCartService
      */
     private function toPayload(SmCart $cart): array
     {
-        $store = $cart->store ?? $cart->items->first()?->product?->store;
+        $items = $cart->items->loadMissing('product.store');
+        $merchantGroups = $items
+            ->groupBy(fn (SmCartItem $item): int => (int) ($item->product?->store_id ?? 0))
+            ->map(function ($group, $storeId): array {
+                $storeId = (int) $storeId;
+                $store = $group->first()?->product?->store;
+                $mappedItems = $group->map(fn (SmCartItem $item): array => $this->itemPayload($item))->values();
+                $subtotal = (float) $mappedItems->sum('totalPrice');
 
-        $mappedItems = $cart->items->map(fn (SmCartItem $item): array => [
-            'id' => $item->id,
-            'productId' => $item->product_id,
-            'name' => $item->product?->name,
-            'quantity' => (int) $item->quantity,
-            'unitPrice' => (float) ($item->unit_price ?? 0),
-            'totalPrice' => round((float) ($item->unit_price ?? 0) * (int) $item->quantity, 2),
-        ])->values();
+                return [
+                    'merchant' => [
+                        'id' => $storeId > 0 ? $storeId : null,
+                        'name' => $store?->name,
+                    ],
+                    'items' => $mappedItems->all(),
+                    'productsCount' => (int) $mappedItems->sum('quantity'),
+                    'amounts' => [
+                        'subtotal' => round($subtotal, 2),
+                        'total' => round($subtotal, 2),
+                    ],
+                ];
+            })
+            ->values();
 
+        $mappedItems = $items->map(fn (SmCartItem $item): array => $this->itemPayload($item))->values();
         $subtotal = (float) $mappedItems->sum('totalPrice');
+        $primaryMerchant = $merchantGroups->first()['merchant'] ?? null;
+        $isMultiMerchant = $merchantGroups->count() > 1;
 
         return [
             'id' => $cart->id,
-            'merchant' => [
-                'id' => $store?->id,
-                'name' => $store?->name,
+            'merchant' => $primaryMerchant,
+            'merchantGroups' => $merchantGroups->all(),
+            'isMultiMerchant' => $isMultiMerchant,
+            'checkout' => [
+                'canPlaceOrder' => $mappedItems->isNotEmpty() && ! $isMultiMerchant,
+                'blockedReason' => $mappedItems->isEmpty()
+                    ? 'empty_cart'
+                    : ($isMultiMerchant ? 'mixed_supermarket_cart' : null),
             ],
             'items' => $mappedItems->all(),
             'productsCount' => (int) $mappedItems->sum('quantity'),
@@ -323,6 +337,22 @@ final class UserSupermarketCartService
                 'subtotal' => round($subtotal, 2),
                 'total' => round($subtotal, 2),
             ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function itemPayload(SmCartItem $item): array
+    {
+        return [
+            'id' => $item->id,
+            'productId' => $item->product_id,
+            'storeId' => $item->product?->store_id,
+            'name' => $item->product?->name,
+            'quantity' => (int) $item->quantity,
+            'unitPrice' => (float) ($item->unit_price ?? 0),
+            'totalPrice' => round((float) ($item->unit_price ?? 0) * (int) $item->quantity, 2),
         ];
     }
 }
