@@ -68,7 +68,7 @@ final class CleaningBookingFinishService
             action: 'worker_finished_successfully',
             actorRole: 'worker',
             fromStatus: $fromStatus,
-            occurredAt: $updated->timer_stopped_at?->toIso8601String() ?? $updated->updated_at?->toIso8601String(),
+            occurredAt: $this->isoDate($updated->timer_stopped_at) ?? $updated->updated_at?->toIso8601String(),
         );
 
         return $updated;
@@ -143,7 +143,7 @@ final class CleaningBookingFinishService
             action: 'worker_opened_dispute',
             actorRole: 'worker',
             fromStatus: $fromStatus,
-            occurredAt: $updated->disputed_at?->toIso8601String() ?? $updated->updated_at?->toIso8601String(),
+            occurredAt: $this->isoDate($updated->disputed_at) ?? $updated->updated_at?->toIso8601String(),
             extraData: [
                 'reasonType' => $reasonType,
                 'reasonLabel' => $reasonLabel,
@@ -235,10 +235,10 @@ final class CleaningBookingFinishService
             'action' => $action,
             'workerId' => $booking->worker_id,
             'isTimerRunning' => false,
-            'timerStoppedAt' => $booking->timer_stopped_at?->toIso8601String(),
+            'timerStoppedAt' => $this->isoDate($booking->timer_stopped_at),
             'workStartedAt' => $booking->work_started_at?->toIso8601String(),
             'workFinishedAt' => $booking->work_finished_at?->toIso8601String(),
-            'disputedAt' => $booking->disputed_at?->toIso8601String(),
+            'disputedAt' => $this->isoDate($booking->disputed_at),
             'requiresRefetch' => true,
             'suspendedMessage' => $status === CleaningBookingStatus::UnderDispute->value
                 ? 'Cleaning booking has been suspended and assigned to admin review.'
@@ -252,6 +252,19 @@ final class CleaningBookingFinishService
             ] : null,
             'updatedAt' => now()->toIso8601String(),
         ]));
+    }
+
+    private function isoDate(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (is_object($value) && method_exists($value, 'toIso8601String')) {
+            return $value->toIso8601String();
+        }
+
+        return (string) $value;
     }
 
     /**
