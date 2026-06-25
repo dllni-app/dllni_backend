@@ -38,7 +38,8 @@ final class RestaurantOwnerOrderItemDestroyController
 
         $updatedOrder = $orderItemService->removeItem($order, $item);
         $updatedOrder->load([
-            'user',
+            'user.addresses',
+            'userAddress',
             'restaurant',
             'orderItems.product',
             'orderStatusLogs',
