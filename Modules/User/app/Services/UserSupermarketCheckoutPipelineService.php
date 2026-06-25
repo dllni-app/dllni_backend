@@ -31,8 +31,7 @@ final class UserSupermarketCheckoutPipelineService
         $cart = SmCart::query()
             ->whereKey($cartId)
             ->where('user_id', $userId)
-            ->whereNotNull('store_id')
-            ->with(['store', 'items.product.store'])
+            ->with(['items.product.store'])
             ->firstOrFail();
 
         if ($cart->items->isEmpty()) {
@@ -41,18 +40,17 @@ final class UserSupermarketCheckoutPipelineService
             ]);
         }
 
-        $this->assertCartItemsBelongToStore($cart);
+        $storeId = $this->resolveSingleStoreId($cart);
 
         $subtotal = (float) $cart->items->sum(
             fn ($item): float => (float) ($item->unit_price ?? 0) * (int) $item->quantity
         );
 
-        $storeId = (int) $cart->store_id;
         $discount = $this->computeDiscount($storeId, $couponCode, $subtotal);
 
         $serviceFee = 0.0;
         $total = max(0.0, $subtotal - $discount) + $serviceFee;
-        $store = $cart->store;
+        $store = $cart->items->first()?->product?->store;
 
         return [
             'cartId' => $cart->id,
@@ -88,7 +86,6 @@ final class UserSupermarketCheckoutPipelineService
             $cart = SmCart::query()
                 ->whereKey($cartId)
                 ->where('user_id', $userId)
-                ->whereNotNull('store_id')
                 ->with(['items.product.store'])
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -99,13 +96,12 @@ final class UserSupermarketCheckoutPipelineService
                 ]);
             }
 
-            $this->assertCartItemsBelongToStore($cart);
+            $storeId = $this->resolveSingleStoreId($cart);
 
             $subtotal = (float) $cart->items->sum(
                 fn ($item): float => (float) ($item->unit_price ?? 0) * (int) $item->quantity
             );
 
-            $storeId = (int) $cart->store_id;
             $coupon = $this->findCoupon($storeId, $couponCode, $subtotal);
 
             $discount = $coupon ? $this->computeDiscount($storeId, $couponCode, $subtotal) : 0.0;
@@ -207,16 +203,26 @@ final class UserSupermarketCheckoutPipelineService
         return $coupon;
     }
 
-    private function assertCartItemsBelongToStore(SmCart $cart): void
+    private function resolveSingleStoreId(SmCart $cart): int
     {
-        $invalidItemExists = $cart->items->contains(
-            fn ($item): bool => (int) $item->product?->store_id !== (int) $cart->store_id
-        );
+        $storeIds = $cart->items
+            ->map(fn ($item): ?int => $item->product?->store_id ? (int) $item->product->store_id : null)
+            ->filter()
+            ->unique()
+            ->values();
 
-        if ($invalidItemExists) {
+        if ($storeIds->isEmpty()) {
             throw ValidationException::withMessages([
-                'cart' => ['Cart contains items from another store.'],
+                'cart' => ['Cart contains products that are not linked to a store.'],
             ]);
         }
+
+        if ($storeIds->count() > 1) {
+            throw ValidationException::withMessages([
+                'cart' => ['Checkout currently requires supermarket cart items to belong to one store.'],
+            ]);
+        }
+
+        return (int) $storeIds->first();
     }
 }
