@@ -45,7 +45,7 @@ final class CleaningBookingFinishController
 
         $resource = CleaningBookingResource::make($booking)->resolve($request);
         $resource['isTimerRunning'] = false;
-        $resource['timerStoppedAt'] = $booking->timer_stopped_at?->toIso8601String();
+        $resource['timerStoppedAt'] = $this->isoDate($booking->timer_stopped_at);
         $resource['canWorkerFinish'] = false;
         $resource['suspendedMessage'] = $status === CleaningBookingStatus::UnderDispute->value ? $message : null;
         $resource['dispute'] = $this->latestDisputePayload($booking);
@@ -79,5 +79,18 @@ final class CleaningBookingFinishController
             'reasonNote' => $dispute->reason_note,
             'openedAt' => $dispute->opened_at?->toIso8601String(),
         ];
+    }
+
+    private function isoDate(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (is_object($value) && method_exists($value, 'toIso8601String')) {
+            return $value->toIso8601String();
+        }
+
+        return (string) $value;
     }
 }
