@@ -13,6 +13,7 @@ enum CleaningBookingStatus: string
     case InProgress = 'in_progress';
     case AwaitingCustomerCompletion = 'awaiting_customer_completion';
     case TimeExtensionRequested = 'time_extension_requested';
+    case UnderDispute = 'under_dispute';
     case Completed = 'completed';
     case Cancelled = 'cancelled';
 
