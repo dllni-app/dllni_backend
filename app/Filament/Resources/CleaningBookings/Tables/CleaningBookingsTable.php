@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningBookings\Tables;
 
+use App\Filament\Resources\CleaningPriceAdjustmentRequests\CleaningPriceAdjustmentRequestResource;
 use App\Models\Worker;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
@@ -22,7 +23,9 @@ use Illuminate\Support\HtmlString;
 use Modules\Cleaning\Enums\CleaningAssignmentMode;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
+use Modules\Cleaning\Enums\CleaningPriceAdjustmentRequestStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingPriceAdjustmentRequest;
 use Modules\Cleaning\Services\CleaningBookingTeamService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
@@ -166,6 +169,12 @@ final class CleaningBookingsTable
                     ->badge()
                     ->color(fn ($state): string => $state ? 'success' : 'warning')
                     ->formatStateUsing(fn ($state): string => $state ? __('cleaning_admin.booking.pricing.final') : __('cleaning_admin.booking.pricing.provisional')),
+                TextColumn::make('price_adjustment_review')
+                    ->label(self::headerLabel('تعديل السعر', 'حالة طلب تعديل السعر المرتبط بالحجز قبل بدء العمل.'))
+                    ->getStateUsing(fn (CleaningBooking $record): string => self::priceAdjustmentState($record))
+                    ->badge()
+                    ->color(fn (CleaningBooking $record): string => self::priceAdjustmentColor($record))
+                    ->toggleable(),
                 TextColumn::make('disputes_count')
                     ->getStateUsing(fn (CleaningBooking $record): int => (int) ($record->disputes_count ?? 0))
                     ->label(self::headerLabel(
@@ -204,6 +213,9 @@ final class CleaningBookingsTable
                 Filter::make('scheduled_today')
                     ->label(__('cleaning_admin.booking.filters.scheduled_today'))
                     ->query(fn (Builder $query): Builder => $query->whereDate('scheduled_date', today())),
+                Filter::make('pending_price_adjustment')
+                    ->label('يوجد طلب تعديل سعر قيد المراجعة')
+                    ->query(fn (Builder $query): Builder => self::whereHasPendingPriceAdjustment($query)),
                 Filter::make('partial_team')
                     ->label(__('cleaning_admin.booking.filters.partial_team'))
                     ->query(fn (Builder $query): Builder => $query
@@ -326,6 +338,14 @@ final class CleaningBookingsTable
                             ->success()
                             ->send();
                     }),
+                Action::make('review_price_adjustment')
+                    ->label('مراجعة تعديل السعر')
+                    ->icon('heroicon-o-currency-dollar')
+                    ->color('warning')
+                    ->visible(fn (CleaningBooking $record): bool => self::pendingPriceAdjustmentRequestId($record) !== null)
+                    ->url(fn (CleaningBooking $record): string => CleaningPriceAdjustmentRequestResource::getUrl('view', [
+                        'record' => self::pendingPriceAdjustmentRequestId($record),
+                    ])),
                 EditAction::make()
                     ->label(__('filament-actions::edit.single.label'))
                     ->visible(fn (CleaningBooking $record): bool => $record->property_type !== UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE),
@@ -501,6 +521,71 @@ final class CleaningBookingsTable
             'admin' => self::money($record->admin_margin_amount),
             'worker' => self::money(self::workerPayoutAmount($record)),
         ]);
+    }
+
+    private static function priceAdjustmentState(CleaningBooking $record): string
+    {
+        $request = self::latestPriceAdjustmentRequest($record);
+
+        if (! $request instanceof CleaningBookingPriceAdjustmentRequest) {
+            return '-';
+        }
+
+        $status = $request->status instanceof CleaningPriceAdjustmentRequestStatus
+            ? $request->status
+            : CleaningPriceAdjustmentRequestStatus::tryFrom((string) $request->status);
+
+        return $status?->label() ?? '-';
+    }
+
+    private static function priceAdjustmentColor(CleaningBooking $record): string
+    {
+        $request = self::latestPriceAdjustmentRequest($record);
+
+        if (! $request instanceof CleaningBookingPriceAdjustmentRequest) {
+            return 'gray';
+        }
+
+        $status = $request->status instanceof CleaningPriceAdjustmentRequestStatus
+            ? $request->status
+            : CleaningPriceAdjustmentRequestStatus::tryFrom((string) $request->status);
+
+        return match ($status) {
+            CleaningPriceAdjustmentRequestStatus::Pending => 'warning',
+            CleaningPriceAdjustmentRequestStatus::Approved => 'success',
+            CleaningPriceAdjustmentRequestStatus::Rejected => 'danger',
+            CleaningPriceAdjustmentRequestStatus::ResolvedWithoutChange => 'info',
+            default => 'gray',
+        };
+    }
+
+    private static function latestPriceAdjustmentRequest(CleaningBooking $record): ?CleaningBookingPriceAdjustmentRequest
+    {
+        return CleaningBookingPriceAdjustmentRequest::query()
+            ->where('cleaning_booking_id', $record->id)
+            ->latest()
+            ->first();
+    }
+
+    private static function pendingPriceAdjustmentRequestId(CleaningBooking $record): ?int
+    {
+        $id = CleaningBookingPriceAdjustmentRequest::query()
+            ->where('cleaning_booking_id', $record->id)
+            ->where('status', CleaningPriceAdjustmentRequestStatus::Pending->value)
+            ->latest()
+            ->value('id');
+
+        return $id !== null ? (int) $id : null;
+    }
+
+    private static function whereHasPendingPriceAdjustment(Builder $query): Builder
+    {
+        return $query->whereExists(function ($subQuery): void {
+            $subQuery->selectRaw('1')
+                ->from('cleaning_booking_price_adjustment_requests')
+                ->whereColumn('cleaning_booking_price_adjustment_requests.cleaning_booking_id', 'cleaning_bookings.id')
+                ->where('cleaning_booking_price_adjustment_requests.status', CleaningPriceAdjustmentRequestStatus::Pending->value);
+        });
     }
 
     private static function activeWorkerOptions(): array
