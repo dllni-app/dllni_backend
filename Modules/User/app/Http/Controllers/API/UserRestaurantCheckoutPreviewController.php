@@ -25,6 +25,7 @@ final class UserRestaurantCheckoutPreviewController
                 scheduledAt: $request->input('scheduledAt'),
                 couponCode: $request->input('couponCode'),
                 note: $request->input('note'),
+                addressId: $request->integer('addressId') ?: null,
             ),
         ]);
     }
