@@ -45,8 +45,11 @@ it('scopes restaurant owner orders index to the authenticated restaurant', funct
     $response = $this->getJson('/api/v1/restaurant-owner/orders?perPage=50');
 
     $response->assertOk();
-    expect(collect($response->json('data'))->pluck('id')->all())
-        ->toContain($ownPendingOrder->id, $ownCompletedOrder->id)
+    $ids = collect($response->json('data'))->pluck('id')->all();
+
+    expect($ids)
+        ->toContain($ownPendingOrder->id)
+        ->toContain($ownCompletedOrder->id)
         ->not->toContain($otherOrder->id);
 });
 
@@ -88,9 +91,12 @@ it('applies restaurant owner status filter after merchant scoping', function () 
     $response = $this->getJson('/api/v1/restaurant-owner/orders?filter[status]=pending&perPage=50');
 
     $response->assertOk();
-    expect(collect($response->json('data'))->pluck('id')->all())
+    $ids = collect($response->json('data'))->pluck('id')->all();
+
+    expect($ids)
         ->toContain($ownPendingOrder->id)
-        ->not->toContain($ownCompletedOrder->id, $otherPendingOrder->id);
+        ->not->toContain($ownCompletedOrder->id)
+        ->not->toContain($otherPendingOrder->id);
 });
 
 it('forbids generic order detail access to another restaurant for restaurant sellers', function () {
