@@ -294,7 +294,8 @@ final class UserSupermarketCartService
         $items = $cart->items->loadMissing('product.store');
         $merchantGroups = $items
             ->groupBy(fn (SmCartItem $item): int => (int) ($item->product?->store_id ?? 0))
-            ->map(function ($group, int $storeId): array {
+            ->map(function ($group, $storeId): array {
+                $storeId = (int) $storeId;
                 $store = $group->first()?->product?->store;
                 $mappedItems = $group->map(fn (SmCartItem $item): array => $this->itemPayload($item))->values();
                 $subtotal = (float) $mappedItems->sum('totalPrice');
