@@ -67,7 +67,7 @@ final class CleaningBookingPriceAdjustmentService
                 ],
             ]);
 
-            return $adjustment->fresh(['booking', 'worker.user']);
+            return $adjustment->fresh();
         });
 
         BroadcastAfterResponse::send(new CleaningBookingPriceAdjustmentRequested(
@@ -188,14 +188,18 @@ final class CleaningBookingPriceAdjustmentService
                 'reviewed_at' => now(),
             ])->save();
 
-            return $request->fresh(['booking', 'worker.user']);
+            return $request->fresh();
         });
+
+        $bookingTotalPrice = (float) (CleaningBooking::query()
+            ->whereKey($resolved->cleaning_booking_id)
+            ->value('total_price') ?? 0);
 
         BroadcastAfterResponse::send(new CleaningBookingPriceAdjustmentResolved(
             cleaningBookingId: (int) $resolved->cleaning_booking_id,
             requestId: (int) $resolved->id,
             requestStatus: $status->value,
-            totalPrice: (float) ($resolved->booking?->total_price ?? 0),
+            totalPrice: $bookingTotalPrice,
             canStartWork: true,
         ));
 
