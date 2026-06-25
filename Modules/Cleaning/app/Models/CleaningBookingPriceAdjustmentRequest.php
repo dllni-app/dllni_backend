@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Models;
 
+use App\Models\User;
+use App\Models\Worker;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Modules\Cleaning\Enums\CleaningPriceAdjustmentRequestStatus;
 
 final class CleaningBookingPriceAdjustmentRequest extends Model
@@ -21,6 +24,21 @@ final class CleaningBookingPriceAdjustmentRequest extends Model
         'reviewed_by',
         'reviewed_at',
     ];
+
+    public function booking(): BelongsTo
+    {
+        return $this->belongsTo(CleaningBooking::class, 'cleaning_booking_id');
+    }
+
+    public function worker(): BelongsTo
+    {
+        return $this->belongsTo(Worker::class);
+    }
+
+    public function reviewedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reviewed_by');
+    }
 
     public function casts(): array
     {
