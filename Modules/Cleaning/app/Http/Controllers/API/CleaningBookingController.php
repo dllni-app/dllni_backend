@@ -14,6 +14,7 @@ use App\Models\Worker;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -34,6 +35,7 @@ use Modules\Cleaning\Http\Resources\CleaningBookingResource;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Services\CleaningBookingService;
 use Modules\Cleaning\Services\DepositService;
+use Modules\Cleaning\Services\WorkerOrderSolvencyService;
 use Modules\User\Http\Resources\UserCleaningSosResource;
 use Throwable;
 
@@ -42,6 +44,7 @@ final class CleaningBookingController
     public function __construct(
         private CleaningBookingService $cleaningBookingService,
         private readonly DepositService $depositService,
+        private readonly WorkerOrderSolvencyService $solvencyService,
     ) {}
 
     public function index(CleaningBookingFilterRequest $request): AnonymousResourceCollection
@@ -60,11 +63,16 @@ final class CleaningBookingController
             ])
             ->paginate($request->get('perPage', 20));
 
-        $collection = CleaningBookingResource::collection($bookings);
         $worker = $request->user()?->worker;
 
         if ($worker instanceof Worker) {
             $worker->loadMissing('deposit');
+            $this->filterFinanciallyBlockedPendingBookings($bookings, $worker);
+        }
+
+        $collection = CleaningBookingResource::collection($bookings);
+
+        if ($worker instanceof Worker) {
             $collection->additional([
                 'dispatchEligibility' => $this->newRequestEligibility(
                     $worker,
@@ -221,7 +229,7 @@ final class CleaningBookingController
     public function accept(CleaningBookingAcceptRequest $request, CleaningBooking $cleaning_booking): CleaningBookingResource|JsonResponse
     {
         $this->ensureWorkerCanActOnBooking($cleaning_booking, requireOwnership: false);
-        $eligibilityResponse = $this->blockedAcceptResponse();
+        $eligibilityResponse = $this->blockedAcceptResponse($cleaning_booking, $request->validated('roomIds'));
 
         if ($eligibilityResponse instanceof JsonResponse) {
             return $eligibilityResponse;
@@ -405,7 +413,8 @@ final class CleaningBookingController
         ]);
     }
 
-    private function blockedAcceptResponse(): ?JsonResponse
+    /** @param array<int, mixed>|null $roomIds */
+    private function blockedAcceptResponse(CleaningBooking $booking, ?array $roomIds = null): ?JsonResponse
     {
         $worker = Auth::user()?->worker;
 
@@ -416,25 +425,34 @@ final class CleaningBookingController
         $worker->loadMissing('deposit');
         $depositSummary = $this->depositService->depositStatusPayload($worker);
         $eligibility = $this->newRequestEligibility($worker, $depositSummary);
+        $solvency = $this->solvencyService->solvencyPayloadForBooking($worker, $booking, $roomIds);
+        $eligibility['bookingSolvency'] = $solvency;
 
-        if ((bool) $eligibility['canAcceptNewBookings']) {
+        if ((bool) $eligibility['canAcceptNewBookings'] && (bool) $solvency['canAcceptBooking']) {
             return null;
         }
 
+        $reasonCode = (bool) $eligibility['canAcceptNewBookings'] ? (string) $solvency['reasonCode'] : (string) $eligibility['reasonCode'];
+        $message = (bool) $eligibility['canAcceptNewBookings']
+            ? 'Worker balance and allowed negative limit do not cover this booking platform commission.'
+            : $eligibility['message'];
+
         return response()->json([
-            'message' => $eligibility['message'],
-            'code' => 'WORKER_NOT_ELIGIBLE_FOR_NEW_REQUESTS',
+            'message' => $message,
+            'code' => 'WORKER_NOT_ELIGIBLE_FOR_BOOKING_COMMISSION',
             'errors' => [
                 'workerEligibility' => [
                     [
-                        'code' => 'WORKER_NOT_ELIGIBLE_FOR_NEW_REQUESTS',
-                        'reasonCode' => $eligibility['reasonCode'],
-                        'message' => $eligibility['message'],
+                        'code' => 'WORKER_NOT_ELIGIBLE_FOR_BOOKING_COMMISSION',
+                        'reasonCode' => $reasonCode,
+                        'message' => $message,
                         'dispatchEligibility' => $eligibility,
+                        'bookingSolvency' => $solvency,
                     ],
                 ],
             ],
             'dispatchEligibility' => $eligibility,
+            'bookingSolvency' => $solvency,
         ], Response::HTTP_UNPROCESSABLE_ENTITY);
     }
 
@@ -452,7 +470,7 @@ final class CleaningBookingController
             'canAcceptNewBookings' => $canReceive,
             'reasonCode' => $reasonCode,
             'message' => $this->eligibilityMessage($reasonCode),
-            'depositSummary' => $depositSummary,
+            'depositSummary' => array_merge($depositSummary, $this->solvencyService->workerCapacitySummary($worker)),
         ];
     }
 
@@ -488,5 +506,36 @@ final class CleaningBookingController
             'trust_score_too_low' => 'Your trust score is below the minimum required to receive new requests.',
             default => 'Your account cannot receive new requests right now.',
         };
+    }
+
+    private function filterFinanciallyBlockedPendingBookings(LengthAwarePaginator $bookings, Worker $worker): void
+    {
+        $bookings->setCollection($bookings->getCollection()
+            ->filter(function (CleaningBooking $booking) use ($worker): bool {
+                if (! $this->isPendingCandidateForWorker($booking, $worker)) {
+                    return true;
+                }
+
+                return $this->solvencyService->canWorkerReceiveBooking($worker, $booking);
+            })
+            ->values());
+    }
+
+    private function isPendingCandidateForWorker(CleaningBooking $booking, Worker $worker): bool
+    {
+        if ($booking->status !== CleaningBookingStatus::Pending) {
+            return false;
+        }
+
+        $hasAcceptedAssignment = $booking->workerAssignments->contains(
+            fn ($assignment): bool => (int) $assignment->worker_id === (int) $worker->id
+                && in_array($assignment->status, CleaningBookingWorkerAssignmentStatus::acceptedStatuses(), true)
+        );
+
+        if ($hasAcceptedAssignment) {
+            return false;
+        }
+
+        return $booking->worker_id === null;
     }
 }
