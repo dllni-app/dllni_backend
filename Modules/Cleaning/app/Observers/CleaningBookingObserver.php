@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Models\Worker;
 use App\Notifications\Cleaning\BookingLifecycleNotification;
 use BackedEnum;
+use Carbon\CarbonInterface;
 use Modules\Cleaning\Enums\CleaningAssignmentMode;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
@@ -22,15 +23,22 @@ use Throwable;
 
 final class CleaningBookingObserver
 {
+    private const HOT_ORDER_PREFIX = '[🚨 طلب ساخن - تنفيذ فوري عاجل]';
+
     public function creating(CleaningBooking $booking): void
     {
         $this->applyWorkEnvironmentSnapshot($booking);
+        $this->applySameDayHotOrderSnapshot($booking);
     }
 
     public function updating(CleaningBooking $booking): void
     {
         if ($booking->isDirty('gender_preference')) {
             $this->applyWorkEnvironmentSnapshot($booking);
+        }
+
+        if ($booking->isDirty('scheduled_date') || $booking->isDirty('property_details')) {
+            $this->applySameDayHotOrderSnapshot($booking);
         }
     }
 
@@ -115,6 +123,69 @@ final class CleaningBookingObserver
         $booking->female_worker_safety_pledge_accepted_at = now();
         $booking->female_worker_safety_pledge_version = (string) ($confirmation['pledgeVersion'] ?? $policy->version());
         $booking->female_worker_safety_pledge_text = $policy->pledgeText();
+    }
+
+    private function applySameDayHotOrderSnapshot(CleaningBooking $booking): void
+    {
+        $propertyDetails = is_array($booking->property_details) ? $booking->property_details : [];
+
+        if (! $this->isScheduledForToday($booking)) {
+            $propertyDetails['is_hot_order'] = false;
+            $propertyDetails['hot_order_prefix'] = null;
+            $propertyDetails['hot_order_title'] = null;
+            $booking->property_details = $propertyDetails;
+
+            return;
+        }
+
+        $baseTitle = $this->resolveBaseOrderTitle($booking, $propertyDetails);
+        $hotTitle = self::HOT_ORDER_PREFIX.' '.$this->stripHotOrderPrefix($baseTitle);
+
+        $propertyDetails['is_hot_order'] = true;
+        $propertyDetails['hot_order_prefix'] = self::HOT_ORDER_PREFIX;
+        $propertyDetails['hot_order_title'] = $hotTitle;
+        $propertyDetails['order_title'] = $hotTitle;
+
+        $booking->property_details = $propertyDetails;
+    }
+
+    private function isScheduledForToday(CleaningBooking $booking): bool
+    {
+        $scheduledDate = $booking->scheduled_date;
+
+        if ($scheduledDate instanceof CarbonInterface) {
+            return $scheduledDate->isSameDay(now());
+        }
+
+        if (is_string($scheduledDate) && $scheduledDate !== '') {
+            return now()->toDateString() === mb_substr($scheduledDate, 0, 10);
+        }
+
+        return false;
+    }
+
+    /** @param array<string, mixed> $propertyDetails */
+    private function resolveBaseOrderTitle(CleaningBooking $booking, array $propertyDetails): string
+    {
+        foreach (['order_title', 'title', 'location_name', 'address'] as $key) {
+            $value = $propertyDetails[$key] ?? null;
+            if (is_string($value) && mb_trim($value) !== '') {
+                return mb_trim($value);
+            }
+        }
+
+        $bookingNumber = is_string($booking->booking_number) && $booking->booking_number !== ''
+            ? $booking->booking_number
+            : 'تنظيف';
+
+        return 'طلب تنظيف '.$bookingNumber;
+    }
+
+    private function stripHotOrderPrefix(string $title): string
+    {
+        $normalized = mb_trim($title);
+
+        return mb_trim(str_replace(self::HOT_ORDER_PREFIX, '', $normalized));
     }
 
     private function chargeAdminCommission(CleaningBooking $booking): void
