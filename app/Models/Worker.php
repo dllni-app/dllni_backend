@@ -16,6 +16,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningNeighborhood;
+use Modules\Cleaning\Support\CleaningNeighborhoodNameNormalizer;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
 use Spatie\MediaLibrary\HasMedia;
@@ -27,6 +29,8 @@ final class Worker extends Model implements HasMedia
     use InteractsWithMedia;
     use LogsActivity;
     use WorkerFilterQuery;
+
+    private const MIN_NEIGHBORHOOD_NAME_LENGTH = 2;
 
     public function getActivitylogOptions(): LogOptions
     {
@@ -74,9 +78,23 @@ final class Worker extends Model implements HasMedia
 
     public function scopeCoversNeighborhood(Builder $query, int $neighborhoodId): Builder
     {
-        return $query->whereHas('zones', function (Builder $zones) use ($neighborhoodId): void {
-            $zones->where('worker_zones.is_active', true)
-                ->where('worker_zones.neighborhood_id', $neighborhoodId);
+        $neighborhoodNames = self::coverageNeighborhoodNames($neighborhoodId);
+
+        return $query->where(function (Builder $workers) use ($neighborhoodId, $neighborhoodNames): void {
+            $workers->whereHas('zones', function (Builder $zones) use ($neighborhoodId): void {
+                $zones->where('worker_zones.is_active', true)
+                    ->where('worker_zones.neighborhood_id', $neighborhoodId);
+            });
+
+            if ($neighborhoodNames === []) {
+                return;
+            }
+
+            $workers->orWhere(function (Builder $addressQuery) use ($neighborhoodNames): void {
+                foreach ($neighborhoodNames as $name) {
+                    $addressQuery->orWhere('home_address', 'like', '%'.self::escapeLike($name).'%');
+                }
+            });
         });
     }
 
@@ -223,17 +241,21 @@ final class Worker extends Model implements HasMedia
             return false;
         }
 
-        if ($this->relationLoaded('zones')) {
-            return $this->zones->contains(
-                fn (WorkerZone $zone): bool => (bool) $zone->is_active
-                    && (int) ($zone->neighborhood_id ?? 0) === $neighborhoodId
-            );
+        if ($this->relationLoaded('zones') && $this->zones->contains(
+            fn (WorkerZone $zone): bool => (bool) $zone->is_active
+                && (int) ($zone->neighborhood_id ?? 0) === $neighborhoodId
+        )) {
+            return true;
         }
 
-        return $this->zones()
+        if (! $this->relationLoaded('zones') && $this->zones()
             ->where('is_active', true)
             ->where('neighborhood_id', $neighborhoodId)
-            ->exists();
+            ->exists()) {
+            return true;
+        }
+
+        return $this->homeAddressMatchesNeighborhood($neighborhoodId);
     }
 
     public function isAvailableAt(CarbonInterface $dateTime): bool
@@ -349,5 +371,66 @@ final class Worker extends Model implements HasMedia
         }
 
         return null;
+    }
+
+    private function homeAddressMatchesNeighborhood(int $neighborhoodId): bool
+    {
+        $homeAddress = CleaningNeighborhoodNameNormalizer::normalize((string) $this->home_address);
+        if ($homeAddress === '') {
+            return false;
+        }
+
+        foreach (self::coverageNeighborhoodNames($neighborhoodId) as $name) {
+            $normalizedName = CleaningNeighborhoodNameNormalizer::normalize($name);
+
+            if (mb_strlen($normalizedName) < self::MIN_NEIGHBORHOOD_NAME_LENGTH) {
+                continue;
+            }
+
+            if (str_contains($homeAddress, $normalizedName)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private static function coverageNeighborhoodNames(int $neighborhoodId): array
+    {
+        $neighborhood = CleaningNeighborhood::query()->find($neighborhoodId);
+        if (! $neighborhood instanceof CleaningNeighborhood) {
+            return [];
+        }
+
+        $aliases = is_array($neighborhood->aliases) ? $neighborhood->aliases : [];
+        $names = array_merge([
+            $neighborhood->name_ar,
+            $neighborhood->name_en,
+            $neighborhood->normalized_name,
+        ], $aliases);
+
+        $normalized = [];
+        foreach ($names as $name) {
+            if (! is_string($name)) {
+                continue;
+            }
+
+            $name = CleaningNeighborhoodNameNormalizer::repairText($name);
+            if (mb_strlen($name) < self::MIN_NEIGHBORHOOD_NAME_LENGTH || in_array($name, $normalized, true)) {
+                continue;
+            }
+
+            $normalized[] = $name;
+        }
+
+        return $normalized;
+    }
+
+    private static function escapeLike(string $value): string
+    {
+        return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
     }
 }
