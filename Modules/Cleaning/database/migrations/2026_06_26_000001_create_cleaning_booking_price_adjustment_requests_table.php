@@ -12,9 +12,7 @@ return new class extends Migration
     {
         Schema::create('cleaning_booking_price_adjustment_requests', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('cleaning_booking_id')
-                ->constrained('cleaning_bookings')
-                ->cascadeOnDelete();
+            $table->foreignId('cleaning_booking_id');
             $table->foreignId('worker_id')
                 ->constrained('workers')
                 ->cascadeOnDelete();
@@ -27,6 +25,11 @@ return new class extends Migration
             $table->foreignId('reviewed_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamp('reviewed_at')->nullable();
             $table->timestamps();
+
+            $table->foreign('cleaning_booking_id', 'cb_price_adj_booking_fk')
+                ->references('id')
+                ->on('cleaning_bookings')
+                ->cascadeOnDelete();
 
             $table->index(['cleaning_booking_id', 'status'], 'cb_price_adj_booking_status_idx');
             $table->index(['worker_id', 'status'], 'cb_price_adj_worker_status_idx');
