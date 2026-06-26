@@ -56,6 +56,7 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             'propertyDetails.hours' => [Rule::requiredIf($isEventAssistance), Rule::prohibitedIf(! $isEventAssistance), 'numeric', 'min:1', 'max:24'],
             'serviceIds' => $isEventAssistance ? ['prohibited'] : ['sometimes', 'array', 'min:1'],
             'serviceIds.*' => $isEventAssistance ? ['prohibited'] : ['integer', 'distinct', 'exists:cleaning_services,id'],
+            'addressId' => ['nullable', 'integer', Rule::exists('user_addresses', 'id')->where('user_id', (int) ($this->user()?->id ?? 0))],
             'addressLatitude' => ['nullable', 'numeric', 'between:-90,90'],
             'addressLongitude' => ['nullable', 'numeric', 'between:-180,180'],
             'preferredWorkerId' => ['nullable', 'exists:workers,id'],
