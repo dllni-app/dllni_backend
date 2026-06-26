@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningWorkers\Widgets;
 
+use App\Filament\Support\AdminUiFormatter;
 use App\Models\CleaningWorkerDeposit;
 use App\Models\Worker;
 use Filament\Widgets\StatsOverviewWidget;
@@ -39,20 +40,20 @@ final class CleaningWorkerFinancialStats extends StatsOverviewWidget
             ->sum('cleaning_booking_worker_assignments.admin_margin_amount');
 
         return [
-            Stat::make('Current debt', self::money($totalDebt))
-                ->description($workersWithDebt.' workers with debt')
+            Stat::make(__('Current debt'), self::money($totalDebt))
+                ->description(__('workers with debt', ['count' => $workersWithDebt]))
                 ->icon('heroicon-o-exclamation-triangle')
                 ->color($totalDebt > 0 ? 'danger' : 'success'),
-            Stat::make('Workers blocked by balance', $workersBlockedByBalance)
-                ->description('Cannot receive new requests because of finance status')
+            Stat::make(__('Workers blocked by balance'), $workersBlockedByBalance)
+                ->description(__('Cannot receive new requests because of finance status'))
                 ->icon('heroicon-o-no-symbol')
                 ->color($workersBlockedByBalance > 0 ? 'danger' : 'success'),
-            Stat::make('Available commission capacity', self::money($totalCapacity - $reservedCommission))
-                ->description('Balance plus debt limit minus reserved commissions')
+            Stat::make(__('Available commission capacity'), self::money($totalCapacity - $reservedCommission))
+                ->description(__('Balance plus debt limit minus reserved commissions'))
                 ->icon('heroicon-o-banknotes')
                 ->color(($totalCapacity - $reservedCommission) > 0 ? 'success' : 'danger'),
-            Stat::make('Reserved active commissions', self::money($reservedCommission))
-                ->description('Accepted active bookings not yet charged')
+            Stat::make(__('Reserved active commissions'), self::money($reservedCommission))
+                ->description(__('Accepted active bookings not yet charged'))
                 ->icon('heroicon-o-clock')
                 ->color($reservedCommission > 0 ? 'warning' : 'gray'),
         ];
@@ -60,6 +61,9 @@ final class CleaningWorkerFinancialStats extends StatsOverviewWidget
 
     private static function money(float $amount): string
     {
-        return 'SYP '.number_format($amount, 2);
+        return AdminUiFormatter::formatCurrency(
+            $amount,
+            arabicNumerals: app()->getLocale() === 'ar',
+        );
     }
 }
