@@ -128,12 +128,26 @@ final class UserCleaningOrderEstimatePriceController
 
     private function resolveAssignmentMode(mixed $assignmentMode, mixed $preferredWorkerId, mixed $numberOfWorkers): string
     {
-        if (is_string($assignmentMode) && mb_trim($assignmentMode) !== '') {
-            return mb_strtolower(mb_trim($assignmentMode));
+        $normalizedMode = is_string($assignmentMode) && mb_trim($assignmentMode) !== ''
+            ? mb_strtolower(mb_trim($assignmentMode))
+            : null;
+        $requestedWorkers = max(1, (int) ($numberOfWorkers ?? 1));
+        $hasPreferredWorker = is_numeric($preferredWorkerId) && (int) $preferredWorkerId > 0;
+
+        if ($normalizedMode === 'open_count') {
+            return 'open_count';
         }
 
-        if (is_numeric($preferredWorkerId) && (int) $preferredWorkerId > 0 && ((int) ($numberOfWorkers ?? 1)) <= 1) {
+        if ($hasPreferredWorker && $requestedWorkers <= 1) {
             return 'preferred_worker';
+        }
+
+        if ($normalizedMode === 'preferred_worker') {
+            return 'open_count';
+        }
+
+        if ($normalizedMode !== null) {
+            return $normalizedMode;
         }
 
         return 'open_count';
