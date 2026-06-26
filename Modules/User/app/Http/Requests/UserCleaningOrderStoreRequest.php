@@ -8,6 +8,7 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 use Modules\User\Http\Requests\Concerns\ValidatesWorkerRoomAssignments;
+use Modules\User\Services\FemaleWorkerSafetyPolicyService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrderStoreRequest extends FormRequest
@@ -22,6 +23,7 @@ final class UserCleaningOrderStoreRequest extends FormRequest
     public function rules(): array
     {
         $isEventAssistance = $this->isEventAssistanceRequested();
+        $requiresFemaleWorkerSafetyConfirmation = $this->requiresFemaleWorkerSafetyConfirmation();
         $today = now(config('app.timezone'))->toDateString();
 
         return [
@@ -70,6 +72,10 @@ final class UserCleaningOrderStoreRequest extends FormRequest
             'numberOfWorkers' => ['nullable', 'integer', 'min:1', 'max:20'],
             ...$this->workerRoomAssignmentRules(),
             'genderPreference' => ['nullable', 'string', Rule::in(['any', 'male', 'female'])],
+            'workEnvironmentConfirmation' => [Rule::requiredIf($requiresFemaleWorkerSafetyConfirmation), 'array:beneficiaryPresence,pledgeAccepted,pledgeVersion'],
+            'workEnvironmentConfirmation.beneficiaryPresence' => [Rule::requiredIf($requiresFemaleWorkerSafetyConfirmation), 'string', Rule::in([FemaleWorkerSafetyPolicyService::BENEFICIARY_FEMALE_PRESENT, FemaleWorkerSafetyPolicyService::BENEFICIARY_MALE_ALONE])],
+            'workEnvironmentConfirmation.pledgeAccepted' => [Rule::requiredIf($requiresFemaleWorkerSafetyConfirmation), 'accepted'],
+            'workEnvironmentConfirmation.pledgeVersion' => [Rule::requiredIf($requiresFemaleWorkerSafetyConfirmation), 'string', 'max:100'],
             'estimatedSqm' => ['prohibited'],
             'estimatedHours' => ['prohibited'],
             'totalHours' => ['prohibited'],
@@ -102,6 +108,20 @@ final class UserCleaningOrderStoreRequest extends FormRequest
                 $validator->errors()->add('numberOfWorkers', 'This request mode only supports one worker.');
             }
 
+            if ($this->requiresFemaleWorkerSafetyConfirmation()) {
+                $policy = app(FemaleWorkerSafetyPolicyService::class);
+                $beneficiaryPresence = (string) $this->input('workEnvironmentConfirmation.beneficiaryPresence');
+                $pledgeVersion = (string) $this->input('workEnvironmentConfirmation.pledgeVersion');
+
+                if ($beneficiaryPresence === FemaleWorkerSafetyPolicyService::BENEFICIARY_MALE_ALONE) {
+                    $validator->errors()->add('workEnvironmentConfirmation.beneficiaryPresence', $policy->blockedMessage());
+                }
+
+                if ($pledgeVersion !== '' && $pledgeVersion !== $policy->version()) {
+                    $validator->errors()->add('workEnvironmentConfirmation.pledgeVersion', 'Invalid pledge version. Please refresh the confirmation screen and try again.');
+                }
+            }
+
             $this->validateWorkerRoomAssignments($validator);
         });
     }
@@ -120,6 +140,11 @@ final class UserCleaningOrderStoreRequest extends FormRequest
     private function isEventAssistanceRequested(): bool
     {
         return mb_strtolower((string) $this->input('propertyType')) === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE;
+    }
+
+    private function requiresFemaleWorkerSafetyConfirmation(): bool
+    {
+        return mb_strtolower((string) $this->input('genderPreference')) === 'female';
     }
 
     private function availableVenueTypes(): array
