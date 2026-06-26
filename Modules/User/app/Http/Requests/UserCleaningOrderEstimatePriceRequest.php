@@ -9,6 +9,7 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 use Modules\User\Http\Requests\Concerns\ValidatesWorkerRoomAssignments;
+use Modules\User\Models\UserAddress;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrderEstimatePriceRequest extends FormRequest
@@ -18,6 +19,47 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
     public function authorize(): bool
     {
         return true;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $merge = [];
+
+        $preferredWorkerIds = $this->normalizePreferredWorkerIds(
+            $this->input('preferredWorkerIds', $this->input('preferredWorkerId'))
+        );
+
+        if ($preferredWorkerIds !== [] || $this->has('preferredWorkerIds')) {
+            $merge['preferredWorkerIds'] = $preferredWorkerIds;
+            $merge['preferredWorkerId'] = $preferredWorkerIds[0] ?? null;
+
+            if (count($preferredWorkerIds) > 1) {
+                if (! $this->filled('numberOfWorkers')) {
+                    $merge['numberOfWorkers'] = count($preferredWorkerIds);
+                }
+
+                if (! $this->filled('assignmentMode')) {
+                    $merge['assignmentMode'] = 'open_count';
+                }
+            }
+        }
+
+        $addressId = $this->input('addressId');
+        if (is_numeric($addressId) && $this->user() !== null) {
+            $address = UserAddress::query()
+                ->whereKey((int) $addressId)
+                ->where('user_id', (int) $this->user()->id)
+                ->first();
+
+            if ($address instanceof UserAddress) {
+                $merge['addressLatitude'] = $address->latitude !== null ? (float) $address->latitude : null;
+                $merge['addressLongitude'] = $address->longitude !== null ? (float) $address->longitude : null;
+            }
+        }
+
+        if ($merge !== []) {
+            $this->merge($merge);
+        }
     }
 
     /**
@@ -59,6 +101,8 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             'addressId' => ['nullable', 'integer', Rule::exists('user_addresses', 'id')->where('user_id', (int) ($this->user()?->id ?? 0))],
             'addressLatitude' => ['nullable', 'numeric', 'between:-90,90'],
             'addressLongitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'preferredWorkerIds' => ['nullable', 'array', 'max:20'],
+            'preferredWorkerIds.*' => ['integer', 'distinct', Rule::exists('workers', 'id')],
             'preferredWorkerId' => ['nullable', 'exists:workers,id'],
             'assignmentMode' => ['nullable', 'string', Rule::in(['preferred_worker', 'open_count'])],
             'numberOfWorkers' => ['nullable', 'integer', 'min:1', 'max:20'],
@@ -71,20 +115,27 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
     {
         $validator->after(function (Validator $validator): void {
             $assignmentMode = $this->normalizedAssignmentMode();
-            $preferredWorkerId = $this->input('preferredWorkerId');
+            $preferredWorkerIds = $this->normalizePreferredWorkerIds($this->input('preferredWorkerIds'));
+            $preferredWorkerId = $preferredWorkerIds[0] ?? $this->input('preferredWorkerId');
             $numberOfWorkers = $this->input('numberOfWorkers');
+            $usesPreferredWorkerIdsArray = $this->has('preferredWorkerIds');
+            $usesMultiplePreferredWorkers = count($preferredWorkerIds) > 1;
+
+            if ($this->filled('addressId') && (! $this->filled('addressLatitude') || ! $this->filled('addressLongitude'))) {
+                $validator->errors()->add('addressId', 'Selected address must include latitude and longitude coordinates.');
+            }
 
             if ($assignmentMode === 'preferred_worker' && is_numeric($preferredWorkerId) && (int) $preferredWorkerId > 0) {
-                if ($numberOfWorkers !== null && (int) $numberOfWorkers !== 1) {
+                if (! $usesMultiplePreferredWorkers && $numberOfWorkers !== null && (int) $numberOfWorkers !== 1) {
                     $validator->errors()->add('numberOfWorkers', 'Selected worker mode only allows one worker.');
                 }
             }
 
-            if ($assignmentMode === 'open_count' && $preferredWorkerId !== null) {
+            if ($assignmentMode === 'open_count' && $preferredWorkerId !== null && ! $usesPreferredWorkerIdsArray) {
                 $validator->errors()->add('preferredWorkerId', 'Selected worker is not compatible with open count mode.');
             }
 
-            if ($assignmentMode === null && $preferredWorkerId !== null && $numberOfWorkers !== null && (int) $numberOfWorkers !== 1) {
+            if ($assignmentMode === null && $preferredWorkerId !== null && $numberOfWorkers !== null && (int) $numberOfWorkers !== 1 && ! $usesMultiplePreferredWorkers) {
                 $validator->errors()->add('numberOfWorkers', 'Legacy selected-worker requests only support one worker.');
             }
 
@@ -101,6 +152,34 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
         }
 
         return mb_strtolower(mb_trim($assignmentMode));
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function normalizePreferredWorkerIds(mixed $value): array
+    {
+        if ($value === null || $value === '') {
+            return [];
+        }
+
+        $values = is_array($value) ? $value : [$value];
+        $ids = [];
+
+        foreach ($values as $item) {
+            if (! is_numeric($item)) {
+                continue;
+            }
+
+            $id = (int) $item;
+            if ($id <= 0 || in_array($id, $ids, true)) {
+                continue;
+            }
+
+            $ids[] = $id;
+        }
+
+        return $ids;
     }
 
     private function isEventAssistanceRequested(): bool
