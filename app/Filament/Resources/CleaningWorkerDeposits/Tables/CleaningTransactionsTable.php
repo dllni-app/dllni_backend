@@ -35,9 +35,23 @@ final class CleaningTransactionsTable
                     ->label(__('cleaning_admin.transactions.fields.amount'))
                     ->money('SYP')
                     ->sortable(),
+                TextColumn::make('balance_before')
+                    ->label(__('cleaning_admin.transactions.fields.balance_before'))
+                    ->money('SYP')
+                    ->toggleable(),
                 TextColumn::make('balance_after')
                     ->label(__('cleaning_admin.transactions.fields.balance_after'))
                     ->money('SYP'),
+                TextColumn::make('cleaning_booking_id')
+                    ->label('Booking')
+                    ->formatStateUsing(fn ($state): string => $state ? '#'.$state : '—')
+                    ->placeholder('—')
+                    ->toggleable(),
+                TextColumn::make('reference')
+                    ->label(__('cleaning_admin.transactions.fields.reference'))
+                    ->limit(24)
+                    ->placeholder('—')
+                    ->toggleable(),
                 TextColumn::make('created_at')
                     ->label(__('cleaning_admin.transactions.fields.date'))
                     ->dateTime('Y-m-d H:i')
@@ -61,6 +75,9 @@ final class CleaningTransactionsTable
                 SelectFilter::make('type')
                     ->label(__('cleaning_admin.transactions.fields.type'))
                     ->options(self::typeOptions()),
+                Filter::make('has_booking')
+                    ->label('Linked to booking')
+                    ->query(fn (Builder $query): Builder => $query->whereNotNull('cleaning_booking_id')),
                 Filter::make('created_at')
                     ->form([
                         DatePicker::make('from')->label(__('cleaning_admin.transactions.filters.from'))->native(false),
@@ -127,7 +144,10 @@ final class CleaningTransactionsTable
                 __('cleaning_admin.transactions.fields.worker') => $tx->worker?->first_name ?? '—',
                 __('cleaning_admin.transactions.fields.type') => self::typeLabel((string) $tx->type),
                 __('cleaning_admin.transactions.fields.amount') => (float) $tx->amount,
+                __('cleaning_admin.transactions.fields.balance_before') => (float) $tx->balance_before,
                 __('cleaning_admin.transactions.fields.balance_after') => (float) $tx->balance_after,
+                'Booking' => $tx->cleaning_booking_id,
+                __('cleaning_admin.transactions.fields.reference') => $tx->reference,
                 __('cleaning_admin.transactions.fields.date') => $tx->created_at?->format('Y-m-d H:i'),
                 __('cleaning_admin.transactions.fields.notes') => $tx->notes,
                 __('cleaning_admin.transactions.fields.created_by') => $tx->createdByAdmin?->name ?? '—',
