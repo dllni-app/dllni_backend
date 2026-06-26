@@ -20,6 +20,7 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
     {
         $eventPayloadRequested = $this->shouldValidateEventPayload();
         $isEventAssistance = $this->isEventAssistanceContext();
+        $today = now(config('app.timezone'))->toDateString();
 
         return [
             'propertyType' => ['sometimes', 'string', Rule::in(UserCleaningOrderEstimationService::PROPERTY_TYPES)],
@@ -56,7 +57,7 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
             'cleaning_services.*' => ['string', 'max:255'],
             'serviceIds' => ['prohibited'],
             'serviceIds.*' => ['prohibited'],
-            'scheduledDate' => ['sometimes', 'date', 'after_or_equal:today'],
+            'scheduledDate' => ['sometimes', 'date', 'after_or_equal:'.$today],
             'scheduledTime' => ['sometimes', 'date_format:H:i'],
             'addressLatitude' => ['sometimes', 'numeric', 'between:-90,90'],
             'addressLongitude' => ['sometimes', 'numeric', 'between:-180,180'],
