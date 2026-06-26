@@ -12,9 +12,13 @@ enum AlertType: string
     case TimeExpired = 'time_expired';
     case OverdueCompletion = 'overdue_completion';
     case AnomalyDetected = 'anomaly_detected';
+    case PriceAdjustmentRequested = 'price_adjustment_requested';
 
     public function label(): string
     {
-        return __('cleaning_admin.enums.alert_type.'.$this->value);
+        return match ($this) {
+            self::PriceAdjustmentRequested => 'Price adjustment requested',
+            default => __('cleaning_admin.enums.alert_type.'.$this->value),
+        };
     }
 }
