@@ -7,6 +7,7 @@ namespace Database\Seeders;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
+use Modules\Cleaning\Models\CleaningBooking;
 
 final class UserNotificationsSeeder extends Seeder
 {
@@ -144,15 +145,15 @@ final class UserNotificationsSeeder extends Seeder
 
     private function seedAppUserNotifications(): void
     {
-        $this->seedForUser('user@dllni.sy', [
-            [
-                'module' => 'cleaning',
-                'type' => 'new_order',
-                'title' => 'حجز تنظيف جديد',
-                'body' => 'تم تأكيد حجز التنظيف الخاص بك بنجاح.',
-                'bookingId' => 101,
-                'read_at' => null,
-            ],
+        $user = User::query()
+            ->where('email', 'user@dllni.sy')
+            ->first();
+
+        if ($user === null) {
+            return;
+        }
+
+        $notifications = [
             [
                 'module' => 'restaurant',
                 'type' => 'order_update',
@@ -173,7 +174,27 @@ final class UserNotificationsSeeder extends Seeder
                 'body' => 'يرجى مراجعة إعدادات حسابك وتحديث بياناتك عند الحاجة.',
                 'read_at' => now()->subHours(2),
             ],
-        ]);
+        ];
+
+        $cleaningBookingId = CleaningBooking::query()
+            ->where('customer_id', $user->id)
+            ->latest('id')
+            ->value('id');
+
+        if ($cleaningBookingId !== null) {
+            array_unshift($notifications, [
+                'module' => 'cleaning',
+                'type' => 'new_order',
+                'title' => 'حجز تنظيف جديد',
+                'body' => 'تم تأكيد حجز التنظيف الخاص بك بنجاح.',
+                'bookingId' => (int) $cleaningBookingId,
+                'orderId' => (int) $cleaningBookingId,
+                'deep_link_target' => 'user_cleaning_order_details',
+                'read_at' => null,
+            ]);
+        }
+
+        $this->seedForUser('user@dllni.sy', $notifications);
     }
 
     /**
