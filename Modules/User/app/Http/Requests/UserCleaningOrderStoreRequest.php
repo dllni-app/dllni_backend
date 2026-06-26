@@ -22,6 +22,7 @@ final class UserCleaningOrderStoreRequest extends FormRequest
     public function rules(): array
     {
         $isEventAssistance = $this->isEventAssistanceRequested();
+        $today = now(config('app.timezone'))->toDateString();
 
         return [
             'propertyType' => ['required', 'string', Rule::in(UserCleaningOrderEstimationService::PROPERTY_TYPES)],
@@ -58,7 +59,7 @@ final class UserCleaningOrderStoreRequest extends FormRequest
             'cleaning_services.*' => ['string', 'max:255'],
             'serviceIds' => ['prohibited'],
             'serviceIds.*' => ['prohibited'],
-            'scheduledDate' => ['required', 'date', 'after_or_equal:today'],
+            'scheduledDate' => ['required', 'date', 'after_or_equal:'.$today],
             'scheduledTime' => ['required', 'date_format:H:i'],
             'addressLatitude' => ['nullable', 'numeric', 'between:-90,90'],
             'addressLongitude' => ['nullable', 'numeric', 'between:-180,180'],
