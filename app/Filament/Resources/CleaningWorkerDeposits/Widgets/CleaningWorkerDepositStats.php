@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningWorkerDeposits\Widgets;
 
+use App\Filament\Support\AdminUiFormatter;
 use App\Models\CleaningDepositTransaction;
 use App\Models\CleaningWorkerDeposit;
 use Filament\Widgets\StatsOverviewWidget;
@@ -28,25 +29,25 @@ final class CleaningWorkerDepositStats extends StatsOverviewWidget
         $totalAdjustments = $this->sumByType('adjustment');
 
         return [
-            Stat::make('Total current debt', self::money($currentDebt))
+            Stat::make(__('Total current debt'), self::money($currentDebt))
                 ->icon('heroicon-o-exclamation-triangle')
                 ->color($currentDebt > 0 ? 'danger' : 'success'),
-            Stat::make('Total deposits', self::money($totalDeposits))
-                ->description('Manual deposit transactions')
+            Stat::make(__('Total deposits'), self::money($totalDeposits))
+                ->description(__('Manual deposit transactions'))
                 ->icon('heroicon-o-arrow-down-tray')
                 ->color('success'),
-            Stat::make('Total settlements', self::money($totalSettlements))
-                ->description('Debt settlement transactions')
+            Stat::make(__('Total settlements'), self::money($totalSettlements))
+                ->description(__('Debt settlement transactions'))
                 ->icon('heroicon-o-check-circle')
                 ->color('primary'),
-            Stat::make('Admin fees charged', self::money($totalAdminFees))
-                ->description('Platform commissions charged to workers')
+            Stat::make(__('Admin fees charged'), self::money($totalAdminFees))
+                ->description(__('Platform commissions charged to workers'))
                 ->icon('heroicon-o-currency-dollar')
                 ->color('danger'),
-            Stat::make('Refunds and withdrawals', self::money($totalRefunds))
+            Stat::make(__('Refunds and withdrawals'), self::money($totalRefunds))
                 ->icon('heroicon-o-arrow-uturn-left')
                 ->color('warning'),
-            Stat::make('Manual adjustments', self::money($totalAdjustments))
+            Stat::make(__('Manual adjustments'), self::money($totalAdjustments))
                 ->icon('heroicon-o-adjustments-horizontal')
                 ->color('gray'),
         ];
@@ -61,6 +62,9 @@ final class CleaningWorkerDepositStats extends StatsOverviewWidget
 
     private static function money(float $amount): string
     {
-        return 'SYP '.number_format($amount, 2);
+        return AdminUiFormatter::formatCurrency(
+            $amount,
+            arabicNumerals: app()->getLocale() === 'ar',
+        );
     }
 }
