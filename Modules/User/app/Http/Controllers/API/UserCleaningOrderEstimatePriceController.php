@@ -10,6 +10,7 @@ use InvalidArgumentException;
 use Modules\Cleaning\Services\CleaningExtendedTimePricingService;
 use Modules\Cleaning\Support\WorkerRoomAssignmentPlanner;
 use Modules\User\Http\Requests\UserCleaningOrderEstimatePriceRequest;
+use Modules\User\Services\FemaleWorkerSafetyPolicyService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrderEstimatePriceController
@@ -89,6 +90,7 @@ final class UserCleaningOrderEstimatePriceController
             ],
             'recommendation' => $estimation['recommendation'] ?? null,
             'workerRoomAssignments' => $workerRoomAssignments,
+            'workEnvironmentConfirmation' => $this->workEnvironmentConfirmationPayload($validated),
             'extendedTimeRanges' => $extendedTimePricing->ranges(),
             'algorithmVersion' => $service->algorithmVersion(),
         ]);
@@ -105,5 +107,25 @@ final class UserCleaningOrderEstimatePriceController
         }
 
         return 'open_count';
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    private function workEnvironmentConfirmationPayload(array $validated): array
+    {
+        $genderPreference = mb_strtolower((string) ($validated['genderPreference'] ?? 'any'));
+
+        if ($genderPreference !== 'female') {
+            return [
+                'required' => false,
+            ];
+        }
+
+        return [
+            'required' => true,
+            ...app(FemaleWorkerSafetyPolicyService::class)->policyPayload(),
+        ];
     }
 }
