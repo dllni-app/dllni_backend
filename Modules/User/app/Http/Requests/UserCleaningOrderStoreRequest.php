@@ -8,6 +8,7 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 use Modules\User\Http\Requests\Concerns\ValidatesWorkerRoomAssignments;
+use Modules\User\Models\UserAddress;
 use Modules\User\Services\FemaleWorkerSafetyPolicyService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
@@ -18,6 +19,68 @@ final class UserCleaningOrderStoreRequest extends FormRequest
     public function authorize(): bool
     {
         return true;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $merge = [];
+
+        $preferredWorkerIds = $this->normalizePreferredWorkerIds(
+            $this->input('preferredWorkerIds', $this->input('preferredWorkerId'))
+        );
+
+        if ($preferredWorkerIds !== [] || $this->has('preferredWorkerIds')) {
+            $merge['preferredWorkerIds'] = $preferredWorkerIds;
+            $merge['preferredWorkerId'] = $preferredWorkerIds[0] ?? null;
+
+            if (count($preferredWorkerIds) > 1) {
+                if (! $this->filled('numberOfWorkers')) {
+                    $merge['numberOfWorkers'] = count($preferredWorkerIds);
+                }
+
+                if (! $this->filled('assignmentMode')) {
+                    $merge['assignmentMode'] = 'open_count';
+                }
+            }
+        }
+
+        $addressId = $this->input('addressId');
+        if (is_numeric($addressId) && $this->user() !== null) {
+            $address = UserAddress::query()
+                ->whereKey((int) $addressId)
+                ->where('user_id', (int) $this->user()->id)
+                ->first();
+
+            if ($address instanceof UserAddress) {
+                $merge['addressLatitude'] = $address->latitude !== null ? (float) $address->latitude : null;
+                $merge['addressLongitude'] = $address->longitude !== null ? (float) $address->longitude : null;
+
+                if (! $this->filled('neighborhoodId') && $address->neighborhood_id !== null) {
+                    $merge['neighborhoodId'] = (int) $address->neighborhood_id;
+                }
+
+                if (! $this->filled('neighborhood') && $address->neighborhood !== null) {
+                    $merge['neighborhood'] = $address->neighborhood;
+                }
+
+                $propertyDetails = $this->input('propertyDetails');
+                if (is_array($propertyDetails)) {
+                    if (! array_key_exists('address', $propertyDetails) || mb_trim((string) ($propertyDetails['address'] ?? '')) === '') {
+                        $propertyDetails['address'] = $this->formatUserAddress($address);
+                    }
+
+                    if (! array_key_exists('location_name', $propertyDetails) && $address->label !== null) {
+                        $propertyDetails['location_name'] = $address->label;
+                    }
+
+                    $merge['propertyDetails'] = $propertyDetails;
+                }
+            }
+        }
+
+        if ($merge !== []) {
+            $this->merge($merge);
+        }
     }
 
     public function rules(): array
@@ -63,10 +126,13 @@ final class UserCleaningOrderStoreRequest extends FormRequest
             'serviceIds.*' => ['prohibited'],
             'scheduledDate' => ['required', 'date', 'after_or_equal:'.$today],
             'scheduledTime' => ['required', 'date_format:H:i'],
+            'addressId' => ['nullable', 'integer', Rule::exists('user_addresses', 'id')->where('user_id', (int) ($this->user()?->id ?? 0))],
             'addressLatitude' => ['nullable', 'numeric', 'between:-90,90'],
             'addressLongitude' => ['nullable', 'numeric', 'between:-180,180'],
             'neighborhoodId' => ['sometimes', 'nullable', 'integer', Rule::exists('cleaning_neighborhoods', 'id')->where('is_active', true)],
             'neighborhood' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'preferredWorkerIds' => ['nullable', 'array', 'max:20'],
+            'preferredWorkerIds.*' => ['integer', 'distinct', Rule::exists('workers', 'id')],
             'preferredWorkerId' => ['nullable', 'exists:workers,id'],
             'assignmentMode' => ['nullable', 'string', Rule::in(['preferred_worker', 'open_count'])],
             'numberOfWorkers' => ['nullable', 'integer', 'min:1', 'max:20'],
@@ -93,18 +159,25 @@ final class UserCleaningOrderStoreRequest extends FormRequest
     {
         $validator->after(function (Validator $validator): void {
             $assignmentMode = $this->normalizedAssignmentMode();
-            $preferredWorkerId = $this->input('preferredWorkerId');
+            $preferredWorkerIds = $this->normalizePreferredWorkerIds($this->input('preferredWorkerIds'));
+            $preferredWorkerId = $preferredWorkerIds[0] ?? $this->input('preferredWorkerId');
             $numberOfWorkers = $this->input('numberOfWorkers');
+            $usesPreferredWorkerIdsArray = $this->has('preferredWorkerIds');
+            $usesMultiplePreferredWorkers = count($preferredWorkerIds) > 1;
 
-            if ($assignmentMode === 'preferred_worker' && is_numeric($preferredWorkerId) && (int) $preferredWorkerId > 0 && $numberOfWorkers !== null && (int) $numberOfWorkers !== 1) {
+            if ($this->filled('addressId') && (! $this->filled('addressLatitude') || ! $this->filled('addressLongitude'))) {
+                $validator->errors()->add('addressId', 'Selected address must include latitude and longitude coordinates.');
+            }
+
+            if ($assignmentMode === 'preferred_worker' && is_numeric($preferredWorkerId) && (int) $preferredWorkerId > 0 && ! $usesMultiplePreferredWorkers && $numberOfWorkers !== null && (int) $numberOfWorkers !== 1) {
                 $validator->errors()->add('numberOfWorkers', 'Selected worker mode only allows one worker.');
             }
 
-            if ($assignmentMode === 'open_count' && $preferredWorkerId !== null) {
+            if ($assignmentMode === 'open_count' && $preferredWorkerId !== null && ! $usesPreferredWorkerIdsArray) {
                 $validator->errors()->add('preferredWorkerId', 'Selected worker is not compatible with open count mode.');
             }
 
-            if ($assignmentMode === null && $preferredWorkerId !== null && $numberOfWorkers !== null && (int) $numberOfWorkers !== 1) {
+            if ($assignmentMode === null && $preferredWorkerId !== null && $numberOfWorkers !== null && (int) $numberOfWorkers !== 1 && ! $usesMultiplePreferredWorkers) {
                 $validator->errors()->add('numberOfWorkers', 'This request mode only supports one worker.');
             }
 
@@ -135,6 +208,52 @@ final class UserCleaningOrderStoreRequest extends FormRequest
         }
 
         return mb_strtolower(mb_trim($assignmentMode));
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function normalizePreferredWorkerIds(mixed $value): array
+    {
+        if ($value === null || $value === '') {
+            return [];
+        }
+
+        $values = is_array($value) ? $value : [$value];
+        $ids = [];
+
+        foreach ($values as $item) {
+            if (! is_numeric($item)) {
+                continue;
+            }
+
+            $id = (int) $item;
+            if ($id <= 0 || in_array($id, $ids, true)) {
+                continue;
+            }
+
+            $ids[] = $id;
+        }
+
+        return $ids;
+    }
+
+    private function formatUserAddress(UserAddress $address): string
+    {
+        $parts = array_values(array_filter([
+            $address->city,
+            $address->neighborhood,
+            $address->street,
+            $address->building !== null ? 'Building '.$address->building : null,
+            $address->floor !== null ? 'Floor '.$address->floor : null,
+            $address->directions,
+        ], static fn (mixed $part): bool => is_string($part) && mb_trim($part) !== ''));
+
+        if ($parts !== []) {
+            return mb_substr(implode(' - ', $parts), 0, 500);
+        }
+
+        return mb_substr((string) $address->label, 0, 500);
     }
 
     private function isEventAssistanceRequested(): bool
