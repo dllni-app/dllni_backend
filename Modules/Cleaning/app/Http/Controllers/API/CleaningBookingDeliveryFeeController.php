@@ -9,14 +9,18 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
+use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
+use Modules\Cleaning\Http\Resources\CleaningBookingResource;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Services\CleaningBookingService;
 use Modules\Cleaning\Services\CleaningPricingCalculator;
 
 final class CleaningBookingDeliveryFeeController
 {
     public function __construct(
         private readonly CleaningPricingCalculator $pricingCalculator,
+        private readonly CleaningBookingService $bookingService,
     ) {}
 
     public function __invoke(Request $request, CleaningBooking $cleaning_booking): JsonResponse
@@ -87,6 +91,74 @@ final class CleaningBookingDeliveryFeeController
         ]);
     }
 
+    public function finish(Request $request, CleaningBooking $cleaning_booking): JsonResponse
+    {
+        $worker = $request->user()?->worker;
+
+        if (! $worker instanceof Worker) {
+            abort(403, 'User must have an associated worker.');
+        }
+
+        $this->ensureWorkerCanActOnBooking($cleaning_booking, $worker);
+
+        $payload = $request->validate([
+            'finish_type' => ['required', 'string', 'in:success,dispute'],
+            'dispute_reason_type' => ['required_if:finish_type,dispute', 'nullable', 'string', 'max:100'],
+            'dispute_reason_note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $booking = $this->bookingService->finish(
+                $cleaning_booking,
+                (string) $payload['finish_type'],
+                isset($payload['dispute_reason_type']) ? (string) $payload['dispute_reason_type'] : null,
+                isset($payload['dispute_reason_note']) ? (string) $payload['dispute_reason_note'] : null,
+            );
+        } catch (InvalidArgumentException $exception) {
+            throw ValidationException::withMessages(['status' => [$exception->getMessage()]]);
+        }
+
+        $booking->load([
+            'customer',
+            'worker.user',
+            'preferredWorker.user',
+            'rooms.assignedWorker.user',
+            'workerAssignments.worker.user',
+            'addons',
+            'billingPolicy',
+            'timeWarnings',
+            'disputes',
+        ]);
+
+        $status = $booking->status instanceof CleaningBookingStatus ? $booking->status->value : (string) $booking->status;
+        $data = CleaningBookingResource::make($booking)->resolve($request);
+        $latestDispute = $booking->disputes->sortByDesc('id')->first();
+
+        $data['isTimerRunning'] = false;
+        $data['timerStoppedAt'] = $booking->work_finished_at?->toIso8601String();
+        $data['suspendedMessage'] = $status === CleaningBookingStatus::UnderDispute->value
+            ? 'تم تعليق الطلب وتحويله للإدارة للتحقق والفصل يدوياً'
+            : null;
+        $data['dispute'] = $latestDispute ? [
+            'id' => $latestDispute->id,
+            'status' => $latestDispute->status?->value ?? $latestDispute->status,
+            'statusLabel' => $latestDispute->status?->label() ?? null,
+            'reasonType' => $latestDispute->category?->value ?? $latestDispute->category,
+            'reasonLabel' => $latestDispute->category?->label() ?? null,
+            'reasonNote' => $latestDispute->description,
+            'ticketNumber' => $latestDispute->ticket_number,
+            'openedAt' => $latestDispute->created_at?->toIso8601String(),
+        ] : null;
+
+        return response()->json([
+            'success' => true,
+            'message' => $status === CleaningBookingStatus::Completed->value
+                ? 'تم إنهاء المهمة بنجاح'
+                : 'تم تعليق الطلب وتحويله للإدارة للتحقق والفصل يدوياً',
+            'data' => $data,
+        ]);
+    }
+
     private function ensureWorkerCanViewBooking(CleaningBooking $booking, Worker $worker): void
     {
         $hasWorkerAssignment = $booking->workerAssignments()
@@ -96,6 +168,22 @@ final class CleaningBookingDeliveryFeeController
 
         if ($booking->worker_id !== null && $booking->worker_id !== $worker->id && ! $hasWorkerAssignment) {
             abort(403, 'Booking is assigned to another worker.');
+        }
+    }
+
+    private function ensureWorkerCanActOnBooking(CleaningBooking $booking, Worker $worker): void
+    {
+        $hasWorkerAssignment = $booking->workerAssignments()
+            ->where('worker_id', $worker->id)
+            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
+            ->exists();
+
+        if ($booking->worker_id !== null && $booking->worker_id !== $worker->id && ! $hasWorkerAssignment) {
+            abort(403, 'Booking is assigned to another worker.');
+        }
+
+        if ($booking->worker_id === null && ! $hasWorkerAssignment) {
+            abort(403, 'Booking must be assigned to worker for this action.');
         }
     }
 }

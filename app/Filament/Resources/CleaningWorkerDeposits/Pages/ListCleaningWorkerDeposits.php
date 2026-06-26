@@ -7,6 +7,7 @@ namespace App\Filament\Resources\CleaningWorkerDeposits\Pages;
 use App\Enums\UserModuleType;
 use App\Filament\Resources\CleaningWorkerDeposits\CleaningWorkerDepositsResource;
 use App\Filament\Resources\CleaningWorkerDeposits\Tables\CleaningTransactionsTable;
+use App\Filament\Resources\CleaningWorkerDeposits\Widgets\CleaningWorkerDepositStats;
 use App\Models\Worker;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
@@ -22,6 +23,13 @@ use Throwable;
 final class ListCleaningWorkerDeposits extends ListRecords
 {
     protected static string $resource = CleaningWorkerDepositsResource::class;
+
+    protected function getHeaderWidgets(): array
+    {
+        return [
+            CleaningWorkerDepositStats::class,
+        ];
+    }
 
     protected function getHeaderActions(): array
     {
