@@ -6,6 +6,7 @@ use App\Enums\UserModuleType;
 use App\Models\User;
 use Laravel\Sanctum\Sanctum;
 use Modules\Resturants\Models\InventoryItem;
+use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
 
 beforeEach(function () {
@@ -88,12 +89,17 @@ it('creates inventory item', function () {
     ]);
 });
 
-it('lists inventory items with filter', function () {
+it('lists inventory items with filter and product ids', function () {
     $restaurant = Restaurant::factory()->create();
     $restaurant->user->update([
         'module_type' => UserModuleType::RestaurantSeller->value,
     ]);
-    InventoryItem::create([
+
+    $product = Product::factory()->create([
+        'restaurant_id' => $restaurant->id,
+    ]);
+
+    $inventoryItem = InventoryItem::create([
         'restaurant_id' => $restaurant->id,
         'name' => 'Item A',
         'unit' => 'piece',
@@ -101,6 +107,7 @@ it('lists inventory items with filter', function () {
         'minimum_limit' => 5,
         'unit_cost' => 1,
     ]);
+    $inventoryItem->products()->attach($product->id, ['quantity_used' => 1]);
 
     Sanctum::actingAs($restaurant->user);
 
@@ -108,6 +115,7 @@ it('lists inventory items with filter', function () {
 
     $response->assertOk();
     expect($response->json('data'))->toHaveCount(1);
+    expect($response->json('data.0.productIds'))->toBe([$product->id]);
 });
 
 it('filters inventory items by status', function () {
