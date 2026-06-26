@@ -37,7 +37,7 @@ final class CleaningBookingObserver
             $this->applyWorkEnvironmentSnapshot($booking);
         }
 
-        if ($booking->isDirty('scheduled_date') || $booking->isDirty('property_details')) {
+        if ($booking->isDirty('scheduled_date') || $booking->isDirty('property_details') || $booking->isDirty('property_type')) {
             $this->applySameDayHotOrderSnapshot($booking);
         }
     }
@@ -128,23 +128,28 @@ final class CleaningBookingObserver
     private function applySameDayHotOrderSnapshot(CleaningBooking $booking): void
     {
         $propertyDetails = is_array($booking->property_details) ? $booking->property_details : [];
+        $baseTitle = $this->stripHotOrderPrefix($this->resolveBaseOrderTitle($booking, $propertyDetails));
 
         if (! $this->isScheduledForToday($booking)) {
             $propertyDetails['is_hot_order'] = false;
+            $propertyDetails['hot_order_label'] = null;
             $propertyDetails['hot_order_prefix'] = null;
             $propertyDetails['hot_order_title'] = null;
+            $propertyDetails['order_title'] = $baseTitle;
+            $propertyDetails['title'] = $baseTitle;
             $booking->property_details = $propertyDetails;
 
             return;
         }
 
-        $baseTitle = $this->resolveBaseOrderTitle($booking, $propertyDetails);
-        $hotTitle = self::HOT_ORDER_PREFIX.' '.$this->stripHotOrderPrefix($baseTitle);
+        $hotTitle = self::HOT_ORDER_PREFIX.' '.$baseTitle;
 
         $propertyDetails['is_hot_order'] = true;
+        $propertyDetails['hot_order_label'] = self::HOT_ORDER_PREFIX;
         $propertyDetails['hot_order_prefix'] = self::HOT_ORDER_PREFIX;
         $propertyDetails['hot_order_title'] = $hotTitle;
         $propertyDetails['order_title'] = $hotTitle;
+        $propertyDetails['title'] = $hotTitle;
 
         $booking->property_details = $propertyDetails;
     }
@@ -167,7 +172,7 @@ final class CleaningBookingObserver
     /** @param array<string, mixed> $propertyDetails */
     private function resolveBaseOrderTitle(CleaningBooking $booking, array $propertyDetails): string
     {
-        foreach (['order_title', 'title', 'location_name', 'address'] as $key) {
+        foreach (['original_order_title', 'order_title', 'title', 'customService', 'custom_service', 'location_name', 'address'] as $key) {
             $value = $propertyDetails[$key] ?? null;
             if (is_string($value) && mb_trim($value) !== '') {
                 return mb_trim($value);
