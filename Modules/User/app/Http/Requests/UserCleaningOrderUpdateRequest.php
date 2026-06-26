@@ -7,6 +7,9 @@ namespace Modules\User\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
+use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
+use Modules\Cleaning\Models\CleaningBooking;
+use Modules\User\Services\FemaleWorkerSafetyPolicyService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrderUpdateRequest extends FormRequest
@@ -20,6 +23,7 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
     {
         $eventPayloadRequested = $this->shouldValidateEventPayload();
         $isEventAssistance = $this->isEventAssistanceContext();
+        $requiresFemaleWorkerSafetyConfirmation = $this->requiresFemaleWorkerSafetyConfirmation();
 
         return [
             'propertyType' => ['sometimes', 'string', Rule::in(UserCleaningOrderEstimationService::PROPERTY_TYPES)],
@@ -66,6 +70,10 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
             'numberOfWorkers' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:20'],
             'assignmentMode' => ['sometimes', 'nullable', 'string', Rule::in(['preferred_worker', 'open_count'])],
             'genderPreference' => ['sometimes', 'nullable', 'string', Rule::in(['any', 'male', 'female'])],
+            'workEnvironmentConfirmation' => [Rule::requiredIf($requiresFemaleWorkerSafetyConfirmation), 'array:beneficiaryPresence,pledgeAccepted,pledgeVersion'],
+            'workEnvironmentConfirmation.beneficiaryPresence' => [Rule::requiredIf($requiresFemaleWorkerSafetyConfirmation), 'string', Rule::in([FemaleWorkerSafetyPolicyService::BENEFICIARY_FEMALE_PRESENT, FemaleWorkerSafetyPolicyService::BENEFICIARY_MALE_ALONE])],
+            'workEnvironmentConfirmation.pledgeAccepted' => [Rule::requiredIf($requiresFemaleWorkerSafetyConfirmation), 'accepted'],
+            'workEnvironmentConfirmation.pledgeVersion' => [Rule::requiredIf($requiresFemaleWorkerSafetyConfirmation), 'string', 'max:100'],
             'estimatedSqm' => ['prohibited'],
             'estimatedHours' => ['prohibited'],
             'totalHours' => ['prohibited'],
@@ -93,6 +101,24 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
 
             if ($assignmentMode === null && $preferredWorkerId !== null && $numberOfWorkers !== null && (int) $numberOfWorkers !== 1) {
                 $validator->errors()->add('numberOfWorkers', 'This request mode only supports one worker.');
+            }
+
+            if ($this->requiresFemaleWorkerSafetyConfirmation()) {
+                $policy = app(FemaleWorkerSafetyPolicyService::class);
+                $beneficiaryPresence = (string) $this->input('workEnvironmentConfirmation.beneficiaryPresence');
+                $pledgeVersion = (string) $this->input('workEnvironmentConfirmation.pledgeVersion');
+
+                if ($beneficiaryPresence === FemaleWorkerSafetyPolicyService::BENEFICIARY_MALE_ALONE) {
+                    $validator->errors()->add('workEnvironmentConfirmation.beneficiaryPresence', $policy->blockedMessage());
+                }
+
+                if ($pledgeVersion !== '' && $pledgeVersion !== $policy->version()) {
+                    $validator->errors()->add('workEnvironmentConfirmation.pledgeVersion', 'Invalid pledge version. Please refresh the confirmation screen and try again.');
+                }
+            }
+
+            if ($this->has('genderPreference') || $this->has('workEnvironmentConfirmation')) {
+                $this->validateGenderPreferenceChangeIsStillSafe($validator);
             }
         });
     }
@@ -128,6 +154,34 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
             || $this->has('propertyDetails.venueType')
             || $this->has('propertyDetails.customService')
             || $this->has('propertyDetails.hours');
+    }
+
+    private function requiresFemaleWorkerSafetyConfirmation(): bool
+    {
+        return $this->has('genderPreference')
+            && mb_strtolower((string) $this->input('genderPreference')) === 'female';
+    }
+
+    private function validateGenderPreferenceChangeIsStillSafe(Validator $validator): void
+    {
+        $bookingId = $this->route('order');
+
+        if (! is_numeric($bookingId)) {
+            return;
+        }
+
+        $hasAcceptedAssignments = CleaningBooking::query()
+            ->whereKey((int) $bookingId)
+            ->whereHas('workerAssignments', static function ($query): void {
+                $query->where('status', CleaningBookingWorkerAssignmentStatus::Accepted->value);
+            })
+            ->exists();
+
+        if (! $hasAcceptedAssignments) {
+            return;
+        }
+
+        $validator->errors()->add('genderPreference', 'Order gender preference cannot be changed after workers have accepted.');
     }
 
     private function availableVenueTypes(): array
