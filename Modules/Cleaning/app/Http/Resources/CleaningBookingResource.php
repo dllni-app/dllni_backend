@@ -13,6 +13,7 @@ use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingRoom;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Services\CleaningExtendedTimePricingService;
+use Modules\Cleaning\Services\CleaningOrderUrgencyService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 /**
@@ -31,6 +32,10 @@ final class CleaningBookingResource extends JsonResource
         $address = $this->addressPayload($normalizedPropertyDetails);
         $servicePrice = (float) ($this->base_price ?? 0);
         $workTimer = $this->workTimerPayload((string) $orderStatus);
+        $urgency = app(CleaningOrderUrgencyService::class);
+        $baseTitle = $this->baseOrderTitle();
+        $displayTitle = $urgency->displayTitle($baseTitle, $this->scheduled_date);
+        $isHotOrder = $urgency->isHotOrder($this->scheduled_date);
 
         return [
             'id' => $this->id,
@@ -45,6 +50,14 @@ final class CleaningBookingResource extends JsonResource
             'cancellationPolicyId' => $this->cancellation_policy_id,
             'billingPolicyId' => $this->billing_policy_id,
             'bookingNumber' => $this->booking_number,
+            'displayTitle' => $displayTitle,
+            'display_title' => $displayTitle,
+            'isHotOrder' => $isHotOrder,
+            'is_hot_order' => $isHotOrder,
+            'urgencyLabel' => $isHotOrder ? CleaningOrderUrgencyService::HOT_ORDER_LABEL : null,
+            'urgency_label' => $isHotOrder ? CleaningOrderUrgencyService::HOT_ORDER_LABEL : null,
+            'urgencyPrefix' => $isHotOrder ? CleaningOrderUrgencyService::HOT_ORDER_PREFIX : null,
+            'urgency_prefix' => $isHotOrder ? CleaningOrderUrgencyService::HOT_ORDER_PREFIX : null,
             'status' => $orderStatus,
             'statusLabel' => $this->enumLabel('booking_status', $orderStatus),
             'order_status' => $orderStatus,
@@ -139,6 +152,15 @@ final class CleaningBookingResource extends JsonResource
             'isWorkOverdue' => $workTimer['isWorkOverdue'],
             'shouldShowWorkTimer' => $workTimer['shouldShowWorkTimer'],
         ];
+    }
+
+    private function baseOrderTitle(): string
+    {
+        $orderType = $this->property_type === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE
+            ? 'طلب مساعدة مناسبة'
+            : 'طلب تنظيف';
+
+        return $orderType.' #'.$this->booking_number;
     }
 
     /**
