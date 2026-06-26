@@ -29,6 +29,11 @@ final class RouteServiceProvider extends ServiceProvider
 
     public function mapApiRoutes(): void
     {
+        Route::middleware(['api', 'auth:sanctum'])
+            ->prefix('api/v1/user')
+            ->name('api.')
+            ->get('cleaning/orders/female-worker-safety-policy', \Modules\User\Http\Controllers\API\UserCleaningFemaleWorkerSafetyPolicyController::class);
+
         Route::middleware('api')->prefix('api')->name('api.')->group(module_path($this->name, '/routes/api.php'));
     }
 }

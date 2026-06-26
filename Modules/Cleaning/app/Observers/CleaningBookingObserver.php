@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Observers;
 
+use App\Enums\GenderPreference;
 use App\Jobs\ConvertPreferredCleaningBookingToOpenJob;
 use App\Jobs\NotifyEligibleWorkersNewOrderJob;
 use App\Models\BookingStatusLog;
@@ -16,10 +17,23 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Services\DepositService;
+use Modules\User\Services\FemaleWorkerSafetyPolicyService;
 use Throwable;
 
 final class CleaningBookingObserver
 {
+    public function creating(CleaningBooking $booking): void
+    {
+        $this->applyWorkEnvironmentSnapshot($booking);
+    }
+
+    public function updating(CleaningBooking $booking): void
+    {
+        if ($booking->isDirty('gender_preference')) {
+            $this->applyWorkEnvironmentSnapshot($booking);
+        }
+    }
+
     public function created(CleaningBooking $booking): void
     {
         BookingStatusLog::create([
@@ -70,6 +84,37 @@ final class CleaningBookingObserver
         }
 
         $this->notifyLifecycleUpdated($booking, $fromStatusValue);
+    }
+
+    private function applyWorkEnvironmentSnapshot(CleaningBooking $booking): void
+    {
+        $genderPreference = $booking->gender_preference instanceof GenderPreference
+            ? $booking->gender_preference->value
+            : (string) $booking->gender_preference;
+
+        if ($genderPreference !== GenderPreference::Female->value) {
+            $booking->work_environment_beneficiary_presence = null;
+            $booking->female_worker_safety_pledge_accepted = false;
+            $booking->female_worker_safety_pledge_accepted_at = null;
+            $booking->female_worker_safety_pledge_version = null;
+            $booking->female_worker_safety_pledge_text = null;
+
+            return;
+        }
+
+        $confirmation = request()->input('workEnvironmentConfirmation');
+
+        if (! is_array($confirmation)) {
+            return;
+        }
+
+        $policy = app(FemaleWorkerSafetyPolicyService::class);
+
+        $booking->work_environment_beneficiary_presence = (string) ($confirmation['beneficiaryPresence'] ?? '');
+        $booking->female_worker_safety_pledge_accepted = (bool) ($confirmation['pledgeAccepted'] ?? false);
+        $booking->female_worker_safety_pledge_accepted_at = now();
+        $booking->female_worker_safety_pledge_version = (string) ($confirmation['pledgeVersion'] ?? $policy->version());
+        $booking->female_worker_safety_pledge_text = $policy->pledgeText();
     }
 
     private function chargeAdminCommission(CleaningBooking $booking): void
