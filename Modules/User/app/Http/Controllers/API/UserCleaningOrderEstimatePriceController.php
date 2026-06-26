@@ -104,32 +104,25 @@ final class UserCleaningOrderEstimatePriceController
      */
     private function resolveAddressCoordinates(array $validated, int $userId): array
     {
-        $latitude = $validated['addressLatitude'] ?? null;
-        $longitude = $validated['addressLongitude'] ?? null;
-
-        if ($latitude !== null && $longitude !== null) {
-            return [$latitude, $longitude];
-        }
-
         $addressId = $validated['addressId'] ?? null;
-        if (! is_numeric($addressId)) {
-            return [$latitude, $longitude];
-        }
+        if (is_numeric($addressId)) {
+            $address = UserAddress::query()
+                ->whereKey((int) $addressId)
+                ->where('user_id', $userId)
+                ->first();
 
-        $address = UserAddress::query()
-            ->whereKey((int) $addressId)
-            ->where('user_id', $userId)
-            ->first();
+            if (! $address instanceof UserAddress) {
+                throw ValidationException::withMessages([
+                    'addressId' => ['Selected address is invalid.'],
+                ]);
+            }
 
-        if (! $address instanceof UserAddress) {
-            throw ValidationException::withMessages([
-                'addressId' => ['Selected address is invalid.'],
-            ]);
+            return [$address->latitude, $address->longitude];
         }
 
         return [
-            $latitude ?? $address->latitude,
-            $longitude ?? $address->longitude,
+            $validated['addressLatitude'] ?? null,
+            $validated['addressLongitude'] ?? null,
         ];
     }
 
