@@ -10,6 +10,7 @@ use InvalidArgumentException;
 use Modules\Cleaning\Services\CleaningExtendedTimePricingService;
 use Modules\Cleaning\Support\WorkerRoomAssignmentPlanner;
 use Modules\User\Http\Requests\UserCleaningOrderEstimatePriceRequest;
+use Modules\User\Models\UserAddress;
 use Modules\User\Services\FemaleWorkerSafetyPolicyService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
@@ -21,6 +22,7 @@ final class UserCleaningOrderEstimatePriceController
         CleaningExtendedTimePricingService $extendedTimePricing,
     ): JsonResponse {
         $validated = $request->validated();
+        [$addressLatitude, $addressLongitude] = $this->resolveAddressCoordinates($validated, (int) $request->user()->id);
 
         try {
             $estimation = $service->estimate(
@@ -31,8 +33,8 @@ final class UserCleaningOrderEstimatePriceController
             $pricing = $service->price(
                 (string) $validated['propertyType'],
                 (array) $validated['propertyDetails'],
-                $validated['addressLatitude'] ?? null,
-                $validated['addressLongitude'] ?? null,
+                $addressLatitude,
+                $addressLongitude,
                 $validated['preferredWorkerId'] ?? null,
                 isset($validated['serviceIds']) ? (array) $validated['serviceIds'] : null,
             );
@@ -94,6 +96,41 @@ final class UserCleaningOrderEstimatePriceController
             'extendedTimeRanges' => $extendedTimePricing->ranges(),
             'algorithmVersion' => $service->algorithmVersion(),
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array{0: mixed, 1: mixed}
+     */
+    private function resolveAddressCoordinates(array $validated, int $userId): array
+    {
+        $latitude = $validated['addressLatitude'] ?? null;
+        $longitude = $validated['addressLongitude'] ?? null;
+
+        if ($latitude !== null && $longitude !== null) {
+            return [$latitude, $longitude];
+        }
+
+        $addressId = $validated['addressId'] ?? null;
+        if (! is_numeric($addressId)) {
+            return [$latitude, $longitude];
+        }
+
+        $address = UserAddress::query()
+            ->whereKey((int) $addressId)
+            ->where('user_id', $userId)
+            ->first();
+
+        if (! $address instanceof UserAddress) {
+            throw ValidationException::withMessages([
+                'addressId' => ['Selected address is invalid.'],
+            ]);
+        }
+
+        return [
+            $latitude ?? $address->latitude,
+            $longitude ?? $address->longitude,
+        ];
     }
 
     private function resolveAssignmentMode(mixed $assignmentMode, mixed $preferredWorkerId, mixed $numberOfWorkers): string
