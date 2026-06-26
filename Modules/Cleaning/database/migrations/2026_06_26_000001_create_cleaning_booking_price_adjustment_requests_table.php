@@ -10,6 +10,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Recover from a previous failed migration attempt where MySQL created
+        // the table before failing on the long auto-generated FK name.
+        Schema::dropIfExists('cleaning_booking_price_adjustment_requests');
+
         Schema::create('cleaning_booking_price_adjustment_requests', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('cleaning_booking_id');
