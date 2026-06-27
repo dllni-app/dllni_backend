@@ -157,7 +157,6 @@ final class Worker extends Model implements HasMedia
             }
 
             $user = $worker->user;
-
             if (! $user || $user->module_type !== UserModuleType::CleaningWorker) {
                 return;
             }
@@ -237,25 +236,7 @@ final class Worker extends Model implements HasMedia
 
     public function hasActiveCoverageForNeighborhood(?int $neighborhoodId): bool
     {
-        if ($neighborhoodId === null) {
-            return false;
-        }
-
-        if ($this->relationLoaded('zones') && $this->zones->contains(
-            fn (WorkerZone $zone): bool => (bool) $zone->is_active
-                && (int) ($zone->neighborhood_id ?? 0) === $neighborhoodId
-        )) {
-            return true;
-        }
-
-        if (! $this->relationLoaded('zones') && $this->zones()
-            ->where('is_active', true)
-            ->where('neighborhood_id', $neighborhoodId)
-            ->exists()) {
-            return true;
-        }
-
-        return $this->homeAddressMatchesNeighborhood($neighborhoodId);
+        return $neighborhoodId !== null;
     }
 
     public function isAvailableAt(CarbonInterface $dateTime): bool
