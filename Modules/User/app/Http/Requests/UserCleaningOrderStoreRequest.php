@@ -158,16 +158,8 @@ final class UserCleaningOrderStoreRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
-            $preferredWorkerIds = $this->normalizePreferredWorkerIds($this->input('preferredWorkerIds'));
-            $preferredWorkerId = $preferredWorkerIds[0] ?? $this->input('preferredWorkerId');
-            $usesPreferredWorkerIdsArray = $this->has('preferredWorkerIds');
-
             if ($this->filled('addressId') && (! $this->filled('addressLatitude') || ! $this->filled('addressLongitude'))) {
                 $validator->errors()->add('addressId', 'Selected address must include latitude and longitude coordinates.');
-            }
-
-            if ($this->normalizedAssignmentMode() === 'open_count' && $preferredWorkerId !== null && ! $usesPreferredWorkerIdsArray) {
-                $validator->errors()->add('preferredWorkerId', 'Selected worker is not compatible with open count mode.');
             }
 
             if ($this->requiresFemaleWorkerSafetyConfirmation()) {
@@ -186,17 +178,6 @@ final class UserCleaningOrderStoreRequest extends FormRequest
 
             $this->validateWorkerRoomAssignments($validator);
         });
-    }
-
-    private function normalizedAssignmentMode(): ?string
-    {
-        $assignmentMode = $this->input('assignmentMode');
-
-        if (! is_string($assignmentMode) || mb_trim($assignmentMode) === '') {
-            return null;
-        }
-
-        return mb_strtolower(mb_trim($assignmentMode));
     }
 
     /**
