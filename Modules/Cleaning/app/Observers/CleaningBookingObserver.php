@@ -17,6 +17,7 @@ use Modules\Cleaning\Enums\CleaningAssignmentMode;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
+use Modules\Cleaning\Services\CleaningLoyaltyAutomationService;
 use Modules\Cleaning\Services\DepositService;
 use Modules\User\Services\FemaleWorkerSafetyPolicyService;
 use Throwable;
@@ -86,6 +87,7 @@ final class CleaningBookingObserver
 
             if ($booking->status === CleaningBookingStatus::Completed) {
                 $this->chargeAdminCommission($booking);
+                $this->evaluateMemberLoyaltyBonus($booking);
             }
 
             return;
@@ -220,6 +222,15 @@ final class CleaningBookingObserver
         }
     }
 
+    private function evaluateMemberLoyaltyBonus(CleaningBooking $booking): void
+    {
+        try {
+            app(CleaningLoyaltyAutomationService::class)->evaluateCompletedBooking($booking);
+        } catch (Throwable $exception) {
+            report($exception);
+        }
+    }
+
     private function dispatchPreferredWorkerFallbackIfNeeded(CleaningBooking $booking): void
     {
         if ($booking->resolvedAssignmentMode() !== CleaningAssignmentMode::PreferredWorker->value || $booking->preferred_worker_id === null) {
@@ -247,15 +258,19 @@ final class CleaningBookingObserver
 
     private function notifyBothParties(CleaningBooking $booking, string $canonicalType, ?string $fromStatus): void
     {
-        $customer = $booking->customer;
-        $workerUser = $booking->worker?->user;
-
-        if ($customer instanceof User) {
-            $customer->notify(new BookingLifecycleNotification($booking, $canonicalType, 'worker', 'customer', $fromStatus));
-        }
-
-        if ($workerUser instanceof User) {
-            $workerUser->notify(new BookingLifecycleNotification($booking, $canonicalType, 'customer', 'worker', $fromStatus));
+        foreach ([$booking->customer, $booking->worker?->user] as $recipient) {
+            if ($recipient instanceof User) {
+                $recipient->notify(new BookingLifecycleNotification(
+                    booking: $booking,
+                    canonicalType: $canonicalType,
+                    channelRole: $recipient->id === $booking->customer_id ? 'customer' : 'worker',
+                    actorRole: 'system',
+                    action: $canonicalType === 'cleaning.booking.created' ? 'created' : 'updated',
+                    fromStatus: $fromStatus,
+                    toStatus: $booking->status?->value,
+                    occurredAt: $booking->updated_at?->toIso8601String(),
+                ));
+            }
         }
     }
 }
