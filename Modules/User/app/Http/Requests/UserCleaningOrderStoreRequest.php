@@ -158,27 +158,16 @@ final class UserCleaningOrderStoreRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
-            $assignmentMode = $this->normalizedAssignmentMode();
             $preferredWorkerIds = $this->normalizePreferredWorkerIds($this->input('preferredWorkerIds'));
             $preferredWorkerId = $preferredWorkerIds[0] ?? $this->input('preferredWorkerId');
-            $numberOfWorkers = $this->input('numberOfWorkers');
             $usesPreferredWorkerIdsArray = $this->has('preferredWorkerIds');
-            $usesMultiplePreferredWorkers = count($preferredWorkerIds) > 1;
 
             if ($this->filled('addressId') && (! $this->filled('addressLatitude') || ! $this->filled('addressLongitude'))) {
                 $validator->errors()->add('addressId', 'Selected address must include latitude and longitude coordinates.');
             }
 
-            if ($assignmentMode === 'preferred_worker' && is_numeric($preferredWorkerId) && (int) $preferredWorkerId > 0 && ! $usesMultiplePreferredWorkers && $numberOfWorkers !== null && (int) $numberOfWorkers !== 1) {
-                $validator->errors()->add('numberOfWorkers', 'Selected worker mode only allows one worker.');
-            }
-
-            if ($assignmentMode === 'open_count' && $preferredWorkerId !== null && ! $usesPreferredWorkerIdsArray) {
+            if ($this->normalizedAssignmentMode() === 'open_count' && $preferredWorkerId !== null && ! $usesPreferredWorkerIdsArray) {
                 $validator->errors()->add('preferredWorkerId', 'Selected worker is not compatible with open count mode.');
-            }
-
-            if ($assignmentMode === null && $preferredWorkerId !== null && $numberOfWorkers !== null && (int) $numberOfWorkers !== 1 && ! $usesMultiplePreferredWorkers) {
-                $validator->errors()->add('numberOfWorkers', 'This request mode only supports one worker.');
             }
 
             if ($this->requiresFemaleWorkerSafetyConfirmation()) {
