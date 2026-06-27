@@ -14,7 +14,7 @@ final class ListCleaningAutomationRules extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'Create rules such as 100 completed hours within 2 months. The system only creates a pending member bonus; admin activation is required.';
+        return __('cleaning_admin.pages.automation_rules.list');
     }
 
     protected function getHeaderActions(): array
