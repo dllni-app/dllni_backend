@@ -8,7 +8,6 @@ use App\Models\Worker;
 use App\Support\Broadcast\BroadcastAfterResponse;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 use Modules\Cleaning\Enums\CleaningAssignmentMode;
 use Modules\Cleaning\Enums\CleaningBookingRoomAssignmentSource;
@@ -22,8 +21,6 @@ use Modules\Cleaning\Support\WorkerRoomAssignmentPlanner;
 
 final class CleaningBookingTeamService
 {
-    private const WORKER_NEIGHBORHOOD_GUARD_MESSAGE = "\u{644}\u{627} \u{64a}\u{645}\u{643}\u{646}\u{643} \u{642}\u{628}\u{648}\u{644} \u{647}\u{630}\u{627} \u{627}\u{644}\u{637}\u{644}\u{628} \u{644}\u{623}\u{646}\u{647} \u{62e}\u{627}\u{631}\u{62c} \u{645}\u{646}\u{627}\u{637}\u{642} \u{639}\u{645}\u{644}\u{643} \u{627}\u{644}\u{645}\u{62d}\u{62f}\u{62f}\u{629}.";
-
     public function __construct(
         private readonly CleaningPricingCalculator $pricingCalculator,
         private readonly DepositService $depositService,
@@ -562,12 +559,6 @@ final class CleaningBookingTeamService
             && $worker->gender !== $booking->gender_preference->value
         ) {
             throw new InvalidArgumentException('Booking gender preference does not match worker profile.');
-        }
-
-        if ($booking->neighborhood_id === null || ! $worker->hasActiveCoverageForNeighborhood((int) $booking->neighborhood_id)) {
-            throw ValidationException::withMessages([
-                'worker' => [self::WORKER_NEIGHBORHOOD_GUARD_MESSAGE],
-            ]);
         }
 
         if ($worker->home_address === null || mb_trim($worker->home_address) === '') {
