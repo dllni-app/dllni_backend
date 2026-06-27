@@ -131,7 +131,6 @@ trait CleaningBookingFilterQuery
                     $pending->where('status', CleaningBookingStatus::Pending)
                         ->whereNull('worker_id')
                         ->whereNull('preferred_worker_id')
-                        ->whereNotNull('neighborhood_id')
                         ->when(
                             $preferredWorkType === WorkerPreferredWorkType::Cleaning,
                             fn (Builder $query): Builder => $query->where('property_type', '!=', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
@@ -146,12 +145,24 @@ trait CleaningBookingFilterQuery
                                 ->orWhere('gender_preference', GenderPreference::Any->value)
                                 ->orWhere('gender_preference', $worker->gender);
                         })
-                        ->whereExists(function ($sub) use ($worker): void {
-                            $sub->selectRaw('1')
-                                ->from('worker_zones')
-                                ->whereColumn('worker_zones.neighborhood_id', 'cleaning_bookings.neighborhood_id')
-                                ->where('worker_zones.worker_id', $worker->id)
-                                ->where('worker_zones.is_active', true);
+                        ->where(function (Builder $coverageQuery) use ($worker): void {
+                            $coverageQuery
+                                ->where(function (Builder $neighborhoodCoverage) use ($worker): void {
+                                    $neighborhoodCoverage
+                                        ->whereNotNull('neighborhood_id')
+                                        ->whereExists(function ($sub) use ($worker): void {
+                                            $sub->selectRaw('1')
+                                                ->from('worker_zones')
+                                                ->whereColumn('worker_zones.neighborhood_id', 'cleaning_bookings.neighborhood_id')
+                                                ->where('worker_zones.worker_id', $worker->id)
+                                                ->where('worker_zones.is_active', true);
+                                        });
+                                })
+                                ->orWhere(function (Builder $eventWithoutNeighborhood): void {
+                                    $eventWithoutNeighborhood
+                                        ->where('property_type', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
+                                        ->whereNull('neighborhood_id');
+                                });
                         })
                         ->whereDoesntHave('rejections', fn (Builder $rejections) => $rejections->where('worker_id', $worker->id));
                 });
