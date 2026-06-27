@@ -258,19 +258,15 @@ final class CleaningBookingObserver
 
     private function notifyBothParties(CleaningBooking $booking, string $canonicalType, ?string $fromStatus): void
     {
-        foreach ([$booking->customer, $booking->worker?->user] as $recipient) {
-            if ($recipient instanceof User) {
-                $recipient->notify(new BookingLifecycleNotification(
-                    booking: $booking,
-                    canonicalType: $canonicalType,
-                    channelRole: $recipient->id === $booking->customer_id ? 'customer' : 'worker',
-                    actorRole: 'system',
-                    action: $canonicalType === 'cleaning.booking.created' ? 'created' : 'updated',
-                    fromStatus: $fromStatus,
-                    toStatus: $booking->status?->value,
-                    occurredAt: $booking->updated_at?->toIso8601String(),
-                ));
-            }
+        $customer = $booking->customer;
+        $workerUser = $booking->worker?->user;
+
+        if ($customer instanceof User) {
+            $customer->notify(new BookingLifecycleNotification($booking, $canonicalType, 'worker', 'customer', $fromStatus));
+        }
+
+        if ($workerUser instanceof User) {
+            $workerUser->notify(new BookingLifecycleNotification($booking, $canonicalType, 'customer', 'worker', $fromStatus));
         }
     }
 }
