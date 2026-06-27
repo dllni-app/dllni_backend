@@ -17,7 +17,6 @@ use Modules\Cleaning\Enums\CleaningAssignmentMode;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
-use Modules\Cleaning\Services\CleaningLoyaltyAutomationService;
 use Modules\Cleaning\Services\DepositService;
 use Modules\User\Services\FemaleWorkerSafetyPolicyService;
 use Throwable;
@@ -87,7 +86,6 @@ final class CleaningBookingObserver
 
             if ($booking->status === CleaningBookingStatus::Completed) {
                 $this->chargeAdminCommission($booking);
-                $this->evaluateMemberLoyaltyBonus($booking);
             }
 
             return;
@@ -217,15 +215,6 @@ final class CleaningBookingObserver
             if ($worker instanceof Worker && $amount > 0) {
                 $depositService->recordAdminFeeDebit($worker, $booking, $amount);
             }
-        } catch (Throwable $exception) {
-            report($exception);
-        }
-    }
-
-    private function evaluateMemberLoyaltyBonus(CleaningBooking $booking): void
-    {
-        try {
-            app(CleaningLoyaltyAutomationService::class)->evaluateCompletedBooking($booking);
         } catch (Throwable $exception) {
             report($exception);
         }
