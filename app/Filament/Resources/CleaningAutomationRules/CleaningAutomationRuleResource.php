@@ -27,31 +27,21 @@ final class CleaningAutomationRuleResource extends Resource
 
     protected static ?int $navigationSort = 25;
 
-    protected static bool $shouldRegisterNavigation = true;
+    protected static bool $shouldRegisterNavigation = false;
 
     public static function getNavigationGroup(): ?string
     {
-        return __('cleaning_admin.nav_groups.settings');
+        return __('cleaning_admin.nav_groups.operations');
     }
 
     public static function getNavigationLabel(): string
     {
-        return 'Loyalty Rules';
-    }
-
-    public static function getModelLabel(): string
-    {
-        return 'Loyalty Rule';
-    }
-
-    public static function getPluralModelLabel(): string
-    {
-        return 'Loyalty Rules';
+        return __('cleaning_admin.automation.nav_label');
     }
 
     public static function getNavigationTooltip(): ?string
     {
-        return 'Configure automatic loyalty thresholds. Eligible member bonuses are created as pending and must be activated by admin.';
+        return __('cleaning_admin.automation.tooltip');
     }
 
     public static function form(Schema $schema): Schema
