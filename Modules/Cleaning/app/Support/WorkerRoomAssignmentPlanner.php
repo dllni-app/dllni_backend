@@ -45,6 +45,12 @@ final class WorkerRoomAssignmentPlanner
             ];
         }
 
+        $workerRoomAssignments = self::normalizePreferredWorkerAssignments(
+            $workerRoomAssignments,
+            $assignmentMode,
+            $preferredWorkerId,
+        );
+
         $errors = [];
         $roomMap = [];
         foreach ($derivedRooms as $room) {
@@ -237,7 +243,7 @@ final class WorkerRoomAssignmentPlanner
 
     /**
      * @param  array<int, array{workerSlot:int, preferredWorkerId:?int, rooms:array<int, array{roomKey:string, roomType:string, roomSize:string, weight:float}>, roomsWeight?:float}>  $assignments
-     * @return array<int, array{workerSlot:int, preferredWorkerId:?int, rooms:array<int, array{roomKey:string, roomType:string, roomSize:string}>, roomsWeight:float, estimatedServiceShareAmount:float}>
+     * @return array<int, array{workerSlot:int, preferredWorkerId:?int, rooms:array<int, array{roomKey:string, roomType:string}>, roomsWeight:float, estimatedServiceShareAmount:float}>
      */
     public static function withPricingPreview(array $assignments, float $subtotal): array
     {
@@ -264,6 +270,44 @@ final class WorkerRoomAssignmentPlanner
                 ], $assignment['rooms']),
             ];
         }, $assignments);
+    }
+
+    /**
+     * Flutter may send preferred-worker room assignments as one entry per selected room,
+     * using workerSlot as a room index and preferredWorkerId as null. For backend domain
+     * rules, preferred-worker mode is still one worker, so normalize those entries into
+     * the single supported slot before validation and room planning.
+     *
+     * @param  array<int, array<string, mixed>>  $workerRoomAssignments
+     * @return array<int, array<string, mixed>>
+     */
+    private static function normalizePreferredWorkerAssignments(
+        array $workerRoomAssignments,
+        string $assignmentMode,
+        ?int $preferredWorkerId,
+    ): array {
+        if ($assignmentMode !== 'preferred_worker') {
+            return $workerRoomAssignments;
+        }
+
+        $rooms = [];
+
+        foreach ($workerRoomAssignments as $assignment) {
+            $assignmentRooms = $assignment['rooms'] ?? null;
+            if (! is_array($assignmentRooms)) {
+                return $workerRoomAssignments;
+            }
+
+            foreach ($assignmentRooms as $room) {
+                $rooms[] = $room;
+            }
+        }
+
+        return [[
+            'workerSlot' => 1,
+            'preferredWorkerId' => $preferredWorkerId,
+            'rooms' => $rooms,
+        ]];
     }
 
     private static function normalizeNullableInt(mixed $value): ?int
