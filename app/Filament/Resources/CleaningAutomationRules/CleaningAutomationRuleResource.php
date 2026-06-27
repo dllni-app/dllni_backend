@@ -23,25 +23,35 @@ final class CleaningAutomationRuleResource extends Resource
 {
     protected static ?string $model = CleaningAutomationRule::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCog6Tooth;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedGift;
 
     protected static ?int $navigationSort = 25;
 
-    protected static bool $shouldRegisterNavigation = false;
+    protected static bool $shouldRegisterNavigation = true;
 
     public static function getNavigationGroup(): ?string
     {
-        return __('cleaning_admin.nav_groups.operations');
+        return __('cleaning_admin.nav_groups.settings');
     }
 
     public static function getNavigationLabel(): string
     {
-        return __('cleaning_admin.automation.nav_label');
+        return 'Loyalty Rules';
+    }
+
+    public static function getModelLabel(): string
+    {
+        return 'Loyalty Rule';
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return 'Loyalty Rules';
     }
 
     public static function getNavigationTooltip(): ?string
     {
-        return __('cleaning_admin.automation.tooltip');
+        return 'Configure automatic loyalty thresholds. Eligible member bonuses are created as pending and must be activated by admin.';
     }
 
     public static function form(Schema $schema): Schema
