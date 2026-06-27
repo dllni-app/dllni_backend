@@ -81,7 +81,11 @@ return new class extends Migration
             HAVING columns_list = 'user_id'
         SQL);
 
-        return array_map(static fn (object $row): string => (string) $row->index_name, $rows);
+        return array_map(static function (object $row): string {
+            $indexName = $row->index_name ?? $row->INDEX_NAME ?? $row->Index_name ?? null;
+
+            return $indexName ? (string) $indexName : '';
+        }, $rows);
     }
 
     private function indexExists(string $indexName): bool
