@@ -302,7 +302,7 @@ it('excludes ineligible workers from dispatch notifications', function (): void 
     }
 });
 
-it('blocks start travel when worker does not meet deposit requirements', function (): void {
+it('allows start travel without checking deposit minimum', function (): void {
     seedDepositSettings(['minimum_deposit_amount' => 5000]);
     $workerUser = User::factory()->create();
     $worker = Worker::factory()->create(['user_id' => $workerUser->id, 'trust_score' => 80]);
@@ -317,5 +317,7 @@ it('blocks start travel when worker does not meet deposit requirements', functio
     ]);
 
     $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/start-travel")
-        ->assertUnprocessable();
+        ->assertOk();
+
+    expect($booking->fresh()->started_travel_at)->not->toBeNull();
 });
