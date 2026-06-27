@@ -158,11 +158,7 @@ trait CleaningBookingFilterQuery
                                                 ->where('worker_zones.is_active', true);
                                         });
                                 })
-                                ->orWhere(function (Builder $eventWithoutNeighborhood): void {
-                                    $eventWithoutNeighborhood
-                                        ->where('property_type', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
-                                        ->whereNull('neighborhood_id');
-                                });
+                                ->orWhereNull('neighborhood_id');
                         })
                         ->whereDoesntHave('rejections', fn (Builder $rejections) => $rejections->where('worker_id', $worker->id));
                 });
