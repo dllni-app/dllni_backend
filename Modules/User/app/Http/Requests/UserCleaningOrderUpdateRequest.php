@@ -90,18 +90,9 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
         $validator->after(function (Validator $validator): void {
             $assignmentMode = $this->normalizedAssignmentMode();
             $preferredWorkerId = $this->input('preferredWorkerId');
-            $numberOfWorkers = $this->input('numberOfWorkers');
-
-            if ($assignmentMode === 'preferred_worker' && is_numeric($preferredWorkerId) && (int) $preferredWorkerId > 0 && $numberOfWorkers !== null && (int) $numberOfWorkers !== 1) {
-                $validator->errors()->add('numberOfWorkers', 'Selected worker mode only allows one worker.');
-            }
 
             if ($assignmentMode === 'open_count' && $preferredWorkerId !== null) {
                 $validator->errors()->add('preferredWorkerId', 'Selected worker is not compatible with open count mode.');
-            }
-
-            if ($assignmentMode === null && $preferredWorkerId !== null && $numberOfWorkers !== null && (int) $numberOfWorkers !== 1) {
-                $validator->errors()->add('numberOfWorkers', 'This request mode only supports one worker.');
             }
 
             if ($this->requiresFemaleWorkerSafetyConfirmation()) {
