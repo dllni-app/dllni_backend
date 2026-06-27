@@ -21,6 +21,7 @@ return new class extends Migration
             });
         }
 
+        $this->ensureUserIdIndexExists();
         $this->dropUserOnlyUniqueIndexIfPresent();
         $this->splitExistingCartsByRestaurant();
         $this->deleteEmptyOrUnscopedCarts();
@@ -62,6 +63,17 @@ return new class extends Migration
 
         Schema::table('carts', function (Blueprint $table): void {
             $table->unique(['user_id', 'restaurant_id'], 'carts_user_restaurant_unique');
+        });
+    }
+
+    private function ensureUserIdIndexExists(): void
+    {
+        if ($this->indexExists('carts_user_id_index')) {
+            return;
+        }
+
+        Schema::table('carts', function (Blueprint $table): void {
+            $table->index('user_id', 'carts_user_id_index');
         });
     }
 
