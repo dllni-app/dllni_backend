@@ -25,6 +25,10 @@ final class UserCleaningOrderStoreRequest extends FormRequest
     {
         $merge = [];
 
+        $assignmentMode = $this->input('assignmentMode');
+        $isPreferredWorkerMode = is_string($assignmentMode)
+            && mb_strtolower(mb_trim($assignmentMode)) === 'preferred_worker';
+
         $preferredWorkerIds = $this->normalizePreferredWorkerIds(
             $this->input('preferredWorkerIds', $this->input('preferredWorkerId'))
         );
@@ -33,7 +37,9 @@ final class UserCleaningOrderStoreRequest extends FormRequest
             $merge['preferredWorkerIds'] = $preferredWorkerIds;
             $merge['preferredWorkerId'] = $preferredWorkerIds[0] ?? null;
 
-            if (count($preferredWorkerIds) > 1) {
+            if ($isPreferredWorkerMode && count($preferredWorkerIds) === 1) {
+                $merge['numberOfWorkers'] = 1;
+            } elseif (count($preferredWorkerIds) > 1) {
                 if (! $this->filled('numberOfWorkers')) {
                     $merge['numberOfWorkers'] = count($preferredWorkerIds);
                 }
