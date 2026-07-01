@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\CleaningDepositSetting;
+use App\Models\CleaningFinancialSetting;
 use App\Models\CleaningWorkerDeposit;
 use App\Models\User;
 use App\Models\Worker;
@@ -20,6 +21,23 @@ function seedUxDepositSettings(array $overrides = []): CleaningDepositSetting
             'is_enabled' => true,
             'trust_reject_after_accept_penalty' => 10,
             'trust_minimum_for_dispatch' => 50,
+        ], $overrides),
+    );
+}
+
+function seedUxFinancialSettings(array $overrides = []): CleaningFinancialSetting
+{
+    return CleaningFinancialSetting::query()->updateOrCreate(
+        ['id' => CleaningFinancialSetting::query()->orderBy('id')->value('id') ?? 1],
+        array_merge([
+            'default_commission_rate' => 10.00,
+            'commission_type' => 'percent',
+            'commission_fixed_amount' => null,
+            'vat_rate' => 0.00,
+            'travel_markup_type' => 'fixed',
+            'travel_markup_value' => 0.00,
+            'travel_per_km' => 0.00,
+            'travel_distance_start_point' => 'worker_home',
         ], $overrides),
     );
 }
@@ -113,6 +131,79 @@ it('hides pending new requests from ineligible workers in the current worker lis
         ->assertJsonPath('dispatchEligibility.reasonCode', 'deposit_below_allowed_balance');
 });
 
+it('shows pending new requests to eligible workers even when commission capacity only blocks accepting', function (): void {
+    seedUxDepositSettings([
+        'minimum_deposit_amount' => 0,
+        'default_max_negative_balance' => 0,
+        'restriction_threshold_percent' => 100,
+    ]);
+    seedUxFinancialSettings();
+
+    $user = User::factory()->create();
+    $worker = Worker::factory()->create([
+        'user_id' => $user->id,
+        'trust_score' => 80,
+        'is_active' => true,
+        'is_suspended' => false,
+        'home_address' => 'Worker Home',
+        'home_latitude' => 36.20,
+        'home_longitude' => 37.15,
+    ]);
+    seedUxWorkerDeposit($worker, 1000, 0, 0);
+
+    $acceptedBooking = CleaningBooking::factory()->create([
+        'status' => CleaningBookingStatus::Pending->value,
+        'worker_id' => null,
+        'base_price' => 10000,
+        'addons_total' => 0,
+        'scheduled_date' => now()->toDateString(),
+        'scheduled_time' => now()->addHour()->format('H:i'),
+        'gender_preference' => 'any',
+        'address_latitude' => 36.1795,
+        'address_longitude' => 37.1082,
+    ]);
+    $acceptedBooking->workerAssignments()->create([
+        'worker_id' => $worker->id,
+        'status' => 'accepted_waiting_for_order_start',
+        'accepted_at' => now(),
+        'room_count' => 0,
+        'rooms_weight' => 0,
+        'service_share_amount' => 0,
+        'travel_fee' => 0,
+        'admin_margin_amount' => 900,
+        'worker_amount' => 0,
+        'currency' => 'SYP',
+    ]);
+
+    $newBooking = CleaningBooking::factory()->create([
+        'status' => CleaningBookingStatus::Pending->value,
+        'worker_id' => null,
+        'preferred_worker_id' => null,
+        'base_price' => 20000,
+        'addons_total' => 0,
+        'scheduled_date' => now()->toDateString(),
+        'scheduled_time' => now()->addHour()->format('H:i'),
+        'gender_preference' => 'any',
+        'address_latitude' => 36.1795,
+        'address_longitude' => 37.1082,
+    ]);
+
+    Sanctum::actingAs($user);
+
+    $response = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
+
+    $response->assertOk()
+        ->assertJsonPath('dispatchEligibility.canReceiveNewRequests', true);
+
+    expect(collect($response->json('data'))->contains(fn (array $booking): bool => $booking['id'] === $newBooking->id))->toBeTrue();
+
+    $acceptResponse = $this->postJson("/api/v1/cleaning-bookings/{$newBooking->id}/accept");
+
+    $acceptResponse->assertUnprocessable()
+        ->assertJsonPath('code', 'WORKER_NOT_ELIGIBLE_FOR_BOOKING_COMMISSION')
+        ->assertJsonPath('errors.workerEligibility.0.reasonCode', 'insufficient_commission_capacity');
+});
+
 it('returns a structured business error when an ineligible worker tries to accept a booking', function (): void {
     actingAsIneligibleUxWorker();
 
@@ -127,7 +218,7 @@ it('returns a structured business error when an ineligible worker tries to accep
     $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/accept");
 
     $response->assertUnprocessable()
-        ->assertJsonPath('code', 'WORKER_NOT_ELIGIBLE_FOR_NEW_REQUESTS')
+        ->assertJsonPath('code', 'WORKER_NOT_ELIGIBLE_FOR_BOOKING_COMMISSION')
         ->assertJsonPath('errors.workerEligibility.0.reasonCode', 'deposit_below_allowed_balance')
         ->assertJsonPath('dispatchEligibility.canAcceptNewBookings', false);
 });
