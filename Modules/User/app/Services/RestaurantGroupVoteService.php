@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\User\Services;
 
+use App\Models\User;
 use App\Services\DeepLinks\CanonicalDeepLinkGenerator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -231,6 +232,7 @@ final class RestaurantGroupVoteService
             ? $vote->ballots->first(fn (RestaurantGroupVoteBallot $ballot): bool => (int) $ballot->user_id === $currentUserId)
             : null;
         $currentUserOptionId = $currentUserBallot?->option_id !== null ? (int) $currentUserBallot->option_id : null;
+        $currentUserOptionAlias = $currentUserOptionId ?? 0;
 
         $optionsPayload = $vote->options->map(function (RestaurantGroupVoteOption $option) use ($countsByOption, $totalBallots, $currentUserOptionId): array {
             $count = (int) ($countsByOption->get($option->id) ?? 0);
@@ -253,14 +255,15 @@ final class RestaurantGroupVoteService
             ];
         })->values()->all();
 
-        $fallbackUserName = "\u{0645}\u{0633}\u{062A}\u{062E}\u{062F}\u{0645} \u{0627}\u{0644}\u{062A}\u{0637}\u{0628}\u{064A}\u{0642}";
+        $votersPayload = $vote->ballots->sortBy('id')->values()->map(function (RestaurantGroupVoteBallot $ballot) use ($currentUserId): array {
+            $isCurrentUser = $currentUserId !== null && (int) $ballot->user_id === $currentUserId;
 
-        $votersPayload = $vote->ballots->sortBy('id')->values()->map(function (RestaurantGroupVoteBallot $ballot) use ($fallbackUserName): array {
             return [
                 'userId' => $ballot->user_id,
-                'name' => $ballot->user?->name ?: $fallbackUserName,
+                'name' => $this->displayUserName($ballot->user, $isCurrentUser),
                 'optionId' => $ballot->option_id,
                 'optionLabel' => $ballot->option?->label,
+                'isCurrentUser' => $isCurrentUser,
             ];
         })->all();
 
@@ -276,10 +279,13 @@ final class RestaurantGroupVoteService
             }
         }
 
-        $invitedUsersPayload = $vote->invites->sortBy('id')->values()->map(function (RestaurantGroupVoteInvite $invite) use ($fallbackUserName): array {
+        $invitedUsersPayload = $vote->invites->sortBy('id')->values()->map(function (RestaurantGroupVoteInvite $invite) use ($currentUserId): array {
+            $isCurrentUser = $currentUserId !== null && (int) $invite->user_id === $currentUserId;
+
             return [
                 'userId' => $invite->user_id,
-                'name' => $invite->user?->name ?: $fallbackUserName,
+                'name' => $this->displayUserName($invite->user, $isCurrentUser),
+                'isCurrentUser' => $isCurrentUser,
             ];
         })->all();
 
@@ -311,6 +317,9 @@ final class RestaurantGroupVoteService
                 'isCreator' => $currentUserId !== null && $currentUserId === $vote->user_id,
                 'isInvited' => $isInvited,
                 'currentUserOptionId' => $currentUserOptionId,
+                'myVotedOptionId' => $currentUserOptionAlias,
+                'userVoteOptionId' => $currentUserOptionAlias,
+                'selectedOptionId' => $currentUserOptionAlias,
                 'hasCurrentUserVoted' => $currentUserOptionId !== null,
                 'createdAt' => $vote->created_at->toIso8601String(),
             ],
@@ -387,6 +396,21 @@ final class RestaurantGroupVoteService
             'cuisineTypes' => $cuisineTypes,
             'suggestions' => $suggestions,
         ];
+    }
+
+    private function displayUserName(?User $user, bool $isCurrentUser = false): string
+    {
+        $name = is_string($user?->name) ? trim($user->name) : '';
+
+        if ($name !== '') {
+            return $name;
+        }
+
+        if ($isCurrentUser) {
+            return 'أنت';
+        }
+
+        return "\u{0645}\u{0633}\u{062A}\u{062E}\u{062F} \u{0627}\u{0644}\u{062A}\u{0637}\u{0628}\u{064A}\u{0642}";
     }
 
     private function applyWinner(RestaurantGroupVote $vote): void
