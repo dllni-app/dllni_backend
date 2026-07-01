@@ -4,16 +4,22 @@ declare(strict_types=1);
 
 namespace Modules\User\Services;
 
+use App\Models\MasterProduct;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Modules\Supermarket\Models\SmCart;
 use Modules\Supermarket\Models\SmCartItem;
 use Modules\Supermarket\Models\SmProduct;
+use Modules\Supermarket\Models\SmStore;
 
 final class UserSupermarketCartService
 {
     private const CART_RELATIONS = [
+        'items.product.category',
         'items.product.store',
+        'items.product.media',
+        'items.product.masterProduct.media',
+        'items.product.modifierGroups.modifiers',
     ];
 
     /**
@@ -234,7 +240,13 @@ final class UserSupermarketCartService
 
             $items = SmCartItem::query()
                 ->where('cart_id', $lockedCart->id)
-                ->with('product.store')
+                ->with([
+                    'product.category',
+                    'product.store',
+                    'product.media',
+                    'product.masterProduct.media',
+                    'product.modifierGroups.modifiers',
+                ])
                 ->orderBy('id')
                 ->lockForUpdate()
                 ->get();
@@ -271,6 +283,7 @@ final class UserSupermarketCartService
         return [
             'id' => null,
             'merchant' => null,
+            'store' => null,
             'merchantGroups' => [],
             'isMultiMerchant' => false,
             'checkout' => [
@@ -291,7 +304,14 @@ final class UserSupermarketCartService
      */
     private function toPayload(SmCart $cart): array
     {
-        $items = $cart->items->loadMissing('product.store');
+        $items = $cart->items->loadMissing([
+            'product.category',
+            'product.store',
+            'product.media',
+            'product.masterProduct.media',
+            'product.modifierGroups.modifiers',
+        ]);
+
         $merchantGroups = $items
             ->groupBy(fn (SmCartItem $item): int => (int) ($item->product?->store_id ?? 0))
             ->map(function ($group, $storeId): array {
@@ -299,12 +319,11 @@ final class UserSupermarketCartService
                 $store = $group->first()?->product?->store;
                 $mappedItems = $group->map(fn (SmCartItem $item): array => $this->itemPayload($item))->values();
                 $subtotal = (float) $mappedItems->sum('totalPrice');
+                $merchant = $this->merchantPayload($store, $storeId > 0 ? $storeId : null);
 
                 return [
-                    'merchant' => [
-                        'id' => $storeId > 0 ? $storeId : null,
-                        'name' => $store?->name,
-                    ],
+                    'merchant' => $merchant,
+                    'store' => $merchant,
                     'items' => $mappedItems->all(),
                     'productsCount' => (int) $mappedItems->sum('quantity'),
                     'amounts' => [
@@ -323,6 +342,7 @@ final class UserSupermarketCartService
         return [
             'id' => $cart->id,
             'merchant' => $primaryMerchant,
+            'store' => $primaryMerchant,
             'merchantGroups' => $merchantGroups->all(),
             'isMultiMerchant' => $isMultiMerchant,
             'checkout' => [
@@ -345,14 +365,187 @@ final class UserSupermarketCartService
      */
     private function itemPayload(SmCartItem $item): array
     {
+        $product = $item->product;
+        $productImages = $this->productImages($product);
+        $options = $this->productOptionsPayload($product);
+        $merchant = $this->merchantPayload($product?->store, $product?->store_id !== null ? (int) $product->store_id : null);
+
         return [
             'id' => $item->id,
             'productId' => $item->product_id,
-            'storeId' => $item->product?->store_id,
-            'name' => $item->product?->name,
+            'storeId' => $product?->store_id,
+            'merchantId' => $product?->store_id,
+            'name' => $product?->name,
+            'primaryImageUrl' => $productImages['primaryImageUrl'],
+            'imageUrl' => $productImages['primaryImageUrl'],
+            'primaryImage' => $productImages['primaryImageUrl'],
+            'images' => $productImages['imageUrls'],
+            'imageUrls' => $productImages['imageUrls'],
             'quantity' => (int) $item->quantity,
             'unitPrice' => (float) ($item->unit_price ?? 0),
             'totalPrice' => round((float) ($item->unit_price ?? 0) * (int) $item->quantity, 2),
+            'modifierIds' => [],
+            'modifiers' => [],
+            'additions' => $options,
+            'options' => $options,
+            'modifierGroups' => $options,
+            'merchant' => $merchant,
+            'store' => $merchant,
+            'product' => $this->productPayload($product),
         ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function merchantPayload(?SmStore $store, ?int $fallbackId = null): ?array
+    {
+        if ($store === null && $fallbackId === null) {
+            return null;
+        }
+
+        return [
+            'id' => $store?->id ?? $fallbackId,
+            'name' => $store?->name,
+            'slug' => $store?->slug,
+            'description' => $store?->description,
+            'address' => $store?->address,
+            'city' => $store?->city,
+            'neighborhood' => $store?->neighborhood,
+            'latitude' => $store?->latitude !== null ? (float) $store->latitude : null,
+            'longitude' => $store?->longitude !== null ? (float) $store->longitude : null,
+            'phone' => $store?->phone,
+            'email' => $store?->email,
+            'logo' => $store?->logo,
+            'cover' => $store?->cover,
+            'primaryImageUrl' => $store?->logo,
+            'logoImageUrl' => $store?->logo,
+            'bannerImageUrl' => $store?->cover,
+            'coverImageUrl' => $store?->cover,
+            'averageRating' => $store?->average_rating !== null ? (float) $store->average_rating : null,
+            'totalReviews' => $store?->total_reviews,
+            'isActive' => $store?->is_active,
+            'isFeatured' => $store?->is_featured,
+            'isTemporarilyClosed' => $store?->is_temporarily_closed,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function productPayload(?SmProduct $product): ?array
+    {
+        if ($product === null) {
+            return null;
+        }
+
+        $productImages = $this->productImages($product);
+        $options = $this->productOptionsPayload($product);
+        $hasDiscount = $product->discounted_price !== null;
+        $finalPrice = $product->discounted_price ?? $product->price;
+
+        return [
+            'id' => $product->id,
+            'storeId' => $product->store_id,
+            'merchantId' => $product->store_id,
+            'categoryId' => $product->category_id,
+            'category' => $product->relationLoaded('category') && $product->category !== null ? [
+                'id' => $product->category->id,
+                'name' => $product->category->name,
+            ] : null,
+            'masterProductId' => $product->master_product_id,
+            'name' => $product->name,
+            'barcode' => $product->barcode,
+            'description' => $product->description,
+            'price' => $product->price !== null ? (float) $product->price : null,
+            'discountedPrice' => $product->discounted_price !== null ? (float) $product->discounted_price : null,
+            'finalPrice' => $finalPrice !== null ? (float) $finalPrice : null,
+            'originalPrice' => $hasDiscount && $product->price !== null ? (float) $product->price : null,
+            'hasDiscount' => $hasDiscount,
+            'primaryImageUrl' => $productImages['primaryImageUrl'],
+            'imageUrl' => $productImages['primaryImageUrl'],
+            'primaryImage' => $productImages['primaryImageUrl'],
+            'images' => $productImages['imageUrls'],
+            'imageUrls' => $productImages['imageUrls'],
+            'additions' => $options,
+            'options' => $options,
+            'modifierGroups' => $options,
+            'stockQuantity' => $product->stock_quantity,
+            'lowStockThreshold' => $product->low_stock_threshold,
+            'expiresAt' => $product->expires_at?->toDateTimeString(),
+            'isAvailable' => $product->is_available,
+            'store' => $this->merchantPayload($product->store, $product->store_id !== null ? (int) $product->store_id : null),
+        ];
+    }
+
+    /**
+     * @return array{primaryImageUrl: string|null, imageUrls: array<int, string>}
+     */
+    private function productImages(?SmProduct $product): array
+    {
+        if ($product === null) {
+            return [
+                'primaryImageUrl' => null,
+                'imageUrls' => [],
+            ];
+        }
+
+        $primaryImageUrl = $product->getFirstMediaUrl(SmProduct::IMAGE_COLLECTION) ?: null;
+        $imageUrls = $product->getMedia(SmProduct::IMAGE_COLLECTION)
+            ->map(fn ($media): string => $media->getFullUrl())
+            ->values()
+            ->all();
+
+        if ($primaryImageUrl === null && $product->relationLoaded('masterProduct') && $product->masterProduct !== null) {
+            $masterMedia = $product->masterProduct->getFirstMedia(MasterProduct::IMAGE_COLLECTION)
+                ?? $product->masterProduct->getFirstMedia();
+
+            if ($masterMedia !== null) {
+                $primaryImageUrl = $masterMedia->getFullUrl();
+                $imageUrls = [$primaryImageUrl];
+            }
+        }
+
+        return [
+            'primaryImageUrl' => $primaryImageUrl,
+            'imageUrls' => $imageUrls,
+        ];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function productOptionsPayload(?SmProduct $product): array
+    {
+        if ($product === null || ! $product->relationLoaded('modifierGroups')) {
+            return [];
+        }
+
+        return $product->modifierGroups
+            ->sortBy('sort_order')
+            ->values()
+            ->map(fn ($group): array => [
+                'id' => $group->id,
+                'storeId' => $group->store_id,
+                'name' => $group->name,
+                'isRequired' => (bool) $group->is_required,
+                'minSelections' => (int) $group->min_selections,
+                'maxSelections' => (int) $group->max_selections,
+                'sortOrder' => (int) $group->sort_order,
+                'isActive' => (bool) $group->is_active,
+                'modifiers' => $group->modifiers
+                    ->sortBy('sort_order')
+                    ->values()
+                    ->map(fn ($modifier): array => [
+                        'id' => $modifier->id,
+                        'modifierGroupId' => $modifier->modifier_group_id,
+                        'name' => $modifier->name,
+                        'price' => (float) $modifier->price,
+                        'sortOrder' => (int) $modifier->sort_order,
+                        'isAvailable' => (bool) $modifier->is_available,
+                    ])
+                    ->all(),
+            ])
+            ->all();
     }
 }
