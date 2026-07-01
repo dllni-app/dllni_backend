@@ -16,7 +16,9 @@ final class UserRestaurantCartService
 {
     private const CART_RELATIONS = [
         'restaurant.media',
+        'items.product.category',
         'items.product.media',
+        'items.product.modifierGroups.modifiers',
         'items.modifiers',
     ];
 
@@ -273,7 +275,7 @@ final class UserRestaurantCartService
 
             $items = CartItem::query()
                 ->where('cart_id', $lockedCart->id)
-                ->with(['product', 'modifiers'])
+                ->with(['product.media', 'product.modifierGroups.modifiers', 'modifiers'])
                 ->orderBy('id')
                 ->lockForUpdate()
                 ->get();
@@ -482,23 +484,49 @@ final class UserRestaurantCartService
      */
     private function toPayload(Cart $cart): array
     {
-        $mappedItems = $cart->items->map(fn (CartItem $item): array => [
-            'id' => $item->id,
-            'productId' => $item->product_id,
-            'name' => $item->product?->name,
-            'primaryImageUrl' => $item->product !== null
+        $mappedItems = $cart->items->loadMissing(['product.media', 'product.modifierGroups.modifiers', 'modifiers'])->map(function (CartItem $item): array {
+            $selectedModifiers = $item->modifiers
+                ->values()
+                ->map(fn (Modifier $modifier): array => [
+                    'id' => $modifier->id,
+                    'modifierGroupId' => $modifier->modifier_group_id,
+                    'name' => $modifier->name,
+                    'price' => isset($modifier->pivot?->price) ? (float) $modifier->pivot->price : (float) ($modifier->price ?? 0),
+                    'sortOrder' => (int) ($modifier->sort_order ?? 0),
+                    'isAvailable' => (bool) $modifier->is_available,
+                ])
+                ->all();
+
+            $availableAdditions = $this->productOptionsPayload($item->product);
+            $primaryImageUrl = $item->product !== null
                 ? ($item->product->getFirstMediaUrl('primary-image') ?: null)
-                : null,
-            'images' => $item->product !== null
+                : null;
+            $imageUrls = $item->product !== null
                 ? $item->product->getMedia('images')->map(fn ($media) => $media->getUrl())->values()->all()
-                : [],
-            'quantity' => (int) $item->quantity,
-            'unitPrice' => (float) ($item->unit_price ?? 0),
-            'totalPrice' => (float) ($item->total_price ?? 0),
-            'modifierIds' => $item->modifiers->pluck('id')->map(fn ($id) => (int) $id)->values()->all(),
-            'substituteProductId' => $item->substitute_product_id,
-            'note' => $item->special_instructions,
-        ])->values();
+                : [];
+
+            return [
+                'id' => $item->id,
+                'productId' => $item->product_id,
+                'name' => $item->product?->name,
+                'primaryImageUrl' => $primaryImageUrl,
+                'imageUrl' => $primaryImageUrl,
+                'images' => $imageUrls,
+                'imageUrls' => $imageUrls,
+                'quantity' => (int) $item->quantity,
+                'unitPrice' => (float) ($item->unit_price ?? 0),
+                'totalPrice' => (float) ($item->total_price ?? 0),
+                'modifierIds' => $item->modifiers->pluck('id')->map(fn ($id) => (int) $id)->values()->all(),
+                'modifiers' => $selectedModifiers,
+                'additions' => $selectedModifiers,
+                'selectedAdditions' => $selectedModifiers,
+                'availableAdditions' => $availableAdditions,
+                'options' => $availableAdditions,
+                'modifierGroups' => $availableAdditions,
+                'substituteProductId' => $item->substitute_product_id,
+                'note' => $item->special_instructions,
+            ];
+        })->values();
 
         $subtotal = (float) $mappedItems->sum('totalPrice');
         $restaurant = $cart->restaurant;
@@ -522,5 +550,42 @@ final class UserRestaurantCartService
                 'total' => round($subtotal, 2),
             ],
         ];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function productOptionsPayload(?Product $product): array
+    {
+        if ($product === null || ! $product->relationLoaded('modifierGroups')) {
+            return [];
+        }
+
+        return $product->modifierGroups
+            ->sortBy('sort_order')
+            ->values()
+            ->map(fn ($group): array => [
+                'id' => $group->id,
+                'restaurantId' => $group->restaurant_id,
+                'name' => $group->name,
+                'isRequired' => (bool) $group->is_required,
+                'minSelections' => (int) $group->min_selections,
+                'maxSelections' => (int) $group->max_selections,
+                'sortOrder' => (int) $group->sort_order,
+                'isActive' => (bool) $group->is_active,
+                'modifiers' => $group->modifiers
+                    ->sortBy('sort_order')
+                    ->values()
+                    ->map(fn (Modifier $modifier): array => [
+                        'id' => $modifier->id,
+                        'modifierGroupId' => $modifier->modifier_group_id,
+                        'name' => $modifier->name,
+                        'price' => (float) $modifier->price,
+                        'sortOrder' => (int) $modifier->sort_order,
+                        'isAvailable' => (bool) $modifier->is_available,
+                    ])
+                    ->all(),
+            ])
+            ->all();
     }
 }
