@@ -16,6 +16,32 @@ final class CleaningBookingFilterRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $filter = $this->input('filter', []);
+        $filter = is_array($filter) ? $filter : [];
+
+        foreach ([
+            'status',
+            'scheduledDateFrom',
+            'scheduledDateTo',
+            'scheduledDate',
+            'customerId',
+            'workerId',
+            'propertyType',
+            'forCurrentWorker',
+            'hasDispute',
+        ] as $alias) {
+            if (! $this->has("filter.{$alias}") && $this->has($alias)) {
+                $filter[$alias] = $this->input($alias);
+            }
+        }
+
+        if ($filter !== []) {
+            $this->merge(['filter' => $filter]);
+        }
+    }
+
     public function rules(): array
     {
         $statuses = array_map(
