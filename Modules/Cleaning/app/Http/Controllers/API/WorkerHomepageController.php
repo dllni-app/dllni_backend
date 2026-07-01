@@ -17,12 +17,14 @@ use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Models\CleaningTimeWarning;
 use Modules\Cleaning\Services\DepositService;
+use Modules\Cleaning\Services\WorkerOrderSolvencyService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class WorkerHomepageController
 {
     public function __construct(
         private readonly DepositService $depositService,
+        private readonly WorkerOrderSolvencyService $solvencyService,
     ) {}
 
     public function __invoke(Request $request): JsonResponse
@@ -70,6 +72,7 @@ final class WorkerHomepageController
                 'isEligibleForNewRequests' => false,
                 'depositSummary' => null,
                 'dispatchEligibility' => null,
+                'commissionCapacityEligibility' => null,
                 'bookingsWeeklyChart' => $this->emptyBookingsWeeklyChart($weekStart, $dayLabels),
                 'invoicesFourWeeksChart' => $this->emptyInvoicesFourWeeksChart($fourWeekStart),
             ]);
@@ -142,44 +145,19 @@ final class WorkerHomepageController
             default => 0.0,
         };
 
-        $newOrdersCount = CleaningBooking::query()
-            ->where('status', CleaningBookingStatus::Pending)
-            ->whereDate('scheduled_date', '>=', $today)
-            ->where(fn ($q) => $q->whereNull('worker_id')->orWhere('worker_id', $worker->id))
-            ->when(
-                $this->preferredWorkType($worker) === WorkerPreferredWorkType::Cleaning,
-                fn (Builder $query): Builder => $query->where('property_type', '!=', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
-            )
-            ->when(
-                $this->preferredWorkType($worker) === WorkerPreferredWorkType::Events,
-                fn (Builder $query): Builder => $query->where('property_type', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
-            )
-            ->whereDoesntHave('workerAssignments', fn (Builder $assignments) => $assignments
-                ->where('worker_id', $worker->id)
-                ->where('status', 'accepted'))
-            ->where(function ($genderQuery) use ($worker): void {
-                $genderQuery
-                    ->whereNull('gender_preference')
-                    ->orWhere('gender_preference', GenderPreference::Any->value)
-                    ->orWhere('gender_preference', $worker->gender);
-            })
-            ->where(function (Builder $coverageQuery) use ($worker): void {
-                $coverageQuery
-                    ->where(function (Builder $neighborhoodCoverage) use ($worker): void {
-                        $neighborhoodCoverage
-                            ->whereNotNull('neighborhood_id')
-                            ->whereExists(function ($sub) use ($worker): void {
-                                $sub->selectRaw('1')
-                                    ->from('worker_zones')
-                                    ->whereColumn('worker_zones.neighborhood_id', 'cleaning_bookings.neighborhood_id')
-                                    ->where('worker_zones.worker_id', $worker->id)
-                                    ->where('worker_zones.is_active', true);
-                            });
-                    })
-                    ->orWhereNull('neighborhood_id');
-            })
-            ->whereDoesntHave('rejections', fn ($q) => $q->where('worker_id', $worker->id))
-            ->count();
+        $newOrderCandidates = $this->newOrdersCandidateQuery($worker, $today)->get();
+        $newOrdersCount = 0;
+        $blockedByCommissionCapacityCount = 0;
+
+        foreach ($newOrderCandidates as $candidate) {
+            if ($this->solvencyService->canWorkerReceiveBooking($worker, $candidate)) {
+                $newOrdersCount++;
+
+                continue;
+            }
+
+            $blockedByCommissionCapacityCount++;
+        }
 
         $pendingExtensionRequestsCount = CleaningTimeWarning::query()
             ->where('booking_type', 'cleaning_booking')
@@ -250,6 +228,12 @@ final class WorkerHomepageController
         $worker->loadMissing('deposit');
         $depositSummary = $this->depositService->depositStatusPayload($worker);
         $dispatchEligibility = $this->newRequestEligibility($worker, $depositSummary);
+        $commissionCapacityEligibility = $this->commissionCapacityEligibility(
+            $worker,
+            $depositSummary,
+            $newOrdersCount,
+            $blockedByCommissionCapacityCount,
+        );
         $canReceiveNewRequests = (bool) $dispatchEligibility['canReceiveNewRequests'];
 
         return response()->json([
@@ -269,6 +253,7 @@ final class WorkerHomepageController
             'isEligibleForNewRequests' => $canReceiveNewRequests,
             'depositSummary' => $depositSummary,
             'dispatchEligibility' => $dispatchEligibility,
+            'commissionCapacityEligibility' => $commissionCapacityEligibility,
             'amountSummary' => [
                 'period' => 'last_4_weeks',
                 'currency' => 'SYP',
@@ -280,6 +265,47 @@ final class WorkerHomepageController
             'bookingsWeeklyChart' => $bookingsWeeklyChart,
             'invoicesFourWeeksChart' => $invoicesFourWeeksChart,
         ]);
+    }
+
+    private function newOrdersCandidateQuery(object $worker, Carbon $today): Builder
+    {
+        return CleaningBooking::query()
+            ->where('status', CleaningBookingStatus::Pending)
+            ->whereDate('scheduled_date', '>=', $today)
+            ->where(fn ($q) => $q->whereNull('worker_id')->orWhere('worker_id', $worker->id))
+            ->when(
+                $this->preferredWorkType($worker) === WorkerPreferredWorkType::Cleaning,
+                fn (Builder $query): Builder => $query->where('property_type', '!=', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
+            )
+            ->when(
+                $this->preferredWorkType($worker) === WorkerPreferredWorkType::Events,
+                fn (Builder $query): Builder => $query->where('property_type', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
+            )
+            ->whereDoesntHave('workerAssignments', fn (Builder $assignments) => $assignments
+                ->where('worker_id', $worker->id)
+                ->where('status', 'accepted'))
+            ->where(function ($genderQuery) use ($worker): void {
+                $genderQuery
+                    ->whereNull('gender_preference')
+                    ->orWhere('gender_preference', GenderPreference::Any->value)
+                    ->orWhere('gender_preference', $worker->gender);
+            })
+            ->where(function (Builder $coverageQuery) use ($worker): void {
+                $coverageQuery
+                    ->where(function (Builder $neighborhoodCoverage) use ($worker): void {
+                        $neighborhoodCoverage
+                            ->whereNotNull('neighborhood_id')
+                            ->whereExists(function ($sub) use ($worker): void {
+                                $sub->selectRaw('1')
+                                    ->from('worker_zones')
+                                    ->whereColumn('worker_zones.neighborhood_id', 'cleaning_bookings.neighborhood_id')
+                                    ->where('worker_zones.worker_id', $worker->id)
+                                    ->where('worker_zones.is_active', true);
+                            });
+                    })
+                    ->orWhereNull('neighborhood_id');
+            })
+            ->whereDoesntHave('rejections', fn ($q) => $q->where('worker_id', $worker->id));
     }
 
     private function emptyBookingsWeeklyChart(Carbon $weekStart, array $dayLabels): array
@@ -371,6 +397,33 @@ final class WorkerHomepageController
             'message' => $this->eligibilityMessage($reasonCode),
             'depositSummary' => $depositSummary,
         ];
+    }
+
+    private function commissionCapacityEligibility(object $worker, array $depositSummary, int $availableNewOrdersCount, int $blockedNewOrdersCount): array
+    {
+        $capacitySummary = $this->solvencyService->workerCapacitySummary($worker);
+        $hasBlockedOrders = $blockedNewOrdersCount > 0;
+        $reasonCode = $hasBlockedOrders
+            ? WorkerOrderSolvencyService::REASON_INSUFFICIENT_COMMISSION_CAPACITY
+            : WorkerOrderSolvencyService::REASON_ELIGIBLE;
+
+        return [
+            'canReceiveNewRequests' => ! $hasBlockedOrders,
+            'canAcceptNewBookings' => ! $hasBlockedOrders,
+            'reasonCode' => $reasonCode,
+            'message' => $this->commissionCapacityMessage($reasonCode),
+            'depositSummary' => array_merge($depositSummary, $capacitySummary),
+            'availableNewOrdersCount' => $availableNewOrdersCount,
+            'blockedNewOrdersCount' => $blockedNewOrdersCount,
+        ];
+    }
+
+    private function commissionCapacityMessage(string $reasonCode): string
+    {
+        return match ($reasonCode) {
+            WorkerOrderSolvencyService::REASON_INSUFFICIENT_COMMISSION_CAPACITY => 'Your available commission capacity is not enough to receive some new requests. Please recharge your deposit account or wait until reserved commissions are released.',
+            default => 'Your available commission capacity can receive new requests.',
+        };
     }
 
     private function eligibilityReasonCode(object $worker, array $depositSummary, bool $canReceive): string
