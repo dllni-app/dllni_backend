@@ -22,6 +22,8 @@ use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class WorkerHomepageController
 {
+    private const ACCEPTED_ASSIGNMENT_STATUSES = ['accepted', 'accepted_waiting_team', 'accepted_waiting_for_order_start'];
+
     public function __construct(
         private readonly DepositService $depositService,
         private readonly WorkerOrderSolvencyService $solvencyService,
@@ -83,7 +85,7 @@ final class WorkerHomepageController
                 ->orWhereHas('workerAssignments', function (Builder $assignments) use ($worker): void {
                     $assignments
                         ->where('worker_id', $worker->id)
-                        ->where('status', 'accepted');
+                        ->whereIn('status', self::ACCEPTED_ASSIGNMENT_STATUSES);
                 });
         });
 
@@ -168,7 +170,7 @@ final class WorkerHomepageController
                         ->where('worker_id', $worker->id)
                         ->orWhereHas('workerAssignments', fn (Builder $assignments) => $assignments
                             ->where('worker_id', $worker->id)
-                            ->where('status', 'accepted'));
+                            ->whereIn('status', self::ACCEPTED_ASSIGNMENT_STATUSES));
                 });
             })
             ->count();
@@ -283,7 +285,7 @@ final class WorkerHomepageController
             )
             ->whereDoesntHave('workerAssignments', fn (Builder $assignments) => $assignments
                 ->where('worker_id', $worker->id)
-                ->where('status', 'accepted'))
+                ->whereIn('status', self::ACCEPTED_ASSIGNMENT_STATUSES))
             ->where(function ($genderQuery) use ($worker): void {
                 $genderQuery
                     ->whereNull('gender_preference')
