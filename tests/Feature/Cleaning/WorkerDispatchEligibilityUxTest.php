@@ -131,7 +131,7 @@ it('hides pending new requests from ineligible workers in the current worker lis
         ->assertJsonPath('dispatchEligibility.reasonCode', 'deposit_below_allowed_balance');
 });
 
-it('shows pending new requests to eligible workers even when commission capacity only blocks accepting', function (): void {
+it('hides and warns about pending new requests when commission capacity is insufficient', function (): void {
     seedUxDepositSettings([
         'minimum_deposit_amount' => 0,
         'default_max_negative_balance' => 0,
@@ -190,12 +190,21 @@ it('shows pending new requests to eligible workers even when commission capacity
 
     Sanctum::actingAs($user);
 
-    $response = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
+    $homepageResponse = $this->getJson('/api/v1/cleaning/worker/homepage');
 
-    $response->assertOk()
+    $homepageResponse->assertOk()
+        ->assertJsonPath('dispatchEligibility.canReceiveNewRequests', true)
+        ->assertJsonPath('commissionCapacityEligibility.canReceiveNewRequests', false)
+        ->assertJsonPath('commissionCapacityEligibility.reasonCode', 'insufficient_commission_capacity')
+        ->assertJsonPath('commissionCapacityEligibility.blockedNewOrdersCount', 1)
+        ->assertJsonPath('newOrdersCount', 0);
+
+    $listResponse = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
+
+    $listResponse->assertOk()
         ->assertJsonPath('dispatchEligibility.canReceiveNewRequests', true);
 
-    expect(collect($response->json('data'))->contains(fn (array $booking): bool => $booking['id'] === $newBooking->id))->toBeTrue();
+    expect(collect($listResponse->json('data'))->contains(fn (array $booking): bool => $booking['id'] === $newBooking->id))->toBeFalse();
 
     $acceptResponse = $this->postJson("/api/v1/cleaning-bookings/{$newBooking->id}/accept");
 
