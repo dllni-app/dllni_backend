@@ -41,12 +41,10 @@ final class WorkerOrderSolvencyService
         $canReceive = $reasonCode === self::REASON_ELIGIBLE
             && $worker->is_active
             && ! $worker->is_suspended
-            && $this->depositService->isWorkerEligibleForDispatch($worker);
-
-        $canAccept = $canReceive
+            && $this->depositService->isWorkerEligibleForDispatch($worker)
             && $capacity['availableCommissionCapacity'] >= $requiredCommission;
 
-        if ($canReceive && ! $canAccept && $reasonCode === self::REASON_ELIGIBLE) {
+        if (! $canReceive && $reasonCode === self::REASON_ELIGIBLE) {
             $reasonCode = self::REASON_INSUFFICIENT_COMMISSION_CAPACITY;
             $message = 'Worker balance and allowed negative limit do not cover this booking platform commission.';
         }
@@ -56,8 +54,8 @@ final class WorkerOrderSolvencyService
             'bookingId' => (int) $booking->id,
             'requiredPlatformCommission' => round($requiredCommission, 2),
             'canReceiveOrder' => $canReceive,
-            'canAcceptBooking' => $canAccept,
-            'reasonCode' => $canAccept ? self::REASON_ELIGIBLE : $reasonCode,
+            'canAcceptBooking' => $canReceive,
+            'reasonCode' => $canReceive ? self::REASON_ELIGIBLE : $reasonCode,
             'message' => $message,
         ]);
     }
