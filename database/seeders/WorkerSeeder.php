@@ -34,7 +34,7 @@ final class WorkerSeeder extends Seeder
                 'lng' => 37.1456,
                 'birthday' => '1993-04-12',
                 'preferred_work_type' => WorkerPreferredWorkType::Cleaning->value,
-                'deposit_balance' => 85000,
+                'deposit_balance' => 5000000,
                 'trust_reason' => 'سجل حجوزات مكتملة بدون شكاوى خلال آخر شهر.',
             ],
             [
@@ -47,7 +47,7 @@ final class WorkerSeeder extends Seeder
                 'lng' => 37.1082,
                 'birthday' => '1990-09-03',
                 'preferred_work_type' => WorkerPreferredWorkType::Events->value,
-                'deposit_balance' => 65000,
+                'deposit_balance' => 5000000,
                 'trust_reason' => 'التزام جيد بمواعيد قبول الحجوزات.',
             ],
             [
@@ -60,7 +60,7 @@ final class WorkerSeeder extends Seeder
                 'lng' => 37.1317,
                 'birthday' => '1996-01-25',
                 'preferred_work_type' => WorkerPreferredWorkType::Both->value,
-                'deposit_balance' => 70000,
+                'deposit_balance' => 5000000,
                 'trust_reason' => 'تقييمات عملاء مرتفعة وثابتة.',
             ],
         ];
