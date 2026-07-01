@@ -16,7 +16,7 @@ use Modules\Cleaning\Support\CleaningFinancialDefaults;
 
 final class UserCleaningOrderEstimationService
 {
-    public const ALGORITHM_VERSION = '2026-06-22-room-db-v1';
+    public const ALGORITHM_VERSION = '2026-07-01-syrian-cash-v1';
     public const EVENT_ASSISTANCE_PROPERTY_TYPE = 'event_assistance';
     public const CLEANING_MODES = ['regular', 'deep'];
     public const PROPERTY_TYPES = ['apartment', 'villa', 'house', 'office', 'studio', self::EVENT_ASSISTANCE_PROPERTY_TYPE];
@@ -145,16 +145,16 @@ final class UserCleaningOrderEstimationService
         if ($this->isEventAssistanceType($input['propertyType'])) {
             $hourlyRate = $this->eventOrderHourlyRate();
             $eventHours = max(1.0, $this->roundToHalfHour((float) ($input['propertyDetails']['hours'] ?? 1.0)));
-            $basePrice = round($hourlyRate * $eventHours, 2);
+            $basePrice = $this->pricingCalculator->roundMoney($hourlyRate * $eventHours);
             $lines = [];
             $addonsTotal = 0.0;
             $estimation = $this->estimate($input['propertyType'], $input['propertyDetails']);
         } else {
             $regularCalculation = $this->calculateRegularCleaningFromSettings($input['propertyDetails'], $input['propertyType']);
-            $basePrice = (float) $regularCalculation['basePrice'];
+            $basePrice = $this->pricingCalculator->roundMoney((float) $regularCalculation['basePrice']);
             $estimation = ['recommendation' => null];
             $lines = $this->resolveRegularCleaningPricingLines($input['serviceIds'], $input['propertyType'], (string) ($input['propertyDetails']['living_room_size'] ?? 'medium'), (float) $regularCalculation['estimatedSqm']);
-            $addonsTotal = round(array_sum(array_map(static fn (array $line): float => (float) $line['totalPrice'], $lines)), 2);
+            $addonsTotal = $this->pricingCalculator->roundMoney(array_sum(array_map(static fn (array $line): float => (float) $line['totalPrice'], $lines)));
         }
 
         if ($input['preferredWorkerId'] === null) {
@@ -225,8 +225,8 @@ final class UserCleaningOrderEstimationService
                 $averageSqm = (float) ($roomSizeRanges[$roomType][$roomSize]['average'] ?? 0.0);
                 $unitCount = (float) ($roomPricingUnits[$roomType][$roomSize] ?? 0.0);
                 $minutesPerRoom = (int) ($roomTimeMinutes[$roomType][$roomSize][$minuteMode] ?? 0);
-                $unitPrice = round($baseUnitPrice * $unitCount * $modeMultiplier, 2);
-                $lineTotal = round($unitPrice * $count, 2);
+                $unitPrice = $this->pricingCalculator->roundMoney($baseUnitPrice * $unitCount * $modeMultiplier);
+                $lineTotal = $this->pricingCalculator->roundMoney($unitPrice * $count);
                 $lineSqm = round($averageSqm * $count, 2);
                 $lineMinutes = $minutesPerRoom * $count;
                 $rawSqm += $lineSqm;
@@ -239,7 +239,7 @@ final class UserCleaningOrderEstimationService
 
         $estimatedSqm = round(max(25.0, $rawSqm * $areaMarginMultiplier), 2);
         $estimatedMinutesWithBuffer = $rawMinutes + $setupBufferMinutes;
-        return ['basePrice' => round($basePrice, 2), 'estimatedSqm' => $estimatedSqm, 'estimatedHours' => max(1.0, $this->roundToHalfHour($estimatedMinutesWithBuffer / 60)), 'estimatedRawMinutes' => $rawMinutes, 'estimatedMinutesWithBuffer' => $estimatedMinutesWithBuffer, 'setupBufferMinutes' => $setupBufferMinutes, 'baseUnitPrice' => $baseUnitPrice, 'deepCleaningMultiplier' => $deepMultiplier, 'areaMarginMultiplier' => $areaMarginMultiplier, 'unitTotal' => round($unitTotal, 2), 'modeMultiplier' => $modeMultiplier, 'roomPricingLines' => $lines];
+        return ['basePrice' => $this->pricingCalculator->roundMoney($basePrice), 'estimatedSqm' => $estimatedSqm, 'estimatedHours' => max(1.0, $this->roundToHalfHour($estimatedMinutesWithBuffer / 60)), 'estimatedRawMinutes' => $rawMinutes, 'estimatedMinutesWithBuffer' => $estimatedMinutesWithBuffer, 'setupBufferMinutes' => $setupBufferMinutes, 'baseUnitPrice' => $baseUnitPrice, 'deepCleaningMultiplier' => $deepMultiplier, 'areaMarginMultiplier' => $areaMarginMultiplier, 'unitTotal' => round($unitTotal, 2), 'modeMultiplier' => $modeMultiplier, 'roomPricingLines' => $lines];
     }
 
     private function hasDatabaseRoomPricingAlgorithm(?CleaningFinancialSetting $setting): bool
@@ -259,7 +259,7 @@ final class UserCleaningOrderEstimationService
         $estimatedSqm = max(25.0, $this->baseSqmByPropertyTypeLegacy($propertyType) + ($bedrooms * 18.0) + ($rooms * 8.0) + ($bathrooms * 6.0) + ($kitchens * 10.0) + ($balconies * 4.0) + $this->livingRoomSqmAdjustmentLegacy($livingRoomSize));
         $rawHours = ($estimatedSqm / 35.0) + ($bathrooms * 0.25) + ($kitchens * 0.20) + ($balconies * 0.10) + ($livingRoomSize === 'large' ? 0.25 : 0.0) + ($livingRoomSize === 'very_large' ? 0.50 : 0.0);
         $estimatedHours = $this->roundToHalfHour(max(1.0, $this->roundToHalfHour($rawHours)) * $factor);
-        $basePrice = round(max(250.0, $estimatedSqm * $this->pricePerSqmByPropertyTypeLegacy($propertyType)) * $factor, 2);
+        $basePrice = $this->pricingCalculator->roundMoney(max(250.0, $estimatedSqm * $this->pricePerSqmByPropertyTypeLegacy($propertyType)) * $factor);
         return ['basePrice' => $basePrice, 'estimatedSqm' => $estimatedSqm, 'estimatedHours' => $estimatedHours, 'estimatedRawMinutes' => (int) round($estimatedHours * 60), 'estimatedMinutesWithBuffer' => (int) round($estimatedHours * 60), 'setupBufferMinutes' => 0, 'baseUnitPrice' => null, 'deepCleaningMultiplier' => $factor, 'areaMarginMultiplier' => null, 'unitTotal' => 0.0, 'modeMultiplier' => $factor, 'roomPricingLines' => []];
     }
 
@@ -304,7 +304,7 @@ final class UserCleaningOrderEstimationService
     private function normalizePreferredWorkerId(mixed $id): ?int { return is_numeric($id) && (int) $id > 0 ? (int) $id : null; }
     private function normalizeCleaningMode(mixed $mode): string { $mode = mb_strtolower(mb_trim((string) ($mode ?? 'regular'))); return in_array($mode, self::CLEANING_MODES, true) ? $mode : 'regular'; }
     private function suggestedEventTeamSize(int $guestCount): int { return max(1, (int) ceil($guestCount / 10)); }
-    private function eventOrderHourlyRate(): float { $rate = (float) (CleaningFinancialSetting::query()->value('extension_rate_per_30_minutes') ?? 0); if ($rate <= 0) { throw new InvalidArgumentException('Event assistance hourly rate is not configured.'); } return round($rate * 2, 2); }
+    private function eventOrderHourlyRate(): float { $rate = (float) (CleaningFinancialSetting::query()->value('extension_rate_per_30_minutes') ?? 0); if ($rate <= 0) { throw new InvalidArgumentException('Event assistance hourly rate is not configured.'); } return $this->pricingCalculator->roundMoney($rate * 2); }
     private function baseSqmByPropertyTypeLegacy(string $type): float { return match ($type) { 'villa' => 120.0, 'house' => 90.0, 'office' => 75.0, default => 65.0 }; }
     private function livingRoomSqmAdjustmentLegacy(string $size): float { return match ($size) { 'small' => 10.0, 'large' => 25.0, 'very_large' => 40.0, default => 15.0 }; }
     private function pricePerSqmByPropertyTypeLegacy(string $type): float { return match ($type) { 'villa' => 9.0, 'house' => 8.0, 'office' => 8.5, default => 8.0 }; }
@@ -330,10 +330,10 @@ final class UserCleaningOrderEstimationService
                 ?? $service->pricing->first(fn (ServicePricing $row): bool => $row->property_type === $propertyType)
                 ?? $service->pricing->first();
             if (! $pricing instanceof ServicePricing) { throw new InvalidArgumentException("No pricing configured for regular cleaning service [{$service->name}]."); }
-            $basePrice = round((float) $pricing->base_price, 2);
-            $sqmPrice = $pricing->price_per_sqm !== null ? round((float) $pricing->price_per_sqm * $estimatedSqm, 2) : null;
+            $basePrice = $this->pricingCalculator->roundMoney((float) $pricing->base_price);
+            $sqmPrice = $pricing->price_per_sqm !== null ? $this->pricingCalculator->roundMoney((float) $pricing->price_per_sqm * $estimatedSqm) : null;
             $servicePrice = (float) ($service->price ?? 0);
-            $unitPrice = round($servicePrice > 0 ? $servicePrice : ($sqmPrice !== null ? max($basePrice, $sqmPrice) : $basePrice), 2);
+            $unitPrice = $this->pricingCalculator->roundMoney($servicePrice > 0 ? $servicePrice : ($sqmPrice !== null ? max($basePrice, $sqmPrice) : $basePrice));
             $lines[] = ['cleaningServiceId' => (int) $service->id, 'name' => (string) $service->name, 'description' => $service->description, 'price' => $unitPrice, 'quantity' => 1.0, 'unitPrice' => $unitPrice, 'totalPrice' => $unitPrice, 'minHours' => round((float) ($pricing->min_hours ?? 0), 2)];
         }
         return $lines;

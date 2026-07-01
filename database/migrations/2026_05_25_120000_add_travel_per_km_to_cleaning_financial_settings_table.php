@@ -12,7 +12,7 @@ return new class extends Migration
     {
         Schema::table('cleaning_financial_settings', function (Blueprint $table): void {
             if (! Schema::hasColumn('cleaning_financial_settings', 'travel_per_km')) {
-                $table->decimal('travel_per_km', 10, 2)->default(0)->after('travel_markup_value');
+                $table->decimal('travel_per_km', 10, 2)->default(7500)->after('travel_markup_value');
             }
         });
     }

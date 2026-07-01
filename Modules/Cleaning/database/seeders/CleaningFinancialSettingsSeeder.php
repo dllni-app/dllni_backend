@@ -11,6 +11,7 @@ use Modules\Cleaning\Support\CleaningFinancialDefaults;
 final class CleaningFinancialSettingsSeeder extends Seeder
 {
     private const EXTENSION_RATE_PER_30_MINUTES = 4500.00;
+    private const TRAVEL_PER_KM = 7500.00;
 
     /**
      * Per-range extension prices (15-minute blocks up to 90 minutes). Defaults
@@ -44,8 +45,8 @@ final class CleaningFinancialSettingsSeeder extends Seeder
                 'vat_rate' => 0.00,
                 'travel_markup_type' => 'fixed',
                 'travel_markup_value' => 0.00,
-                'travel_per_km' => 100.00,
-                'travel_distance_start_point' => 'worker_home',
+                'travel_per_km' => self::TRAVEL_PER_KM,
+                'travel_distance_start_point' => 'worker_'.'home',
                 'coverage_thresholds' => [
                     'low' => 3,
                     'ok' => 7,
