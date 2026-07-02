@@ -34,11 +34,89 @@ it('returns authenticated current user state on the public vote show endpoint', 
     $this->getJson('/api/v1/user/restaurants/votes/'.$vote->id)
         ->assertSuccessful()
         ->assertJsonPath('data.vote.isCreator', true)
+        ->assertJsonPath('data.vote.creator.id', $creator->id)
+        ->assertJsonPath('data.vote.creator.isCurrentUser', true)
         ->assertJsonPath('data.vote.currentUserOptionId', null)
         ->assertJsonPath('data.vote.selectedOptionId', 0)
         ->assertJsonPath('data.vote.myVotedOptionId', 0)
         ->assertJsonPath('data.vote.userVoteOptionId', 0)
-        ->assertJsonPath('data.vote.hasCurrentUserVoted', false);
+        ->assertJsonPath('data.vote.hasCurrentUserVoted', false)
+        ->assertJsonPath('data.vote.currentUserVote.hasVoted', false)
+        ->assertJsonPath('data.vote.currentUserVote.optionId', null);
+});
+
+it('returns creator data and selected option for the bearer token user on vote show', function (): void {
+    $creator = User::factory()->create(['name' => 'Vote Creator']);
+    $vote = createVoteWithTwoOptionsForCurrentUserStateTest($creator);
+    $optionId = (int) $vote->options->first()->id;
+
+    app(RestaurantGroupVoteService::class)->castBallot($vote, (int) $creator->id, $optionId);
+
+    $token = $creator->createToken('mobile')->plainTextToken;
+
+    $response = $this
+        ->withHeader('Authorization', 'Bearer '.$token)
+        ->getJson('/api/v1/user/restaurants/votes/'.$vote->id);
+
+    $response
+        ->assertSuccessful()
+        ->assertJsonPath('data.vote.isCreator', true)
+        ->assertJsonPath('data.vote.creator.id', $creator->id)
+        ->assertJsonPath('data.vote.creator.name', 'Vote Creator')
+        ->assertJsonPath('data.vote.creator.isCurrentUser', true)
+        ->assertJsonPath('data.vote.currentUserOptionId', $optionId)
+        ->assertJsonPath('data.vote.selectedOptionId', $optionId)
+        ->assertJsonPath('data.vote.myVotedOptionId', $optionId)
+        ->assertJsonPath('data.vote.userVoteOptionId', $optionId)
+        ->assertJsonPath('data.vote.hasCurrentUserVoted', true)
+        ->assertJsonPath('data.vote.currentUserVote.hasVoted', true)
+        ->assertJsonPath('data.vote.currentUserVote.optionId', $optionId)
+        ->assertJsonPath('data.vote.currentUserVote.optionLabel', 'A');
+
+    $selectedOption = collect($response->json('data.options'))->firstWhere('id', $optionId);
+    expect($selectedOption['isSelectedByCurrentUser'])->toBeTrue();
+});
+
+it('returns creator data without personalized selection for anonymous vote show', function (): void {
+    $creator = User::factory()->create(['name' => 'Anonymous Creator']);
+    $vote = createVoteWithTwoOptionsForCurrentUserStateTest($creator);
+    $optionId = (int) $vote->options->first()->id;
+
+    app(RestaurantGroupVoteService::class)->castBallot($vote, (int) $creator->id, $optionId);
+
+    $response = $this->getJson('/api/v1/user/restaurants/votes/'.$vote->id);
+
+    $response
+        ->assertSuccessful()
+        ->assertJsonPath('data.vote.isCreator', false)
+        ->assertJsonPath('data.vote.creator.id', $creator->id)
+        ->assertJsonPath('data.vote.creator.name', 'Anonymous Creator')
+        ->assertJsonPath('data.vote.creator.isCurrentUser', false)
+        ->assertJsonPath('data.vote.currentUserOptionId', null)
+        ->assertJsonPath('data.vote.selectedOptionId', 0)
+        ->assertJsonPath('data.vote.hasCurrentUserVoted', false)
+        ->assertJsonPath('data.vote.currentUserVote.hasVoted', false)
+        ->assertJsonPath('data.vote.currentUserVote.optionId', null);
+
+    $selectedOption = collect($response->json('data.options'))->firstWhere('id', $optionId);
+    expect($selectedOption['isSelectedByCurrentUser'])->toBeFalse();
+});
+
+it('returns a neutral realtime payload that requires client refetch', function (): void {
+    $creator = User::factory()->create();
+    $vote = createVoteWithTwoOptionsForCurrentUserStateTest($creator);
+    $optionId = (int) $vote->options->first()->id;
+
+    app(RestaurantGroupVoteService::class)->castBallot($vote, (int) $creator->id, $optionId);
+
+    $payload = app(RestaurantGroupVoteService::class)->broadcastRefreshPayload($vote);
+
+    expect($payload['refreshRequired'])->toBeTrue();
+    expect($payload['vote']['id'])->toBe($vote->id);
+    expect($payload['vote']['status'])->toBe('active');
+    expect($payload['options'] ?? null)->toBeNull();
+    expect($payload['voters'] ?? null)->toBeNull();
+    expect($payload['currentUserVote'] ?? null)->toBeNull();
 });
 
 it('returns a deselection signal when the current user taps the same vote option again', function (): void {
@@ -53,6 +131,8 @@ it('returns a deselection signal when the current user taps the same vote option
     ])->assertSuccessful()
         ->assertJsonPath('data.vote.currentUserOptionId', $optionId)
         ->assertJsonPath('data.vote.selectedOptionId', $optionId)
+        ->assertJsonPath('data.vote.currentUserVote.hasVoted', true)
+        ->assertJsonPath('data.vote.currentUserVote.optionId', $optionId)
         ->assertJsonPath('data.vote.hasCurrentUserVoted', true);
 
     $this->postJson('/api/v1/user/restaurants/votes/'.$vote->id.'/ballots', [
@@ -62,6 +142,8 @@ it('returns a deselection signal when the current user taps the same vote option
         ->assertJsonPath('data.vote.selectedOptionId', 0)
         ->assertJsonPath('data.vote.myVotedOptionId', 0)
         ->assertJsonPath('data.vote.userVoteOptionId', 0)
+        ->assertJsonPath('data.vote.currentUserVote.hasVoted', false)
+        ->assertJsonPath('data.vote.currentUserVote.optionId', null)
         ->assertJsonPath('data.vote.hasCurrentUserVoted', false)
         ->assertJsonCount(0, 'data.voters');
 });
