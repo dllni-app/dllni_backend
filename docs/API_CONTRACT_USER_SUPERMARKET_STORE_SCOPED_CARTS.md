@@ -18,7 +18,7 @@ A supermarket cart belongs to exactly one supermarket store.
 GET /api/v1/user/supermarket/carts
 ```
 
-Returns a list of active non-empty carts, one cart per supermarket.
+Returns only a flat `data` list of the authenticated user's supermarket cart payloads. Each returned cart includes its own `store` data and `items` data.
 
 ```json
 {
