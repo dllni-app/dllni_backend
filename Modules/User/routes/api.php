@@ -109,6 +109,7 @@ use Modules\User\Http\Controllers\API\UserRestaurantProductsSearchController;
 use Modules\User\Http\Controllers\API\UserRestaurantProductsByCategoryController;
 use Modules\User\Http\Controllers\API\UserRestaurantProductsWithOffersController;
 use Modules\User\Http\Controllers\API\UserSosController;
+use Modules\User\Http\Controllers\API\UserSupermarketCartDestroyController;
 use Modules\User\Http\Controllers\API\UserSupermarketCartItemDestroyController;
 use Modules\User\Http\Controllers\API\UserSupermarketCartItemStoreController;
 use Modules\User\Http\Controllers\API\UserSupermarketCartItemUpdateController;
@@ -268,6 +269,7 @@ Route::prefix('v1/user')->group(function (): void {
 
         Route::get('supermarket/carts', UserSupermarketCartShowController::class);
         Route::get('supermarket/carts/{cartId}', UserSupermarketCartShowController::class)->whereNumber('cartId');
+        Route::delete('supermarket/carts/{cartId}', UserSupermarketCartDestroyController::class)->whereNumber('cartId');
         Route::post('supermarket/cart/items', UserSupermarketCartItemStoreController::class);
         Route::patch('supermarket/carts/{cartId}/items/{itemId}', UserSupermarketCartItemUpdateController::class)->whereNumber(['cartId', 'itemId']);
         Route::delete('supermarket/carts/{cartId}/items/{itemId}', UserSupermarketCartItemDestroyController::class)->whereNumber(['cartId', 'itemId']);
