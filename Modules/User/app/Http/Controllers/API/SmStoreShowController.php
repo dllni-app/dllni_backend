@@ -11,9 +11,14 @@ use Modules\Resturants\Models\Favorite;
 use Modules\Supermarket\Http\Resources\SmStoreResource;
 use Modules\Supermarket\Models\SmProduct;
 use Modules\Supermarket\Models\SmStore;
+use Modules\User\Services\UserSupermarketCartService;
 
 final class SmStoreShowController
 {
+    public function __construct(
+        private readonly UserSupermarketCartService $carts,
+    ) {}
+
     public function __invoke(Request $request, int $store): JsonResponse
     {
         $now = CarbonImmutable::now();
@@ -50,6 +55,7 @@ final class SmStoreShowController
             ])
             ->findOrFail($store);
 
+        $cartPayload = null;
         $user = $request->user('sanctum');
         if ($user !== null) {
             $isFavorited = Favorite::query()
@@ -77,13 +83,18 @@ final class SmStoreShowController
                     $product->setAttribute('isFavoritedByUser', $favoritedProductIds->has($product->id));
                 });
             }
+
+            $cartPayload = $this->carts->showForStore((int) $user->id, (int) $model->id);
+            $model->setAttribute('cartPayload', $cartPayload);
         } else {
             $model->setAttribute('isFavoritedByUser', false);
+            $model->setAttribute('cartPayload', null);
             $model->products->each(fn (SmProduct $product) => $product->setAttribute('isFavoritedByUser', false));
         }
 
         return response()->json([
             'store' => SmStoreResource::make($model),
+            'cart' => $cartPayload,
         ]);
     }
 }
