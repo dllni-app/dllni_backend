@@ -29,7 +29,7 @@ final class UserSupermarketCartShowController
             ->where('user_id', $userId)
             ->latest()
             ->pluck('id')
-            ->map(fn (int $id): array => $this->carts->show($userId, $id))
+            ->map(fn ($id): array => $this->carts->show($userId, (int) $id))
             ->values()
             ->all();
 
