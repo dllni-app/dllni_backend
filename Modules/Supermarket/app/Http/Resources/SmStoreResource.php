@@ -48,6 +48,7 @@ final class SmStoreResource extends JsonResource
             'isActive' => $this->is_active,
             'isFeatured' => $this->is_featured,
             'isFavorited' => (bool) ($attributes['isFavoritedByUser'] ?? false),
+            'cart' => $attributes['cartPayload'] ?? null,
             'suspensionUntil' => $this->suspension_until?->toDateTimeString(),
             'distanceKm' => array_key_exists('distanceKm', $this->getAttributes())
                 ? round((float) $this->distanceKm, 2)
