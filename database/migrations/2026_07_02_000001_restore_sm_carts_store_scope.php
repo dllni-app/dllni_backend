@@ -17,6 +17,7 @@ return new class extends Migration
             });
         }
 
+        $this->dropForeignKeysForColumn('sm_carts', 'user_id');
         $this->dropIndexIfExists('sm_carts', 'sm_carts_user_id_unique');
         $this->splitExistingCartsByStore();
         $this->mergeDuplicateUserStoreCarts();
@@ -35,6 +36,8 @@ return new class extends Migration
                 $table->unique(['user_id', 'store_id'], 'sm_cart_user_store_uniq');
             });
         }
+
+        $this->createForeignKeyIfMissing('sm_carts', 'sm_carts_user_id_foreign', 'user_id', 'users');
     }
 
     public function down(): void
@@ -253,6 +256,49 @@ return new class extends Migration
             'SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = ? AND TABLE_NAME = ? AND CONSTRAINT_NAME = ? AND CONSTRAINT_TYPE = ?',
             [$database, $table, $foreignKey, 'FOREIGN KEY']
         ))->isNotEmpty();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function foreignKeysForColumn(string $table, string $column): array
+    {
+        if (DB::getDriverName() === 'sqlite') {
+            return [];
+        }
+
+        $database = DB::getDatabaseName();
+
+        return collect(DB::select(
+            'SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE CONSTRAINT_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ? AND REFERENCED_TABLE_NAME IS NOT NULL',
+            [$database, $table, $column]
+        ))
+            ->pluck('CONSTRAINT_NAME')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function dropForeignKeysForColumn(string $table, string $column): void
+    {
+        foreach ($this->foreignKeysForColumn($table, $column) as $foreignKey) {
+            $this->dropForeignIfExists($table, $foreignKey);
+        }
+    }
+
+    private function createForeignKeyIfMissing(string $table, string $foreignKey, string $column, string $referencedTable): void
+    {
+        if (DB::getDriverName() === 'sqlite' || $this->foreignKeysForColumn($table, $column) !== []) {
+            return;
+        }
+
+        Schema::table($table, function (Blueprint $table) use ($foreignKey, $column, $referencedTable): void {
+            $table->foreign($column, $foreignKey)
+                ->references('id')
+                ->on($referencedTable)
+                ->cascadeOnDelete();
+        });
     }
 
     private function dropIndexIfExists(string $table, string $index): void
