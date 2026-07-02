@@ -224,7 +224,7 @@ final class RestaurantGroupVoteService
     {
         $this->finalizeIfExpired($vote);
         $vote->refresh();
-        $vote->load(['options.product', 'ballots.user', 'ballots.option', 'cuisineType', 'winningOption', 'invites.user']);
+        $vote->load(['creator', 'options.product', 'ballots.user', 'ballots.option', 'cuisineType', 'winningOption', 'invites.user']);
 
         $totalBallots = $vote->ballots->count();
         $countsByOption = $vote->ballots->groupBy('option_id')->map->count();
@@ -233,6 +233,7 @@ final class RestaurantGroupVoteService
             : null;
         $currentUserOptionId = $currentUserBallot?->option_id !== null ? (int) $currentUserBallot->option_id : null;
         $currentUserOptionAlias = $currentUserOptionId ?? 0;
+        $currentUserVotePayload = $this->currentUserVotePayload($currentUserBallot);
 
         $optionsPayload = $vote->options->map(function (RestaurantGroupVoteOption $option) use ($countsByOption, $totalBallots, $currentUserOptionId): array {
             $count = (int) ($countsByOption->get($option->id) ?? 0);
@@ -293,10 +294,7 @@ final class RestaurantGroupVoteService
             ? $vote->invites->contains(fn(RestaurantGroupVoteInvite $invite): bool => $invite->user_id === $currentUserId)
             : false;
 
-        $secondsRemaining = 0;
-        if ($vote->status === RestaurantGroupVoteStatus::Active) {
-            $secondsRemaining = max(0, (int) ($vote->ends_at->getTimestamp() - now()->getTimestamp()));
-        }
+        $secondsRemaining = $this->secondsRemaining($vote);
 
         return [
             'vote' => [
@@ -314,6 +312,7 @@ final class RestaurantGroupVoteService
                 'endsAt' => $vote->ends_at->toIso8601String(),
                 'secondsRemaining' => $secondsRemaining,
                 'creatorUserId' => $vote->user_id,
+                'creator' => $this->creatorPayload($vote->creator, $currentUserId),
                 'isCreator' => $currentUserId !== null && $currentUserId === $vote->user_id,
                 'isInvited' => $isInvited,
                 'currentUserOptionId' => $currentUserOptionId,
@@ -321,12 +320,35 @@ final class RestaurantGroupVoteService
                 'userVoteOptionId' => $currentUserOptionAlias,
                 'selectedOptionId' => $currentUserOptionAlias,
                 'hasCurrentUserVoted' => $currentUserOptionId !== null,
+                'currentUserVote' => $currentUserVotePayload,
                 'createdAt' => $vote->created_at->toIso8601String(),
             ],
             'options' => $optionsPayload,
             'voters' => $votersPayload,
             'invitedUsers' => $invitedUsersPayload,
             'winner' => $winnerPayload,
+        ];
+    }
+
+    /**
+     * Realtime events are intentionally neutral. Every client must refetch the vote
+     * details with its own token so `currentUserVote` is personalized correctly.
+     *
+     * @return array<string, mixed>
+     */
+    public function broadcastRefreshPayload(RestaurantGroupVote $vote): array
+    {
+        $this->finalizeIfExpired($vote);
+        $vote->refresh();
+
+        return [
+            'vote' => [
+                'id' => (int) $vote->id,
+                'status' => $vote->status->value,
+                'secondsRemaining' => $this->secondsRemaining($vote),
+                'updatedAt' => $vote->updated_at?->toIso8601String(),
+            ],
+            'refreshRequired' => true,
         ];
     }
 
@@ -411,6 +433,58 @@ final class RestaurantGroupVoteService
         }
 
         return "\u{0645}\u{0633}\u{062A}\u{062E}\u{062F} \u{0627}\u{0644}\u{062A}\u{0637}\u{0628}\u{064A}\u{0642}";
+    }
+
+    /**
+     * @return array{id:int,name:string,avatarUrl:string|null,isCurrentUser:bool}|null
+     */
+    private function creatorPayload(?User $creator, ?int $currentUserId): ?array
+    {
+        if ($creator === null) {
+            return null;
+        }
+
+        $isCurrentUser = $currentUserId !== null && (int) $creator->id === $currentUserId;
+
+        return [
+            'id' => (int) $creator->id,
+            'name' => $this->displayUserName($creator, $isCurrentUser),
+            'avatarUrl' => null,
+            'isCurrentUser' => $isCurrentUser,
+        ];
+    }
+
+    /**
+     * @return array{hasVoted:bool,optionId:int|null,optionLabel:string|null,ballotId:int|null,votedAt:string|null}
+     */
+    private function currentUserVotePayload(?RestaurantGroupVoteBallot $ballot): array
+    {
+        if ($ballot === null) {
+            return [
+                'hasVoted' => false,
+                'optionId' => null,
+                'optionLabel' => null,
+                'ballotId' => null,
+                'votedAt' => null,
+            ];
+        }
+
+        return [
+            'hasVoted' => true,
+            'optionId' => (int) $ballot->option_id,
+            'optionLabel' => $ballot->option?->label,
+            'ballotId' => (int) $ballot->id,
+            'votedAt' => $ballot->created_at?->toIso8601String(),
+        ];
+    }
+
+    private function secondsRemaining(RestaurantGroupVote $vote): int
+    {
+        if ($vote->status !== RestaurantGroupVoteStatus::Active) {
+            return 0;
+        }
+
+        return max(0, (int) ($vote->ends_at->getTimestamp() - now()->getTimestamp()));
     }
 
     private function applyWinner(RestaurantGroupVote $vote): void
