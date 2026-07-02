@@ -15,6 +15,7 @@ use Modules\Supermarket\Models\SmStore;
 final class UserSupermarketCartService
 {
     private const CART_RELATIONS = [
+        'store',
         'items.product.category',
         'items.product.store',
         'items.product.media',
@@ -34,6 +35,7 @@ final class UserSupermarketCartService
             ->get()
             ->filter(fn (SmCart $cart): bool => $cart->items->isNotEmpty())
             ->map(fn (SmCart $cart): array => $this->toPayload($this->normalizeCart($cart)))
+            ->filter(fn (array $payload): bool => $payload['id'] !== null && $payload['items'] !== [])
             ->values()
             ->all();
     }
@@ -50,6 +52,46 @@ final class UserSupermarketCartService
             ->firstOrFail();
 
         return $this->toPayload($this->normalizeCart($cart));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function showForStore(int $userId, int $storeId): array
+    {
+        $store = SmStore::query()->findOrFail($storeId);
+
+        $cart = SmCart::query()
+            ->where('user_id', $userId)
+            ->where('store_id', $storeId)
+            ->with(self::CART_RELATIONS)
+            ->first();
+
+        if ($cart === null || $cart->items->isEmpty()) {
+            return $this->emptyCartPayload($store);
+        }
+
+        return $this->toPayload($this->normalizeCart($cart));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function deleteCart(int $userId, int $cartId): array
+    {
+        return DB::transaction(function () use ($userId, $cartId): array {
+            $cart = SmCart::query()
+                ->whereKey($cartId)
+                ->where('user_id', $userId)
+                ->with('store')
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $store = $cart->store;
+            $cart->delete();
+
+            return $this->emptyCartPayload($store);
+        });
     }
 
     /**
@@ -72,7 +114,7 @@ final class UserSupermarketCartService
                 ]);
             }
 
-            $cart = $this->normalizeCart($this->resolveActiveCart($userId));
+            $cart = $this->normalizeCart($this->resolveStoreCart($userId, (int) $product->store_id));
             $unitPrice = (float) ($product->discounted_price ?? $product->price ?? 0);
 
             $item = SmCartItem::query()
@@ -139,7 +181,7 @@ final class UserSupermarketCartService
                 }
             }
 
-            $cart = $this->normalizeCart($this->resolveActiveCart($userId));
+            $cart = $this->normalizeCart($this->resolveStoreCart($userId, $storeId));
 
             foreach ($mergedQuantities as $productId => $quantity) {
                 $product = $products->get($productId);
@@ -180,7 +222,7 @@ final class UserSupermarketCartService
                 ->whereKey($itemId)
                 ->where('cart_id', $cartId)
                 ->whereHas('cart', fn ($q) => $q->where('user_id', $userId))
-                ->with(['product', 'cart'])
+                ->with(['product', 'cart.store'])
                 ->lockForUpdate()
                 ->firstOrFail();
 
@@ -204,11 +246,12 @@ final class UserSupermarketCartService
                 ->whereKey($itemId)
                 ->where('cart_id', $cartId)
                 ->whereHas('cart', fn ($q) => $q->where('user_id', $userId))
-                ->with('cart')
+                ->with('cart.store')
                 ->lockForUpdate()
                 ->firstOrFail();
 
             $cart = $item->cart;
+            $store = $cart?->store;
             $item->delete();
 
             $freshCart = $this->normalizeCart($cart);
@@ -216,17 +259,18 @@ final class UserSupermarketCartService
             if ($freshCart->items->isEmpty()) {
                 $freshCart->delete();
 
-                return $this->emptyCartPayload();
+                return $this->emptyCartPayload($store);
             }
 
             return $this->toPayload($freshCart);
         });
     }
 
-    private function resolveActiveCart(int $userId): SmCart
+    private function resolveStoreCart(int $userId, int $storeId): SmCart
     {
         return SmCart::firstOrCreate([
             'user_id' => $userId,
+            'store_id' => $storeId,
         ]);
     }
 
@@ -255,6 +299,47 @@ final class UserSupermarketCartService
                 return $lockedCart->fresh(self::CART_RELATIONS) ?? $lockedCart;
             }
 
+            if ($lockedCart->store_id === null) {
+                $firstStoreId = $items
+                    ->map(fn (SmCartItem $item): ?int => $item->product?->store_id !== null ? (int) $item->product->store_id : null)
+                    ->filter()
+                    ->first();
+
+                if ($firstStoreId !== null) {
+                    $lockedCart->update(['store_id' => $firstStoreId]);
+                    $lockedCart->store_id = $firstStoreId;
+                }
+            }
+
+            foreach ($items as $item) {
+                $itemStoreId = $item->product?->store_id !== null ? (int) $item->product->store_id : null;
+
+                if ($itemStoreId === null) {
+                    $item->delete();
+                    continue;
+                }
+
+                if ((int) $lockedCart->store_id === $itemStoreId) {
+                    continue;
+                }
+
+                $targetCart = $this->resolveStoreCart((int) $lockedCart->user_id, $itemStoreId);
+                $this->moveOrMergeItem($item, $targetCart);
+            }
+
+            $items = SmCartItem::query()
+                ->where('cart_id', $lockedCart->id)
+                ->with([
+                    'product.category',
+                    'product.store',
+                    'product.media',
+                    'product.masterProduct.media',
+                    'product.modifierGroups.modifiers',
+                ])
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
             foreach ($items->groupBy('product_id') as $productId => $group) {
                 /** @var SmCartItem $keeper */
                 $keeper = $group->first();
@@ -275,21 +360,40 @@ final class UserSupermarketCartService
         });
     }
 
+    private function moveOrMergeItem(SmCartItem $item, SmCart $targetCart): void
+    {
+        $existing = SmCartItem::query()
+            ->where('cart_id', $targetCart->id)
+            ->where('product_id', $item->product_id)
+            ->lockForUpdate()
+            ->first();
+
+        if ($existing !== null) {
+            $existing->update([
+                'quantity' => (int) $existing->quantity + max(1, (int) $item->quantity),
+                'unit_price' => (float) ($item->unit_price ?? $existing->unit_price ?? 0),
+            ]);
+            $item->delete();
+
+            return;
+        }
+
+        $item->update(['cart_id' => $targetCart->id]);
+    }
+
     /**
      * @return array<string, mixed>
      */
-    private function emptyCartPayload(): array
+    private function emptyCartPayload(?SmStore $store = null): array
     {
+        $merchant = $this->merchantPayload($store, $store?->id);
+
         return [
             'id' => null,
-            'merchant' => null,
-            'store' => null,
-            'merchantGroups' => [],
-            'isMultiMerchant' => false,
-            'checkout' => [
-                'canPlaceOrder' => false,
-                'blockedReason' => 'empty_cart',
-            ],
+            'storeId' => $store?->id,
+            'merchantId' => $store?->id,
+            'merchant' => $merchant,
+            'store' => $merchant,
             'items' => [],
             'productsCount' => 0,
             'amounts' => [
@@ -312,45 +416,25 @@ final class UserSupermarketCartService
             'product.modifierGroups.modifiers',
         ]);
 
-        $merchantGroups = $items
-            ->groupBy(fn (SmCartItem $item): int => (int) ($item->product?->store_id ?? 0))
-            ->map(function ($group, $storeId): array {
-                $storeId = (int) $storeId;
-                $store = $group->first()?->product?->store;
-                $mappedItems = $group->map(fn (SmCartItem $item): array => $this->itemPayload($item))->values();
-                $subtotal = (float) $mappedItems->sum('totalPrice');
-                $merchant = $this->merchantPayload($store, $storeId > 0 ? $storeId : null);
-
-                return [
-                    'merchant' => $merchant,
-                    'store' => $merchant,
-                    'items' => $mappedItems->all(),
-                    'productsCount' => (int) $mappedItems->sum('quantity'),
-                    'amounts' => [
-                        'subtotal' => round($subtotal, 2),
-                        'total' => round($subtotal, 2),
-                    ],
-                ];
-            })
-            ->values();
-
         $mappedItems = $items->map(fn (SmCartItem $item): array => $this->itemPayload($item))->values();
         $subtotal = (float) $mappedItems->sum('totalPrice');
-        $primaryMerchant = $merchantGroups->first()['merchant'] ?? null;
-        $isMultiMerchant = $merchantGroups->count() > 1;
+        $store = $cart->relationLoaded('store') ? $cart->store : null;
+
+        if ($store === null) {
+            $store = $items->first()?->product?->store;
+        }
+
+        $storeId = $cart->store_id !== null
+            ? (int) $cart->store_id
+            : ($store?->id !== null ? (int) $store->id : null);
+        $merchant = $this->merchantPayload($store, $storeId);
 
         return [
             'id' => $cart->id,
-            'merchant' => $primaryMerchant,
-            'store' => $primaryMerchant,
-            'merchantGroups' => $merchantGroups->all(),
-            'isMultiMerchant' => $isMultiMerchant,
-            'checkout' => [
-                'canPlaceOrder' => $mappedItems->isNotEmpty() && ! $isMultiMerchant,
-                'blockedReason' => $mappedItems->isEmpty()
-                    ? 'empty_cart'
-                    : ($isMultiMerchant ? 'mixed_supermarket_cart' : null),
-            ],
+            'storeId' => $storeId,
+            'merchantId' => $storeId,
+            'merchant' => $merchant,
+            'store' => $merchant,
             'items' => $mappedItems->all(),
             'productsCount' => (int) $mappedItems->sum('quantity'),
             'amounts' => [

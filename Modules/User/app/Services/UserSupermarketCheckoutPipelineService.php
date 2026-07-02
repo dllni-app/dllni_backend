@@ -31,7 +31,7 @@ final class UserSupermarketCheckoutPipelineService
         $cart = SmCart::query()
             ->whereKey($cartId)
             ->where('user_id', $userId)
-            ->with(['items.product.store'])
+            ->with(['store', 'items.product.store'])
             ->firstOrFail();
 
         if ($cart->items->isEmpty()) {
@@ -50,7 +50,7 @@ final class UserSupermarketCheckoutPipelineService
 
         $serviceFee = 0.0;
         $total = max(0.0, $subtotal - $discount) + $serviceFee;
-        $store = $cart->items->first()?->product?->store;
+        $store = $cart->store ?? $cart->items->first()?->product?->store;
 
         return [
             'cartId' => $cart->id,
@@ -86,7 +86,7 @@ final class UserSupermarketCheckoutPipelineService
             $cart = SmCart::query()
                 ->whereKey($cartId)
                 ->where('user_id', $userId)
-                ->with(['items.product.store'])
+                ->with(['store', 'items.product.store'])
                 ->lockForUpdate()
                 ->firstOrFail();
 
@@ -205,24 +205,31 @@ final class UserSupermarketCheckoutPipelineService
 
     private function resolveSingleStoreId(SmCart $cart): int
     {
-        $storeIds = $cart->items
+        $cartStoreId = $cart->store_id !== null ? (int) $cart->store_id : null;
+        $itemStoreIds = $cart->items
             ->map(fn ($item): ?int => $item->product?->store_id ? (int) $item->product->store_id : null)
             ->filter()
             ->unique()
             ->values();
 
-        if ($storeIds->isEmpty()) {
+        if ($cartStoreId === null && $itemStoreIds->isEmpty()) {
             throw ValidationException::withMessages([
                 'cart' => ['Cart contains products that are not linked to a store.'],
             ]);
         }
 
-        if ($storeIds->count() > 1) {
+        if ($cartStoreId !== null && $itemStoreIds->contains(fn (int $storeId): bool => $storeId !== $cartStoreId)) {
             throw ValidationException::withMessages([
-                'cart' => ['Checkout currently requires supermarket cart items to belong to one store.'],
+                'cart' => ['Supermarket cart items must belong to the cart store.'],
             ]);
         }
 
-        return (int) $storeIds->first();
+        if ($itemStoreIds->count() > 1) {
+            throw ValidationException::withMessages([
+                'cart' => ['Supermarket cart items must belong to one store.'],
+            ]);
+        }
+
+        return $cartStoreId ?? (int) $itemStoreIds->first();
     }
 }
