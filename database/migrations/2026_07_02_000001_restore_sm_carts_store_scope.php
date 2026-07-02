@@ -13,7 +13,7 @@ return new class extends Migration
     {
         if (! Schema::hasColumn('sm_carts', 'store_id')) {
             Schema::table('sm_carts', function (Blueprint $table): void {
-                $table->unsignedBigInteger('store_id')->nullable()->after('user_id');
+                $table->unsignedBigInteger('store_id')->nullable();
             });
         }
 
@@ -21,7 +21,7 @@ return new class extends Migration
         $this->splitExistingCartsByStore();
         $this->mergeDuplicateUserStoreCarts();
 
-        if (! $this->foreignKeyExists('sm_carts', 'sm_cart_store_fk')) {
+        if (DB::getDriverName() !== 'sqlite' && ! $this->foreignKeyExists('sm_carts', 'sm_cart_store_fk')) {
             Schema::table('sm_carts', function (Blueprint $table): void {
                 $table->foreign('store_id', 'sm_cart_store_fk')
                     ->references('id')
