@@ -7,6 +7,7 @@ use Database\Factories\SmCategoryFactory;
 use Database\Factories\SmProductFactory;
 use Database\Factories\SmStoreFactory;
 use Laravel\Sanctum\Sanctum;
+use Modules\Supermarket\Models\SmCart;
 
 it('creates separate supermarket carts for products from different stores', function (): void {
     $user = User::factory()->create();
@@ -54,9 +55,28 @@ it('creates separate supermarket carts for products from different stores', func
     $this->assertArrayNotHasKey('isMultiMerchant', $secondAddResponse->json('data'));
     $this->assertArrayNotHasKey('checkout', $secondAddResponse->json('data'));
 
-    $this->getJson('/api/v1/user/supermarket/carts')
+    $listResponse = $this->getJson('/api/v1/user/supermarket/carts')
         ->assertOk()
         ->assertJsonCount(2, 'data');
+
+    $storeIds = collect($listResponse->json('data'))
+        ->pluck('storeId')
+        ->sort()
+        ->values()
+        ->all();
+
+    expect($storeIds)->toBe([$firstStore->id, $secondStore->id]);
+    expect($listResponse->json('data.0'))->toHaveKeys([
+        'id',
+        'storeId',
+        'merchantId',
+        'merchant',
+        'store',
+        'items',
+        'productsCount',
+        'amounts',
+    ]);
+    expect($listResponse->json('data.0.items'))->toBeArray();
 
     $this->assertDatabaseCount('sm_carts', 2);
 
@@ -80,6 +100,30 @@ it('creates separate supermarket carts for products from different stores', func
         'product_id' => $secondProduct->id,
         'quantity' => 2,
     ]);
+});
+
+it('returns cart list payloads with store data and item data', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $store = SmStoreFactory::new()->create();
+    $cart = SmCart::create([
+        'user_id' => $user->id,
+        'store_id' => $store->id,
+    ]);
+
+    $this->getJson('/api/v1/user/supermarket/carts')
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.id', $cart->id)
+        ->assertJsonPath('data.0.storeId', $store->id)
+        ->assertJsonPath('data.0.merchantId', $store->id)
+        ->assertJsonPath('data.0.store.id', $store->id)
+        ->assertJsonPath('data.0.merchant.id', $store->id)
+        ->assertJsonPath('data.0.items', [])
+        ->assertJsonPath('data.0.productsCount', 0)
+        ->assertJsonPath('data.0.amounts.subtotal', 0.0)
+        ->assertJsonPath('data.0.amounts.total', 0.0);
 });
 
 it('increments quantity when the same supermarket product is added again', function (): void {
