@@ -53,18 +53,15 @@ final class CleaningWorkerDepositStats extends StatsOverviewWidget
         ];
     }
 
+    private static function money(float $amount): string
+    {
+        return AdminUiFormatter::formatCurrency($amount);
+    }
+
     private function sumByType(string $type): float
     {
         return (float) CleaningDepositTransaction::query()
             ->where('type', $type)
             ->sum('amount');
-    }
-
-    private static function money(float $amount): string
-    {
-        return AdminUiFormatter::formatCurrency(
-            $amount,
-            arabicNumerals: app()->getLocale() === 'ar',
-        );
     }
 }

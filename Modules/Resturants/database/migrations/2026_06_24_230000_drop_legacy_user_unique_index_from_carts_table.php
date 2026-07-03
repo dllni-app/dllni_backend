@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -33,35 +32,21 @@ return new class extends Migration
      */
     private function userOnlyUniqueIndexes(): array
     {
-        $rows = DB::select(<<<'SQL'
-            SELECT INDEX_NAME AS index_name, GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) AS columns_list
-            FROM information_schema.STATISTICS
-            WHERE TABLE_SCHEMA = DATABASE()
-              AND TABLE_NAME = 'carts'
-              AND NON_UNIQUE = 0
-              AND INDEX_NAME <> 'PRIMARY'
-            GROUP BY INDEX_NAME
-            HAVING columns_list = 'user_id'
-        SQL);
-
-        return array_values(array_filter(array_map(
-            static fn (object $row): ?string => isset($row->index_name) ? (string) $row->index_name : null,
-            $rows,
-        )));
+        return collect(Schema::getIndexes('carts'))
+            ->filter(static fn (array $index): bool => $index['unique']
+                && ! $index['primary']
+                && $index['columns'] === ['user_id'])
+            ->pluck('name')
+            ->filter()
+            ->map(static fn (string $name): string => $name)
+            ->values()
+            ->all();
     }
 
     private function indexExists(string $indexName): bool
     {
-        $exists = DB::selectOne(<<<'SQL'
-            SELECT 1 AS exists_flag
-            FROM information_schema.STATISTICS
-            WHERE TABLE_SCHEMA = DATABASE()
-              AND TABLE_NAME = 'carts'
-              AND INDEX_NAME = ?
-            LIMIT 1
-        SQL, [$indexName]);
-
-        return $exists !== null;
+        return collect(Schema::getIndexes('carts'))
+            ->contains(static fn (array $index): bool => $index['name'] === $indexName);
     }
 
     private function dropIndexIfExists(string $indexName): void
@@ -70,7 +55,8 @@ return new class extends Migration
             return;
         }
 
-        $safeIndexName = str_replace('`', '``', $indexName);
-        DB::statement("ALTER TABLE `carts` DROP INDEX `{$safeIndexName}`");
+        Schema::table('carts', function (Blueprint $table) use ($indexName): void {
+            $table->dropIndex($indexName);
+        });
     }
 };

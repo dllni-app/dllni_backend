@@ -69,6 +69,12 @@ return [
             'pending_events' => 'Pending events',
             'pending_events_hint' => 'Event-assistance bookings that still need attention.',
         ],
+        'empty' => [
+            'booking_statuses' => 'No booking data.',
+            'alert_types' => 'No alerts in this period.',
+            'alert_lifecycle' => 'No alerts currently.',
+            'all_clear' => 'All clear, nothing needs action.',
+        ],
     ],
 
     'workers' => [
@@ -425,6 +431,12 @@ return [
             'center_latitude' => 'Center latitude',
             'center_longitude' => 'Center longitude',
             'is_active' => 'Active',
+            'workers_count' => 'Workers',
+            'coverage_level' => 'Coverage',
+        ],
+        'coverage' => [
+            'high' => 'High coverage',
+            'low' => 'Low coverage',
         ],
         'filters' => [
             'is_active' => 'Active',
@@ -449,7 +461,9 @@ return [
         'tooltip' => 'Base pricing, add-ons, commission, travel costs, distance start point, time billing policy and minimum billable minutes.',
         'subheading' => 'Manage base pricing, add-ons, commission, travel costs, distance calculation start point, time billing policy and minimum billable minutes.',
         'saved' => 'Financial settings saved',
+        'pricing_algorithm_description' => 'Manage the room/unit pricing algorithm used by the user cleaning order estimate and create APIs.',
         'sections' => [
+            'pricing_algorithm' => 'Cleaning price algorithm',
             'revenue_model' => 'Revenue Model',
             'travel_costs' => 'Travel Costs',
             'time_billing_policy' => 'Time Billing Policy',
@@ -458,6 +472,10 @@ return [
             'worker_finance' => 'Worker Finance',
         ],
         'fields' => [
+            'cleaning_base_unit_price' => 'Base unit price',
+            'cleaning_deep_multiplier' => 'Deep cleaning multiplier',
+            'cleaning_area_margin_multiplier' => 'Area margin multiplier',
+            'cleaning_setup_buffer_minutes' => 'Setup buffer minutes',
             'commission_type' => 'Commission type',
             'default_commission_rate' => 'Default commission rate (%)',
             'commission_fixed_amount' => 'Fixed commission amount',
@@ -545,6 +563,13 @@ return [
         ],
         'hints' => [
             'adjustment_amount' => 'Use a positive value to credit the balance and a negative value to debit it.',
+        ],
+        'references' => [
+            'admin_deposit' => 'Admin deposit',
+            'admin_settlement' => 'Debt settlement',
+            'admin_refund' => 'Admin refund',
+            'admin_adjustment' => 'Manual adjustment',
+            'admin_fee_booking' => 'Admin fee — booking #:id',
         ],
     ],
 
@@ -727,7 +752,7 @@ return [
         ],
         'geographic_coverage' => [
             'title' => 'Geographic Coverage',
-            'description' => 'Track worker coverage and booking pressure by mapped neighborhood, and surface legacy zones that still need mapping.',
+            'description' => 'Neighborhoods with their worker count and coverage level.',
             'search_placeholder' => 'Search by neighborhood name...',
             'table_title' => 'Coverage Table',
             'empty' => 'No coverage data found for the current filters.',
@@ -957,6 +982,9 @@ return [
             'property_damage' => 'Property damage',
             'unprofessional' => 'Unprofessional conduct',
             'billing_issue' => 'Billing issue',
+            'customer_terms_violation' => 'Customer terms violation',
+            'financial_or_verbal_dispute' => 'Financial or verbal dispute',
+            'force_majeure' => 'Force majeure',
             'other' => 'Other',
         ],
         'dispute_resolution' => [

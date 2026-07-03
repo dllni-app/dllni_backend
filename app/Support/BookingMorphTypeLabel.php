@@ -21,7 +21,7 @@ final class BookingMorphTypeLabel
             EventBooking::class => 'event',
             Order::class => 'restaurant_order',
             'cleaning_booking', 'cleaning' => 'cleaning',
-            'event' => 'event',
+            'event_booking', 'event' => 'event',
             default => null,
         };
 

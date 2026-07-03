@@ -6,50 +6,30 @@
         </a>
     </div>
 
-    <x-filament::section heading="Cleaning price algorithm">
+    <x-filament::section :heading="__('cleaning_admin.financial.sections.pricing_algorithm')">
         <p class="mb-4 text-sm text-gray-500 dark:text-gray-400">
-            Manage the room/unit pricing algorithm used by the user cleaning order estimate and create APIs. The JSON fields are keyed by room type and size: small, medium, large.
+            {{ __('cleaning_admin.financial.pricing_algorithm_description') }}
         </p>
         <div class="grid gap-4 md:grid-cols-4">
             <label class="flex flex-col gap-1">
-                <span class="text-sm">Base unit price</span>
+                <span class="text-sm">{{ __('cleaning_admin.financial.fields.cleaning_base_unit_price') }}</span>
                 <input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="cleaningBaseUnitPrice">
                 @error('cleaningBaseUnitPrice') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
             </label>
             <label class="flex flex-col gap-1">
-                <span class="text-sm">Deep cleaning multiplier</span>
+                <span class="text-sm">{{ __('cleaning_admin.financial.fields.cleaning_deep_multiplier') }}</span>
                 <input type="number" min="1" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="cleaningDeepMultiplier">
                 @error('cleaningDeepMultiplier') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
             </label>
             <label class="flex flex-col gap-1">
-                <span class="text-sm">Area margin multiplier</span>
+                <span class="text-sm">{{ __('cleaning_admin.financial.fields.cleaning_area_margin_multiplier') }}</span>
                 <input type="number" min="1" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="cleaningAreaMarginMultiplier">
                 @error('cleaningAreaMarginMultiplier') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
             </label>
             <label class="flex flex-col gap-1">
-                <span class="text-sm">Setup buffer minutes</span>
+                <span class="text-sm">{{ __('cleaning_admin.financial.fields.cleaning_setup_buffer_minutes') }}</span>
                 <input type="number" min="0" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="cleaningSetupBufferMinutes">
                 @error('cleaningSetupBufferMinutes') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
-            </label>
-        </div>
-        <div class="mt-4 grid gap-4 xl:grid-cols-3">
-            <label class="flex flex-col gap-1">
-                <span class="text-sm font-medium">Room size ranges JSON</span>
-                <textarea rows="18" class="fi-textarea block w-full rounded-lg border-gray-300 font-mono text-xs dark:border-gray-600 dark:bg-gray-800" wire:model.defer="cleaningRoomSizeRangesJson"></textarea>
-                <span class="text-xs text-gray-500 dark:text-gray-400">Used to estimate square meters. Each size should include min, max, average.</span>
-                @error('cleaningRoomSizeRangesJson') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
-            </label>
-            <label class="flex flex-col gap-1">
-                <span class="text-sm font-medium">Room pricing units JSON</span>
-                <textarea rows="18" class="fi-textarea block w-full rounded-lg border-gray-300 font-mono text-xs dark:border-gray-600 dark:bg-gray-800" wire:model.defer="cleaningRoomPricingUnitsJson"></textarea>
-                <span class="text-xs text-gray-500 dark:text-gray-400">Order price = count × units × base unit price × cleaning mode multiplier.</span>
-                @error('cleaningRoomPricingUnitsJson') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
-            </label>
-            <label class="flex flex-col gap-1">
-                <span class="text-sm font-medium">Room time minutes JSON</span>
-                <textarea rows="18" class="fi-textarea block w-full rounded-lg border-gray-300 font-mono text-xs dark:border-gray-600 dark:bg-gray-800" wire:model.defer="cleaningRoomTimeMinutesJson"></textarea>
-                <span class="text-xs text-gray-500 dark:text-gray-400">Used to estimate duration. Each size should include regular and deep minutes.</span>
-                @error('cleaningRoomTimeMinutesJson') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
             </label>
         </div>
     </x-filament::section>
@@ -132,7 +112,7 @@
                     <span class="text-sm font-medium">{{ __('cleaning_admin.financial.extension.range_label', ['start' => $range['start'], 'end' => $range['end']]) }}</span>
                     <div class="flex items-center gap-2">
                         <input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="extensionRanges.{{ $i }}.price">
-                        <span class="text-xs text-gray-500 dark:text-gray-400">SYP</span>
+                        <span class="text-xs text-gray-500 dark:text-gray-400">{{ __('SYP') }}</span>
                     </div>
                     @error('extensionRanges.'.$i.'.price') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
                 </label>

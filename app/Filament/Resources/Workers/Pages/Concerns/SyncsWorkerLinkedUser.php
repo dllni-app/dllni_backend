@@ -14,18 +14,16 @@ trait SyncsWorkerLinkedUser
             return;
         }
 
-        $state = $this->form->getState();
-
         $updates = [
             'name' => $this->record->first_name,
         ];
 
-        if (filled($state['user_phone'] ?? null)) {
-            $updates['phone'] = $state['user_phone'];
+        if (filled($this->data['user_phone'] ?? null)) {
+            $updates['phone'] = $this->data['user_phone'];
         }
 
-        if (filled($state['user_password'] ?? null)) {
-            $updates['password'] = $state['user_password'];
+        if (filled($this->data['user_password'] ?? null)) {
+            $updates['password'] = $this->data['user_password'];
         }
 
         $user->forceFill($updates)->saveQuietly();

@@ -15,7 +15,6 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use UnitEnum;
 
 final class CleaningWorkerDepositsResource extends Resource
 {
@@ -65,7 +64,9 @@ final class CleaningWorkerDepositsResource extends Resource
                     TextEntry::make('amount')->label(__('cleaning_admin.transactions.fields.amount'))->money('SYP'),
                     TextEntry::make('balance_before')->label(__('cleaning_admin.transactions.fields.balance_before'))->money('SYP'),
                     TextEntry::make('balance_after')->label(__('cleaning_admin.transactions.fields.balance_after'))->money('SYP'),
-                    TextEntry::make('reference')->label(__('cleaning_admin.transactions.fields.reference'))->placeholder('—'),
+                    TextEntry::make('reference')->label(__('cleaning_admin.transactions.fields.reference'))
+                        ->formatStateUsing(fn (?string $state): string => CleaningTransactionsTable::referenceLabel($state))
+                        ->placeholder('—'),
                     TextEntry::make('createdByAdmin.name')->label(__('cleaning_admin.transactions.fields.created_by'))->placeholder('—'),
                     TextEntry::make('notes')->label(__('cleaning_admin.transactions.fields.notes'))->placeholder('—')->columnSpanFull(),
                     TextEntry::make('created_at')->label(__('cleaning_admin.transactions.fields.date'))->dateTime('Y-m-d H:i'),

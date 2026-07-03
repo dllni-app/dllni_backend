@@ -14,45 +14,63 @@ use Modules\Cleaning\Support\CleaningFinancialDefaults;
 
 final class FinancialSettings extends Page
 {
-    public float $defaultCommissionRate = 0.0;
-    public float $vatRate = 0.0;
-    public string $commissionType = 'percent';
-    public ?float $commissionFixedAmount = null;
-    public string $travelMarkupType = 'fixed';
-    public float $travelMarkupValue = 0.0;
-    public float $travelPerKm = 0.0;
-    public string $travelDistanceStartPoint = 'worker_home';
-    public int $coverageLow = 3;
-    public int $coverageOk = 7;
-    public array $extensionRanges = [];
-    public string $timeBillingMode = 'actual';
-    public ?int $minBillableMinutes = null;
-    public ?int $timeWarningMinutesBeforeEnd = null;
-    public float $extensionRatePer30Minutes = 0.0;
-    public float $minimumDepositAmount = 0.0;
-    public float $defaultMaxNegativeBalance = 0.0;
-    public float $restrictionThresholdPercent = 80.0;
-    public int $trustRejectAfterAcceptPenalty = 10;
-    public int $trustMinimumForDispatch = 0;
-    public bool $workerFinanceEnabled = true;
-    public float $cleaningBaseUnitPrice = CleaningFinancialDefaults::BASE_UNIT_PRICE;
-    public float $cleaningDeepMultiplier = CleaningFinancialDefaults::DEEP_CLEANING_MULTIPLIER;
-    public float $cleaningAreaMarginMultiplier = CleaningFinancialDefaults::AREA_MARGIN_MULTIPLIER;
-    public int $cleaningSetupBufferMinutes = CleaningFinancialDefaults::SETUP_BUFFER_MINUTES;
-    public string $cleaningRoomSizeRangesJson = '';
-    public string $cleaningRoomPricingUnitsJson = '';
-    public string $cleaningRoomTimeMinutesJson = '';
-
     private const EXTENSION_BLOCKS = [[0, 15], [16, 30], [31, 45], [46, 60], [61, 75], [76, 90]];
 
-    protected static string|BackedEnum|null $navigationIcon = \Filament\Support\Icons\Heroicon::OutlinedCurrencyDollar;
-    protected string $view = 'filament.cleaning-admin.pages.financial-settings';
-    protected static ?int $navigationSort = 20;
+    public float $defaultCommissionRate = 0.0;
 
-    public function getMaxContentWidth(): ?string
-    {
-        return '7xl';
-    }
+    public float $vatRate = 0.0;
+
+    public string $commissionType = 'percent';
+
+    public ?float $commissionFixedAmount = null;
+
+    public string $travelMarkupType = 'fixed';
+
+    public float $travelMarkupValue = 0.0;
+
+    public float $travelPerKm = 0.0;
+
+    public string $travelDistanceStartPoint = 'worker_home';
+
+    public int $coverageLow = 3;
+
+    public int $coverageOk = 7;
+
+    public array $extensionRanges = [];
+
+    public string $timeBillingMode = 'actual';
+
+    public ?int $minBillableMinutes = null;
+
+    public ?int $timeWarningMinutesBeforeEnd = null;
+
+    public float $extensionRatePer30Minutes = 0.0;
+
+    public float $minimumDepositAmount = 0.0;
+
+    public float $defaultMaxNegativeBalance = 0.0;
+
+    public float $restrictionThresholdPercent = 80.0;
+
+    public int $trustRejectAfterAcceptPenalty = 10;
+
+    public int $trustMinimumForDispatch = 0;
+
+    public bool $workerFinanceEnabled = true;
+
+    public float $cleaningBaseUnitPrice = CleaningFinancialDefaults::BASE_UNIT_PRICE;
+
+    public float $cleaningDeepMultiplier = CleaningFinancialDefaults::DEEP_CLEANING_MULTIPLIER;
+
+    public float $cleaningAreaMarginMultiplier = CleaningFinancialDefaults::AREA_MARGIN_MULTIPLIER;
+
+    public int $cleaningSetupBufferMinutes = CleaningFinancialDefaults::SETUP_BUFFER_MINUTES;
+
+    protected static string|BackedEnum|null $navigationIcon = \Filament\Support\Icons\Heroicon::OutlinedCurrencyDollar;
+
+    protected string $view = 'filament.cleaning-admin.pages.financial-settings';
+
+    protected static ?int $navigationSort = 20;
 
     public static function getNavigationGroup(): ?string
     {
@@ -84,6 +102,11 @@ final class FinancialSettings extends Page
         return $user->can('pricing.view') || $user->can('settings.view');
     }
 
+    public function getMaxContentWidth(): ?string
+    {
+        return '7xl';
+    }
+
     public function getTitle(): string
     {
         return __('cleaning_admin.financial.title');
@@ -98,9 +121,6 @@ final class FinancialSettings extends Page
     {
         $setting = CleaningFinancialSetting::query()->first();
         $this->extensionRanges = $this->resolveExtensionRanges($setting);
-        $this->cleaningRoomSizeRangesJson = $this->prettyJson($setting?->cleaning_room_size_ranges ?: CleaningFinancialDefaults::roomSizeRanges());
-        $this->cleaningRoomPricingUnitsJson = $this->prettyJson($setting?->cleaning_room_pricing_units ?: CleaningFinancialDefaults::roomPricingUnits());
-        $this->cleaningRoomTimeMinutesJson = $this->prettyJson($setting?->cleaning_room_time_minutes ?: CleaningFinancialDefaults::roomTimeMinutes());
 
         if ($setting) {
             $this->defaultCommissionRate = (float) $setting->default_commission_rate;
@@ -162,9 +182,6 @@ final class FinancialSettings extends Page
             'cleaningDeepMultiplier' => ['required', 'numeric', 'min:1'],
             'cleaningAreaMarginMultiplier' => ['required', 'numeric', 'min:1'],
             'cleaningSetupBufferMinutes' => ['required', 'integer', 'min:0'],
-            'cleaningRoomSizeRangesJson' => ['required', 'json'],
-            'cleaningRoomPricingUnitsJson' => ['required', 'json'],
-            'cleaningRoomTimeMinutesJson' => ['required', 'json'],
         ]);
 
         CleaningFinancialSetting::query()->updateOrCreate(
@@ -192,9 +209,6 @@ final class FinancialSettings extends Page
                 'cleaning_deep_multiplier' => $this->cleaningDeepMultiplier,
                 'cleaning_area_margin_multiplier' => $this->cleaningAreaMarginMultiplier,
                 'cleaning_setup_buffer_minutes' => $this->cleaningSetupBufferMinutes,
-                'cleaning_room_size_ranges' => json_decode($this->cleaningRoomSizeRangesJson, true, 512, JSON_THROW_ON_ERROR),
-                'cleaning_room_pricing_units' => json_decode($this->cleaningRoomPricingUnitsJson, true, 512, JSON_THROW_ON_ERROR),
-                'cleaning_room_time_minutes' => json_decode($this->cleaningRoomTimeMinutesJson, true, 512, JSON_THROW_ON_ERROR),
             ],
         );
 
@@ -228,10 +242,5 @@ final class FinancialSettings extends Page
 
             return ['start' => $start, 'end' => $end, 'price' => (float) $price];
         }, self::EXTENSION_BLOCKS);
-    }
-
-    private function prettyJson(array $value): string
-    {
-        return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
     }
 }

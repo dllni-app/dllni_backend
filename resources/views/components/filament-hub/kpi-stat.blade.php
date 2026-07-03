@@ -10,7 +10,6 @@
     'formatValueAsInteger' => false,
     'valueFormat' => null, // integer|currency|raw|null
     'currencyDecimals' => 2,
-    'arabicNumerals' => true,
     'actionEmphasis' => false,
 ])
 
@@ -22,8 +21,8 @@
     $resolvedFormat = $valueFormat
         ?? ($formatValueAsInteger ? 'integer' : 'raw');
     $displayValue = match ($resolvedFormat) {
-        'integer' => \App\Filament\Support\AdminUiFormatter::formatNumber((float) $value, 0, $arabicNumerals),
-        'currency' => \App\Filament\Support\AdminUiFormatter::formatCurrency((float) $value, $currencyDecimals, arabicNumerals: $arabicNumerals),
+        'integer' => \App\Filament\Support\AdminUiFormatter::formatNumber((float) $value, 0),
+        'currency' => \App\Filament\Support\AdminUiFormatter::formatCurrency((float) $value, $currencyDecimals),
         default => $value,
     };
     $toneClasses = match ($tone) {

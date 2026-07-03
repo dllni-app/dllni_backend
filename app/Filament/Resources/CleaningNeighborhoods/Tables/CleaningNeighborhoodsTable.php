@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Filament\Resources\CleaningNeighborhoods\Tables;
 
 use App\Filament\Resources\CleaningNeighborhoods\CleaningNeighborhoodResource;
+use App\Models\CleaningFinancialSetting;
+use App\Models\WorkerZone;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
@@ -13,6 +15,7 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Modules\Cleaning\Models\CleaningNeighborhood;
 
@@ -20,29 +23,37 @@ final class CleaningNeighborhoodsTable
 {
     public static function configure(Table $table): Table
     {
+        $thresholds = CleaningFinancialSetting::query()->first()?->coverage_thresholds ?? ['low' => 3, 'ok' => 7];
+        $highCoverageThreshold = (int) ($thresholds['ok'] ?? 7);
+
         return $table
             ->defaultSort('sort_order')
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->addSelect([
+                'workers_count' => WorkerZone::query()
+                    ->selectRaw('COUNT(DISTINCT worker_id)')
+                    ->whereColumn('neighborhood_id', 'cleaning_neighborhoods.id')
+                    ->where('is_active', true),
+            ]))
             ->columns([
                 TextColumn::make('name_ar')
                     ->label(__('cleaning_admin.cleaning_neighborhoods.fields.name_ar'))
                     ->searchable()
                     ->sortable(),
-                TextColumn::make('name_en')
-                    ->label(__('cleaning_admin.cleaning_neighborhoods.fields.name_en'))
-                    ->searchable()
-                    ->toggleable(),
                 TextColumn::make('city_name')
                     ->label(__('cleaning_admin.cleaning_neighborhoods.fields.city_name'))
                     ->badge()
                     ->searchable(),
-                TextColumn::make('aliases')
-                    ->label(__('cleaning_admin.cleaning_neighborhoods.fields.aliases'))
-                    ->formatStateUsing(fn ($state): string => implode(', ', is_array($state) ? $state : []))
-                    ->wrap()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('sort_order')
-                    ->label(__('cleaning_admin.cleaning_neighborhoods.fields.sort_order'))
+                TextColumn::make('workers_count')
+                    ->label(__('cleaning_admin.cleaning_neighborhoods.fields.workers_count'))
+                    ->badge()
+                    ->color('gray')
                     ->sortable(),
+                TextColumn::make('coverage_level')
+                    ->label(__('cleaning_admin.cleaning_neighborhoods.fields.coverage_level'))
+                    ->badge()
+                    ->getStateUsing(fn (CleaningNeighborhood $record): string => (int) ($record->workers_count ?? 0) >= $highCoverageThreshold ? 'high' : 'low')
+                    ->formatStateUsing(fn (string $state): string => __('cleaning_admin.cleaning_neighborhoods.coverage.'.$state))
+                    ->color(fn (string $state): string => $state === 'high' ? 'success' : 'warning'),
                 IconColumn::make('is_active')
                     ->label(__('cleaning_admin.cleaning_neighborhoods.fields.is_active'))
                     ->boolean(),
