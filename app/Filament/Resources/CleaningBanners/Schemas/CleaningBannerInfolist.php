@@ -29,9 +29,6 @@ final class CleaningBannerInfolist
                                 TextEntry::make('subtitle')
                                     ->label(__('cleaning_admin.cleaning_banners.fields.subtitle'))
                                     ->placeholder('—'),
-                                TextEntry::make('target_url')
-                                    ->label(__('cleaning_admin.cleaning_banners.fields.target_url'))
-                                    ->placeholder('—'),
                             ]),
                     ]),
                 Section::make(__('cleaning_admin.cleaning_banners.sections.visibility'))

@@ -23,6 +23,8 @@ final class CleaningPriceAdjustmentRequestResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCurrencyDollar;
 
+    protected static bool $shouldRegisterNavigation = false;
+
     protected static ?int $navigationSort = 3;
 
     public static function getNavigationGroup(): ?string

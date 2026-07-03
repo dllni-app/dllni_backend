@@ -61,9 +61,6 @@ final class CleaningWorkerFinancialStats extends StatsOverviewWidget
 
     private static function money(float $amount): string
     {
-        return AdminUiFormatter::formatCurrency(
-            $amount,
-            arabicNumerals: app()->getLocale() === 'ar',
-        );
+        return AdminUiFormatter::formatCurrency($amount);
     }
 }

@@ -9,7 +9,6 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-use Illuminate\Validation\Rule;
 use Modules\Cleaning\Support\CleaningNeighborhoodNameNormalizer;
 
 final class CleaningNeighborhoodForm
@@ -25,10 +24,7 @@ final class CleaningNeighborhoodForm
                             ->label(__('cleaning_admin.cleaning_neighborhoods.fields.name_ar'))
                             ->required()
                             ->maxLength(255)
-                            ->rules([
-                                Rule::unique('cleaning_neighborhoods', 'name_ar')
-                                    ->ignore(fn ($record) => $record),
-                            ]),
+                            ->unique('cleaning_neighborhoods', 'name_ar', ignoreRecord: true),
                         TextInput::make('name_en')
                             ->label(__('cleaning_admin.cleaning_neighborhoods.fields.name_en'))
                             ->maxLength(255),

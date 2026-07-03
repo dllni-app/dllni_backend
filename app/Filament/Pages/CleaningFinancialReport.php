@@ -14,14 +14,14 @@ use Illuminate\Support\Facades\DB;
 
 final class CleaningFinancialReport extends Page
 {
+    /** @var array<int, array{label: string, value: string, tone: string}> */
+    public array $metrics = [];
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChartBar;
 
     protected string $view = 'filament.cleaning-admin.pages.financial-report';
 
     protected static ?int $navigationSort = 53;
-
-    /** @var array<int, array{label: string, value: string, tone: string}> */
-    public array $metrics = [];
 
     public static function getNavigationGroup(): ?string
     {
@@ -67,18 +67,9 @@ final class CleaningFinancialReport extends Page
         $depositsHeld = (float) CleaningWorkerDeposit::query()
             ->sum(DB::raw('COALESCE(deposited_total, 0) - COALESCE(withdrawn_total, 0)'));
 
-        $restrictedWorkers = Worker::query()
-            ->where('security_deposit_status', 'insufficient_balance')
-            ->count();
+        $activeWorkers = Worker::query()->activeAvailable()->count();
 
-        $activeWorkers = Worker::query()
-            ->where('is_active', true)
-            ->where('is_suspended', false)
-            ->where(function ($query): void {
-                $query->whereNull('security_deposit_status')
-                    ->orWhere('security_deposit_status', 'active');
-            })
-            ->count();
+        $restrictedWorkers = Worker::query()->restricted()->count();
 
         return [
             ['label' => __('cleaning_admin.report.metrics.deposits_held'), 'value' => $this->money($depositsHeld), 'tone' => 'primary'],

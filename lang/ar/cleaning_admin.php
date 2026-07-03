@@ -88,6 +88,12 @@ return [
             'bookings' => 'الحجوزات',
             'alerts' => 'التنبيهات',
         ],
+        'empty' => [
+            'booking_statuses' => 'لا توجد بيانات للحجوزات.',
+            'alert_types' => 'لا توجد تنبيهات في هذه الفترة.',
+            'alert_lifecycle' => 'لا توجد تنبيهات حالياً.',
+            'all_clear' => 'الكل واضح، لا توجد عناصر تحتاج إجراء.',
+        ],
     ],
 
     'workers' => [
@@ -128,7 +134,7 @@ return [
             'security_deposit_status' => 'حالة التأمين',
             'average_rating' => 'متوسط التقييم',
             'total_completed_jobs' => 'المهام المنجزة',
-                        'gross_revenue' => 'إجمالي الإيرادات',
+            'gross_revenue' => 'إجمالي الإيرادات',
             'worker_net_earnings' => 'صافي مستحقات العامل',
             'admin_margin_total' => 'هامش الإدارة',
             'completed_jobs_count' => 'عدد المهام المكتملة',
@@ -461,6 +467,12 @@ return [
             'center_latitude' => 'خط العرض التقريبي',
             'center_longitude' => 'خط الطول التقريبي',
             'is_active' => 'نشط',
+            'workers_count' => 'عدد العاملين',
+            'coverage_level' => 'التغطية',
+        ],
+        'coverage' => [
+            'high' => 'تغطية عالية',
+            'low' => 'تغطية منخفضة',
         ],
         'filters' => [
             'is_active' => 'نشط',
@@ -485,7 +497,9 @@ return [
         'tooltip' => 'التسعير الأساسي، الإضافات، العمولة، تكاليف التنقل، نقطة بدء المسافة، سياسة فوترة الوقت والحد الأدنى للدقائق القابلة للفوترة.',
         'subheading' => 'إدارة التسعير الأساسي، الإضافات، العمولة، تكاليف التنقل، نقطة حساب المسافة، سياسة فوترة الوقت والحد الأدنى للدقائق.',
         'saved' => 'تم حفظ الإعدادات المالية',
+        'pricing_algorithm_description' => 'إدارة خوارزمية تسعير الغرف/الوحدات المستخدمة في تقدير طلبات التنظيف وإنشائها عبر واجهات المستخدم.',
         'sections' => [
+            'pricing_algorithm' => 'خوارزمية تسعير التنظيف',
             'revenue_model' => 'نموذج الإيراد',
             'travel_costs' => 'تكاليف التنقل',
             'time_billing_policy' => 'سياسة فوترة الوقت',
@@ -494,6 +508,10 @@ return [
             'worker_finance' => 'مالية العاملين',
         ],
         'fields' => [
+            'cleaning_base_unit_price' => 'سعر الوحدة الأساسي',
+            'cleaning_deep_multiplier' => 'معامل التنظيف العميق',
+            'cleaning_area_margin_multiplier' => 'معامل هامش المساحة',
+            'cleaning_setup_buffer_minutes' => 'دقائق التحضير الإضافية',
             'commission_type' => 'نوع العمولة',
             'default_commission_rate' => 'نسبة العمولة الافتراضية (%)',
             'commission_fixed_amount' => 'قيمة العمولة الثابتة',
@@ -581,6 +599,13 @@ return [
         ],
         'hints' => [
             'adjustment_amount' => 'استخدم قيمة موجبة لزيادة الرصيد وقيمة سالبة لخصمه.',
+        ],
+        'references' => [
+            'admin_deposit' => 'إيداع يدوي من الإدارة',
+            'admin_settlement' => 'تسوية دين',
+            'admin_refund' => 'استرداد من الإدارة',
+            'admin_adjustment' => 'تعديل يدوي',
+            'admin_fee_booking' => 'عمولة الإدارة — حجز #:id',
         ],
     ],
 
@@ -803,7 +828,7 @@ return [
         ],
         'geographic_coverage' => [
             'title' => 'التغطية الجغرافية',
-            'description' => 'متابعة تغطية العاملين وضغط الحجوزات حسب الأحياء المعتمدة مع إظهار المناطق القديمة التي ما زالت تحتاج إلى ربط.',
+            'description' => 'قائمة الأحياء مع عدد العاملين ومستوى التغطية.',
             'search_placeholder' => 'ابحث باسم الحي...',
             'table_title' => 'جدول التغطية',
             'empty' => 'لا توجد بيانات تغطية مطابقة للمرشحات الحالية.',
@@ -1033,6 +1058,9 @@ return [
             'property_damage' => 'تلف بالممتلكات',
             'unprofessional' => 'سلوك غير مهني',
             'billing_issue' => 'مشكلة في الدفع',
+            'customer_terms_violation' => 'مخالفة شروط العميل',
+            'financial_or_verbal_dispute' => 'خلاف مالي أو لفظي',
+            'force_majeure' => 'ظرف قاهر',
             'other' => 'أخرى',
         ],
         'dispute_resolution' => [

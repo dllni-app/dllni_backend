@@ -25,10 +25,6 @@ final class CleaningBannerForm
                             ->label(__('cleaning_admin.cleaning_banners.fields.title'))
                             ->required()
                             ->maxLength(255),
-                        TextInput::make('target_url')
-                            ->label(__('cleaning_admin.cleaning_banners.fields.target_url'))
-                            ->url()
-                            ->maxLength(2048),
                         Textarea::make('subtitle')
                             ->label(__('cleaning_admin.cleaning_banners.fields.subtitle'))
                             ->columnSpanFull()

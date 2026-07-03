@@ -5,12 +5,14 @@ declare(strict_types=1);
 use App\Enums\AlertSeverity;
 use App\Enums\AlertType;
 use App\Enums\SystemAlertStatus;
-use App\Filament\Pages\GeographicCoverage;
 use App\Filament\Pages\CleaningOverview;
+use App\Filament\Pages\GeographicCoverage;
 use App\Filament\Pages\RestaurantSectionHub;
 use App\Filament\Pages\SupermarketSectionHub;
 use App\Filament\Pages\SupermarketStatsPage;
 use App\Filament\Resources\CleaningNeighborhoods\CleaningNeighborhoodResource;
+use App\Filament\Resources\CleaningNeighborhoods\Pages\CreateCleaningNeighborhood;
+use App\Filament\Resources\CleaningNeighborhoods\Pages\EditCleaningNeighborhood;
 use App\Filament\Resources\MasterProducts\MasterProductResource;
 use App\Filament\Resources\SmCategories\SmCategoryResource;
 use App\Filament\Resources\SmOrderDisputes\SmOrderDisputeResource;
@@ -19,6 +21,8 @@ use App\Filament\Resources\SmStores\SmStoreResource;
 use App\Models\SystemAlert;
 use App\Models\User;
 use Database\Factories\OrderFactory;
+use Livewire\Livewire;
+use Modules\Cleaning\Models\CleaningNeighborhood;
 use Modules\Resturants\Models\Order;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -75,11 +79,65 @@ it('allows an admin to load the cleaning overview command center', function (): 
         ->assertSuccessful();
 });
 
+it('injects the latin digits script into the admin panel head', function (): void {
+    $this->get(CleaningOverview::getUrl([], isAbsolute: false))
+        ->assertSuccessful()
+        ->assertSee("numberingSystem = 'latn'", escape: false);
+});
+
 it('allows an admin to load cleaning neighborhoods and geographic coverage pages', function (): void {
     $this->get(CleaningNeighborhoodResource::getUrl('index', [], isAbsolute: false))
         ->assertSuccessful();
     $this->get(GeographicCoverage::getUrl([], isAbsolute: false))
         ->assertSuccessful();
+});
+
+it('allows an admin to load and submit the cleaning neighborhood create form', function (): void {
+    $this->get(CleaningNeighborhoodResource::getUrl('create', [], isAbsolute: false))
+        ->assertSuccessful();
+
+    Livewire::test(CreateCleaningNeighborhood::class)
+        ->fillForm([
+            'name_ar' => 'حي الاختبار',
+            'city_name' => 'حلب',
+            'sort_order' => 0,
+        ])
+        ->call('create')
+        ->assertHasNoFormErrors();
+
+    $this->assertDatabaseHas('cleaning_neighborhoods', [
+        'name_ar' => 'حي الاختبار',
+    ]);
+});
+
+it('rejects a duplicate neighborhood name on create', function (): void {
+    CleaningNeighborhood::factory()->create(['name_ar' => 'حي مكرر']);
+
+    Livewire::test(CreateCleaningNeighborhood::class)
+        ->fillForm([
+            'name_ar' => 'حي مكرر',
+            'city_name' => 'حلب',
+            'sort_order' => 0,
+        ])
+        ->call('create')
+        ->assertHasFormErrors(['name_ar']);
+});
+
+it('allows an admin to save the neighborhood edit form without a self unique conflict', function (): void {
+    $neighborhood = CleaningNeighborhood::factory()->create(['name_ar' => 'حي قائم']);
+
+    Livewire::test(EditCleaningNeighborhood::class, ['record' => $neighborhood->getRouteKey()])
+        ->fillForm([
+            'name_ar' => 'حي قائم',
+            'sort_order' => 5,
+        ])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $this->assertDatabaseHas('cleaning_neighborhoods', [
+        'id' => $neighborhood->id,
+        'sort_order' => 5,
+    ]);
 });
 
 it('allows an admin to load the cleaning overview when a system alert targets a restaurant order', function (): void {

@@ -49,7 +49,7 @@ final class CleaningTransactionsTable
                     ->toggleable(),
                 TextColumn::make('reference')
                     ->label(__('cleaning_admin.transactions.fields.reference'))
-                    ->limit(24)
+                    ->formatStateUsing(fn (?string $state): string => self::referenceLabel($state))
                     ->placeholder('—')
                     ->toggleable(),
                 TextColumn::make('created_at')
@@ -118,6 +118,22 @@ final class CleaningTransactionsTable
         return $label === $key ? $type : $label;
     }
 
+    public static function referenceLabel(?string $reference): string
+    {
+        if ($reference === null || $reference === '') {
+            return '—';
+        }
+
+        if (preg_match('/^admin_fee_booking_(\d+)$/', $reference, $matches) === 1) {
+            return __('cleaning_admin.transactions.references.admin_fee_booking', ['id' => $matches[1]]);
+        }
+
+        $key = 'cleaning_admin.transactions.references.'.$reference;
+        $label = __($key);
+
+        return $label === $key ? $reference : $label;
+    }
+
     public static function typeColor(string $type): string
     {
         return match ($type) {
@@ -147,7 +163,7 @@ final class CleaningTransactionsTable
                 __('cleaning_admin.transactions.fields.balance_before') => (float) $tx->balance_before,
                 __('cleaning_admin.transactions.fields.balance_after') => (float) $tx->balance_after,
                 'Booking' => $tx->cleaning_booking_id,
-                __('cleaning_admin.transactions.fields.reference') => $tx->reference,
+                __('cleaning_admin.transactions.fields.reference') => self::referenceLabel($tx->reference),
                 __('cleaning_admin.transactions.fields.date') => $tx->created_at?->format('Y-m-d H:i'),
                 __('cleaning_admin.transactions.fields.notes') => $tx->notes,
                 __('cleaning_admin.transactions.fields.created_by') => $tx->createdByAdmin?->name ?? '—',

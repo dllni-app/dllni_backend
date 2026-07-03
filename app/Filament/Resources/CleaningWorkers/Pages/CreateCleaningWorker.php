@@ -6,16 +6,20 @@ namespace App\Filament\Resources\CleaningWorkers\Pages;
 
 use App\Enums\UserModuleType;
 use App\Filament\Resources\CleaningWorkers\CleaningWorkerResource;
+use App\Filament\Resources\Workers\Pages\Concerns\SyncsWorkerLinkedUser;
 use Filament\Resources\Pages\CreateRecord;
 
 final class CreateCleaningWorker extends CreateRecord
 {
+    use SyncsWorkerLinkedUser;
+
     protected static string $resource = CleaningWorkerResource::class;
 
-    protected function mutateFormDataBeforeCreate(array $data): array
+    protected function afterCreate(): void
     {
-        $data['module_type'] = UserModuleType::CleaningWorker->value;
-
-        return $data;
+        $this->syncLinkedUserAccount();
+        $this->record->user?->forceFill([
+            'module_type' => UserModuleType::CleaningWorker->value,
+        ])->saveQuietly();
     }
 }
