@@ -46,6 +46,7 @@ final class DatabaseSeeder extends Seeder
         }
 
         $this->call(CleaningWorkerHighBalanceSeeder::class);
+        $this->call(SyrianPoundSeedPriceNormalizer::class);
     }
 
     /**
