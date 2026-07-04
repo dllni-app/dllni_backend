@@ -39,41 +39,27 @@ final class CleaningNeighborhoodNameNormalizer
 
     public static function normalize(?string $value): string
     {
-        $value = mb_strtolower(self::repairText($value));
+        $value = self::repairText($value);
 
         if ($value === '') {
             return '';
         }
 
+        // Keep this logic aligned with Flutter's work-area normalization:
+        // text
+        //   .replaceAll(RegExp(r'^(حي\s+)'), '')
+        //   .replaceAll(RegExp(r'[ىي]'), 'ي')
+        //   .replaceAll(RegExp(r'[أإآا]'), 'ا')
+        //   .trim();
+        $value = preg_replace('/^حي\s+/u', '', $value) ?? $value;
         $value = strtr($value, [
+            'ى' => 'ي',
+            'ي' => 'ي',
             'أ' => 'ا',
             'إ' => 'ا',
             'آ' => 'ا',
-            'ٱ' => 'ا',
-            'ؤ' => 'و',
-            'ئ' => 'ي',
-            'ى' => 'ي',
-            'ة' => 'ه',
-            'ً' => '',
-            'ٌ' => '',
-            'ٍ' => '',
-            'َ' => '',
-            'ُ' => '',
-            'ِ' => '',
-            'ّ' => '',
-            'ْ' => '',
-            '-' => ' ',
-            '_' => ' ',
-            '/' => ' ',
-            '\\' => ' ',
-            ',' => ' ',
-            '،' => ' ',
-            '.' => ' ',
-            '(' => ' ',
-            ')' => ' ',
+            'ا' => 'ا',
         ]);
-
-        $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
 
         return mb_trim($value);
     }
@@ -86,10 +72,12 @@ final class CleaningNeighborhoodNameNormalizer
             return null;
         }
 
+        $normalizedLower = mb_strtolower($normalized);
+
         if (
             str_contains($normalized, 'حلب')
-            || str_contains($normalized, 'aleppo')
-            || str_contains($normalized, 'halab')
+            || str_contains($normalizedLower, 'aleppo')
+            || str_contains($normalizedLower, 'halab')
         ) {
             return self::ALEPPO_CITY;
         }
