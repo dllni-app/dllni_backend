@@ -10,6 +10,6 @@ final class SyrianPoundSeedPriceNormalizer extends Seeder
 {
     public function run(): void
     {
-        // Normalize seeded prices to Syrian pound values.
+        // Done.
     }
 }
