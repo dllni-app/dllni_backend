@@ -27,8 +27,10 @@ final class WorkerDepositController
         }
 
         $worker->loadMissing('deposit');
+        $payload = $this->depositService->depositStatusPayload($worker);
+        $payload['debtAmount'] = $this->resolveDebtAmount($payload);
 
-        return response()->json($this->depositService->depositStatusPayload($worker));
+        return response()->json($payload);
     }
 
     public function getTransactions(Request $request): JsonResponse
@@ -66,6 +68,17 @@ final class WorkerDepositController
                 'total' => $transactions->total(),
             ],
         ]);
+    }
+
+    /**
+     * Debt is the admin amount still owed by the worker.
+     */
+    private function resolveDebtAmount(array $payload): float
+    {
+        $depositBase = (float) ($payload['depositedTotal'] ?? 0) - (float) ($payload['withdrawnTotal'] ?? 0);
+        $debtAmount = $depositBase - (float) ($payload['currentBalance'] ?? 0);
+
+        return round(max(0.0, $debtAmount), 2);
     }
 
     private function getWorker(): ?Worker
