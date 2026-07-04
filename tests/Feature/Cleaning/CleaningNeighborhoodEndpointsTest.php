@@ -69,6 +69,7 @@ it('normalizes Arabic neighborhood names like Flutter work areas', function (): 
 
 it('seeds Arabic aliases that match mobile work area normalization', function (): void {
     (new AleppoNeighborhoodSeeder())->run();
+    (new AleppoNeighborhoodSeeder())->run();
 
     $neighborhood = CleaningNeighborhood::query()
         ->where('name_ar', 'الأشرفية')
@@ -76,5 +77,6 @@ it('seeds Arabic aliases that match mobile work area normalization', function ()
 
     expect($neighborhood->normalized_name)->toBe('الاشرفية')
         ->and($neighborhood->aliases)->toContain('حي الأشرفية')
-        ->and($neighborhood->aliases)->toContain('الاشرفية');
+        ->and($neighborhood->aliases)->toContain('الاشرفية')
+        ->and(CleaningNeighborhood::query()->where('name_ar', 'الأشرفية')->count())->toBe(1);
 });
