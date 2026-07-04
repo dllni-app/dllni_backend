@@ -10,14 +10,19 @@ use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Http\Requests\OrderAcceptRequest;
 use Modules\Resturants\Http\Resources\OrderResource;
 use Modules\Resturants\Models\Order;
+use Modules\Resturants\Services\RestaurantOrderNotificationService;
 
 final class OrderAcceptController
 {
-    public function __construct(private ActivityLogService $activityLogService) {}
+    public function __construct(
+        private ActivityLogService $activityLogService,
+        private RestaurantOrderNotificationService $notifications,
+    ) {}
 
     public function __invoke(OrderAcceptRequest $request, Order $order): JsonResource
     {
         $validated = $request->validated();
+        $previousStatus = $order->status?->value ?? (string) $order->status;
 
         $order->update([
             'status' => OrderStatus::Accepted,
@@ -28,6 +33,7 @@ final class OrderAcceptController
         ]);
 
         $this->activityLogService->logOrderAccepted((int) $order->id, $order->order_number, (int) $order->restaurant_id);
+        $this->notifications->notifyStatusChanged($order->refresh(), $previousStatus, OrderStatus::Accepted->value, 'owner');
 
         $order->load([
             'user', 'restaurant', 'orderItems.product', 'orderStatusLogs',
