@@ -17,7 +17,23 @@ final class SyrianPoundSeedPriceNormalizer extends Seeder
     {
         $this->scaleColumns('cleaning_services', ['price']);
         $this->scaleColumns('service_pricing', ['base_price', 'price_per_sqm']);
-        $this->scaleColumns('cleaning_bookings', ['base_price', 'travel_fee', 'total_price']);
+        $this->scaleColumns('booking_addons', ['unit_price', 'total_price']);
+        $this->scaleColumns('cleaning_booking_service', ['unit_price', 'total_price']);
+        $this->scaleColumns('cleaning_booking_worker_assignments', [
+            'service_share_amount',
+            'travel_fee',
+            'admin_margin_amount',
+            'worker_amount',
+        ]);
+        $this->scaleColumns('cleaning_bookings', [
+            'base_price',
+            'addons_total',
+            'extension_fee_total',
+            'travel_fee',
+            'admin_margin_amount',
+            'cancellation_fee',
+            'total_price',
+        ]);
     }
 
     private function scaleColumns(string $table, array $columns): void
