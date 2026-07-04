@@ -19,19 +19,21 @@ final class WorkerHomepageEligibilityController
         $response = ($this->homepageController)($request);
         $payload = $response->getData(true);
         $eligibility = $payload['commissionCapacityEligibility'] ?? null;
+        $depositSummary = $payload['depositSummary'] ?? null;
 
-        if (is_array($eligibility)) {
-            $availableCount = (int) ($eligibility['availableNewOrdersCount'] ?? 0);
-            $blockedCount = (int) ($eligibility['blockedNewOrdersCount'] ?? 0);
-            $allVisibleCandidatesBlocked = $blockedCount > 0 && $availableCount === 0;
+        if (is_array($eligibility) && is_array($depositSummary)) {
+            $balanceEligible = (bool) ($depositSummary['isEligibleForNewRequests'] ?? false);
 
-            if (! $allVisibleCandidatesBlocked) {
-                $eligibility['canReceiveNewRequests'] = true;
-                $eligibility['canAcceptNewBookings'] = true;
-                $eligibility['reasonCode'] = WorkerOrderSolvencyService::REASON_ELIGIBLE;
-                $eligibility['message'] = 'Your available commission capacity can receive new requests.';
-                $payload['commissionCapacityEligibility'] = $eligibility;
-            }
+            $eligibility['canReceiveNewRequests'] = $balanceEligible;
+            $eligibility['canAcceptNewBookings'] = $balanceEligible;
+            $eligibility['reasonCode'] = $balanceEligible
+                ? WorkerOrderSolvencyService::REASON_ELIGIBLE
+                : WorkerOrderSolvencyService::REASON_INSUFFICIENT_COMMISSION_CAPACITY;
+            $eligibility['message'] = $balanceEligible
+                ? 'Your deposit balance can receive new requests.'
+                : 'Your deposit balance is not enough to receive new requests. Please recharge your deposit account.';
+
+            $payload['commissionCapacityEligibility'] = $eligibility;
         }
 
         return response()->json($payload, $response->getStatusCode(), $response->headers->all());
