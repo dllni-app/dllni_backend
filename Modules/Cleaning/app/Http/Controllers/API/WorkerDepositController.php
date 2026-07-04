@@ -45,12 +45,13 @@ final class WorkerDepositController
         }
 
         $type = $request->get('type');
+        $allowedTypes = ['deposit', 'withdrawal', 'admin_fee', 'settlement', 'refund', 'adjustment'];
 
         $query = CleaningDepositTransaction::query()
             ->where('worker_id', $worker->id)
             ->orderByDesc('created_at');
 
-        if ($type && in_array($type, ['deposit', 'withdrawal', 'admin_fee'], true)) {
+        if ($type && in_array($type, $allowedTypes, true)) {
             $query->where('type', $type);
         }
 
