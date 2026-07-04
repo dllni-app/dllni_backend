@@ -89,19 +89,31 @@ final class AleppoNeighborhoodSeeder extends Seeder
     public function run(): void
     {
         foreach (self::NEIGHBORHOODS as $index => $neighborhood) {
-            CleaningNeighborhood::query()->updateOrCreate(
-                [
-                    'normalized_name' => CleaningNeighborhoodNameNormalizer::normalize($neighborhood['name_ar']),
-                ],
-                [
-                    'city_name' => CleaningNeighborhoodNameNormalizer::ALEPPO_CITY,
-                    'name_ar' => $neighborhood['name_ar'],
-                    'name_en' => $neighborhood['name_en'],
-                    'aliases' => self::aliasesFor($neighborhood['name_ar'], $neighborhood['aliases']),
-                    'sort_order' => $index + 1,
-                    'is_active' => true,
-                ],
-            );
+            $normalizedName = CleaningNeighborhoodNameNormalizer::normalize($neighborhood['name_ar']);
+            $attributes = [
+                'city_name' => CleaningNeighborhoodNameNormalizer::ALEPPO_CITY,
+                'name_ar' => $neighborhood['name_ar'],
+                'name_en' => $neighborhood['name_en'],
+                'aliases' => self::aliasesFor($neighborhood['name_ar'], $neighborhood['aliases']),
+                'sort_order' => $index + 1,
+                'is_active' => true,
+            ];
+
+            $existingNeighborhood = CleaningNeighborhood::query()
+                ->where('normalized_name', $normalizedName)
+                ->orWhere('name_ar', $neighborhood['name_ar'])
+                ->first();
+
+            if ($existingNeighborhood instanceof CleaningNeighborhood) {
+                $existingNeighborhood->forceFill($attributes)->save();
+
+                continue;
+            }
+
+            CleaningNeighborhood::query()->create([
+                'normalized_name' => $normalizedName,
+                ...$attributes,
+            ]);
         }
     }
 
