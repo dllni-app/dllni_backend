@@ -14,9 +14,14 @@ use Modules\Supermarket\Models\SmCoupon;
 use Modules\Supermarket\Models\SmOrder;
 use Modules\Supermarket\Models\SmOrderItem;
 use Modules\Supermarket\Models\SmOrderStatusLog;
+use Modules\Supermarket\Services\SmOrderNotificationService;
 
 final class UserSupermarketCheckoutPipelineService
 {
+    public function __construct(
+        private readonly SmOrderNotificationService $notifications,
+    ) {}
+
     /**
      * @return array<string, mixed>
      */
@@ -82,7 +87,7 @@ final class UserSupermarketCheckoutPipelineService
         ?string $couponCode,
         ?string $note,
     ): SmOrder {
-        return DB::transaction(function () use ($userId, $cartId, $receiveMode, $scheduledAt, $couponCode, $note): SmOrder {
+        $order = DB::transaction(function () use ($userId, $cartId, $receiveMode, $scheduledAt, $couponCode, $note): SmOrder {
             $cart = SmCart::query()
                 ->whereKey($cartId)
                 ->where('user_id', $userId)
@@ -148,6 +153,10 @@ final class UserSupermarketCheckoutPipelineService
 
             return $order->fresh(['store', 'items.product', 'statusLogs']);
         });
+
+        $this->notifications->notifyCreated($order);
+
+        return $order;
     }
 
     private function computeDiscount(int $storeId, ?string $couponCode, float $subtotal): float
