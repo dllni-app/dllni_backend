@@ -13,12 +13,14 @@ use Modules\Supermarket\Http\Requests\SmOrderRequest;
 use Modules\Supermarket\Http\Requests\SmOrderRequests\SmOrderFilterRequest;
 use Modules\Supermarket\Http\Resources\SmOrderResource;
 use Modules\Supermarket\Models\SmOrder;
+use Modules\Supermarket\Services\SmOrderNotificationService;
 use Modules\Supermarket\Services\SmOrderService;
 
 final class SmOrderController
 {
     public function __construct(
-        private SmOrderService $service
+        private SmOrderService $service,
+        private SmOrderNotificationService $notifications,
     ) {}
 
     public function index(SmOrderFilterRequest $request): AnonymousResourceCollection
@@ -41,6 +43,7 @@ final class SmOrderController
     public function store(SmOrderRequest $request): SmOrderResource
     {
         $order = $this->service->store(SmOrderData::from($request->validated()));
+        $this->notifications->notifyCreated($order);
 
         return SmOrderResource::make($order->load(['customer', 'store', 'coupon', 'items.product', 'statusLogs', 'disputes']));
     }
@@ -52,7 +55,10 @@ final class SmOrderController
 
     public function update(SmOrderRequest $request, SmOrder $smOrder): SmOrderResource
     {
+        $previousStatus = $smOrder->status?->value ?? (string) $smOrder->status;
         $order = $this->service->update(SmOrderData::from($request->validated()), $smOrder);
+        $nextStatus = $order->status?->value ?? (string) $order->status;
+        $this->notifications->notifyStatusChanged($order, $previousStatus, $nextStatus, 'owner');
 
         return SmOrderResource::make($order->load(['customer', 'store', 'coupon', 'items.product', 'statusLogs', 'disputes']));
     }
