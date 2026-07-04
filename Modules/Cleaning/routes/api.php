@@ -6,6 +6,7 @@ use App\Http\Controllers\API\RegisterFcmTokenController;
 use App\Http\Controllers\API\UserNotificationController;
 use Illuminate\Support\Facades\Route;
 use Modules\Cleaning\Http\Controllers\API\CleaningBillingPolicyController;
+use Modules\Cleaning\Http\Controllers\API\CleaningBookingCompleteController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingDeliveryFeeController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingPriceAdjustmentRequestController;
@@ -99,7 +100,7 @@ Route::prefix('v1')->group(function () {
         Route::post('cleaning-bookings/{cleaning_booking}/arrive', [CleaningBookingController::class, 'arrive'])->name('cleaning-bookings.arrive');
         Route::post('cleaning-bookings/{cleaning_booking}/price-adjustment-requests', [CleaningBookingPriceAdjustmentRequestController::class, 'store'])->name('cleaning-bookings.price-adjustment-requests.store');
         Route::post('cleaning-bookings/{cleaning_booking}/start-work', CleaningBookingStartWorkController::class)->name('cleaning-bookings.start-work');
-        Route::post('cleaning-bookings/{cleaning_booking}/complete', [CleaningBookingController::class, 'complete'])->name('cleaning-bookings.complete');
+        Route::post('cleaning-bookings/{cleaning_booking}/complete', CleaningBookingCompleteController::class)->name('cleaning-bookings.complete');
         Route::post('cleaning-bookings/{cleaning_booking}/finish', [CleaningBookingDeliveryFeeController::class, 'finish'])->name('cleaning-bookings.finish');
         Route::post('cleaning-bookings/{cleaning_booking}/cancel', [CleaningBookingController::class, 'cancel'])->name('cleaning-bookings.cancel');
         Route::apiResource('cleaning-bookings', CleaningBookingController::class);
