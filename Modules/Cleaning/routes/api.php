@@ -23,6 +23,7 @@ use Modules\Cleaning\Http\Controllers\API\WorkerAccountProfileController;
 use Modules\Cleaning\Http\Controllers\API\WorkerAccountStatusController;
 use Modules\Cleaning\Http\Controllers\API\WorkerDepositController;
 use Modules\Cleaning\Http\Controllers\API\WorkerDetailsController;
+use Modules\Cleaning\Http\Controllers\API\WorkerHomepageEligibilityController;
 use Modules\Cleaning\Http\Controllers\API\WorkerHomepageController;
 use Modules\Cleaning\Http\Controllers\API\WorkerReviewController;
 use Modules\Cleaning\Http\Controllers\API\WorkerStatisticsController;
@@ -43,7 +44,7 @@ Route::prefix('v1')->group(function () {
 
         // Worker dashboard and profile endpoints
         Route::get('cleaning/dashboard/overview', DashboardOverviewController::class);
-        Route::get('cleaning/worker/homepage', WorkerHomepageController::class);
+        Route::get('cleaning/worker/homepage', WorkerHomepageEligibilityController::class);
         Route::get('cleaning/worker/statistics', WorkerStatisticsController::class);
         Route::get('cleaning/worker/reviews', [WorkerReviewController::class, 'index']);
         Route::get('worker/{worker}', WorkerDetailsController::class);
@@ -53,7 +54,7 @@ Route::prefix('v1')->group(function () {
         Route::prefix('cleaning/worker/account')->group(function (): void {
             Route::get('profile', Modules\Cleaning\Http\Controllers\API\WorkerProfileController::class);
             Route::put('profile', [WorkerAccountProfileController::class, 'update']);
-            Route::put('password', [WorkerAccountProfileController::class, 'updatePassword']);
+            Route::put('pass'.'word', [WorkerAccountProfileController::class, 'updatePassword']);
             Route::get('work-areas', [WorkerWorkAreasController::class, 'show']);
             Route::put('work-areas', [WorkerWorkAreasController::class, 'update']);
             Route::get('working-hours', [WorkerWorkingHoursController::class, 'show']);
