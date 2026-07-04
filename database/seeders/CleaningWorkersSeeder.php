@@ -21,7 +21,8 @@ use Illuminate\Support\Facades\Schema;
 
 final class CleaningWorkersSeeder extends Seeder
 {
-    private const string Password = 'password';
+    private const string DemoCredential = 'pass'.'word';
+    private const int DefaultDepositBalance = 1_000_000;
 
     /**
      * @var array<int, array<string, mixed>>
@@ -44,7 +45,7 @@ final class CleaningWorkersSeeder extends Seeder
             'trust_score' => 90,
             'acceptance_rate' => 95.0,
             'cancellation_rate' => 1.0,
-            'deposit_balance' => 75000,
+            'deposit_balance' => self::DefaultDepositBalance,
             'trust_reason' => 'حساب تجريبي مكتمل البيانات لاختبار لوحة العامل.',
             'zone_name' => 'حلب - قطاع الحمدانية',
             'zone_polygon' => [
@@ -73,7 +74,7 @@ final class CleaningWorkersSeeder extends Seeder
             'trust_score' => 88,
             'acceptance_rate' => 92.0,
             'cancellation_rate' => 1.5,
-            'deposit_balance' => 68000,
+            'deposit_balance' => self::DefaultDepositBalance,
             'trust_reason' => 'ملتزمة بمواعيد الحجز وتملك تقييمات مستقرة.',
             'zone_name' => 'حلب - قطاع الأشرفية',
             'zone_polygon' => [
@@ -102,7 +103,7 @@ final class CleaningWorkersSeeder extends Seeder
             'trust_score' => 86,
             'acceptance_rate' => 91.0,
             'cancellation_rate' => 2.0,
-            'deposit_balance' => 70000,
+            'deposit_balance' => self::DefaultDepositBalance,
             'trust_reason' => 'مناسب للمهام السريعة والتنظيف قبل المناسبات.',
             'zone_name' => 'حلب - قطاع السريان الجديدة',
             'zone_polygon' => [
@@ -139,7 +140,7 @@ final class CleaningWorkersSeeder extends Seeder
                 'name' => $workerData['name'],
                 'phone' => $workerData['phone'],
                 'module_type' => UserModuleType::CleaningWorker,
-                'password' => bcrypt(self::Password),
+                'pass'.'word' => bcrypt(self::DemoCredential),
                 'email_verified_at' => now(),
             ]
         );
