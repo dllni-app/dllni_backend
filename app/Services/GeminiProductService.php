@@ -158,9 +158,11 @@ final class GeminiProductService
                         : null,
                     'response_text' => $this->extractResponseTextFromDecoded($response),
                 ]);
+
+                return null;
             }
 
-            return $imageData;
+            return $this->optimizeGeneratedImageBase64($imageData);
         } catch (Throwable $exception) {
             $this->logFailure(__FUNCTION__, $exception);
 
@@ -240,7 +242,7 @@ final class GeminiProductService
     private function buildImagePrompt(string $title, ?string $description): string
     {
         $promptLines = [
-            'Generate a high-quality catalog product photo.',
+            'Generate a lightweight mobile catalog product image optimized for small upload size.',
             "Product name: {$title}.",
         ];
 
@@ -250,8 +252,12 @@ final class GeminiProductService
             $promptLines[] = "Product description: {$normalizedDescription}.";
         }
 
-        $promptLines[] = 'Use a clean studio background with soft lighting. '
-            . 'Realistic style, no text, no watermarks, centered composition, and exact 1:1 aspect ratio.';
+        $promptLines[] = 'Create a simple compressed 512x512 catalog thumbnail style image. '
+            . 'Use one centered product only, a plain light studio background, soft lighting, minimal texture, '
+            . 'minimal shadows, and no extra props or decorative elements. '
+            . 'Avoid ultra-high detail, complex backgrounds, dense patterns, text, logos, and watermarks. '
+            . 'Prioritize a small file size and clear product recognition over poster-quality detail. '
+            . 'Use exact 1:1 aspect ratio.';
 
         return implode(' ', $promptLines);
     }
@@ -501,6 +507,91 @@ final class GeminiProductService
         }
 
         return implode('', $textParts);
+    }
+
+    private function optimizeGeneratedImageBase64(string $base64Image): string
+    {
+        if (
+            ! function_exists('imagecreatefromstring')
+            || ! function_exists('imagecreatetruecolor')
+            || ! function_exists('imagecopyresampled')
+            || ! function_exists('imagejpeg')
+        ) {
+            return $base64Image;
+        }
+
+        $binary = base64_decode($base64Image, true);
+
+        if ($binary === false || $binary === '') {
+            return $base64Image;
+        }
+
+        $source = @imagecreatefromstring($binary);
+
+        if ($source === false) {
+            return $base64Image;
+        }
+
+        $canvas = false;
+
+        try {
+            $width = imagesx($source);
+            $height = imagesy($source);
+
+            if ($width <= 0 || $height <= 0) {
+                return $base64Image;
+            }
+
+            $maxDimension = 768;
+            $scale = min(1.0, $maxDimension / max($width, $height));
+            $targetWidth = max(1, (int) round($width * $scale));
+            $targetHeight = max(1, (int) round($height * $scale));
+
+            $canvas = imagecreatetruecolor($targetWidth, $targetHeight);
+
+            if ($canvas === false) {
+                return $base64Image;
+            }
+
+            $white = imagecolorallocate($canvas, 255, 255, 255);
+
+            if ($white !== false) {
+                imagefilledrectangle($canvas, 0, 0, $targetWidth, $targetHeight, $white);
+            }
+
+            imagecopyresampled(
+                $canvas,
+                $source,
+                0,
+                0,
+                0,
+                0,
+                $targetWidth,
+                $targetHeight,
+                $width,
+                $height,
+            );
+
+            ob_start();
+            $success = imagejpeg($canvas, null, 82);
+            $optimizedBinary = ob_get_clean();
+
+            if (! $success || ! is_string($optimizedBinary) || $optimizedBinary === '') {
+                return $base64Image;
+            }
+
+            if (strlen($optimizedBinary) >= strlen($binary)) {
+                return $base64Image;
+            }
+
+            return base64_encode($optimizedBinary);
+        } finally {
+            imagedestroy($source);
+
+            if ($canvas !== false) {
+                imagedestroy($canvas);
+            }
+        }
     }
 
     private function encodeUploadedFile(UploadedFile $file): string
