@@ -22,8 +22,39 @@ final class SyrianPoundSeedPriceNormalizer extends Seeder
 
     private function scaleColumns(string $table, array $columns): void
     {
-        if (! Schema::hasTable($table)) {
+        if (! Schema::hasTable($table) || ! Schema::hasColumn($table, 'id')) {
             return;
         }
+
+        $existingColumns = [];
+        foreach ($columns as $column) {
+            if (Schema::hasColumn($table, $column)) {
+                $existingColumns[] = $column;
+            }
+        }
+
+        if ($existingColumns === []) {
+            return;
+        }
+
+        DB::table($table)
+            ->select(array_merge(['id'], $existingColumns))
+            ->orderBy('id')
+            ->chunk(100, function ($rows) use ($table, $existingColumns): void {
+                foreach ($rows as $row) {
+                    $updates = [];
+
+                    foreach ($existingColumns as $column) {
+                        $amount = (float) ($row->{$column} ?? 0);
+                        if ($amount > 0 && $amount < self::SmallAmountThreshold) {
+                            $updates[$column] = $amount * self::Multiplier;
+                        }
+                    }
+
+                    if ($updates !== []) {
+                        DB::table($table)->where('id', $row->id)->update($updates);
+                    }
+                }
+            });
     }
 }
