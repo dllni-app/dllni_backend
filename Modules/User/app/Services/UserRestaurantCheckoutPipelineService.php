@@ -11,12 +11,14 @@ use Modules\Resturants\Models\Cart;
 use Modules\Resturants\Models\Order;
 use Modules\Resturants\Models\OrderStatusLog;
 use Modules\Resturants\Models\PromoCode;
+use Modules\Resturants\Services\RestaurantOrderNotificationService;
 use Modules\User\Models\UserAddress;
 
 final class UserRestaurantCheckoutPipelineService
 {
     public function __construct(
         private readonly RestaurantCheckoutService $checkoutService,
+        private readonly RestaurantOrderNotificationService $notifications,
     ) {}
 
     /**
@@ -109,7 +111,10 @@ final class UserRestaurantCheckoutPipelineService
             'note' => 'Order placed by customer.',
         ]);
 
-        return $order->fresh(['restaurant', 'userAddress', 'orderItems.product', 'orderStatusLogs']);
+        $order = $order->fresh(['restaurant', 'userAddress', 'orderItems.product', 'orderStatusLogs']);
+        $this->notifications->notifyCreated($order);
+
+        return $order;
     }
 
     private function computeDiscount(int $restaurantId, ?string $couponCode, float $subtotal): float

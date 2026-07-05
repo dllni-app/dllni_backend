@@ -9,6 +9,7 @@ use Illuminate\Validation\ValidationException;
 use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Http\Requests\RestaurantOwner\OwnerOrderStatusRequest;
 use Modules\Resturants\Models\Order;
+use Modules\Resturants\Services\RestaurantOrderNotificationService;
 use Modules\Resturants\Support\RestaurantOwnerContext;
 use Modules\Resturants\Support\RestaurantOwnerOrderPayload;
 use Spatie\Activitylog\Facades\Activity;
@@ -20,7 +21,8 @@ final class RestaurantOwnerOrderStatusController
         OwnerOrderStatusRequest $request,
         Order $order,
         RestaurantOwnerContext $context,
-        RestaurantOwnerOrderPayload $payload
+        RestaurantOwnerOrderPayload $payload,
+        RestaurantOrderNotificationService $notifications,
     ): JsonResponse {
         $context->ensureOwnedOrder($order);
 
@@ -67,6 +69,8 @@ final class RestaurantOwnerOrderStatusController
                 'to_status' => $nextStatus,
             ])
             ->log("غيّر حالة الطلب رقم #{$order->order_number} من {$currentStatus} إلى {$nextStatus}");
+
+        $notifications->notifyStatusChanged($order->refresh(), $currentStatus, $nextStatus, 'owner');
 
         return $this->response($order, $payload, 'Order status updated successfully.');
     }
