@@ -9,12 +9,14 @@ use App\Enums\GenderPreference;
 use App\Enums\UserModuleType;
 use App\Enums\WorkerPreferredWorkType;
 use App\Models\CleaningDepositSetting;
+use App\Models\CleaningDepositTransaction;
 use App\Models\CleaningWorkerDeposit;
 use App\Models\User;
 use App\Models\Worker;
 use App\Models\WorkerAvailability;
 use App\Models\WorkerTrustLog;
 use App\Models\WorkerZone;
+use Carbon\CarbonImmutable;
 use Database\Seeders\Support\SeederMedia;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Schema;
@@ -23,19 +25,25 @@ final class WorkerSeeder extends Seeder
 {
     public function run(): void
     {
+        $timelineNow = CarbonImmutable::now();
+
         $workers = [
             [
                 'email' => 'worker1@dllni.sy',
+                'phone' => '+963944100001',
                 'gender' => GenderPreference::Female->value,
-                'first_name' => 'سارة',
+                'first_name' => 'رنا',
                 'bio' => 'عاملة تنظيف محترفة بخبرة أكثر من 5 سنوات، متخصصة في التنظيف العميق واستخدام المنتجات الصديقة للبيئة.',
                 'address' => 'حلب - الجميلية - شارع فيصل',
                 'lat' => 36.2127,
                 'lng' => 37.1456,
                 'birthday' => '1993-04-12',
                 'preferred_work_type' => WorkerPreferredWorkType::Cleaning->value,
-                'deposit_balance' => 5000000,
+                'deposit_balance' => 827500,
+                'deposited_total' => 1000000,
+                'withdrawn_total' => 0,
                 'trust_reason' => 'سجل حجوزات مكتملة بدون شكاوى خلال آخر شهر.',
+                'deposit_transactions' => self::runaDepositTimeline($timelineNow),
             ],
             [
                 'email' => 'worker2@dllni.sy',
@@ -65,29 +73,41 @@ final class WorkerSeeder extends Seeder
             ],
         ];
 
-        CleaningDepositSetting::firstOrCreate([], [
+        $depositSetting = CleaningDepositSetting::query()->firstOrCreate([], []);
+        $depositSetting->forceFill(self::onlyExistingColumns('cleaning_deposit_settings', [
             'minimum_deposit_amount' => 50000,
+            'default_max_negative_balance' => 0,
+            'restriction_threshold_percent' => 80,
+            'trust_minimum_for_dispatch' => 0,
             'is_enabled' => true,
-        ]);
+        ]))->save();
 
         foreach ($workers as $index => $data) {
-            $phone = sprintf('+9639441201%02d', $index + 1);
+            $phone = $data['phone'] ?? sprintf('+9639441201%02d', $index + 1);
 
-            $user = User::firstOrCreate(
-                ['email' => $data['email']],
-                [
+            $user = User::query()
+                ->where('email', $data['email'])
+                ->orWhere('phone', $phone)
+                ->first();
+
+            if (! $user instanceof User) {
+                $user = User::query()->create([
                     'name' => $data['first_name'].' عامل تنظيف',
+                    'email' => $data['email'],
                     'phone' => $phone,
                     'module_type' => UserModuleType::CleaningWorker,
                     'password' => bcrypt('password'),
                     'email_verified_at' => now(),
-                ]
-            );
+                ]);
+            }
 
             $user->forceFill([
                 'name' => $data['first_name'].' عامل تنظيف',
+                'email' => $data['email'],
                 'phone' => $phone,
                 'module_type' => UserModuleType::CleaningWorker,
+                'password' => bcrypt('password'),
+                'email_verified_at' => $user->email_verified_at ?? now(),
                 'phone_verified_at' => now(),
             ])->save();
 
@@ -139,13 +159,19 @@ final class WorkerSeeder extends Seeder
 
             CleaningWorkerDeposit::updateOrCreate(
                 ['worker_id' => $worker->id],
-                [
+                self::onlyExistingColumns('cleaning_worker_deposits', [
                     'current_balance' => $data['deposit_balance'],
-                    'deposited_total' => $data['deposit_balance'],
-                    'withdrawn_total' => 0,
+                    'deposited_total' => $data['deposited_total'] ?? $data['deposit_balance'],
+                    'withdrawn_total' => $data['withdrawn_total'] ?? 0,
+                    'minimum_required' => 50000,
+                    'max_negative_balance' => 0,
                     'is_active' => true,
-                ]
+                ])
             );
+
+            foreach ($data['deposit_transactions'] ?? [] as $transactionData) {
+                self::upsertDepositTransaction($worker, $transactionData);
+            }
 
             WorkerTrustLog::firstOrCreate(
                 [
@@ -189,6 +215,102 @@ final class WorkerSeeder extends Seeder
                 "worker-{$worker->id}-avatar"
             );
         }
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private static function runaDepositTimeline(CarbonImmutable $now): array
+    {
+        return [
+            [
+                'type' => 'deposit',
+                'amount' => 500000,
+                'balance_before' => 0,
+                'balance_after' => 500000,
+                'reference' => 'seed-runa-opening-deposit',
+                'notes' => 'إيداع التأمين الافتتاحي لعامل التنظيف.',
+                'created_at' => $now->subDays(14)->setTime(10, 15),
+            ],
+            [
+                'type' => 'deposit',
+                'amount' => 500000,
+                'balance_before' => 500000,
+                'balance_after' => 1000000,
+                'reference' => 'seed-runa-second-deposit',
+                'notes' => 'تعزيز رصيد التأمين قبل استقبال طلبات إضافية.',
+                'created_at' => $now->subDays(10)->setTime(12, 30),
+            ],
+            [
+                'type' => 'admin_fee',
+                'amount' => 45000,
+                'balance_before' => 1000000,
+                'balance_after' => 955000,
+                'reference' => 'seed-runa-admin-fee-1',
+                'notes' => 'مديونية عمولة الإدارة عن طلب تنظيف مكتمل.',
+                'created_at' => $now->subDays(7)->setTime(16, 10),
+            ],
+            [
+                'type' => 'admin_fee',
+                'amount' => 57500,
+                'balance_before' => 955000,
+                'balance_after' => 897500,
+                'reference' => 'seed-runa-admin-fee-2',
+                'notes' => 'مديونية عمولة الإدارة عن طلب تنظيف عميق.',
+                'created_at' => $now->subDays(4)->setTime(18, 5),
+            ],
+            [
+                'type' => 'admin_fee',
+                'amount' => 70000,
+                'balance_before' => 897500,
+                'balance_after' => 827500,
+                'reference' => 'seed-runa-admin-fee-3',
+                'notes' => 'مديونية عمولة الإدارة عن طلب مناسبة مكتمل.',
+                'created_at' => $now->subDay()->setTime(20, 20),
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $transactionData
+     */
+    private static function upsertDepositTransaction(Worker $worker, array $transactionData): void
+    {
+        $createdAt = $transactionData['created_at'] ?? now();
+
+        $transaction = CleaningDepositTransaction::query()->updateOrCreate(
+            [
+                'worker_id' => $worker->id,
+                'reference' => $transactionData['reference'],
+            ],
+            self::onlyExistingColumns('cleaning_deposit_transactions', [
+                'cleaning_booking_id' => $transactionData['cleaning_booking_id'] ?? null,
+                'created_by_admin_id' => $transactionData['created_by_admin_id'] ?? null,
+                'type' => $transactionData['type'],
+                'amount' => $transactionData['amount'],
+                'balance_before' => $transactionData['balance_before'],
+                'balance_after' => $transactionData['balance_after'],
+                'notes' => $transactionData['notes'] ?? null,
+            ])
+        );
+
+        $transaction->forceFill([
+            'created_at' => $createdAt,
+            'updated_at' => $createdAt,
+        ])->saveQuietly();
+    }
+
+    /**
+     * @param  array<string, mixed>  $values
+     * @return array<string, mixed>
+     */
+    private static function onlyExistingColumns(string $table, array $values): array
+    {
+        return array_filter(
+            $values,
+            static fn (string $column): bool => Schema::hasColumn($table, $column),
+            ARRAY_FILTER_USE_KEY,
+        );
     }
 
     private static function defaultWorkingHours(): array
