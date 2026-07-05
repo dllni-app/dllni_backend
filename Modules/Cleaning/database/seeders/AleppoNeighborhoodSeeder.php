@@ -18,6 +18,8 @@ final class AleppoNeighborhoodSeeder extends Seeder
      * - Keep name_en as a clean display/search name.
      * - Keep aliases broad because OpenStreetMap/Nominatim may return different transliterations
      *   depending on the mapped object, browser language, and address level.
+     * - Arabic aliases include the Flutter-normalized form and the common "حي ..." prefix form
+     *   so worker work-area matching stays aligned with the mobile app normalization.
      * - Do not use OSM English names as the only matching key; match by id first, then normalized
      *   Arabic/name_en/aliases for reverse-geocoding fallback.
      */
@@ -87,19 +89,45 @@ final class AleppoNeighborhoodSeeder extends Seeder
     public function run(): void
     {
         foreach (self::NEIGHBORHOODS as $index => $neighborhood) {
-            CleaningNeighborhood::query()->updateOrCreate(
-                [
-                    'normalized_name' => CleaningNeighborhoodNameNormalizer::normalize($neighborhood['name_ar']),
-                ],
-                [
-                    'city_name' => CleaningNeighborhoodNameNormalizer::ALEPPO_CITY,
-                    'name_ar' => $neighborhood['name_ar'],
-                    'name_en' => $neighborhood['name_en'],
-                    'aliases' => $neighborhood['aliases'],
-                    'sort_order' => $index + 1,
-                    'is_active' => true,
-                ],
-            );
+            $normalizedName = CleaningNeighborhoodNameNormalizer::normalize($neighborhood['name_ar']);
+            $attributes = [
+                'city_name' => CleaningNeighborhoodNameNormalizer::ALEPPO_CITY,
+                'name_ar' => $neighborhood['name_ar'],
+                'name_en' => $neighborhood['name_en'],
+                'aliases' => self::aliasesFor($neighborhood['name_ar'], $neighborhood['aliases']),
+                'sort_order' => $index + 1,
+                'is_active' => true,
+            ];
+
+            $existingNeighborhood = CleaningNeighborhood::query()
+                ->where('normalized_name', $normalizedName)
+                ->orWhere('name_ar', $neighborhood['name_ar'])
+                ->first();
+
+            if ($existingNeighborhood instanceof CleaningNeighborhood) {
+                $existingNeighborhood->forceFill($attributes)->save();
+
+                continue;
+            }
+
+            CleaningNeighborhood::query()->create([
+                'normalized_name' => $normalizedName,
+                ...$attributes,
+            ]);
         }
+    }
+
+    /**
+     * @param  array<int, string>  $aliases
+     * @return array<int, string>
+     */
+    private static function aliasesFor(string $nameAr, array $aliases): array
+    {
+        return array_values(array_unique(array_filter([
+            ...$aliases,
+            "حي {$nameAr}",
+            CleaningNeighborhoodNameNormalizer::normalize($nameAr),
+            CleaningNeighborhoodNameNormalizer::normalize("حي {$nameAr}"),
+        ], static fn (string $alias): bool => mb_trim($alias) !== '')));
     }
 }
