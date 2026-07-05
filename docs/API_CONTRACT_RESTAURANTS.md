@@ -15,6 +15,7 @@ This is the main contract index for Restaurant module APIs implemented under:
 Detailed contracts:
 - Core dashboard/admin flows: [API_CONTRACT_RESTAURANTS_DASHBOARD.md](API_CONTRACT_RESTAURANTS_DASHBOARD.md)
 - Product AI (extract/generate): [API_CONTRACT_RESTAURANT_PRODUCTS_AI.md](API_CONTRACT_RESTAURANT_PRODUCTS_AI.md)
+- Restaurant owner add products from menu: [API_CONTRACT_RESTAURANT_OWNER_ADD_PRODUCTS_FROM_MENU.md](API_CONTRACT_RESTAURANT_OWNER_ADD_PRODUCTS_FROM_MENU.md)
 
 ---
 
@@ -26,7 +27,7 @@ All paths are relative to `/api/v1`.
 | ------- | --------- | ----------- |
 | **Dashboard** | `GET /restaurant/dashboard/overview` | KPIs (sales, orders, disputes, low stock) |
 | **Analytics** | `GET /restaurant/analytics/daily-stats`, `GET /restaurant/analytics/monthly-stats` | Daily and monthly stats |
-| **Restaurant Owner App (new)** | `GET /restaurant-owner/dashboard/performance`, `GET /restaurant-owner/orders/{order}`, `POST/PATCH/DELETE /restaurant-owner/orders/{order}/items`, `PATCH /restaurant-owner/products/{product}/availability`, `GET /restaurant-owner/offers`, `GET /restaurant-owner/offers/summary`, `GET /restaurant-owner/coupons`, `GET /restaurant-owner/coupons/summary`, `GET/POST/PATCH /restaurant-owner/employees`, `PATCH /restaurant-owner/employees/{restaurant_staff}/status`, `GET /restaurant-owner/notifications`, `PATCH /restaurant-owner/notifications/{notification}/read`, `PATCH /restaurant-owner/notifications/read-all` | Owner-scoped management endpoints (restaurant inferred from authenticated seller) |
+| **Restaurant Owner App (new)** | `GET /restaurant-owner/dashboard/performance`, `GET /restaurant-owner/orders/{order}`, `POST/PATCH/DELETE /restaurant-owner/orders/{order}/items`, `POST /restaurant-owner/products`, `PATCH /restaurant-owner/products/{product}/availability`, `GET /restaurant-owner/offers`, `GET /restaurant-owner/offers/summary`, `GET /restaurant-owner/coupons`, `GET /restaurant-owner/coupons/summary`, `GET/POST/PATCH /restaurant-owner/employees`, `PATCH /restaurant-owner/employees/{restaurant_staff}/status`, `GET /restaurant-owner/notifications`, `PATCH /restaurant-owner/notifications/{notification}/read`, `PATCH /restaurant-owner/notifications/read-all` | Owner-scoped management endpoints (restaurant inferred from authenticated seller) |
 | **Restaurants** | CRUD `/restaurants`, `GET/PUT /restaurants/{restaurant}/operating-hours` | Restaurant CRUD and operating hours |
 | **Categories** | CRUD `/categories` | Product categories |
 | **Products** | CRUD `/products` | Product CRUD |
