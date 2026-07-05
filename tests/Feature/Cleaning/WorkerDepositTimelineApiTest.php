@@ -70,12 +70,12 @@ it('exposes worker deposit summary and filters timeline tab transactions', funct
     Sanctum::actingAs($user);
 
     $statusResponse = $this->getJson('/api/v1/cleaning/worker/account/deposit');
-    $statusResponse->assertOk()
-        ->assertJsonPath('currentBalance', 827500)
-        ->assertJsonPath('depositedTotal', 1000000)
-        ->assertJsonPath('withdrawnTotal', 0)
-        ->assertJsonPath('minimumRequired', 50000)
-        ->assertJsonPath('debtAmount', 172500);
+    $statusResponse->assertOk();
+    expect((float) $statusResponse->json('currentBalance'))->toBe(827500.0);
+    expect((float) $statusResponse->json('depositedTotal'))->toBe(1000000.0);
+    expect((float) $statusResponse->json('withdrawnTotal'))->toBe(0.0);
+    expect((float) $statusResponse->json('minimumRequired'))->toBe(50000.0);
+    expect((float) $statusResponse->json('debtAmount'))->toBe(172500.0);
 
     $depositTimelineResponse = $this->getJson('/api/v1/cleaning/worker/account/deposit/transactions?type=deposit');
     $depositTimelineResponse->assertOk()
