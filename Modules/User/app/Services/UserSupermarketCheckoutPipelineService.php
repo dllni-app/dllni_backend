@@ -25,12 +25,23 @@ final class UserSupermarketCheckoutPipelineService
         private readonly DeliveryOrderCreationService $deliveryOrders,
     ) {}
 
-    public function preview(int $userId, int $cartId, string $receiveMode, ?string $scheduledAt, ?string $couponCode, ?string $note): array
+    /** @return array<string, mixed> */
+    public function preview(int $userId, int $cartId, string $fulfillmentType, string $receiveMode, ?string $scheduledAt, ?string $couponCode, ?string $note, ?int $addressId = null): array
     {
+        if ($fulfillmentType === 'delivery' && $addressId === null) {
+            throw ValidationException::withMessages(['addressId' => ['يرجى اختيار عنوان توصيل صالح.']]);
+        }
+
         $cart = SmCart::query()->whereKey($cartId)->where('user_id', $userId)->with(['store', 'items.product.store'])->firstOrFail();
         if ($cart->items->isEmpty()) {
             throw ValidationException::withMessages(['cart' => ['Cart is empty.']]);
         }
+
+        $address = $this->resolveUserAddress($userId, $addressId);
+        if ($fulfillmentType === 'delivery' && $address instanceof UserAddress) {
+            $this->assertDeliveryCoordinates($cart, $address);
+        }
+
         $storeId = $this->resolveSingleStoreId($cart);
         $subtotal = (float) $cart->items->sum(fn ($item): float => (float) ($item->unit_price ?? 0) * (int) $item->quantity);
         $discount = $this->computeDiscount($storeId, $couponCode, $subtotal);
@@ -41,7 +52,12 @@ final class UserSupermarketCheckoutPipelineService
         return [
             'cartId' => $cart->id,
             'merchant' => ['id' => $store?->id, 'name' => $store?->name],
-            'fulfillment' => ['type' => 'pickup', 'receiveMode' => $receiveMode, 'scheduledAt' => $scheduledAt],
+            'fulfillment' => [
+                'type' => $fulfillmentType,
+                'receiveMode' => $receiveMode,
+                'scheduledAt' => $scheduledAt,
+                'address' => $address ? $this->addressPayload($address) : null,
+            ],
             'amounts' => ['subtotal' => round($subtotal, 2), 'discount' => round($discount, 2), 'serviceFee' => round($serviceFee, 2), 'tax' => 0.0, 'total' => round($total, 2)],
             'note' => $note,
         ];
@@ -54,12 +70,17 @@ final class UserSupermarketCheckoutPipelineService
         }
 
         $address = $this->resolveUserAddress($userId, $addressId);
+        if ($fulfillmentType === 'delivery' && $address instanceof UserAddress) {
+            $cartForValidation = SmCart::query()->whereKey($cartId)->where('user_id', $userId)->with(['store', 'items.product.store'])->firstOrFail();
+            $this->assertDeliveryCoordinates($cartForValidation, $address);
+        }
 
         $order = DB::transaction(function () use ($userId, $cartId, $receiveMode, $scheduledAt, $couponCode, $note): SmOrder {
             $cart = SmCart::query()->whereKey($cartId)->where('user_id', $userId)->with(['store', 'items.product.store'])->lockForUpdate()->firstOrFail();
             if ($cart->items->isEmpty()) {
                 throw ValidationException::withMessages(['cart' => ['Cart is empty.']]);
             }
+
             $storeId = $this->resolveSingleStoreId($cart);
             $subtotal = (float) $cart->items->sum(fn ($item): float => (float) ($item->unit_price ?? 0) * (int) $item->quantity);
             $coupon = $this->findCoupon($storeId, $couponCode, $subtotal);
@@ -99,9 +120,8 @@ final class UserSupermarketCheckoutPipelineService
             return $order->fresh(['customer', 'store', 'items.product', 'statusLogs']);
         });
 
-        if ($fulfillmentType === 'delivery') {
-            $order->setRelation('deliveryUserAddress', $address);
-            $this->deliveryOrders->createForSupermarketOrder($order);
+        if ($fulfillmentType === 'delivery' && $address instanceof UserAddress) {
+            $this->deliveryOrders->createForSupermarketOrder($order, $address);
         }
 
         $order = $order->fresh(['customer', 'store', 'items.product', 'statusLogs', 'deliveryOrder.driver.user', 'deliveryOrder.driver.latestLocation', 'deliveryOrder.events']);
@@ -176,5 +196,34 @@ final class UserSupermarketCheckoutPipelineService
             throw ValidationException::withMessages(['addressId' => ['The selected address does not belong to the authenticated user.']]);
         }
         return $address;
+    }
+
+    private function assertDeliveryCoordinates(SmCart $cart, UserAddress $address): void
+    {
+        $this->resolveSingleStoreId($cart);
+        $store = $cart->store ?? $cart->items->first()?->product?->store;
+        if ($store === null || ! is_numeric($store->latitude) || ! is_numeric($store->longitude) || ! is_numeric($address->latitude) || ! is_numeric($address->longitude)) {
+            throw ValidationException::withMessages([
+                'delivery' => ['لا يمكن إنشاء طلب توصيل بدون تحديد موقع الاستلام والتسليم.'],
+            ]);
+        }
+    }
+
+    /** @return array<string, mixed> */
+    private function addressPayload(UserAddress $address): array
+    {
+        return [
+            'id' => $address->id,
+            'label' => $address->label,
+            'mobile' => $address->mobile,
+            'city' => $address->city,
+            'neighborhood' => $address->neighborhood,
+            'street' => $address->street,
+            'building' => $address->building,
+            'floor' => $address->floor,
+            'directions' => $address->directions,
+            'latitude' => $address->latitude !== null ? (float) $address->latitude : null,
+            'longitude' => $address->longitude !== null ? (float) $address->longitude : null,
+        ];
     }
 }
