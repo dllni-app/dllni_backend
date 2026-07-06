@@ -12,6 +12,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
+use Modules\Delivery\Models\DeliveryOrder;
 use Modules\Supermarket\Enums\SmOrderStatus;
 use Modules\Supermarket\Enums\SmPickupMode;
 use Modules\Supermarket\Traits\FilterQueries\SmOrderFilterQuery;
@@ -54,6 +56,11 @@ final class SmOrder extends Model
     public function store(): BelongsTo
     {
         return $this->belongsTo(SmStore::class, 'store_id');
+    }
+
+    public function deliveryOrder(): MorphOne
+    {
+        return $this->morphOne(DeliveryOrder::class, 'source', 'source_type', 'source_id');
     }
 
     public function coupon(): BelongsTo
