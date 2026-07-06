@@ -382,7 +382,7 @@ final class MandoubDeliveryTestUserSeeder extends Seeder
                     'description' => 'بلاغ اختبار مرتبط بمندوب الاختبار لعرض شاشة البلاغات.',
                     'category' => DisputeCategory::Other->value,
                     'status' => DisputeStatus::UnderReview->value,
-                    'resolution' => DisputeResolution::Pending->value,
+                    'resolution' => DisputeResolution::Dismissed->value,
                     'worker_earnings_frozen' => false,
                 ],
             );
