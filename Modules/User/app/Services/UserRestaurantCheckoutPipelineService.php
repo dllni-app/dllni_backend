@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Modules\User\Services;
 
 use Illuminate\Validation\ValidationException;
+use Modules\Delivery\Services\DeliveryOrderCreationService;
 use Modules\Resturants\Enums\OrderStatus;
+use Modules\Resturants\Enums\OrderType;
 use Modules\Resturants\Enums\RestaurantPickupMode;
 use Modules\Resturants\Models\Cart;
 use Modules\Resturants\Models\Order;
@@ -19,6 +21,7 @@ final class UserRestaurantCheckoutPipelineService
     public function __construct(
         private readonly RestaurantCheckoutService $checkoutService,
         private readonly RestaurantOrderNotificationService $notifications,
+        private readonly DeliveryOrderCreationService $deliveryOrders,
     ) {}
 
     /**
@@ -89,6 +92,12 @@ final class UserRestaurantCheckoutPipelineService
         ?string $note,
         ?int $addressId = null,
     ): Order {
+        if ($fulfillmentType === OrderType::Delivery->value && $addressId === null) {
+            throw ValidationException::withMessages([
+                'addressId' => ['يرجى اختيار عنوان توصيل صالح.'],
+            ]);
+        }
+
         $address = $this->resolveUserAddress($userId, $addressId);
         $order = $this->checkoutService->checkoutCart(
             userId: $userId,
@@ -111,7 +120,22 @@ final class UserRestaurantCheckoutPipelineService
             'note' => 'Order placed by customer.',
         ]);
 
-        $order = $order->fresh(['restaurant', 'userAddress', 'orderItems.product', 'orderStatusLogs']);
+        $order = $order->fresh(['restaurant', 'user', 'userAddress', 'orderItems.product', 'orderStatusLogs']);
+
+        if ($fulfillmentType === OrderType::Delivery->value) {
+            $this->deliveryOrders->createForRestaurantOrder($order);
+        }
+
+        $order = $order->fresh([
+            'restaurant',
+            'userAddress',
+            'orderItems.product',
+            'orderStatusLogs',
+            'deliveryOrder.driver.user',
+            'deliveryOrder.driver.latestLocation',
+            'deliveryOrder.events',
+        ]);
+
         $this->notifications->notifyCreated($order);
 
         return $order;
