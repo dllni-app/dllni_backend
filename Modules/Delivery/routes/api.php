@@ -46,9 +46,8 @@ Route::prefix('v1/delivery/driver')->group(function (): void {
 
         Route::get('disputes', DriverDisputeController::class);
 
-        // Additive UI-facing aliases for Flutter contract alignment.
         Route::get('bootstrap', [DriverUiController::class, 'bootstrap']);
-
+        Route::get('dashboard/summary', [DriverUiController::class, 'dashboardSummary']);
         Route::get('orders/status-counts', [DriverUiController::class, 'statusCounts']);
         Route::get('orders/{order}/offer-state', [DriverUiController::class, 'offerState'])->whereNumber('order');
         Route::get('orders/{order}/timeline', [DriverUiController::class, 'timeline'])->whereNumber('order');
