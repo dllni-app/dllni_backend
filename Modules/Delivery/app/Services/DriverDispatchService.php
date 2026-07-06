@@ -23,6 +23,8 @@ final class DriverDispatchService
         private readonly DriverLocationService $locationService,
         private readonly DeliveryOrderService $deliveryOrderService,
         private readonly DeliveryNotificationService $notifications,
+        private readonly DeliverySourceOrderSyncService $sourceSync,
+        private readonly DeliveryUserNotificationService $userNotifications,
     ) {}
 
     public function dispatchByOrderId(int $orderId): void
@@ -235,14 +237,17 @@ final class DriverDispatchService
                 payload: ['attemptId' => $attempt->id],
             );
 
+            $this->sourceSync->sync($order->fresh('source'), DeliveryOrderStatus::Accepted, 'Driver accepted offer');
+
             $driver->forceFill([
                 'availability_status' => DeliveryDriverAvailabilityStatus::Busy->value,
             ])->save();
 
-            return $order->fresh(['company']);
+            return $order->fresh(['company', 'createdBy']);
         });
 
         $this->notifications->notifyOrderAccepted($order);
+        $this->userNotifications->notifyAccepted($order);
 
         return $order;
     }
