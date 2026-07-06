@@ -20,10 +20,12 @@ final class UserSupermarketCheckoutPreviewController
             'data' => $this->checkout->preview(
                 userId: (int) $request->user()->id,
                 cartId: $cartId,
+                fulfillmentType: (string) $request->string('fulfillmentType'),
                 receiveMode: (string) $request->string('receiveMode'),
                 scheduledAt: $request->input('scheduledAt'),
                 couponCode: $request->input('couponCode'),
                 note: $request->input('note'),
+                addressId: $request->integer('addressId') ?: null,
             ),
         ]);
     }
