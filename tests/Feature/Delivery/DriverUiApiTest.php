@@ -77,6 +77,24 @@ it('supports ui order endpoints and notification actions', function (): void {
         ->assertOk()
         ->assertJsonStructure(['data', 'meta']);
 
+    $this->getJson('/api/v1/delivery/driver/orders?filter[status]=WAITING_ACCEPTANCE')
+        ->assertOk()
+        ->assertJsonStructure(['data', 'meta']);
+
+    $this->getJson('/api/v1/delivery/driver/dashboard/summary')
+        ->assertOk()
+        ->assertJsonStructure([
+            'data' => [
+                'activeOrdersCount',
+                'completedTodayCount',
+                'rejectedOffersTodayCount',
+                'missedOffersTodayCount',
+                'currentBalance',
+                'currency',
+                'availabilityStatus',
+            ],
+        ]);
+
     $this->getJson('/api/v1/delivery/driver/orders/status-counts')
         ->assertOk()
         ->assertJsonStructure(['data' => ['WAITING_ACCEPTANCE', 'ACTIVE', 'COMPLETED', 'REJECTED']]);
