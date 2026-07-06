@@ -8,6 +8,13 @@ use Illuminate\Foundation\Http\FormRequest;
 
 final class DriverOrderIndexRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        if ($this->input('status') === null && $this->input('filter.status') !== null) {
+            $this->merge(['status' => $this->input('filter.status')]);
+        }
+    }
+
     public function authorize(): bool
     {
         return true;
