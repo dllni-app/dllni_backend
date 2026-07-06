@@ -18,6 +18,7 @@ use Modules\Cleaning\Database\Seeders\CleaningWorkerExtensionScenarioSeeder;
 use Modules\Cleaning\Database\Seeders\EventBookingSeeder;
 use Modules\Delivery\Database\Seeders\DeliveryPermissionsSeeder;
 use Modules\Delivery\Database\Seeders\DeliveryModuleDataSeeder;
+use Modules\Delivery\Database\Seeders\MandoubDeliveryTestUserSeeder;
 use Modules\Resturants\Database\Seeders\RestaurantSeeder;
 use Modules\Supermarket\Database\Seeders\SupermarketDatabaseSeeder;
 
@@ -61,6 +62,7 @@ final class DatabaseSeeder extends Seeder
             DashboardPermissionsSeeder::class,
             DeliveryPermissionsSeeder::class,
             DeliveryModuleDataSeeder::class,
+            MandoubDeliveryTestUserSeeder::class,
             RestaurantOwnerEmployeePermissionsSeeder::class,
             TeamRoleTemplatesSeeder::class,
             AdminUserSeeder::class,
