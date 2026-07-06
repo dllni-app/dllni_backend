@@ -6,9 +6,9 @@ namespace Modules\Resturants\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Modules\Delivery\Support\DeliveryPresentation;
 use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Models\Order;
-use Modules\Delivery\Support\DeliveryPresentation;
 
 /**
  * @mixin Order
@@ -29,9 +29,11 @@ final class OrderResource extends JsonResource
     {
         $statusValue = $this->status?->value ?? $this->status;
         $deliverySummary = DeliveryPresentation::merchantSummary($this->resource);
+        $deliveryOrder = $this->relationLoaded('deliveryOrder') ? $this->deliveryOrder : null;
 
         return [
             'id' => $this->id,
+            'deliveryOrderId' => $deliveryOrder?->id,
             'userId' => $this->user_id,
             'userAddressId' => $this->user_address_id,
             'restaurantId' => $this->restaurant_id,
