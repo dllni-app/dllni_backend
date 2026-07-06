@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use Modules\Delivery\Http\Controllers\API\Driver\DriverAuthController;
 use Modules\Delivery\Http\Controllers\API\Driver\DriverAvailabilityController;
+use Modules\Delivery\Http\Controllers\API\Driver\DriverDashboardSummaryController;
 use Modules\Delivery\Http\Controllers\API\Driver\DriverDisputeController;
 use Modules\Delivery\Http\Controllers\API\Driver\DriverFinancialController;
 use Modules\Delivery\Http\Controllers\API\Driver\DriverLocationController;
@@ -47,7 +48,7 @@ Route::prefix('v1/delivery/driver')->group(function (): void {
         Route::get('disputes', DriverDisputeController::class);
 
         Route::get('bootstrap', [DriverUiController::class, 'bootstrap']);
-        Route::get('dashboard/summary', [DriverUiController::class, 'dashboardSummary']);
+        Route::get('dashboard/summary', DriverDashboardSummaryController::class);
         Route::get('orders/status-counts', [DriverUiController::class, 'statusCounts']);
         Route::get('orders/{order}/offer-state', [DriverUiController::class, 'offerState'])->whereNumber('order');
         Route::get('orders/{order}/timeline', [DriverUiController::class, 'timeline'])->whereNumber('order');
