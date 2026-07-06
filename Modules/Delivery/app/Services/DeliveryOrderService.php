@@ -23,6 +23,8 @@ final class DeliveryOrderService
         private readonly FinancialLedgerService $ledgerService,
         private readonly FinancialSuspensionService $suspensionService,
         private readonly DeliveryNotificationService $notifications,
+        private readonly DeliverySourceOrderSyncService $sourceSync,
+        private readonly DeliveryUserNotificationService $userNotifications,
     ) {}
 
     /**
@@ -37,6 +39,8 @@ final class DeliveryOrderService
      *     dropoffLatitude: float,
      *     dropoffLongitude: float,
      *     currency?: string|null,
+     *     sourceType?: string|null,
+     *     sourceId?: int|null,
      * }  $payload
      */
     public function create(DeliveryCompany $company, array $payload, ?int $createdByUserId = null): DeliveryOrder
@@ -71,6 +75,8 @@ final class DeliveryOrderService
                 'currency' => $pricing['currency'],
                 'status' => DeliveryOrderStatus::New->value,
                 'created_by_user_id' => $createdByUserId,
+                'source_type' => $payload['sourceType'] ?? null,
+                'source_id' => $payload['sourceId'] ?? null,
             ]);
 
             $this->recordStatusChange(
@@ -142,8 +148,9 @@ final class DeliveryOrderService
                 'actorId' => $driverId,
             ]);
 
-            $order = $order->fresh(['company', 'driver.user']);
+            $order = $order->fresh(['company', 'driver.user', 'createdBy']);
             $this->notifications->notifyOrderStarted($order);
+            $this->userNotifications->notifyStarted($order);
 
             return $order;
         });
@@ -163,8 +170,9 @@ final class DeliveryOrderService
                 'actorId' => $driverId,
             ]);
 
-            $order = $order->fresh(['company', 'driver.user']);
+            $order = $order->fresh(['company', 'driver.user', 'createdBy']);
             $this->notifications->notifyOrderPickedUp($order);
+            $this->userNotifications->notifyPickedUp($order);
 
             return $order;
         });
@@ -188,8 +196,9 @@ final class DeliveryOrderService
                 ->where('id', $driverId)
                 ->update(['availability_status' => DeliveryDriverAvailabilityStatus::Available->value]);
 
-            $order = $order->fresh(['company', 'driver.user']);
+            $order = $order->fresh(['company', 'driver.user', 'createdBy']);
             $this->notifications->notifyOrderDelivered($order);
+            $this->userNotifications->notifyDelivered($order);
 
             $this->complete($order, $driverId);
 
@@ -221,7 +230,7 @@ final class DeliveryOrderService
                 'actorId' => $driverId,
             ]);
 
-            $order = $order->fresh(['company']);
+            $order = $order->fresh(['company', 'createdBy']);
             $transaction = $this->ledgerService->recordOrderFeeDebit($order);
 
             if ($transaction !== null) {
@@ -230,6 +239,7 @@ final class DeliveryOrderService
             }
 
             $this->notifications->notifyOrderCompleted($order);
+            $this->userNotifications->notifyCompleted($order);
 
             return $order->fresh();
         });
@@ -268,7 +278,10 @@ final class DeliveryOrderService
                 'actorId' => $cancelledByUserId,
             ]);
 
-            return $order->fresh();
+            $order = $order->fresh(['createdBy']);
+            $this->userNotifications->notifyCancelled($order, $reason);
+
+            return $order;
         });
     }
 
@@ -301,11 +314,12 @@ final class DeliveryOrderService
 
             $wasStopped = true;
 
-            return $order->fresh(['company']);
+            return $order->fresh(['company', 'createdBy']);
         });
 
         if ($wasStopped) {
             $this->notifications->notifyOrderStopped($order, $reason);
+            $this->userNotifications->notifyStopped($order, $reason);
         }
 
         return $order;
@@ -374,6 +388,8 @@ final class DeliveryOrderService
             actorId: $context['actorId'] ?? null,
             payload: $context['payload'] ?? null,
         );
+
+        $this->sourceSync->sync($order->fresh('source'), $to, $context['note'] ?? null);
     }
 
     private function assertAssignedDriver(DeliveryOrder $order, int $driverId): void
