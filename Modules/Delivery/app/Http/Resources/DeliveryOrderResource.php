@@ -29,6 +29,8 @@ final class DeliveryOrderResource extends JsonResource
             ]),
             'driverId' => $this->driver_id,
             'driver' => DeliveryDriverResource::make($this->whenLoaded('driver')),
+            'sourceType' => $this->source_type,
+            'sourceId' => $this->source_id,
             'status' => $this->status,
             'statusLabelAr' => DeliveryPresentation::statusLabelAr((string) $this->status),
             'customerName' => $this->customer_name,
