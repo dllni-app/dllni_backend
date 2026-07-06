@@ -44,12 +44,7 @@ final class DeliveryOrderCreationService
                 'customerName' => (string) ($order->user?->name ?? 'عميل دللني'),
                 'customerPhone' => $order->userAddress->mobile ?? $order->user?->phone,
                 'customerNotes' => $order->special_instructions,
-                'pickupAddress' => $this->merchantAddress(
-                    address: $order->restaurant->address,
-                    city: $order->restaurant->city,
-                    area: $order->restaurant->district,
-                    fallback: $order->restaurant->name,
-                ),
+                'pickupAddress' => $this->merchantAddress(address: $order->restaurant->address, city: $order->restaurant->city, area: $order->restaurant->district, fallback: $order->restaurant->name),
                 'pickupLatitude' => $this->requiredCoordinate($order->restaurant->latitude, 'pickupLatitude'),
                 'pickupLongitude' => $this->requiredCoordinate($order->restaurant->longitude, 'pickupLongitude'),
                 'dropoffAddress' => $this->userAddressText($order->userAddress),
@@ -73,7 +68,7 @@ final class DeliveryOrderCreationService
             ]);
         }
 
-        $address = $order->getRelation('deliveryUserAddress') instanceof UserAddress
+        $address = $order->relationLoaded('deliveryUserAddress') && $order->getRelation('deliveryUserAddress') instanceof UserAddress
             ? $order->getRelation('deliveryUserAddress')
             : null;
 
@@ -89,12 +84,7 @@ final class DeliveryOrderCreationService
                 'customerName' => (string) ($order->customer?->name ?? 'عميل دللني'),
                 'customerPhone' => $address->mobile ?? $order->customer?->phone,
                 'customerNotes' => $order->special_instructions,
-                'pickupAddress' => $this->merchantAddress(
-                    address: $order->store->address,
-                    city: $order->store->city,
-                    area: $order->store->neighborhood,
-                    fallback: $order->store->name,
-                ),
+                'pickupAddress' => $this->merchantAddress(address: $order->store->address, city: $order->store->city, area: $order->store->neighborhood, fallback: $order->store->name),
                 'pickupLatitude' => $this->requiredCoordinate($order->store->latitude, 'pickupLatitude'),
                 'pickupLongitude' => $this->requiredCoordinate($order->store->longitude, 'pickupLongitude'),
                 'dropoffAddress' => $this->userAddressText($address),
@@ -110,11 +100,7 @@ final class DeliveryOrderCreationService
 
     private function resolveCompany(): DeliveryCompany
     {
-        $company = DeliveryCompany::query()
-            ->where('is_active', true)
-            ->where('is_suspended', false)
-            ->oldest('id')
-            ->first();
+        $company = DeliveryCompany::query()->where('is_active', true)->where('is_suspended', false)->oldest('id')->first();
 
         if (! $company instanceof DeliveryCompany) {
             throw ValidationException::withMessages([
@@ -139,27 +125,14 @@ final class DeliveryOrderCreationService
 
     private function merchantAddress(?string $address, ?string $city, ?string $area, ?string $fallback): string
     {
-        $parts = array_values(array_filter([
-            $fallback,
-            $city,
-            $area,
-            $address,
-        ], fn (?string $value): bool => is_string($value) && trim($value) !== ''));
+        $parts = array_values(array_filter([$fallback, $city, $area, $address], fn (?string $value): bool => is_string($value) && trim($value) !== ''));
 
         return implode(' - ', $parts) ?: 'نقطة الاستلام';
     }
 
     private function userAddressText(UserAddress $address): string
     {
-        $parts = array_values(array_filter([
-            $address->label,
-            $address->city,
-            $address->neighborhood,
-            $address->street,
-            $address->building,
-            $address->floor,
-            $address->directions,
-        ], fn (?string $value): bool => is_string($value) && trim($value) !== ''));
+        $parts = array_values(array_filter([$address->label, $address->city, $address->neighborhood, $address->street, $address->building, $address->floor, $address->directions], fn (?string $value): bool => is_string($value) && trim($value) !== ''));
 
         return implode(' - ', $parts) ?: 'عنوان العميل';
     }
