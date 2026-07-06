@@ -17,9 +17,10 @@ final class DriverOrderIndexRequest extends FormRequest
     {
         return [
             'status' => 'nullable|string|in:WAITING_ACCEPTANCE,ACTIVE,COMPLETED,REJECTED',
+            'filter' => 'nullable|array',
+            'filter.status' => 'nullable|string|in:WAITING_ACCEPTANCE,ACTIVE,COMPLETED,REJECTED',
             'page' => 'nullable|integer|min:1',
             'perPage' => 'nullable|integer|min:1|max:100',
         ];
     }
 }
-
