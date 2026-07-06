@@ -24,18 +24,18 @@ final class DeliveryOrderCreationService
 
     public function createForRestaurantOrder(Order $order): DeliveryOrder
     {
+        $existing = $this->existingFor(self::SOURCE_RESTAURANT_ORDER, (int) $order->id);
+        if ($existing instanceof DeliveryOrder) {
+            return $existing;
+        }
+
         $order->loadMissing(['user', 'restaurant', 'userAddress']);
 
         if (! $order->restaurant instanceof Restaurant) {
-            throw ValidationException::withMessages([
-                'restaurant' => ['لا يمكن إنشاء طلب توصيل بدون مطعم مرتبط بالطلب.'],
-            ]);
+            throw ValidationException::withMessages(['restaurant' => ['لا يمكن إنشاء طلب توصيل بدون مطعم مرتبط بالطلب.']]);
         }
-
         if (! $order->userAddress instanceof UserAddress) {
-            throw ValidationException::withMessages([
-                'addressId' => ['يرجى اختيار عنوان توصيل صالح.'],
-            ]);
+            throw ValidationException::withMessages(['addressId' => ['يرجى اختيار عنوان توصيل صالح.']]);
         }
 
         return $this->deliveryOrders->create(
@@ -58,24 +58,17 @@ final class DeliveryOrderCreationService
         );
     }
 
-    public function createForSupermarketOrder(SmOrder $order): DeliveryOrder
+    public function createForSupermarketOrder(SmOrder $order, UserAddress $address): DeliveryOrder
     {
+        $existing = $this->existingFor(self::SOURCE_SUPERMARKET_ORDER, (int) $order->id);
+        if ($existing instanceof DeliveryOrder) {
+            return $existing;
+        }
+
         $order->loadMissing(['customer', 'store']);
 
         if (! $order->store instanceof SmStore) {
-            throw ValidationException::withMessages([
-                'store' => ['لا يمكن إنشاء طلب توصيل بدون متجر مرتبط بالطلب.'],
-            ]);
-        }
-
-        $address = $order->relationLoaded('deliveryUserAddress') && $order->getRelation('deliveryUserAddress') instanceof UserAddress
-            ? $order->getRelation('deliveryUserAddress')
-            : null;
-
-        if (! $address instanceof UserAddress) {
-            throw ValidationException::withMessages([
-                'addressId' => ['يرجى اختيار عنوان توصيل صالح.'],
-            ]);
+            throw ValidationException::withMessages(['store' => ['لا يمكن إنشاء طلب توصيل بدون متجر مرتبط بالطلب.']]);
         }
 
         return $this->deliveryOrders->create(
@@ -98,14 +91,20 @@ final class DeliveryOrderCreationService
         );
     }
 
+    private function existingFor(string $sourceType, int $sourceId): ?DeliveryOrder
+    {
+        return DeliveryOrder::query()
+            ->where('source_type', $sourceType)
+            ->where('source_id', $sourceId)
+            ->first();
+    }
+
     private function resolveCompany(): DeliveryCompany
     {
         $company = DeliveryCompany::query()->where('is_active', true)->where('is_suspended', false)->oldest('id')->first();
 
         if (! $company instanceof DeliveryCompany) {
-            throw ValidationException::withMessages([
-                'delivery' => ['لا توجد شركة توصيل متاحة حالياً.'],
-            ]);
+            throw ValidationException::withMessages(['delivery' => ['لا توجد شركة توصيل متاحة حالياً.']]);
         }
 
         return $company;
