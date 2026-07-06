@@ -21,9 +21,11 @@ final class SmOrderResource extends JsonResource
     {
         $deliverySummary = DeliveryPresentation::merchantSummary($this->resource);
         $orderDetails = $this->orderDetailsPayload();
+        $deliveryOrder = $this->relationLoaded('deliveryOrder') ? $this->deliveryOrder : null;
 
         return [
             'id' => $this->id,
+            'deliveryOrderId' => $deliveryOrder?->id,
             'customerId' => $this->customer_id,
             'customer' => UserResource::make($this->whenLoaded('customer')),
             'storeId' => $this->store_id,
@@ -58,9 +60,6 @@ final class SmOrderResource extends JsonResource
         ];
     }
 
-    /**
-     * @return array<string, mixed>
-     */
     private function orderDetailsPayload(): array
     {
         $internalStatus = $this->status?->value;
@@ -68,9 +67,7 @@ final class SmOrderResource extends JsonResource
         $statusStartedAt = $this->statusStartedAt($internalStatus);
         $deliveredAt = $this->deliveredAt();
         $statusElapsedMinutes = $statusStartedAt ? max(0, (int) $statusStartedAt->diffInMinutes(now())) : null;
-        $deliveryDurationMinutes = ($statusStartedAt && $deliveredAt)
-            ? max(0, (int) $statusStartedAt->diffInMinutes($deliveredAt))
-            : null;
+        $deliveryDurationMinutes = ($statusStartedAt && $deliveredAt) ? max(0, (int) $statusStartedAt->diffInMinutes($deliveredAt)) : null;
 
         return [
             'current_status' => $currentStatus,
@@ -90,22 +87,14 @@ final class SmOrderResource extends JsonResource
     private function statusStartedAt(?string $internalStatus): ?Carbon
     {
         if ($internalStatus !== null && $this->resource->relationLoaded('statusLogs')) {
-            $statusLog = $this->resource->statusLogs
-                ->where('to_status', $internalStatus)
-                ->sortByDesc('created_at')
-                ->first();
-
+            $statusLog = $this->resource->statusLogs->where('to_status', $internalStatus)->sortByDesc('created_at')->first();
             if ($statusLog?->created_at !== null) {
                 return Carbon::parse($statusLog->created_at);
             }
         }
 
         if ($internalStatus !== null) {
-            $statusLog = $this->resource->statusLogs()
-                ->where('to_status', $internalStatus)
-                ->latest('created_at')
-                ->first();
-
+            $statusLog = $this->resource->statusLogs()->where('to_status', $internalStatus)->latest('created_at')->first();
             if ($statusLog?->created_at !== null) {
                 return Carbon::parse($statusLog->created_at);
             }
@@ -123,20 +112,13 @@ final class SmOrderResource extends JsonResource
         $completedStatus = SmOrderStatus::Completed->value;
 
         if ($this->resource->relationLoaded('statusLogs')) {
-            $statusLog = $this->resource->statusLogs
-                ->where('to_status', $completedStatus)
-                ->sortByDesc('created_at')
-                ->first();
-
+            $statusLog = $this->resource->statusLogs->where('to_status', $completedStatus)->sortByDesc('created_at')->first();
             if ($statusLog?->created_at !== null) {
                 return Carbon::parse($statusLog->created_at);
             }
         }
 
-        $statusLog = $this->resource->statusLogs()
-            ->where('to_status', $completedStatus)
-            ->latest('created_at')
-            ->first();
+        $statusLog = $this->resource->statusLogs()->where('to_status', $completedStatus)->latest('created_at')->first();
 
         return $statusLog?->created_at ? Carbon::parse($statusLog->created_at) : null;
     }
