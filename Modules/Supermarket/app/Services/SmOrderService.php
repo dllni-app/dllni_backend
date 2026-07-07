@@ -9,6 +9,7 @@ use Exception;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Log;
+use Modules\Delivery\Services\DeliveryOrderService;
 use Modules\Supermarket\Data\SmOrderData;
 use Modules\Supermarket\Data\SmOrderRejectStatusData;
 use Modules\Supermarket\Enums\RejectionType;
@@ -35,7 +36,8 @@ final class SmOrderService
     private const CONSECUTIVE_REJECTION_LIMIT = 3;
 
     public function __construct(
-        private readonly SmInventoryService $inventoryService
+        private readonly SmInventoryService $inventoryService,
+        private readonly DeliveryOrderService $deliveryOrderService,
     ) {}
 
     public function store(SmOrderData $data): SmOrder
@@ -156,6 +158,72 @@ final class SmOrderService
         });
     }
 
+    public function markPreparing(SmOrder $order, ?int $actorUserId): SmOrder
+    {
+        return DB::transaction(function () use ($order, $actorUserId): SmOrder {
+            $order = SmOrder::query()->lockForUpdate()->findOrFail($order->id);
+
+            if ($order->status === SmOrderStatus::Preparing) {
+                return $order->refresh();
+            }
+
+            if ($order->status !== SmOrderStatus::Accepted) {
+                throw new Exception(
+                    "Cannot mark order {$order->order_number} as preparing. Order must be in accepted status, currently in {$order->status->value}"
+                );
+            }
+
+            $order->update([
+                'status' => SmOrderStatus::Preparing,
+            ]);
+
+            $this->logStatus($order, SmOrderStatus::Accepted, SmOrderStatus::Preparing, 'Order preparation started.', $actorUserId);
+
+            return $order->refresh();
+        });
+    }
+
+    public function markReadyForPickup(SmOrder $order, ?int $actorUserId): SmOrder
+    {
+        $shouldStartDispatch = false;
+
+        $order = DB::transaction(function () use ($order, $actorUserId, &$shouldStartDispatch): SmOrder {
+            $order = SmOrder::query()->lockForUpdate()->findOrFail($order->id);
+
+            if ($order->status === SmOrderStatus::ReadyForPickup) {
+                return $order->refresh();
+            }
+
+            if (! in_array($order->status, [SmOrderStatus::Accepted, SmOrderStatus::Preparing], true)) {
+                throw new Exception(
+                    "Cannot mark order {$order->order_number} as ready for pickup. Order must be accepted or preparing, currently in {$order->status->value}"
+                );
+            }
+
+            $from = $order->status;
+
+            $order->update([
+                'status' => SmOrderStatus::ReadyForPickup,
+                'ready_for_pickup_at' => now(),
+            ]);
+
+            $this->logStatus($order, $from, SmOrderStatus::ReadyForPickup, 'Order is ready for courier pickup.', $actorUserId);
+            $shouldStartDispatch = true;
+
+            return $order->refresh();
+        });
+
+        if ($shouldStartDispatch) {
+            $deliveryOrder = $order->deliveryOrder()->first();
+
+            if ($deliveryOrder !== null) {
+                $this->deliveryOrderService->startDispatch($deliveryOrder, 'Supermarket order is ready for pickup.');
+            }
+        }
+
+        return $order->refresh();
+    }
+
     public function handOverToCourier(SmOrder $order, ?int $actorUserId): SmOrder
     {
         return DB::transaction(function () use ($order, $actorUserId): SmOrder {
@@ -174,13 +242,7 @@ final class SmOrderService
                 'picked_up_at' => now(),
             ]);
 
-            SmOrderStatusLog::query()->create([
-                'order_id' => $order->id,
-                'from_status' => SmOrderStatus::ReadyForPickup->value,
-                'to_status' => SmOrderStatus::PickedUp->value,
-                'notes' => 'Handed to courier.',
-                'changed_by_user_id' => $actorUserId,
-            ]);
+            $this->logStatus($order, SmOrderStatus::ReadyForPickup, SmOrderStatus::PickedUp, 'Handed to courier.', $actorUserId);
 
             return $order->refresh();
         });
@@ -263,8 +325,19 @@ final class SmOrderService
             try {
                 Notification::send($store->owner, new ConsecutiveRejectionsAlertNotification($store, $recentCancelledCount));
             } catch (Exception $e) {
-                Log::warning("Failed to send consecutive rejections alert: {$e->getMessage()}");
+                Log::warning("Failed to send consecutive rejection alert: {$e->getMessage()}");
             }
         }
+    }
+
+    private function logStatus(SmOrder $order, ?SmOrderStatus $from, SmOrderStatus $to, ?string $note = null, ?int $actorUserId = null): void
+    {
+        SmOrderStatusLog::query()->create([
+            'order_id' => $order->id,
+            'from_status' => $from?->value,
+            'to_status' => $to->value,
+            'notes' => $note,
+            'changed_by_user_id' => $actorUserId,
+        ]);
     }
 }
