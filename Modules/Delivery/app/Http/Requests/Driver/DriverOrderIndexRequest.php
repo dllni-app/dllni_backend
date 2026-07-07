@@ -13,6 +13,10 @@ final class DriverOrderIndexRequest extends FormRequest
         if ($this->input('status') === null && $this->input('filter.status') !== null) {
             $this->merge(['status' => $this->input('filter.status')]);
         }
+
+        if ($this->input('status') === null) {
+            $this->merge(['status' => 'WAITING_ACCEPTANCE']);
+        }
     }
 
     public function authorize(): bool
