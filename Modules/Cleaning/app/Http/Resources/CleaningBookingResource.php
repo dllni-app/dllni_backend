@@ -116,6 +116,8 @@ final class CleaningBookingResource extends JsonResource
             'customerConfirmedAt' => $this->customer_confirmed_at?->toDateTimeString(),
             'cancelledAt' => $this->cancelled_at?->toDateTimeString(),
             'cancellationReason' => $this->cancellation_reason,
+            'cancelledByRole' => $this->cancelled_by_role,
+            'cancelled_by_role' => $this->cancelled_by_role,
             'customer' => $this->whenLoaded('customer', fn () => ['id' => $this->customer->id, 'name' => $this->customer->name, 'email' => $this->customer->email, 'phone' => $this->customer->phone]),
             'preferredWorker' => $this->whenLoaded('preferredWorker', fn () => $this->preferredWorker ? $this->serializeWorker($this->preferredWorker) : null),
             'worker' => $this->whenLoaded('worker', fn () => $this->worker ? $this->serializeWorker($this->worker) : null),
