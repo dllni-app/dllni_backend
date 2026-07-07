@@ -33,7 +33,7 @@ final class UserAuthController
             $this->throwValidationError('phone', self::ACCOUNT_NOT_ACTIVE_MESSAGE);
         }
 
-        $requestedModuleType = UserModuleType::from($request->validated('moduleType'));
+        $requestedModuleType = UserModuleType::from($request->validated('module'));
         if ($user->module_type !== $requestedModuleType) {
             $this->throwValidationError('phone', self::MODULE_ACCESS_DENIED_MESSAGE);
         }

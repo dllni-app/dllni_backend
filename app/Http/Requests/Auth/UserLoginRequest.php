@@ -26,7 +26,7 @@ final class UserLoginRequest extends FormRequest
         return [
             'phone' => ['required', 'string'],
             'password' => ['required', 'string'],
-            'moduleType' => ['required', 'string', Rule::enum(UserModuleType::class)],
+            'module' => ['required', 'string', Rule::enum(UserModuleType::class)],
             'fcmToken' => ['nullable', 'string', 'min:16', 'max:4096'],
         ];
     }
