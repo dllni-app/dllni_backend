@@ -90,17 +90,7 @@ final class WorkerRoomAssignmentPlanner
             if ($assignmentMode === 'open_count' && $slotPreferredWorkerId !== null) {
                 $errors[$preferredWorkerPath][] = 'Open count room assignments cannot target a preferred worker.';
             }
-
-            if ($assignmentMode === 'preferred_worker') {
-                if ($workerSlot !== 1) {
-                    $errors[$slotPath][] = 'Preferred worker mode only supports worker slot 1.';
-                }
-
-                if ($preferredWorkerId === null || $slotPreferredWorkerId !== $preferredWorkerId) {
-                    $errors[$preferredWorkerPath][] = 'The preferred worker must match the top-level preferredWorkerId.';
-                }
-            }
-
+            
             $rooms = $assignment['rooms'] ?? null;
             if (! is_array($rooms)) {
                 $errors[$roomsPath][] = 'The rooms field must be an array.';

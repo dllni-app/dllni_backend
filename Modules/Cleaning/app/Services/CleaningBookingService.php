@@ -197,11 +197,6 @@ final class CleaningBookingService
                 throw new InvalidArgumentException('Booking cannot start travel in current status.');
             }
 
-            $worker = Auth::user()?->worker;
-            if ($worker && ! $this->depositService->isWorkerEligibleToStartWork($worker)) {
-                throw new InvalidArgumentException('Worker deposit or trust requirements are not met.');
-            }
-
             $booking->update(['started_travel_at' => now()]);
 
             return $booking->fresh();
