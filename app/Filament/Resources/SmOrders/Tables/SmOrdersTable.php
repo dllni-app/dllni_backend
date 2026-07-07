@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\SmOrders\Tables;
 
+use App\Filament\Support\ArabicDashboardLabels;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -19,6 +20,7 @@ final class SmOrdersTable
         )->all();
 
         return $table
+            ->searchPlaceholder('ابحث برقم الطلب، اسم العميل أو اسم المتجر')
             ->columns([
                 TextColumn::make('order_number')->label(__('supermarket_admin.infolist.order_number'))->searchable()->sortable(),
                 TextColumn::make('customer.name')->label(__('supermarket_admin.infolist.order_customer'))->searchable()->placeholder('—'),
@@ -28,11 +30,21 @@ final class SmOrdersTable
                     ->formatStateUsing(fn ($state) => $state ? __('supermarket_admin.enums.order_status.'.$state->value) : '—')
                     ->badge()
                     ->sortable(),
-                TextColumn::make('pickup_scheduled_for')->label(__('supermarket_admin.infolist.pickup_scheduled'))->dateTime('Y-m-d H:i')->placeholder('—')->sortable(),
-                TextColumn::make('ready_for_pickup_at')->label(__('supermarket_admin.infolist.ready_at'))->dateTime('Y-m-d H:i')->placeholder('—')->sortable(),
-                TextColumn::make('picked_up_at')->label(__('supermarket_admin.infolist.picked_up_at'))->dateTime('Y-m-d H:i')->placeholder('—')->sortable(),
-                TextColumn::make('total_amount')->label(__('supermarket_admin.infolist.total_amount'))->money(config('app.currency', 'SYP'))->sortable(),
-                TextColumn::make('cancellation_fee_amount')->label(__('supermarket_admin.infolist.cancellation_fee'))->money(config('app.currency', 'SYP'))->placeholder('—')->sortable(),
+                TextColumn::make('pickup_scheduled_for')->label(__('supermarket_admin.infolist.pickup_scheduled'))->dateTime('d/m/Y H:i')->placeholder('—')->sortable(),
+                TextColumn::make('ready_for_pickup_at')->label(__('supermarket_admin.infolist.ready_at'))->dateTime('d/m/Y H:i')->placeholder('—')->sortable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('picked_up_at')->label(__('supermarket_admin.infolist.picked_up_at'))->dateTime('d/m/Y H:i')->placeholder('—')->sortable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('total_amount')
+                    ->label(__('supermarket_admin.infolist.total_amount'))
+                    ->formatStateUsing(fn ($state): string => ArabicDashboardLabels::money($state))
+                    ->alignEnd()
+                    ->sortable(),
+                TextColumn::make('cancellation_fee_amount')
+                    ->label(__('supermarket_admin.infolist.cancellation_fee'))
+                    ->formatStateUsing(fn ($state): string => ArabicDashboardLabels::money($state))
+                    ->placeholder('—')
+                    ->alignEnd()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->modifyQueryUsing(fn ($query) => $query->with(['customer', 'store']))
             ->filters([
@@ -44,7 +56,7 @@ final class SmOrdersTable
                     ->preload(),
             ])
             ->recordActions([
-                ViewAction::make(),
+                ViewAction::make()->label('عرض'),
             ]);
     }
 }
