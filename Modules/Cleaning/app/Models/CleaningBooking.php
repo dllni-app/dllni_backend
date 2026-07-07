@@ -87,6 +87,7 @@ final class CleaningBooking extends Model
         'customer_confirmed_at',
         'cancelled_at',
         'cancellation_reason',
+        'cancelled_by_role',
     ];
 
     public function customer(): BelongsTo
@@ -258,18 +259,14 @@ final class CleaningBooking extends Model
         if ($this->relationLoaded('acceptedWorkerAssignments')) {
             $count = $this->acceptedWorkerAssignments->count();
         } elseif ($this->relationLoaded('workerAssignments')) {
-            $count = $this->workerAssignments->filter(
-                static fn (CleaningBookingWorkerAssignment $assignment): bool => in_array($assignment->status, CleaningBookingWorkerAssignmentStatus::acceptedStatuses(), true)
-            )->count();
+            $count = $this->workerAssignments
+                ->filter(fn (CleaningBookingWorkerAssignment $assignment): bool => in_array((string) ($assignment->status?->value ?? $assignment->status), CleaningBookingWorkerAssignmentStatus::acceptedValues(), true))
+                ->count();
         } else {
             $count = $this->acceptedWorkerAssignments()->count();
         }
 
-        if ($count === 0 && $this->worker_id !== null) {
-            return 1;
-        }
-
-        return $count;
+        return max(0, (int) $count);
     }
 
     public function remainingWorkerCount(): int
@@ -279,28 +276,33 @@ final class CleaningBooking extends Model
 
     public function isTeamFulfilled(): bool
     {
-        return $this->remainingWorkerCount() === 0;
+        return $this->remainingWorkerCount() <= 0;
     }
 
     public function startApprovedWorkerCount(): int
     {
+        $count = 0;
+
         if ($this->relationLoaded('workerAssignments')) {
-            return $this->workerAssignments->filter(
-                static fn (CleaningBookingWorkerAssignment $assignment): bool => $assignment->status === CleaningBookingWorkerAssignmentStatus::StartApproved
-                    || $assignment->start_approved_at !== null
-            )->count();
+            $count = $this->workerAssignments
+                ->filter(fn (CleaningBookingWorkerAssignment $assignment): bool => (string) ($assignment->status?->value ?? $assignment->status) === CleaningBookingWorkerAssignmentStatus::StartApproved->value)
+                ->count();
+        } else {
+            $count = $this->workerAssignments()
+                ->where('status', CleaningBookingWorkerAssignmentStatus::StartApproved->value)
+                ->count();
         }
 
-        return $this->workerAssignments()
-            ->where(function ($query): void {
-                $query->where('status', CleaningBookingWorkerAssignmentStatus::StartApproved->value)
-                    ->orWhereNotNull('start_approved_at');
-            })
-            ->count();
+        return max(0, (int) $count);
     }
 
     public function notStartApprovedWorkerCount(): int
     {
         return max(0, $this->acceptedWorkerCount() - $this->startApprovedWorkerCount());
+    }
+
+    protected static function newFactory(): CleaningBookingFactory
+    {
+        return CleaningBookingFactory::new();
     }
 }
