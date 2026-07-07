@@ -14,6 +14,8 @@ return [
         'offer_timeout_seconds' => (int) env('DELIVERY_OFFER_TIMEOUT_SECONDS', 30),
         'max_search_radius_km' => (float) env('DELIVERY_MAX_SEARCH_RADIUS_KM', 15),
         'max_attempts_per_order' => (int) env('DELIVERY_MAX_ATTEMPTS_PER_ORDER', 20),
+        'no_candidate_retry_seconds' => (int) env('DELIVERY_NO_CANDIDATE_RETRY_SECONDS', 60),
+        'max_no_candidate_retries' => (int) env('DELIVERY_MAX_NO_CANDIDATE_RETRIES', 10),
     ],
     'trust' => [
         'default_score' => (int) env('DELIVERY_DRIVER_DEFAULT_TRUST_SCORE', 100),

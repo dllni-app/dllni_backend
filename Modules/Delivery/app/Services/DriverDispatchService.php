@@ -19,6 +19,9 @@ use RuntimeException;
 
 final class DriverDispatchService
 {
+    private const NO_ELIGIBLE_DRIVERS_NOTE = 'No eligible drivers available within search radius.';
+    private const DRIVER_LOCATION_UNAVAILABLE_NOTE = 'Selected driver has no recent location.';
+
     public function __construct(
         private readonly DriverLocationService $locationService,
         private readonly DeliveryOrderService $deliveryOrderService,
@@ -30,8 +33,10 @@ final class DriverDispatchService
     public function dispatchByOrderId(int $orderId): void
     {
         $attemptId = null;
+        $redispatchOrderId = null;
+        $redispatchDelaySeconds = null;
 
-        DB::transaction(function () use ($orderId, &$attemptId): void {
+        DB::transaction(function () use ($orderId, &$attemptId, &$redispatchOrderId, &$redispatchDelaySeconds): void {
             $order = DeliveryOrder::query()->lockForUpdate()->find($orderId);
 
             if (! $order instanceof DeliveryOrder) {
@@ -62,7 +67,12 @@ final class DriverDispatchService
             $candidate = $this->selectNextCandidate($order);
 
             if (! $candidate instanceof DeliveryDriver) {
-                $this->deliveryOrderService->markStopped($order, 'No eligible drivers available within search radius.');
+                $this->retryWithoutCandidate(
+                    order: $order,
+                    reason: self::NO_ELIGIBLE_DRIVERS_NOTE,
+                    redispatchOrderId: $redispatchOrderId,
+                    redispatchDelaySeconds: $redispatchDelaySeconds,
+                );
 
                 return;
             }
@@ -70,7 +80,12 @@ final class DriverDispatchService
             $latestLocation = $candidate->locations()->latest('recorded_at')->first();
 
             if (! $latestLocation instanceof DeliveryDriverLocation) {
-                $this->deliveryOrderService->markStopped($order, 'Selected driver has no recent location.');
+                $this->retryWithoutCandidate(
+                    order: $order,
+                    reason: self::DRIVER_LOCATION_UNAVAILABLE_NOTE,
+                    redispatchOrderId: $redispatchOrderId,
+                    redispatchDelaySeconds: $redispatchDelaySeconds,
+                );
 
                 return;
             }
@@ -119,6 +134,10 @@ final class DriverDispatchService
 
             $attemptId = $attempt->id;
         });
+
+        if ($redispatchOrderId !== null) {
+            DispatchDeliveryOrderJob::dispatch($redispatchOrderId)->delay($redispatchDelaySeconds ?? 60);
+        }
 
         if ($attemptId !== null) {
             $attempt = DeliveryAssignmentAttempt::query()
@@ -318,6 +337,53 @@ final class DriverDispatchService
             ])
             ->latest('updated_at')
             ->first();
+    }
+
+    private function retryWithoutCandidate(
+        DeliveryOrder $order,
+        string $reason,
+        ?int &$redispatchOrderId,
+        ?int &$redispatchDelaySeconds,
+    ): void {
+        if ($this->shouldStopAfterNoCandidateRetries($order)) {
+            $this->deliveryOrderService->markStopped($order, $reason);
+
+            return;
+        }
+
+        $this->deliveryOrderService->recordStatusChange(
+            order: $order,
+            from: DeliveryOrderStatus::Dispatching,
+            to: DeliveryOrderStatus::Dispatching,
+            note: $reason,
+        );
+
+        $redispatchOrderId = (int) $order->id;
+        $redispatchDelaySeconds = $this->noCandidateRetryDelaySeconds();
+    }
+
+    private function shouldStopAfterNoCandidateRetries(DeliveryOrder $order): bool
+    {
+        $maxRetries = (int) config('delivery.dispatch.max_no_candidate_retries', 10);
+
+        if ($maxRetries < 0) {
+            return false;
+        }
+
+        $retryCount = $order->events()
+            ->where('to_status', DeliveryOrderStatus::Dispatching->value)
+            ->whereIn('note', [
+                self::NO_ELIGIBLE_DRIVERS_NOTE,
+                self::DRIVER_LOCATION_UNAVAILABLE_NOTE,
+            ])
+            ->count();
+
+        return $retryCount >= $maxRetries;
+    }
+
+    private function noCandidateRetryDelaySeconds(): int
+    {
+        return max(1, (int) config('delivery.dispatch.no_candidate_retry_seconds', 60));
     }
 
     private function selectNextCandidate(DeliveryOrder $order): ?DeliveryDriver
