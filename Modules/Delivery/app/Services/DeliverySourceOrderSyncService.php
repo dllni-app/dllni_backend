@@ -90,8 +90,7 @@ final class DeliverySourceOrderSyncService
                 'completed_at' => $order->completed_at ?? now(),
                 'customer_pickup_confirmed_at' => $order->customer_pickup_confirmed_at ?? now(),
             ],
-            DeliveryOrderStatus::Cancelled,
-            DeliveryOrderStatus::Stopped => [
+            DeliveryOrderStatus::Cancelled => [
                 'status' => OrderStatus::Cancelled->value,
                 'cancelled_at' => $order->cancelled_at ?? now(),
                 'cancellation_reason' => $order->cancellation_reason ?? 'Delivery order '.$deliveryStatus->value,
@@ -113,8 +112,7 @@ final class DeliverySourceOrderSyncService
                 'status' => SmOrderStatus::Completed->value,
                 'customer_pickup_confirmed_at' => $order->customer_pickup_confirmed_at ?? now(),
             ],
-            DeliveryOrderStatus::Cancelled,
-            DeliveryOrderStatus::Stopped => [
+            DeliveryOrderStatus::Cancelled => [
                 'status' => SmOrderStatus::Cancelled->value,
                 'cancelled_at' => $order->cancelled_at ?? now(),
                 'cancellation_reason' => $order->cancellation_reason ?? 'Delivery order '.$deliveryStatus->value,
