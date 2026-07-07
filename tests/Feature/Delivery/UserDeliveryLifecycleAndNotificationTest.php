@@ -55,6 +55,47 @@ it('syncs picked up and completed delivery statuses to supermarket source order'
     expect($order->fresh()->status->value)->toBe(SmOrderStatus::Completed->value);
 });
 
+it('does not cancel a restaurant source order when delivery dispatch is stopped', function (): void {
+    $user = User::factory()->create();
+    $order = Order::factory()->create([
+        'user_id' => $user->id,
+        'order_type' => OrderType::Delivery->value,
+        'status' => OrderStatus::Pending->value,
+    ]);
+    $deliveryOrder = DeliveryOrder::factory()->create([
+        'created_by_user_id' => $user->id,
+        'source_type' => DeliveryOrderCreationService::SOURCE_RESTAURANT_ORDER,
+        'source_id' => $order->id,
+    ]);
+
+    app(DeliverySourceOrderSyncService::class)->sync($deliveryOrder, DeliveryOrderStatus::Stopped, 'No drivers available');
+
+    $order->refresh();
+
+    expect($order->status->value)->toBe(OrderStatus::Pending->value);
+    expect($order->cancelled_at)->toBeNull();
+});
+
+it('does not cancel a supermarket source order when delivery dispatch is stopped', function (): void {
+    $user = User::factory()->create();
+    $order = SmOrder::factory()->create([
+        'customer_id' => $user->id,
+        'status' => SmOrderStatus::Pending->value,
+    ]);
+    $deliveryOrder = DeliveryOrder::factory()->create([
+        'created_by_user_id' => $user->id,
+        'source_type' => DeliveryOrderCreationService::SOURCE_SUPERMARKET_ORDER,
+        'source_id' => $order->id,
+    ]);
+
+    app(DeliverySourceOrderSyncService::class)->sync($deliveryOrder, DeliveryOrderStatus::Stopped, 'No drivers available');
+
+    $order->refresh();
+
+    expect($order->status->value)->toBe(SmOrderStatus::Pending->value);
+    expect($order->cancelled_at)->toBeNull();
+});
+
 it('sends user delivery notification payload with tracking deep link', function (): void {
     Notification::fake();
     $user = User::factory()->create();
