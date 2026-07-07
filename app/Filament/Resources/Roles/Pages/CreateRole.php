@@ -11,6 +11,11 @@ final class CreateRole extends CreateRecord
 {
     protected static string $resource = RoleResource::class;
 
+    public function getTitle(): string
+    {
+        return 'إضافة دور';
+    }
+
     public function afterCreate(): void
     {
         $permissions = $this->form->getState()['permissions'] ?? [];
