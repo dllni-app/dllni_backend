@@ -13,6 +13,7 @@ use App\Models\Worker;
 use App\Notifications\Cleaning\BookingLifecycleNotification;
 use BackedEnum;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Facades\Auth;
 use Modules\Cleaning\Enums\CleaningAssignmentMode;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
@@ -39,6 +40,10 @@ final class CleaningBookingObserver
 
         if ($booking->isDirty('scheduled_date') || $booking->isDirty('property_details') || $booking->isDirty('property_type')) {
             $this->applySameDayHotOrderSnapshot($booking);
+        }
+
+        if ($booking->isDirty('status')) {
+            $this->applyCancellationSourceSnapshot($booking);
         }
     }
 
@@ -154,6 +159,29 @@ final class CleaningBookingObserver
         $booking->property_details = $propertyDetails;
     }
 
+    private function applyCancellationSourceSnapshot(CleaningBooking $booking): void
+    {
+        $currentStatus = $booking->status instanceof CleaningBookingStatus
+            ? $booking->status
+            : CleaningBookingStatus::tryFrom((string) $booking->status);
+
+        if ($currentStatus !== CleaningBookingStatus::Cancelled || filled($booking->cancelled_by_role)) {
+            return;
+        }
+
+        $fromStatus = $booking->getOriginal('status');
+        $fromStatusValue = $fromStatus instanceof BackedEnum ? $fromStatus->value : (string) $fromStatus;
+
+        if (! in_array($fromStatusValue, [
+            CleaningBookingStatus::AwaitingStartVerification->value,
+            CleaningBookingStatus::AwaitingWorkerStartConfirmation->value,
+        ], true)) {
+            return;
+        }
+
+        $booking->cancelled_by_role = Auth::user()?->worker instanceof Worker ? 'worker' : 'customer';
+    }
+
     private function isScheduledForToday(CleaningBooking $booking): bool
     {
         $scheduledDate = $booking->scheduled_date;
@@ -222,40 +250,49 @@ final class CleaningBookingObserver
 
     private function dispatchPreferredWorkerFallbackIfNeeded(CleaningBooking $booking): void
     {
-        if ($booking->resolvedAssignmentMode() !== CleaningAssignmentMode::PreferredWorker->value || $booking->preferred_worker_id === null) {
+        if ($booking->preferred_worker_id === null || $booking->resolvedAssignmentMode() !== CleaningAssignmentMode::PreferredWorker->value) {
             return;
         }
 
-        $timeoutMinutes = max(1, (int) config('cleaning.preferred_worker_response_timeout_minutes', 20));
-        $fallbackRatio = max(0.1, min(1.0, (float) config('cleaning.preferred_worker_fallback_after_ratio', 0.5)));
-        $fallbackDelayMinutes = max(1, (int) ceil($timeoutMinutes * $fallbackRatio));
+        $delayMinutes = (int) config('cleaning.preferred_worker_fallback_minutes', 10);
+        if ($delayMinutes <= 0) {
+            return;
+        }
 
-        ConvertPreferredCleaningBookingToOpenJob::dispatch($booking->id)
-            ->delay(now()->addMinutes($fallbackDelayMinutes))
-            ->afterCommit();
+        ConvertPreferredCleaningBookingToOpenJob::dispatch($booking->id)->delay(now()->addMinutes($delayMinutes))->afterCommit();
     }
 
     private function notifyLifecycleCreated(CleaningBooking $booking): void
     {
-        $this->notifyBothParties($booking, 'cleaning.booking.created', null);
+        $booking->loadMissing(['customer', 'worker.user']);
+
+        $notification = new BookingLifecycleNotification(
+            canonicalType: 'cleaning.booking.created',
+            action: 'created',
+            booking: $booking,
+            actorRole: 'system',
+            fromStatus: null,
+            occurredAt: $booking->created_at?->toIso8601String() ?? now()->toIso8601String(),
+        );
+
+        $booking->customer?->notify($notification);
+        $booking->worker?->user?->notify($notification);
     }
 
-    private function notifyLifecycleUpdated(CleaningBooking $booking, ?string $fromStatus): void
+    private function notifyLifecycleUpdated(CleaningBooking $booking, string $fromStatus): void
     {
-        $this->notifyBothParties($booking, 'cleaning.booking.updated', $fromStatus);
-    }
+        $booking->loadMissing(['customer', 'worker.user']);
 
-    private function notifyBothParties(CleaningBooking $booking, string $canonicalType, ?string $fromStatus): void
-    {
-        $customer = $booking->customer;
-        $workerUser = $booking->worker?->user;
+        $notification = new BookingLifecycleNotification(
+            canonicalType: 'cleaning.booking.updated',
+            action: 'updated',
+            booking: $booking,
+            actorRole: 'system',
+            fromStatus: $fromStatus,
+            occurredAt: $booking->updated_at?->toIso8601String() ?? now()->toIso8601String(),
+        );
 
-        if ($customer instanceof User) {
-            $customer->notify(new BookingLifecycleNotification($booking, $canonicalType, 'worker', 'customer', $fromStatus));
-        }
-
-        if ($workerUser instanceof User) {
-            $workerUser->notify(new BookingLifecycleNotification($booking, $canonicalType, 'customer', 'worker', $fromStatus));
-        }
+        $booking->customer?->notify($notification);
+        $booking->worker?->user?->notify($notification);
     }
 }
