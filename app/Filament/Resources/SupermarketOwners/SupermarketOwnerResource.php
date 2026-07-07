@@ -30,12 +30,12 @@ final class SupermarketOwnerResource extends Resource
 
     public static function getNavigationGroup(): ?string
     {
-        return __('supermarket_admin.owner_management.group');
+        return 'إدارة المتاجر';
     }
 
     public static function getNavigationLabel(): string
     {
-        return __('supermarket_admin.owner_management.owners');
+        return 'مالكو المتاجر';
     }
 
     public static function form(Schema $schema): Schema
