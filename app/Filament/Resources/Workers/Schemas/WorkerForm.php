@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Workers\Schemas;
 
 use App\Enums\WorkerPreferredWorkType;
+use App\Models\Worker;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -12,6 +13,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Illuminate\Validation\Rule;
 
 final class WorkerForm
 {
@@ -22,11 +24,6 @@ final class WorkerForm
                 Section::make(__('cleaning_admin.workers.sections.profile'))
                     ->columns(2)
                     ->schema([
-                        Select::make('user_id')
-                            ->label(__('cleaning_admin.workers.fields.user'))
-                            ->relationship('user', 'name')
-                            ->visible(fn (string $operation): bool => $operation === 'create')
-                            ->required(),
                         TextInput::make('first_name')
                             ->label(__('cleaning_admin.workers.fields.first_name'))
                             ->required(),
@@ -58,12 +55,18 @@ final class WorkerForm
                         TextInput::make('user_phone')
                             ->label(__('cleaning_admin.workers.fields.phone'))
                             ->tel()
+                            ->required(fn (string $operation): bool => $operation === 'create')
+                            ->rules(fn (?Worker $record): array => [
+                                Rule::unique('users', 'phone')->ignore($record?->user_id),
+                            ])
                             ->dehydrated(false),
                         TextInput::make('user_password')
                             ->label(__('cleaning_admin.workers.fields.password'))
                             ->password()
                             ->revealable()
                             ->autocomplete('new-password')
+                            ->required(fn (string $operation): bool => $operation === 'create')
+                            ->minLength(8)
                             ->dehydrated(false),
                     ]),
             ]);
