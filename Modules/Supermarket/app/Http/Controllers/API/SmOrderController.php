@@ -27,7 +27,7 @@ final class SmOrderController
     {
         $orders = SmOrder::getQuery()
             ->where('store_id', $request->integer('store_id'))
-            ->with(['items.product', 'statusLogs'])
+            ->with($this->eagerLoads())
             ->paginate($request->get('perPage', 20));
 
         return SmOrderResource::collection($orders);
@@ -45,12 +45,12 @@ final class SmOrderController
         $order = $this->service->store(SmOrderData::from($request->validated()));
         $this->notifications->notifyCreated($order);
 
-        return SmOrderResource::make($order->load(['customer', 'store', 'coupon', 'items.product', 'statusLogs', 'disputes']));
+        return SmOrderResource::make($order->load(['customer', 'store', 'coupon', ...$this->eagerLoads(), 'disputes']));
     }
 
     public function show(SmOrder $smOrder): SmOrderResource
     {
-        return SmOrderResource::make($smOrder->load(['customer', 'store', 'coupon', 'items.product.media', 'statusLogs', 'disputes']));
+        return SmOrderResource::make($smOrder->load(['customer', 'store', 'coupon', 'items.product.media', 'statusLogs', 'disputes', 'deliveryOrder.driver.user', 'deliveryOrder.driver.latestLocation', 'deliveryOrder.events']));
     }
 
     public function update(SmOrderRequest $request, SmOrder $smOrder): SmOrderResource
@@ -60,7 +60,7 @@ final class SmOrderController
         $nextStatus = $order->status?->value ?? (string) $order->status;
         $this->notifications->notifyStatusChanged($order, $previousStatus, $nextStatus, 'owner');
 
-        return SmOrderResource::make($order->load(['customer', 'store', 'coupon', 'items.product', 'statusLogs', 'disputes']));
+        return SmOrderResource::make($order->load(['customer', 'store', 'coupon', ...$this->eagerLoads(), 'disputes']));
     }
 
     public function destroy(SmOrder $smOrder): Response
@@ -68,5 +68,10 @@ final class SmOrderController
         $smOrder->delete();
 
         return response()->noContent();
+    }
+
+    private function eagerLoads(): array
+    {
+        return ['items.product', 'statusLogs', 'deliveryOrder.driver.user', 'deliveryOrder.driver.latestLocation', 'deliveryOrder.events'];
     }
 }
