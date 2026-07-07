@@ -233,7 +233,9 @@ it('returns 409 when another driver tries to accept an offer', function (): void
     $response->assertStatus(409);
 });
 
-it('stops dispatch when no eligible drivers exist', function (): void {
+it('keeps dispatching and retries when no eligible drivers exist', function (): void {
+    Queue::fake();
+
     $company = DeliveryCompany::factory()->create();
 
     $order = app(DeliveryOrderService::class)->create($company, deliveryOrderPayload());
@@ -241,8 +243,26 @@ it('stops dispatch when no eligible drivers exist', function (): void {
 
     $order->refresh();
 
-    expect($order->status)->toBe(DeliveryOrderStatus::Stopped->value);
-    expect($order->stop_reason)->not->toBeNull();
+    expect($order->status)->toBe(DeliveryOrderStatus::Dispatching->value);
+    expect($order->stop_reason)->toBeNull();
+    Queue::assertPushed(DispatchDeliveryOrderJob::class);
+});
+
+it('stops dispatch after the no-candidate retry budget is exhausted', function (): void {
+    Queue::fake();
+    config()->set('delivery.dispatch.max_no_candidate_retries', 1);
+
+    $company = DeliveryCompany::factory()->create();
+
+    $order = app(DeliveryOrderService::class)->create($company, deliveryOrderPayload());
+    app(DriverDispatchService::class)->dispatchByOrderId($order->id);
+
+    expect($order->fresh()->status)->toBe(DeliveryOrderStatus::Dispatching->value);
+
+    app(DriverDispatchService::class)->dispatchByOrderId($order->id);
+
+    expect($order->fresh()->status)->toBe(DeliveryOrderStatus::Stopped->value);
+    expect($order->fresh()->stop_reason)->not->toBeNull();
 });
 
 it('retries dispatch after a stopped order', function (): void {
@@ -250,7 +270,7 @@ it('retries dispatch after a stopped order', function (): void {
 
     $company = DeliveryCompany::factory()->create();
     $order = app(DeliveryOrderService::class)->create($company, deliveryOrderPayload());
-    app(DriverDispatchService::class)->dispatchByOrderId($order->id);
+    app(DeliveryOrderService::class)->markStopped($order, 'Manual dispatch stop.');
 
     expect($order->fresh()->status)->toBe(DeliveryOrderStatus::Stopped->value);
 
