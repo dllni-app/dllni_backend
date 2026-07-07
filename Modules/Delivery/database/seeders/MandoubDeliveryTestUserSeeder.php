@@ -10,8 +10,8 @@ use App\Enums\DisputeStatus;
 use App\Enums\UserModuleType;
 use App\Models\Dispute;
 use App\Models\User;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Modules\Delivery\Enums\DeliveryAssignmentAttemptStatus;
@@ -228,7 +228,7 @@ final class MandoubDeliveryTestUserSeeder extends Seeder
         string $pickupAddress,
         string $dropoffAddress,
         float $fee,
-        Carbon $createdAt,
+        CarbonInterface $createdAt,
     ): DeliveryOrder {
         $acceptedAt = in_array($status, [DeliveryOrderStatus::Accepted, DeliveryOrderStatus::InProgress, DeliveryOrderStatus::PickedUp, DeliveryOrderStatus::Delivered, DeliveryOrderStatus::Completed, DeliveryOrderStatus::Cancelled], true) ? $createdAt->copy()->addMinutes(6) : null;
         $startedAt = in_array($status, [DeliveryOrderStatus::InProgress, DeliveryOrderStatus::PickedUp, DeliveryOrderStatus::Delivered, DeliveryOrderStatus::Completed], true) ? $createdAt->copy()->addMinutes(14) : null;
@@ -278,7 +278,7 @@ final class MandoubDeliveryTestUserSeeder extends Seeder
         $this->attempt($orders['offer'], $offerDriver, DeliveryAssignmentAttemptStatus::Open, 0.9, now()->subMinute(), null, now()->addMinutes(10));
     }
 
-    private function attempt(DeliveryOrder $order, DeliveryDriver $driver, DeliveryAssignmentAttemptStatus $status, float $distance, Carbon $offeredAt, ?Carbon $respondedAt, ?Carbon $expiresAt = null): void
+    private function attempt(DeliveryOrder $order, DeliveryDriver $driver, DeliveryAssignmentAttemptStatus $status, float $distance, CarbonInterface $offeredAt, ?CarbonInterface $respondedAt, ?CarbonInterface $expiresAt = null): void
     {
         DeliveryAssignmentAttempt::updateOrCreate(
             ['order_id' => $order->id, 'driver_id' => $driver->id, 'attempt_no' => 1],
