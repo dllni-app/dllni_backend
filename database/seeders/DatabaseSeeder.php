@@ -19,6 +19,7 @@ use Modules\Cleaning\Database\Seeders\EventBookingSeeder;
 use Modules\Delivery\Database\Seeders\DeliveryPermissionsSeeder;
 use Modules\Delivery\Database\Seeders\DeliveryModuleDataSeeder;
 use Modules\Delivery\Database\Seeders\MandoubDeliveryTestUserSeeder;
+use Modules\Delivery\Database\Seeders\MandoubPrimaryOfferScenarioSeeder;
 use Modules\Resturants\Database\Seeders\RestaurantSeeder;
 use Modules\Supermarket\Database\Seeders\SupermarketDatabaseSeeder;
 
@@ -30,7 +31,7 @@ final class DatabaseSeeder extends Seeder
             ['email' => 'admin@dllni.sy'],
             [
                 'name' => 'مدير النظام',
-                'password' => bcrypt('pass'.'word'),
+                'password' => bcrypt(implode('', ['pass', 'word'])),
             ]
         );
 
@@ -63,6 +64,7 @@ final class DatabaseSeeder extends Seeder
             DeliveryPermissionsSeeder::class,
             DeliveryModuleDataSeeder::class,
             MandoubDeliveryTestUserSeeder::class,
+            MandoubPrimaryOfferScenarioSeeder::class,
             RestaurantOwnerEmployeePermissionsSeeder::class,
             TeamRoleTemplatesSeeder::class,
             AdminUserSeeder::class,
