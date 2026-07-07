@@ -15,6 +15,8 @@ use Modules\Delivery\Models\DeliveryCompany;
 use Modules\Delivery\Models\DeliveryDriver;
 use Modules\Delivery\Models\DeliveryOrder;
 use Modules\Delivery\Models\DeliveryOrderEvent;
+use Modules\Supermarket\Enums\SmOrderStatus;
+use Modules\Supermarket\Models\SmOrder;
 
 final class DeliveryOrderService
 {
@@ -41,6 +43,7 @@ final class DeliveryOrderService
      *     currency?: string|null,
      *     sourceType?: string|null,
      *     sourceId?: int|null,
+     *     dispatchImmediately?: bool|null,
      * }  $payload
      */
     public function create(DeliveryCompany $company, array $payload, ?int $createdByUserId = null): DeliveryOrder
@@ -57,7 +60,12 @@ final class DeliveryOrderService
             currency: $payload['currency'] ?? null,
         );
 
-        $order = DB::transaction(function () use ($company, $payload, $createdByUserId, $pricing): DeliveryOrder {
+        $dispatchImmediately = (bool) ($payload['dispatchImmediately'] ?? true);
+        $initialStatus = $dispatchImmediately
+            ? DeliveryOrderStatus::SearchingForDriver
+            : DeliveryOrderStatus::WaitingMerchantReady;
+
+        $order = DB::transaction(function () use ($company, $payload, $createdByUserId, $pricing, $initialStatus): DeliveryOrder {
             $order = DeliveryOrder::query()->create([
                 'company_id' => $company->id,
                 'order_number' => $this->generateOrderNumber(),
@@ -86,14 +94,18 @@ final class DeliveryOrderService
                 note: 'تم إنشاء الطلب',
             );
 
-            $this->applyStatus($order, DeliveryOrderStatus::Dispatching, [
-                'note' => 'تم احتساب السعر وإضافة الطلب إلى قائمة التوزيع',
+            $this->applyStatus($order, $initialStatus, [
+                'note' => $initialStatus === DeliveryOrderStatus::WaitingMerchantReady
+                    ? 'تم إنشاء طلب التوصيل بانتظار جاهزية المتجر'
+                    : 'تم احتساب السعر وبدأ البحث عن مندوب',
             ]);
 
             return $order->fresh();
         });
 
-        DispatchDeliveryOrderJob::dispatch($order->id);
+        if ($dispatchImmediately) {
+            DispatchDeliveryOrderJob::dispatch($order->id);
+        }
 
         return $order;
     }
@@ -104,7 +116,13 @@ final class DeliveryOrderService
             $order = DeliveryOrder::query()->lockForUpdate()->findOrFail($order->id);
             $currentStatus = DeliveryOrderStatus::tryFrom((string) $order->status);
 
-            if (! in_array($currentStatus, [DeliveryOrderStatus::Stopped, DeliveryOrderStatus::Dispatching], true)) {
+            if (! in_array($currentStatus, [
+                DeliveryOrderStatus::Stopped,
+                DeliveryOrderStatus::WaitingMerchantReady,
+                DeliveryOrderStatus::SearchingForDriver,
+                DeliveryOrderStatus::Dispatching,
+                DeliveryOrderStatus::Offered,
+            ], true)) {
                 throw new InvalidArgumentException('لا يمكن إعادة محاولة توزيع الطلب من حالته الحالية.');
             }
 
@@ -114,7 +132,7 @@ final class DeliveryOrderService
 
             $from = DeliveryOrderStatus::tryFrom((string) $order->status);
             $order->forceFill([
-                'status' => DeliveryOrderStatus::Dispatching->value,
+                'status' => DeliveryOrderStatus::SearchingForDriver->value,
                 'stopped_at' => null,
                 'stop_reason' => null,
             ])->save();
@@ -122,8 +140,8 @@ final class DeliveryOrderService
             $this->recordStatusChange(
                 order: $order,
                 from: $from,
-                to: DeliveryOrderStatus::Dispatching,
-                note: 'تم طلب إعادة التوزيع',
+                to: DeliveryOrderStatus::SearchingForDriver,
+                note: 'تم طلب إعادة البحث عن مندوب',
             );
 
             return $order->fresh();
@@ -132,6 +150,53 @@ final class DeliveryOrderService
         DispatchDeliveryOrderJob::dispatch($order->id);
 
         return $order;
+    }
+
+    public function startDispatch(DeliveryOrder $order, string $note = 'بدأ البحث عن مندوب'): DeliveryOrder
+    {
+        $order = DB::transaction(function () use ($order, $note): DeliveryOrder {
+            $order = DeliveryOrder::query()->lockForUpdate()->findOrFail($order->id);
+            $currentStatus = DeliveryOrderStatus::tryFrom((string) $order->status);
+
+            if (in_array($currentStatus, [DeliveryOrderStatus::Accepted, DeliveryOrderStatus::InProgress, DeliveryOrderStatus::PickedUp, DeliveryOrderStatus::Delivered, DeliveryOrderStatus::Completed, DeliveryOrderStatus::Cancelled], true)) {
+                return $order->fresh();
+            }
+
+            $order->assignmentAttempts()
+                ->where('status', 'open')
+                ->update(['status' => 'cancelled']);
+
+            $this->applyStatus($order, DeliveryOrderStatus::SearchingForDriver, [
+                'note' => $note,
+                'extraAttributes' => ['stopped_at' => null, 'stop_reason' => null],
+            ]);
+
+            return $order->fresh();
+        });
+
+        DispatchDeliveryOrderJob::dispatch($order->id);
+
+        return $order;
+    }
+
+    public function cancelLinkedSource(string $sourceType, int $sourceId, string $reason, ?int $cancelledByUserId = null): ?DeliveryOrder
+    {
+        $order = DeliveryOrder::query()
+            ->where('source_type', $sourceType)
+            ->where('source_id', $sourceId)
+            ->first();
+
+        if (! $order instanceof DeliveryOrder) {
+            return null;
+        }
+
+        $status = DeliveryOrderStatus::tryFrom((string) $order->status);
+
+        if (in_array($status, [DeliveryOrderStatus::Delivered, DeliveryOrderStatus::Completed, DeliveryOrderStatus::Cancelled], true)) {
+            return $order;
+        }
+
+        return $this->cancel($order, $reason, $cancelledByUserId);
     }
 
     public function start(DeliveryOrder $order, int $driverId): DeliveryOrder
@@ -162,6 +227,7 @@ final class DeliveryOrderService
             $order = DeliveryOrder::query()->lockForUpdate()->findOrFail($order->id);
             $this->assertAssignedDriver($order, $driverId);
             $this->assertCurrentStatus($order, DeliveryOrderStatus::InProgress);
+            $this->assertSourceReadyForPickup($order);
 
             $this->applyStatus($order, DeliveryOrderStatus::PickedUp, [
                 'timestampColumn' => 'picked_up_at',
@@ -256,7 +322,7 @@ final class DeliveryOrderService
                 DeliveryOrderStatus::Completed,
                 DeliveryOrderStatus::Cancelled,
             ], true)) {
-                throw new InvalidArgumentException('لا يمكن إلغاء الطلب من حالته الحالية.');
+                return $order;
             }
 
             $order->assignmentAttempts()
@@ -403,6 +469,21 @@ final class DeliveryOrderService
     {
         if ($order->status !== $expected->value) {
             throw new InvalidArgumentException("انتقال حالة غير صالح من {$order->status} إلى {$expected->value}.");
+        }
+    }
+
+    private function assertSourceReadyForPickup(DeliveryOrder $order): void
+    {
+        $source = $order->relationLoaded('source') ? $order->source : $order->source()->first();
+
+        if (! $source instanceof SmOrder) {
+            return;
+        }
+
+        $status = $source->status?->value ?? (string) $source->status;
+
+        if ($status !== SmOrderStatus::ReadyForPickup->value) {
+            throw new InvalidArgumentException('طلب السوبرماركت غير جاهز للاستلام بعد.');
         }
     }
 
