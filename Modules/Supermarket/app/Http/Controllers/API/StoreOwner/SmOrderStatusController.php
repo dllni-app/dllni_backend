@@ -40,16 +40,47 @@ final class SmOrderStatusController
             $this->activityLogService->logSmOrderAccepted((int) $order->id, $order->order_number, (int) $order->store_id);
             $this->notifications->notifyStatusChanged($acceptedOrder, $previousStatus, $this->statusValue($acceptedOrder), 'owner');
 
-            return SmOrderResource::make($acceptedOrder->load([
-                'customer',
-                'store',
-                'coupon',
-                'items.product',
-                'statusLogs',
-                'disputes',
-            ]))->additional([
-                'message' => 'Order accepted successfully.',
-            ]);
+            return $this->resource($acceptedOrder, 'Order accepted successfully.');
+        } catch (Exception $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    /**
+     * Mark accepted order as preparing.
+     */
+    public function preparing(SmOrder $order): JsonResponse|JsonResource
+    {
+        $this->context->store((int) $order->store_id);
+        $previousStatus = $this->statusValue($order);
+
+        try {
+            $updated = $this->orderService->markPreparing($order, $this->context->owner()->id);
+            $this->notifications->notifyStatusChanged($updated, $previousStatus, $this->statusValue($updated), 'owner');
+
+            return $this->resource($updated, 'Order marked as preparing successfully.');
+        } catch (Exception $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    /**
+     * Mark order as ready for pickup and start Mandoub dispatch.
+     */
+    public function readyForPickup(SmOrder $order): JsonResponse|JsonResource
+    {
+        $this->context->store((int) $order->store_id);
+        $previousStatus = $this->statusValue($order);
+
+        try {
+            $updated = $this->orderService->markReadyForPickup($order, $this->context->owner()->id);
+            $this->notifications->notifyStatusChanged($updated, $previousStatus, $this->statusValue($updated), 'owner');
+
+            return $this->resource($updated, 'Order marked as ready for pickup successfully.');
         } catch (Exception $e) {
             return response()->json([
                 'message' => $e->getMessage(),
@@ -69,16 +100,7 @@ final class SmOrderStatusController
             $updated = $this->orderService->handOverToCourier($order, $this->context->owner()->id);
             $this->notifications->notifyStatusChanged($updated, $previousStatus, $this->statusValue($updated), 'owner');
 
-            return SmOrderResource::make($updated->load([
-                'customer',
-                'store',
-                'coupon',
-                'items.product',
-                'statusLogs',
-                'disputes',
-            ]))->additional([
-                'message' => 'Order handed to courier successfully.',
-            ]);
+            return $this->resource($updated, 'Order handed to courier successfully.');
         } catch (Exception $e) {
             return response()->json([
                 'message' => $e->getMessage(),
@@ -104,21 +126,29 @@ final class SmOrderStatusController
             $this->activityLogService->logSmOrderRejected((int) $order->id, $order->order_number, (int) $order->store_id);
             $this->notifications->notifyStatusChanged($rejectedOrder, $previousStatus, $this->statusValue($rejectedOrder), 'owner');
 
-            return SmOrderResource::make($rejectedOrder->load([
-                'customer',
-                'store',
-                'coupon',
-                'items.product',
-                'statusLogs',
-                'disputes',
-            ]))->additional([
-                'message' => 'Order rejected successfully.',
-            ]);
+            return $this->resource($rejectedOrder, 'Order rejected successfully.');
         } catch (Exception $e) {
             return response()->json([
                 'message' => $e->getMessage(),
             ], 400);
         }
+    }
+
+    private function resource(SmOrder $order, string $message): JsonResource
+    {
+        return SmOrderResource::make($order->load([
+            'customer',
+            'store',
+            'coupon',
+            'items.product',
+            'statusLogs',
+            'disputes',
+            'deliveryOrder.driver.user',
+            'deliveryOrder.driver.latestLocation',
+            'deliveryOrder.events',
+        ]))->additional([
+            'message' => $message,
+        ]);
     }
 
     private function statusValue(SmOrder $order): string
