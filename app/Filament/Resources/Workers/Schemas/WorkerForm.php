@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Workers\Schemas;
 
 use App\Enums\WorkerPreferredWorkType;
+use App\Models\User;
 use App\Models\Worker;
+use Closure;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -13,7 +15,6 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-use Illuminate\Validation\Rule;
 
 final class WorkerForm
 {
@@ -55,9 +56,18 @@ final class WorkerForm
                         TextInput::make('user_phone')
                             ->label(__('cleaning_admin.workers.fields.phone'))
                             ->tel()
+                            ->autocomplete('tel')
+                            ->placeholder('+9639XXXXXXXX')
+                            ->helperText('أدخل رقم هاتف سوري بصيغة دولية مثل +963912345678.')
+                            ->extraInputAttributes([
+                                'dir' => 'ltr',
+                                'inputmode' => 'tel',
+                                'pattern' => '^\\+9639[0-9]{8}$',
+                            ])
                             ->required(fn (string $operation): bool => $operation === 'create')
-                            ->rules(fn (?Worker $record): array => [
-                                Rule::unique('users', 'phone')->ignore($record?->user_id),
+                            ->rules(fn (?Worker $record, string $operation): array => [
+                                self::syrianPhoneFormatRule(),
+                                self::workerPhoneAvailabilityRule($record, $operation),
                             ])
                             ->dehydrated(false),
                         TextInput::make('user_password')
@@ -70,5 +80,45 @@ final class WorkerForm
                             ->dehydrated(false),
                     ]),
             ]);
+    }
+
+    private static function syrianPhoneFormatRule(): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail): void {
+            if (blank($value)) {
+                return;
+            }
+
+            if (! is_string($value) || preg_match('/^\+9639\d{8}$/', trim($value)) !== 1) {
+                $fail('أدخل رقم هاتف سوري بصيغة +9639XXXXXXXX، مثل +963912345678.');
+            }
+        };
+    }
+
+    private static function workerPhoneAvailabilityRule(?Worker $record, string $operation): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail) use ($record, $operation): void {
+            if (blank($value)) {
+                return;
+            }
+
+            $user = User::query()->where('phone', trim((string) $value))->first();
+
+            if (! $user instanceof User) {
+                return;
+            }
+
+            if ($operation === 'create') {
+                if ($user->worker()->exists()) {
+                    $fail('رقم الهاتف مرتبط بعامل موجود مسبقاً. افتح سجل العامل الحالي لتعديله.');
+                }
+
+                return;
+            }
+
+            if ((int) $user->getKey() !== (int) ($record?->user_id ?? 0)) {
+                $fail('رقم الهاتف مستخدم لحساب آخر.');
+            }
+        };
     }
 }

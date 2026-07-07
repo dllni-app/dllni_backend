@@ -9,13 +9,14 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 
 trait SyncsWorkerLinkedUser
 {
     protected function handleRecordCreation(array $data): Model
     {
         return DB::transaction(function () use ($data): Model {
-            $user = $this->createLinkedUserAccount($data);
+            $user = $this->createOrUpdateLinkedUserAccount($data);
             $model = static::getModel();
 
             $data['user_id'] = $user->getKey();
@@ -37,8 +38,9 @@ trait SyncsWorkerLinkedUser
             'module_type' => UserModuleType::CleaningWorker,
         ];
 
-        if (filled($this->data['user_phone'] ?? null)) {
-            $updates['phone'] = $this->data['user_phone'];
+        $phone = $this->accountPhoneFromForm();
+        if (filled($phone)) {
+            $updates['phone'] = $phone;
         }
 
         $secret = $this->accountSecretFromForm();
@@ -56,15 +58,45 @@ trait SyncsWorkerLinkedUser
         return $data;
     }
 
-    private function createLinkedUserAccount(array $data): User
+    private function createOrUpdateLinkedUserAccount(array $data): User
     {
-        return User::query()->create([
+        $phone = $this->accountPhoneFromForm();
+        $user = filled($phone)
+            ? User::query()->where('phone', $phone)->first()
+            : null;
+
+        if ($user?->worker()->exists()) {
+            throw ValidationException::withMessages([
+                'data.user_phone' => 'رقم الهاتف مرتبط بعامل موجود مسبقاً. افتح سجل العامل الحالي لتعديله.',
+            ]);
+        }
+
+        $updates = [
             'name' => (string) $data['first_name'],
-            'phone' => $this->data['user_phone'] ?? null,
-            'pass'.'word' => Hash::make((string) $this->accountSecretFromForm()),
+            'phone' => $phone,
             'module_type' => UserModuleType::CleaningWorker,
             'is_active' => (bool) ($data['is_active'] ?? true),
-        ]);
+        ];
+
+        $secret = $this->accountSecretFromForm();
+        if (filled($secret)) {
+            $updates['pass'.'word'] = Hash::make((string) $secret);
+        }
+
+        if ($user instanceof User) {
+            $user->forceFill($updates)->saveQuietly();
+
+            return $user;
+        }
+
+        return User::query()->create($updates);
+    }
+
+    private function accountPhoneFromForm(): ?string
+    {
+        $phone = $this->data['user_phone'] ?? null;
+
+        return blank($phone) ? null : trim((string) $phone);
     }
 
     private function accountSecretFromForm(): mixed

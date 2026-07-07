@@ -26,16 +26,16 @@ beforeEach(function (): void {
 it('creates a cleaning worker and syncs the linked user account', function (): void {
     $linkedUser = User::factory()->create([
         'name' => 'Old Name',
-        'phone' => '+963900000000',
+        'phone' => '+963911111111',
         'module_type' => null,
     ]);
 
     Livewire::test(CreateCleaningWorker::class)
         ->fillForm([
-            'user_id' => $linkedUser->id,
             'first_name' => 'Maher',
             'preferred_work_type' => WorkerPreferredWorkType::Both->value,
             'user_phone' => '+963911111111',
+            'user_password' => 'password',
         ])
         ->call('create')
         ->assertHasNoFormErrors();
@@ -47,6 +47,40 @@ it('creates a cleaning worker and syncs the linked user account', function (): v
     expect($linkedUser->name)->toBe('Maher')
         ->and($linkedUser->phone)->toBe('+963911111111')
         ->and($linkedUser->module_type)->toBe(UserModuleType::CleaningWorker);
+});
+
+it('rejects cleaning worker account phones outside the Syrian +963 mobile format', function (): void {
+    Livewire::test(CreateCleaningWorker::class)
+        ->fillForm([
+            'first_name' => 'Maher',
+            'preferred_work_type' => WorkerPreferredWorkType::Both->value,
+            'user_phone' => '0911111111',
+            'user_password' => 'password',
+        ])
+        ->call('create')
+        ->assertHasFormErrors(['user_phone']);
+});
+
+it('rejects creating a second cleaning worker for an existing worker account phone', function (): void {
+    $linkedUser = User::factory()->create([
+        'name' => 'Sara',
+        'phone' => '+963933333333',
+        'module_type' => UserModuleType::CleaningWorker->value,
+    ]);
+    Worker::factory()->create([
+        'user_id' => $linkedUser->id,
+        'first_name' => 'Sara',
+    ]);
+
+    Livewire::test(CreateCleaningWorker::class)
+        ->fillForm([
+            'first_name' => 'Sara Duplicate',
+            'preferred_work_type' => WorkerPreferredWorkType::Both->value,
+            'user_phone' => '+963933333333',
+            'user_password' => 'password',
+        ])
+        ->call('create')
+        ->assertHasFormErrors(['user_phone']);
 });
 
 it('updates a cleaning worker without writing user fields to the workers table', function (): void {
