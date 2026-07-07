@@ -36,6 +36,16 @@ final class RoleResource extends Resource
         return __('restaurant_admin.team.roles');
     }
 
+    public static function getModelLabel(): string
+    {
+        return 'دور';
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return 'الأدوار والصلاحيات';
+    }
+
     public static function getNavigationTooltip(): ?string
     {
         return 'إدارة الأدوار والصلاحيات: قائمة الأدوار (مدير أعلى، مدير عمليات التنظيف، دعم العملاء، محاسب) وتعيين الصلاحيات.';
