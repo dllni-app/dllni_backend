@@ -60,6 +60,8 @@ Route::prefix('v1')->middleware(['auth:sanctum', InjectStoreIdFromOwnerContext::
         // Order Management
         Route::get('orders/counts', StoreOwnerOrderCountsController::class)->name('orders.counts');
         Route::post('orders/{order}/accept', [SmOrderStatusController::class, 'accept'])->name('orders.accept');
+        Route::post('orders/{order}/preparing', [SmOrderStatusController::class, 'preparing'])->name('orders.preparing');
+        Route::post('orders/{order}/ready-for-pickup', [SmOrderStatusController::class, 'readyForPickup'])->name('orders.ready-for-pickup');
         Route::post('orders/{order}/reject', [SmOrderStatusController::class, 'reject'])->name('orders.reject');
         Route::post('orders/{order}/courier-handover', [SmOrderStatusController::class, 'courierHandover'])->name('orders.courier-handover');
         Route::post('orders/{order}/return', [StoreOwnerInventoryController::class, 'processReturn'])->name('orders.return');
