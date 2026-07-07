@@ -13,6 +13,11 @@ final class EditRole extends EditRecord
 {
     protected static string $resource = RoleResource::class;
 
+    public function getTitle(): string
+    {
+        return 'تعديل الدور';
+    }
+
     public function mutateFormDataBeforeFill(array $data): array
     {
         $data['permissions'] = $this->record->permissions->pluck('name')->toArray();
