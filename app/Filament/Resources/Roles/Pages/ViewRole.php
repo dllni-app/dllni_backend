@@ -12,6 +12,11 @@ final class ViewRole extends ViewRecord
 {
     protected static string $resource = RoleResource::class;
 
+    public function getTitle(): string
+    {
+        return 'عرض الدور';
+    }
+
     protected function getHeaderActions(): array
     {
         return [
