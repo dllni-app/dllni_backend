@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Modules\Delivery\Services;
 
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Modules\Delivery\Enums\DeliveryAssignmentAttemptStatus;
 use Modules\Delivery\Enums\DeliveryDriverAvailabilityStatus;
@@ -19,8 +18,7 @@ use RuntimeException;
 
 final class DriverDispatchService
 {
-    private const NO_ELIGIBLE_DRIVERS_NOTE = 'No eligible drivers available within search radius.';
-    private const DRIVER_LOCATION_UNAVAILABLE_NOTE = 'Selected driver has no recent location.';
+    private const NO_ELIGIBLE_DRIVERS_NOTE = 'No eligible drivers available; keeping order in driver search.';
 
     public function __construct(
         private readonly DriverLocationService $locationService,
@@ -43,7 +41,13 @@ final class DriverDispatchService
                 return;
             }
 
-            if ($order->status !== DeliveryOrderStatus::Dispatching->value) {
+            if (! in_array($order->status, [DeliveryOrderStatus::SearchingForDriver->value, DeliveryOrderStatus::Dispatching->value], true)) {
+                return;
+            }
+
+            if ($order->assignmentAttempts()->where('status', DeliveryAssignmentAttemptStatus::Open->value)->exists()) {
+                $order->forceFill(['status' => DeliveryOrderStatus::Offered->value])->save();
+
                 return;
             }
 
@@ -55,82 +59,53 @@ final class DriverDispatchService
                 return;
             }
 
-            $attemptCount = $order->assignmentAttempts()->count();
-            $maxAttempts = (int) config('delivery.dispatch.max_attempts_per_order', 20);
+            $candidateRow = $this->selectNextCandidate($order);
 
-            if ($attemptCount >= $maxAttempts) {
-                $this->deliveryOrderService->markStopped($order, 'Maximum dispatch attempts reached.');
-
-                return;
-            }
-
-            $candidate = $this->selectNextCandidate($order);
-
-            if (! $candidate instanceof DeliveryDriver) {
-                $this->retryWithoutCandidate(
-                    order: $order,
-                    reason: self::NO_ELIGIBLE_DRIVERS_NOTE,
-                    redispatchOrderId: $redispatchOrderId,
-                    redispatchDelaySeconds: $redispatchDelaySeconds,
-                );
+            if ($candidateRow === null) {
+                $this->retryWithoutCandidate($order, self::NO_ELIGIBLE_DRIVERS_NOTE, $redispatchOrderId, $redispatchDelaySeconds);
 
                 return;
             }
 
-            $latestLocation = $candidate->locations()->latest('recorded_at')->first();
-
-            if (! $latestLocation instanceof DeliveryDriverLocation) {
-                $this->retryWithoutCandidate(
-                    order: $order,
-                    reason: self::DRIVER_LOCATION_UNAVAILABLE_NOTE,
-                    redispatchOrderId: $redispatchOrderId,
-                    redispatchDelaySeconds: $redispatchDelaySeconds,
-                );
-
-                return;
-            }
-
-            $distanceToPickupKm = round($this->locationService->calculateHaversineDistance(
-                (float) $latestLocation->latitude,
-                (float) $latestLocation->longitude,
-                (float) $order->pickup_latitude,
-                (float) $order->pickup_longitude,
-            ), 3);
+            /** @var DeliveryDriver $candidate */
+            $candidate = $candidateRow['driver'];
 
             $attemptNo = ((int) $order->assignmentAttempts()
                 ->where('driver_id', $candidate->id)
                 ->max('attempt_no')) + 1;
 
-            $offerTimeoutSeconds = (int) config('delivery.dispatch.offer_timeout_seconds', 30);
             $offeredAt = now();
-            $expiresAt = $offeredAt->copy()->addSeconds($offerTimeoutSeconds);
+            $expiresAt = $this->offerExpiresAt((string) $candidateRow['tier'], $offeredAt);
 
             $attempt = DeliveryAssignmentAttempt::query()->create([
                 'order_id' => $order->id,
                 'driver_id' => $candidate->id,
                 'attempt_no' => $attemptNo,
                 'status' => DeliveryAssignmentAttemptStatus::Open->value,
-                'distance_to_pickup_km' => $distanceToPickupKm,
+                'distance_to_pickup_km' => $candidateRow['distanceKm'] !== null ? round((float) $candidateRow['distanceKm'], 3) : null,
                 'offered_at' => $offeredAt,
                 'expires_at' => $expiresAt,
             ]);
 
             $this->deliveryOrderService->recordStatusChange(
                 order: $order,
-                from: DeliveryOrderStatus::Dispatching,
+                from: DeliveryOrderStatus::tryFrom((string) $order->status),
                 to: DeliveryOrderStatus::Offered,
-                note: 'Offer sent to driver',
+                note: 'Offer sent to ranked driver candidate',
                 actorType: 'delivery_driver',
                 actorId: $candidate->id,
                 payload: [
                     'attemptId' => $attempt->id,
-                    'distanceToPickupKm' => $distanceToPickupKm,
+                    'distanceToPickupKm' => $candidateRow['distanceKm'],
+                    'candidateTier' => $candidateRow['tier'],
                 ],
             );
 
             $order->forceFill(['status' => DeliveryOrderStatus::Offered->value])->save();
 
-            ExpireAssignmentAttemptJob::dispatch($attempt->id)->delay($expiresAt);
+            if ($expiresAt !== null) {
+                ExpireAssignmentAttemptJob::dispatch($attempt->id)->delay($expiresAt);
+            }
 
             $attemptId = $attempt->id;
         });
@@ -167,7 +142,7 @@ final class DriverDispatchService
                 return;
             }
 
-            if ($attempt->expires_at !== null && $attempt->expires_at->isFuture()) {
+            if ($attempt->expires_at === null || $attempt->expires_at->isFuture()) {
                 return;
             }
 
@@ -185,12 +160,12 @@ final class DriverDispatchService
             $this->deliveryOrderService->recordStatusChange(
                 order: $order,
                 from: DeliveryOrderStatus::tryFrom((string) $order->status),
-                to: DeliveryOrderStatus::Dispatching,
-                note: 'Assignment attempt timed out',
+                to: DeliveryOrderStatus::SearchingForDriver,
+                note: 'Assignment attempt timed out; continuing search',
                 payload: ['attemptId' => $attempt->id],
             );
 
-            $order->forceFill(['status' => DeliveryOrderStatus::Dispatching->value])->save();
+            $order->forceFill(['status' => DeliveryOrderStatus::SearchingForDriver->value])->save();
             $shouldRedispatch = true;
             $orderId = $order->id;
             $timedOutAttemptId = $attempt->id;
@@ -297,8 +272,8 @@ final class DriverDispatchService
             $this->deliveryOrderService->recordStatusChange(
                 order: $order,
                 from: DeliveryOrderStatus::tryFrom((string) $order->status),
-                to: DeliveryOrderStatus::Dispatching,
-                note: 'Driver rejected offer',
+                to: DeliveryOrderStatus::SearchingForDriver,
+                note: 'Driver rejected offer; continuing search',
                 actorType: 'delivery_driver',
                 actorId: $driver->id,
                 payload: [
@@ -307,7 +282,7 @@ final class DriverDispatchService
                 ],
             );
 
-            $order->forceFill(['status' => DeliveryOrderStatus::Dispatching->value])->save();
+            $order->forceFill(['status' => DeliveryOrderStatus::SearchingForDriver->value])->save();
             $orderId = $order->id;
         });
 
@@ -321,7 +296,9 @@ final class DriverDispatchService
         return DeliveryAssignmentAttempt::query()
             ->where('driver_id', $driver->id)
             ->where('status', DeliveryAssignmentAttemptStatus::Open->value)
-            ->where('expires_at', '>', now())
+            ->where(function ($query): void {
+                $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
+            })
             ->latest('created_at')
             ->first();
     }
@@ -345,7 +322,7 @@ final class DriverDispatchService
         ?int &$redispatchOrderId,
         ?int &$redispatchDelaySeconds,
     ): void {
-        if ($this->shouldStopAfterNoCandidateRetries($order)) {
+        if ((bool) config('delivery.dispatch.stop_when_no_driver', false)) {
             $this->deliveryOrderService->markStopped($order, $reason);
 
             return;
@@ -353,40 +330,17 @@ final class DriverDispatchService
 
         $this->deliveryOrderService->recordStatusChange(
             order: $order,
-            from: DeliveryOrderStatus::Dispatching,
-            to: DeliveryOrderStatus::Dispatching,
+            from: DeliveryOrderStatus::tryFrom((string) $order->status),
+            to: DeliveryOrderStatus::SearchingForDriver,
             note: $reason,
         );
 
+        $order->forceFill(['status' => DeliveryOrderStatus::SearchingForDriver->value])->save();
         $redispatchOrderId = (int) $order->id;
-        $redispatchDelaySeconds = $this->noCandidateRetryDelaySeconds();
+        $redispatchDelaySeconds = max(1, (int) config('delivery.dispatch.no_candidate_retry_seconds', 60));
     }
 
-    private function shouldStopAfterNoCandidateRetries(DeliveryOrder $order): bool
-    {
-        $maxRetries = (int) config('delivery.dispatch.max_no_candidate_retries', 10);
-
-        if ($maxRetries < 0) {
-            return false;
-        }
-
-        $retryCount = $order->events()
-            ->where('to_status', DeliveryOrderStatus::Dispatching->value)
-            ->whereIn('note', [
-                self::NO_ELIGIBLE_DRIVERS_NOTE,
-                self::DRIVER_LOCATION_UNAVAILABLE_NOTE,
-            ])
-            ->count();
-
-        return $retryCount >= $maxRetries;
-    }
-
-    private function noCandidateRetryDelaySeconds(): int
-    {
-        return max(1, (int) config('delivery.dispatch.no_candidate_retry_seconds', 60));
-    }
-
-    private function selectNextCandidate(DeliveryOrder $order): ?DeliveryDriver
+    private function selectNextCandidate(DeliveryOrder $order): ?array
     {
         $staleCutoff = now()->subMinutes((int) config('delivery.dispatch.stale_location_minutes', 5));
         $maxRadiusKm = (float) config('delivery.dispatch.max_search_radius_km', 15);
@@ -395,49 +349,107 @@ final class DriverDispatchService
             ->whereIn('status', [
                 DeliveryAssignmentAttemptStatus::Rejected->value,
                 DeliveryAssignmentAttemptStatus::TimedOut->value,
+                DeliveryAssignmentAttemptStatus::Cancelled->value,
             ])
             ->pluck('driver_id')
             ->all();
 
-        /** @var Collection<int, DeliveryDriver> $drivers */
-        $drivers = DeliveryDriver::query()
+        $rows = DeliveryDriver::query()
             ->where('company_id', $order->company_id)
             ->where('is_active', true)
             ->where('is_suspended', false)
-            ->where('availability_status', DeliveryDriverAvailabilityStatus::Available->value)
-            ->where('last_seen_at', '>=', $staleCutoff)
             ->when($excludedDriverIds !== [], fn ($query) => $query->whereNotIn('id', $excludedDriverIds))
-            ->whereHas('locations', fn ($query) => $query->where('recorded_at', '>=', $staleCutoff))
-            ->get();
-
-        $ranked = $drivers
-            ->map(function (DeliveryDriver $driver) use ($order): ?array {
-                $latestLocation = $driver->locations()->latest('recorded_at')->first();
-
-                if (! $latestLocation instanceof DeliveryDriverLocation) {
-                    return null;
-                }
-
-                $distanceKm = $this->locationService->calculateHaversineDistance(
-                    (float) $latestLocation->latitude,
-                    (float) $latestLocation->longitude,
-                    (float) $order->pickup_latitude,
-                    (float) $order->pickup_longitude,
-                );
-
-                return [
-                    'driver' => $driver,
-                    'distanceKm' => $distanceKm,
-                ];
-            })
-            ->filter()
-            ->filter(fn (array $row): bool => $row['distanceKm'] <= $maxRadiusKm)
-            ->sortBy('distanceKm')
+            ->get()
+            ->reject(fn (DeliveryDriver $driver): bool => $this->driverHasActiveOrder($driver, (int) $order->id))
+            ->map(fn (DeliveryDriver $driver): array => $this->rankDriver($driver, $order, $staleCutoff, $maxRadiusKm))
+            ->sort($this->rowSorter())
             ->values();
 
-        $first = $ranked->first();
+        $online = $rows->first(fn (array $row): bool => $row['tier'] === 'online');
+        if ($online !== null) {
+            return $online;
+        }
 
-        return $first['driver'] ?? null;
+        $fallback = $rows->first();
+        if ($fallback !== null && (bool) config('delivery.dispatch.include_offline_fallback', true)) {
+            return $fallback;
+        }
+
+        return null;
+    }
+
+    private function rankDriver(DeliveryDriver $driver, DeliveryOrder $order, \Illuminate\Support\Carbon $staleCutoff, float $maxRadiusKm): array
+    {
+        $latestLocation = $driver->locations()->latest('recorded_at')->first();
+        $hasFreshSeen = $driver->last_seen_at !== null && $driver->last_seen_at->greaterThanOrEqualTo($staleCutoff);
+        $hasFreshLocation = $latestLocation instanceof DeliveryDriverLocation && $latestLocation->recorded_at !== null && $latestLocation->recorded_at->greaterThanOrEqualTo($staleCutoff);
+        $distanceKm = null;
+
+        if ($latestLocation instanceof DeliveryDriverLocation) {
+            $distanceKm = $this->locationService->calculateHaversineDistance(
+                (float) $latestLocation->latitude,
+                (float) $latestLocation->longitude,
+                (float) $order->pickup_latitude,
+                (float) $order->pickup_longitude,
+            );
+        }
+
+        $isAvailable = $driver->availability_status === DeliveryDriverAvailabilityStatus::Available->value;
+        $isOnlineMatch = $isAvailable && $hasFreshSeen && $hasFreshLocation && $distanceKm !== null && $distanceKm <= $maxRadiusKm;
+
+        return [
+            'driver' => $driver,
+            'tier' => $isOnlineMatch ? 'online' : 'fallback',
+            'tierRank' => $isOnlineMatch ? 0 : 1,
+            'distanceKm' => $distanceKm,
+            'lastSeenAt' => $driver->last_seen_at,
+            'trustScore' => (int) $driver->trust_score,
+            'openDisputesCount' => (int) $driver->open_disputes_count,
+        ];
+    }
+
+    private function rowSorter(): callable
+    {
+        return static function (array $a, array $b): int {
+            $tierCompare = $a['tierRank'] <=> $b['tierRank'];
+            if ($tierCompare !== 0) {
+                return $tierCompare;
+            }
+
+            $distanceA = $a['distanceKm'] ?? PHP_FLOAT_MAX;
+            $distanceB = $b['distanceKm'] ?? PHP_FLOAT_MAX;
+            $distanceCompare = $distanceA <=> $distanceB;
+            if ($distanceCompare !== 0) {
+                return $distanceCompare;
+            }
+
+            $lastSeenA = $a['lastSeenAt']?->getTimestamp() ?? 0;
+            $lastSeenB = $b['lastSeenAt']?->getTimestamp() ?? 0;
+            $lastSeenCompare = $lastSeenB <=> $lastSeenA;
+            if ($lastSeenCompare !== 0) {
+                return $lastSeenCompare;
+            }
+
+            $trustCompare = $b['trustScore'] <=> $a['trustScore'];
+            if ($trustCompare !== 0) {
+                return $trustCompare;
+            }
+
+            return $a['openDisputesCount'] <=> $b['openDisputesCount'];
+        };
+    }
+
+    private function offerExpiresAt(string $tier, \Illuminate\Support\Carbon $offeredAt): ?\Illuminate\Support\Carbon
+    {
+        $seconds = $tier === 'fallback'
+            ? (int) config('delivery.dispatch.offline_offer_timeout_seconds', 0)
+            : (int) config('delivery.dispatch.offer_timeout_seconds', 30);
+
+        if ($seconds <= 0) {
+            return null;
+        }
+
+        return $offeredAt->copy()->addSeconds($seconds);
     }
 
     private function driverHasActiveOrder(DeliveryDriver $driver, int $excludingOrderId): bool
