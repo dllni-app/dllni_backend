@@ -31,24 +31,60 @@ use Modules\Delivery\Models\DeliveryOrderEvent;
 
 final class MandoubDeliveryTestUserSeeder extends Seeder
 {
-    private const TEST_EMAIL = 'mandoub.test@dllni.sy';
-    private const TEST_PHONE = '+963900000001';
     private const TEST_PASSWORD = 'secret123';
+
+    /**
+     * @var array<string, array{email: string, phone: string, name: string, first_name: string, vehicle_type: string, plate_number: string}>
+     */
+    private const TEST_DRIVERS = [
+        'primary' => [
+            'email' => 'mandoub.test@dllni.sy',
+            'phone' => '+963900000001',
+            'name' => 'مندوب اختبار',
+            'first_name' => 'مندوب الاختبار',
+            'vehicle_type' => 'motorbike',
+            'plate_number' => 'TEST-9001',
+        ],
+        'nearby' => [
+            'email' => 'mandoub.nearby@dllni.sy',
+            'phone' => '+963900000002',
+            'name' => 'مندوب قريب',
+            'first_name' => 'مندوب قريب',
+            'vehicle_type' => 'motorbike',
+            'plate_number' => 'TEST-9002',
+        ],
+        'fallback' => [
+            'email' => 'mandoub.fallback@dllni.sy',
+            'phone' => '+963900000003',
+            'name' => 'مندوب بديل',
+            'first_name' => 'مندوب بديل',
+            'vehicle_type' => 'car',
+            'plate_number' => 'TEST-9003',
+        ],
+        'offline' => [
+            'email' => 'mandoub.offline@dllni.sy',
+            'phone' => '+963900000004',
+            'name' => 'مندوب غير متصل',
+            'first_name' => 'مندوب غير متصل',
+            'vehicle_type' => 'motorbike',
+            'plate_number' => 'TEST-9004',
+        ],
+    ];
 
     public function run(): void
     {
         $owner = $this->ownerUser();
         $company = $this->company($owner);
-        $user = $this->testUser();
-        $driver = $this->driver($company, $user);
-        $orders = $this->orders($company, $owner, $driver);
+        $users = $this->testUsers();
+        $drivers = $this->drivers($company, $users);
+        $orders = $this->orders($company, $owner, $drivers['primary']);
 
-        $this->assignmentAttempts($driver, $orders);
-        $this->orderEvents($owner, $driver, $orders);
-        $this->locations($driver);
-        $this->financialAccount($driver, $owner, $orders);
-        $this->disputeAndTrustLog($driver, $orders['cancelled']);
-        $this->notifications($driver, $orders);
+        $this->assignmentAttempts($drivers['primary'], $drivers['nearby'], $orders);
+        $this->orderEvents($owner, $drivers['primary'], $drivers['nearby'], $orders);
+        $this->locations($drivers);
+        $this->financialAccounts($drivers, $owner, $orders);
+        $this->disputeAndTrustLog($drivers['primary'], $orders['cancelled']);
+        $this->notifications($drivers['primary'], $drivers['nearby'], $orders);
     }
 
     private function ownerUser(): User
@@ -86,41 +122,88 @@ final class MandoubDeliveryTestUserSeeder extends Seeder
         )->fresh();
     }
 
-    private function testUser(): User
+    /** @return array<string, User> */
+    private function testUsers(): array
     {
-        return User::updateOrCreate(
-            ['email' => self::TEST_EMAIL],
-            [
-                'name' => 'مندوب اختبار',
-                'phone' => self::TEST_PHONE,
-                'module_type' => UserModuleType::DeliveryDriver->value,
-                'password' => bcrypt(self::TEST_PASSWORD),
-                'email_verified_at' => now(),
-                'phone_verified_at' => now(),
-            ],
-        )->fresh();
+        $users = [];
+
+        foreach (self::TEST_DRIVERS as $key => $profile) {
+            $users[$key] = User::updateOrCreate(
+                ['email' => $profile['email']],
+                [
+                    'name' => $profile['name'],
+                    'phone' => $profile['phone'],
+                    'module_type' => UserModuleType::DeliveryDriver->value,
+                    'password' => bcrypt(self::TEST_PASSWORD),
+                    'email_verified_at' => now(),
+                    'phone_verified_at' => now(),
+                ],
+            )->fresh();
+        }
+
+        return $users;
     }
 
-    private function driver(DeliveryCompany $company, User $user): DeliveryDriver
+    /**
+     * @param  array<string, User>  $users
+     * @return array<string, DeliveryDriver>
+     */
+    private function drivers(DeliveryCompany $company, array $users): array
     {
-        return DeliveryDriver::updateOrCreate(
-            ['user_id' => $user->id],
-            [
-                'company_id' => $company->id,
-                'first_name' => 'مندوب الاختبار',
-                'phone' => self::TEST_PHONE,
-                'vehicle_type' => 'motorbike',
-                'plate_number' => 'TEST-9001',
-                'availability_status' => DeliveryDriverAvailabilityStatus::Available->value,
-                'is_active' => true,
-                'is_suspended' => false,
-                'suspended_until' => null,
-                'suspension_reason' => null,
+        $runtime = [
+            'primary' => [
+                'availability_status' => DeliveryDriverAvailabilityStatus::Busy->value,
                 'trust_score' => 98,
                 'open_disputes_count' => 1,
                 'last_seen_at' => now()->subMinute(),
             ],
-        )->fresh();
+            'nearby' => [
+                'availability_status' => DeliveryDriverAvailabilityStatus::Available->value,
+                'trust_score' => 100,
+                'open_disputes_count' => 0,
+                'last_seen_at' => now()->subMinute(),
+            ],
+            'fallback' => [
+                'availability_status' => DeliveryDriverAvailabilityStatus::Available->value,
+                'trust_score' => 95,
+                'open_disputes_count' => 0,
+                'last_seen_at' => now()->subMinutes(2),
+            ],
+            'offline' => [
+                'availability_status' => DeliveryDriverAvailabilityStatus::Offline->value,
+                'trust_score' => 82,
+                'open_disputes_count' => 0,
+                'last_seen_at' => now()->subHours(2),
+            ],
+        ];
+
+        $drivers = [];
+
+        foreach ($users as $key => $user) {
+            $profile = self::TEST_DRIVERS[$key];
+            $state = $runtime[$key];
+
+            $drivers[$key] = DeliveryDriver::updateOrCreate(
+                ['user_id' => $user->id],
+                [
+                    'company_id' => $company->id,
+                    'first_name' => $profile['first_name'],
+                    'phone' => $profile['phone'],
+                    'vehicle_type' => $profile['vehicle_type'],
+                    'plate_number' => $profile['plate_number'],
+                    'availability_status' => $state['availability_status'],
+                    'is_active' => true,
+                    'is_suspended' => false,
+                    'suspended_until' => null,
+                    'suspension_reason' => null,
+                    'trust_score' => $state['trust_score'],
+                    'open_disputes_count' => $state['open_disputes_count'],
+                    'last_seen_at' => $state['last_seen_at'],
+                ],
+            )->fresh();
+        }
+
+        return $drivers;
     }
 
     /** @return array<string, DeliveryOrder> */
@@ -187,11 +270,12 @@ final class MandoubDeliveryTestUserSeeder extends Seeder
     }
 
     /** @param array<string, DeliveryOrder> $orders */
-    private function assignmentAttempts(DeliveryDriver $driver, array $orders): void
+    private function assignmentAttempts(DeliveryDriver $primaryDriver, DeliveryDriver $offerDriver, array $orders): void
     {
-        $this->attempt($orders['active'], $driver, DeliveryAssignmentAttemptStatus::Accepted, 1.1, now()->subHour(), now()->subMinutes(54));
-        $this->attempt($orders['completed'], $driver, DeliveryAssignmentAttemptStatus::Accepted, 1.8, now()->subHours(5), now()->subHours(5)->addMinute());
-        $this->attempt($orders['offer'], $driver, DeliveryAssignmentAttemptStatus::Open, 0.9, now()->subMinute(), null, now()->addMinutes(10));
+        $this->attempt($orders['active'], $primaryDriver, DeliveryAssignmentAttemptStatus::Accepted, 1.1, now()->subHour(), now()->subMinutes(54));
+        $this->attempt($orders['completed'], $primaryDriver, DeliveryAssignmentAttemptStatus::Accepted, 1.8, now()->subHours(5), now()->subHours(5)->addMinute());
+        $this->attempt($orders['cancelled'], $primaryDriver, DeliveryAssignmentAttemptStatus::Accepted, 2.2, now()->subDay(), now()->subDay()->addMinutes(2));
+        $this->attempt($orders['offer'], $offerDriver, DeliveryAssignmentAttemptStatus::Open, 0.9, now()->subMinute(), null, now()->addMinutes(10));
     }
 
     private function attempt(DeliveryOrder $order, DeliveryDriver $driver, DeliveryAssignmentAttemptStatus $status, float $distance, Carbon $offeredAt, ?Carbon $respondedAt, ?Carbon $expiresAt = null): void
@@ -210,9 +294,9 @@ final class MandoubDeliveryTestUserSeeder extends Seeder
     }
 
     /** @param array<string, DeliveryOrder> $orders */
-    private function orderEvents(User $owner, DeliveryDriver $driver, array $orders): void
+    private function orderEvents(User $owner, DeliveryDriver $primaryDriver, DeliveryDriver $offerDriver, array $orders): void
     {
-        foreach ($orders as $order) {
+        foreach ($orders as $key => $order) {
             DeliveryOrderEvent::updateOrCreate(
                 ['order_id' => $order->id, 'to_status' => DeliveryOrderStatus::New->value],
                 ['actor_type' => User::class, 'actor_id' => $owner->id, 'from_status' => null, 'note' => 'Mandoub test order created', 'payload' => ['seed' => 'mandoub_test_user']],
@@ -220,35 +304,66 @@ final class MandoubDeliveryTestUserSeeder extends Seeder
 
             DeliveryOrderEvent::updateOrCreate(
                 ['order_id' => $order->id, 'to_status' => $order->status],
-                ['actor_type' => DeliveryDriver::class, 'actor_id' => $order->driver_id ?? $driver->id, 'from_status' => $order->driver_id !== null ? DeliveryOrderStatus::Accepted->value : DeliveryOrderStatus::Dispatching->value, 'note' => 'Mandoub test order status '.$order->status, 'payload' => ['seed' => 'mandoub_test_user', 'currentStatus' => $order->status]],
+                [
+                    'actor_type' => DeliveryDriver::class,
+                    'actor_id' => $order->driver_id ?? ($key === 'offer' ? $offerDriver->id : $primaryDriver->id),
+                    'from_status' => $order->driver_id !== null ? DeliveryOrderStatus::Accepted->value : DeliveryOrderStatus::Dispatching->value,
+                    'note' => 'Mandoub test order status '.$order->status,
+                    'payload' => ['seed' => 'mandoub_test_user', 'currentStatus' => $order->status],
+                ],
             );
         }
     }
 
-    private function locations(DeliveryDriver $driver): void
+    /** @param array<string, DeliveryDriver> $drivers */
+    private function locations(array $drivers): void
     {
-        DeliveryDriverLocation::updateOrCreate(
-            ['driver_id' => $driver->id, 'recorded_at' => now()->subMinutes(2)->startOfMinute()],
-            ['latitude' => 36.20690000, 'longitude' => 37.13890000, 'accuracy' => 3.5, 'speed' => 18.0, 'heading' => 185],
-        );
+        $rows = [
+            'primary' => ['recorded_at' => now()->subMinutes(2)->startOfMinute(), 'latitude' => 36.20690000, 'longitude' => 37.13890000, 'accuracy' => 3.5, 'speed' => 18.0, 'heading' => 185],
+            'nearby' => ['recorded_at' => now()->subMinute()->startOfMinute(), 'latitude' => 36.20230000, 'longitude' => 37.13440000, 'accuracy' => 2.8, 'speed' => 12.0, 'heading' => 90],
+            'fallback' => ['recorded_at' => now()->subMinutes(2)->startOfMinute(), 'latitude' => 36.21100000, 'longitude' => 37.14200000, 'accuracy' => 4.0, 'speed' => 10.0, 'heading' => 75],
+            'offline' => ['recorded_at' => now()->subHours(2)->startOfMinute(), 'latitude' => 36.25000000, 'longitude' => 37.18000000, 'accuracy' => 8.0, 'speed' => 0.0, 'heading' => 0],
+        ];
+
+        foreach ($rows as $key => $row) {
+            DeliveryDriverLocation::updateOrCreate(
+                ['driver_id' => $drivers[$key]->id, 'recorded_at' => $row['recorded_at']],
+                ['latitude' => $row['latitude'], 'longitude' => $row['longitude'], 'accuracy' => $row['accuracy'], 'speed' => $row['speed'], 'heading' => $row['heading']],
+            );
+        }
     }
 
-    /** @param array<string, DeliveryOrder> $orders */
-    private function financialAccount(DeliveryDriver $driver, User $owner, array $orders): void
+    /**
+     * @param array<string, DeliveryDriver> $drivers
+     * @param array<string, DeliveryOrder> $orders
+     */
+    private function financialAccounts(array $drivers, User $owner, array $orders): void
     {
-        $account = DeliveryFinancialAccount::updateOrCreate(
-            ['owner_type' => DeliveryDriver::class, 'owner_id' => $driver->id, 'currency' => 'SYP'],
-            ['current_balance' => 87500, 'financial_limit' => 150000, 'is_suspended' => false, 'suspension_reason' => null, 'suspended_at' => null],
-        );
-
-        foreach ([
-            [DeliveryFinancialTransactionType::OrderFeeDebit->value, DeliveryFinancialDirection::Debit->value, 12500, 100000, 87500, $orders['completed']->id, 'Seed completed order fee'],
-            [DeliveryFinancialTransactionType::CollectionCredit->value, DeliveryFinancialDirection::Credit->value, 15000, 72500, 87500, $orders['active']->id, 'Seed active order collection'],
-        ] as $index => [$type, $direction, $amount, $before, $after, $referenceId, $note]) {
-            DeliveryFinancialTransaction::updateOrCreate(
-                ['account_id' => $account->id, 'transaction_type' => $type, 'reference_id' => $referenceId, 'amount' => $amount],
-                ['direction' => $direction, 'balance_before' => $before, 'balance_after' => $after, 'reference_type' => DeliveryOrder::class, 'note' => $note, 'metadata' => ['seed' => 'mandoub_test_user', 'index' => $index + 1], 'created_by_user_id' => $owner->id],
+        foreach ($drivers as $key => $driver) {
+            $account = DeliveryFinancialAccount::updateOrCreate(
+                ['owner_type' => DeliveryDriver::class, 'owner_id' => $driver->id, 'currency' => 'SYP'],
+                [
+                    'current_balance' => $key === 'primary' ? 87500 : 0,
+                    'financial_limit' => 150000,
+                    'is_suspended' => false,
+                    'suspension_reason' => null,
+                    'suspended_at' => null,
+                ],
             );
+
+            if ($key !== 'primary') {
+                continue;
+            }
+
+            foreach ([
+                [DeliveryFinancialTransactionType::OrderFeeDebit->value, DeliveryFinancialDirection::Debit->value, 12500, 100000, 87500, $orders['completed']->id, 'Seed completed order fee'],
+                [DeliveryFinancialTransactionType::CollectionCredit->value, DeliveryFinancialDirection::Credit->value, 15000, 72500, 87500, $orders['active']->id, 'Seed active order collection'],
+            ] as $index => [$type, $direction, $amount, $before, $after, $referenceId, $note]) {
+                DeliveryFinancialTransaction::updateOrCreate(
+                    ['account_id' => $account->id, 'transaction_type' => $type, 'reference_id' => $referenceId, 'amount' => $amount],
+                    ['direction' => $direction, 'balance_before' => $before, 'balance_after' => $after, 'reference_type' => DeliveryOrder::class, 'note' => $note, 'metadata' => ['seed' => 'mandoub_test_user', 'index' => $index + 1], 'created_by_user_id' => $owner->id],
+                );
+            }
         }
     }
 
@@ -266,22 +381,23 @@ final class MandoubDeliveryTestUserSeeder extends Seeder
     }
 
     /** @param array<string, DeliveryOrder> $orders */
-    private function notifications(DeliveryDriver $driver, array $orders): void
+    private function notifications(DeliveryDriver $primaryDriver, DeliveryDriver $offerDriver, array $orders): void
     {
-        foreach ([
-            ['title' => 'طلب توصيل جديد', 'body' => 'يوجد عرض توصيل جديد بانتظار قرارك.', 'order' => $orders['offer'], 'read' => false],
-            ['title' => 'طلب نشط', 'body' => 'لديك طلب نشط جاهز للبدء.', 'order' => $orders['active'], 'read' => false],
-            ['title' => 'تم إكمال طلب', 'body' => 'تم تسجيل طلب مكتمل في سجل الحركة.', 'order' => $orders['completed'], 'read' => true],
-        ] as $index => $notification) {
-            DB::table('notifications')->updateOrInsert(
-                [
-                    'notifiable_type' => User::class,
-                    'notifiable_id' => $driver->user_id,
-                    'type' => \Modules\Delivery\Notifications\DeliveryCanonicalNotification::class,
-                    'data' => json_encode(['module' => 'delivery', 'type' => 'delivery_order_update', 'category' => 'orders', 'priority' => $index === 0 ? 'high' : 'normal', 'title' => $notification['title'], 'body' => $notification['body'], 'message' => $notification['body'], 'orderId' => $notification['order']->id], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                ],
-                ['id' => (string) Str::uuid(), 'read_at' => $notification['read'] ? now()->subHour() : null, 'created_at' => now()->subMinutes(20 - ($index * 5)), 'updated_at' => now()->subMinutes(20 - ($index * 5))],
-            );
-        }
+        $this->notification($offerDriver, 'طلب توصيل جديد', 'يوجد عرض توصيل جديد بانتظار قرارك.', $orders['offer'], false, 0);
+        $this->notification($primaryDriver, 'طلب نشط', 'لديك طلب نشط جاهز للبدء.', $orders['active'], false, 1);
+        $this->notification($primaryDriver, 'تم إكمال طلب', 'تم تسجيل طلب مكتمل في سجل الحركة.', $orders['completed'], true, 2);
+    }
+
+    private function notification(DeliveryDriver $driver, string $title, string $body, DeliveryOrder $order, bool $read, int $index): void
+    {
+        DB::table('notifications')->updateOrInsert(
+            [
+                'notifiable_type' => User::class,
+                'notifiable_id' => $driver->user_id,
+                'type' => \Modules\Delivery\Notifications\DeliveryCanonicalNotification::class,
+                'data' => json_encode(['module' => 'delivery', 'type' => 'delivery_order_update', 'category' => 'orders', 'priority' => $index === 0 ? 'high' : 'normal', 'title' => $title, 'body' => $body, 'message' => $body, 'orderId' => $order->id], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ],
+            ['id' => (string) Str::uuid(), 'read_at' => $read ? now()->subHour() : null, 'created_at' => now()->subMinutes(20 - ($index * 5)), 'updated_at' => now()->subMinutes(20 - ($index * 5))],
+        );
     }
 }
