@@ -108,6 +108,7 @@ final class CleaningBookingController
         if (! in_array($cleaning_booking->status, [
             CleaningBookingStatus::WorkerAssigned,
             CleaningBookingStatus::AwaitingStartVerification,
+            CleaningBookingStatus::AwaitingWorkerStartConfirmation,
         ], true)) {
             throw ValidationException::withMessages([
                 'status' => ['Security code is only available for bookings ready to start.'],
