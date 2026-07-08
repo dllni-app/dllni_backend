@@ -7,6 +7,8 @@ namespace App\Filament\Resources\Workers\Pages\Concerns;
 use App\Enums\UserModuleType;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
@@ -20,6 +22,7 @@ trait SyncsWorkerLinkedUser
             $model = static::getModel();
 
             $data['user_id'] = $user->getKey();
+            unset($data['avatar_upload']);
 
             return $model::query()->create($data);
         });
@@ -49,6 +52,49 @@ trait SyncsWorkerLinkedUser
         }
 
         $user->forceFill($updates)->saveQuietly();
+    }
+
+    protected function syncWorkerAvatarFromForm(): void
+    {
+        $avatar = $this->workerAvatarFromForm();
+
+        if ($avatar === null) {
+            return;
+        }
+
+        $this->record->clearMediaCollection('avatar');
+
+        if ($avatar instanceof UploadedFile) {
+            $this->record->addMedia($avatar)->toMediaCollection('avatar');
+
+            return;
+        }
+
+        if (is_object($avatar) && method_exists($avatar, 'getRealPath')) {
+            $realPath = $avatar->getRealPath();
+
+            if (! is_string($realPath) || $realPath === '') {
+                return;
+            }
+
+            $mediaAdder = $this->record->addMedia($realPath);
+
+            if (method_exists($avatar, 'getClientOriginalName')) {
+                $originalName = $avatar->getClientOriginalName();
+
+                if (is_string($originalName) && $originalName !== '') {
+                    $mediaAdder->usingFileName($originalName);
+                }
+            }
+
+            $mediaAdder->toMediaCollection('avatar');
+
+            return;
+        }
+
+        if (is_string($avatar) && $avatar !== '') {
+            $this->record->addMediaFromDisk($avatar, 'public')->toMediaCollection('avatar');
+        }
     }
 
     protected function mutateLinkedUserFormDataBeforeFill(array $data): array
@@ -102,5 +148,16 @@ trait SyncsWorkerLinkedUser
     private function accountSecretFromForm(): mixed
     {
         return $this->data['user_'.'password'] ?? null;
+    }
+
+    private function workerAvatarFromForm(): mixed
+    {
+        $avatar = $this->data['avatar_upload'] ?? null;
+
+        if (is_array($avatar)) {
+            return Arr::first($avatar);
+        }
+
+        return $avatar;
     }
 }

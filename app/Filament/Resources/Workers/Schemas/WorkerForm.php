@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\Worker;
 use Closure;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -43,6 +44,19 @@ final class WorkerForm
                         DatePicker::make('birthday')
                             ->label(__('cleaning_admin.workers.fields.birthday'))
                             ->native(false),
+                        FileUpload::make('avatar_upload')
+                            ->label(app()->isLocale('ar') ? 'صورة الملف الشخصي' : 'Profile image')
+                            ->helperText(app()->isLocale('ar')
+                                ? 'اختياري: ارفع صورة واضحة للعامل. سيتم حفظها كصورة الملف الشخصي.'
+                                : 'Optional: upload a clear worker photo. It will be saved as the profile image.')
+                            ->image()
+                            ->imageEditor()
+                            ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+                            ->maxSize(4096)
+                            ->storeFiles(false)
+                            ->dehydrated(false)
+                            ->visible(fn (string $operation): bool => $operation === 'create')
+                            ->columnSpanFull(),
                         Textarea::make('bio')
                             ->label(__('cleaning_admin.workers.fields.bio')),
                         Toggle::make('is_active')
