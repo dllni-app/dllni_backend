@@ -7,9 +7,9 @@ namespace App\Filament\Resources\CleaningWorkers\Pages;
 use App\Enums\UserModuleType;
 use App\Filament\Resources\CleaningWorkers\CleaningWorkerResource;
 use App\Filament\Resources\Workers\Pages\Concerns\SyncsWorkerLinkedUser;
+use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Models\CleaningNeighborhood;
-use Filament\Resources\Pages\CreateRecord;
 
 final class CreateCleaningWorker extends CreateRecord
 {
