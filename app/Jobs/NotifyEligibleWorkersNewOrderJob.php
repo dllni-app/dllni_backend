@@ -220,7 +220,17 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
             return;
         }
 
-        $worker->user->notify(new NewOrderRequestNotification($booking));
+        try {
+            $worker->user->notify(new NewOrderRequestNotification($booking));
+        } catch (Throwable $exception) {
+            Log::warning('Cleaning new order notification failed.', [
+                'booking_id' => $booking->id,
+                'worker_id' => $worker->id,
+                'user_id' => $worker->user->id,
+                'message' => $exception->getMessage(),
+            ]);
+        }
+
         $this->broadcastNewOrderToWorker($worker, $booking);
     }
 
