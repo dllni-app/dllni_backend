@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Arr;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingRoom;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
@@ -21,11 +22,16 @@ final class CleaningBookingResource extends JsonResource
     public function toArray(Request $request): array
     {
         $details = is_array($this->property_details) ? $this->property_details : [];
-        $orderStatus = $this->status?->value ?? $this->status;
-        $myAssignment = $this->serializeMyAssignment($request);
+        $globalOrderStatus = $this->status?->value ?? $this->status;
+        $myAssignmentModel = $this->currentWorkerAssignment($request);
+        $myAssignment = $myAssignmentModel instanceof CleaningBookingWorkerAssignment
+            ? $this->serializeWorkerAssignment($myAssignmentModel)
+            : null;
+        $orderStatus = $this->responseStatusForRequest($myAssignmentModel, (string) $globalOrderStatus);
+        $workerOrderStatus = $this->workerOrderStatus($myAssignmentModel, (string) $globalOrderStatus);
         $team = $this->workerAcceptanceSummary();
         $address = $this->addressPayload($details);
-        $workTimer = $this->workTimerPayload((string) $orderStatus);
+        $workTimer = $this->workTimerPayload((string) $orderStatus, $myAssignmentModel);
         $finishedServices = $this->finishedSnapshot($this->worker_finished_cleaning_services, 'service');
         $finishedRooms = $this->finishedSnapshot($this->worker_finished_property_rooms, 'room');
         $urgency = app(CleaningOrderUrgencyService::class);
@@ -56,10 +62,12 @@ final class CleaningBookingResource extends JsonResource
             'urgency_prefix' => $isHotOrder ? CleaningOrderUrgencyService::HOT_ORDER_PREFIX : null,
             'status' => $orderStatus,
             'statusLabel' => $this->label($orderStatus),
-            'order_status' => $orderStatus,
-            'order_status_label' => $this->label($orderStatus),
-            'worker_order_status' => $this->workerOrderStatus($myAssignment, (string) $orderStatus),
-            'worker_order_status_label' => $this->label($this->workerOrderStatus($myAssignment, (string) $orderStatus)),
+            'globalStatus' => $globalOrderStatus,
+            'global_status' => $globalOrderStatus,
+            'order_status' => $globalOrderStatus,
+            'order_status_label' => $this->label($globalOrderStatus),
+            'worker_order_status' => $workerOrderStatus,
+            'worker_order_status_label' => $this->label($workerOrderStatus),
             'type' => $this->property_type === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE ? 'events' : 'cleaning',
             'required_workers_count' => $team['required'],
             'accepted_workers_count' => $team['accepted'],
@@ -101,9 +109,9 @@ final class CleaningBookingResource extends JsonResource
             'totalPrice' => (float) $this->total_price,
             'currency' => (string) config('app.currency', 'SYP'),
             'termsAccepted' => $this->terms_accepted,
-            'workStartedAt' => $this->work_started_at?->toDateTimeString(),
-            'workFinishedAt' => $this->work_finished_at?->toDateTimeString(),
-            'workerCompletionMessage' => $this->worker_completion_message,
+            'workStartedAt' => $this->workerTimestamp($myAssignmentModel, 'work_started_at', $this->work_started_at, 'dateTime'),
+            'workFinishedAt' => $this->workerTimestamp($myAssignmentModel, 'work_finished_at', $this->work_finished_at, 'dateTime'),
+            'workerCompletionMessage' => $myAssignmentModel?->worker_completion_message ?? $this->worker_completion_message,
             'workerFinishedCleaningServices' => $finishedServices,
             'worker_finished_cleaning_services' => $finishedServices,
             'workerFinishedPropertyRooms' => $finishedRooms,
@@ -111,8 +119,8 @@ final class CleaningBookingResource extends JsonResource
             'customerCompletionRejectionMessage' => $this->customer_completion_rejection_message,
             'completionRejectedAt' => $this->completion_rejected_at?->toIso8601String(),
             'completionRequest' => $this->completionRequestPayload($finishedServices, $finishedRooms),
-            'startedTravelAt' => $this->started_travel_at?->toDateTimeString(),
-            'arrivedAt' => $this->arrived_at?->toDateTimeString(),
+            'startedTravelAt' => $this->workerTimestamp($myAssignmentModel, 'started_travel_at', $this->started_travel_at, 'dateTime'),
+            'arrivedAt' => $this->workerTimestamp($myAssignmentModel, 'arrived_at', $this->arrived_at, 'dateTime'),
             'customerConfirmedAt' => $this->customer_confirmed_at?->toDateTimeString(),
             'cancelledAt' => $this->cancelled_at?->toDateTimeString(),
             'cancellationReason' => $this->cancellation_reason,
@@ -211,7 +219,28 @@ final class CleaningBookingResource extends JsonResource
     {
         $worker = $assignment->relationLoaded('worker') ? $assignment->worker : null;
         $roomIds = $this->relationLoaded('rooms') ? $this->rooms->where('assigned_worker_id', $assignment->worker_id)->pluck('id')->values()->all() : [];
-        return ['id' => $assignment->id, 'workerId' => $assignment->worker_id, 'status' => $assignment->status?->value ?? $assignment->status, 'statusLabel' => $this->label($assignment->status?->value ?? $assignment->status), 'acceptedAt' => $assignment->accepted_at?->toIso8601String(), 'startApprovedAt' => $assignment->start_approved_at?->toIso8601String(), 'roomCount' => (int) $assignment->room_count, 'roomsWeight' => (float) $assignment->rooms_weight, 'serviceShareAmount' => (float) $assignment->service_share_amount, 'travelFee' => (float) $assignment->travel_fee, 'adminMarginAmount' => (float) $assignment->admin_margin_amount, 'workerAmount' => (float) $assignment->worker_amount, 'currency' => $assignment->currency, 'roomIds' => $roomIds, 'worker' => $worker ? $this->serializeWorker($worker) : null];
+        return [
+            'id' => $assignment->id,
+            'workerId' => $assignment->worker_id,
+            'status' => $this->assignmentStatus($assignment),
+            'statusLabel' => $this->label($this->assignmentStatus($assignment)),
+            'acceptedAt' => $assignment->accepted_at?->toIso8601String(),
+            'startedTravelAt' => $assignment->started_travel_at?->toIso8601String(),
+            'arrivedAt' => $assignment->arrived_at?->toIso8601String(),
+            'startApprovedAt' => $assignment->start_approved_at?->toIso8601String(),
+            'workStartedAt' => $assignment->work_started_at?->toIso8601String(),
+            'workFinishedAt' => $assignment->work_finished_at?->toIso8601String(),
+            'workerCompletionMessage' => $assignment->worker_completion_message,
+            'roomCount' => (int) $assignment->room_count,
+            'roomsWeight' => (float) $assignment->rooms_weight,
+            'serviceShareAmount' => (float) $assignment->service_share_amount,
+            'travelFee' => (float) $assignment->travel_fee,
+            'adminMarginAmount' => (float) $assignment->admin_margin_amount,
+            'workerAmount' => (float) $assignment->worker_amount,
+            'currency' => $assignment->currency,
+            'roomIds' => $roomIds,
+            'worker' => $worker ? $this->serializeWorker($worker) : null,
+        ];
     }
 
     private function serializeRoomAssignment(CleaningBookingRoom $room): array
@@ -225,12 +254,12 @@ final class CleaningBookingResource extends JsonResource
         return $this->rooms->groupBy('planned_worker_slot')->filter(fn ($_, $slot): bool => $slot !== '')->map(fn ($rooms, $slot): array => ['workerSlot' => (int) $slot, 'preferredWorkerId' => $rooms->first()?->planned_preferred_worker_id, 'roomsWeight' => round((float) $rooms->sum('weight'), 2), 'rooms' => $rooms->map(fn ($room): array => ['roomKey' => $room->room_key, 'roomType' => $room->room_type, 'roomTypeLabel' => $this->label($room->room_type), 'roomSize' => $room->room_size, 'roomSizeLabel' => $this->label($room->room_size)])->values()->all()])->values()->all();
     }
 
-    private function serializeMyAssignment(Request $request): ?array
+    private function currentWorkerAssignment(Request $request): ?CleaningBookingWorkerAssignment
     {
         $workerId = $request->user()?->worker?->id;
         if ($workerId === null) return null;
         $assignment = $this->relationLoaded('workerAssignments') ? $this->workerAssignments->firstWhere('worker_id', $workerId) : $this->workerAssignments()->where('worker_id', $workerId)->first();
-        return $assignment instanceof CleaningBookingWorkerAssignment ? $this->serializeWorkerAssignment($assignment) : null;
+        return $assignment instanceof CleaningBookingWorkerAssignment ? $assignment : null;
     }
 
     private function completionRequestPayload(array $services, array $rooms): array
@@ -240,9 +269,53 @@ final class CleaningBookingResource extends JsonResource
         return ['isAwaitingCustomerConfirmation' => $awaiting, 'message' => $this->worker_completion_message, 'requestedAt' => $this->work_finished_at?->toIso8601String(), 'expiresAt' => $awaiting && $this->work_finished_at !== null ? $this->work_finished_at->copy()->addMinutes(30)->toIso8601String() : null, 'finishedCleaningServices' => $services, 'finished_cleaning_services' => $services, 'finishedPropertyRooms' => $rooms, 'finished_property_rooms' => $rooms, 'actions' => ['canConfirm' => $awaiting, 'canReject' => $awaiting, 'canRequestExtension' => $awaiting]];
     }
 
-    private function workerOrderStatus(?array $myAssignment, string $status): string
+    private function workerOrderStatus(?CleaningBookingWorkerAssignment $assignment, string $globalStatus): string
     {
-        return in_array($status, ['cancelled', 'completed', 'in_progress', 'awaiting_customer_completion', 'time_extension_requested'], true) ? $status : (string) ($myAssignment['status'] ?? $status);
+        if (in_array($globalStatus, [
+            CleaningBookingStatus::Cancelled->value,
+            CleaningBookingStatus::Completed->value,
+            CleaningBookingStatus::UnderDispute->value,
+        ], true)) {
+            return $globalStatus;
+        }
+
+        return $assignment instanceof CleaningBookingWorkerAssignment ? $this->assignmentStatus($assignment) : $globalStatus;
+    }
+
+    private function responseStatusForRequest(?CleaningBookingWorkerAssignment $assignment, string $globalStatus): string
+    {
+        if (! $assignment instanceof CleaningBookingWorkerAssignment) {
+            return $globalStatus;
+        }
+
+        if (in_array($globalStatus, [
+            CleaningBookingStatus::Cancelled->value,
+            CleaningBookingStatus::Completed->value,
+            CleaningBookingStatus::UnderDispute->value,
+        ], true)) {
+            return $globalStatus;
+        }
+
+        return match ($this->assignmentStatus($assignment)) {
+            CleaningBookingWorkerAssignmentStatus::AwaitingStartVerification->value => $assignment->arrived_at !== null
+                ? CleaningBookingStatus::AwaitingStartVerification->value
+                : CleaningBookingStatus::WorkerAssigned->value,
+            CleaningBookingWorkerAssignmentStatus::StartApproved->value => CleaningBookingStatus::AwaitingWorkerStartConfirmation->value,
+            CleaningBookingWorkerAssignmentStatus::InProgress->value => CleaningBookingStatus::InProgress->value,
+            CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion->value => CleaningBookingStatus::AwaitingCustomerCompletion->value,
+            CleaningBookingWorkerAssignmentStatus::TimeExtensionRequested->value => CleaningBookingStatus::TimeExtensionRequested->value,
+            CleaningBookingWorkerAssignmentStatus::Completed->value => CleaningBookingStatus::Completed->value,
+            default => $globalStatus === CleaningBookingStatus::Pending->value
+                ? CleaningBookingStatus::Pending->value
+                : CleaningBookingStatus::WorkerAssigned->value,
+        };
+    }
+
+    private function assignmentStatus(CleaningBookingWorkerAssignment $assignment): string
+    {
+        return $assignment->status instanceof CleaningBookingWorkerAssignmentStatus
+            ? $assignment->status->value
+            : (string) $assignment->status;
     }
 
     private function label(mixed $value): ?string
@@ -251,14 +324,26 @@ final class CleaningBookingResource extends JsonResource
         return str_replace('_', ' ', (string) $value);
     }
 
-    private function workTimerPayload(string $status): array
+    private function workerTimestamp(?CleaningBookingWorkerAssignment $assignment, string $field, mixed $fallback, string $format): ?string
     {
-        $start = $this->work_started_at ?? $this->arrived_at;
+        $value = $assignment instanceof CleaningBookingWorkerAssignment ? $assignment->{$field} : null;
+        $value ??= $fallback;
+
+        if ($value === null) {
+            return null;
+        }
+
+        return $format === 'iso' ? $value->toIso8601String() : $value->toDateTimeString();
+    }
+
+    private function workTimerPayload(string $status, ?CleaningBookingWorkerAssignment $assignment = null): array
+    {
+        $start = $assignment?->work_started_at ?? $this->work_started_at ?? $this->arrived_at;
         $hours = (float) ($this->total_hours ?: $this->estimated_hours ?: 0);
         if ($start === null || $hours <= 0) return ['timerStartAt' => $start?->toIso8601String(), 'expectedFinishAt' => null, 'durationHours' => $hours > 0 ? $hours : null, 'remainingWorkSeconds' => 0, 'overdueWorkSeconds' => 0, 'isWorkOverdue' => false, 'shouldShowWorkTimer' => false, 'source' => ['startField' => null, 'durationField' => null]];
         $expected = $start->copy()->addSeconds((int) round($hours * 3600));
         $diff = now()->diffInSeconds($expected, false);
         $show = in_array($status, [CleaningBookingStatus::InProgress->value, CleaningBookingStatus::TimeExtensionRequested->value], true);
-        return ['timerStartAt' => $start->toIso8601String(), 'expectedFinishAt' => $expected->toIso8601String(), 'durationHours' => $hours, 'remainingWorkSeconds' => $show ? max(0, $diff) : 0, 'overdueWorkSeconds' => $show ? max(0, -$diff) : 0, 'isWorkOverdue' => $show && $diff < 0, 'shouldShowWorkTimer' => $show, 'source' => ['startField' => $this->work_started_at !== null ? 'work_started_at' : 'arrived_at', 'durationField' => $this->total_hours ? 'total_hours' : 'estimated_hours']];
+        return ['timerStartAt' => $start->toIso8601String(), 'expectedFinishAt' => $expected->toIso8601String(), 'durationHours' => $hours, 'remainingWorkSeconds' => $show ? max(0, $diff) : 0, 'overdueWorkSeconds' => $show ? max(0, -$diff) : 0, 'isWorkOverdue' => $show && $diff < 0, 'shouldShowWorkTimer' => $show, 'source' => ['startField' => $assignment?->work_started_at !== null ? 'assignment.work_started_at' : ($this->work_started_at !== null ? 'work_started_at' : 'arrived_at'), 'durationField' => $this->total_hours ? 'total_hours' : 'estimated_hours']];
     }
 }
