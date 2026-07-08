@@ -16,6 +16,7 @@ use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
 use Modules\Cleaning\Http\Resources\CleaningBookingResource;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Services\CleaningLifecycleNotificationService;
 use Throwable;
 
@@ -34,13 +35,52 @@ final class CleaningBookingStartTravelController
 
         try {
             $booking = DB::transaction(function () use ($cleaning_booking): CleaningBooking {
-                if ($cleaning_booking->status !== CleaningBookingStatus::WorkerAssigned) {
+                $worker = Auth::user()?->worker;
+                if (! $worker instanceof Worker) {
+                    throw new InvalidArgumentException('User must have an associated worker.');
+                }
+
+                $lockedBooking = CleaningBooking::query()
+                    ->whereKey($cleaning_booking->id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                $assignment = CleaningBookingWorkerAssignment::query()
+                    ->where('cleaning_booking_id', $lockedBooking->id)
+                    ->where('worker_id', $worker->id)
+                    ->whereIn('status', CleaningBookingWorkerAssignmentStatus::activeValues())
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($assignment instanceof CleaningBookingWorkerAssignment) {
+                    if (! in_array($lockedBooking->status, [
+                        CleaningBookingStatus::WorkerAssigned,
+                        CleaningBookingStatus::AwaitingStartVerification,
+                        CleaningBookingStatus::AwaitingWorkerStartConfirmation,
+                        CleaningBookingStatus::InProgress,
+                    ], true)) {
+                        throw new InvalidArgumentException('Booking cannot start travel in current status.');
+                    }
+
+                    $startedTravelAt = $assignment->started_travel_at ?? now();
+                    $assignment->forceFill([
+                        'started_travel_at' => $startedTravelAt,
+                    ])->save();
+
+                    if ($lockedBooking->started_travel_at === null) {
+                        $lockedBooking->forceFill(['started_travel_at' => $startedTravelAt])->save();
+                    }
+
+                    return $this->freshBooking($lockedBooking);
+                }
+
+                if ($lockedBooking->status !== CleaningBookingStatus::WorkerAssigned) {
                     throw new InvalidArgumentException('Booking cannot start travel in current status.');
                 }
 
-                $cleaning_booking->update(['started_travel_at' => now()]);
+                $lockedBooking->update(['started_travel_at' => now()]);
 
-                return $cleaning_booking->fresh();
+                return $this->freshBooking($lockedBooking);
             });
         } catch (InvalidArgumentException $e) {
             throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
@@ -86,6 +126,21 @@ final class CleaningBookingStartTravelController
     private function loadBookingDetails(CleaningBooking $booking): CleaningBooking
     {
         return $booking->load([
+            'customer',
+            'worker.user',
+            'preferredWorker.user',
+            'rooms.assignedWorker.user',
+            'workerAssignments.worker.user',
+            'addons',
+            'billingPolicy',
+            'timeWarnings',
+            'disputes',
+        ]);
+    }
+
+    private function freshBooking(CleaningBooking $booking): CleaningBooking
+    {
+        return $booking->fresh([
             'customer',
             'worker.user',
             'preferredWorker.user',
