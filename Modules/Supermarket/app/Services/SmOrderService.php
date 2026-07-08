@@ -9,6 +9,7 @@ use Exception;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Log;
+use Modules\Delivery\Services\DeliveryOrderCreationService;
 use Modules\Delivery\Services\DeliveryOrderService;
 use Modules\Supermarket\Data\SmOrderData;
 use Modules\Supermarket\Data\SmOrderRejectStatusData;
@@ -38,6 +39,7 @@ final class SmOrderService
     public function __construct(
         private readonly SmInventoryService $inventoryService,
         private readonly DeliveryOrderService $deliveryOrderService,
+        private readonly DeliveryOrderCreationService $deliveryOrderCreationService,
     ) {}
 
     public function store(SmOrderData $data): SmOrder
@@ -139,9 +141,11 @@ final class SmOrderService
         return $weeklyCounts;
     }
 
-    public function acceptOrder(SmOrder $order): SmOrder
+    public function acceptOrder(SmOrder $order, ?int $actorUserId = null): SmOrder
     {
-        return DB::transaction(function () use ($order): SmOrder {
+        return DB::transaction(function () use ($order, $actorUserId): SmOrder {
+            $order = SmOrder::query()->lockForUpdate()->findOrFail($order->id);
+
             if ($order->status !== SmOrderStatus::Pending) {
                 throw new Exception(
                     "Cannot accept order {$order->order_number}. Order must be in PENDING status, currently in {$order->status->value}"
@@ -153,6 +157,8 @@ final class SmOrderService
             $order->update([
                 'status' => SmOrderStatus::Accepted,
             ]);
+
+            $this->logStatus($order, SmOrderStatus::Pending, SmOrderStatus::Accepted, 'Order accepted by store owner.', $actorUserId);
 
             return $order->refresh();
         });
@@ -191,6 +197,8 @@ final class SmOrderService
             $order = SmOrder::query()->lockForUpdate()->findOrFail($order->id);
 
             if ($order->status === SmOrderStatus::ReadyForPickup) {
+                $shouldStartDispatch = true;
+
                 return $order->refresh();
             }
 
@@ -214,7 +222,7 @@ final class SmOrderService
         });
 
         if ($shouldStartDispatch) {
-            $deliveryOrder = $order->deliveryOrder()->first();
+            $deliveryOrder = $this->deliveryOrderCreationService->findForSupermarketOrder($order);
 
             if ($deliveryOrder !== null) {
                 $this->deliveryOrderService->startDispatch($deliveryOrder, 'Supermarket order is ready for pickup.');

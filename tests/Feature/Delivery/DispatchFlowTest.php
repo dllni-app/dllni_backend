@@ -57,19 +57,19 @@ it('creates an order with pricing and queues dispatch', function (): void {
     $company = DeliveryCompany::factory()->create();
     $order = app(DeliveryOrderService::class)->create($company, deliveryOrderPayload());
 
-    expect($order->status)->toBe(DeliveryOrderStatus::Dispatching->value);
+    expect($order->status)->toBe(DeliveryOrderStatus::SearchingForDriver->value);
     expect((float) $order->distance_km)->toBeGreaterThan(0);
     expect((float) $order->delivery_fee)->toBeGreaterThan(0);
 
     Queue::assertPushed(DispatchDeliveryOrderJob::class, fn (DispatchDeliveryOrderJob $job): bool => true);
     $this->assertDatabaseHas('delivery_order_events', [
         'order_id' => $order->id,
-        'to_status' => DeliveryOrderStatus::Dispatching->value,
+        'to_status' => DeliveryOrderStatus::SearchingForDriver->value,
     ]);
     $this->assertDatabaseHas('booking_status_logs', [
         'booking_id' => $order->id,
         'booking_type' => 'delivery_order',
-        'to_status' => DeliveryOrderStatus::Dispatching->value,
+        'to_status' => DeliveryOrderStatus::SearchingForDriver->value,
     ]);
 });
 
@@ -243,7 +243,7 @@ it('keeps dispatching and retries when no eligible drivers exist', function (): 
 
     $order->refresh();
 
-    expect($order->status)->toBe(DeliveryOrderStatus::Dispatching->value);
+    expect($order->status)->toBe(DeliveryOrderStatus::SearchingForDriver->value);
     expect($order->stop_reason)->toBeNull();
     Queue::assertPushed(DispatchDeliveryOrderJob::class);
 });
@@ -257,7 +257,7 @@ it('stops dispatch after the no-candidate retry budget is exhausted', function (
     $order = app(DeliveryOrderService::class)->create($company, deliveryOrderPayload());
     app(DriverDispatchService::class)->dispatchByOrderId($order->id);
 
-    expect($order->fresh()->status)->toBe(DeliveryOrderStatus::Dispatching->value);
+    expect($order->fresh()->status)->toBe(DeliveryOrderStatus::SearchingForDriver->value);
 
     app(DriverDispatchService::class)->dispatchByOrderId($order->id);
 
@@ -278,6 +278,6 @@ it('retries dispatch after a stopped order', function (): void {
 
     $retried = app(DeliveryOrderService::class)->retryDispatch($order->fresh());
 
-    expect($retried->status)->toBe(DeliveryOrderStatus::Dispatching->value);
+    expect($retried->status)->toBe(DeliveryOrderStatus::SearchingForDriver->value);
     Queue::assertPushed(DispatchDeliveryOrderJob::class);
 });

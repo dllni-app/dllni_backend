@@ -4,9 +4,15 @@ declare(strict_types=1);
 
 use App\Enums\UserModuleType;
 use App\Models\User;
+use Database\Factories\DeliveryOrderFactory;
 use Database\Factories\SmOrderFactory;
 use Database\Factories\SmStoreFactory;
+use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
+use Modules\Delivery\Enums\DeliveryOrderStatus;
+use Modules\Delivery\Jobs\DispatchDeliveryOrderJob;
+use Modules\Delivery\Models\DeliveryCompany;
+use Modules\Delivery\Services\DeliveryOrderCreationService;
 use Modules\Supermarket\Enums\RejectionType;
 use Modules\Supermarket\Enums\SmOrderStatus;
 use Modules\Supermarket\Models\SmOrderStatusLog;
@@ -23,24 +29,53 @@ beforeEach(function (): void {
     ]);
 });
 
+function createLinkedSupermarketDeliveryOrder(\Modules\Supermarket\Models\SmOrder $order, array $overrides = []): \Modules\Delivery\Models\DeliveryOrder
+{
+    $company = DeliveryCompany::factory()->create([
+        'is_active' => true,
+        'is_suspended' => false,
+    ]);
+
+    return DeliveryOrderFactory::new()->create([
+        'company_id' => $company->id,
+        'status' => DeliveryOrderStatus::WaitingMerchantReady->value,
+        'created_by_user_id' => $order->customer_id,
+        'source_type' => DeliveryOrderCreationService::SOURCE_SUPERMARKET_ORDER,
+        'source_id' => $order->id,
+        ...$overrides,
+    ]);
+}
+
 // ============ ACCEPT ORDER TESTS ============
 
 it('accepts a pending order', function (): void {
+    Queue::fake();
+
     $order = SmOrderFactory::new()->create([
         'store_id' => $this->store->id,
         'status' => SmOrderStatus::Pending,
     ]);
+    $deliveryOrder = createLinkedSupermarketDeliveryOrder($order);
 
     $response = $this->postJson("/api/v1/store-owner/orders/{$order->id}/accept");
 
     $response->assertOk();
     expect($response->json('message'))->toBe('Order accepted successfully.');
     expect($response->json('data.status'))->toBe('accepted');
+    expect($deliveryOrder->fresh()->status)->toBe(DeliveryOrderStatus::SearchingForDriver->value);
 
     $this->assertDatabaseHas('sm_orders', [
         'id' => $order->id,
         'status' => 'accepted',
     ]);
+    $this->assertDatabaseHas('sm_order_status_logs', [
+        'order_id' => $order->id,
+        'from_status' => SmOrderStatus::Pending->value,
+        'to_status' => SmOrderStatus::Accepted->value,
+        'changed_by_user_id' => $this->user->id,
+    ]);
+
+    Queue::assertPushed(DispatchDeliveryOrderJob::class, fn (DispatchDeliveryOrderJob $job): bool => true);
 });
 
 it('rejects accepting non-pending orders', function (): void {
@@ -99,6 +134,51 @@ it('hands over a ready_for_pickup order to courier', function (): void {
         'from_status' => SmOrderStatus::ReadyForPickup->value,
         'to_status' => SmOrderStatus::PickedUp->value,
     ]);
+});
+
+it('marks an accepted order ready for pickup and starts linked delivery dispatch', function (): void {
+    Queue::fake();
+
+    $order = SmOrderFactory::new()->accepted()->create([
+        'store_id' => $this->store->id,
+        'ready_for_pickup_at' => null,
+    ]);
+    $deliveryOrder = createLinkedSupermarketDeliveryOrder($order);
+
+    $response = $this->postJson("/api/v1/store-owner/orders/{$order->id}/ready-for-pickup");
+
+    $response->assertOk();
+    expect($response->json('message'))->toBe('Order marked as ready for pickup successfully.');
+    expect($response->json('data.status'))->toBe(SmOrderStatus::ReadyForPickup->value);
+    expect($deliveryOrder->fresh()->status)->toBe(DeliveryOrderStatus::SearchingForDriver->value);
+
+    $this->assertDatabaseHas('sm_order_status_logs', [
+        'order_id' => $order->id,
+        'from_status' => SmOrderStatus::Accepted->value,
+        'to_status' => SmOrderStatus::ReadyForPickup->value,
+        'changed_by_user_id' => $this->user->id,
+    ]);
+
+    Queue::assertPushed(DispatchDeliveryOrderJob::class, fn (DispatchDeliveryOrderJob $job): bool => true);
+});
+
+it('retries linked delivery dispatch when ready for pickup is called again', function (): void {
+    Queue::fake();
+
+    $order = SmOrderFactory::new()->readyForPickup()->create([
+        'store_id' => $this->store->id,
+    ]);
+    $deliveryOrder = createLinkedSupermarketDeliveryOrder($order);
+    $beforeCount = SmOrderStatusLog::query()->where('order_id', $order->id)->count();
+
+    $response = $this->postJson("/api/v1/store-owner/orders/{$order->id}/ready-for-pickup");
+
+    $response->assertOk();
+    expect($response->json('data.status'))->toBe(SmOrderStatus::ReadyForPickup->value);
+    expect($deliveryOrder->fresh()->status)->toBe(DeliveryOrderStatus::SearchingForDriver->value);
+    expect(SmOrderStatusLog::query()->where('order_id', $order->id)->count())->toBe($beforeCount);
+
+    Queue::assertPushed(DispatchDeliveryOrderJob::class, fn (DispatchDeliveryOrderJob $job): bool => true);
 });
 
 it('rejects courier handover when order is not ready_for_pickup', function (): void {

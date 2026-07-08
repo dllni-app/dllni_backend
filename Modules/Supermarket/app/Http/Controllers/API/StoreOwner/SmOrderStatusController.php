@@ -8,6 +8,7 @@ use App\Services\ActivityLogService;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Modules\Delivery\Services\DeliveryOrderCreationService;
 use Modules\Delivery\Services\DeliveryOrderService;
 use Modules\Supermarket\Data\SmOrderRejectStatusData;
 use Modules\Supermarket\Http\Requests\SmOrderRejectStatusRequest;
@@ -22,6 +23,7 @@ final class SmOrderStatusController
     public function __construct(
         private SmOrderService $orderService,
         private DeliveryOrderService $deliveryOrderService,
+        private DeliveryOrderCreationService $deliveryOrderCreationService,
         private ActivityLogService $activityLogService,
         private StoreOwnerContextService $context,
         private SmOrderNotificationService $notifications,
@@ -35,10 +37,11 @@ final class SmOrderStatusController
     public function accept(SmOrder $order): JsonResponse|JsonResource
     {
         $this->context->store((int) $order->store_id);
+        $owner = $this->context->owner();
         $previousStatus = $this->statusValue($order);
 
         try {
-            $acceptedOrder = $this->orderService->acceptOrder($order);
+            $acceptedOrder = $this->orderService->acceptOrder($order, $owner->id);
             $this->startLinkedDeliveryDispatch($acceptedOrder);
             $acceptedOrder->refresh();
 
@@ -141,7 +144,7 @@ final class SmOrderStatusController
 
     private function startLinkedDeliveryDispatch(SmOrder $order): void
     {
-        $deliveryOrder = $order->deliveryOrder()->first();
+        $deliveryOrder = $this->deliveryOrderCreationService->findForSupermarketOrder($order);
 
         if ($deliveryOrder === null) {
             return;

@@ -24,7 +24,7 @@ final class DeliveryOrderCreationService
 
     public function createForRestaurantOrder(Order $order): DeliveryOrder
     {
-        $existing = $this->existingFor(self::SOURCE_RESTAURANT_ORDER, (int) $order->id);
+        $existing = $this->findForRestaurantOrder($order);
         if ($existing instanceof DeliveryOrder) {
             return $existing;
         }
@@ -60,7 +60,7 @@ final class DeliveryOrderCreationService
 
     public function createForSupermarketOrder(SmOrder $order, UserAddress $address): DeliveryOrder
     {
-        $existing = $this->existingFor(self::SOURCE_SUPERMARKET_ORDER, (int) $order->id);
+        $existing = $this->findForSupermarketOrder($order);
         if ($existing instanceof DeliveryOrder) {
             return $existing;
         }
@@ -92,7 +92,17 @@ final class DeliveryOrderCreationService
         );
     }
 
-    private function existingFor(string $sourceType, int $sourceId): ?DeliveryOrder
+    public function findForRestaurantOrder(Order $order): ?DeliveryOrder
+    {
+        return $this->findForSource(self::SOURCE_RESTAURANT_ORDER, (int) $order->id);
+    }
+
+    public function findForSupermarketOrder(SmOrder $order): ?DeliveryOrder
+    {
+        return $this->findForSource(self::SOURCE_SUPERMARKET_ORDER, (int) $order->id);
+    }
+
+    public function findForSource(string $sourceType, int $sourceId): ?DeliveryOrder
     {
         return DeliveryOrder::query()
             ->where('source_type', $sourceType)

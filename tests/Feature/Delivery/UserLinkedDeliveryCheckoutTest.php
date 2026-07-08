@@ -16,9 +16,9 @@ use Modules\Resturants\Models\Restaurant;
 use Modules\Supermarket\Models\SmCart;
 use Modules\Supermarket\Models\SmCartItem;
 use Modules\Supermarket\Models\SmOrder;
-use Modules\Supermarket\Models\SmProduct;
 use Modules\Supermarket\Models\SmStore;
 use Modules\User\Models\UserAddress;
+use Database\Factories\SmProductFactory;
 
 function linkedDeliveryAddress(User $user, array $overrides = []): UserAddress
 {
@@ -58,7 +58,7 @@ function linkedSupermarketCart(User $user, array $storeOverrides = []): SmCart
         'longitude' => 37.170000,
         ...$storeOverrides,
     ]);
-    $product = SmProduct::factory()->create(['store_id' => $store->id, 'price' => 9000]);
+    $product = SmProductFactory::new()->create(['store_id' => $store->id, 'price' => 9000]);
     $cart = SmCart::query()->create(['user_id' => $user->id, 'store_id' => $store->id]);
     SmCartItem::query()->create([
         'cart_id' => $cart->id,
