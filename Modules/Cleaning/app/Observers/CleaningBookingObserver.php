@@ -14,6 +14,7 @@ use App\Notifications\Cleaning\BookingLifecycleNotification;
 use BackedEnum;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Enums\CleaningAssignmentMode;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
@@ -61,7 +62,7 @@ final class CleaningBookingObserver
             return;
         }
 
-        NotifyEligibleWorkersNewOrderJob::dispatch($booking->id)->afterCommit();
+        $this->dispatchNewOrderNotificationsAfterCommit((int) $booking->id);
         $this->dispatchPreferredWorkerFallbackIfNeeded($booking);
         $this->notifyLifecycleCreated($booking);
     }
@@ -246,6 +247,17 @@ final class CleaningBookingObserver
         } catch (Throwable $exception) {
             report($exception);
         }
+    }
+
+    private function dispatchNewOrderNotificationsAfterCommit(int $bookingId): void
+    {
+        DB::afterCommit(static function () use ($bookingId): void {
+            try {
+                NotifyEligibleWorkersNewOrderJob::dispatchSync($bookingId);
+            } catch (Throwable $exception) {
+                report($exception);
+            }
+        });
     }
 
     private function dispatchPreferredWorkerFallbackIfNeeded(CleaningBooking $booking): void
