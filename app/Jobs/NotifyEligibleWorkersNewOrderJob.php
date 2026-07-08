@@ -14,11 +14,14 @@ use App\Notifications\Cleaning\NewOrderRequestNotification;
 use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Log;
 use Modules\Cleaning\Enums\CleaningAssignmentMode;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
+use Modules\Cleaning\Events\CleaningBookingCreated;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Services\DepositService;
 use Modules\Cleaning\Services\WorkerOrderSolvencyService;
+use Throwable;
 
 final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
 {
@@ -47,7 +50,7 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
         $assignmentMode = $booking->resolvedAssignmentMode();
         $rejectedWorkerIds = $booking->rejections()->pluck('worker_id')->map(static fn (mixed $workerId): int => (int) $workerId)->all();
         $acceptedWorkerIds = $booking->workerAssignments()
-            ->where('status', CleaningBookingWorkerAssignmentStatus::Accepted->value)
+            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
             ->pluck('worker_id')
             ->map(static fn (mixed $workerId): int => (int) $workerId)
             ->all();
@@ -91,12 +94,19 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
                 ->first();
 
             if (! $worker?->user || ! $this->isWorkerAvailable($worker, $bookingDateTime) || ! $depositService->isWorkerEligibleForDispatch($worker)) {
+                $this->createDispatchAlert(
+                    $booking,
+                    'preferred_worker_not_available',
+                    'Preferred worker is not currently available or eligible for dispatch.',
+                    ['preferredWorkerId' => (int) $booking->preferred_worker_id],
+                );
+
                 return;
             }
 
             $solvency = $solvencyService->solvencyPayloadForBooking($worker, $booking);
             if ((bool) $solvency['canReceiveOrder']) {
-                $worker->user->notify(new NewOrderRequestNotification($booking));
+                $this->notifyWorkerAboutNewOrder($worker, $booking);
 
                 return;
             }
@@ -138,11 +148,13 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
         }
 
         $notifiedCount = 0;
+        $unavailableCount = 0;
         $financiallyBlockedCount = 0;
         $lastBlockedPayload = null;
 
         foreach ($workers as $worker) {
             if (! $worker->user || ! $this->isWorkerAvailable($worker, $bookingDateTime) || ! $depositService->isWorkerEligibleForDispatch($worker)) {
+                $unavailableCount++;
                 continue;
             }
 
@@ -154,7 +166,7 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
                 continue;
             }
 
-            $worker->user->notify(new NewOrderRequestNotification($booking));
+            $this->notifyWorkerAboutNewOrder($worker, $booking);
             $notifiedCount++;
         }
 
@@ -167,6 +179,15 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
                     'financiallyBlockedWorkersCount' => $financiallyBlockedCount,
                     'lastBlockedSolvencyPayload' => $lastBlockedPayload,
                 ],
+            );
+        }
+
+        if ($notifiedCount === 0 && $financiallyBlockedCount === 0 && $unavailableCount > 0) {
+            $this->createDispatchAlert(
+                $booking,
+                'no_available_workers_at_scheduled_time',
+                'Workers cover the booking neighborhood, but none are available or eligible at the scheduled time.',
+                ['unavailableWorkersCount' => $unavailableCount],
             );
         }
     }
@@ -191,6 +212,63 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    private function notifyWorkerAboutNewOrder(Worker $worker, CleaningBooking $booking): void
+    {
+        if (! $worker->user) {
+            return;
+        }
+
+        $worker->user->notify(new NewOrderRequestNotification($booking));
+        $this->broadcastNewOrderToWorker($worker, $booking);
+    }
+
+    private function broadcastNewOrderToWorker(Worker $worker, CleaningBooking $booking): void
+    {
+        try {
+            event(new CleaningBookingCreated(
+                cleaningBookingId: (int) $booking->id,
+                workerId: (int) $worker->id,
+                booking: $this->bookingBroadcastPayload($booking),
+            ));
+        } catch (Throwable $exception) {
+            Log::warning('Cleaning new order realtime broadcast failed.', [
+                'booking_id' => $booking->id,
+                'worker_id' => $worker->id,
+                'message' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function bookingBroadcastPayload(CleaningBooking $booking): array
+    {
+        return [
+            'id' => (int) $booking->id,
+            'bookingId' => (int) $booking->id,
+            'cleaningBookingId' => (int) $booking->id,
+            'bookingNumber' => (string) $booking->booking_number,
+            'booking_number' => (string) $booking->booking_number,
+            'status' => $booking->status?->value ?? (string) $booking->status,
+            'order_status' => $booking->status?->value ?? (string) $booking->status,
+            'scheduledDate' => $booking->scheduled_date?->format('Y-m-d'),
+            'scheduled_date' => $booking->scheduled_date?->format('Y-m-d'),
+            'scheduledTime' => (string) $booking->scheduled_time,
+            'scheduled_time' => (string) $booking->scheduled_time,
+            'propertyType' => (string) $booking->property_type,
+            'property_type' => (string) $booking->property_type,
+            'neighborhoodId' => $booking->neighborhood_id,
+            'neighborhood_id' => $booking->neighborhood_id,
+            'neighborhoodName' => $booking->neighborhood_name,
+            'neighborhood_name' => $booking->neighborhood_name,
+            'totalPrice' => (float) ($booking->total_price ?? 0),
+            'total_price' => (float) ($booking->total_price ?? 0),
+            'numberOfWorkers' => (int) ($booking->number_of_workers ?? 1),
+            'number_of_workers' => (int) ($booking->number_of_workers ?? 1),
+        ];
     }
 
     /**
