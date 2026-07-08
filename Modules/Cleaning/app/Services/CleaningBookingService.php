@@ -29,7 +29,6 @@ use Modules\Cleaning\Events\WorkerArrived;
 use Modules\Cleaning\Events\WorkerLocationUpdated;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
-use Modules\Cleaning\Services\CleaningBookingTeamService;
 
 final class CleaningBookingService
 {
@@ -61,17 +60,7 @@ final class CleaningBookingService
 
             $this->teamService->syncRooms($booking);
 
-            return $booking->fresh([
-                'customer',
-                'worker.user',
-                'preferredWorker.user',
-                'rooms.assignedWorker.user',
-                'workerAssignments.worker.user',
-                'addons',
-                'billingPolicy',
-                'timeWarnings',
-                'disputes',
-            ]);
+            return $this->freshBooking($booking);
         });
     }
 
@@ -92,17 +81,7 @@ final class CleaningBookingService
                 $this->teamService->syncRooms($booking->fresh());
             }
 
-            return $booking->fresh([
-                'customer',
-                'worker.user',
-                'preferredWorker.user',
-                'rooms.assignedWorker.user',
-                'workerAssignments.worker.user',
-                'addons',
-                'billingPolicy',
-                'timeWarnings',
-                'disputes',
-            ]);
+            return $this->freshBooking($booking);
         });
     }
 
@@ -192,14 +171,41 @@ final class CleaningBookingService
     {
         $fromStatus = (string) $booking->status->value;
 
-        $updated = DB::transaction(function () use ($booking) {
-            if ($booking->status !== CleaningBookingStatus::WorkerAssigned) {
+        $updated = DB::transaction(function () use ($booking): CleaningBooking {
+            $worker = $this->currentWorker();
+            $lockedBooking = $this->lockBooking($booking);
+
+            if (! in_array($lockedBooking->status, [
+                CleaningBookingStatus::WorkerAssigned,
+                CleaningBookingStatus::AwaitingStartVerification,
+                CleaningBookingStatus::AwaitingWorkerStartConfirmation,
+            ], true)) {
                 throw new InvalidArgumentException('Booking cannot start travel in current status.');
             }
 
-            $booking->update(['started_travel_at' => now()]);
+            $assignment = $this->activeAssignmentForWorker($lockedBooking->id, $worker->id, true);
 
-            return $booking->fresh();
+            if ($assignment instanceof CleaningBookingWorkerAssignment) {
+                if ($assignment->started_travel_at === null) {
+                    $assignment->forceFill([
+                        'started_travel_at' => now(),
+                    ])->save();
+                }
+
+                if ($lockedBooking->started_travel_at === null) {
+                    $lockedBooking->forceFill(['started_travel_at' => $assignment->started_travel_at ?? now()])->save();
+                }
+
+                return $this->freshBooking($lockedBooking);
+            }
+
+            if ((int) $lockedBooking->worker_id !== (int) $worker->id) {
+                throw new InvalidArgumentException('Worker must accept the booking before starting travel.');
+            }
+
+            $lockedBooking->update(['started_travel_at' => now()]);
+
+            return $this->freshBooking($lockedBooking);
         });
 
         $this->dispatchTrackingUpdate($updated);
@@ -221,8 +227,24 @@ final class CleaningBookingService
     public function issueSecurityCode(CleaningBooking $booking): array
     {
         return DB::transaction(function () use ($booking): array {
-            if (! in_array($booking->status, [CleaningBookingStatus::WorkerAssigned, CleaningBookingStatus::AwaitingStartVerification], true)) {
+            $worker = $this->currentWorker();
+            $lockedBooking = $this->lockBooking($booking);
+
+            if (! in_array($lockedBooking->status, [
+                CleaningBookingStatus::WorkerAssigned,
+                CleaningBookingStatus::AwaitingStartVerification,
+                CleaningBookingStatus::AwaitingWorkerStartConfirmation,
+            ], true)) {
                 throw new InvalidArgumentException('Security code is only available for bookings ready to start.');
+            }
+
+            $assignment = $this->activeAssignmentForWorker($lockedBooking->id, $worker->id, true);
+            if ($assignment instanceof CleaningBookingWorkerAssignment && $assignment->arrived_at === null) {
+                throw new InvalidArgumentException('Worker must arrive before requesting a security code.');
+            }
+
+            if (! $assignment instanceof CleaningBookingWorkerAssignment && (int) $lockedBooking->worker_id !== (int) $worker->id) {
+                throw new InvalidArgumentException('Worker must accept the booking before requesting a security code.');
             }
 
             $securityCode = mb_str_pad((string) random_int(0, 9999), self::SECURITY_CODE_LENGTH, '0', STR_PAD_LEFT);
@@ -230,8 +252,8 @@ final class CleaningBookingService
 
             DB::table('booking_security_codes')->updateOrInsert(
                 [
-                    'booking_id' => $booking->id,
-                    'booking_type' => $booking->getMorphClass(),
+                    'booking_id' => $lockedBooking->id,
+                    'booking_type' => $lockedBooking->getMorphClass(),
                 ],
                 [
                     'code' => $this->securityCodeHash($securityCode),
@@ -254,12 +276,24 @@ final class CleaningBookingService
 
     public function updateLocation(CleaningBooking $booking, float $latitude, float $longitude): void
     {
+        $worker = $this->currentWorker();
+        $assignment = $this->activeAssignmentForWorker($booking->id, $worker->id);
+
+        if ($assignment instanceof CleaningBookingWorkerAssignment) {
+            if ($assignment->started_travel_at === null) {
+                throw new InvalidArgumentException('Worker must have started travel to send location updates.');
+            }
+
+            BroadcastAfterResponse::send(new WorkerLocationUpdated($booking->id, $latitude, $longitude, $worker->id));
+
+            return;
+        }
+
         if ($booking->status !== CleaningBookingStatus::WorkerAssigned || $booking->started_travel_at === null) {
             throw new InvalidArgumentException('Worker must have started travel to send location updates.');
         }
 
-        $worker = Auth::user()?->worker;
-        if (! $worker || $booking->worker_id !== $worker->id) {
+        if ((int) $booking->worker_id !== (int) $worker->id) {
             throw new InvalidArgumentException('Only the assigned worker can update location.');
         }
 
@@ -270,20 +304,59 @@ final class CleaningBookingService
     {
         $fromStatus = (string) $booking->status->value;
 
-        $updated = DB::transaction(function () use ($booking) {
-            if (! in_array($booking->status, [CleaningBookingStatus::WorkerAssigned, CleaningBookingStatus::AwaitingStartVerification], true)) {
-                throw new InvalidArgumentException('Booking must be in worker_assigned status to mark arrival.');
+        $updated = DB::transaction(function () use ($booking): CleaningBooking {
+            $worker = $this->currentWorker();
+            $lockedBooking = $this->lockBooking($booking);
+
+            if (! in_array($lockedBooking->status, [
+                CleaningBookingStatus::WorkerAssigned,
+                CleaningBookingStatus::AwaitingStartVerification,
+                CleaningBookingStatus::AwaitingWorkerStartConfirmation,
+            ], true)) {
+                throw new InvalidArgumentException('Booking must be ready to start before marking arrival.');
             }
-            if ($booking->started_travel_at === null) {
+
+            $assignment = $this->activeAssignmentForWorker($lockedBooking->id, $worker->id, true);
+
+            if ($assignment instanceof CleaningBookingWorkerAssignment) {
+                if ($assignment->started_travel_at === null) {
+                    throw new InvalidArgumentException('Worker must have started travel before marking arrival.');
+                }
+
+                $arrivedAt = now();
+                $assignment->forceFill([
+                    'status' => CleaningBookingWorkerAssignmentStatus::AwaitingStartVerification,
+                    'arrived_at' => $assignment->arrived_at ?? $arrivedAt,
+                ])->save();
+
+                $updates = [];
+                if ($lockedBooking->status === CleaningBookingStatus::WorkerAssigned) {
+                    $updates['status'] = CleaningBookingStatus::AwaitingStartVerification;
+                }
+                if ($lockedBooking->arrived_at === null) {
+                    $updates['arrived_at'] = $assignment->arrived_at ?? $arrivedAt;
+                }
+                if ($updates !== []) {
+                    $lockedBooking->forceFill($updates)->save();
+                }
+
+                return $this->freshBooking($lockedBooking);
+            }
+
+            if ((int) $lockedBooking->worker_id !== (int) $worker->id) {
+                throw new InvalidArgumentException('Worker must accept the booking before marking arrival.');
+            }
+
+            if ($lockedBooking->started_travel_at === null) {
                 throw new InvalidArgumentException('Worker must have started travel before marking arrival.');
             }
 
-            $booking->update([
+            $lockedBooking->update([
                 'status' => CleaningBookingStatus::AwaitingStartVerification,
                 'arrived_at' => now(),
             ]);
 
-            return $booking->fresh();
+            return $this->freshBooking($lockedBooking);
         });
 
         BroadcastAfterResponse::send(new WorkerArrived($updated->id, (string) $updated->arrived_at?->toIso8601String()));
@@ -309,24 +382,17 @@ final class CleaningBookingService
 
     public function startWork(CleaningBooking $booking): CleaningBooking
     {
-        $updated = DB::transaction(function () use ($booking) {
-            $worker = Auth::user()?->worker;
-            if (! $worker) {
-                throw new InvalidArgumentException('User must have an associated worker.');
-            }
+        $updated = DB::transaction(function () use ($booking): CleaningBooking {
+            $worker = $this->currentWorker();
+            $lockedBooking = $this->lockBooking($booking);
 
-            $booking = CleaningBooking::query()
-                ->whereKey($booking->id)
-                ->lockForUpdate()
-                ->firstOrFail();
-
-            if (in_array($booking->status, [
+            if (in_array($lockedBooking->status, [
                 CleaningBookingStatus::AwaitingStartVerification,
                 CleaningBookingStatus::AwaitingWorkerStartConfirmation,
             ], true)) {
                 $securityCode = DB::table('booking_security_codes')
-                    ->where('booking_id', $booking->id)
-                    ->where('booking_type', $booking->getMorphClass())
+                    ->where('booking_id', $lockedBooking->id)
+                    ->where('booking_type', $lockedBooking->getMorphClass())
                     ->orderByDesc('id')
                     ->first();
 
@@ -334,14 +400,9 @@ final class CleaningBookingService
                     throw new InvalidArgumentException('Customer must verify the security code before work can start.');
                 }
 
-                $assignment = CleaningBookingWorkerAssignment::query()
-                    ->where('cleaning_booking_id', $booking->id)
-                    ->where('worker_id', $worker->id)
-                    ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
-                    ->lockForUpdate()
-                    ->first();
+                $assignment = $this->activeAssignmentForWorker($lockedBooking->id, $worker->id, true);
 
-                if (! $assignment && (int) $booking->worker_id !== (int) $worker->id) {
+                if (! $assignment instanceof CleaningBookingWorkerAssignment && (int) $lockedBooking->worker_id !== (int) $worker->id) {
                     throw new InvalidArgumentException('Worker must accept the booking before approving start.');
                 }
 
@@ -349,57 +410,69 @@ final class CleaningBookingService
                     throw new InvalidArgumentException('Worker has already approved the booking start.');
                 }
 
-                if ($assignment !== null) {
+                if ($assignment instanceof CleaningBookingWorkerAssignment) {
                     $assignment->forceFill([
                         'status' => CleaningBookingWorkerAssignmentStatus::StartApproved,
-                        'start_approved_at' => now(),
+                        'start_approved_at' => $assignment->start_approved_at ?? now(),
                     ])->save();
                 }
 
                 $startApproved = CleaningBookingWorkerAssignment::query()
-                    ->where('cleaning_booking_id', $booking->id)
-                    ->where('status', CleaningBookingWorkerAssignmentStatus::StartApproved->value)
+                    ->where('cleaning_booking_id', $lockedBooking->id)
+                    ->whereNotNull('start_approved_at')
                     ->lockForUpdate()
                     ->count();
 
-                $required = max(1, (int) ($booking->number_of_workers ?? 1));
+                $required = $this->requiredWorkers($lockedBooking);
 
                 if ($assignment === null || $startApproved >= $required) {
-                    $booking->update([
+                    $startedAt = $lockedBooking->work_started_at ?? now();
+
+                    CleaningBookingWorkerAssignment::query()
+                        ->where('cleaning_booking_id', $lockedBooking->id)
+                        ->whereNotNull('start_approved_at')
+                        ->whereIn('status', [
+                            CleaningBookingWorkerAssignmentStatus::StartApproved->value,
+                            CleaningBookingWorkerAssignmentStatus::AwaitingStartVerification->value,
+                        ])
+                        ->update([
+                            'status' => CleaningBookingWorkerAssignmentStatus::InProgress->value,
+                            'work_started_at' => $startedAt,
+                            'updated_at' => now(),
+                        ]);
+
+                    $lockedBooking->update([
                         'status' => CleaningBookingStatus::InProgress,
-                        'work_started_at' => now(),
+                        'work_started_at' => $startedAt,
                     ]);
                 }
 
-                return $booking->fresh([
-                    'workerAssignments.worker.user',
-                    'rooms.assignedWorker.user',
-                ]);
+                return $this->freshBooking($lockedBooking);
             }
 
-            if ($booking->status !== CleaningBookingStatus::WorkerAssigned) {
+            if ($lockedBooking->status !== CleaningBookingStatus::WorkerAssigned) {
                 throw new InvalidArgumentException('Booking must be assigned to start work.');
             }
 
-            $booking->update([
+            $assignment = $this->activeAssignmentForWorker($lockedBooking->id, $worker->id, true);
+            $startedAt = now();
+
+            if ($assignment instanceof CleaningBookingWorkerAssignment) {
+                $assignment->forceFill([
+                    'status' => CleaningBookingWorkerAssignmentStatus::InProgress,
+                    'start_approved_at' => $assignment->start_approved_at ?? $startedAt,
+                    'work_started_at' => $assignment->work_started_at ?? $startedAt,
+                ])->save();
+            } elseif ((int) $lockedBooking->worker_id !== (int) $worker->id) {
+                throw new InvalidArgumentException('Worker must accept the booking before starting work.');
+            }
+
+            $lockedBooking->update([
                 'status' => CleaningBookingStatus::InProgress,
-                'work_started_at' => now(),
+                'work_started_at' => $startedAt,
             ]);
 
-            CleaningBookingWorkerAssignment::query()
-                ->where('cleaning_booking_id', $booking->id)
-                ->where('worker_id', $worker->id)
-                ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
-                ->update([
-                    'status' => CleaningBookingWorkerAssignmentStatus::StartApproved->value,
-                    'start_approved_at' => now(),
-                    'updated_at' => now(),
-                ]);
-
-            return $booking->fresh([
-                'workerAssignments.worker.user',
-                'rooms.assignedWorker.user',
-            ]);
+            return $this->freshBooking($lockedBooking);
         });
 
         $this->dispatchTrackingUpdate($updated);
@@ -414,48 +487,101 @@ final class CleaningBookingService
             ? mb_trim($completionMessage)
             : null;
 
-        $updated = DB::transaction(static function () use ($booking, $completionMessage) {
-            if ($booking->status !== CleaningBookingStatus::InProgress) {
+        $becameAwaitingCustomerCompletion = false;
+
+        $updated = DB::transaction(function () use ($booking, $completionMessage, &$becameAwaitingCustomerCompletion): CleaningBooking {
+            $worker = $this->currentWorker();
+            $lockedBooking = $this->lockBooking($booking);
+
+            if ($lockedBooking->status !== CleaningBookingStatus::InProgress) {
                 throw new InvalidArgumentException('Booking must be in progress to mark completion.');
             }
 
-            $booking->update([
+            $assignment = $this->activeAssignmentForWorker($lockedBooking->id, $worker->id, true);
+
+            if ($assignment instanceof CleaningBookingWorkerAssignment) {
+                if (! in_array((string) ($assignment->status?->value ?? $assignment->status), [
+                    CleaningBookingWorkerAssignmentStatus::InProgress->value,
+                    CleaningBookingWorkerAssignmentStatus::StartApproved->value,
+                ], true)) {
+                    throw new InvalidArgumentException('Worker assignment must be in progress to mark completion.');
+                }
+
+                $finishedAt = now();
+                $assignment->forceFill([
+                    'status' => CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion,
+                    'work_finished_at' => $finishedAt,
+                    'worker_completion_message' => $completionMessage,
+                ])->save();
+
+                $finishedAssignments = CleaningBookingWorkerAssignment::query()
+                    ->where('cleaning_booking_id', $lockedBooking->id)
+                    ->whereIn('status', [
+                        CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion->value,
+                        CleaningBookingWorkerAssignmentStatus::Completed->value,
+                    ])
+                    ->lockForUpdate()
+                    ->count();
+
+                if ($finishedAssignments >= $this->requiredWorkers($lockedBooking)) {
+                    $lockedBooking->update([
+                        'status' => CleaningBookingStatus::AwaitingCustomerCompletion,
+                        'work_finished_at' => $finishedAt,
+                        'worker_completion_message' => $completionMessage,
+                        'customer_completion_rejection_message' => null,
+                        'completion_rejected_at' => null,
+                    ]);
+                    $becameAwaitingCustomerCompletion = true;
+                }
+
+                return $this->freshBooking($lockedBooking);
+            }
+
+            if ((int) $lockedBooking->worker_id !== (int) $worker->id) {
+                throw new InvalidArgumentException('Worker must accept the booking before marking completion.');
+            }
+
+            $lockedBooking->update([
                 'status' => CleaningBookingStatus::AwaitingCustomerCompletion,
                 'work_finished_at' => now(),
                 'worker_completion_message' => $completionMessage,
                 'customer_completion_rejection_message' => null,
                 'completion_rejected_at' => null,
             ]);
+            $becameAwaitingCustomerCompletion = true;
 
-            return $booking->fresh(['customer', 'worker.user']);
+            return $this->freshBooking($lockedBooking);
         });
 
-        $expiresAt = now()->addMinutes(30)->toIso8601String();
+        if ($becameAwaitingCustomerCompletion) {
+            $expiresAt = now()->addMinutes(30)->toIso8601String();
 
-        BroadcastAfterResponse::send(new CleaningOrderAwaitingCustomerCompletion(
-            $updated->id,
-            $updated->worker_id,
-            (string) $updated->status?->value,
-            $expiresAt,
-            $updated->worker_completion_message,
-        ));
+            BroadcastAfterResponse::send(new CleaningOrderAwaitingCustomerCompletion(
+                $updated->id,
+                $updated->worker_id,
+                (string) $updated->status?->value,
+                $expiresAt,
+                $updated->worker_completion_message,
+            ));
+            $this->lifecycleNotifications->notifyCustomer(
+                booking: $updated,
+                canonicalType: 'cleaning.booking.completion_requested',
+                action: 'completion_requested',
+                actorRole: 'worker',
+                fromStatus: $fromStatus,
+                occurredAt: $updated->work_finished_at?->toIso8601String() ?? $updated->updated_at?->toIso8601String(),
+                extraData: [
+                    'completionMessage' => $updated->worker_completion_message,
+                    'expiresAt' => $expiresAt,
+                    'requiresCustomerAction' => true,
+                ],
+                templateContext: [
+                    'completion_message' => $updated->worker_completion_message,
+                ],
+            );
+        }
+
         $this->dispatchTrackingUpdate($updated);
-        $this->lifecycleNotifications->notifyCustomer(
-            booking: $updated,
-            canonicalType: 'cleaning.booking.completion_requested',
-            action: 'completion_requested',
-            actorRole: 'worker',
-            fromStatus: $fromStatus,
-            occurredAt: $updated->work_finished_at?->toIso8601String() ?? $updated->updated_at?->toIso8601String(),
-            extraData: [
-                'completionMessage' => $updated->worker_completion_message,
-                'expiresAt' => $expiresAt,
-                'requiresCustomerAction' => true,
-            ],
-            templateContext: [
-                'completion_message' => $updated->worker_completion_message,
-            ],
-        );
 
         return $updated;
     }
@@ -696,5 +822,58 @@ final class CleaningBookingService
     private function securityCodeHash(string $code): string
     {
         return hash_hmac('sha256', $code, (string) config('app.key'));
+    }
+
+    private function currentWorker(): Worker
+    {
+        $worker = Auth::user()?->worker;
+
+        if (! $worker instanceof Worker) {
+            throw new InvalidArgumentException('User must have an associated worker.');
+        }
+
+        return $worker;
+    }
+
+    private function lockBooking(CleaningBooking $booking): CleaningBooking
+    {
+        return CleaningBooking::query()
+            ->whereKey($booking->id)
+            ->lockForUpdate()
+            ->firstOrFail();
+    }
+
+    private function activeAssignmentForWorker(int $bookingId, int $workerId, bool $lock = false): ?CleaningBookingWorkerAssignment
+    {
+        $query = CleaningBookingWorkerAssignment::query()
+            ->where('cleaning_booking_id', $bookingId)
+            ->where('worker_id', $workerId)
+            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::activeValues());
+
+        if ($lock) {
+            $query->lockForUpdate();
+        }
+
+        return $query->first();
+    }
+
+    private function requiredWorkers(CleaningBooking $booking): int
+    {
+        return max(1, (int) ($booking->number_of_workers ?? 1));
+    }
+
+    private function freshBooking(CleaningBooking $booking): CleaningBooking
+    {
+        return $booking->fresh([
+            'customer',
+            'worker.user',
+            'preferredWorker.user',
+            'rooms.assignedWorker.user',
+            'workerAssignments.worker.user',
+            'addons',
+            'billingPolicy',
+            'timeWarnings',
+            'disputes',
+        ]);
     }
 }
