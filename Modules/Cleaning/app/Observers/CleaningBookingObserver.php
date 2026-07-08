@@ -252,7 +252,11 @@ final class CleaningBookingObserver
     private function dispatchNewOrderNotificationsAfterCommit(int $bookingId): void
     {
         DB::afterCommit(static function () use ($bookingId): void {
-            NotifyEligibleWorkersNewOrderJob::dispatchSync($bookingId);
+            try {
+                NotifyEligibleWorkersNewOrderJob::dispatchSync($bookingId);
+            } catch (Throwable $exception) {
+                report($exception);
+            }
         });
     }
 
