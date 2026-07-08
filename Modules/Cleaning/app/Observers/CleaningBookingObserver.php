@@ -266,33 +266,73 @@ final class CleaningBookingObserver
     {
         $booking->loadMissing(['customer', 'worker.user']);
 
-        $notification = new BookingLifecycleNotification(
+        $this->notifyLifecycleRecipient(
+            recipient: $booking->customer,
+            booking: $booking,
+            targetRole: 'customer',
             canonicalType: 'cleaning.booking.created',
             action: 'created',
-            booking: $booking,
-            actorRole: 'system',
             fromStatus: null,
             occurredAt: $booking->created_at?->toIso8601String() ?? now()->toIso8601String(),
         );
 
-        $booking->customer?->notify($notification);
-        $booking->worker?->user?->notify($notification);
+        $this->notifyLifecycleRecipient(
+            recipient: $booking->worker?->user,
+            booking: $booking,
+            targetRole: 'worker',
+            canonicalType: 'cleaning.booking.created',
+            action: 'created',
+            fromStatus: null,
+            occurredAt: $booking->created_at?->toIso8601String() ?? now()->toIso8601String(),
+        );
     }
 
     private function notifyLifecycleUpdated(CleaningBooking $booking, string $fromStatus): void
     {
         $booking->loadMissing(['customer', 'worker.user']);
 
-        $notification = new BookingLifecycleNotification(
+        $this->notifyLifecycleRecipient(
+            recipient: $booking->customer,
+            booking: $booking,
+            targetRole: 'customer',
             canonicalType: 'cleaning.booking.updated',
             action: 'updated',
-            booking: $booking,
-            actorRole: 'system',
             fromStatus: $fromStatus,
             occurredAt: $booking->updated_at?->toIso8601String() ?? now()->toIso8601String(),
         );
 
-        $booking->customer?->notify($notification);
-        $booking->worker?->user?->notify($notification);
+        $this->notifyLifecycleRecipient(
+            recipient: $booking->worker?->user,
+            booking: $booking,
+            targetRole: 'worker',
+            canonicalType: 'cleaning.booking.updated',
+            action: 'updated',
+            fromStatus: $fromStatus,
+            occurredAt: $booking->updated_at?->toIso8601String() ?? now()->toIso8601String(),
+        );
+    }
+
+    private function notifyLifecycleRecipient(
+        ?User $recipient,
+        CleaningBooking $booking,
+        string $targetRole,
+        string $canonicalType,
+        string $action,
+        ?string $fromStatus,
+        string $occurredAt,
+    ): void {
+        if (! $recipient instanceof User) {
+            return;
+        }
+
+        $recipient->notify(new BookingLifecycleNotification(
+            canonicalType: $canonicalType,
+            action: $action,
+            booking: $booking,
+            actorRole: 'system',
+            targetRole: $targetRole,
+            fromStatus: $fromStatus,
+            occurredAt: $occurredAt,
+        ));
     }
 }
