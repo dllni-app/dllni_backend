@@ -6,22 +6,16 @@ namespace App\Notifications\Cleaning;
 
 use App\Notifications\Core\NotificationPayloadBuilder;
 use DevKandil\NotiFire\FcmMessage;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 use Modules\Cleaning\Models\CleaningBooking;
 
-final class NewOrderRequestNotification extends Notification implements ShouldQueue
+final class NewOrderRequestNotification extends Notification
 {
-    use Queueable;
-
     private const string CanonicalType = 'cleaning.booking.new_order_request';
 
     public function __construct(
         private readonly CleaningBooking $booking
-    ) {
-        $this->afterCommit();
-    }
+    ) {}
 
     /**
      * @return array<int, string>
