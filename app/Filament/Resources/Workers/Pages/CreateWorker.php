@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Workers\Pages;
 
-use App\Filament\Resources\Workers\WorkerResource;
 use App\Filament\Resources\Workers\Pages\Concerns\SyncsWorkerLinkedUser;
+use App\Filament\Resources\Workers\WorkerResource;
 use Filament\Resources\Pages\CreateRecord;
 
 final class CreateWorker extends CreateRecord
@@ -17,5 +17,6 @@ final class CreateWorker extends CreateRecord
     protected function afterCreate(): void
     {
         $this->syncLinkedUserAccount();
+        $this->syncWorkerAvatarFromForm();
     }
 }
