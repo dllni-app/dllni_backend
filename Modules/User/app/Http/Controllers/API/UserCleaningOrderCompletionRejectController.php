@@ -18,7 +18,12 @@ final class UserCleaningOrderCompletionRejectController
             ->where('customer_id', $request->user()->id)
             ->findOrFail($order);
 
-        $updated = $service->reject($model, $request->completionRejectionMessage());
+        $updated = $service->reject(
+            booking: $model,
+            message: $request->completionRejectionMessage(),
+            workerId: $request->targetWorkerId(),
+            assignmentId: $request->targetAssignmentId(),
+        );
         $updated->load(['worker.user', 'workerAssignments.worker.user', 'rooms.assignedWorker.user', 'timeWarnings', 'disputes', 'addons', 'billingPolicy']);
 
         return CleaningBookingResource::make($updated)->additional([
