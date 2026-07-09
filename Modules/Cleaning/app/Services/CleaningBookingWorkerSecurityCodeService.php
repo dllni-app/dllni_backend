@@ -255,6 +255,22 @@ final class CleaningBookingWorkerSecurityCodeService
             return CleaningBookingStatus::AwaitingWorkerStartConfirmation;
         }
 
+        $hasAwaitingCustomerCompletion = $activeAssignments->contains(function (CleaningBookingWorkerAssignment $assignment): bool {
+            return $this->assignmentStatus($assignment) === CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion->value;
+        });
+
+        if ($hasAwaitingCustomerCompletion) {
+            return CleaningBookingStatus::AwaitingCustomerCompletion;
+        }
+
+        $hasExtensionRequest = $activeAssignments->contains(function (CleaningBookingWorkerAssignment $assignment): bool {
+            return $this->assignmentStatus($assignment) === CleaningBookingWorkerAssignmentStatus::TimeExtensionRequested->value;
+        });
+
+        if ($hasExtensionRequest) {
+            return CleaningBookingStatus::TimeExtensionRequested;
+        }
+
         $hasArrivedWorkerWaitingForCode = $activeAssignments->contains(function (CleaningBookingWorkerAssignment $assignment): bool {
             return $assignment->arrived_at !== null
                 && $assignment->start_approved_at === null
