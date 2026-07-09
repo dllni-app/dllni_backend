@@ -22,24 +22,19 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 final class CleaningBookingWorkerSecurityCodeService
 {
     private const SECURITY_CODE_TTL_MINUTES = 10;
-
     private const SECURITY_CODE_LENGTH = 4;
-
     private const MAX_SECURITY_CODE_ATTEMPTS = 5;
 
     public function __construct(
         private readonly CleaningLifecycleNotificationService $lifecycleNotifications,
     ) {}
 
-    /**
-     * @return array{securityCode:string,expiresAt:string}
-     */
+    /** @return array{securityCode:string,expiresAt:string} */
     public function issueForCurrentWorker(CleaningBooking $booking): array
     {
         return DB::transaction(function () use ($booking): array {
             $worker = $this->currentWorker();
             $lockedBooking = $this->lockBooking($booking);
-
             $this->assertBookingIsNotTerminal($lockedBooking);
 
             $assignment = $this->activeAssignmentForWorker($lockedBooking->id, $worker->id, true);
@@ -82,38 +77,25 @@ final class CleaningBookingWorkerSecurityCodeService
                 ]
             );
 
-            return [
-                'securityCode' => $generated['code'],
-                'expiresAt' => $expiresAt->toIso8601String(),
-            ];
+            return ['securityCode' => $generated['code'], 'expiresAt' => $expiresAt->toIso8601String()];
         });
     }
 
     public function confirmForCustomer(CleaningBooking $booking, string $code): CleaningBooking
     {
-        if (in_array($booking->status, [
-            CleaningBookingStatus::Completed,
-            CleaningBookingStatus::Cancelled,
-            CleaningBookingStatus::UnderDispute,
-        ], true)) {
-            throw ValidationException::withMessages([
-                'status' => ['Order is not waiting for start verification.'],
-            ]);
+        if (in_array($booking->status, [CleaningBookingStatus::Completed, CleaningBookingStatus::Cancelled, CleaningBookingStatus::UnderDispute], true)) {
+            throw ValidationException::withMessages(['status' => ['Order is not waiting for start verification.']]);
         }
 
         return DB::transaction(function () use ($booking, $code): CleaningBooking {
             $lockedBooking = $this->lockBooking($booking);
             $this->assertBookingIsNotTerminal($lockedBooking);
-
             $providedHash = $this->securityCodeHash($code);
             $record = $this->matchingSecurityCodeRecord($lockedBooking, $providedHash, $code);
 
             if (! $record) {
                 $this->incrementActiveAttempts($lockedBooking);
-
-                throw ValidationException::withMessages([
-                    'code' => ['Invalid security code.'],
-                ]);
+                throw ValidationException::withMessages(['code' => ['Invalid security code.']]);
             }
 
             if (($record->consumed_at ?? null) !== null) {
@@ -125,16 +107,12 @@ final class CleaningBookingWorkerSecurityCodeService
             }
 
             if (now()->greaterThan(Carbon::parse((string) $record->expires_at))) {
-                throw ValidationException::withMessages([
-                    'code' => ['Security code has expired.'],
-                ]);
+                throw ValidationException::withMessages(['code' => ['Security code has expired.']]);
             }
 
             $workerId = $this->resolveWorkerIdForSecurityCode($lockedBooking, $record);
             if ($workerId === null) {
-                throw ValidationException::withMessages([
-                    'code' => ['Security code is not available for this worker. Please request a new code.'],
-                ]);
+                throw ValidationException::withMessages(['code' => ['Security code is not available for this worker. Please request a new code.']]);
             }
 
             $assignment = $this->activeAssignmentForWorker($lockedBooking->id, $workerId, true);
@@ -143,9 +121,7 @@ final class CleaningBookingWorkerSecurityCodeService
 
             if ($assignment instanceof CleaningBookingWorkerAssignment) {
                 if ($assignment->arrived_at === null) {
-                    throw ValidationException::withMessages([
-                        'code' => ['Worker must arrive before this security code can be verified.'],
-                    ]);
+                    throw ValidationException::withMessages(['code' => ['Worker must arrive before this security code can be verified.']]);
                 }
 
                 $arrivedAt = $assignment->arrived_at;
@@ -154,19 +130,15 @@ final class CleaningBookingWorkerSecurityCodeService
                     'start_approved_at' => $assignment->start_approved_at ?? $verifiedAt,
                 ])->save();
             } elseif ((int) $lockedBooking->worker_id !== (int) $workerId) {
-                throw ValidationException::withMessages([
-                    'code' => ['Security code is not available for this worker. Please request a new code.'],
-                ]);
+                throw ValidationException::withMessages(['code' => ['Security code is not available for this worker. Please request a new code.']]);
             }
 
-            DB::table('booking_security_codes')
-                ->where('id', $record->id)
-                ->update([
-                    'attempts' => ((int) $record->attempts) + 1,
-                    'consumed_at' => $verifiedAt,
-                    'last_attempt_at' => $verifiedAt,
-                    'updated_at' => $verifiedAt,
-                ]);
+            DB::table('booking_security_codes')->where('id', $record->id)->update([
+                'attempts' => ((int) $record->attempts) + 1,
+                'consumed_at' => $verifiedAt,
+                'last_attempt_at' => $verifiedAt,
+                'updated_at' => $verifiedAt,
+            ]);
 
             $lockedBooking->forceFill([
                 'status' => $this->resolveBookingStatusAfterVerification($lockedBooking),
@@ -176,12 +148,7 @@ final class CleaningBookingWorkerSecurityCodeService
 
             $updated = $this->freshBooking($lockedBooking);
             $this->dispatchTrackingUpdate($updated);
-            BroadcastAfterResponse::send(new ArrivalVerified(
-                $updated->id,
-                $workerId,
-                (string) $arrivedAt?->toIso8601String(),
-                (string) $updated->status?->value,
-            ));
+            BroadcastAfterResponse::send(new ArrivalVerified($updated->id, $workerId, (string) $arrivedAt?->toIso8601String(), (string) $updated->status?->value));
             $this->lifecycleNotifications->notifyWorker(
                 booking: $updated,
                 canonicalType: 'cleaning.booking.start_verified',
@@ -214,8 +181,7 @@ final class CleaningBookingWorkerSecurityCodeService
             $query->where('worker_id', $worker->id);
         } else {
             $query->where(function ($scope) use ($worker): void {
-                $scope->where('worker_id', $worker->id)
-                    ->orWhereNull('worker_id');
+                $scope->where('worker_id', $worker->id)->orWhereNull('worker_id');
             });
         }
 
@@ -232,8 +198,7 @@ final class CleaningBookingWorkerSecurityCodeService
             ->where(function ($query) use ($providedHash, $code): void {
                 $query->where('code_hash', $providedHash)
                     ->orWhere(function ($legacy) use ($code): void {
-                        $legacy->whereNull('code_hash')
-                            ->where('code', $code);
+                        $legacy->whereNull('code_hash')->where('code', $code);
                     });
             })
             ->orderByRaw('consumed_at is null desc')
@@ -250,11 +215,7 @@ final class CleaningBookingWorkerSecurityCodeService
             ->whereNull('consumed_at')
             ->where('expires_at', '>', now())
             ->where('attempts', '<', self::MAX_SECURITY_CODE_ATTEMPTS)
-            ->update([
-                'attempts' => DB::raw('attempts + 1'),
-                'last_attempt_at' => now(),
-                'updated_at' => now(),
-            ]);
+            ->update(['attempts' => DB::raw('attempts + 1'), 'last_attempt_at' => now(), 'updated_at' => now()]);
     }
 
     private function resolveWorkerIdForSecurityCode(CleaningBooking $booking, object $record): ?int
@@ -307,8 +268,7 @@ final class CleaningBookingWorkerSecurityCodeService
         }
 
         $startedWorkers = $activeAssignments->filter(function (CleaningBookingWorkerAssignment $assignment): bool {
-            return $this->assignmentStatus($assignment) === CleaningBookingWorkerAssignmentStatus::InProgress->value
-                && $assignment->work_started_at !== null;
+            return $this->assignmentStatus($assignment) === CleaningBookingWorkerAssignmentStatus::InProgress->value && $assignment->work_started_at !== null;
         })->count();
 
         return $startedWorkers >= max(1, (int) ($booking->number_of_workers ?? 1))
@@ -316,13 +276,11 @@ final class CleaningBookingWorkerSecurityCodeService
             : CleaningBookingStatus::AwaitingWorkerStartConfirmation;
     }
 
-    /**
-     * @return array{code:string,hash:string}
-     */
+    /** @return array{code:string,hash:string} */
     private function uniqueSecurityCodeForBooking(CleaningBooking $booking): array
     {
         for ($attempt = 0; $attempt < 20; $attempt++) {
-            $code = mb_str_pad((string) random_int(0, 9999), self::SECURITY_CODE_LENGTH, '0', STR_PAD_LEFT);
+            $code = str_pad((string) random_int(0, 9999), self::SECURITY_CODE_LENGTH, '0', STR_PAD_LEFT);
             $hash = $this->securityCodeHash($code);
 
             $exists = DB::table('booking_security_codes')
@@ -358,31 +316,20 @@ final class CleaningBookingWorkerSecurityCodeService
     private function currentWorker(): Worker
     {
         $worker = Auth::user()?->worker;
-
         if (! $worker instanceof Worker) {
             throw new InvalidArgumentException('User must have an associated worker.');
         }
-
         return $worker;
     }
 
     private function lockBooking(CleaningBooking $booking): CleaningBooking
     {
-        return CleaningBooking::query()
-            ->whereKey($booking->id)
-            ->lockForUpdate()
-            ->firstOrFail();
+        return CleaningBooking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
     }
 
     private function assertBookingIsNotTerminal(CleaningBooking $booking): void
     {
-        if (in_array($booking->status, [
-            CleaningBookingStatus::Completed,
-            CleaningBookingStatus::Cancelled,
-            CleaningBookingStatus::UnderDispute,
-            CleaningBookingStatus::AwaitingCustomerCompletion,
-            CleaningBookingStatus::TimeExtensionRequested,
-        ], true)) {
+        if (in_array($booking->status, [CleaningBookingStatus::Completed, CleaningBookingStatus::Cancelled, CleaningBookingStatus::UnderDispute], true)) {
             throw new InvalidArgumentException('Security code is only available for bookings ready to start.');
         }
     }
@@ -394,15 +341,12 @@ final class CleaningBookingWorkerSecurityCodeService
 
     private function assignmentStatus(CleaningBookingWorkerAssignment $assignment): string
     {
-        return $assignment->status instanceof CleaningBookingWorkerAssignmentStatus
-            ? $assignment->status->value
-            : (string) $assignment->status;
+        return $assignment->status instanceof CleaningBookingWorkerAssignmentStatus ? $assignment->status->value : (string) $assignment->status;
     }
 
     private function dispatchTrackingUpdate(CleaningBooking $booking): void
     {
         $status = $booking->status instanceof CleaningBookingStatus ? $booking->status->value : (string) $booking->status;
-
         BroadcastAfterResponse::send(new CleaningBookingTrackingUpdated($booking->id, [
             'cleaningBookingId' => $booking->id,
             'status' => $status,
@@ -432,16 +376,6 @@ final class CleaningBookingWorkerSecurityCodeService
 
     private function freshBooking(CleaningBooking $booking): CleaningBooking
     {
-        return $booking->fresh([
-            'customer',
-            'worker.user',
-            'preferredWorker.user',
-            'rooms.assignedWorker.user',
-            'workerAssignments.worker.user',
-            'addons',
-            'billingPolicy',
-            'timeWarnings',
-            'disputes',
-        ]);
+        return $booking->fresh(['customer', 'worker.user', 'preferredWorker.user', 'rooms.assignedWorker.user', 'workerAssignments.worker.user', 'addons', 'billingPolicy', 'timeWarnings', 'disputes']);
     }
 }
