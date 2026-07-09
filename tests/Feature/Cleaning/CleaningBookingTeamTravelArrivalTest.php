@@ -75,6 +75,69 @@ it('allows another team worker to start travel and arrive even when the global b
     expect($workerOneUser)->toBeInstanceOf(User::class);
 });
 
+it('keeps team worker arrival assignment-aware when only the global travel timestamp exists', function (): void {
+    [$workerOneUser, $workerOne] = createTravelArrivalWorker('team-global-travel-one@example.com');
+    [$workerTwoUser, $workerTwo] = createTravelArrivalWorker('team-global-travel-two@example.com');
+    $startedTravelAt = now()->subMinutes(10);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $workerOne->id,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'status' => CleaningBookingStatus::WorkerAssigned,
+        'number_of_workers' => 2,
+        'started_travel_at' => $startedTravelAt,
+    ]);
+
+    createTravelArrivalAssignment($booking, $workerOne, CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart, [
+        'started_travel_at' => $startedTravelAt,
+    ]);
+    createTravelArrivalAssignment($booking, $workerTwo, CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart);
+
+    Sanctum::actingAs($workerTwoUser);
+    $arriveResponse = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/arrive");
+
+    $arriveResponse->assertOk();
+    $arriveResponse->assertJsonPath('data.order_status', CleaningBookingStatus::AwaitingStartVerification->value);
+    $arriveResponse->assertJsonPath('data.worker_order_status', CleaningBookingWorkerAssignmentStatus::AwaitingStartVerification->value);
+
+    expect(DB::table('cleaning_booking_worker_assignments')
+        ->where('cleaning_booking_id', $booking->id)
+        ->where('worker_id', $workerTwo->id)
+        ->value('started_travel_at'))->not->toBeNull();
+
+    $this->assertDatabaseHas('cleaning_booking_worker_assignments', [
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $workerTwo->id,
+        'status' => CleaningBookingWorkerAssignmentStatus::AwaitingStartVerification->value,
+    ]);
+    $this->assertDatabaseHas('cleaning_bookings', [
+        'id' => $booking->id,
+        'status' => CleaningBookingStatus::AwaitingStartVerification->value,
+    ]);
+
+    expect($workerOneUser)->toBeInstanceOf(User::class);
+});
+
+it('still requires explicit travel start before arrival for a one-worker booking', function (): void {
+    [$workerUser, $worker] = createTravelArrivalWorker('single-worker-arrival@example.com');
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'status' => CleaningBookingStatus::WorkerAssigned,
+        'number_of_workers' => 1,
+        'started_travel_at' => null,
+    ]);
+
+    createTravelArrivalAssignment($booking, $worker, CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart);
+
+    Sanctum::actingAs($workerUser);
+    $arriveResponse = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/arrive");
+
+    $arriveResponse->assertUnprocessable();
+    $arriveResponse->assertJsonPath('errors.status.0', 'Worker must have started travel before marking arrival.');
+});
+
 function createTravelArrivalWorker(string $email): array
 {
     $user = User::factory()->create(['email' => $email]);
