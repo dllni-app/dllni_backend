@@ -118,7 +118,7 @@ it('keeps team worker arrival assignment-aware when only the global travel times
     expect($workerOneUser)->toBeInstanceOf(User::class);
 });
 
-it('requires a separate customer security confirmation for every arrived worker', function (): void {
+it('requires a separate customer security confirmation for every arrived worker and lets each worker start and finish independently', function (): void {
     $customer = User::factory()->create(['email' => 'team-code-customer@example.com']);
     [$workerOneUser, $workerOne] = createTravelArrivalWorker('team-code-worker-one@example.com');
     [$workerTwoUser, $workerTwo] = createTravelArrivalWorker('team-code-worker-two@example.com');
@@ -189,6 +189,25 @@ it('requires a separate customer security confirmation for every arrived worker'
         ->assertUnprocessable()
         ->assertJsonPath('errors.status.0', 'Customer must verify the security code before work can start.');
 
+    Sanctum::actingAs($workerOneUser);
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/complete", [
+        'completionMessage' => 'Worker one finished.',
+    ])
+        ->assertOk()
+        ->assertJsonPath('data.status', CleaningBookingStatus::AwaitingCustomerCompletion->value)
+        ->assertJsonPath('data.worker_order_status', CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion->value)
+        ->assertJsonPath('data.order_status', CleaningBookingStatus::AwaitingStartVerification->value);
+
+    $this->assertDatabaseHas('cleaning_booking_worker_assignments', [
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $workerOne->id,
+        'status' => CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion->value,
+    ]);
+    $this->assertDatabaseHas('cleaning_bookings', [
+        'id' => $booking->id,
+        'status' => CleaningBookingStatus::AwaitingStartVerification->value,
+    ]);
+
     Sanctum::actingAs($customer);
     $confirmTwo = $this->postJson("/api/v1/user/cleaning/orders/{$booking->id}/start-verification/confirm", [
         'code' => $workerTwoCode,
@@ -207,6 +226,13 @@ it('requires a separate customer security confirmation for every arrived worker'
         ->assertOk()
         ->assertJsonPath('data.status', CleaningBookingStatus::InProgress->value)
         ->assertJsonPath('data.order_status', CleaningBookingStatus::InProgress->value);
+
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/complete", [
+        'completionMessage' => 'Worker two finished.',
+    ])
+        ->assertOk()
+        ->assertJsonPath('data.status', CleaningBookingStatus::AwaitingCustomerCompletion->value)
+        ->assertJsonPath('data.order_status', CleaningBookingStatus::AwaitingCustomerCompletion->value);
 
     $this->assertDatabaseHas('booking_security_codes', [
         'booking_id' => $booking->id,
