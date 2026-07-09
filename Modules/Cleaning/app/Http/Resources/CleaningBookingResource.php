@@ -219,11 +219,13 @@ final class CleaningBookingResource extends JsonResource
     {
         $worker = $assignment->relationLoaded('worker') ? $assignment->worker : null;
         $roomIds = $this->relationLoaded('rooms') ? $this->rooms->where('assigned_worker_id', $assignment->worker_id)->pluck('id')->values()->all() : [];
+        $assignmentStatus = $this->assignmentStatusForResponse($assignment);
+
         return [
             'id' => $assignment->id,
             'workerId' => $assignment->worker_id,
-            'status' => $this->assignmentStatus($assignment),
-            'statusLabel' => $this->label($this->assignmentStatus($assignment)),
+            'status' => $assignmentStatus,
+            'statusLabel' => $this->label($assignmentStatus),
             'acceptedAt' => $assignment->accepted_at?->toIso8601String(),
             'startedTravelAt' => $assignment->started_travel_at?->toIso8601String(),
             'arrivedAt' => $assignment->arrived_at?->toIso8601String(),
@@ -279,7 +281,7 @@ final class CleaningBookingResource extends JsonResource
             return $globalStatus;
         }
 
-        return $assignment instanceof CleaningBookingWorkerAssignment ? $this->assignmentStatus($assignment) : $globalStatus;
+        return $assignment instanceof CleaningBookingWorkerAssignment ? $this->assignmentStatusForResponse($assignment) : $globalStatus;
     }
 
     private function responseStatusForRequest(?CleaningBookingWorkerAssignment $assignment, string $globalStatus): string
@@ -296,7 +298,18 @@ final class CleaningBookingResource extends JsonResource
             return $globalStatus;
         }
 
-        return match ($this->assignmentStatus($assignment)) {
+        $assignmentStatus = $this->assignmentStatus($assignment);
+
+        if (
+            $globalStatus === CleaningBookingStatus::AwaitingWorkerStartConfirmation->value
+            && $assignmentStatus === CleaningBookingWorkerAssignmentStatus::AwaitingStartVerification->value
+        ) {
+            return $assignment->arrived_at !== null
+                ? CleaningBookingStatus::AwaitingWorkerStartConfirmation->value
+                : CleaningBookingStatus::WorkerAssigned->value;
+        }
+
+        return match ($assignmentStatus) {
             CleaningBookingWorkerAssignmentStatus::AwaitingStartVerification->value => $assignment->arrived_at !== null
                 ? CleaningBookingStatus::AwaitingStartVerification->value
                 : CleaningBookingStatus::WorkerAssigned->value,
@@ -309,6 +322,24 @@ final class CleaningBookingResource extends JsonResource
                 ? CleaningBookingStatus::Pending->value
                 : CleaningBookingStatus::WorkerAssigned->value,
         };
+    }
+
+    private function assignmentStatusForResponse(CleaningBookingWorkerAssignment $assignment): string
+    {
+        $assignmentStatus = $this->assignmentStatus($assignment);
+        $globalStatus = $this->status instanceof CleaningBookingStatus
+            ? $this->status->value
+            : (string) $this->status;
+
+        if (
+            $globalStatus === CleaningBookingStatus::AwaitingWorkerStartConfirmation->value
+            && $assignmentStatus === CleaningBookingWorkerAssignmentStatus::AwaitingStartVerification->value
+            && $assignment->arrived_at !== null
+        ) {
+            return CleaningBookingStatus::AwaitingWorkerStartConfirmation->value;
+        }
+
+        return $assignmentStatus;
     }
 
     private function assignmentStatus(CleaningBookingWorkerAssignment $assignment): string
