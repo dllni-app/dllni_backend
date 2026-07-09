@@ -11,6 +11,7 @@ use Modules\Cleaning\Http\Controllers\API\CleaningBookingCompleteController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingDeliveryFeeController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingPriceAdjustmentRequestController;
+use Modules\Cleaning\Http\Controllers\API\CleaningBookingSecurityCodeController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingStartTravelController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingStartWorkController;
 use Modules\Cleaning\Http\Controllers\API\CleaningNeighborhoodController;
@@ -86,7 +87,7 @@ Route::prefix('v1')->group(function () {
         Route::post('cleaning-bookings/{cleaning_booking}/accept', [CleaningBookingController::class, 'accept'])->name('cleaning-bookings.accept');
         Route::post('cleaning-bookings/{cleaning_booking}/rooms/claim', [CleaningBookingController::class, 'claimRooms'])->name('cleaning-bookings.rooms.claim');
         Route::post('cleaning-bookings/{cleaning_booking}/reject', [CleaningBookingController::class, 'reject'])->name('cleaning-bookings.reject');
-        Route::get('cleaning-bookings/{cleaning_booking}/security-code', [CleaningBookingController::class, 'securityCode'])->name('cleaning-bookings.security-code');
+        Route::get('cleaning-bookings/{cleaning_booking}/security-code', CleaningBookingSecurityCodeController::class)->name('cleaning-bookings.security-code');
         Route::post('cleaning-bookings/{cleaning_booking}/sos', [CleaningBookingController::class, 'sos'])->name('cleaning-bookings.sos');
         Route::post('cleaning-bookings/{cleaning_booking}/start-travel', CleaningBookingStartTravelController::class)->name('cleaning-bookings.start-travel');
         Route::post('cleaning-bookings/{cleaning_booking}/location', [CleaningBookingController::class, 'updateLocation'])->name('cleaning-bookings.location');
