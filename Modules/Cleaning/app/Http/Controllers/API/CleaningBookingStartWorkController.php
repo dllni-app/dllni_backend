@@ -236,6 +236,7 @@ final class CleaningBookingStartWorkController
             'worker.user',
             'preferredWorker.user',
             'rooms.assignedWorker.user',
+            'workerAssignments.worker.user',
             'addons',
             'billingPolicy',
             'timeWarnings',
