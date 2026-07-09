@@ -16,12 +16,14 @@ use Modules\Cleaning\Http\Resources\CleaningTimeWarningResource;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningTimeWarning;
 use Modules\Cleaning\Services\CleaningTimeWarningService;
+use Modules\Cleaning\Services\CleaningTimeWarningWorkerNotificationService;
 use Throwable;
 
 final class CleaningTimeWarningController
 {
     public function __construct(
-        private CleaningTimeWarningService $cleaningTimeWarningService
+        private CleaningTimeWarningService $cleaningTimeWarningService,
+        private CleaningTimeWarningWorkerNotificationService $workerNotificationService,
     ) {}
 
     public function index(CleaningTimeWarningFilterRequest $request): AnonymousResourceCollection
@@ -69,6 +71,7 @@ final class CleaningTimeWarningController
     public function accept(CleaningTimeWarningAcceptRequest $request, CleaningTimeWarning $cleaning_time_warning): CleaningTimeWarningResource
     {
         $this->ensureWorkerOwnsWarning($cleaning_time_warning);
+        $fromStatus = $this->warningStatus($cleaning_time_warning);
 
         try {
             $warning = $this->cleaningTimeWarningService->accept(
@@ -79,6 +82,8 @@ final class CleaningTimeWarningController
             throw ValidationException::withMessages(['warning' => [$e->getMessage()]]);
         }
 
+        $this->workerNotificationService->accepted($warning, $fromStatus);
+
         return CleaningTimeWarningResource::make($warning->load(['booking']));
     }
 
@@ -86,6 +91,7 @@ final class CleaningTimeWarningController
     public function reject(CleaningTimeWarningRejectRequest $request, CleaningTimeWarning $cleaning_time_warning): CleaningTimeWarningResource
     {
         $this->ensureWorkerOwnsWarning($cleaning_time_warning);
+        $fromStatus = $this->warningStatus($cleaning_time_warning);
 
         try {
             $warning = $this->cleaningTimeWarningService->reject(
@@ -95,6 +101,8 @@ final class CleaningTimeWarningController
         } catch (InvalidArgumentException $e) {
             throw ValidationException::withMessages(['warning' => [$e->getMessage()]]);
         }
+
+        $this->workerNotificationService->declined($warning, $fromStatus, $request->validated('message'));
 
         return CleaningTimeWarningResource::make($warning->load(['booking']));
     }
@@ -132,5 +140,14 @@ final class CleaningTimeWarningController
             ->where('worker_id', $workerId)
             ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
             ->exists();
+    }
+
+    private function warningStatus(CleaningTimeWarning $warning): ?string
+    {
+        $booking = $warning->booking;
+
+        return $booking instanceof CleaningBooking
+            ? ($booking->status?->value ?? (string) $booking->status)
+            : null;
     }
 }
