@@ -91,6 +91,8 @@ final class CleaningBookingStartWorkController
                 CleaningBookingStatus::AwaitingStartVerification,
                 CleaningBookingStatus::AwaitingWorkerStartConfirmation,
                 CleaningBookingStatus::InProgress,
+                CleaningBookingStatus::AwaitingCustomerCompletion,
+                CleaningBookingStatus::TimeExtensionRequested,
             ], true)) {
                 throw new InvalidArgumentException('Booking must be ready to start before approving work start.');
             }
