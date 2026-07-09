@@ -29,6 +29,8 @@ final class CleaningTimeWarningResource extends JsonResource
             'id' => $this->id,
             'bookingId' => $this->booking_id,
             'bookingType' => $this->booking_type,
+            'workerId' => $this->worker_id,
+            'worker_id' => $this->worker_id,
             'bookingStatus' => $bookingStatus,
             'booking_status' => $bookingStatus,
             'status' => $responseStatus,
