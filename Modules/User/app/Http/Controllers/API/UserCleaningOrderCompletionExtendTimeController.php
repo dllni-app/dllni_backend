@@ -22,6 +22,8 @@ final class UserCleaningOrderCompletionExtendTimeController
             booking: $model,
             additionalMinutes: (int) $request->validated('additionalMinutes'),
             customerMessage: $request->customerMessage(),
+            workerId: $request->targetWorkerId(),
+            assignmentId: $request->targetAssignmentId(),
         );
         $updated = $result['booking'];
         $updated->load(['worker.user', 'workerAssignments.worker.user', 'rooms.assignedWorker.user', 'timeWarnings', 'disputes', 'addons', 'billingPolicy']);
