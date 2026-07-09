@@ -31,9 +31,12 @@ final class CleaningBookingCompleteController
     {
         $this->ensureWorkerCanActOnBooking($cleaning_booking);
 
+        $finishedServices = $request->finishedCleaningServices();
+        $finishedRooms = $request->finishedPropertyRooms();
+
         try {
             $booking = $this->shouldUseTeamCompletionFlow($cleaning_booking)
-                ? $this->completeTeamWorker($cleaning_booking, $request->completionMessage())
+                ? $this->completeTeamWorker($cleaning_booking, $request->completionMessage(), $finishedServices, $finishedRooms)
                 : $this->cleaningBookingService->complete(
                     $cleaning_booking,
                     $request->completionMessage(),
@@ -43,10 +46,8 @@ final class CleaningBookingCompleteController
         }
 
         $booking = $this->loadBookingDetails($booking);
-        $finishedServices = $request->finishedCleaningServices();
-        $finishedRooms = $request->finishedPropertyRooms();
 
-        if ($booking->status === CleaningBookingStatus::AwaitingCustomerCompletion) {
+        if (! $this->shouldUseTeamCompletionFlow($booking) && $booking->status === CleaningBookingStatus::AwaitingCustomerCompletion) {
             $booking->forceFill([
                 'worker_finished_cleaning_services' => $finishedServices !== [] ? $finishedServices : $this->inferFinishedServices($booking),
                 'worker_finished_property_rooms' => $finishedRooms !== [] ? $finishedRooms : $this->inferFinishedRooms($booking),
@@ -84,13 +85,17 @@ final class CleaningBookingCompleteController
             && $booking->workerAssignments()->exists();
     }
 
-    private function completeTeamWorker(CleaningBooking $booking, ?string $completionMessage = null): CleaningBooking
+    /**
+     * @param  array<int, array<string, mixed>>  $finishedServices
+     * @param  array<int, array<string, mixed>>  $finishedRooms
+     */
+    private function completeTeamWorker(CleaningBooking $booking, ?string $completionMessage, array $finishedServices, array $finishedRooms): CleaningBooking
     {
         $completionMessage = is_string($completionMessage) && mb_trim($completionMessage) !== ''
             ? mb_trim($completionMessage)
             : null;
 
-        $updated = DB::transaction(function () use ($booking, $completionMessage): CleaningBooking {
+        $updated = DB::transaction(function () use ($booking, $completionMessage, $finishedServices, $finishedRooms): CleaningBooking {
             $worker = Auth::user()?->worker;
             if (! $worker instanceof Worker) {
                 throw new InvalidArgumentException('User must have an associated worker.');
@@ -133,11 +138,14 @@ final class CleaningBookingCompleteController
                 throw new InvalidArgumentException('Worker assignment must be in progress to mark completion.');
             }
 
+            $lockedBooking->loadMissing(['rooms', 'addons']);
             $finishedAt = now();
             $assignment->forceFill([
                 'status' => CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion,
                 'work_finished_at' => $finishedAt,
                 'worker_completion_message' => $completionMessage,
+                'worker_finished_cleaning_services' => $finishedServices !== [] ? $finishedServices : $this->inferFinishedServices($lockedBooking),
+                'worker_finished_property_rooms' => $finishedRooms !== [] ? $finishedRooms : $this->inferFinishedRoomsForWorker($lockedBooking, $worker->id),
             ])->save();
 
             $statusAfterCompletion = $this->resolveBookingStatusAfterWorkerCompletion($lockedBooking);
@@ -148,6 +156,8 @@ final class CleaningBookingCompleteController
             if ($statusAfterCompletion === CleaningBookingStatus::AwaitingCustomerCompletion) {
                 $updates['work_finished_at'] = $finishedAt;
                 $updates['worker_completion_message'] = $completionMessage;
+                $updates['worker_finished_cleaning_services'] = $assignment->worker_finished_cleaning_services;
+                $updates['worker_finished_property_rooms'] = $assignment->worker_finished_property_rooms;
                 $updates['customer_completion_rejection_message'] = null;
                 $updates['completion_rejected_at'] = null;
             }
@@ -164,41 +174,38 @@ final class CleaningBookingCompleteController
 
     private function resolveBookingStatusAfterWorkerCompletion(CleaningBooking $booking): CleaningBookingStatus
     {
-        $activeAssignments = CleaningBookingWorkerAssignment::query()
+        $assignments = CleaningBookingWorkerAssignment::query()
             ->where('cleaning_booking_id', $booking->id)
-            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::activeValues())
+            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
             ->lockForUpdate()
             ->get();
 
         $requiredWorkers = max(1, (int) ($booking->number_of_workers ?? 1));
-        $finishedWorkers = $activeAssignments->filter(function (CleaningBookingWorkerAssignment $assignment): bool {
-            return in_array($this->assignmentStatus($assignment), [
-                CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion->value,
-                CleaningBookingWorkerAssignmentStatus::Completed->value,
-            ], true);
+        $awaitingCustomer = $assignments->filter(function (CleaningBookingWorkerAssignment $assignment): bool {
+            return $this->assignmentStatus($assignment) === CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion->value;
         })->count();
 
-        if ($finishedWorkers >= $requiredWorkers) {
+        if ($awaitingCustomer > 0) {
             return CleaningBookingStatus::AwaitingCustomerCompletion;
         }
 
-        $hasArrivedWorkerWaitingForCode = $activeAssignments->contains(function (CleaningBookingWorkerAssignment $assignment): bool {
-            return $assignment->arrived_at !== null
-                && $assignment->start_approved_at === null
-                && ! in_array($this->assignmentStatus($assignment), [
-                    CleaningBookingWorkerAssignmentStatus::StartApproved->value,
-                    CleaningBookingWorkerAssignmentStatus::InProgress->value,
-                    CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion->value,
-                    CleaningBookingWorkerAssignmentStatus::TimeExtensionRequested->value,
-                    CleaningBookingWorkerAssignmentStatus::Completed->value,
-                ], true);
-        });
+        $completedWorkers = $assignments->filter(function (CleaningBookingWorkerAssignment $assignment): bool {
+            return $this->assignmentStatus($assignment) === CleaningBookingWorkerAssignmentStatus::Completed->value;
+        })->count();
 
-        if ($hasArrivedWorkerWaitingForCode) {
-            return CleaningBookingStatus::AwaitingStartVerification;
+        if ($completedWorkers >= $requiredWorkers) {
+            return CleaningBookingStatus::Completed;
         }
 
-        $hasStartedWorker = $activeAssignments->contains(function (CleaningBookingWorkerAssignment $assignment): bool {
+        $hasExtensionRequest = $assignments->contains(function (CleaningBookingWorkerAssignment $assignment): bool {
+            return $this->assignmentStatus($assignment) === CleaningBookingWorkerAssignmentStatus::TimeExtensionRequested->value;
+        });
+
+        if ($hasExtensionRequest) {
+            return CleaningBookingStatus::TimeExtensionRequested;
+        }
+
+        $hasStartedWorker = $assignments->contains(function (CleaningBookingWorkerAssignment $assignment): bool {
             return $this->assignmentStatus($assignment) === CleaningBookingWorkerAssignmentStatus::InProgress->value
                 && $assignment->work_started_at !== null;
         });
@@ -207,7 +214,7 @@ final class CleaningBookingCompleteController
             return CleaningBookingStatus::InProgress;
         }
 
-        $hasStartApprovedWorker = $activeAssignments->contains(function (CleaningBookingWorkerAssignment $assignment): bool {
+        $hasStartApprovedWorker = $assignments->contains(function (CleaningBookingWorkerAssignment $assignment): bool {
             return $this->assignmentStatus($assignment) === CleaningBookingWorkerAssignmentStatus::StartApproved->value
                 || $assignment->start_approved_at !== null;
         });
@@ -315,6 +322,26 @@ final class CleaningBookingCompleteController
     private function inferFinishedRooms(CleaningBooking $booking): array
     {
         return $booking->rooms
+            ->map(static fn (CleaningBookingRoom $room): array => [
+                'id' => $room->id,
+                'roomKey' => $room->room_key,
+                'roomType' => $room->room_type,
+                'displayLabel' => $room->display_label,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function inferFinishedRoomsForWorker(CleaningBooking $booking, int $workerId): array
+    {
+        $rooms = $booking->rooms->where('assigned_worker_id', $workerId);
+
+        if ($rooms->isEmpty()) {
+            return $this->inferFinishedRooms($booking);
+        }
+
+        return $rooms
             ->map(static fn (CleaningBookingRoom $room): array => [
                 'id' => $room->id,
                 'roomKey' => $room->room_key,
