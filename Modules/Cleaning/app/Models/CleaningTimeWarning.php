@@ -6,7 +6,9 @@ namespace Modules\Cleaning\Models;
 
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use App\Models\Worker;
 use Modules\Cleaning\Enums\CleaningTimeWarningResponse;
 use Modules\Cleaning\Observers\CleaningTimeWarningObserver;
 use Modules\Cleaning\Traits\FilterQueries\CleaningTimeWarningFilterQuery;
@@ -19,6 +21,7 @@ final class CleaningTimeWarning extends Model
     protected $fillable = [
         'booking_id',
         'booking_type',
+        'worker_id',
         'customer_response',
         'customer_message',
         'worker_response',
@@ -37,9 +40,15 @@ final class CleaningTimeWarning extends Model
         return $this->morphTo(__FUNCTION__, 'booking_type', 'booking_id');
     }
 
+    public function worker(): BelongsTo
+    {
+        return $this->belongsTo(Worker::class);
+    }
+
     public function casts(): array
     {
         return [
+            'worker_id' => 'integer',
             'customer_response' => CleaningTimeWarningResponse::class,
             'worker_response' => CleaningTimeWarningResponse::class,
             'sent_at' => 'datetime',
