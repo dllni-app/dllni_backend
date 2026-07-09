@@ -149,13 +149,16 @@ final class CleaningBookingWorkerSecurityCodeService
             $updated = $this->freshBooking($lockedBooking);
             $this->dispatchTrackingUpdate($updated);
             BroadcastAfterResponse::send(new ArrivalVerified($updated->id, $workerId, (string) $arrivedAt?->toIso8601String(), (string) $updated->status?->value));
-            $this->lifecycleNotifications->notifyWorker(
+            $this->lifecycleNotifications->notifyWorkerById(
                 booking: $updated,
+                workerId: $workerId,
                 canonicalType: 'cleaning.booking.start_verified',
                 action: 'start_verified',
                 actorRole: 'customer',
                 fromStatus: CleaningBookingStatus::AwaitingStartVerification->value,
                 occurredAt: $verifiedAt->toIso8601String(),
+                extraData: ['assignmentId' => $assignment?->id],
+                templateContext: ['assignmentId' => $assignment?->id],
             );
 
             return $updated;
