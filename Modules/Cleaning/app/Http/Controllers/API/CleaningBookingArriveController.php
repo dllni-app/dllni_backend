@@ -49,6 +49,13 @@ final class CleaningBookingArriveController
 
                 if ($assignment instanceof CleaningBookingWorkerAssignment) {
                     $isTeamBooking = max(1, (int) ($lockedBooking->number_of_workers ?? 1)) > 1;
+                    $assignmentStatus = $assignment->status instanceof CleaningBookingWorkerAssignmentStatus
+                        ? $assignment->status->value
+                        : (string) $assignment->status;
+
+                    if ($assignmentStatus === CleaningBookingWorkerAssignmentStatus::InProgress->value) {
+                        return $this->freshBooking($lockedBooking);
+                    }
 
                     if ($isTeamBooking) {
                         if (in_array($lockedBooking->status, [
@@ -78,21 +85,19 @@ final class CleaningBookingArriveController
                         'status' => CleaningBookingWorkerAssignmentStatus::AwaitingStartVerification,
                         'started_travel_at' => $startedTravelAt,
                         'arrived_at' => $arrivedAt,
+                        'start_approved_at' => null,
                     ])->save();
 
-                    $updates = [];
-                    if ($lockedBooking->status !== CleaningBookingStatus::AwaitingWorkerStartConfirmation) {
-                        $updates['status'] = CleaningBookingStatus::AwaitingStartVerification;
-                    }
+                    $updates = [
+                        'status' => CleaningBookingStatus::AwaitingStartVerification,
+                    ];
                     if ($lockedBooking->started_travel_at === null) {
                         $updates['started_travel_at'] = $startedTravelAt;
                     }
                     if ($lockedBooking->arrived_at === null) {
                         $updates['arrived_at'] = $arrivedAt;
                     }
-                    if ($updates !== []) {
-                        $lockedBooking->forceFill($updates)->save();
-                    }
+                    $lockedBooking->forceFill($updates)->save();
 
                     return $this->freshBooking($lockedBooking);
                 }
