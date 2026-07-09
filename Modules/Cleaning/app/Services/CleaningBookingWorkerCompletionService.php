@@ -25,14 +25,15 @@ final class CleaningBookingWorkerCompletionService
         private readonly DepositService $depositService,
     ) {}
 
-    public function confirm(CleaningBooking $booking): CleaningBooking
+    public function confirm(CleaningBooking $booking, ?int $workerId = null, ?int $assignmentId = null): CleaningBooking
     {
         $fromStatus = (string) $booking->status->value;
         $decisionWorkerId = null;
+        $decisionAssignmentId = null;
 
-        $updated = DB::transaction(function () use ($booking, &$decisionWorkerId): CleaningBooking {
+        $updated = DB::transaction(function () use ($booking, $workerId, $assignmentId, &$decisionWorkerId, &$decisionAssignmentId): CleaningBooking {
             $lockedBooking = $this->lockBooking($booking);
-            $assignment = $this->pendingCompletionAssignment($lockedBooking, true);
+            $assignment = $this->resolvePendingCompletionAssignment($lockedBooking, $workerId, $assignmentId, true);
 
             if (! $assignment instanceof CleaningBookingWorkerAssignment) {
                 if ($lockedBooking->status !== CleaningBookingStatus::AwaitingCustomerCompletion) {
@@ -50,6 +51,7 @@ final class CleaningBookingWorkerCompletionService
             }
 
             $decisionWorkerId = (int) $assignment->worker_id;
+            $decisionAssignmentId = (int) $assignment->id;
             $assignment->forceFill([
                 'status' => CleaningBookingWorkerAssignmentStatus::Completed,
             ])->save();
@@ -75,16 +77,20 @@ final class CleaningBookingWorkerCompletionService
             $this->recordAdminFees($updated);
         }
 
-        $this->dispatchTrackingUpdate($updated);
+        $this->dispatchTrackingUpdate($updated, $decisionWorkerId, $decisionAssignmentId);
         BroadcastAfterResponse::send(new CompletionDecisionMade(
             $updated->id,
             $decisionWorkerId ?? $updated->worker_id,
             'approved',
             null,
             now()->toIso8601String(),
+            $updated->status?->value,
+            null,
         ));
-        $this->lifecycleNotifications->notifyWorker(
+        $this->notifyWorkerDecision(
             booking: $updated,
+            workerId: $decisionWorkerId,
+            assignmentId: $decisionAssignmentId,
             canonicalType: 'cleaning.booking.completion_approved',
             action: 'completion_approved',
             actorRole: 'customer',
@@ -95,14 +101,15 @@ final class CleaningBookingWorkerCompletionService
         return $updated;
     }
 
-    public function reject(CleaningBooking $booking, ?string $message = null): CleaningBooking
+    public function reject(CleaningBooking $booking, ?string $message = null, ?int $workerId = null, ?int $assignmentId = null): CleaningBooking
     {
         $fromStatus = (string) $booking->status->value;
         $decisionWorkerId = null;
+        $decisionAssignmentId = null;
 
-        $updated = DB::transaction(function () use ($booking, $message, &$decisionWorkerId): CleaningBooking {
+        $updated = DB::transaction(function () use ($booking, $message, $workerId, $assignmentId, &$decisionWorkerId, &$decisionAssignmentId): CleaningBooking {
             $lockedBooking = $this->lockBooking($booking);
-            $assignment = $this->pendingCompletionAssignment($lockedBooking, true);
+            $assignment = $this->resolvePendingCompletionAssignment($lockedBooking, $workerId, $assignmentId, true);
 
             if (! $assignment instanceof CleaningBookingWorkerAssignment) {
                 if ($lockedBooking->status !== CleaningBookingStatus::AwaitingCustomerCompletion) {
@@ -122,6 +129,7 @@ final class CleaningBookingWorkerCompletionService
             }
 
             $decisionWorkerId = (int) $assignment->worker_id;
+            $decisionAssignmentId = (int) $assignment->id;
             $assignment->forceFill([
                 'status' => CleaningBookingWorkerAssignmentStatus::InProgress,
                 'work_finished_at' => null,
@@ -140,16 +148,20 @@ final class CleaningBookingWorkerCompletionService
             return $this->freshBooking($lockedBooking);
         });
 
-        $this->dispatchTrackingUpdate($updated);
+        $this->dispatchTrackingUpdate($updated, $decisionWorkerId, $decisionAssignmentId);
         BroadcastAfterResponse::send(new CompletionDecisionMade(
             $updated->id,
             $decisionWorkerId ?? $updated->worker_id,
             'rejected',
             $message,
             now()->toIso8601String(),
+            $updated->status?->value,
+            null,
         ));
-        $this->lifecycleNotifications->notifyWorker(
+        $this->notifyWorkerDecision(
             booking: $updated,
+            workerId: $decisionWorkerId,
+            assignmentId: $decisionAssignmentId,
             canonicalType: 'cleaning.booking.completion_rejected',
             action: 'completion_rejected',
             actorRole: 'customer',
@@ -163,15 +175,16 @@ final class CleaningBookingWorkerCompletionService
     /**
      * @return array{booking:CleaningBooking,extensionPricing:array<string,mixed>,warning:CleaningTimeWarning}
      */
-    public function requestExtension(CleaningBooking $booking, int $additionalMinutes, ?string $customerMessage = null): array
+    public function requestExtension(CleaningBooking $booking, int $additionalMinutes, ?string $customerMessage = null, ?int $workerId = null, ?int $assignmentId = null): array
     {
         $fromStatus = (string) $booking->status->value;
         $extensionPricing = $this->extendedTimePricing->quote($additionalMinutes);
         $decisionWorkerId = null;
+        $decisionAssignmentId = null;
 
-        $result = DB::transaction(function () use ($booking, $additionalMinutes, $customerMessage, $extensionPricing, &$decisionWorkerId): array {
+        $result = DB::transaction(function () use ($booking, $additionalMinutes, $customerMessage, $extensionPricing, $workerId, $assignmentId, &$decisionWorkerId, &$decisionAssignmentId): array {
             $lockedBooking = $this->lockBooking($booking);
-            $assignment = $this->pendingCompletionAssignment($lockedBooking, true);
+            $assignment = $this->resolvePendingCompletionAssignment($lockedBooking, $workerId, $assignmentId, true);
 
             if (! $assignment instanceof CleaningBookingWorkerAssignment) {
                 if ($lockedBooking->status !== CleaningBookingStatus::AwaitingCustomerCompletion) {
@@ -182,6 +195,7 @@ final class CleaningBookingWorkerCompletionService
             }
 
             $decisionWorkerId = $assignment instanceof CleaningBookingWorkerAssignment ? (int) $assignment->worker_id : $lockedBooking->worker_id;
+            $decisionAssignmentId = $assignment instanceof CleaningBookingWorkerAssignment ? (int) $assignment->id : null;
 
             $warning = CleaningTimeWarning::query()->create([
                 'booking_id' => $lockedBooking->id,
@@ -219,21 +233,27 @@ final class CleaningBookingWorkerCompletionService
         $updated = $result['booking'];
         $warning = $result['warning'];
 
-        $this->dispatchTrackingUpdate($updated);
+        $this->dispatchTrackingUpdate($updated, $decisionWorkerId, $decisionAssignmentId);
         BroadcastAfterResponse::send(new CompletionDecisionMade(
             $updated->id,
             $decisionWorkerId ?? $updated->worker_id,
             'extension_requested',
             $customerMessage,
             now()->toIso8601String(),
+            $updated->status?->value,
+            $warning->id,
         ));
-        $this->lifecycleNotifications->notifyWorker(
+        $this->notifyWorkerDecision(
             booking: $updated,
+            workerId: $decisionWorkerId,
+            assignmentId: $decisionAssignmentId,
             canonicalType: 'cleaning.booking.time_extension_requested',
             action: 'time_extension_requested',
             actorRole: 'customer',
             fromStatus: $fromStatus,
             occurredAt: $updated->updated_at?->toIso8601String(),
+            extraData: ['warningId' => $warning->id],
+            templateContext: ['warningId' => $warning->id],
         );
 
         return [
@@ -292,19 +312,35 @@ final class CleaningBookingWorkerCompletionService
         return CleaningBookingStatus::WorkerAssigned;
     }
 
-    private function pendingCompletionAssignment(CleaningBooking $booking, bool $lock = false): ?CleaningBookingWorkerAssignment
+    private function resolvePendingCompletionAssignment(CleaningBooking $booking, ?int $workerId = null, ?int $assignmentId = null, bool $lock = false): ?CleaningBookingWorkerAssignment
     {
         $query = CleaningBookingWorkerAssignment::query()
             ->where('cleaning_booking_id', $booking->id)
-            ->where('status', CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion->value)
-            ->orderBy('work_finished_at')
-            ->orderBy('id');
+            ->where('status', CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion->value);
+
+        if ($assignmentId !== null) {
+            $query->whereKey($assignmentId);
+        }
+
+        if ($workerId !== null) {
+            $query->where('worker_id', $workerId);
+        }
+
+        $query->orderBy('work_finished_at')->orderBy('id');
 
         if ($lock) {
             $query->lockForUpdate();
         }
 
-        return $query->first();
+        $assignment = $query->first();
+
+        if (! $assignment instanceof CleaningBookingWorkerAssignment && ($workerId !== null || $assignmentId !== null)) {
+            throw ValidationException::withMessages([
+                'status' => ['Selected worker completion request is not waiting for customer confirmation.'],
+            ]);
+        }
+
+        return $assignment;
     }
 
     private function latestAssignmentFinishAt(CleaningBooking $booking): mixed
@@ -336,6 +372,46 @@ final class CleaningBookingWorkerCompletionService
         }
     }
 
+    private function notifyWorkerDecision(
+        CleaningBooking $booking,
+        ?int $workerId,
+        ?int $assignmentId,
+        string $canonicalType,
+        string $action,
+        string $actorRole,
+        ?string $fromStatus = null,
+        ?string $occurredAt = null,
+        array $extraData = [],
+        array $templateContext = [],
+    ): void {
+        if ($workerId !== null) {
+            $this->lifecycleNotifications->notifyWorkerById(
+                booking: $booking,
+                workerId: $workerId,
+                canonicalType: $canonicalType,
+                action: $action,
+                actorRole: $actorRole,
+                fromStatus: $fromStatus,
+                occurredAt: $occurredAt,
+                extraData: array_merge(['assignmentId' => $assignmentId], $extraData),
+                templateContext: array_merge(['assignmentId' => $assignmentId], $templateContext),
+            );
+
+            return;
+        }
+
+        $this->lifecycleNotifications->notifyWorker(
+            booking: $booking,
+            canonicalType: $canonicalType,
+            action: $action,
+            actorRole: $actorRole,
+            fromStatus: $fromStatus,
+            occurredAt: $occurredAt,
+            extraData: $extraData,
+            templateContext: $templateContext,
+        );
+    }
+
     private function lockBooking(CleaningBooking $booking): CleaningBooking
     {
         return CleaningBooking::query()->lockForUpdate()->findOrFail($booking->id);
@@ -363,7 +439,7 @@ final class CleaningBookingWorkerCompletionService
             : (string) $assignment->status;
     }
 
-    private function dispatchTrackingUpdate(CleaningBooking $booking): void
+    private function dispatchTrackingUpdate(CleaningBooking $booking, ?int $workerId = null, ?int $assignmentId = null): void
     {
         $status = $booking->status instanceof CleaningBookingStatus ? $booking->status->value : (string) $booking->status;
 
@@ -371,7 +447,8 @@ final class CleaningBookingWorkerCompletionService
             'cleaningBookingId' => $booking->id,
             'status' => $status,
             'statusLabel' => $booking->status instanceof CleaningBookingStatus ? $booking->status->label() : null,
-            'workerId' => $booking->worker_id,
+            'workerId' => $workerId ?? $booking->worker_id,
+            'assignmentId' => $assignmentId,
             'assignmentMode' => $booking->resolvedAssignmentMode(),
             'requiredWorkers' => max(1, (int) ($booking->number_of_workers ?? 1)),
             'acceptedWorkers' => $booking->acceptedWorkerCount(),
