@@ -48,7 +48,17 @@ final class CleaningBookingArriveController
                     ->first();
 
                 if ($assignment instanceof CleaningBookingWorkerAssignment) {
-                    if (! in_array($lockedBooking->status, [
+                    $isTeamBooking = max(1, (int) ($lockedBooking->number_of_workers ?? 1)) > 1;
+
+                    if ($isTeamBooking) {
+                        if (in_array($lockedBooking->status, [
+                            CleaningBookingStatus::Cancelled,
+                            CleaningBookingStatus::Completed,
+                            CleaningBookingStatus::UnderDispute,
+                        ], true)) {
+                            throw new InvalidArgumentException('Booking must be ready to start before marking arrival.');
+                        }
+                    } elseif (! in_array($lockedBooking->status, [
                         CleaningBookingStatus::WorkerAssigned,
                         CleaningBookingStatus::AwaitingStartVerification,
                         CleaningBookingStatus::AwaitingWorkerStartConfirmation,
@@ -57,19 +67,25 @@ final class CleaningBookingArriveController
                         throw new InvalidArgumentException('Booking must be ready to start before marking arrival.');
                     }
 
-                    if ($assignment->started_travel_at === null) {
+                    $startedTravelAt = $assignment->started_travel_at ?? $lockedBooking->started_travel_at;
+                    if ($startedTravelAt === null) {
                         throw new InvalidArgumentException('Worker must have started travel before marking arrival.');
                     }
 
                     $arrivedAt = $assignment->arrived_at ?? now();
+
                     $assignment->forceFill([
                         'status' => CleaningBookingWorkerAssignmentStatus::AwaitingStartVerification,
+                        'started_travel_at' => $startedTravelAt,
                         'arrived_at' => $arrivedAt,
                     ])->save();
 
                     $updates = [];
                     if ($lockedBooking->status !== CleaningBookingStatus::AwaitingWorkerStartConfirmation) {
                         $updates['status'] = CleaningBookingStatus::AwaitingStartVerification;
+                    }
+                    if ($lockedBooking->started_travel_at === null) {
+                        $updates['started_travel_at'] = $startedTravelAt;
                     }
                     if ($lockedBooking->arrived_at === null) {
                         $updates['arrived_at'] = $arrivedAt;
