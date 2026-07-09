@@ -19,12 +19,14 @@ use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Services\CleaningBookingPriceAdjustmentService;
 use Modules\Cleaning\Services\CleaningBookingService;
+use Modules\Cleaning\Services\CleaningBookingWorkerSecurityCodeService;
 
 final class CleaningBookingStartWorkController
 {
     public function __construct(
         private readonly CleaningBookingService $cleaningBookingService,
         private readonly CleaningBookingPriceAdjustmentService $priceAdjustmentService,
+        private readonly CleaningBookingWorkerSecurityCodeService $workerSecurityCodes,
     ) {}
 
     public function __invoke(CleaningBooking $cleaning_booking): CleaningBookingResource|JsonResponse
@@ -104,9 +106,7 @@ final class CleaningBookingStartWorkController
                 throw new InvalidArgumentException('Worker must accept the booking before approving start.');
             }
 
-            $assignmentStatus = $assignment->status instanceof CleaningBookingWorkerAssignmentStatus
-                ? $assignment->status->value
-                : (string) $assignment->status;
+            $assignmentStatus = $this->assignmentStatus($assignment);
 
             if ($assignmentStatus === CleaningBookingWorkerAssignmentStatus::InProgress->value) {
                 return $this->freshBooking($lockedBooking);
@@ -116,7 +116,7 @@ final class CleaningBookingStartWorkController
                 throw new InvalidArgumentException('Worker must arrive before approving work start.');
             }
 
-            $this->assertSecurityCodeVerified($lockedBooking);
+            $this->workerSecurityCodes->assertWorkerSecurityCodeVerified($lockedBooking, $worker);
 
             $startedAt = now();
             $assignment->forceFill([
@@ -125,25 +125,13 @@ final class CleaningBookingStartWorkController
                 'work_started_at' => $assignment->work_started_at ?? $startedAt,
             ])->save();
 
-            $requiredWorkers = max(1, (int) ($lockedBooking->number_of_workers ?? 1));
-            $startedWorkers = CleaningBookingWorkerAssignment::query()
-                ->where('cleaning_booking_id', $lockedBooking->id)
-                ->where('status', CleaningBookingWorkerAssignmentStatus::InProgress->value)
-                ->whereNotNull('work_started_at')
-                ->lockForUpdate()
-                ->count();
-
-            if ($startedWorkers >= $requiredWorkers) {
-                $lockedBooking->forceFill([
-                    'status' => CleaningBookingStatus::InProgress,
-                    'work_started_at' => $lockedBooking->work_started_at ?? $startedAt,
-                ])->save();
-            } else {
-                $lockedBooking->forceFill([
-                    'status' => CleaningBookingStatus::AwaitingWorkerStartConfirmation,
-                    'work_started_at' => null,
-                ])->save();
-            }
+            $statusAfterStart = $this->resolveBookingStatusAfterWorkerStart($lockedBooking);
+            $lockedBooking->forceFill([
+                'status' => $statusAfterStart,
+                'work_started_at' => $statusAfterStart === CleaningBookingStatus::InProgress
+                    ? ($lockedBooking->work_started_at ?? $startedAt)
+                    : null,
+            ])->save();
 
             return $this->freshBooking($lockedBooking);
         });
@@ -153,18 +141,44 @@ final class CleaningBookingStartWorkController
         return $updated;
     }
 
-    private function assertSecurityCodeVerified(CleaningBooking $booking): void
+    private function resolveBookingStatusAfterWorkerStart(CleaningBooking $booking): CleaningBookingStatus
     {
-        $securityCode = DB::table('booking_security_codes')
-            ->where('booking_id', $booking->id)
-            ->where('booking_type', $booking->getMorphClass())
-            ->orderByDesc('id')
+        $activeAssignments = CleaningBookingWorkerAssignment::query()
+            ->where('cleaning_booking_id', $booking->id)
+            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::activeValues())
             ->lockForUpdate()
-            ->first();
+            ->get();
 
-        if (! $securityCode || $securityCode->consumed_at === null) {
-            throw new InvalidArgumentException('Customer must verify the security code before work can start.');
+        $hasArrivedWorkerWaitingForCode = $activeAssignments->contains(function (CleaningBookingWorkerAssignment $assignment): bool {
+            return $assignment->arrived_at !== null
+                && $assignment->start_approved_at === null
+                && ! in_array($this->assignmentStatus($assignment), [
+                    CleaningBookingWorkerAssignmentStatus::StartApproved->value,
+                    CleaningBookingWorkerAssignmentStatus::InProgress->value,
+                    CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion->value,
+                    CleaningBookingWorkerAssignmentStatus::TimeExtensionRequested->value,
+                ], true);
+        });
+
+        if ($hasArrivedWorkerWaitingForCode) {
+            return CleaningBookingStatus::AwaitingStartVerification;
         }
+
+        $startedWorkers = $activeAssignments->filter(function (CleaningBookingWorkerAssignment $assignment): bool {
+            return $this->assignmentStatus($assignment) === CleaningBookingWorkerAssignmentStatus::InProgress->value
+                && $assignment->work_started_at !== null;
+        })->count();
+
+        return $startedWorkers >= max(1, (int) ($booking->number_of_workers ?? 1))
+            ? CleaningBookingStatus::InProgress
+            : CleaningBookingStatus::AwaitingWorkerStartConfirmation;
+    }
+
+    private function assignmentStatus(CleaningBookingWorkerAssignment $assignment): string
+    {
+        return $assignment->status instanceof CleaningBookingWorkerAssignmentStatus
+            ? $assignment->status->value
+            : (string) $assignment->status;
     }
 
     private function dispatchTrackingUpdate(CleaningBooking $booking): void
@@ -222,7 +236,6 @@ final class CleaningBookingStartWorkController
             'worker.user',
             'preferredWorker.user',
             'rooms.assignedWorker.user',
-            'workerAssignments.worker.user',
             'addons',
             'billingPolicy',
             'timeWarnings',
