@@ -93,7 +93,7 @@ final class CleaningTimeWarningController
                 $request->validated('message')
             );
         } catch (InvalidArgumentException $e) {
-            throw ValidationException::withMessages(['warning' => [$e->getMessage()]]]);
+            throw ValidationException::withMessages(['warning' => [$e->getMessage()]]);
         }
 
         return CleaningTimeWarningResource::make($warning->load(['booking']));
