@@ -48,7 +48,7 @@ function createLinkedSupermarketDeliveryOrder(\Modules\Supermarket\Models\SmOrde
 
 // ============ ACCEPT ORDER TESTS ============
 
-it('accepts a pending order', function (): void {
+it('accepts a pending order without starting delivery dispatch', function (): void {
     Queue::fake();
 
     $order = SmOrderFactory::new()->create([
@@ -62,7 +62,7 @@ it('accepts a pending order', function (): void {
     $response->assertOk();
     expect($response->json('message'))->toBe('Order accepted successfully.');
     expect($response->json('data.status'))->toBe('accepted');
-    expect($deliveryOrder->fresh()->status)->toBe(DeliveryOrderStatus::SearchingForDriver->value);
+    expect($deliveryOrder->fresh()->status)->toBe(DeliveryOrderStatus::WaitingMerchantReady->value);
 
     $this->assertDatabaseHas('sm_orders', [
         'id' => $order->id,
@@ -75,7 +75,7 @@ it('accepts a pending order', function (): void {
         'changed_by_user_id' => $this->user->id,
     ]);
 
-    Queue::assertPushed(DispatchDeliveryOrderJob::class, fn (DispatchDeliveryOrderJob $job): bool => true);
+    Queue::assertNotPushed(DispatchDeliveryOrderJob::class);
 });
 
 it('rejects accepting non-pending orders', function (): void {
@@ -108,6 +108,45 @@ it('returns loaded relationships on accept', function (): void {
         'statusLogs',
         'disputes',
     ]);
+});
+
+// ============ PREPARING TESTS ============
+
+it('marks an accepted order as preparing without starting delivery dispatch', function (): void {
+    Queue::fake();
+
+    $order = SmOrderFactory::new()->accepted()->create([
+        'store_id' => $this->store->id,
+    ]);
+    $deliveryOrder = createLinkedSupermarketDeliveryOrder($order);
+
+    $response = $this->postJson("/api/v1/store-owner/orders/{$order->id}/preparing");
+
+    $response->assertOk();
+    expect($response->json('message'))->toBe('Order marked as preparing successfully.');
+    expect($response->json('data.status'))->toBe(SmOrderStatus::Preparing->value);
+    expect($deliveryOrder->fresh()->status)->toBe(DeliveryOrderStatus::WaitingMerchantReady->value);
+
+    $this->assertDatabaseHas('sm_order_status_logs', [
+        'order_id' => $order->id,
+        'from_status' => SmOrderStatus::Accepted->value,
+        'to_status' => SmOrderStatus::Preparing->value,
+        'changed_by_user_id' => $this->user->id,
+    ]);
+
+    Queue::assertNotPushed(DispatchDeliveryOrderJob::class);
+});
+
+it('rejects preparing transition when order is not accepted', function (): void {
+    $order = SmOrderFactory::new()->create([
+        'store_id' => $this->store->id,
+        'status' => SmOrderStatus::Pending,
+    ]);
+
+    $response = $this->postJson("/api/v1/store-owner/orders/{$order->id}/preparing");
+
+    $response->assertStatus(400);
+    expect($response->json('message'))->toContain('Cannot mark order');
 });
 
 // ============ COURIER HANDOVER TESTS ============
@@ -155,6 +194,33 @@ it('marks an accepted order ready for pickup and starts linked delivery dispatch
     $this->assertDatabaseHas('sm_order_status_logs', [
         'order_id' => $order->id,
         'from_status' => SmOrderStatus::Accepted->value,
+        'to_status' => SmOrderStatus::ReadyForPickup->value,
+        'changed_by_user_id' => $this->user->id,
+    ]);
+
+    Queue::assertPushed(DispatchDeliveryOrderJob::class, fn (DispatchDeliveryOrderJob $job): bool => true);
+});
+
+it('marks a preparing order ready for pickup and starts linked delivery dispatch', function (): void {
+    Queue::fake();
+
+    $order = SmOrderFactory::new()->create([
+        'store_id' => $this->store->id,
+        'status' => SmOrderStatus::Preparing,
+        'ready_for_pickup_at' => null,
+    ]);
+    $deliveryOrder = createLinkedSupermarketDeliveryOrder($order);
+
+    $response = $this->postJson("/api/v1/store-owner/orders/{$order->id}/ready-for-pickup");
+
+    $response->assertOk();
+    expect($response->json('message'))->toBe('Order marked as ready for pickup successfully.');
+    expect($response->json('data.status'))->toBe(SmOrderStatus::ReadyForPickup->value);
+    expect($deliveryOrder->fresh()->status)->toBe(DeliveryOrderStatus::SearchingForDriver->value);
+
+    $this->assertDatabaseHas('sm_order_status_logs', [
+        'order_id' => $order->id,
+        'from_status' => SmOrderStatus::Preparing->value,
         'to_status' => SmOrderStatus::ReadyForPickup->value,
         'changed_by_user_id' => $this->user->id,
     ]);
