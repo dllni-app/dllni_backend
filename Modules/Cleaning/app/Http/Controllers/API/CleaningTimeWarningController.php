@@ -35,6 +35,10 @@ final class CleaningTimeWarningController
         if ($worker !== null) {
             $warnings
                 ->where('booking_type', 'cleaning_booking')
+                ->where(function (Builder $warningQuery) use ($worker): void {
+                    $warningQuery->where('worker_id', $worker->id)
+                        ->orWhereNull('worker_id');
+                })
                 ->whereHasMorph('booking', [CleaningBooking::class], function (Builder $query) use ($worker) {
                     $query->where('worker_id', $worker->id)
                         ->orWhereHas('workerAssignments', function (Builder $assignmentQuery) use ($worker) {
@@ -89,7 +93,7 @@ final class CleaningTimeWarningController
                 $request->validated('message')
             );
         } catch (InvalidArgumentException $e) {
-            throw ValidationException::withMessages(['warning' => [$e->getMessage()]]);
+            throw ValidationException::withMessages(['warning' => [$e->getMessage()]]]);
         }
 
         return CleaningTimeWarningResource::make($warning->load(['booking']));
@@ -105,6 +109,10 @@ final class CleaningTimeWarningController
 
         if ($warning->booking_type !== 'cleaning_booking') {
             abort(403, 'Extension request is not for a cleaning booking.');
+        }
+
+        if ($warning->worker_id !== null && (int) $warning->worker_id !== (int) $worker->id) {
+            abort(403, 'Extension request is not for your worker assignment.');
         }
 
         $booking = $warning->booking;
