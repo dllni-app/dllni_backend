@@ -8,8 +8,6 @@ use App\Services\ActivityLogService;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Modules\Delivery\Services\DeliveryOrderCreationService;
-use Modules\Delivery\Services\DeliveryOrderService;
 use Modules\Supermarket\Data\SmOrderRejectStatusData;
 use Modules\Supermarket\Http\Requests\SmOrderRejectStatusRequest;
 use Modules\Supermarket\Http\Resources\SmOrderResource;
@@ -22,8 +20,6 @@ final class SmOrderStatusController
 {
     public function __construct(
         private SmOrderService $orderService,
-        private DeliveryOrderService $deliveryOrderService,
-        private DeliveryOrderCreationService $deliveryOrderCreationService,
         private ActivityLogService $activityLogService,
         private StoreOwnerContextService $context,
         private SmOrderNotificationService $notifications,
@@ -32,7 +28,8 @@ final class SmOrderStatusController
     /**
      * Accept an order.
      *
-     * Business logic is delegated to SmOrderService::acceptOrder()
+     * Business logic is delegated to SmOrderService::acceptOrder().
+     * Delivery dispatch must wait until the store marks the order as ready_for_pickup.
      */
     public function accept(SmOrder $order): JsonResponse|JsonResource
     {
@@ -42,7 +39,6 @@ final class SmOrderStatusController
 
         try {
             $acceptedOrder = $this->orderService->acceptOrder($order, $owner->id);
-            $this->startLinkedDeliveryDispatch($acceptedOrder);
             $acceptedOrder->refresh();
 
             $this->activityLogService->logSmOrderAccepted((int) $order->id, $order->order_number, (int) $order->store_id);
@@ -140,20 +136,6 @@ final class SmOrderStatusController
                 'message' => $e->getMessage(),
             ], 400);
         }
-    }
-
-    private function startLinkedDeliveryDispatch(SmOrder $order): void
-    {
-        $deliveryOrder = $this->deliveryOrderCreationService->findForSupermarketOrder($order);
-
-        if ($deliveryOrder === null) {
-            return;
-        }
-
-        $this->deliveryOrderService->startDispatch(
-            $deliveryOrder,
-            'Supermarket order accepted; dispatch started.',
-        );
     }
 
     private function resource(SmOrder $order, string $message): JsonResource
