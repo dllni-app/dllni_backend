@@ -118,70 +118,104 @@ it('keeps team worker arrival assignment-aware when only the global travel times
     expect($workerOneUser)->toBeInstanceOf(User::class);
 });
 
-it('returns start confirmation status to arrived team workers after the customer verifies the code', function (): void {
-    [$workerOneUser, $workerOne] = createTravelArrivalWorker('team-confirmed-one@example.com');
-    [$workerTwoUser, $workerTwo] = createTravelArrivalWorker('team-confirmed-two@example.com');
-    $confirmedAt = now();
-    $arrivedAt = now()->subMinutes(2);
+it('requires a separate customer security confirmation for every arrived worker', function (): void {
+    $customer = User::factory()->create(['email' => 'team-code-customer@example.com']);
+    [$workerOneUser, $workerOne] = createTravelArrivalWorker('team-code-worker-one@example.com');
+    [$workerTwoUser, $workerTwo] = createTravelArrivalWorker('team-code-worker-two@example.com');
+    $startedTravelAt = now()->subMinutes(5);
 
     $booking = CleaningBooking::factory()->create([
+        'customer_id' => $customer->id,
         'worker_id' => $workerOne->id,
         'billing_policy_id' => $this->billingPolicy->id,
-        'status' => CleaningBookingStatus::AwaitingWorkerStartConfirmation,
+        'status' => CleaningBookingStatus::WorkerAssigned,
         'number_of_workers' => 2,
-        'started_travel_at' => now()->subMinutes(5),
-        'arrived_at' => $arrivedAt,
-        'customer_confirmed_at' => $confirmedAt,
+        'started_travel_at' => $startedTravelAt,
         'work_started_at' => null,
     ]);
 
-    createTravelArrivalAssignment($booking, $workerOne, CleaningBookingWorkerAssignmentStatus::AwaitingStartVerification, [
-        'started_travel_at' => now()->subMinutes(5),
-        'arrived_at' => $arrivedAt,
+    createTravelArrivalAssignment($booking, $workerOne, CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart, [
+        'started_travel_at' => $startedTravelAt,
     ]);
-    createTravelArrivalAssignment($booking, $workerTwo, CleaningBookingWorkerAssignmentStatus::AwaitingStartVerification, [
-        'started_travel_at' => now()->subMinutes(5),
-        'arrived_at' => $arrivedAt,
-    ]);
-
-    DB::table('booking_security_codes')->insert([
-        'booking_id' => $booking->id,
-        'booking_type' => $booking->getMorphClass(),
-        'code' => hash_hmac('sha256', '1234', (string) config('app.key')),
-        'code_hash' => hash_hmac('sha256', '1234', (string) config('app.key')),
-        'attempts' => 1,
-        'last_attempt_at' => $confirmedAt,
-        'consumed_at' => $confirmedAt,
-        'expires_at' => now()->addMinutes(10),
-        'created_at' => now(),
-        'updated_at' => now(),
+    createTravelArrivalAssignment($booking, $workerTwo, CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart, [
+        'started_travel_at' => $startedTravelAt,
     ]);
 
     Sanctum::actingAs($workerOneUser);
-    $showWorkerOne = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}");
-
-    $showWorkerOne->assertOk();
-    $showWorkerOne->assertJsonPath('data.status', CleaningBookingStatus::AwaitingWorkerStartConfirmation->value);
-    $showWorkerOne->assertJsonPath('data.worker_order_status', CleaningBookingStatus::AwaitingWorkerStartConfirmation->value);
-    $showWorkerOne->assertJsonPath('data.myAssignment.status', CleaningBookingStatus::AwaitingWorkerStartConfirmation->value);
-
-    $startWorkerOne = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/start-work");
-    $startWorkerOne->assertOk();
-    $startWorkerOne->assertJsonPath('data.status', CleaningBookingStatus::InProgress->value);
-    $startWorkerOne->assertJsonPath('data.order_status', CleaningBookingStatus::AwaitingWorkerStartConfirmation->value);
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/arrive")->assertOk();
+    $workerOneCode = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/security-code")
+        ->assertOk()
+        ->json('data.securityCode');
 
     Sanctum::actingAs($workerTwoUser);
-    $showWorkerTwo = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}");
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/arrive")->assertOk();
+    $workerTwoCode = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/security-code")
+        ->assertOk()
+        ->json('data.securityCode');
 
-    $showWorkerTwo->assertOk();
-    $showWorkerTwo->assertJsonPath('data.status', CleaningBookingStatus::AwaitingWorkerStartConfirmation->value);
-    $showWorkerTwo->assertJsonPath('data.worker_order_status', CleaningBookingStatus::AwaitingWorkerStartConfirmation->value);
-    $showWorkerTwo->assertJsonPath('data.myAssignment.status', CleaningBookingStatus::AwaitingWorkerStartConfirmation->value);
+    expect($workerOneCode)->not->toBe($workerTwoCode);
 
-    $startWorkerTwo = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/start-work");
-    $startWorkerTwo->assertOk();
-    $startWorkerTwo->assertJsonPath('data.status', CleaningBookingStatus::InProgress->value);
-    $startWorkerTwo->assertJsonPath('data.order_status', CleaningBookingStatus::InProgress->value);
+    Sanctum::actingAs($customer);
+    $confirmOne = $this->postJson("/api/v1/user/cleaning/orders/{$booking->id}/start-verification/confirm", [
+        'code' => $workerOneCode,
+    ]);
+
+    $confirmOne->assertOk();
+    $confirmOne->assertJsonPath('data.order_status', CleaningBookingStatus::AwaitingStartVerification->value);
+    $this->assertDatabaseHas('cleaning_booking_worker_assignments', [
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $workerOne->id,
+        'status' => CleaningBookingWorkerAssignmentStatus::StartApproved->value,
+    ]);
+    $this->assertDatabaseHas('cleaning_booking_worker_assignments', [
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $workerTwo->id,
+        'status' => CleaningBookingWorkerAssignmentStatus::AwaitingStartVerification->value,
+    ]);
+
+    Sanctum::actingAs($workerOneUser);
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}")
+        ->assertOk()
+        ->assertJsonPath('data.status', CleaningBookingStatus::AwaitingWorkerStartConfirmation->value)
+        ->assertJsonPath('data.worker_order_status', CleaningBookingWorkerAssignmentStatus::StartApproved->value);
+
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/start-work")
+        ->assertOk()
+        ->assertJsonPath('data.status', CleaningBookingStatus::InProgress->value)
+        ->assertJsonPath('data.order_status', CleaningBookingStatus::AwaitingStartVerification->value);
+
+    Sanctum::actingAs($workerTwoUser);
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/start-work")
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.status.0', 'Customer must verify the security code before work can start.');
+
+    Sanctum::actingAs($customer);
+    $confirmTwo = $this->postJson("/api/v1/user/cleaning/orders/{$booking->id}/start-verification/confirm", [
+        'code' => $workerTwoCode,
+    ]);
+
+    $confirmTwo->assertOk();
+    $confirmTwo->assertJsonPath('data.order_status', CleaningBookingStatus::AwaitingWorkerStartConfirmation->value);
+
+    Sanctum::actingAs($workerTwoUser);
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}")
+        ->assertOk()
+        ->assertJsonPath('data.status', CleaningBookingStatus::AwaitingWorkerStartConfirmation->value)
+        ->assertJsonPath('data.worker_order_status', CleaningBookingWorkerAssignmentStatus::StartApproved->value);
+
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/start-work")
+        ->assertOk()
+        ->assertJsonPath('data.status', CleaningBookingStatus::InProgress->value)
+        ->assertJsonPath('data.order_status', CleaningBookingStatus::InProgress->value);
+
+    $this->assertDatabaseHas('booking_security_codes', [
+        'booking_id' => $booking->id,
+        'worker_id' => $workerOne->id,
+    ]);
+    $this->assertDatabaseHas('booking_security_codes', [
+        'booking_id' => $booking->id,
+        'worker_id' => $workerTwo->id,
+    ]);
 });
 
 it('still requires explicit travel start before arrival for a one-worker booking', function (): void {
