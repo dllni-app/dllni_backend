@@ -10,6 +10,7 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningTimeWarning;
 
 beforeEach(function () {
     $this->billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
@@ -156,38 +157,14 @@ it('requires a separate customer security confirmation for every arrived worker 
     expect($workerOneCode)->not->toBe($workerTwoCode);
 
     Sanctum::actingAs($customer);
-    $confirmOne = $this->postJson("/api/v1/user/cleaning/orders/{$booking->id}/start-verification/confirm", [
+    $this->postJson("/api/v1/user/cleaning/orders/{$booking->id}/start-verification/confirm", [
         'code' => $workerOneCode,
-    ]);
-
-    $confirmOne->assertOk();
-    $confirmOne->assertJsonPath('data.order_status', CleaningBookingStatus::AwaitingStartVerification->value);
-    $this->assertDatabaseHas('cleaning_booking_worker_assignments', [
-        'cleaning_booking_id' => $booking->id,
-        'worker_id' => $workerOne->id,
-        'status' => CleaningBookingWorkerAssignmentStatus::StartApproved->value,
-    ]);
-    $this->assertDatabaseHas('cleaning_booking_worker_assignments', [
-        'cleaning_booking_id' => $booking->id,
-        'worker_id' => $workerTwo->id,
-        'status' => CleaningBookingWorkerAssignmentStatus::AwaitingStartVerification->value,
-    ]);
+    ])->assertOk();
 
     Sanctum::actingAs($workerOneUser);
-    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}")
-        ->assertOk()
-        ->assertJsonPath('data.status', CleaningBookingStatus::AwaitingWorkerStartConfirmation->value)
-        ->assertJsonPath('data.worker_order_status', CleaningBookingWorkerAssignmentStatus::StartApproved->value);
-
     $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/start-work")
         ->assertOk()
-        ->assertJsonPath('data.status', CleaningBookingStatus::InProgress->value)
-        ->assertJsonPath('data.order_status', CleaningBookingStatus::AwaitingStartVerification->value);
-
-    Sanctum::actingAs($workerTwoUser);
-    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/start-work")
-        ->assertUnprocessable()
-        ->assertJsonPath('errors.status.0', 'Customer must verify the security code before work can start.');
+        ->assertJsonPath('data.status', CleaningBookingStatus::InProgress->value);
 
     Sanctum::actingAs($workerOneUser);
     $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/complete", [
@@ -196,43 +173,59 @@ it('requires a separate customer security confirmation for every arrived worker 
         ->assertOk()
         ->assertJsonPath('data.status', CleaningBookingStatus::AwaitingCustomerCompletion->value)
         ->assertJsonPath('data.worker_order_status', CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion->value)
-        ->assertJsonPath('data.order_status', CleaningBookingStatus::AwaitingStartVerification->value);
+        ->assertJsonPath('data.order_status', CleaningBookingStatus::AwaitingCustomerCompletion->value);
 
     $this->assertDatabaseHas('cleaning_booking_worker_assignments', [
         'cleaning_booking_id' => $booking->id,
         'worker_id' => $workerOne->id,
         'status' => CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion->value,
     ]);
-    $this->assertDatabaseHas('cleaning_bookings', [
-        'id' => $booking->id,
-        'status' => CleaningBookingStatus::AwaitingStartVerification->value,
-    ]);
 
     Sanctum::actingAs($customer);
-    $confirmTwo = $this->postJson("/api/v1/user/cleaning/orders/{$booking->id}/start-verification/confirm", [
+    $this->postJson("/api/v1/user/cleaning/orders/{$booking->id}/start-verification/confirm", [
         'code' => $workerTwoCode,
-    ]);
-
-    $confirmTwo->assertOk();
-    $confirmTwo->assertJsonPath('data.order_status', CleaningBookingStatus::AwaitingWorkerStartConfirmation->value);
+    ])->assertOk()
+        ->assertJsonPath('data.order_status', CleaningBookingStatus::AwaitingCustomerCompletion->value)
+        ->assertJsonCount(1, 'data.completionRequests')
+        ->assertJsonPath('data.completionRequests.0.workerId', $workerOne->id);
 
     Sanctum::actingAs($workerTwoUser);
-    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}")
-        ->assertOk()
-        ->assertJsonPath('data.status', CleaningBookingStatus::AwaitingWorkerStartConfirmation->value)
-        ->assertJsonPath('data.worker_order_status', CleaningBookingWorkerAssignmentStatus::StartApproved->value);
-
     $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/start-work")
         ->assertOk()
         ->assertJsonPath('data.status', CleaningBookingStatus::InProgress->value)
-        ->assertJsonPath('data.order_status', CleaningBookingStatus::InProgress->value);
+        ->assertJsonPath('data.order_status', CleaningBookingStatus::AwaitingCustomerCompletion->value);
 
     $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/complete", [
         'completionMessage' => 'Worker two finished.',
     ])
         ->assertOk()
         ->assertJsonPath('data.status', CleaningBookingStatus::AwaitingCustomerCompletion->value)
-        ->assertJsonPath('data.order_status', CleaningBookingStatus::AwaitingCustomerCompletion->value);
+        ->assertJsonPath('data.order_status', CleaningBookingStatus::AwaitingCustomerCompletion->value)
+        ->assertJsonCount(2, 'data.completionRequests');
+
+    $workerTwoAssignmentId = (int) DB::table('cleaning_booking_worker_assignments')
+        ->where('cleaning_booking_id', $booking->id)
+        ->where('worker_id', $workerTwo->id)
+        ->value('id');
+
+    Sanctum::actingAs($customer);
+    $this->postJson("/api/v1/user/cleaning/orders/{$booking->id}/completion/confirm", [
+        'workerId' => $workerOne->id,
+    ])
+        ->assertOk()
+        ->assertJsonPath('data.order_status', CleaningBookingStatus::AwaitingCustomerCompletion->value)
+        ->assertJsonCount(1, 'data.completionRequests')
+        ->assertJsonPath('data.completionRequests.0.workerId', $workerTwo->id)
+        ->assertJsonPath('data.workerLifecycleSummary.completed', 1)
+        ->assertJsonPath('data.workerLifecycleSummary.awaitingCustomerCompletion', 1);
+
+    $this->postJson("/api/v1/user/cleaning/orders/{$booking->id}/completion/confirm", [
+        'assignmentId' => $workerTwoAssignmentId,
+    ])
+        ->assertOk()
+        ->assertJsonPath('data.order_status', CleaningBookingStatus::Completed->value)
+        ->assertJsonPath('data.workerLifecycleSummary.completed', 2)
+        ->assertJsonPath('data.workerLifecycleSummary.isFullyCompleted', true);
 
     $this->assertDatabaseHas('booking_security_codes', [
         'booking_id' => $booking->id,
@@ -242,6 +235,94 @@ it('requires a separate customer security confirmation for every arrived worker 
         'booking_id' => $booking->id,
         'worker_id' => $workerTwo->id,
     ]);
+});
+
+it('targets completion extension requests to the selected worker only', function (): void {
+    $customer = User::factory()->create(['email' => 'team-extension-customer@example.com']);
+    [$workerOneUser, $workerOne] = createTravelArrivalWorker('team-extension-worker-one@example.com');
+    [$workerTwoUser, $workerTwo] = createTravelArrivalWorker('team-extension-worker-two@example.com');
+
+    $booking = CleaningBooking::factory()->create([
+        'customer_id' => $customer->id,
+        'worker_id' => $workerOne->id,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'status' => CleaningBookingStatus::AwaitingCustomerCompletion,
+        'number_of_workers' => 2,
+        'work_started_at' => now()->subHour(),
+    ]);
+
+    createTravelArrivalAssignment($booking, $workerOne, CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion, [
+        'start_approved_at' => now()->subHour(),
+        'work_started_at' => now()->subHour(),
+        'work_finished_at' => now()->subMinutes(10),
+        'worker_completion_message' => 'Worker one finished.',
+        'worker_finished_cleaning_services' => json_encode([['name' => 'Kitchen']]),
+        'worker_finished_property_rooms' => json_encode([['roomKey' => 'kitchen', 'displayLabel' => 'Kitchen']]),
+    ]);
+    createTravelArrivalAssignment($booking, $workerTwo, CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion, [
+        'start_approved_at' => now()->subHour(),
+        'work_started_at' => now()->subHour(),
+        'work_finished_at' => now()->subMinutes(5),
+        'worker_completion_message' => 'Worker two finished.',
+        'worker_finished_cleaning_services' => json_encode([['name' => 'Bedroom']]),
+        'worker_finished_property_rooms' => json_encode([['roomKey' => 'bedroom', 'displayLabel' => 'Bedroom']]),
+    ]);
+
+    Sanctum::actingAs($customer);
+    $this->getJson("/api/v1/user/cleaning/orders/{$booking->id}")
+        ->assertOk()
+        ->assertJsonCount(2, 'data.completionRequests')
+        ->assertJsonPath('data.workerLifecycleSummary.awaitingCustomerCompletion', 2);
+
+    $this->postJson("/api/v1/user/cleaning/orders/{$booking->id}/completion/extend-time", [
+        'workerId' => $workerTwo->id,
+        'additionalMinutes' => 30,
+        'message' => 'Please continue this worker only.',
+    ])->assertOk()
+        ->assertJsonPath('data.order_status', CleaningBookingStatus::TimeExtensionRequested->value)
+        ->assertJsonPath('data.workerLifecycleSummary.awaitingCustomerCompletion', 1)
+        ->assertJsonPath('data.workerLifecycleSummary.timeExtensionRequested', 1);
+
+    $warning = CleaningTimeWarning::query()
+        ->where('booking_id', $booking->id)
+        ->where('worker_id', $workerTwo->id)
+        ->latest('id')
+        ->first();
+
+    expect($warning)->not->toBeNull();
+
+    $this->assertDatabaseHas('cleaning_booking_worker_assignments', [
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $workerOne->id,
+        'status' => CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion->value,
+    ]);
+    $this->assertDatabaseHas('cleaning_booking_worker_assignments', [
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $workerTwo->id,
+        'status' => CleaningBookingWorkerAssignmentStatus::TimeExtensionRequested->value,
+    ]);
+
+    Sanctum::actingAs($workerTwoUser);
+    $this->postJson("/api/v1/cleaning-time-warnings/{$warning->id}/accept")
+        ->assertOk()
+        ->assertJsonPath('data.workerId', $workerTwo->id);
+
+    $this->assertDatabaseHas('cleaning_booking_worker_assignments', [
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $workerTwo->id,
+        'status' => CleaningBookingWorkerAssignmentStatus::InProgress->value,
+    ]);
+    $this->assertDatabaseHas('cleaning_booking_worker_assignments', [
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $workerOne->id,
+        'status' => CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion->value,
+    ]);
+    $this->assertDatabaseHas('cleaning_bookings', [
+        'id' => $booking->id,
+        'status' => CleaningBookingStatus::AwaitingCustomerCompletion->value,
+    ]);
+
+    expect($workerOneUser)->toBeInstanceOf(User::class);
 });
 
 it('still requires explicit travel start before arrival for a one-worker booking', function (): void {
@@ -294,6 +375,8 @@ function createTravelArrivalAssignment(
         'work_started_at' => null,
         'work_finished_at' => null,
         'worker_completion_message' => null,
+        'worker_finished_cleaning_services' => null,
+        'worker_finished_property_rooms' => null,
         'room_count' => 0,
         'rooms_weight' => 0,
         'service_share_amount' => 0,
