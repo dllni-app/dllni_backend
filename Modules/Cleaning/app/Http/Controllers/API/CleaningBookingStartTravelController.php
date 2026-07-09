@@ -58,6 +58,8 @@ final class CleaningBookingStartTravelController
                         CleaningBookingStatus::AwaitingStartVerification,
                         CleaningBookingStatus::AwaitingWorkerStartConfirmation,
                         CleaningBookingStatus::InProgress,
+                        CleaningBookingStatus::AwaitingCustomerCompletion,
+                        CleaningBookingStatus::TimeExtensionRequested,
                     ], true)) {
                         throw new InvalidArgumentException('Booking cannot start travel in current status.');
                     }
