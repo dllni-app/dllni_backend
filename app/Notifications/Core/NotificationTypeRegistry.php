@@ -13,8 +13,7 @@ final class NotificationTypeRegistry
      */
     public function definition(string $canonicalType): array
     {
-        $types = config('notification_types.types', []);
-        $definition = is_array($types) ? ($types[$canonicalType] ?? null) : null;
+        $definition = $this->types()[$canonicalType] ?? null;
 
         if (! is_array($definition)) {
             throw new InvalidArgumentException("Notification type [{$canonicalType}] is not configured.");
@@ -29,13 +28,7 @@ final class NotificationTypeRegistry
             return null;
         }
 
-        $types = config('notification_types.types', []);
-
-        if (! is_array($types)) {
-            return null;
-        }
-
-        foreach ($types as $canonicalType => $definition) {
+        foreach ($this->types() as $canonicalType => $definition) {
             if (! is_array($definition)) {
                 continue;
             }
@@ -67,5 +60,19 @@ final class NotificationTypeRegistry
         $iconPath = config("notification_types.module_icons.{$module}");
 
         return is_string($iconPath) ? $iconPath : null;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function types(): array
+    {
+        $configuredTypes = config('notification_types.types', []);
+        $extensionTypes = config('notification_type_extensions.types', []);
+
+        return array_replace(
+            is_array($configuredTypes) ? $configuredTypes : [],
+            is_array($extensionTypes) ? $extensionTypes : [],
+        );
     }
 }
