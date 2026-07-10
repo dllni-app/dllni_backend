@@ -11,7 +11,6 @@ use App\Enums\SystemAlertStatus;
 use App\Models\SystemAlert;
 use App\Models\Worker;
 use App\Notifications\Cleaning\NewOrderRequestNotification;
-use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -46,7 +45,6 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
         $depositService = app(DepositService::class);
         $solvencyService = app(WorkerOrderSolvencyService::class);
 
-        $bookingDateTime = $this->bookingDateTime($booking);
         $assignmentMode = $booking->resolvedAssignmentMode();
         $rejectedWorkerIds = $booking->rejections()->pluck('worker_id')->map(static fn (mixed $workerId): int => (int) $workerId)->all();
         $acceptedWorkerIds = $booking->workerAssignments()
@@ -55,30 +53,8 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
             ->map(static fn (mixed $workerId): int => (int) $workerId)
             ->all();
 
-        if ($booking->neighborhood_id === null) {
-            $this->createDispatchAlert(
-                $booking,
-                'missing_neighborhood',
-                'Booking cannot be dispatched because neighborhood is missing.',
-            );
-
-            return;
-        }
-
         if ($assignmentMode === CleaningAssignmentMode::PreferredWorker->value && $booking->preferred_worker_id !== null) {
             if (in_array((int) $booking->preferred_worker_id, $acceptedWorkerIds, true)) {
-                return;
-            }
-
-            $preferredWorker = Worker::query()->find($booking->preferred_worker_id);
-            if (! $preferredWorker?->hasActiveCoverageForNeighborhood((int) $booking->neighborhood_id)) {
-                $this->createDispatchAlert(
-                    $booking,
-                    'preferred_worker_outside_neighborhood',
-                    'Preferred worker does not cover the booking neighborhood.',
-                    ['preferredWorkerId' => (int) $booking->preferred_worker_id],
-                );
-
                 return;
             }
 
@@ -89,15 +65,14 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
                     $q->whereNull('is_suspended')->orWhere('is_suspended', false);
                 })
                 ->whereNotIn('id', $rejectedWorkerIds)
-                ->coversNeighborhood((int) $booking->neighborhood_id)
                 ->with(['user', 'deposit'])
                 ->first();
 
-            if (! $worker?->user || ! $this->isWorkerAvailable($worker, $bookingDateTime) || ! $depositService->isWorkerEligibleForDispatch($worker)) {
+            if (! $worker?->user || ! $depositService->isWorkerEligibleForDispatch($worker)) {
                 $this->createDispatchAlert(
                     $booking,
-                    'preferred_worker_not_available',
-                    'Preferred worker is not currently available or eligible for dispatch.',
+                    'preferred_worker_not_eligible',
+                    'Preferred worker is not currently eligible for dispatch.',
                     ['preferredWorkerId' => (int) $booking->preferred_worker_id],
                 );
 
@@ -132,7 +107,6 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
                 fn ($query) => $query->where('gender', $booking->gender_preference->value)
             )
             ->whereNotIn('id', array_values(array_unique(array_merge($rejectedWorkerIds, $acceptedWorkerIds))))
-            ->coversNeighborhood((int) $booking->neighborhood_id)
             ->with(['user', 'deposit'])
             ->limit(50)
             ->get();
@@ -140,21 +114,21 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
         if ($workers->isEmpty()) {
             $this->createDispatchAlert(
                 $booking,
-                'no_neighborhood_coverage',
-                'No active workers cover the booking neighborhood.',
+                'no_active_workers',
+                'No active workers are available for this booking.',
             );
 
             return;
         }
 
         $notifiedCount = 0;
-        $unavailableCount = 0;
+        $ineligibleCount = 0;
         $financiallyBlockedCount = 0;
         $lastBlockedPayload = null;
 
         foreach ($workers as $worker) {
-            if (! $worker->user || ! $this->isWorkerAvailable($worker, $bookingDateTime) || ! $depositService->isWorkerEligibleForDispatch($worker)) {
-                $unavailableCount++;
+            if (! $worker->user || ! $depositService->isWorkerEligibleForDispatch($worker)) {
+                $ineligibleCount++;
                 continue;
             }
 
@@ -182,35 +156,13 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
             );
         }
 
-        if ($notifiedCount === 0 && $financiallyBlockedCount === 0 && $unavailableCount > 0) {
+        if ($notifiedCount === 0 && $financiallyBlockedCount === 0 && $ineligibleCount > 0) {
             $this->createDispatchAlert(
                 $booking,
-                'no_available_workers_at_scheduled_time',
-                'Workers cover the booking neighborhood, but none are available or eligible at the scheduled time.',
-                ['unavailableWorkersCount' => $unavailableCount],
+                'no_dispatch_eligible_workers',
+                'Active workers exist, but none are currently eligible for dispatch.',
+                ['ineligibleWorkersCount' => $ineligibleCount],
             );
-        }
-    }
-
-    private function isWorkerAvailable(Worker $worker, ?Carbon $bookingDateTime): bool
-    {
-        if ($bookingDateTime === null) {
-            return false;
-        }
-
-        return $worker->isAvailableAt($bookingDateTime);
-    }
-
-    private function bookingDateTime(CleaningBooking $booking): ?Carbon
-    {
-        if ($booking->scheduled_date === null || $booking->scheduled_time === null) {
-            return null;
-        }
-
-        try {
-            return Carbon::parse($booking->scheduled_date->format('Y-m-d').' '.trim((string) $booking->scheduled_time), config('app.timezone'));
-        } catch (\Throwable) {
-            return null;
         }
     }
 
@@ -296,7 +248,7 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
                 'severity' => AlertSeverity::High->value,
                 'status' => SystemAlertStatus::New->value,
                 'payload' => array_merge([
-                    'source' => 'cleaning_neighborhood_dispatch',
+                    'source' => 'cleaning_order_dispatch',
                     'reasonCode' => $reasonCode,
                     'message' => $message,
                     'bookingId' => $booking->id,
