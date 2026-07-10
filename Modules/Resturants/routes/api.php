@@ -42,6 +42,7 @@ use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerOrder
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerOrderItemUpdateController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerOrderShowController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerOrderStatusController;
+use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOrderPreparationEstimateController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerPermissionsController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerProductAvailabilityController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerPromoCodesController;
@@ -120,6 +121,7 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
         Route::get('orders', RestaurantOwnerOrderIndexController::class);
         Route::get('orders/{order}', RestaurantOwnerOrderShowController::class);
         Route::patch('orders/{order}/status', RestaurantOwnerOrderStatusController::class);
+        Route::patch('orders/{order}/preparation-estimate', RestaurantOrderPreparationEstimateController::class);
         Route::post('orders/{order}/items', RestaurantOwnerOrderItemStoreController::class);
         Route::patch('orders/{order}/items/{item}', RestaurantOwnerOrderItemUpdateController::class);
         Route::delete('orders/{order}/items/{item}', RestaurantOwnerOrderItemDestroyController::class);

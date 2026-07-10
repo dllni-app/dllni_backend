@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Modules\Delivery\Models\DeliveryDriverTrustLog;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 
@@ -41,6 +42,11 @@ final class Dispute extends Model implements HasMedia
     public function messages(): HasMany
     {
         return $this->hasMany(DisputeMessage::class);
+    }
+
+    public function trustLogs(): HasMany
+    {
+        return $this->hasMany(DeliveryDriverTrustLog::class, 'related_dispute_id');
     }
 
     public function casts(): array

@@ -19,6 +19,7 @@ final class OwnerOrderStatusRequest extends FormRequest
             'status' => 'required|string|in:accepted,preparing,ready_for_pickup,picked_up,completed,cancelled',
             'reason' => 'nullable|string|max:255',
             'customerMessage' => 'nullable|string|max:500',
+            'preparationTimeMinutes' => 'sometimes|nullable|integer|min:1|max:120',
         ];
     }
 }

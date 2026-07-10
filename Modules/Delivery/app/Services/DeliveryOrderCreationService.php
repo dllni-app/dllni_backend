@@ -53,6 +53,7 @@ final class DeliveryOrderCreationService
                 'currency' => 'SYP',
                 'sourceType' => self::SOURCE_RESTAURANT_ORDER,
                 'sourceId' => (int) $order->id,
+                'dispatchImmediately' => false,
             ],
             createdByUserId: (int) $order->user_id,
         );

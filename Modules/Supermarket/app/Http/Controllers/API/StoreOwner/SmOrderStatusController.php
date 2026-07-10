@@ -10,6 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Modules\Supermarket\Data\SmOrderRejectStatusData;
 use Modules\Supermarket\Http\Requests\SmOrderRejectStatusRequest;
+use Modules\Supermarket\Http\Requests\SmOrderAcceptRequest;
 use Modules\Supermarket\Http\Resources\SmOrderResource;
 use Modules\Supermarket\Models\SmOrder;
 use Modules\Supermarket\Services\SmOrderNotificationService;
@@ -31,14 +32,18 @@ final class SmOrderStatusController
      * Business logic is delegated to SmOrderService::acceptOrder().
      * Delivery dispatch must wait until the store marks the order as ready_for_pickup.
      */
-    public function accept(SmOrder $order): JsonResponse|JsonResource
+    public function accept(SmOrderAcceptRequest $request, SmOrder $order): JsonResponse|JsonResource
     {
         $this->context->store((int) $order->store_id);
         $owner = $this->context->owner();
         $previousStatus = $this->statusValue($order);
 
         try {
-            $acceptedOrder = $this->orderService->acceptOrder($order, $owner->id);
+            $acceptedOrder = $this->orderService->acceptOrder(
+                $order,
+                $owner->id,
+                $request->filled('preparationTimeMinutes') ? $request->integer('preparationTimeMinutes') : null,
+            );
             $acceptedOrder->refresh();
 
             $this->activityLogService->logSmOrderAccepted((int) $order->id, $order->order_number, (int) $order->store_id);

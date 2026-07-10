@@ -11,12 +11,14 @@ use Modules\Resturants\Http\Requests\OrderRejectRequest;
 use Modules\Resturants\Http\Resources\OrderResource;
 use Modules\Resturants\Models\Order;
 use Modules\Resturants\Services\RestaurantOrderNotificationService;
+use Modules\Delivery\Services\MerchantOrderDeliveryService;
 
 final class OrderRejectController
 {
     public function __construct(
         private ActivityLogService $activityLogService,
         private RestaurantOrderNotificationService $notifications,
+        private MerchantOrderDeliveryService $merchantDelivery,
     ) {}
 
     public function __invoke(OrderRejectRequest $request, Order $order): JsonResource
@@ -30,6 +32,12 @@ final class OrderRejectController
             'cancellation_reason_code' => $validated['reason'],
             'cancellation_reason' => $validated['customerMessage'] ?? 'Cancelled by seller',
         ]);
+
+        $this->merchantDelivery->cancelled(
+            $order->fresh(),
+            (string) $order->cancellation_reason,
+            auth()->id(),
+        );
 
         $this->activityLogService->logOrderRejected((int) $order->id, $order->order_number, (int) $order->restaurant_id);
         $this->notifications->notifyStatusChanged($order->refresh(), $previousStatus, OrderStatus::Cancelled->value, 'owner');

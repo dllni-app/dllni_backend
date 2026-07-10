@@ -48,7 +48,7 @@ function createLinkedSupermarketDeliveryOrder(\Modules\Supermarket\Models\SmOrde
 
 // ============ ACCEPT ORDER TESTS ============
 
-it('accepts a pending order without starting delivery dispatch', function (): void {
+it('accepts a pending order and starts delivery dispatch', function (): void {
     Queue::fake();
 
     $order = SmOrderFactory::new()->create([
@@ -57,12 +57,15 @@ it('accepts a pending order without starting delivery dispatch', function (): vo
     ]);
     $deliveryOrder = createLinkedSupermarketDeliveryOrder($order);
 
-    $response = $this->postJson("/api/v1/store-owner/orders/{$order->id}/accept");
+    $response = $this->postJson("/api/v1/store-owner/orders/{$order->id}/accept", [
+        'preparationTimeMinutes' => 20,
+    ]);
 
     $response->assertOk();
     expect($response->json('message'))->toBe('Order accepted successfully.');
     expect($response->json('data.status'))->toBe('accepted');
-    expect($deliveryOrder->fresh()->status)->toBe(DeliveryOrderStatus::WaitingMerchantReady->value);
+    expect($deliveryOrder->fresh()->status)->toBe(DeliveryOrderStatus::SearchingForDriver->value);
+    expect($response->json('data.estimatedPreparationMinutes'))->toBe(20);
 
     $this->assertDatabaseHas('sm_orders', [
         'id' => $order->id,
@@ -75,7 +78,7 @@ it('accepts a pending order without starting delivery dispatch', function (): vo
         'changed_by_user_id' => $this->user->id,
     ]);
 
-    Queue::assertNotPushed(DispatchDeliveryOrderJob::class);
+    Queue::assertPushed(DispatchDeliveryOrderJob::class);
 });
 
 it('rejects accepting non-pending orders', function (): void {

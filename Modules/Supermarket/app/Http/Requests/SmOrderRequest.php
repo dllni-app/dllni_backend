@@ -17,6 +17,7 @@ final class SmOrderRequest extends FormRequest
     public function rules(): array
     {
         $orderId = $this->route('sm_order');
+        $lifecycleFieldRule = $this->isMethod('post') ? 'sometimes' : 'prohibited';
 
         return [
             'customerId' => 'sometimes|required|integer|exists:users,id',
@@ -30,11 +31,11 @@ final class SmOrderRequest extends FormRequest
                 'max:255',
                 Rule::unique('sm_orders', 'order_number')->ignore($orderId),
             ],
-            'status' => 'sometimes|required|string|in:pending,accepted,preparing,ready_for_pickup,picked_up,completed,cancelled',
+            'status' => [$lifecycleFieldRule, 'required', 'string', 'in:pending,accepted,preparing,ready_for_pickup,picked_up,completed,cancelled'],
             'pickupMode' => 'sometimes|required|string|in:immediate_pickup,scheduled_pickup',
             'pickupScheduledFor' => 'nullable|date',
-            'readyForPickupAt' => 'nullable|date',
-            'pickedUpAt' => 'nullable|date',
+            'readyForPickupAt' => [$lifecycleFieldRule, 'nullable', 'date'],
+            'pickedUpAt' => [$lifecycleFieldRule, 'nullable', 'date'],
             'customerPickupConfirmedAt' => 'nullable|date',
             'subtotal' => 'nullable|numeric|min:0',
             'discountAmount' => 'nullable|numeric|min:0',
@@ -43,8 +44,8 @@ final class SmOrderRequest extends FormRequest
             'cancellationFeeAmount' => 'nullable|numeric|min:0',
             'cancellationPolicySnapshot' => 'nullable|array',
             'specialInstructions' => 'nullable|string',
-            'cancelledAt' => 'nullable|date',
-            'cancellationReason' => 'nullable|string',
+            'cancelledAt' => [$lifecycleFieldRule, 'nullable', 'date'],
+            'cancellationReason' => [$lifecycleFieldRule, 'nullable', 'string'],
         ];
     }
 }

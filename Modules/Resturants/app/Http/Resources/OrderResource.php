@@ -59,6 +59,7 @@ final class OrderResource extends JsonResource
             'specialInstructions' => $this->special_instructions,
             'acceptedAt' => $this->accepted_at?->toDateTimeString(),
             'estimatedPreparationMinutes' => $this->estimated_preparation_minutes,
+            'estimatedReadyAt' => $this->estimated_ready_at?->toIso8601String(),
             'kitchenNotes' => $this->kitchen_notes,
             'preparingAt' => $this->preparing_at?->toDateTimeString(),
             'completedAt' => $this->completed_at?->toDateTimeString(),

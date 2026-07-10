@@ -10,6 +10,7 @@ use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Http\Requests\RestaurantOwner\OwnerOrderStatusRequest;
 use Modules\Resturants\Models\Order;
 use Modules\Resturants\Services\RestaurantOrderNotificationService;
+use Modules\Delivery\Services\MerchantOrderDeliveryService;
 use Modules\Resturants\Support\RestaurantOwnerContext;
 use Modules\Resturants\Support\RestaurantOwnerOrderPayload;
 use Spatie\Activitylog\Facades\Activity;
@@ -23,6 +24,7 @@ final class RestaurantOwnerOrderStatusController
         RestaurantOwnerContext $context,
         RestaurantOwnerOrderPayload $payload,
         RestaurantOrderNotificationService $notifications,
+        MerchantOrderDeliveryService $merchantDelivery,
     ): JsonResponse {
         $context->ensureOwnedOrder($order);
 
@@ -44,7 +46,11 @@ final class RestaurantOwnerOrderStatusController
         $now = now();
 
         match ($nextStatus) {
-            OrderStatus::Accepted->value => $update += ['accepted_at' => $order->accepted_at ?? $now],
+            OrderStatus::Accepted->value => $update += [
+                'accepted_at' => $order->accepted_at ?? $now,
+                'estimated_preparation_minutes' => $validated['preparationTimeMinutes'] ?? null,
+                'estimated_ready_at' => isset($validated['preparationTimeMinutes']) ? $now->copy()->addMinutes((int) $validated['preparationTimeMinutes']) : null,
+            ],
             OrderStatus::Preparing->value => $update += ['preparing_at' => $order->preparing_at ?? $now],
             OrderStatus::ReadyForPickup->value => $update += ['ready_for_pickup_at' => $order->ready_for_pickup_at ?? $now],
             OrderStatus::PickedUp->value => $update += ['picked_up_at' => $order->picked_up_at ?? $now],
@@ -58,6 +64,18 @@ final class RestaurantOwnerOrderStatusController
         };
 
         $order->update($update);
+
+        match ($nextStatus) {
+            OrderStatus::Accepted->value => $merchantDelivery->accepted($order->fresh()),
+            OrderStatus::Preparing->value => $merchantDelivery->statusUpdated($order->fresh()),
+            OrderStatus::ReadyForPickup->value => $merchantDelivery->ready($order->fresh()),
+            OrderStatus::Cancelled->value => $merchantDelivery->cancelled(
+                $order->fresh(),
+                (string) ($order->cancellation_reason ?? 'Cancelled by restaurant owner'),
+                auth()->id(),
+            ),
+            default => null,
+        };
 
         Activity::causedBy(auth()->user())
             ->performedOn($order)

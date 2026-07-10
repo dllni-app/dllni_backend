@@ -482,6 +482,40 @@ return [
                 ],
             ],
         ],
+        'delivery.order.merchant_preparation_updated' => [
+            'legacy_type' => 'delivery_order_merchant_preparation_updated',
+            'module' => 'delivery',
+            'category' => 'orders',
+            'priority' => 'normal',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'تحديث وقت تجهيز الطلب',
+                    'body' => 'تم تحديث وقت تجهيز الطلب :order_number.',
+                ],
+                'en' => [
+                    'title' => 'Preparation time updated',
+                    'body' => 'The preparation estimate for order :order_number was updated.',
+                ],
+            ],
+        ],
+        'delivery.order.merchant_ready' => [
+            'legacy_type' => 'delivery_order_merchant_ready',
+            'module' => 'delivery',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'الطلب جاهز للاستلام',
+                    'body' => 'أصبح الطلب :order_number جاهزاً للاستلام.',
+                ],
+                'en' => [
+                    'title' => 'Order ready for pickup',
+                    'body' => 'Order :order_number is ready for pickup.',
+                ],
+            ],
+        ],
         'delivery.dispute.opened' => [
             'legacy_type' => 'delivery_dispute_opened',
             'module' => 'delivery',

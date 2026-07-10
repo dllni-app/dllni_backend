@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
 use Modules\Delivery\Models\DeliveryCompany;
 use Modules\Delivery\Models\DeliveryOrder;
+use Modules\Delivery\Enums\DeliveryOrderStatus;
+use Modules\Delivery\Jobs\DispatchDeliveryOrderJob;
 use Modules\Delivery\Services\DeliveryOrderCreationService;
 use Modules\Resturants\Models\Cart;
 use Modules\Resturants\Models\CartItem;
@@ -88,7 +90,10 @@ it('restaurant delivery checkout creates a linked delivery order', function (): 
     $order = Order::query()->where('user_id', $user->id)->firstOrFail();
     expect($order->deliveryOrder)->toBeInstanceOf(DeliveryOrder::class)
         ->and($order->deliveryOrder->source_type)->toBe(DeliveryOrderCreationService::SOURCE_RESTAURANT_ORDER)
+        ->and($order->deliveryOrder->status)->toBe(DeliveryOrderStatus::WaitingMerchantReady->value)
         ->and((int) $order->deliveryOrder->created_by_user_id)->toBe((int) $user->id);
+
+    Queue::assertNotPushed(DispatchDeliveryOrderJob::class);
 });
 
 it('restaurant pickup checkout does not create a delivery order', function (): void {

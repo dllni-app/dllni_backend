@@ -9,8 +9,8 @@ use Exception;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Log;
-use Modules\Delivery\Services\DeliveryOrderCreationService;
-use Modules\Delivery\Services\DeliveryOrderService;
+use InvalidArgumentException;
+use Modules\Delivery\Services\MerchantOrderDeliveryService;
 use Modules\Supermarket\Data\SmOrderData;
 use Modules\Supermarket\Data\SmOrderRejectStatusData;
 use Modules\Supermarket\Enums\RejectionType;
@@ -38,8 +38,7 @@ final class SmOrderService
 
     public function __construct(
         private readonly SmInventoryService $inventoryService,
-        private readonly DeliveryOrderService $deliveryOrderService,
-        private readonly DeliveryOrderCreationService $deliveryOrderCreationService,
+        private readonly MerchantOrderDeliveryService $merchantDelivery,
     ) {}
 
     public function store(SmOrderData $data): SmOrder
@@ -141,9 +140,9 @@ final class SmOrderService
         return $weeklyCounts;
     }
 
-    public function acceptOrder(SmOrder $order, ?int $actorUserId = null): SmOrder
+    public function acceptOrder(SmOrder $order, ?int $actorUserId = null, ?int $preparationMinutes = null): SmOrder
     {
-        return DB::transaction(function () use ($order, $actorUserId): SmOrder {
+        $accepted = DB::transaction(function () use ($order, $actorUserId, $preparationMinutes): SmOrder {
             $order = SmOrder::query()->lockForUpdate()->findOrFail($order->id);
 
             if ($order->status !== SmOrderStatus::Pending) {
@@ -154,19 +153,27 @@ final class SmOrderService
 
             $this->inventoryService->deductStockForOrder($order);
 
+            $acceptedAt = now();
             $order->update([
                 'status' => SmOrderStatus::Accepted,
+                'accepted_at' => $acceptedAt,
+                'estimated_preparation_minutes' => $preparationMinutes,
+                'estimated_ready_at' => $preparationMinutes !== null ? $acceptedAt->copy()->addMinutes($preparationMinutes) : null,
             ]);
 
             $this->logStatus($order, SmOrderStatus::Pending, SmOrderStatus::Accepted, 'Order accepted by store owner.', $actorUserId);
 
             return $order->refresh();
         });
+
+        $this->merchantDelivery->accepted($accepted);
+
+        return $accepted->refresh();
     }
 
     public function markPreparing(SmOrder $order, ?int $actorUserId): SmOrder
     {
-        return DB::transaction(function () use ($order, $actorUserId): SmOrder {
+        $updated = DB::transaction(function () use ($order, $actorUserId): SmOrder {
             $order = SmOrder::query()->lockForUpdate()->findOrFail($order->id);
 
             if ($order->status === SmOrderStatus::Preparing) {
@@ -187,18 +194,18 @@ final class SmOrderService
 
             return $order->refresh();
         });
+
+        $this->merchantDelivery->statusUpdated($updated);
+
+        return $updated->refresh();
     }
 
     public function markReadyForPickup(SmOrder $order, ?int $actorUserId): SmOrder
     {
-        $shouldStartDispatch = false;
-
-        $order = DB::transaction(function () use ($order, $actorUserId, &$shouldStartDispatch): SmOrder {
+        $order = DB::transaction(function () use ($order, $actorUserId): SmOrder {
             $order = SmOrder::query()->lockForUpdate()->findOrFail($order->id);
 
             if ($order->status === SmOrderStatus::ReadyForPickup) {
-                $shouldStartDispatch = true;
-
                 return $order->refresh();
             }
 
@@ -216,20 +223,33 @@ final class SmOrderService
             ]);
 
             $this->logStatus($order, $from, SmOrderStatus::ReadyForPickup, 'Order is ready for courier pickup.', $actorUserId);
-            $shouldStartDispatch = true;
-
             return $order->refresh();
         });
 
-        if ($shouldStartDispatch) {
-            $deliveryOrder = $this->deliveryOrderCreationService->findForSupermarketOrder($order);
-
-            if ($deliveryOrder !== null) {
-                $this->deliveryOrderService->startDispatch($deliveryOrder, 'Supermarket order is ready for pickup.');
-            }
-        }
+        $this->merchantDelivery->ready($order);
 
         return $order->refresh();
+    }
+
+    public function updatePreparationEstimate(SmOrder $order, ?int $preparationMinutes): SmOrder
+    {
+        $updated = DB::transaction(function () use ($order, $preparationMinutes): SmOrder {
+            $lockedOrder = SmOrder::query()->lockForUpdate()->findOrFail($order->id);
+            if (! in_array($lockedOrder->status, [SmOrderStatus::Accepted, SmOrderStatus::Preparing], true)) {
+                throw new InvalidArgumentException('Preparation estimates can only be changed while accepted or preparing.');
+            }
+
+            $lockedOrder->forceFill([
+                'estimated_preparation_minutes' => $preparationMinutes,
+                'estimated_ready_at' => $preparationMinutes !== null ? now()->addMinutes($preparationMinutes) : null,
+            ])->save();
+
+            return $lockedOrder->fresh();
+        });
+
+        $this->merchantDelivery->preparationUpdated($updated);
+
+        return $updated->refresh();
     }
 
     public function handOverToCourier(SmOrder $order, ?int $actorUserId): SmOrder

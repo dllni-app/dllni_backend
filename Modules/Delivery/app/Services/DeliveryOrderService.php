@@ -8,6 +8,7 @@ use App\Models\BookingStatusLog;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use Modules\Delivery\Exceptions\MerchantNotReadyException;
 use Modules\Delivery\Enums\DeliveryDriverAvailabilityStatus;
 use Modules\Delivery\Enums\DeliveryOrderStatus;
 use Modules\Delivery\Jobs\DispatchDeliveryOrderJob;
@@ -17,6 +18,8 @@ use Modules\Delivery\Models\DeliveryOrder;
 use Modules\Delivery\Models\DeliveryOrderEvent;
 use Modules\Supermarket\Enums\SmOrderStatus;
 use Modules\Supermarket\Models\SmOrder;
+use Modules\Resturants\Enums\OrderStatus;
+use Modules\Resturants\Models\Order;
 
 final class DeliveryOrderService
 {
@@ -135,6 +138,9 @@ final class DeliveryOrderService
                 'status' => DeliveryOrderStatus::SearchingForDriver->value,
                 'stopped_at' => null,
                 'stop_reason' => null,
+                'dispatch_wave' => 0,
+                'search_radius_km' => null,
+                'dispatch_phase' => 'radius',
             ])->save();
 
             $this->recordStatusChange(
@@ -158,7 +164,7 @@ final class DeliveryOrderService
             $order = DeliveryOrder::query()->lockForUpdate()->findOrFail($order->id);
             $currentStatus = DeliveryOrderStatus::tryFrom((string) $order->status);
 
-            if (in_array($currentStatus, [DeliveryOrderStatus::Accepted, DeliveryOrderStatus::InProgress, DeliveryOrderStatus::PickedUp, DeliveryOrderStatus::Delivered, DeliveryOrderStatus::Completed, DeliveryOrderStatus::Cancelled], true)) {
+            if (in_array($currentStatus, [DeliveryOrderStatus::SearchingForDriver, DeliveryOrderStatus::Dispatching, DeliveryOrderStatus::Offered, DeliveryOrderStatus::Accepted, DeliveryOrderStatus::InProgress, DeliveryOrderStatus::PickedUp, DeliveryOrderStatus::Delivered, DeliveryOrderStatus::Completed, DeliveryOrderStatus::Cancelled], true)) {
                 return $order->fresh();
             }
 
@@ -168,7 +174,13 @@ final class DeliveryOrderService
 
             $this->applyStatus($order, DeliveryOrderStatus::SearchingForDriver, [
                 'note' => $note,
-                'extraAttributes' => ['stopped_at' => null, 'stop_reason' => null],
+                'extraAttributes' => [
+                    'stopped_at' => null,
+                    'stop_reason' => null,
+                    'dispatch_wave' => 0,
+                    'search_radius_km' => null,
+                    'dispatch_phase' => 'radius',
+                ],
             ]);
 
             return $order->fresh();
@@ -476,14 +488,15 @@ final class DeliveryOrderService
     {
         $source = $order->relationLoaded('source') ? $order->source : $order->source()->first();
 
-        if (! $source instanceof SmOrder) {
-            return;
-        }
+        $status = $source?->status?->value ?? (string) ($source?->status ?? '');
+        $isReady = match (true) {
+            $source instanceof SmOrder => in_array($status, [SmOrderStatus::ReadyForPickup->value, SmOrderStatus::PickedUp->value, SmOrderStatus::Completed->value], true),
+            $source instanceof Order => in_array($status, [OrderStatus::ReadyForPickup->value, OrderStatus::PickedUp->value, OrderStatus::Completed->value], true),
+            default => true,
+        };
 
-        $status = $source->status?->value ?? (string) $source->status;
-
-        if ($status !== SmOrderStatus::ReadyForPickup->value) {
-            throw new InvalidArgumentException('طلب السوبرماركت غير جاهز للاستلام بعد.');
+        if (! $isReady) {
+            throw new MerchantNotReadyException();
         }
     }
 
