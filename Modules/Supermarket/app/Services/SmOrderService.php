@@ -252,6 +252,40 @@ final class SmOrderService
         return $updated->refresh();
     }
 
+    public function cancelAfterAcceptance(SmOrder $order, string $reason, ?int $actorUserId): SmOrder
+    {
+        $cancelled = DB::transaction(function () use ($order, $reason, $actorUserId): SmOrder {
+            $lockedOrder = SmOrder::query()->lockForUpdate()->findOrFail($order->id);
+
+            if ($lockedOrder->status === SmOrderStatus::Cancelled) {
+                return $lockedOrder->refresh();
+            }
+
+            if (! in_array($lockedOrder->status, [
+                SmOrderStatus::Accepted,
+                SmOrderStatus::Preparing,
+                SmOrderStatus::ReadyForPickup,
+            ], true)) {
+                throw new InvalidArgumentException('Only accepted, preparing, or ready-for-pickup orders can be cancelled by the store.');
+            }
+
+            $from = $lockedOrder->status;
+            $lockedOrder->forceFill([
+                'status' => SmOrderStatus::Cancelled,
+                'cancelled_at' => now(),
+                'cancellation_reason' => $reason,
+            ])->save();
+
+            $this->logStatus($lockedOrder, $from, SmOrderStatus::Cancelled, $reason, $actorUserId);
+
+            return $lockedOrder->refresh();
+        });
+
+        $this->merchantDelivery->cancelled($cancelled, $reason, $actorUserId);
+
+        return $cancelled->refresh();
+    }
+
     public function handOverToCourier(SmOrder $order, ?int $actorUserId): SmOrder
     {
         return DB::transaction(function () use ($order, $actorUserId): SmOrder {
