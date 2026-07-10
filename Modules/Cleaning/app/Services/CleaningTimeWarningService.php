@@ -24,11 +24,15 @@ final class CleaningTimeWarningService
 
     public function accept(CleaningTimeWarning $warning, ?int $additionalMinutes = null): CleaningTimeWarning
     {
-        $warning = DB::transaction(function () use ($warning, $additionalMinutes): CleaningTimeWarning {
+        $alreadyResolved = false;
+
+        $warning = DB::transaction(function () use ($warning, $additionalMinutes, &$alreadyResolved): CleaningTimeWarning {
             $warning = CleaningTimeWarning::query()->lockForUpdate()->findOrFail($warning->id);
 
             if ($warning->worker_responded_at !== null) {
-                throw new InvalidArgumentException('Extension request has already been responded to.');
+                $alreadyResolved = true;
+
+                return $warning->fresh(['booking']);
             }
 
             $booking = $this->lockedBooking($warning);
@@ -72,18 +76,24 @@ final class CleaningTimeWarningService
             return $warning->fresh(['booking']);
         });
 
-        $this->broadcastDecision($warning, 'extension_accepted');
+        if (! $alreadyResolved) {
+            $this->broadcastDecision($warning, 'extension_accepted');
+        }
 
         return $warning;
     }
 
     public function reject(CleaningTimeWarning $warning, ?string $message = null): CleaningTimeWarning
     {
-        $warning = DB::transaction(function () use ($warning, $message): CleaningTimeWarning {
+        $alreadyResolved = false;
+
+        $warning = DB::transaction(function () use ($warning, $message, &$alreadyResolved): CleaningTimeWarning {
             $warning = CleaningTimeWarning::query()->lockForUpdate()->findOrFail($warning->id);
 
             if ($warning->worker_responded_at !== null) {
-                throw new InvalidArgumentException('Extension request has already been responded to.');
+                $alreadyResolved = true;
+
+                return $warning->fresh(['booking']);
             }
 
             $booking = $this->lockedBooking($warning);
@@ -121,7 +131,9 @@ final class CleaningTimeWarningService
             return $warning->fresh(['booking']);
         });
 
-        $this->broadcastDecision($warning, 'extension_rejected', $message);
+        if (! $alreadyResolved) {
+            $this->broadcastDecision($warning, 'extension_rejected', $message);
+        }
 
         return $warning;
     }
