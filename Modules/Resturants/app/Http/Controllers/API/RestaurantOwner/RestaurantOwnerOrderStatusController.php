@@ -6,11 +6,12 @@ namespace Modules\Resturants\Http\Controllers\API\RestaurantOwner;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\ValidationException;
+use Modules\Delivery\Services\MerchantOrderDeliveryService;
 use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Http\Requests\RestaurantOwner\OwnerOrderStatusRequest;
 use Modules\Resturants\Models\Order;
+use Modules\Resturants\Services\OrderService;
 use Modules\Resturants\Services\RestaurantOrderNotificationService;
-use Modules\Delivery\Services\MerchantOrderDeliveryService;
 use Modules\Resturants\Support\RestaurantOwnerContext;
 use Modules\Resturants\Support\RestaurantOwnerOrderPayload;
 use Spatie\Activitylog\Facades\Activity;
@@ -25,6 +26,7 @@ final class RestaurantOwnerOrderStatusController
         RestaurantOwnerOrderPayload $payload,
         RestaurantOrderNotificationService $notifications,
         MerchantOrderDeliveryService $merchantDelivery,
+        OrderService $orders,
     ): JsonResponse {
         $context->ensureOwnedOrder($order);
 
@@ -42,40 +44,47 @@ final class RestaurantOwnerOrderStatusController
             ]);
         }
 
-        $update = ['status' => $nextStatus];
-        $now = now();
+        if ($nextStatus === OrderStatus::Accepted->value) {
+            // Keep every restaurant acceptance path behind the same row-locking
+            // service and merchant-delivery coordinator.
+            $order = $orders->accept(
+                order: $order,
+                preparationMinutes: array_key_exists('preparationTimeMinutes', $validated)
+                    ? $validated['preparationTimeMinutes']
+                    : null,
+                assignedStaffId: null,
+                kitchenNotes: null,
+            );
+        } else {
+            $update = ['status' => $nextStatus];
+            $now = now();
 
-        match ($nextStatus) {
-            OrderStatus::Accepted->value => $update += [
-                'accepted_at' => $order->accepted_at ?? $now,
-                'estimated_preparation_minutes' => $validated['preparationTimeMinutes'] ?? null,
-                'estimated_ready_at' => isset($validated['preparationTimeMinutes']) ? $now->copy()->addMinutes((int) $validated['preparationTimeMinutes']) : null,
-            ],
-            OrderStatus::Preparing->value => $update += ['preparing_at' => $order->preparing_at ?? $now],
-            OrderStatus::ReadyForPickup->value => $update += ['ready_for_pickup_at' => $order->ready_for_pickup_at ?? $now],
-            OrderStatus::PickedUp->value => $update += ['picked_up_at' => $order->picked_up_at ?? $now],
-            OrderStatus::Completed->value => $update += ['completed_at' => $order->completed_at ?? $now],
-            OrderStatus::Cancelled->value => $update += [
-                'cancelled_at' => $order->cancelled_at ?? $now,
-                'cancellation_reason_code' => $validated['reason'] ?? 'owner_cancelled',
-                'cancellation_reason' => $validated['customerMessage'] ?? 'Cancelled by restaurant owner',
-            ],
-            default => null,
-        };
+            match ($nextStatus) {
+                OrderStatus::Preparing->value => $update += ['preparing_at' => $order->preparing_at ?? $now],
+                OrderStatus::ReadyForPickup->value => $update += ['ready_for_pickup_at' => $order->ready_for_pickup_at ?? $now],
+                OrderStatus::PickedUp->value => $update += ['picked_up_at' => $order->picked_up_at ?? $now],
+                OrderStatus::Completed->value => $update += ['completed_at' => $order->completed_at ?? $now],
+                OrderStatus::Cancelled->value => $update += [
+                    'cancelled_at' => $order->cancelled_at ?? $now,
+                    'cancellation_reason_code' => $validated['reason'] ?? 'owner_cancelled',
+                    'cancellation_reason' => $validated['customerMessage'] ?? 'Cancelled by restaurant owner',
+                ],
+                default => null,
+            };
 
-        $order->update($update);
+            $order->update($update);
 
-        match ($nextStatus) {
-            OrderStatus::Accepted->value => $merchantDelivery->accepted($order->fresh()),
-            OrderStatus::Preparing->value => $merchantDelivery->statusUpdated($order->fresh()),
-            OrderStatus::ReadyForPickup->value => $merchantDelivery->ready($order->fresh()),
-            OrderStatus::Cancelled->value => $merchantDelivery->cancelled(
-                $order->fresh(),
-                (string) ($order->cancellation_reason ?? 'Cancelled by restaurant owner'),
-                auth()->id(),
-            ),
-            default => null,
-        };
+            match ($nextStatus) {
+                OrderStatus::Preparing->value => $merchantDelivery->statusUpdated($order->fresh()),
+                OrderStatus::ReadyForPickup->value => $merchantDelivery->ready($order->fresh()),
+                OrderStatus::Cancelled->value => $merchantDelivery->cancelled(
+                    $order->fresh(),
+                    (string) ($order->cancellation_reason ?? 'Cancelled by restaurant owner'),
+                    auth()->id(),
+                ),
+                default => null,
+            };
+        }
 
         Activity::causedBy(auth()->user())
             ->performedOn($order)
