@@ -106,7 +106,7 @@ it('rejects inactive neighborhoods when updating worker work areas', function ()
         ->assertJsonValidationErrors(['zones.0.neighborhoodId']);
 });
 
-it('dispatches new orders only to workers covering the booking neighborhood', function (): void {
+it('dispatches new orders regardless of worker neighborhood coverage', function (): void {
     Notification::fake();
 
     $neighborhoodA = CleaningNeighborhood::factory()->create(['name_ar' => 'Aziziyah']);
@@ -126,17 +126,17 @@ it('dispatches new orders only to workers covering the booking neighborhood', fu
     (new NotifyEligibleWorkersNewOrderJob($booking->id))->handle();
 
     Notification::assertSentTo($userA, NewOrderRequestNotification::class);
-    Notification::assertNotSentTo($userB, NewOrderRequestNotification::class);
+    Notification::assertSentTo($userB, NewOrderRequestNotification::class);
 });
 
-it('filters current worker pending bookings by neighborhood coverage', function (): void {
+it('shows current worker pending bookings regardless of neighborhood coverage', function (): void {
     $neighborhoodA = CleaningNeighborhood::factory()->create(['name_ar' => 'Aziziyah']);
     $neighborhoodB = CleaningNeighborhood::factory()->create(['name_ar' => 'Jamiliyah']);
     [$user] = createCoveredWorker($neighborhoodA);
 
     Sanctum::actingAs($user);
 
-    $visible = CleaningBooking::factory()->create([
+    $insideAreaBooking = CleaningBooking::factory()->create([
         'status' => CleaningBookingStatus::Pending->value,
         'worker_id' => null,
         'scheduled_date' => now()->toDateString(),
@@ -145,7 +145,7 @@ it('filters current worker pending bookings by neighborhood coverage', function 
         'neighborhood_id' => $neighborhoodA->id,
         'neighborhood_name' => $neighborhoodA->name_ar,
     ]);
-    CleaningBooking::factory()->create([
+    $outsideAreaBooking = CleaningBooking::factory()->create([
         'status' => CleaningBookingStatus::Pending->value,
         'worker_id' => null,
         'scheduled_date' => now()->toDateString(),
@@ -158,8 +158,15 @@ it('filters current worker pending bookings by neighborhood coverage', function 
     $response = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
 
     $response->assertOk()
-        ->assertJsonCount(1, 'data')
-        ->assertJsonPath('data.0.id', $visible->id);
+        ->assertJsonCount(2, 'data');
+
+    $bookingIds = collect($response->json('data'))
+        ->pluck('id')
+        ->map(static fn (mixed $id): int => (int) $id)
+        ->all();
+
+    expect($bookingIds)->toContain($insideAreaBooking->id);
+    expect($bookingIds)->toContain($outsideAreaBooking->id);
 });
 
 it('blocks workers from accepting bookings outside their neighborhoods', function (): void {

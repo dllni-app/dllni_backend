@@ -98,15 +98,12 @@ trait CleaningBookingFilterQuery
 
         $worker->loadMissing('deposit');
         $canReceiveNewRequests = app(DepositService::class)->isWorkerEligibleForNewRequests($worker);
-        $hasActiveWorkAreas = $worker->zones()
-            ->where('is_active', true)
-            ->exists();
 
         $preferredWorkType = $worker->preferred_work_type instanceof WorkerPreferredWorkType
             ? $worker->preferred_work_type
             : WorkerPreferredWorkType::tryFrom((string) ($worker->preferred_work_type ?? WorkerPreferredWorkType::Both->value)) ?? WorkerPreferredWorkType::Both;
 
-        return $query->where(function (Builder $q) use ($worker, $preferredWorkType, $canReceiveNewRequests, $hasActiveWorkAreas): void {
+        return $query->where(function (Builder $q) use ($worker, $preferredWorkType, $canReceiveNewRequests): void {
             $q->where('worker_id', $worker->id)
                 ->orWhereHas('workerAssignments', function (Builder $assignments) use ($worker): void {
                     $assignments
@@ -125,7 +122,7 @@ trait CleaningBookingFilterQuery
                         ->where('preferred_worker_id', $worker->id)
                         ->whereDoesntHave('rejections', fn (Builder $rejections) => $rejections->where('worker_id', $worker->id));
                 })
-                ->orWhere(function (Builder $pending) use ($worker, $preferredWorkType, $canReceiveNewRequests, $hasActiveWorkAreas): void {
+                ->orWhere(function (Builder $pending) use ($worker, $preferredWorkType, $canReceiveNewRequests): void {
                     if (! $canReceiveNewRequests) {
                         $pending->where('id', -1);
 
@@ -148,23 +145,6 @@ trait CleaningBookingFilterQuery
                                 ->whereNull('gender_preference')
                                 ->orWhere('gender_preference', GenderPreference::Any->value)
                                 ->orWhere('gender_preference', $worker->gender);
-                        })
-                        ->when($hasActiveWorkAreas, function (Builder $query) use ($worker): Builder {
-                            return $query->where(function (Builder $coverageQuery) use ($worker): void {
-                                $coverageQuery
-                                    ->where(function (Builder $neighborhoodCoverage) use ($worker): void {
-                                        $neighborhoodCoverage
-                                            ->whereNotNull('neighborhood_id')
-                                            ->whereExists(function ($sub) use ($worker): void {
-                                                $sub->selectRaw('1')
-                                                    ->from('worker_zones')
-                                                    ->whereColumn('worker_zones.neighborhood_id', 'cleaning_bookings.neighborhood_id')
-                                                    ->where('worker_zones.worker_id', $worker->id)
-                                                    ->where('worker_zones.is_active', true);
-                                            });
-                                    })
-                                    ->orWhereNull('neighborhood_id');
-                            });
                         })
                         ->whereDoesntHave('rejections', fn (Builder $rejections) => $rejections->where('worker_id', $worker->id));
                 });

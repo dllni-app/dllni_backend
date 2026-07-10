@@ -292,21 +292,6 @@ final class WorkerHomepageController
                     ->orWhere('gender_preference', GenderPreference::Any->value)
                     ->orWhere('gender_preference', $worker->gender);
             })
-            ->where(function (Builder $coverageQuery) use ($worker): void {
-                $coverageQuery
-                    ->where(function (Builder $neighborhoodCoverage) use ($worker): void {
-                        $neighborhoodCoverage
-                            ->whereNotNull('neighborhood_id')
-                            ->whereExists(function ($sub) use ($worker): void {
-                                $sub->selectRaw('1')
-                                    ->from('worker_zones')
-                                    ->whereColumn('worker_zones.neighborhood_id', 'cleaning_bookings.neighborhood_id')
-                                    ->where('worker_zones.worker_id', $worker->id)
-                                    ->where('worker_zones.is_active', true);
-                            });
-                    })
-                    ->orWhereNull('neighborhood_id');
-            })
             ->whereDoesntHave('rejections', fn ($q) => $q->where('worker_id', $worker->id));
     }
 

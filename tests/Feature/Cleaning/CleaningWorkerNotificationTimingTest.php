@@ -13,7 +13,7 @@ use Modules\Cleaning\Events\CleaningBookingCreated;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningNeighborhood;
 
-it('does not notify workers who are outside the booking working hours', function (): void {
+it('notifies workers regardless of configured working hours', function (): void {
     Carbon::setTestNow(Carbon::parse('2026-06-16 12:00:00'));
     Notification::fake();
     Event::fake([CleaningBookingCreated::class]);
@@ -64,10 +64,14 @@ it('does not notify workers who are outside the booking working hours', function
         (new NotifyEligibleWorkersNewOrderJob($booking->id))->handle();
 
         Notification::assertSentTo($insideUser, NewOrderRequestNotification::class);
-        Notification::assertNotSentTo($outsideUser, NewOrderRequestNotification::class);
+        Notification::assertSentTo($outsideUser, NewOrderRequestNotification::class);
         Event::assertDispatched(CleaningBookingCreated::class, function (CleaningBookingCreated $event) use ($booking, $insideWorker): bool {
             return $event->cleaningBookingId === (int) $booking->id
                 && $event->workerId === (int) $insideWorker->id;
+        });
+        Event::assertDispatched(CleaningBookingCreated::class, function (CleaningBookingCreated $event) use ($booking, $outsideWorker): bool {
+            return $event->cleaningBookingId === (int) $booking->id
+                && $event->workerId === (int) $outsideWorker->id;
         });
     } finally {
         Carbon::setTestNow();
