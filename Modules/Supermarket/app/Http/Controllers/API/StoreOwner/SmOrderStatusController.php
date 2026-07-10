@@ -9,8 +9,9 @@ use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Modules\Supermarket\Data\SmOrderRejectStatusData;
-use Modules\Supermarket\Http\Requests\SmOrderRejectStatusRequest;
 use Modules\Supermarket\Http\Requests\SmOrderAcceptRequest;
+use Modules\Supermarket\Http\Requests\SmOrderCancelRequest;
+use Modules\Supermarket\Http\Requests\SmOrderRejectStatusRequest;
 use Modules\Supermarket\Http\Resources\SmOrderResource;
 use Modules\Supermarket\Models\SmOrder;
 use Modules\Supermarket\Services\SmOrderNotificationService;
@@ -27,10 +28,7 @@ final class SmOrderStatusController
     ) {}
 
     /**
-     * Accept an order.
-     *
-     * Business logic is delegated to SmOrderService::acceptOrder().
-     * Delivery dispatch must wait until the store marks the order as ready_for_pickup.
+     * Accept an order and immediately start Mandoub dispatch.
      */
     public function accept(SmOrderAcceptRequest $request, SmOrder $order): JsonResponse|JsonResource
     {
@@ -78,7 +76,7 @@ final class SmOrderStatusController
     }
 
     /**
-     * Mark order as ready for pickup and start Mandoub dispatch.
+     * Mark order as ready for pickup without disturbing an assigned driver or active search.
      */
     public function readyForPickup(SmOrder $order): JsonResponse|JsonResource
     {
@@ -90,6 +88,30 @@ final class SmOrderStatusController
             $this->notifications->notifyStatusChanged($updated, $previousStatus, $this->statusValue($updated), 'owner');
 
             return $this->resource($updated, 'Order marked as ready for pickup successfully.');
+        } catch (Exception $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    /**
+     * Cancel an accepted/preparing/ready order and release delivery offers or the assigned driver.
+     */
+    public function cancel(SmOrderCancelRequest $request, SmOrder $order): JsonResponse|JsonResource
+    {
+        $this->context->store((int) $order->store_id);
+        $previousStatus = $this->statusValue($order);
+
+        try {
+            $updated = $this->orderService->cancelAfterAcceptance(
+                $order,
+                (string) $request->validated('reason'),
+                $this->context->owner()->id,
+            );
+            $this->notifications->notifyStatusChanged($updated, $previousStatus, $this->statusValue($updated), 'owner');
+
+            return $this->resource($updated, 'Order cancelled successfully.');
         } catch (Exception $e) {
             return response()->json([
                 'message' => $e->getMessage(),
@@ -118,11 +140,7 @@ final class SmOrderStatusController
     }
 
     /**
-     * Reject an order with reason and type.
-     *
-     * Business logic is delegated to SmOrderService::rejectOrder()
-     * All status transitions, trust score calculations, and notifications
-     * are handled inside the service layer.
+     * Reject a pending order with reason and type.
      */
     public function reject(SmOrderRejectStatusRequest $request, SmOrder $order): JsonResponse|JsonResource
     {
