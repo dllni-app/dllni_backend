@@ -10,6 +10,7 @@ use Modules\Cleaning\Http\Controllers\API\CleaningBookingArriveController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingCompleteController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingDeliveryFeeController;
+use Modules\Cleaning\Http\Controllers\API\CleaningBookingLocationController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingPriceAdjustmentRequestController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingSecurityCodeController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingStartTravelController;
@@ -80,7 +81,7 @@ Route::prefix('v1')->group(function () {
             Route::put('settings', [DepositManagementController::class, 'updateSettings']);
             Route::post('{worker}/deposit', [DepositManagementController::class, 'recordDeposit']);
             Route::post('{worker}/withdraw', [DepositManagementController::class, 'recordWithdrawal']);
-            Route::get('{worker}/transactions', [DepositManagementController::class, 'getWorkerTransactions']);
+            Route::get('{worker}/transactions', [DepositManagementController::class, 'getTransactions']);
         });
 
         Route::post('cleaning-bookings/{cleaning_booking}/delivery-fee', CleaningBookingDeliveryFeeController::class)->name('cleaning-bookings.delivery-fee');
@@ -90,7 +91,7 @@ Route::prefix('v1')->group(function () {
         Route::get('cleaning-bookings/{cleaning_booking}/security-code', CleaningBookingSecurityCodeController::class)->name('cleaning-bookings.security-code');
         Route::post('cleaning-bookings/{cleaning_booking}/sos', [CleaningBookingController::class, 'sos'])->name('cleaning-bookings.sos');
         Route::post('cleaning-bookings/{cleaning_booking}/start-travel', CleaningBookingStartTravelController::class)->name('cleaning-bookings.start-travel');
-        Route::post('cleaning-bookings/{cleaning_booking}/location', [CleaningBookingController::class, 'updateLocation'])->name('cleaning-bookings.location');
+        Route::post('cleaning-bookings/{cleaning_booking}/location', CleaningBookingLocationController::class)->name('cleaning-bookings.location');
         Route::post('cleaning-bookings/{cleaning_booking}/arrive', CleaningBookingArriveController::class)->name('cleaning-bookings.arrive');
         Route::post('cleaning-bookings/{cleaning_booking}/price-adjustment-requests', [CleaningBookingPriceAdjustmentRequestController::class, 'store'])->name('cleaning-bookings.price-adjustment-requests.store');
         Route::post('cleaning-bookings/{cleaning_booking}/start-work', CleaningBookingStartWorkController::class)->name('cleaning-bookings.start-work');
