@@ -6,6 +6,7 @@ namespace Modules\Cleaning\Services;
 
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
@@ -18,6 +19,7 @@ final class CleaningBookingActionNotificationService
     public function __construct(
         private readonly CleaningBookingActionNotificationRuleEngine $ruleEngine,
         private readonly CleaningLegacyBookingActionNotificationRuleEngine $legacyRuleEngine,
+        private readonly CleaningRepeatedActionNotificationRuleEngine $repeatedRuleEngine,
         private readonly CleaningLifecycleNotificationService $lifecycleNotifications,
     ) {}
 
@@ -37,15 +39,28 @@ final class CleaningBookingActionNotificationService
         $sent = 0;
 
         CleaningBooking::query()
-            ->with(['customer', 'worker.user', 'workerAssignments.worker.user'])
-            ->whereIn('status', [
-                CleaningBookingStatus::Pending->value,
-                CleaningBookingStatus::WorkerAssigned->value,
-                CleaningBookingStatus::AwaitingStartVerification->value,
-                CleaningBookingStatus::AwaitingWorkerStartConfirmation->value,
+            ->with([
+                'customer',
+                'worker.user',
+                'workerAssignments.worker.user',
+                'timeWarnings.worker.user',
             ])
-            ->whereDate('scheduled_date', '>=', $now->subMinutes($lookback)->toDateString())
-            ->whereDate('scheduled_date', '<=', $now->addMinutes($lookahead)->toDateString())
+            ->where(function (Builder $query) use ($now, $lookahead, $lookback): void {
+                $query->where(function (Builder $scheduledQuery) use ($now, $lookahead, $lookback): void {
+                    $scheduledQuery
+                        ->whereIn('status', [
+                            CleaningBookingStatus::Pending->value,
+                            CleaningBookingStatus::WorkerAssigned->value,
+                            CleaningBookingStatus::AwaitingStartVerification->value,
+                            CleaningBookingStatus::AwaitingWorkerStartConfirmation->value,
+                        ])
+                        ->whereDate('scheduled_date', '>=', $now->subMinutes($lookback)->toDateString())
+                        ->whereDate('scheduled_date', '<=', $now->addMinutes($lookahead)->toDateString());
+                })->orWhereIn('status', [
+                    CleaningBookingStatus::AwaitingCustomerCompletion->value,
+                    CleaningBookingStatus::TimeExtensionRequested->value,
+                ]);
+            })
             ->orderBy('id')
             ->chunkById($chunkSize, function ($bookings) use ($now, &$sent): void {
                 foreach ($bookings as $booking) {
@@ -56,6 +71,7 @@ final class CleaningBookingActionNotificationService
                     $rules = array_merge(
                         $this->ruleEngine->dueNotifications($booking, $now),
                         $this->legacyRuleEngine->dueNotifications($booking, $now),
+                        $this->repeatedRuleEngine->dueNotifications($booking, $now),
                     );
 
                     foreach ($rules as $rule) {
@@ -78,6 +94,7 @@ final class CleaningBookingActionNotificationService
         $canonicalType = (string) $rule['canonicalType'];
         $scheduledAt = $rule['scheduledAt'];
         $dueAt = $rule['dueAt'];
+        $occurrenceKey = isset($rule['occurrenceKey']) ? (string) $rule['occurrenceKey'] : null;
 
         if (! $scheduledAt instanceof CarbonImmutable || ! $dueAt instanceof CarbonImmutable) {
             return false;
@@ -89,6 +106,7 @@ final class CleaningBookingActionNotificationService
             recipientId: (int) $recipient->getKey(),
             canonicalType: $canonicalType,
             scheduledAt: $scheduledAt,
+            occurrenceKey: $occurrenceKey,
         );
 
         $dispatch = CleaningNotificationDispatch::query()->firstOrCreate(
@@ -129,7 +147,7 @@ final class CleaningBookingActionNotificationService
         $deadlineAt = $rule['deadlineAt'] ?? null;
         $extraData = array_filter([
             'assignmentId' => $assignment?->id,
-            'workerId' => $assignment?->worker_id ?? ($targetRole === 'worker' ? $booking->worker_id : null),
+            'workerId' => $rule['workerId'] ?? $assignment?->worker_id ?? ($targetRole === 'worker' ? $booking->worker_id : null),
             'scheduledAt' => $scheduledAt->toIso8601String(),
             'deadlineAt' => $deadlineAt instanceof CarbonImmutable ? $deadlineAt->toIso8601String() : null,
             'requiredAction' => (string) $rule['requiredAction'],
@@ -137,6 +155,11 @@ final class CleaningBookingActionNotificationService
             'minutesUntilStart' => (int) $rule['minutesUntilStart'],
             'severity' => (string) $rule['severity'],
             'dedupeKey' => $dedupeKey,
+            'isRepeatedReminder' => $occurrenceKey !== null,
+            'repeatNumber' => isset($rule['repeatNumber']) ? (int) $rule['repeatNumber'] : null,
+            'maxRepeats' => isset($rule['maxRepeats']) ? (int) $rule['maxRepeats'] : null,
+            'warningId' => isset($rule['warningId']) ? (int) $rule['warningId'] : null,
+            'securityCodeId' => isset($rule['securityCodeId']) ? (int) $rule['securityCodeId'] : null,
         ], static fn (mixed $value): bool => $value !== null);
         $templateContext = [
             'scheduled_time' => $scheduledAt->format('H:i'),
@@ -211,9 +234,16 @@ final class CleaningBookingActionNotificationService
         int $recipientId,
         string $canonicalType,
         CarbonImmutable $scheduledAt,
+        ?string $occurrenceKey = null,
     ): string {
         $scope = $assignmentId !== null ? "assignment:{$assignmentId}" : "recipient:{$recipientId}";
-        $fingerprint = hash('sha256', $canonicalType.'|'.$scheduledAt->toIso8601String());
+        $fingerprintSource = $canonicalType.'|'.$scheduledAt->toIso8601String();
+
+        if ($occurrenceKey !== null) {
+            $fingerprintSource .= '|'.$occurrenceKey;
+        }
+
+        $fingerprint = hash('sha256', $fingerprintSource);
 
         return "cleaning:{$bookingId}:{$scope}:{$fingerprint}";
     }
