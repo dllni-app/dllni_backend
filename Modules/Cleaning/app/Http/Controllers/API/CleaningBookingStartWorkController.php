@@ -35,8 +35,8 @@ final class CleaningBookingStartWorkController
 
         try {
             $this->priceAdjustmentService->assertNoPendingRequestBeforeStart($cleaning_booking);
-            $booking = $this->shouldUseTeamStartFlow($cleaning_booking)
-                ? $this->startTeamWorker($cleaning_booking)
+            $booking = $this->shouldUseAssignmentStartFlow($cleaning_booking)
+                ? $this->startAssignedWorker($cleaning_booking)
                 : $this->cleaningBookingService->startWork($cleaning_booking);
         } catch (InvalidArgumentException $e) {
             throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
@@ -67,13 +67,12 @@ final class CleaningBookingStartWorkController
         }
     }
 
-    private function shouldUseTeamStartFlow(CleaningBooking $booking): bool
+    private function shouldUseAssignmentStartFlow(CleaningBooking $booking): bool
     {
-        return max(1, (int) ($booking->number_of_workers ?? 1)) > 1
-            && $booking->workerAssignments()->exists();
+        return $booking->workerAssignments()->exists();
     }
 
-    private function startTeamWorker(CleaningBooking $booking): CleaningBooking
+    private function startAssignedWorker(CleaningBooking $booking): CleaningBooking
     {
         $updated = DB::transaction(function () use ($booking): CleaningBooking {
             $worker = Auth::user()?->worker;

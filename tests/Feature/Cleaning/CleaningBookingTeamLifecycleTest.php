@@ -73,6 +73,58 @@ it('keeps team booking waiting until every worker starts their own assignment', 
     ]);
 });
 
+it('starts an assignment-backed one-worker booking after customer verification', function (): void {
+    [$workerUser, $worker] = createCleaningWorker('assignment-one-worker@example.com');
+    $customer = User::factory()->create(['email' => 'assignment-one-worker-customer@example.com']);
+
+    $booking = CleaningBooking::factory()->create([
+        'customer_id' => $customer->id,
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'status' => CleaningBookingStatus::AwaitingStartVerification,
+        'number_of_workers' => 1,
+        'arrived_at' => now()->subMinutes(2),
+    ]);
+
+    createTeamAssignment($booking, $worker, CleaningBookingWorkerAssignmentStatus::AwaitingStartVerification);
+    DB::table('booking_security_codes')->insert([
+        'booking_id' => $booking->id,
+        'booking_type' => $booking->getMorphClass(),
+        'worker_id' => $worker->id,
+        'code' => hash_hmac('sha256', '1234', (string) config('app.key')),
+        'code_hash' => hash_hmac('sha256', '1234', (string) config('app.key')),
+        'attempts' => 0,
+        'expires_at' => now()->addMinutes(10),
+        'consumed_at' => null,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    Sanctum::actingAs($customer);
+    $this->postJson("/api/v1/user/cleaning/orders/{$booking->id}/start-verification/confirm", [
+        'code' => '1234',
+    ])
+        ->assertOk()
+        ->assertJsonPath('data.status', CleaningBookingStatus::AwaitingWorkerStartConfirmation->value);
+
+    Sanctum::actingAs($workerUser);
+    $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/start-work");
+
+    $response->assertOk()
+        ->assertJsonPath('data.order_status', CleaningBookingStatus::InProgress->value)
+        ->assertJsonPath('data.worker_order_status', CleaningBookingWorkerAssignmentStatus::InProgress->value);
+
+    $this->assertDatabaseHas('cleaning_bookings', [
+        'id' => $booking->id,
+        'status' => CleaningBookingStatus::InProgress->value,
+    ]);
+    $this->assertDatabaseHas('cleaning_booking_worker_assignments', [
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $worker->id,
+        'status' => CleaningBookingWorkerAssignmentStatus::InProgress->value,
+    ]);
+});
+
 it('keeps team booking active until every worker completes their own assignment', function (): void {
     [$workerOneUser, $workerOne] = createCleaningWorker('team-complete-one@example.com');
     [$workerTwoUser, $workerTwo] = createCleaningWorker('team-complete-two@example.com');
