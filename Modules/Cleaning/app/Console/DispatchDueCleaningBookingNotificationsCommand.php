@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Console;
 
 use Illuminate\Console\Command;
-use Modules\Cleaning\Services\CleaningBookingActionNotificationService;
+use Modules\Cleaning\Jobs\DispatchDueCleaningBookingNotificationsJob;
 
 final class DispatchDueCleaningBookingNotificationsCommand extends Command
 {
@@ -13,10 +13,10 @@ final class DispatchDueCleaningBookingNotificationsCommand extends Command
 
     protected $description = 'Dispatch due cleaning booking reminders and missing-action warnings';
 
-    public function handle(CleaningBookingActionNotificationService $service): int
+    public function handle(): int
     {
-        $count = $service->dispatchDue();
-        $this->info("Cleaning action notifications dispatched: {$count}");
+        DispatchDueCleaningBookingNotificationsJob::dispatch();
+        $this->info('Cleaning action notification job dispatched.');
 
         return self::SUCCESS;
     }
