@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Filament\Tables\DashboardTable;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\ServiceProvider;
@@ -12,6 +13,8 @@ final class FilamentCompatibilityServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->app->bind(Table::class, DashboardTable::class);
+
         if (
             ! class_exists(\Filament\Infolists\Components\Section::class, false)
             && class_exists(\Filament\Schemas\Components\Section::class)
