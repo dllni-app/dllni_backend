@@ -69,10 +69,12 @@ final class NotificationTypeRegistry
     {
         $configuredTypes = config('notification_types.types', []);
         $extensionTypes = config('notification_type_extensions.types', []);
+        $cleaningRepeatedTypes = config('cleaning_repeated_notification_types.types', []);
 
         return array_replace(
             is_array($configuredTypes) ? $configuredTypes : [],
             is_array($extensionTypes) ? $extensionTypes : [],
+            is_array($cleaningRepeatedTypes) ? $cleaningRepeatedTypes : [],
         );
     }
 }
