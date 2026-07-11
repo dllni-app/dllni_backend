@@ -17,6 +17,7 @@ final class CleaningBookingActionNotificationService
 {
     public function __construct(
         private readonly CleaningBookingActionNotificationRuleEngine $ruleEngine,
+        private readonly CleaningLegacyBookingActionNotificationRuleEngine $legacyRuleEngine,
         private readonly CleaningLifecycleNotificationService $lifecycleNotifications,
     ) {}
 
@@ -36,7 +37,7 @@ final class CleaningBookingActionNotificationService
         $sent = 0;
 
         CleaningBooking::query()
-            ->with(['customer', 'workerAssignments.worker.user'])
+            ->with(['customer', 'worker.user', 'workerAssignments.worker.user'])
             ->whereIn('status', [
                 CleaningBookingStatus::Pending->value,
                 CleaningBookingStatus::WorkerAssigned->value,
@@ -52,7 +53,12 @@ final class CleaningBookingActionNotificationService
                         continue;
                     }
 
-                    foreach ($this->ruleEngine->dueNotifications($booking, $now) as $rule) {
+                    $rules = array_merge(
+                        $this->ruleEngine->dueNotifications($booking, $now),
+                        $this->legacyRuleEngine->dueNotifications($booking, $now),
+                    );
+
+                    foreach ($rules as $rule) {
                         if ($this->dispatchRule($booking, $rule, $now)) {
                             $sent++;
                         }
@@ -119,10 +125,11 @@ final class CleaningBookingActionNotificationService
             $dispatch->refresh();
         }
 
+        $targetRole = (string) ($rule['targetRole'] ?? 'customer');
         $deadlineAt = $rule['deadlineAt'] ?? null;
         $extraData = array_filter([
             'assignmentId' => $assignment?->id,
-            'workerId' => $assignment?->worker_id,
+            'workerId' => $assignment?->worker_id ?? ($targetRole === 'worker' ? $booking->worker_id : null),
             'scheduledAt' => $scheduledAt->toIso8601String(),
             'deadlineAt' => $deadlineAt instanceof CarbonImmutable ? $deadlineAt->toIso8601String() : null,
             'requiredAction' => (string) $rule['requiredAction'],
@@ -142,18 +149,31 @@ final class CleaningBookingActionNotificationService
             : (string) $booking->status;
 
         try {
-            if (($rule['targetRole'] ?? null) === 'worker' && $assignment instanceof CleaningBookingWorkerAssignment) {
-                $this->lifecycleNotifications->notifyWorkerAssignment(
-                    booking: $booking,
-                    assignment: $assignment,
-                    canonicalType: $canonicalType,
-                    action: (string) $rule['action'],
-                    actorRole: 'system',
-                    fromStatus: $status,
-                    occurredAt: $now->toIso8601String(),
-                    extraData: $extraData,
-                    templateContext: $templateContext,
-                );
+            if ($targetRole === 'worker') {
+                if ($assignment instanceof CleaningBookingWorkerAssignment) {
+                    $this->lifecycleNotifications->notifyWorkerAssignment(
+                        booking: $booking,
+                        assignment: $assignment,
+                        canonicalType: $canonicalType,
+                        action: (string) $rule['action'],
+                        actorRole: 'system',
+                        fromStatus: $status,
+                        occurredAt: $now->toIso8601String(),
+                        extraData: $extraData,
+                        templateContext: $templateContext,
+                    );
+                } else {
+                    $this->lifecycleNotifications->notifyWorker(
+                        booking: $booking,
+                        canonicalType: $canonicalType,
+                        action: (string) $rule['action'],
+                        actorRole: 'system',
+                        fromStatus: $status,
+                        occurredAt: $now->toIso8601String(),
+                        extraData: $extraData,
+                        templateContext: $templateContext,
+                    );
+                }
             } else {
                 $this->lifecycleNotifications->notifyCustomer(
                     booking: $booking,
