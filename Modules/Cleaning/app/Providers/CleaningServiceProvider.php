@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Providers;
 
 use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\ServiceProvider;
+use Modules\Cleaning\Console\DispatchDueCleaningBookingNotificationsCommand;
 use Nwidart\Modules\Traits\PathNamespace;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -73,9 +75,23 @@ final class CleaningServiceProvider extends ServiceProvider
         return [];
     }
 
-    public function registerCommands(): void {}
+    public function registerCommands(): void
+    {
+        if (! $this->app->runningInConsole()) {
+            return;
+        }
 
-    public function registerCommandSchedules(): void {}
+        $this->commands([
+            DispatchDueCleaningBookingNotificationsCommand::class,
+        ]);
+    }
+
+    public function registerCommandSchedules(): void
+    {
+        Schedule::command('cleaning:dispatch-due-action-notifications')
+            ->everyMinute()
+            ->withoutOverlapping(5);
+    }
 
     public function registerConfig(): void
     {
