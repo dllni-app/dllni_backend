@@ -18,15 +18,15 @@ return [
     'repeat_policies' => [
         'worker_start_travel_warning' => [
             'interval_minutes' => (int) env('CLEANING_REPEAT_TRAVEL_WARNING_INTERVAL_MINUTES', 5),
-            'max_occurrences' => (int) env('CLEANING_REPEAT_TRAVEL_WARNING_MAX_OCCURRENCES', 2),
+            'max_occurrences' => (int) env('CLEANING_REPEAT_TRAVEL_WARNING_MAX_OCCURRENCES', 13),
         ],
         'worker_arrival_critical_warning' => [
             'interval_minutes' => (int) env('CLEANING_REPEAT_ARRIVAL_WARNING_INTERVAL_MINUTES', 5),
-            'max_occurrences' => (int) env('CLEANING_REPEAT_ARRIVAL_WARNING_MAX_OCCURRENCES', 12),
+            'max_occurrences' => (int) env('CLEANING_REPEAT_ARRIVAL_WARNING_MAX_OCCURRENCES', 34),
         ],
         'worker_security_code_issue_reminder' => [
-            'interval_minutes' => (int) env('CLEANING_REPEAT_SECURITY_CODE_ISSUE_INTERVAL_MINUTES', 2),
-            'max_occurrences' => (int) env('CLEANING_REPEAT_SECURITY_CODE_ISSUE_MAX_OCCURRENCES', 4),
+            'interval_minutes' => (int) env('CLEANING_REPEAT_SECURITY_CODE_ISSUE_INTERVAL_MINUTES', 5),
+            'max_occurrences' => (int) env('CLEANING_REPEAT_SECURITY_CODE_ISSUE_MAX_OCCURRENCES', 35),
         ],
         'customer_verification_reminder' => [
             'interval_minutes' => (int) env('CLEANING_REPEAT_SECURITY_CODE_INTERVAL_MINUTES', 2),
@@ -34,15 +34,15 @@ return [
         ],
         'worker_start_confirmation_warning' => [
             'interval_minutes' => (int) env('CLEANING_REPEAT_START_CONFIRMATION_INTERVAL_MINUTES', 5),
-            'max_occurrences' => (int) env('CLEANING_REPEAT_START_CONFIRMATION_MAX_OCCURRENCES', 5),
+            'max_occurrences' => (int) env('CLEANING_REPEAT_START_CONFIRMATION_MAX_OCCURRENCES', 35),
         ],
         'customer_completion_action_reminder' => [
             'interval_minutes' => (int) env('CLEANING_REPEAT_COMPLETION_ACTION_INTERVAL_MINUTES', 5),
-            'max_occurrences' => (int) env('CLEANING_REPEAT_COMPLETION_ACTION_MAX_OCCURRENCES', 6),
+            'max_occurrences' => (int) env('CLEANING_REPEAT_COMPLETION_ACTION_MAX_OCCURRENCES', 36),
         ],
         'worker_extension_response_reminder' => [
             'interval_minutes' => (int) env('CLEANING_REPEAT_EXTENSION_RESPONSE_INTERVAL_MINUTES', 5),
-            'max_occurrences' => (int) env('CLEANING_REPEAT_EXTENSION_RESPONSE_MAX_OCCURRENCES', 6),
+            'max_occurrences' => (int) env('CLEANING_REPEAT_EXTENSION_RESPONSE_MAX_OCCURRENCES', 36),
         ],
     ],
 ];
