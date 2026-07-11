@@ -12,6 +12,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Modules\Cleaning\Services\DepositService;
+use Modules\Cleaning\Services\WorkerDebtService;
 use Throwable;
 
 /**
@@ -28,9 +29,9 @@ final class WorkerDepositActions
         return [
             ActionGroup::make([
                 self::deposit(),
+                self::debt(),
                 self::settlement(),
                 self::refund(),
-                self::adjustment(),
                 self::reactivate(),
             ])
                 ->label(__('cleaning_admin.workers.finance.group'))
@@ -48,7 +49,7 @@ final class WorkerDepositActions
             ->form(self::amountForm())
             ->action(function (Worker $record, array $data): void {
                 self::run(
-                    fn (DepositService $service) => $service->recordDeposit(
+                    fn () => app(DepositService::class)->recordDeposit(
                         $record,
                         (float) $data['amount'],
                         'admin_deposit',
@@ -60,16 +61,40 @@ final class WorkerDepositActions
             });
     }
 
+    private static function debt(): Action
+    {
+        return Action::make('recordDebt')
+            ->label(__('cleaning_finance.debt.label'))
+            ->icon('heroicon-o-plus-circle')
+            ->color('warning')
+            ->modalDescription(__('cleaning_finance.debt.description'))
+            ->requiresConfirmation()
+            ->form(self::amountForm(__('cleaning_finance.fields.positive_amount_hint')))
+            ->action(function (Worker $record, array $data): void {
+                self::run(
+                    fn () => app(WorkerDebtService::class)->recordDebt(
+                        $record,
+                        (float) $data['amount'],
+                        'admin_debt',
+                        self::composeNotes($data),
+                        auth()->id(),
+                    ),
+                    __('cleaning_finance.debt.success'),
+                );
+            });
+    }
+
     private static function settlement(): Action
     {
         return Action::make('recordSettlement')
             ->label(__('cleaning_admin.workers.finance.settlement.label'))
             ->icon('heroicon-o-check-circle')
             ->color('primary')
+            ->modalDescription(__('cleaning_finance.settlement.description'))
             ->form(self::amountForm())
             ->action(function (Worker $record, array $data): void {
                 self::run(
-                    fn (DepositService $service) => $service->recordSettlement(
+                    fn () => app(WorkerDebtService::class)->recordSettlement(
                         $record,
                         (float) $data['amount'],
                         'admin_settlement',
@@ -90,7 +115,7 @@ final class WorkerDepositActions
             ->form(self::amountForm())
             ->action(function (Worker $record, array $data): void {
                 self::run(
-                    fn (DepositService $service) => $service->recordRefund(
+                    fn () => app(DepositService::class)->recordRefund(
                         $record,
                         (float) $data['amount'],
                         'admin_refund',
@@ -98,40 +123,6 @@ final class WorkerDepositActions
                         auth()->id(),
                     ),
                     __('cleaning_admin.workers.finance.refund.success'),
-                );
-            });
-    }
-
-    private static function adjustment(): Action
-    {
-        return Action::make('recordAdjustment')
-            ->label(__('cleaning_admin.workers.finance.adjustment.label'))
-            ->icon('heroicon-o-adjustments-horizontal')
-            ->color('gray')
-            ->form([
-                TextInput::make('amount')
-                    ->label(__('cleaning_admin.workers.finance.fields.signed_amount'))
-                    ->helperText(__('cleaning_admin.workers.finance.hints.signed_amount'))
-                    ->numeric()
-                    ->required(),
-                DatePicker::make('date')
-                    ->label(__('cleaning_admin.workers.finance.fields.date'))
-                    ->native(false)
-                    ->default(now()),
-                Textarea::make('notes')
-                    ->label(__('cleaning_admin.workers.finance.fields.notes'))
-                    ->maxLength(1000),
-            ])
-            ->action(function (Worker $record, array $data): void {
-                self::run(
-                    fn (DepositService $service) => $service->recordAdjustment(
-                        $record,
-                        (float) $data['amount'],
-                        'admin_adjustment',
-                        self::composeNotes($data),
-                        auth()->id(),
-                    ),
-                    __('cleaning_admin.workers.finance.adjustment.success'),
                 );
             });
     }
@@ -158,11 +149,12 @@ final class WorkerDepositActions
     /**
      * @return array<int, \Filament\Forms\Components\Field>
      */
-    private static function amountForm(): array
+    private static function amountForm(?string $helperText = null): array
     {
         return [
             TextInput::make('amount')
                 ->label(__('cleaning_admin.workers.finance.fields.amount'))
+                ->helperText($helperText)
                 ->numeric()
                 ->minValue(0.01)
                 ->required(),
@@ -192,13 +184,10 @@ final class WorkerDepositActions
         return $notes === '' ? null : $notes;
     }
 
-    /**
-     * @param  callable(DepositService): mixed  $callback
-     */
     private static function run(callable $callback, string $successMessage): void
     {
         try {
-            $callback(app(DepositService::class));
+            $callback();
 
             Notification::make()
                 ->title($successMessage)
