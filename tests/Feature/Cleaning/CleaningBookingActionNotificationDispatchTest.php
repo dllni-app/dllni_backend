@@ -21,6 +21,7 @@ beforeEach(function (): void {
         NotifyEligibleWorkersNewOrderJob::class,
         ConvertPreferredCleaningBookingToOpenJob::class,
     ]);
+    Notification::fake();
 });
 
 afterEach(function (): void {
