@@ -17,6 +17,7 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Database\Eloquent\Builder;
 use Modules\Cleaning\Services\DepositService;
+use Modules\Cleaning\Services\WorkerDebtService;
 use Rap2hpoutre\FastExcel\FastExcel;
 use Throwable;
 
@@ -48,17 +49,18 @@ final class ListCleaningWorkerDeposits extends ListRecords
                         ->label(__('cleaning_admin.transactions.fields.type'))
                         ->options([
                             'deposit' => __('cleaning_admin.transactions.types.deposit'),
+                            'debt' => __('cleaning_finance.types.debt'),
                             'settlement' => __('cleaning_admin.transactions.types.settlement'),
                             'refund' => __('cleaning_admin.transactions.types.refund'),
-                            'adjustment' => __('cleaning_admin.transactions.types.adjustment'),
                         ])
                         ->default('deposit')
                         ->required(),
                     TextInput::make('amount')
                         ->label(__('cleaning_admin.transactions.fields.amount'))
                         ->numeric()
+                        ->minValue(0.01)
                         ->required()
-                        ->helperText(__('cleaning_admin.transactions.hints.adjustment_amount')),
+                        ->helperText(__('cleaning_finance.fields.positive_amount_hint')),
                     Textarea::make('notes')
                         ->label(__('cleaning_admin.transactions.fields.notes'))
                         ->maxLength(1000),
@@ -72,16 +74,17 @@ final class ListCleaningWorkerDeposits extends ListRecords
                         return;
                     }
 
-                    $service = app(DepositService::class);
+                    $depositService = app(DepositService::class);
+                    $debtService = app(WorkerDebtService::class);
                     $amount = (float) $data['amount'];
                     $notes = isset($data['notes']) && trim((string) $data['notes']) !== '' ? trim((string) $data['notes']) : null;
 
                     try {
                         match ($data['type']) {
-                            'deposit' => $service->recordDeposit($worker, $amount, 'admin_manual', $notes, auth()->id()),
-                            'settlement' => $service->recordSettlement($worker, $amount, 'admin_manual', $notes, auth()->id()),
-                            'refund' => $service->recordRefund($worker, $amount, 'admin_manual', $notes, auth()->id()),
-                            'adjustment' => $service->recordAdjustment($worker, $amount, 'admin_manual', $notes, auth()->id()),
+                            'deposit' => $depositService->recordDeposit($worker, $amount, 'admin_manual', $notes, auth()->id()),
+                            'debt' => $debtService->recordDebt($worker, $amount, 'admin_manual_debt', $notes, auth()->id()),
+                            'settlement' => $debtService->recordSettlement($worker, $amount, 'admin_manual', $notes, auth()->id()),
+                            'refund' => $depositService->recordRefund($worker, $amount, 'admin_manual', $notes, auth()->id()),
                             default => null,
                         };
 
