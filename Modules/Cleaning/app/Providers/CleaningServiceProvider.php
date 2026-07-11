@@ -114,6 +114,7 @@ final class CleaningServiceProvider extends ServiceProvider
                     }
 
                     $key = ($config === 'config.php') ? $this->nameLower : implode('.', $normalized);
+
                     $this->publishes([$file->getPathname() => config_path($config)], 'config');
                     $this->merge_config_from($file->getPathname(), $key);
                 }
@@ -134,7 +135,7 @@ final class CleaningServiceProvider extends ServiceProvider
         $paths = [];
         foreach (config('view.paths') as $path) {
             if (is_dir($path.'/modules/'.$this->nameLower)) {
-                $paths[] = $path;
+                $paths[] = $path.'/modules/'.$this->nameLower;
             }
         }
 
