@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Http\Controllers\API\AppDownloadController;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\DeepLinks\OpenDeepLinkLandingController;
 use App\Http\Controllers\DeepLinks\OpenDeepLinkController;
@@ -14,7 +15,16 @@ Route::prefix('v1/apps')->group(function (): void {
     Route::get('download', AppDownloadController::class);
 });
 
-Route::get('/', fn(): View => view('welcome'));
+Route::get('/', function (): Response {
+    $content = view('welcome')->render();
+    $footer = view('partials.landing-copyright')->render();
+
+    return response(str_replace(
+        "    </main>\n</div>",
+        "    </main>\n\n{$footer}\n</div>",
+        $content,
+    ));
+});
 
 Route::get('/reset-password/{token}', function (string $token, Illuminate\Http\Request $request) {
     return redirect()->to(config('app.frontend_url', url('/')) . '/reset-password?token=' . $token . '&email=' . urlencode($request->query('email', '')));
