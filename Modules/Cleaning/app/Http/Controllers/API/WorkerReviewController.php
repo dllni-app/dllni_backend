@@ -4,15 +4,14 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Http\Controllers\API;
 
-use App\Models\BookingReview;
+use App\Enums\WorkerCustomerRatingType;
 use App\Models\Worker;
+use App\Models\WorkerCustomerRating;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
-use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Http\Requests\WorkerReviewIndexRequest;
 use Modules\Cleaning\Http\Resources\WorkerReviewResource;
-use Modules\Cleaning\Models\CleaningBooking;
 
 final class WorkerReviewController
 {
@@ -60,17 +59,9 @@ final class WorkerReviewController
 
     private function reviewsQuery(Worker $worker): Builder
     {
-        return BookingReview::query()
-            ->whereHasMorph('booking', [CleaningBooking::class], function (Builder $bookingQuery) use ($worker): void {
-                $bookingQuery->where(function (Builder $workerScope) use ($worker): void {
-                    $workerScope->where('worker_id', $worker->id)
-                        ->orWhereHas('workerAssignments', function (Builder $assignmentQuery) use ($worker): void {
-                            $assignmentQuery
-                                ->where('worker_id', $worker->id)
-                                ->where('status', CleaningBookingWorkerAssignmentStatus::Accepted->value);
-                        });
-                });
-            });
+        return WorkerCustomerRating::query()
+            ->where('worker_id', $worker->id)
+            ->where('rating_type', WorkerCustomerRatingType::CustomerToWorker->value);
     }
 
     private function ratingCounts(Builder $query): array

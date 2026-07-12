@@ -4,14 +4,12 @@ declare(strict_types=1);
 
 namespace App\Http\Resources;
 
-use App\Models\BookingReview;
+use App\Enums\WorkerCustomerRatingType;
 use App\Models\Worker;
+use App\Models\WorkerCustomerRating;
 use App\Models\WorkerZone;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
-use Modules\Cleaning\Models\CleaningBooking;
 
 /**
  * @mixin Worker
@@ -64,17 +62,9 @@ final class WorkerResource extends JsonResource
 
     private function resolveCleaningAverageRating(): float
     {
-        $average = BookingReview::query()
-            ->whereHasMorph('booking', [CleaningBooking::class], function (Builder $bookingQuery): void {
-                $bookingQuery->where(function (Builder $workerScope): void {
-                    $workerScope->where('worker_id', $this->id)
-                        ->orWhereHas('workerAssignments', function (Builder $assignmentQuery): void {
-                            $assignmentQuery
-                                ->where('worker_id', $this->id)
-                                ->where('status', CleaningBookingWorkerAssignmentStatus::Accepted->value);
-                        });
-                });
-            })
+        $average = WorkerCustomerRating::query()
+            ->where('worker_id', $this->id)
+            ->where('rating_type', WorkerCustomerRatingType::CustomerToWorker->value)
             ->avg('rating');
 
         if ($average !== null) {

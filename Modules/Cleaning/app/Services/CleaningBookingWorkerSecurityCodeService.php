@@ -22,7 +22,9 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 final class CleaningBookingWorkerSecurityCodeService
 {
     private const SECURITY_CODE_TTL_MINUTES = 10;
+
     private const SECURITY_CODE_LENGTH = 4;
+
     private const MAX_SECURITY_CODE_ATTEMPTS = 5;
 
     public function __construct(
@@ -43,7 +45,9 @@ final class CleaningBookingWorkerSecurityCodeService
                     throw new InvalidArgumentException('Worker must arrive before requesting a security code.');
                 }
 
-                if ($assignment->work_started_at !== null || $this->assignmentStatus($assignment) === CleaningBookingWorkerAssignmentStatus::InProgress->value) {
+                if ($assignment->start_approved_at !== null ||
+                    $assignment->work_started_at !== null ||
+                    $this->assignmentStatus($assignment) === CleaningBookingWorkerAssignmentStatus::InProgress->value) {
                     throw new InvalidArgumentException('Work has already started for this worker.');
                 }
             } else {
@@ -53,6 +57,10 @@ final class CleaningBookingWorkerSecurityCodeService
 
                 if ($lockedBooking->arrived_at === null) {
                     throw new InvalidArgumentException('Worker must arrive before requesting a security code.');
+                }
+
+                if ($lockedBooking->customer_confirmed_at !== null) {
+                    throw new InvalidArgumentException('Customer has already verified the security code.');
                 }
             }
 
@@ -299,7 +307,7 @@ final class CleaningBookingWorkerSecurityCodeService
     private function uniqueSecurityCodeForBooking(CleaningBooking $booking): array
     {
         for ($attempt = 0; $attempt < 20; $attempt++) {
-            $code = str_pad((string) random_int(0, 9999), self::SECURITY_CODE_LENGTH, '0', STR_PAD_LEFT);
+            $code = mb_str_pad((string) random_int(0, 9999), self::SECURITY_CODE_LENGTH, '0', STR_PAD_LEFT);
             $hash = $this->securityCodeHash($code);
 
             $exists = DB::table('booking_security_codes')
@@ -338,6 +346,7 @@ final class CleaningBookingWorkerSecurityCodeService
         if (! $worker instanceof Worker) {
             throw new InvalidArgumentException('User must have an associated worker.');
         }
+
         return $worker;
     }
 

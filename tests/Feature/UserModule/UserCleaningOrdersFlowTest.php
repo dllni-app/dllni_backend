@@ -2,22 +2,25 @@
 
 declare(strict_types=1);
 
-use App\Models\BookingReview;
+use App\Enums\WorkerCustomerRatingType;
+use App\Enums\WorkerPreferredWorkType;
 use App\Models\CancellationPolicy;
 use App\Models\CleaningFinancialSetting;
 use App\Models\User;
 use App\Models\Worker;
-use App\Enums\WorkerPreferredWorkType;
+use App\Models\WorkerCustomerRating;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBillingMode;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Enums\ServiceCategory;
 use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Models\CleaningService;
 use Modules\Cleaning\Models\ServicePricing;
 use Modules\User\Services\UserCleaningOrderEstimationService;
@@ -1377,44 +1380,140 @@ it('cancels pending cleaning order and rejects cancelling completed order', func
     ])->assertUnprocessable();
 });
 
-it('submits cleaning order review for completed order', function (): void {
+it('submits editable worker-specific reviews before every worker completes', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
+    $workerOne = Worker::factory()->create();
+    $workerTwo = Worker::factory()->create();
     $order = CleaningBooking::factory()->create([
         'customer_id' => $user->id,
-        'status' => CleaningBookingStatus::Completed->value,
+        'status' => CleaningBookingStatus::InProgress->value,
+        'number_of_workers' => 2,
     ]);
+    createReviewableAssignment(
+        $order,
+        $workerOne,
+        CleaningBookingWorkerAssignmentStatus::Completed,
+    );
+    createReviewableAssignment(
+        $order,
+        $workerTwo,
+        CleaningBookingWorkerAssignmentStatus::InProgress,
+    );
 
     postJson("/api/v1/user/cleaning/orders/{$order->id}/review", [
+        'workerId' => $workerOne->id,
         'rating' => 5,
         'comment' => 'Great service and on-time delivery.',
     ])->assertOk()
         ->assertJsonPath('data.ok', true);
 
-    expect(BookingReview::query()
+    postJson("/api/v1/user/cleaning/orders/{$order->id}/review", [
+        'workerId' => $workerOne->id,
+        'rating' => 4,
+    ])->assertOk();
+
+    expect(WorkerCustomerRating::query()
         ->where('booking_id', $order->id)
         ->where('booking_type', $order->getMorphClass())
+        ->where('worker_id', $workerOne->id)
         ->where('customer_id', $user->id)
-        ->where('rating', 5)
+        ->where('rating_type', WorkerCustomerRatingType::CustomerToWorker)
+        ->where('rating', 4)
         ->exists())->toBeTrue();
+    expect(WorkerCustomerRating::query()
+        ->where('booking_id', $order->id)
+        ->where('worker_id', $workerOne->id)
+        ->count())->toBe(1);
+
+    $secondAssignment = CleaningBookingWorkerAssignment::query()
+        ->where('cleaning_booking_id', $order->id)
+        ->where('worker_id', $workerTwo->id)
+        ->firstOrFail();
+    $secondAssignment->update([
+        'status' => CleaningBookingWorkerAssignmentStatus::Completed,
+    ]);
+
+    postJson("/api/v1/user/cleaning/orders/{$order->id}/review", [
+        'workerId' => $workerTwo->id,
+        'rating' => 5,
+    ])->assertOk();
+
+    expect(WorkerCustomerRating::query()
+        ->where('booking_id', $order->id)
+        ->where('rating_type', WorkerCustomerRatingType::CustomerToWorker)
+        ->count())->toBe(2);
 });
 
-it('rejects cleaning order review for non-completed order', function (): void {
+it('rejects a review for a worker whose work is not confirmed', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
+    $worker = Worker::factory()->create();
     $order = CleaningBooking::factory()->create([
         'customer_id' => $user->id,
         'status' => CleaningBookingStatus::InProgress->value,
     ]);
+    createReviewableAssignment(
+        $order,
+        $worker,
+        CleaningBookingWorkerAssignmentStatus::InProgress,
+    );
 
     postJson("/api/v1/user/cleaning/orders/{$order->id}/review", [
+        'workerId' => $worker->id,
         'rating' => 4,
         'comment' => 'Good work.',
     ])->assertUnprocessable()
-        ->assertJsonValidationErrors(['status']);
+        ->assertJsonValidationErrors(['workerId']);
 });
+
+it('allows worker-specific ratings for event assistance bookings', function (): void {
+    $user = User::factory()->create();
+    $worker = Worker::factory()->create();
+    Sanctum::actingAs($user);
+
+    $order = CleaningBooking::factory()->create([
+        'customer_id' => $user->id,
+        'property_type' => 'event_assistance',
+        'status' => CleaningBookingStatus::InProgress->value,
+    ]);
+    createReviewableAssignment(
+        $order,
+        $worker,
+        CleaningBookingWorkerAssignmentStatus::Completed,
+    );
+
+    postJson("/api/v1/user/cleaning/orders/{$order->id}/review", [
+        'workerId' => $worker->id,
+        'rating' => 5,
+    ])->assertOk();
+
+    $this->assertDatabaseHas('worker_customer_ratings', [
+        'booking_id' => $order->id,
+        'worker_id' => $worker->id,
+        'rating_type' => WorkerCustomerRatingType::CustomerToWorker->value,
+    ]);
+});
+
+function createReviewableAssignment(
+    CleaningBooking $booking,
+    Worker $worker,
+    CleaningBookingWorkerAssignmentStatus $status,
+): void {
+    CleaningBookingWorkerAssignment::query()->create([
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $worker->id,
+        'status' => $status,
+        'accepted_at' => now()->subHour(),
+        'work_started_at' => now()->subMinutes(30),
+        'work_finished_at' => $status === CleaningBookingWorkerAssignmentStatus::Completed
+            ? now()->subMinute()
+            : null,
+        'currency' => (string) config('app.currency', 'SYP'),
+    ]);
+}
 
 it('estimates event assistance pricing from selected hours instead of selected services', function (): void {
     $user = User::factory()->create();

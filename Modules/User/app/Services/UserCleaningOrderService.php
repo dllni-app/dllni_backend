@@ -4,38 +4,40 @@ declare(strict_types=1);
 
 namespace Modules\User\Services;
 
-use Carbon\Carbon;
 use App\Enums\GenderPreference;
-use App\Models\Worker;
-use App\Support\Broadcast\BroadcastAfterResponse;
-use App\Models\BookingReview;
+use App\Enums\WorkerCustomerRatingType;
 use App\Models\CancellationPolicy;
 use App\Models\User;
+use App\Models\Worker;
+use App\Models\WorkerCustomerRating;
+use App\Support\Broadcast\BroadcastAfterResponse;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
-use Modules\Cleaning\Events\ArrivalVerified;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Enums\CleaningTimeWarningResponse;
+use Modules\Cleaning\Events\ArrivalVerified;
 use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
 use Modules\Cleaning\Events\CompletionDecisionMade;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningNeighborhood;
 use Modules\Cleaning\Models\CleaningTimeWarning;
-use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
-use Modules\Cleaning\Services\CleaningExtendedTimePricingService;
-use Modules\Cleaning\Services\CleaningNeighborhoodResolver;
-use Modules\Cleaning\Support\WorkerRoomAssignmentPlanner;
 use Modules\Cleaning\Services\CleaningBookingTeamService;
+use Modules\Cleaning\Services\CleaningExtendedTimePricingService;
 use Modules\Cleaning\Services\CleaningLifecycleNotificationService;
+use Modules\Cleaning\Services\CleaningNeighborhoodResolver;
 use Modules\Cleaning\Services\DepositService;
+use Modules\Cleaning\Support\WorkerRoomAssignmentPlanner;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 final class UserCleaningOrderService
 {
     private const MAX_SECURITY_CODE_ATTEMPTS = 5;
+
     private const PREFERRED_WORKER_NEIGHBORHOOD_MESSAGE = "\u{645}\u{642}\u{62f}\u{645} \u{627}\u{644}\u{62e}\u{62f}\u{645}\u{629} \u{627}\u{644}\u{645}\u{62e}\u{62a}\u{627}\u{631} \u{644}\u{627} \u{64a}\u{639}\u{645}\u{644} \u{636}\u{645}\u{646} \u{627}\u{644}\u{62d}\u{64a} \u{627}\u{644}\u{645}\u{62d}\u{62f}\u{62f}.";
 
     public function __construct(
@@ -391,7 +393,7 @@ final class UserCleaningOrderService
     {
         $fromStatus = (string) $booking->status->value;
 
-        if (! in_array($booking->status, [CleaningBookingStatus::Pending, CleaningBookingStatus::WorkerAssigned , CleaningBookingStatus::AwaitingStartVerification], true)) {
+        if (! in_array($booking->status, [CleaningBookingStatus::Pending, CleaningBookingStatus::WorkerAssigned, CleaningBookingStatus::AwaitingStartVerification], true)) {
             throw ValidationException::withMessages([
                 'order' => ['Order cannot be cancelled in current status.'],
             ]);
@@ -403,7 +405,7 @@ final class UserCleaningOrderService
             'cancellation_reason' => $reason,
         ]);
 
-        //TODO: add tag to order that cancelation is from the user if the CleaningBookingStatus::AwaitingStartVerification
+        // TODO: add tag to order that cancelation is from the user if the CleaningBookingStatus::AwaitingStartVerification
         $updated = $booking->fresh();
         $this->dispatchTrackingUpdate($updated);
         $this->lifecycleNotifications->notifyWorker(
@@ -563,7 +565,7 @@ final class UserCleaningOrderService
                 $worker = $assignment->worker;
                 $adminFee = (float) $assignment->admin_margin_amount;
 
-                if ($worker instanceof \App\Models\Worker && $adminFee > 0) {
+                if ($worker instanceof Worker && $adminFee > 0) {
                     $this->depositService->recordAdminFeeDebit($worker, $freshBooking, $adminFee);
                 }
             }
@@ -704,6 +706,43 @@ final class UserCleaningOrderService
         ];
     }
 
+    /**
+     * @param  array{workerId:int,rating:int,comment?:string|null}  $validated
+     */
+    public function submitReview(CleaningBooking $booking, array $validated): WorkerCustomerRating
+    {
+        $workerId = (int) $validated['workerId'];
+        $completedAssignmentExists = $booking->workerAssignments()
+            ->where('worker_id', $workerId)
+            ->where('status', CleaningBookingWorkerAssignmentStatus::Completed->value)
+            ->exists();
+        $legacyBookingWorkerCompleted = (int) $booking->worker_id === $workerId
+            && $booking->status === CleaningBookingStatus::Completed;
+
+        if (! $completedAssignmentExists && ! $legacyBookingWorkerCompleted) {
+            throw ValidationException::withMessages([
+                'workerId' => ['Review can only be submitted for a worker whose work has been confirmed.'],
+            ]);
+        }
+
+        /** @var WorkerCustomerRating $review */
+        $review = WorkerCustomerRating::query()->updateOrCreate(
+            [
+                'booking_id' => $booking->id,
+                'booking_type' => $booking->getMorphClass(),
+                'worker_id' => $workerId,
+                'customer_id' => $booking->customer_id,
+                'rating_type' => WorkerCustomerRatingType::CustomerToWorker->value,
+            ],
+            [
+                'rating' => (int) $validated['rating'],
+                'comment' => $validated['comment'] ?? null,
+            ]
+        );
+
+        return $review;
+    }
+
     private function normalizedAssignmentMode(mixed $assignmentMode): ?string
     {
         if (! is_string($assignmentMode) || mb_trim($assignmentMode) === '') {
@@ -761,8 +800,7 @@ final class UserCleaningOrderService
         string $propertyType,
         int $suggestedWorkers,
         ?string $assignmentMode = null
-    ): int
-    {
+    ): int {
         $assignmentMode = $assignmentMode ?? $this->resolveAssignmentMode($validated);
 
         if (array_key_exists('numberOfWorkers', $validated) && $validated['numberOfWorkers'] !== null) {
@@ -934,33 +972,6 @@ final class UserCleaningOrderService
         ], $plan['assignments']);
     }
 
-    /**
-     * @param array{rating:int,comment?:string|null} $validated
-     */
-    public function submitReview(CleaningBooking $booking, array $validated): BookingReview
-    {
-        if ($booking->status !== CleaningBookingStatus::Completed) {
-            throw ValidationException::withMessages([
-                'status' => ['Review can only be submitted for completed orders.'],
-            ]);
-        }
-
-        /** @var BookingReview $review */
-        $review = BookingReview::query()->updateOrCreate(
-            [
-                'booking_id' => $booking->id,
-                'booking_type' => $booking->getMorphClass(),
-                'customer_id' => $booking->customer_id,
-            ],
-            [
-                'rating' => (int) $validated['rating'],
-                'comment' => $validated['comment'] ?? null,
-            ]
-        );
-
-        return $review;
-    }
-
     private function defaultCancellationPolicyId(): ?int
     {
         $id = CancellationPolicy::query()
@@ -985,7 +996,7 @@ final class UserCleaningOrderService
     private function generateBookingNumber(): string
     {
         do {
-            $bookingNumber = 'CLN-USER-' . Str::upper(Str::random(8));
+            $bookingNumber = 'CLN-USER-'.Str::upper(Str::random(8));
         } while (CleaningBooking::query()->where('booking_number', $bookingNumber)->exists());
 
         return $bookingNumber;
@@ -1015,7 +1026,6 @@ final class UserCleaningOrderService
     }
 
     /**
-     * @param  mixed  $services
      * @return array<int, string>|null
      */
     private function normalizeCleaningServices(mixed $services): ?array
