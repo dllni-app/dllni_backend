@@ -1,0 +1,55 @@
+name: Add landing copyright footer
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/add-landing-copyright-footer.yml
+
+permissions:
+  contents: write
+
+jobs:
+  update-footer:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Add copyright footer to landing page
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("resources/views/welcome.blade.php")
+          content = path.read_text(encoding="utf-8")
+
+          if "جميع الحقوق محفوظة" not in content:
+              marker = "    </main>\n</div>\n\n<script>"
+              replacement = """    </main>
+
+    <footer style="padding: 24px 16px; border-top: 1px solid #E6E8F0; background: #F7F8FC;">
+        <div class="container" style="text-align: center;">
+            <p style="margin: 0; color: #65697C; font-size: 14px;">
+                © {{ now()->year }} ع الندهة. جميع الحقوق محفوظة.
+            </p>
+        </div>
+    </footer>
+</div>
+
+<script>"""
+
+              if marker not in content:
+                  raise SystemExit("Landing page closing marker was not found.")
+
+              path.write_text(content.replace(marker, replacement, 1), encoding="utf-8")
+
+      - name: Commit landing page update
+        run: |
+          rm .github/workflows/add-landing-copyright-footer.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add resources/views/welcome.blade.php .github/workflows/add-landing-copyright-footer.yml
+          git commit -m "add landing page copyright footer"
+          git push
