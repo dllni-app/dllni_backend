@@ -57,7 +57,7 @@ it('creates employee and syncs selected permissions', function (): void {
         'name' => 'Store Employee',
         'email' => 'store.employee@example.com',
         'phone' => '+963955000111',
-        'permissionIds' => $permissionIds,
+        'permissionIds[]' => $permissionIds,
         'isActive' => true,
         'profileImage' => $profileImage,
     ], ['Accept' => 'application/json']);
@@ -65,6 +65,9 @@ it('creates employee and syncs selected permissions', function (): void {
     $response->assertCreated();
     $response->assertJsonPath('data.user.email', 'store.employee@example.com');
     $response->assertJsonPath('data.isActive', true);
+
+    expect(collect($response->json('data.permissionIds'))->sort()->values()->all())
+        ->toBe(collect($permissionIds)->sort()->values()->all());
 
     $employeeUser = User::query()->where('email', 'store.employee@example.com')->firstOrFail();
 
@@ -112,12 +115,15 @@ it('updates employee profile and permissions', function (): void {
 
     $response = $this->patch("/api/v1/store-owner/employees/{$staff->id}", [
         'name' => 'Updated Employee',
-        'permissionIds' => $updatedPermissionIds,
+        'permissionIds[]' => $updatedPermissionIds,
         'profileImage' => $updatedProfileImage,
     ], ['Accept' => 'application/json']);
 
     $response->assertOk();
     $response->assertJsonPath('data.user.name', 'Updated Employee');
+
+    expect(collect($response->json('data.permissionIds'))->sort()->values()->all())
+        ->toBe(collect($updatedPermissionIds)->sort()->values()->all());
 
     $employee->refresh();
 
