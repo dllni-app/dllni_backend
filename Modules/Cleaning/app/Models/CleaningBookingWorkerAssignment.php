@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Models;
 
 use App\Models\Worker;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -65,5 +66,54 @@ final class CleaningBookingWorkerAssignment extends Model
             'admin_margin_amount' => 'decimal:2',
             'worker_amount' => 'decimal:2',
         ];
+    }
+
+    protected function workerFinishedCleaningServices(): Attribute
+    {
+        return $this->singleWorkerSnapshotFallback('worker_finished_cleaning_services');
+    }
+
+    protected function workerFinishedPropertyRooms(): Attribute
+    {
+        return $this->singleWorkerSnapshotFallback('worker_finished_property_rooms');
+    }
+
+    private function singleWorkerSnapshotFallback(string $bookingColumn): Attribute
+    {
+        return Attribute::make(
+            get: function (mixed $value) use ($bookingColumn): array {
+                $snapshot = $this->normalizeSnapshotValue($value);
+
+                if ($snapshot !== []) {
+                    return $snapshot;
+                }
+
+                $booking = $this->relationLoaded('booking')
+                    ? $this->booking
+                    : $this->booking()->first();
+
+                if (! $booking instanceof CleaningBooking || max(1, (int) ($booking->number_of_workers ?? 1)) > 1) {
+                    return $snapshot;
+                }
+
+                return $this->normalizeSnapshotValue($booking->getAttribute($bookingColumn));
+            },
+        );
+    }
+
+    /** @return array<int, mixed> */
+    private function normalizeSnapshotValue(mixed $value): array
+    {
+        if (is_array($value)) {
+            return array_values($value);
+        }
+
+        if (! is_string($value) || trim($value) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($value, true);
+
+        return is_array($decoded) ? array_values($decoded) : [];
     }
 }
