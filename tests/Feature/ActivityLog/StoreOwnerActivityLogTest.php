@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use App\Enums\UserModuleType;
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Modules\Supermarket\Models\SmStore;
 use Spatie\Activitylog\Models\Activity;
@@ -89,6 +91,29 @@ it('returns activity log with causer information', function () {
     expect($data)->toHaveKeys(['id', 'description', 'logName', 'causer', 'createdAt']);
     expect($data['causer']['id'])->toBe($this->user->id);
     expect($data['causer']['name'])->toBe($this->user->name);
+});
+
+it('returns causer profile image URL from the media library', function () {
+    $disk = (string) (config('media-library.disk_name') ?: config('filesystems.default', 'public'));
+    Storage::fake($disk);
+
+    $this->user
+        ->addMedia(UploadedFile::fake()->image('avatar.png', 64, 64))
+        ->toMediaCollection('primary-image');
+
+    Activity::create([
+        'log_name' => 'products',
+        'description' => 'أضاف منتجاً جديداً (Test Product)',
+        'causer_type' => User::class,
+        'causer_id' => $this->user->id,
+        'properties' => ['store_id' => $this->store->id],
+    ]);
+
+    $response = $this->getJson('/api/v1/store-owner/activity-logs');
+
+    $response->assertSuccessful();
+    expect($response->json('data.0.causer.avatarUrl'))
+        ->toBe($this->user->getFirstMediaUrl('primary-image'));
 });
 
 it('returns successful empty listing without optional filters', function () {
