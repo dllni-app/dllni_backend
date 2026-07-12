@@ -13,6 +13,17 @@ final class StoreOwnerEmployeeStoreRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $input = $this->all();
+
+        if (! array_key_exists('permissionIds', $input) && array_key_exists('permissionIds[]', $input)) {
+            $this->merge([
+                'permissionIds' => $input['permissionIds[]'],
+            ]);
+        }
+    }
+
     public function rules(): array
     {
         return [
