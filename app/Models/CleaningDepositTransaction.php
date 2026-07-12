@@ -20,6 +20,7 @@ final class CleaningDepositTransaction extends Model
         'created_by_admin_id',
         'type',
         'amount',
+        'debt_settled_amount',
         'balance_before',
         'balance_after',
         'reference',
@@ -54,6 +55,7 @@ final class CleaningDepositTransaction extends Model
         return [
             'type' => 'string',
             'amount' => 'decimal:2',
+            'debt_settled_amount' => 'decimal:2',
             'balance_before' => 'decimal:2',
             'balance_after' => 'decimal:2',
         ];

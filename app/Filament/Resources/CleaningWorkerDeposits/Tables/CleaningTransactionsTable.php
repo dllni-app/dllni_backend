@@ -35,6 +35,11 @@ final class CleaningTransactionsTable
                     ->label(__('cleaning_admin.transactions.fields.amount'))
                     ->money('SYP')
                     ->sortable(),
+                TextColumn::make('debt_settled_amount')
+                    ->label(__('cleaning_finance.fields.debt_settled_amount'))
+                    ->money('SYP')
+                    ->placeholder('—')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('balance_before')
                     ->label(__('cleaning_admin.transactions.fields.balance_before'))
                     ->money('SYP')
@@ -102,6 +107,7 @@ final class CleaningTransactionsTable
     {
         return [
             'deposit' => self::typeLabel('deposit'),
+            'debt' => self::typeLabel('debt'),
             'settlement' => self::typeLabel('settlement'),
             'refund' => self::typeLabel('refund'),
             'adjustment' => self::typeLabel('adjustment'),
@@ -112,6 +118,10 @@ final class CleaningTransactionsTable
 
     public static function typeLabel(string $type): string
     {
+        if ($type === 'debt') {
+            return __('cleaning_finance.types.debt');
+        }
+
         $key = 'cleaning_admin.transactions.types.'.$type;
         $label = __($key);
 
@@ -128,6 +138,13 @@ final class CleaningTransactionsTable
             return __('cleaning_admin.transactions.references.admin_fee_booking', ['id' => $matches[1]]);
         }
 
+        $financeKey = 'cleaning_finance.references.'.$reference;
+        $financeLabel = __($financeKey);
+
+        if ($financeLabel !== $financeKey) {
+            return $financeLabel;
+        }
+
         $key = 'cleaning_admin.transactions.references.'.$reference;
         $label = __($key);
 
@@ -139,6 +156,7 @@ final class CleaningTransactionsTable
         return match ($type) {
             'deposit' => 'success',
             'settlement' => 'primary',
+            'debt' => 'warning',
             'refund', 'withdrawal' => 'warning',
             'admin_fee' => 'danger',
             'adjustment' => 'gray',
@@ -160,6 +178,7 @@ final class CleaningTransactionsTable
                 __('cleaning_admin.transactions.fields.worker') => $tx->worker?->first_name ?? '—',
                 __('cleaning_admin.transactions.fields.type') => self::typeLabel((string) $tx->type),
                 __('cleaning_admin.transactions.fields.amount') => (float) $tx->amount,
+                __('cleaning_finance.fields.debt_settled_amount') => (float) ($tx->debt_settled_amount ?? 0),
                 __('cleaning_admin.transactions.fields.balance_before') => (float) $tx->balance_before,
                 __('cleaning_admin.transactions.fields.balance_after') => (float) $tx->balance_after,
                 'Booking' => $tx->cleaning_booking_id,

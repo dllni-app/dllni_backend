@@ -11,6 +11,7 @@ use BackedEnum;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\DB;
+use Modules\Cleaning\Services\WorkerDebtService;
 
 final class CleaningFinancialReport extends Page
 {
@@ -53,28 +54,22 @@ final class CleaningFinancialReport extends Page
      */
     private function computeMetrics(): array
     {
-        $sums = CleaningDepositTransaction::query()
-            ->selectRaw("COALESCE(SUM(CASE WHEN type = 'admin_fee' THEN amount ELSE 0 END), 0) as commissions")
-            ->selectRaw("COALESCE(SUM(CASE WHEN type = 'settlement' THEN amount ELSE 0 END), 0) as settlements")
-            ->selectRaw("COALESCE(SUM(CASE WHEN type IN ('refund', 'withdrawal') THEN amount ELSE 0 END), 0) as refunds")
-            ->first();
+        $ledger = app(WorkerDebtService::class)->globalSummary();
 
-        $commissions = (float) ($sums?->commissions ?? 0);
-        $settlements = (float) ($sums?->settlements ?? 0);
-        $refunds = (float) ($sums?->refunds ?? 0);
-        $outstanding = max(0.0, $commissions - $settlements);
+        $refunds = (float) CleaningDepositTransaction::query()
+            ->whereIn('type', ['refund', 'withdrawal'])
+            ->sum('amount');
 
         $depositsHeld = (float) CleaningWorkerDeposit::query()
             ->sum(DB::raw('COALESCE(deposited_total, 0) - COALESCE(withdrawn_total, 0)'));
 
         $activeWorkers = Worker::query()->activeAvailable()->count();
-
         $restrictedWorkers = Worker::query()->restricted()->count();
 
         return [
             ['label' => __('cleaning_admin.report.metrics.deposits_held'), 'value' => $this->money($depositsHeld), 'tone' => 'primary'],
-            ['label' => __('cleaning_admin.report.metrics.outstanding_commissions'), 'value' => $this->money($outstanding), 'tone' => 'danger'],
-            ['label' => __('cleaning_admin.report.metrics.settlements_received'), 'value' => $this->money($settlements), 'tone' => 'success'],
+            ['label' => __('cleaning_finance.report.outstanding_admin_due'), 'value' => $this->money((float) $ledger['outstandingAdministrationDue']), 'tone' => 'danger'],
+            ['label' => __('cleaning_admin.report.metrics.settlements_received'), 'value' => $this->money((float) $ledger['totalSettled']), 'tone' => 'success'],
             ['label' => __('cleaning_admin.report.metrics.deposit_refunds'), 'value' => $this->money($refunds), 'tone' => 'warning'],
             ['label' => __('cleaning_admin.report.metrics.active_workers'), 'value' => (string) $activeWorkers, 'tone' => 'success'],
             ['label' => __('cleaning_admin.report.metrics.restricted_workers'), 'value' => (string) $restrictedWorkers, 'tone' => 'danger'],

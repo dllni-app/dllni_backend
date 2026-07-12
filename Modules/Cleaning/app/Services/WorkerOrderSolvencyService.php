@@ -20,6 +20,7 @@ final class WorkerOrderSolvencyService
     public function __construct(
         private readonly CleaningPricingCalculator $pricingCalculator,
         private readonly DepositService $depositService,
+        private readonly WorkerDebtService $debtService,
     ) {}
 
     public function solvencyPayloadForBooking(Worker $worker, CleaningBooking $booking, ?array $roomIds = null): array
@@ -97,7 +98,7 @@ final class WorkerOrderSolvencyService
         return [
             'currentBalance' => round($currentBalance, 2),
             'allowedDebtLimit' => round($allowedNegativeLimit, 2),
-            'currentDebtAmount' => round(max(0, -$currentBalance), 2),
+            'currentDebtAmount' => $this->debtService->outstandingAdministrationDue($worker),
             'activeReservedCommission' => round($activeReservedCommission, 2),
             'availableCommissionCapacity' => round($currentBalance + $allowedNegativeLimit - $activeReservedCommission, 2),
         ];

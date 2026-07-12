@@ -15,6 +15,7 @@ final class CleaningDepositTransactionResource extends JsonResource
             'id' => $this->id,
             'type' => $this->type,
             'amount' => (float) $this->amount,
+            'debtSettledAmount' => (float) ($this->debt_settled_amount ?? 0),
             'balanceBefore' => (float) $this->balance_before,
             'balanceAfter' => (float) $this->balance_after,
             'reference' => $this->reference,
