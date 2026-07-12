@@ -4,18 +4,17 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
-    <title>على الندهة | كل خدماتك اليومية في تطبيق واحد</title>
+    <title>ع الندهة | كل خدماتك اليومية في تطبيق واحد</title>
     <meta
         name="description"
-        content="على الندهة يجمع المطاعم والسوبرماركت وخدمات التنظيف في تطبيق واحد سريع وموثوق داخل مدينة حلب."
+        content="ع الندهة يجمع المطاعم والسوبرماركت وخدمات التنظيف في تطبيق واحد سريع وموثوق داخل مدينة حلب."
     >
     <meta name="theme-color" content="#1E2A78">
 
     <link rel="preconnect" href="https://fonts.bunny.net">
-    <link
-        href="https://fonts.bunny.net/css?family=cairo:400,500,600,700,800"
-        rel="stylesheet"
-    >
+    <link href="https://fonts.bunny.net/css?family=cairo:400,500,600,700,800" rel="stylesheet">
+
+    @php($contactEmail = config('mail.from.address') ?: 'info@alnadha.net')
 
     <style>
         :root {
@@ -47,10 +46,7 @@
         body {
             margin: 0;
             color: var(--text);
-            background:
-                radial-gradient(circle at 85% 8%, rgba(108, 99, 255, 0.09), transparent 25rem),
-                radial-gradient(circle at 10% 28%, rgba(46, 196, 182, 0.07), transparent 22rem),
-                var(--white);
+            background: var(--white);
             font-family: "Cairo", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             line-height: 1.8;
             -webkit-font-smoothing: antialiased;
@@ -66,7 +62,50 @@
         }
 
         .page {
+            position: relative;
             overflow: hidden;
+            isolation: isolate;
+        }
+
+        .page::before,
+        .page::after {
+            content: "";
+            position: fixed;
+            z-index: -2;
+            width: 34rem;
+            height: 34rem;
+            border-radius: 50%;
+            filter: blur(10px);
+            pointer-events: none;
+            opacity: 0.7;
+        }
+
+        .page::before {
+            top: -14rem;
+            right: -12rem;
+            background: radial-gradient(circle, rgba(108, 99, 255, 0.16), rgba(108, 99, 255, 0));
+            animation: backgroundFloatOne 13s ease-in-out infinite alternate;
+        }
+
+        .page::after {
+            left: -13rem;
+            bottom: -15rem;
+            background: radial-gradient(circle, rgba(46, 196, 182, 0.14), rgba(46, 196, 182, 0));
+            animation: backgroundFloatTwo 15s ease-in-out infinite alternate;
+        }
+
+        .background-dots {
+            position: absolute;
+            z-index: -1;
+            width: 180px;
+            height: 180px;
+            top: 90px;
+            left: 3vw;
+            opacity: 0.45;
+            background-image: radial-gradient(rgba(30, 42, 120, 0.22) 1.5px, transparent 1.5px);
+            background-size: 17px 17px;
+            animation: dotsDrift 11s ease-in-out infinite alternate;
+            pointer-events: none;
         }
 
         .container {
@@ -75,15 +114,15 @@
         }
 
         .hero {
-            min-height: 92vh;
+            min-height: 88vh;
             display: grid;
             place-items: center;
-            padding: 72px 0 60px;
+            padding: 80px 0 64px;
         }
 
         .hero__grid {
             display: grid;
-            grid-template-columns: minmax(0, 1.08fr) minmax(300px, 0.82fr);
+            grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.8fr);
             align-items: center;
             gap: clamp(44px, 7vw, 96px);
         }
@@ -101,14 +140,16 @@
             font-size: 14px;
             font-weight: 700;
             box-shadow: 0 8px 24px rgba(30, 42, 120, 0.06);
+            backdrop-filter: blur(12px);
         }
 
         .eyebrow__dot {
             width: 9px;
             height: 9px;
             border-radius: 50%;
-            background: var(--restaurant);
-            box-shadow: 0 0 0 6px rgba(255, 122, 0, 0.12);
+            background: var(--secondary);
+            box-shadow: 0 0 0 6px rgba(108, 99, 255, 0.12);
+            animation: pulse 2.5s ease-in-out infinite;
         }
 
         h1,
@@ -133,7 +174,7 @@
         }
 
         .hero__description {
-            max-width: 640px;
+            max-width: 660px;
             margin-bottom: 28px;
             color: var(--muted);
             font-size: clamp(17px, 2vw, 20px);
@@ -157,12 +198,13 @@
             color: var(--primary);
             font-size: 14px;
             font-weight: 700;
+            box-shadow: 0 10px 25px rgba(30, 42, 120, 0.06);
         }
 
         .meta-chip svg {
             width: 19px;
             height: 19px;
-            color: var(--restaurant);
+            color: var(--secondary);
         }
 
         .download-label {
@@ -178,26 +220,32 @@
             gap: 12px;
         }
 
-        .store-button {
-            min-width: 166px;
+        .store-button,
+        .contact-button {
             display: inline-flex;
             align-items: center;
             justify-content: center;
             gap: 11px;
-            padding: 12px 16px;
+            min-height: 52px;
+            padding: 12px 18px;
             border: 1px solid rgba(30, 42, 120, 0.12);
             border-radius: 15px;
             color: var(--white);
             background: var(--primary);
             font-weight: 700;
             box-shadow: 0 14px 32px rgba(30, 42, 120, 0.18);
-            transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
+            transition: transform 220ms ease, box-shadow 220ms ease, background 220ms ease;
         }
 
-        .store-button:hover {
-            transform: translateY(-2px);
+        .store-button {
+            min-width: 166px;
+        }
+
+        .store-button:hover,
+        .contact-button:hover {
+            transform: translateY(-3px);
             background: var(--primary-dark);
-            box-shadow: 0 18px 38px rgba(30, 42, 120, 0.24);
+            box-shadow: 0 20px 42px rgba(30, 42, 120, 0.24);
         }
 
         .store-button--secondary {
@@ -208,7 +256,8 @@
             background: #5850ED;
         }
 
-        .store-button svg {
+        .store-button svg,
+        .contact-button svg {
             width: 23px;
             height: 23px;
             flex: 0 0 auto;
@@ -227,295 +276,132 @@
             opacity: 0.78;
         }
 
-        .phone-stage {
+        .service-orbit {
             position: relative;
             display: grid;
             place-items: center;
-            min-height: 610px;
+            min-height: 520px;
         }
 
-        .phone-stage::before,
-        .phone-stage::after {
+        .service-orbit::before,
+        .service-orbit::after {
             content: "";
             position: absolute;
             border-radius: 50%;
             pointer-events: none;
         }
 
-        .phone-stage::before {
-            width: 420px;
-            height: 420px;
-            background: linear-gradient(145deg, rgba(30, 42, 120, 0.12), rgba(108, 99, 255, 0.06));
+        .service-orbit::before {
+            width: 410px;
+            height: 410px;
+            background: linear-gradient(145deg, rgba(30, 42, 120, 0.12), rgba(108, 99, 255, 0.04));
+            animation: orbitBreath 6s ease-in-out infinite;
         }
 
-        .phone-stage::after {
-            width: 260px;
-            height: 260px;
-            inset-inline-start: -20px;
-            bottom: 40px;
-            border: 1px dashed rgba(108, 99, 255, 0.32);
+        .service-orbit::after {
+            width: 330px;
+            height: 330px;
+            border: 1px dashed rgba(108, 99, 255, 0.35);
+            animation: orbitSpin 24s linear infinite;
         }
 
-        .phone {
+        .orbit-center {
             position: relative;
             z-index: 2;
-            width: min(338px, 84vw);
-            padding: 11px;
-            border: 4px solid #11131A;
-            border-radius: 48px;
-            background: #11131A;
-            box-shadow: 0 34px 70px rgba(15, 18, 45, 0.25);
-            transform: rotate(2deg);
-        }
-
-        .phone::before {
-            content: "";
-            position: absolute;
-            z-index: 5;
-            top: 15px;
-            left: 50%;
-            width: 92px;
-            height: 25px;
-            border-radius: 0 0 16px 16px;
-            background: #11131A;
-            transform: translateX(-50%);
-        }
-
-        .phone__screen {
-            min-height: 580px;
-            overflow: hidden;
-            border-radius: 36px;
-            background: var(--surface);
-        }
-
-        .phone__top {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 42px 21px 16px;
-            background: var(--white);
-        }
-
-        .phone__greeting small {
-            display: block;
-            color: #85899A;
-            font-size: 10px;
-        }
-
-        .phone__greeting strong {
-            color: var(--primary);
-            font-size: 18px;
-        }
-
-        .phone__icons {
-            display: flex;
-            gap: 8px;
-        }
-
-        .phone__circle {
-            width: 36px;
-            height: 36px;
+            width: 190px;
+            height: 190px;
             display: grid;
             place-items: center;
-            border: 1px solid var(--border);
-            border-radius: 50%;
-            background: var(--white);
-            color: var(--primary);
-        }
-
-        .phone__circle svg {
-            width: 18px;
-            height: 18px;
-        }
-
-        .phone__body {
-            padding: 0 18px 20px;
-        }
-
-        .phone__search {
-            display: flex;
-            align-items: center;
-            gap: 9px;
-            margin: 14px 0 18px;
-            padding: 12px 14px;
-            border: 1px solid var(--border);
-            border-radius: 17px;
-            color: #979BAC;
-            background: var(--white);
-            font-size: 11px;
-        }
-
-        .phone__search svg {
-            width: 18px;
-            height: 18px;
-            color: var(--primary);
-        }
-
-        .phone__offer {
-            position: relative;
-            overflow: hidden;
-            margin-bottom: 18px;
-            padding: 20px;
-            border-radius: 21px;
+            padding: 24px;
+            border: 1px solid rgba(30, 42, 120, 0.1);
+            border-radius: 46px;
             color: var(--white);
-            background: linear-gradient(135deg, var(--primary), #3142A6);
+            background: linear-gradient(145deg, var(--primary), #3142A6);
+            box-shadow: 0 32px 70px rgba(30, 42, 120, 0.28);
+            text-align: center;
+            transform: rotate(-3deg);
+            animation: centerFloat 5s ease-in-out infinite;
         }
 
-        .phone__offer::after {
-            content: "";
-            position: absolute;
-            width: 130px;
-            height: 130px;
-            inset-inline-start: -34px;
-            top: -45px;
-            border-radius: 50%;
-            background: rgba(108, 99, 255, 0.42);
-        }
-
-        .phone__offer span,
-        .phone__offer strong {
-            position: relative;
-            z-index: 1;
+        .orbit-center strong {
             display: block;
+            font-size: 29px;
+            line-height: 1.5;
         }
 
-        .phone__offer span {
-            margin-bottom: 5px;
-            font-size: 11px;
-            opacity: 0.78;
+        .orbit-center small {
+            font-size: 13px;
+            opacity: 0.8;
         }
 
-        .phone__offer strong {
-            max-width: 205px;
-            font-size: 16px;
-            line-height: 1.6;
+        .orbit-item {
+            position: absolute;
+            z-index: 3;
+            width: 104px;
+            min-height: 104px;
+            display: grid;
+            place-items: center;
+            gap: 6px;
+            padding: 14px;
+            border: 1px solid var(--border);
+            border-radius: 28px;
+            background: rgba(255, 255, 255, 0.92);
+            box-shadow: 0 20px 45px rgba(30, 42, 120, 0.12);
+            text-align: center;
+            backdrop-filter: blur(12px);
+            animation: itemFloat 5s ease-in-out infinite;
         }
 
-        .phone__title {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 10px;
+        .orbit-item svg {
+            width: 34px;
+            height: 34px;
+        }
+
+        .orbit-item span {
             font-size: 12px;
             font-weight: 800;
         }
 
-        .phone__title small {
-            color: var(--secondary);
-            font-size: 9px;
-        }
-
-        .phone__services {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 8px;
-            margin-bottom: 18px;
-        }
-
-        .phone-service {
-            min-height: 86px;
-            display: grid;
-            place-items: center;
-            gap: 5px;
-            padding: 10px 5px;
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            background: var(--white);
-            font-size: 9px;
-            font-weight: 700;
-            text-align: center;
-        }
-
-        .phone-service__icon {
-            width: 34px;
-            height: 34px;
-            display: grid;
-            place-items: center;
-            border-radius: 11px;
-            color: var(--primary);
-            background: var(--primary-soft);
-        }
-
-        .phone-service__icon--restaurant {
+        .orbit-item--restaurant {
+            top: 70px;
+            right: 20px;
             color: var(--restaurant);
-            background: var(--restaurant-soft);
+            animation-delay: -1s;
         }
 
-        .phone-service__icon--cleaning {
-            color: #159B90;
-            background: var(--cleaning-soft);
+        .orbit-item--market {
+            bottom: 58px;
+            right: 30px;
+            color: var(--secondary);
+            animation-delay: -2.3s;
         }
 
-        .phone-service__icon svg {
-            width: 21px;
-            height: 21px;
-        }
-
-        .phone__stores {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 10px;
-        }
-
-        .phone-store {
-            overflow: hidden;
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            background: var(--white);
-        }
-
-        .phone-store__image {
-            height: 74px;
-            display: grid;
-            place-items: center;
-            color: var(--primary);
-            background:
-                linear-gradient(135deg, rgba(30, 42, 120, 0.08), rgba(108, 99, 255, 0.14)),
-                var(--white);
-        }
-
-        .phone-store__image svg {
-            width: 38px;
-            height: 38px;
-        }
-
-        .phone-store__content {
-            padding: 9px;
-        }
-
-        .phone-store__content strong {
-            display: block;
-            margin-bottom: 3px;
-            font-size: 10px;
-        }
-
-        .phone-store__rating {
-            color: #14A167;
-            font-size: 9px;
-            font-weight: 800;
+        .orbit-item--cleaning {
+            left: 4px;
+            top: 190px;
+            color: var(--cleaning);
+            animation-delay: -3.4s;
         }
 
         .section {
-            padding: 76px 0;
+            padding: 88px 0;
         }
 
         .section--soft {
-            background: linear-gradient(180deg, rgba(247, 248, 252, 0.78), rgba(255, 255, 255, 0.94));
+            background: linear-gradient(180deg, rgba(247, 248, 252, 0.72), rgba(255, 255, 255, 0.9));
         }
 
         .section-heading {
-            max-width: 690px;
-            margin: 0 auto 38px;
+            max-width: 720px;
+            margin: 0 auto 42px;
             text-align: center;
         }
 
         .section-heading__label {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 8px;
+            display: inline-block;
+            margin-bottom: 9px;
             color: var(--secondary);
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 800;
         }
 
@@ -523,7 +409,8 @@
             margin-bottom: 10px;
             color: var(--primary);
             font-size: clamp(30px, 4vw, 44px);
-            line-height: 1.4;
+            line-height: 1.35;
+            font-weight: 800;
         }
 
         .section-heading p {
@@ -532,68 +419,97 @@
             font-size: 16px;
         }
 
-        .services-grid {
+        .services-grid,
+        .partner-grid {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 22px;
         }
 
-        .service-card {
+        .service-card,
+        .partner-card,
+        .benefit-card {
             position: relative;
-            min-height: 430px;
-            display: flex;
-            flex-direction: column;
             overflow: hidden;
-            padding: 30px;
             border: 1px solid var(--border);
-            border-radius: 28px;
-            background: var(--white);
-            box-shadow: 0 16px 44px rgba(30, 42, 120, 0.07);
-            transition: transform 180ms ease, box-shadow 180ms ease;
+            background: rgba(255, 255, 255, 0.92);
+            box-shadow: 0 18px 45px rgba(30, 42, 120, 0.07);
+            transition: transform 300ms cubic-bezier(.2,.8,.2,1), box-shadow 300ms ease, border-color 300ms ease;
         }
 
-        .service-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 24px 54px rgba(30, 42, 120, 0.12);
+        .service-card:hover,
+        .partner-card:hover,
+        .benefit-card:hover {
+            transform: translateY(-9px);
+            box-shadow: 0 30px 65px rgba(30, 42, 120, 0.15);
+            border-color: rgba(108, 99, 255, 0.24);
         }
 
-        .service-card::before {
+        .service-card {
+            min-height: 430px;
+            padding: 30px;
+            border-radius: 30px;
+        }
+
+        .service-card::after,
+        .partner-card::after {
             content: "";
             position: absolute;
-            width: 180px;
-            height: 180px;
-            top: -92px;
-            inset-inline-start: -65px;
+            width: 160px;
+            height: 160px;
+            left: -80px;
+            bottom: -90px;
             border-radius: 50%;
-            opacity: 0.62;
+            opacity: 0.55;
+            transition: transform 450ms ease;
         }
 
-        .service-card--restaurant::before {
-            background: var(--restaurant-soft);
+        .service-card:hover::after,
+        .partner-card:hover::after {
+            transform: scale(1.35);
         }
 
-        .service-card--market::before {
-            background: var(--secondary-soft);
+        .service-card--restaurant {
+            background: linear-gradient(160deg, var(--white), var(--restaurant-soft));
         }
 
-        .service-card--cleaning::before {
-            background: var(--cleaning-soft);
+        .service-card--restaurant::after {
+            background: rgba(255, 122, 0, 0.14);
+        }
+
+        .service-card--market {
+            background: linear-gradient(160deg, var(--white), var(--secondary-soft));
+        }
+
+        .service-card--market::after {
+            background: rgba(108, 99, 255, 0.13);
+        }
+
+        .service-card--cleaning {
+            background: linear-gradient(160deg, var(--white), var(--cleaning-soft));
+        }
+
+        .service-card--cleaning::after {
+            background: rgba(46, 196, 182, 0.16);
+        }
+
+        .service-card__icon,
+        .partner-card__icon,
+        .benefit-card__icon {
+            display: grid;
+            place-items: center;
+            border-radius: 22px;
         }
 
         .service-card__icon {
-            position: relative;
-            z-index: 1;
-            width: 78px;
-            height: 78px;
-            display: grid;
-            place-items: center;
-            margin-bottom: 22px;
-            border-radius: 24px;
+            width: 74px;
+            height: 74px;
+            margin-bottom: 24px;
         }
 
         .service-card__icon svg {
-            width: 42px;
-            height: 42px;
+            width: 38px;
+            height: 38px;
         }
 
         .service-card--restaurant .service-card__icon {
@@ -607,240 +523,323 @@
         }
 
         .service-card--cleaning .service-card__icon {
-            color: #159B90;
+            color: var(--cleaning);
             background: var(--cleaning-soft);
         }
 
         .service-card h3 {
-            margin-bottom: 6px;
-            font-size: 23px;
-            line-height: 1.5;
+            margin-bottom: 8px;
+            color: var(--primary);
+            font-size: 25px;
         }
 
-        .service-card--restaurant h3 {
-            color: var(--restaurant);
-        }
-
-        .service-card--market h3 {
-            color: var(--secondary);
-        }
-
-        .service-card--cleaning h3 {
-            color: #159B90;
-        }
-
-        .service-card__tagline {
+        .service-card__subtitle {
             margin-bottom: 14px;
             color: var(--text);
-            font-size: 15px;
             font-weight: 700;
         }
 
         .service-card__description {
-            margin-bottom: 24px;
+            margin-bottom: 22px;
             color: var(--muted);
             font-size: 14px;
         }
 
         .feature-list {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin: 0;
+            padding: 0;
+            list-style: none;
+        }
+
+        .feature-list li {
+            display: flex;
+            align-items: center;
             gap: 9px;
-            margin-top: auto;
+            color: var(--text);
+            font-size: 13px;
+            font-weight: 600;
         }
 
-        .feature {
-            display: grid;
-            justify-items: center;
-            gap: 7px;
-            padding: 11px 6px;
-            border-radius: 15px;
-            font-size: 10px;
-            font-weight: 700;
-            text-align: center;
-        }
-
-        .feature svg {
-            width: 20px;
-            height: 20px;
-        }
-
-        .service-card--restaurant .feature {
-            color: #D86100;
-            background: var(--restaurant-soft);
-        }
-
-        .service-card--market .feature {
-            color: #5148DE;
-            background: var(--secondary-soft);
-        }
-
-        .service-card--cleaning .feature {
-            color: #138C83;
-            background: var(--cleaning-soft);
-        }
-
-        .benefits {
-            padding: 42px;
-            border: 1px solid var(--border);
-            border-radius: 30px;
-            background:
-                linear-gradient(135deg, rgba(30, 42, 120, 0.035), rgba(108, 99, 255, 0.045)),
-                var(--white);
-            box-shadow: var(--shadow);
+        .feature-list li::before {
+            content: "";
+            width: 8px;
+            height: 8px;
+            flex: 0 0 auto;
+            border-radius: 50%;
+            background: var(--secondary);
+            box-shadow: 0 0 0 4px rgba(108, 99, 255, 0.1);
         }
 
         .benefits-grid {
             display: grid;
             grid-template-columns: repeat(5, minmax(0, 1fr));
-            gap: 0;
+            gap: 14px;
         }
 
-        .benefit {
-            padding: 12px 20px;
+        .benefit-card {
+            padding: 24px 18px;
+            border-radius: 24px;
             text-align: center;
         }
 
-        .benefit + .benefit {
-            border-inline-start: 1px solid var(--border);
-        }
-
-        .benefit__icon {
+        .benefit-card__icon {
             width: 52px;
             height: 52px;
-            display: grid;
-            place-items: center;
             margin: 0 auto 15px;
-            border-radius: 17px;
             color: var(--primary);
             background: var(--primary-soft);
         }
 
-        .benefit:nth-child(even) .benefit__icon {
+        .benefit-card__icon svg {
+            width: 26px;
+            height: 26px;
+        }
+
+        .benefit-card h3 {
+            margin-bottom: 7px;
+            color: var(--primary);
+            font-size: 15px;
+        }
+
+        .benefit-card p {
+            margin-bottom: 0;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .join-section {
+            position: relative;
+        }
+
+        .partner-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .partner-card {
+            padding: 25px;
+            border-radius: 27px;
+        }
+
+        .partner-card__icon {
+            width: 58px;
+            height: 58px;
+            margin-bottom: 18px;
+            color: var(--primary);
+            background: var(--primary-soft);
+        }
+
+        .partner-card__icon svg {
+            width: 29px;
+            height: 29px;
+        }
+
+        .partner-card h3 {
+            margin-bottom: 8px;
+            color: var(--primary);
+            font-size: 19px;
+        }
+
+        .partner-card p {
+            margin-bottom: 18px;
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .partner-card a {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            color: var(--secondary);
+            font-size: 13px;
+            font-weight: 800;
+        }
+
+        .partner-card a svg {
+            width: 17px;
+            height: 17px;
+            transition: transform 180ms ease;
+        }
+
+        .partner-card a:hover svg {
+            transform: translateX(-4px);
+        }
+
+        .partner-card--restaurant .partner-card__icon {
+            color: var(--restaurant);
+            background: var(--restaurant-soft);
+        }
+
+        .partner-card--cleaning .partner-card__icon {
+            color: var(--cleaning);
+            background: var(--cleaning-soft);
+        }
+
+        .partner-card--market .partner-card__icon {
             color: var(--secondary);
             background: var(--secondary-soft);
         }
 
-        .benefit__icon svg {
-            width: 27px;
-            height: 27px;
-        }
-
-        .benefit h3 {
-            margin-bottom: 7px;
-            color: var(--primary);
-            font-size: 14px;
-        }
-
-        .benefit p {
-            margin-bottom: 0;
-            color: var(--muted);
-            font-size: 11px;
-            line-height: 1.9;
-        }
-
-        .cta {
-            padding: 24px 0 78px;
-        }
-
-        .cta-card {
+        .contact-panel {
             position: relative;
             overflow: hidden;
             display: grid;
-            grid-template-columns: 1fr auto;
+            grid-template-columns: minmax(0, 1fr) auto;
             align-items: center;
-            gap: 36px;
-            padding: clamp(30px, 5vw, 54px);
-            border-radius: 32px;
+            gap: 32px;
+            margin-top: 28px;
+            padding: clamp(28px, 5vw, 48px);
+            border-radius: 34px;
             color: var(--white);
-            background: linear-gradient(135deg, var(--primary-dark), var(--primary) 58%, #3547AD);
-            box-shadow: 0 28px 70px rgba(30, 42, 120, 0.26);
+            background: linear-gradient(135deg, var(--primary), #293A9D 64%, var(--secondary));
+            box-shadow: var(--shadow);
         }
 
-        .cta-card::before,
-        .cta-card::after {
+        .contact-panel::before,
+        .contact-panel::after {
             content: "";
             position: absolute;
             border-radius: 50%;
-            background: rgba(108, 99, 255, 0.24);
+            background: rgba(255, 255, 255, 0.08);
+            pointer-events: none;
         }
 
-        .cta-card::before {
-            width: 240px;
-            height: 240px;
-            inset-inline-start: -92px;
-            top: -118px;
+        .contact-panel::before {
+            width: 220px;
+            height: 220px;
+            top: -130px;
+            left: 6%;
+            animation: contactBubble 7s ease-in-out infinite alternate;
         }
 
-        .cta-card::after {
-            width: 140px;
-            height: 140px;
-            inset-inline-end: 33%;
-            bottom: -96px;
+        .contact-panel::after {
+            width: 130px;
+            height: 130px;
+            right: 38%;
+            bottom: -75px;
+            animation: contactBubble 9s ease-in-out infinite alternate-reverse;
         }
 
-        .cta-card__content,
-        .cta-card__actions {
+        .contact-panel__content,
+        .contact-panel__action {
             position: relative;
             z-index: 1;
         }
 
-        .cta-card h2 {
+        .contact-panel h2 {
             margin-bottom: 8px;
-            color: var(--white);
-            font-size: clamp(28px, 4vw, 44px);
+            font-size: clamp(26px, 4vw, 40px);
             line-height: 1.45;
         }
 
-        .cta-card h2 span {
-            color: #FFB066;
-        }
-
-        .cta-card p {
-            max-width: 620px;
+        .contact-panel p {
+            max-width: 720px;
             margin-bottom: 0;
             color: rgba(255, 255, 255, 0.78);
-            font-size: 16px;
         }
 
-        .cta-card__actions {
-            display: grid;
-            gap: 10px;
-            min-width: 206px;
-        }
-
-        .cta-card .store-button {
-            border-color: rgba(255, 255, 255, 0.18);
+        .contact-button {
+            min-width: 190px;
             color: var(--primary);
             background: var(--white);
-            box-shadow: none;
+            box-shadow: 0 16px 40px rgba(10, 16, 64, 0.24);
         }
 
-        .cta-card .store-button:hover {
+        .contact-button:hover {
+            color: var(--primary-dark);
+            background: #F7F8FF;
+        }
+
+        .final-cta {
+            padding: 0 0 88px;
+        }
+
+        .final-cta__box {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 30px;
+            padding: 36px;
+            border: 1px solid var(--border);
+            border-radius: 30px;
+            background: linear-gradient(145deg, var(--white), var(--primary-soft));
+            box-shadow: 0 20px 50px rgba(30, 42, 120, 0.08);
+        }
+
+        .final-cta h2 {
+            margin-bottom: 7px;
             color: var(--primary);
-            background: #F6F7FF;
+            font-size: clamp(25px, 4vw, 36px);
         }
 
-        .cta-note {
-            margin: 10px 0 0;
-            color: rgba(255, 255, 255, 0.6);
-            font-size: 10px;
-            text-align: center;
+        .final-cta p {
+            margin-bottom: 0;
+            color: var(--muted);
         }
 
-        @media (max-width: 980px) {
+        .reveal {
+            opacity: 0;
+            transform: translateY(28px);
+            transition: opacity 700ms ease, transform 700ms cubic-bezier(.2,.8,.2,1);
+        }
+
+        .reveal.is-visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        @keyframes backgroundFloatOne {
+            to { transform: translate(-45px, 70px) scale(1.08); }
+        }
+
+        @keyframes backgroundFloatTwo {
+            to { transform: translate(55px, -45px) scale(1.12); }
+        }
+
+        @keyframes dotsDrift {
+            to { transform: translateY(30px) rotate(5deg); }
+        }
+
+        @keyframes pulse {
+            50% { transform: scale(1.22); box-shadow: 0 0 0 10px rgba(108, 99, 255, 0.04); }
+        }
+
+        @keyframes orbitBreath {
+            50% { transform: scale(1.06); }
+        }
+
+        @keyframes orbitSpin {
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes centerFloat {
+            50% { transform: translateY(-12px) rotate(-1deg); }
+        }
+
+        @keyframes itemFloat {
+            50% { transform: translateY(-14px); }
+        }
+
+        @keyframes contactBubble {
+            to { transform: translate(38px, 24px) scale(1.12); }
+        }
+
+        @media (max-width: 960px) {
             .hero {
-                padding-top: 54px;
+                min-height: auto;
             }
 
             .hero__grid {
                 grid-template-columns: 1fr;
-                text-align: center;
             }
 
             .hero__content {
-                display: grid;
-                justify-items: center;
+                text-align: center;
+            }
+
+            .hero__description {
+                margin-inline: auto;
             }
 
             .hero__meta,
@@ -848,14 +847,12 @@
                 justify-content: center;
             }
 
-            .phone-stage {
-                min-height: 590px;
+            .service-orbit {
+                min-height: 470px;
             }
 
             .services-grid {
                 grid-template-columns: 1fr;
-                max-width: 680px;
-                margin-inline: auto;
             }
 
             .service-card {
@@ -863,125 +860,91 @@
             }
 
             .benefits-grid {
-                grid-template-columns: repeat(2, 1fr);
-                gap: 24px 0;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
             }
 
-            .benefit + .benefit {
-                border-inline-start: 0;
+            .partner-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
             }
 
-            .benefit:nth-child(even) {
-                border-inline-start: 1px solid var(--border);
-            }
-
-            .benefit:last-child {
-                grid-column: 1 / -1;
-                max-width: 320px;
-                margin-inline: auto;
-            }
-
-            .cta-card {
+            .contact-panel,
+            .final-cta__box {
                 grid-template-columns: 1fr;
                 text-align: center;
             }
 
-            .cta-card p {
-                margin-inline: auto;
-            }
-
-            .cta-card__actions {
-                width: min(100%, 360px);
-                margin-inline: auto;
+            .contact-panel__action,
+            .final-cta .download-actions {
+                justify-self: center;
             }
         }
 
-        @media (max-width: 640px) {
+        @media (max-width: 620px) {
             .container {
                 width: min(100% - 22px, 1120px);
             }
 
             .hero {
-                min-height: auto;
-                padding: 40px 0 30px;
+                padding: 54px 0 40px;
             }
 
             .hero h1 {
-                font-size: 40px;
-            }
-
-            .hero__description {
-                font-size: 16px;
-            }
-
-            .download-actions {
-                width: 100%;
+                font-size: 41px;
             }
 
             .store-button {
                 width: 100%;
             }
 
-            .phone-stage {
-                min-height: 540px;
+            .service-orbit {
+                min-height: 390px;
+                transform: scale(0.9);
             }
 
-            .phone {
-                width: min(308px, 88vw);
+            .service-orbit::before {
+                width: 340px;
+                height: 340px;
             }
 
-            .phone__screen {
-                min-height: 530px;
+            .service-orbit::after {
+                width: 285px;
+                height: 285px;
+            }
+
+            .orbit-center {
+                width: 160px;
+                height: 160px;
+                border-radius: 38px;
+            }
+
+            .orbit-center strong {
+                font-size: 25px;
+            }
+
+            .orbit-item {
+                width: 92px;
+                min-height: 92px;
+                border-radius: 24px;
             }
 
             .section {
-                padding: 58px 0;
+                padding: 64px 0;
             }
 
-            .section-heading {
-                margin-bottom: 28px;
-            }
-
-            .service-card {
-                padding: 24px;
-                border-radius: 23px;
-            }
-
-            .feature-list {
+            .benefits-grid,
+            .partner-grid {
                 grid-template-columns: 1fr;
             }
 
-            .feature {
-                grid-template-columns: auto 1fr;
-                justify-items: start;
-                text-align: right;
-            }
-
-            .benefits {
-                padding: 28px 18px;
-            }
-
-            .benefits-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .benefit,
-            .benefit:nth-child(even) {
-                border-inline-start: 0;
-            }
-
-            .benefit + .benefit {
-                padding-top: 24px;
-                border-top: 1px solid var(--border);
-            }
-
-            .benefit:last-child {
-                grid-column: auto;
-            }
-
-            .cta-card {
-                padding: 30px 20px;
+            .service-card,
+            .partner-card,
+            .contact-panel,
+            .final-cta__box {
                 border-radius: 24px;
+            }
+
+            .contact-button {
+                width: 100%;
             }
         }
 
@@ -993,421 +956,337 @@
             *,
             *::before,
             *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
                 transition-duration: 0.01ms !important;
+            }
+
+            .reveal {
+                opacity: 1;
+                transform: none;
             }
         }
     </style>
 </head>
 <body>
-    <main class="page">
-        <section class="hero" aria-labelledby="hero-title">
+<div class="page">
+    <div class="background-dots" aria-hidden="true"></div>
+
+    <main>
+        <section class="hero">
             <div class="container hero__grid">
-                <div class="hero__content">
+                <div class="hero__content reveal">
                     <div class="eyebrow">
                         <span class="eyebrow__dot" aria-hidden="true"></span>
-                        متواجدون الآن في مدينة حلب
+                        متواجدون الآن في حلب
                     </div>
 
-                    <h1 id="hero-title">
-                        كل خدماتك اليومية
-                        <br>
-                        في <span>تطبيق واحد</span>
-                    </h1>
+                    <h1>كل خدماتك اليومية في <span>تطبيق واحد</span></h1>
 
                     <p class="hero__description">
-                        تعبت من مشاوير وتأخير الطلبات؟ تطبيق «على الندهة» هو مساعدك الشخصي
-                        لخدمات المطاعم والسوبرماركت والتنظيف، بسرعة وموثوقية وفي أي وقت.
+                        تعبت من المشاوير وتأخير الطلبات؟ تطبيق «ع الندهة» هو مساعدك اليومي لطلب الطعام،
+                        حاجيات المنزل وخدمات التنظيف بسرعة وموثوقية، ومن مكان واحد.
                     </p>
 
-                    <div class="hero__meta" aria-label="مميزات سريعة">
+                    <div class="hero__meta">
                         <span class="meta-chip">
-                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                <path d="M12 21s7-4.6 7-11a7 7 0 1 0-14 0c0 6.4 7 11 7 11Z" stroke="currentColor" stroke-width="1.8"/>
-                                <circle cx="12" cy="10" r="2.5" stroke="currentColor" stroke-width="1.8"/>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                                <path d="M12 21s6-4.35 6-10a6 6 0 1 0-12 0c0 5.65 6 10 6 10Z"/>
+                                <circle cx="12" cy="11" r="2"/>
                             </svg>
-                            تغطية أحياء حلب
+                            تغطية داخل مدينة حلب
                         </span>
                         <span class="meta-chip">
-                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                <path d="M12 3a9 9 0 1 0 9 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                                <path d="M12 7v5l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                                <path d="M17 3h4v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                                <path d="M12 3v18M3 12h18"/>
                             </svg>
-                            استجابة سريعة
+                            خدمات متعددة في تطبيق واحد
                         </span>
                     </div>
 
-                    <div class="download-label">حمّل تطبيق المستخدم</div>
-                    <div class="download-actions" aria-label="روابط تحميل التطبيق">
+                    <p class="download-label">حمّل تطبيق المستخدم</p>
+                    <div class="download-actions">
                         <a class="store-button" href="#" aria-label="تحميل التطبيق من App Store">
                             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                                <path d="M16.7 12.9c0-2.5 2.1-3.7 2.2-3.8-1.2-1.7-3-1.9-3.7-1.9-1.6-.2-3.1.9-3.9.9-.8 0-2-.9-3.3-.9-1.7 0-3.3 1-4.2 2.5-1.8 3.1-.5 7.8 1.3 10.3.9 1.3 2 2.7 3.4 2.6 1.3-.1 1.9-.9 3.5-.9s2.1.9 3.5.9c1.5 0 2.4-1.3 3.3-2.6 1-1.5 1.5-3 1.5-3.1-.1 0-2.8-1.1-2.8-4Zm-2.5-7.4c.7-.9 1.2-2.1 1.1-3.3-1.1 0-2.4.7-3.2 1.6-.7.8-1.3 2-1.1 3.2 1.2.1 2.4-.6 3.2-1.5Z"/>
+                                <path d="M16.37 12.64c.02 2.2 1.93 2.93 1.95 2.94-.02.05-.3 1.04-1 2.06-.6.88-1.23 1.76-2.22 1.78-.97.02-1.28-.57-2.39-.57-1.1 0-1.45.55-2.37.59-.95.04-1.67-.95-2.28-1.82-1.24-1.8-2.19-5.08-.92-7.29a3.54 3.54 0 0 1 3.03-1.85c.94-.02 1.84.64 2.4.64.57 0 1.64-.79 2.76-.67.47.02 1.79.19 2.63 1.43-.07.04-1.58.92-1.57 2.76ZM14.6 7.27c.5-.6.83-1.44.74-2.27-.72.03-1.6.48-2.12 1.08-.46.53-.87 1.38-.76 2.2.81.07 1.64-.41 2.14-1.01Z"/>
                             </svg>
-                            <span class="store-button__text">
-                                <small>قريباً على</small>
-                                App Store
-                            </span>
+                            <span class="store-button__text"><small>تحميل من</small>App Store</span>
                         </a>
 
                         <a class="store-button store-button--secondary" href="#" aria-label="تحميل التطبيق من Google Play">
                             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                                <path d="M3.5 2.7c-.3.4-.5.9-.5 1.6v15.4c0 .6.2 1.2.5 1.6l9-9.3-9-9.3Zm10.2 10.5-2.3-2.4-7.1 7.4 9.4-5Zm.8-.8 2.7-1.5c.8-.5.8-1.2 0-1.7l-3.3-1.9-2.4 2.5 3 2.6Zm-.7.8-9.5 5.3 9.6-10 2.5 2.8-2.6 1.9Z"/>
+                                <path d="m3.64 2.27 10.1 9.73-10.1 9.73A1.9 1.9 0 0 1 3 20.3V3.7c0-.55.23-1.05.64-1.43Zm11.43 11.01 2.29 2.21-10.5 5.95 8.21-8.16Zm3.55-2.02c.51.29.82.76.82 1.24s-.31.95-.82 1.24l-1.82 1.03-2.47-2.38.4-.39-.4-.39 2.47-2.38 1.82 1.03ZM6.86 2.56l10.5 5.95-2.29 2.21-8.21-8.16Z"/>
                             </svg>
-                            <span class="store-button__text">
-                                <small>قريباً على</small>
-                                Google Play
-                            </span>
+                            <span class="store-button__text"><small>تحميل من</small>Google Play</span>
                         </a>
                     </div>
                 </div>
 
-                <div class="phone-stage" aria-label="معاينة واجهة تطبيق على الندهة">
-                    <div class="phone">
-                        <div class="phone__screen">
-                            <div class="phone__top">
-                                <div class="phone__greeting">
-                                    <small>مرحباً بعودتك 👋</small>
-                                    <strong>أهلاً بك</strong>
-                                </div>
-
-                                <div class="phone__icons" aria-hidden="true">
-                                    <span class="phone__circle">
-                                        <svg viewBox="0 0 24 24" fill="none">
-                                            <path d="M6 8h12l-1 11H7L6 8Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-                                            <path d="M9 9V6a3 3 0 0 1 6 0v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                                        </svg>
-                                    </span>
-                                    <span class="phone__circle">
-                                        <svg viewBox="0 0 24 24" fill="none">
-                                            <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                                            <path d="M10 20h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                                        </svg>
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div class="phone__body">
-                                <div class="phone__search">
-                                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                        <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/>
-                                        <path d="m16 16 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                                    </svg>
-                                    ابحث عن متجر أو منتج...
-                                </div>
-
-                                <div class="phone__offer">
-                                    <span>عروض استثنائية</span>
-                                    <strong>خصومات على طلباتك اليومية من متاجر حلب</strong>
-                                </div>
-
-                                <div class="phone__title">
-                                    <span>خدماتنا</span>
-                                    <small>عرض الكل</small>
-                                </div>
-
-                                <div class="phone__services">
-                                    <div class="phone-service">
-                                        <span class="phone-service__icon phone-service__icon--restaurant">
-                                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                                <path d="M5 12h14a7 7 0 0 0-14 0Z" stroke="currentColor" stroke-width="1.8"/>
-                                                <path d="M3 12h18M8 17h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                                                <path d="M7 17h10l1-5H6l1 5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-                                            </svg>
-                                        </span>
-                                        المطاعم
-                                    </div>
-
-                                    <div class="phone-service">
-                                        <span class="phone-service__icon">
-                                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                                <path d="M4 5h2l2 10h9l2-7H7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                                                <circle cx="10" cy="19" r="1.5" fill="currentColor"/>
-                                                <circle cx="17" cy="19" r="1.5" fill="currentColor"/>
-                                            </svg>
-                                        </span>
-                                        السوبرماركت
-                                    </div>
-
-                                    <div class="phone-service">
-                                        <span class="phone-service__icon phone-service__icon--cleaning">
-                                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                                <path d="M8 5h7l2 5v9H6v-9l2-5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-                                                <path d="M10 5V3h4v2M9 13h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                                                <path d="M18 4h3M19.5 2.5v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                                            </svg>
-                                        </span>
-                                        التنظيف
-                                    </div>
-                                </div>
-
-                                <div class="phone__title">
-                                    <span>متاجر قريبة منك</span>
-                                    <small>في حلب</small>
-                                </div>
-
-                                <div class="phone__stores">
-                                    <article class="phone-store">
-                                        <div class="phone-store__image">
-                                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                                <path d="M4 10h16v10H4V10Z" stroke="currentColor" stroke-width="1.6"/>
-                                                <path d="m3 10 2-6h14l2 6M8 10V6M12 10V6M16 10V6" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-                                            </svg>
-                                        </div>
-                                        <div class="phone-store__content">
-                                            <strong>متجر الحي</strong>
-                                            <span class="phone-store__rating">★ 4.8</span>
-                                        </div>
-                                    </article>
-
-                                    <article class="phone-store">
-                                        <div class="phone-store__image">
-                                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                                <path d="M4 10h16v10H4V10Z" stroke="currentColor" stroke-width="1.6"/>
-                                                <path d="m3 10 2-6h14l2 6M8 10V6M12 10V6M16 10V6" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-                                            </svg>
-                                        </div>
-                                        <div class="phone-store__content">
-                                            <strong>سوبرماركت النور</strong>
-                                            <span class="phone-store__rating">★ 4.7</span>
-                                        </div>
-                                    </article>
-                                </div>
-                            </div>
+                <div class="service-orbit reveal" aria-label="خدمات تطبيق ع الندهة">
+                    <div class="orbit-center">
+                        <div>
+                            <strong>ع الندهة</strong>
+                            <small>طلبك مجاب ووقتك محفوظ</small>
                         </div>
+                    </div>
+
+                    <div class="orbit-item orbit-item--restaurant">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                            <path d="M4 12h16M6 12a6 6 0 0 1 12 0M3 16h18M8 20h8"/>
+                        </svg>
+                        <span>المطاعم</span>
+                    </div>
+
+                    <div class="orbit-item orbit-item--market">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                            <path d="M4 5h2l2 10h9l2-7H7M9 20h.01M17 20h.01"/>
+                        </svg>
+                        <span>السوبرماركت</span>
+                    </div>
+
+                    <div class="orbit-item orbit-item--cleaning">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                            <path d="m8 3 2 5M5 8h10l-1 13H6L5 8ZM15 5h4M17 3v4"/>
+                        </svg>
+                        <span>التنظيف</span>
                     </div>
                 </div>
             </div>
         </section>
 
-        <section class="section section--soft" aria-labelledby="services-title">
+        <section class="section section--soft">
             <div class="container">
-                <header class="section-heading">
-                    <span class="section-heading__label">ثلاث خدمات، تجربة واحدة</span>
-                    <h2 id="services-title">أقسام التطبيق</h2>
-                    <p>كل ما تحتاجه خلال يومك ضمن تطبيق بسيط وسريع.</p>
-                </header>
+                <div class="section-heading reveal">
+                    <span class="section-heading__label">أقسام التطبيق</span>
+                    <h2>ثلاث خدمات أساسية، تجربة واحدة متكاملة</h2>
+                    <p>اختر الخدمة التي تحتاجها، حدّد طلبك، وتابع كل شيء بسهولة من التطبيق.</p>
+                </div>
 
                 <div class="services-grid">
-                    <article class="service-card service-card--restaurant">
+                    <article class="service-card service-card--restaurant reveal">
                         <div class="service-card__icon">
-                            <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
-                                <path d="M10 24h28c0-8-6.3-14-14-14S10 16 10 24Z" stroke="currentColor" stroke-width="3"/>
-                                <path d="M7 24h34M13 34h22" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-                                <path d="M12 34h24l2-10H10l2 10Z" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/>
-                                <path d="M24 10V7" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                                <path d="M4 12h16M6 12a6 6 0 0 1 12 0M3 16h18M8 20h8"/>
                             </svg>
                         </div>
                         <h3>قسم المطاعم</h3>
-                        <p class="service-card__tagline">أكل حلب على أصوله</p>
+                        <p class="service-card__subtitle">أكل حلب على أصوله</p>
                         <p class="service-card__description">
-                            تصفّح مجموعة واسعة من المطاعم الغربية والشرقية والوجبات السريعة
-                            والحلويات، واطلب وجبتك المفضلة لتصلك ساخنة إلى بابك.
+                            تصفّح مطاعم متنوعة واطلب وجبتك المفضلة لتصلك ساخنة وبأسرع وقت ممكن.
                         </p>
-
-                        <div class="feature-list">
-                            <span class="feature">
-                                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                    <path d="M12 21s8-4 8-11V5l-8-3-8 3v5c0 7 8 11 8 11Z" stroke="currentColor" stroke-width="1.8"/>
-                                    <path d="m9 11 2 2 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                                </svg>
-                                مطاعم موثوقة
-                            </span>
-                            <span class="feature">
-                                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                    <path d="M3 14h11V7H6l-3 4v3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-                                    <path d="M14 10h4l3 3v4h-7v-7Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-                                    <circle cx="7" cy="18" r="2" stroke="currentColor" stroke-width="1.8"/>
-                                    <circle cx="17" cy="18" r="2" stroke="currentColor" stroke-width="1.8"/>
-                                </svg>
-                                توصيل سريع
-                            </span>
-                            <span class="feature">
-                                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                    <path d="M5 12h14a7 7 0 0 0-14 0Z" stroke="currentColor" stroke-width="1.8"/>
-                                    <path d="M3 12h18M8 17h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                                </svg>
-                                خيارات متنوعة
-                            </span>
-                        </div>
+                        <ul class="feature-list">
+                            <li>مطاعم وأصناف متنوعة</li>
+                            <li>توصيل سريع ومتابعة واضحة</li>
+                            <li>عروض وخصومات حصرية</li>
+                        </ul>
                     </article>
 
-                    <article class="service-card service-card--market">
+                    <article class="service-card service-card--market reveal">
                         <div class="service-card__icon">
-                            <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
-                                <path d="M8 10h5l4 22h20l5-16H15" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-                                <circle cx="20" cy="39" r="3" fill="currentColor"/>
-                                <circle cx="34" cy="39" r="3" fill="currentColor"/>
-                                <path d="M22 12V7M31 12V7M18 9h17" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                                <path d="M4 5h2l2 10h9l2-7H7M9 20h.01M17 20h.01"/>
                             </svg>
                         </div>
                         <h3>قسم السوبرماركت</h3>
-                        <p class="service-card__tagline">حاجيات البيت دون تعب</p>
+                        <p class="service-card__subtitle">حاجيات البيت دون تعب</p>
                         <p class="service-card__description">
-                            اطلب المواد الغذائية والخضار والفواكه والمنظفات والاحتياجات
-                            اليومية من أقرب سوبرماركت إليك، دون طوابير أو مشاوير.
+                            اطلب المواد الغذائية والخضار والفواكه والمنظفات والاحتياجات اليومية من المتاجر القريبة.
                         </p>
-
-                        <div class="feature-list">
-                            <span class="feature">
-                                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                    <path d="M6 8h12l-1 12H7L6 8Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-                                    <path d="M9 8a3 3 0 0 1 6 0" stroke="currentColor" stroke-width="1.8"/>
-                                </svg>
-                                منتجات يومية
-                            </span>
-                            <span class="feature">
-                                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                    <path d="M12 3v18M7 7h7.5a3 3 0 1 1 0 6H9.5a3 3 0 1 0 0 6H17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                                </svg>
-                                أسعار مناسبة
-                            </span>
-                            <span class="feature">
-                                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                    <path d="M12 21s7-4.6 7-11a7 7 0 1 0-14 0c0 6.4 7 11 7 11Z" stroke="currentColor" stroke-width="1.8"/>
-                                    <circle cx="12" cy="10" r="2.5" stroke="currentColor" stroke-width="1.8"/>
-                                </svg>
-                                متاجر قريبة
-                            </span>
-                        </div>
+                        <ul class="feature-list">
+                            <li>منتجات يومية متنوعة</li>
+                            <li>متاجر قريبة وأسعار مناسبة</li>
+                            <li>طلب سهل من مكان واحد</li>
+                        </ul>
                     </article>
 
-                    <article class="service-card service-card--cleaning">
+                    <article class="service-card service-card--cleaning reveal">
                         <div class="service-card__icon">
-                            <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
-                                <path d="M17 13h14l5 10v18H12V23l5-10Z" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/>
-                                <path d="M21 13V8h7v5M18 29h12" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-                                <path d="M36 9h7M39.5 5.5v7" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                                <path d="m8 3 2 5M5 8h10l-1 13H6L5 8ZM15 5h4M17 3v4"/>
                             </svg>
                         </div>
                         <h3>قسم خدمات التنظيف</h3>
-                        <p class="service-card__tagline">راحة ونظافة تامة</p>
+                        <p class="service-card__subtitle">راحة ونظافة تامة</p>
                         <p class="service-card__description">
-                            خدمات تنظيف احترافية للمنازل والمكاتب والمنشآت، إضافة إلى
-                            تنظيف الحفلات والمناسبات، عبر كوادر مدرّبة وموثوقة.
+                            خدمات تنظيف احترافية للمنازل والمكاتب والمنشآت والحفلات من خلال كوادر مدرّبة وموثوقة.
                         </p>
-
-                        <div class="feature-list">
-                            <span class="feature">
-                                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                    <path d="M12 21s8-4 8-11V5l-8-3-8 3v5c0 7 8 11 8 11Z" stroke="currentColor" stroke-width="1.8"/>
-                                    <path d="m9 11 2 2 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                                </svg>
-                                كوادر موثوقة
-                            </span>
-                            <span class="feature">
-                                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                    <path d="M5 20h14M7 20V9l5-5 5 5v11" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-                                    <path d="M10 20v-6h4v6" stroke="currentColor" stroke-width="1.8"/>
-                                </svg>
-                                منازل ومنشآت
-                            </span>
-                            <span class="feature">
-                                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                    <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                                    <circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.8"/>
-                                </svg>
-                                نتائج مضمونة
-                            </span>
-                        </div>
+                        <ul class="feature-list">
+                            <li>كوادر موثوقة ومدرّبة</li>
+                            <li>خدمات للمنازل والمنشآت</li>
+                            <li>تنظيف للمناسبات والحفلات</li>
+                        </ul>
                     </article>
                 </div>
             </div>
         </section>
 
-        <section class="section" aria-labelledby="benefits-title">
+        <section class="section">
             <div class="container">
-                <header class="section-heading">
-                    <span class="section-heading__label">تجربة مصممة لراحتك</span>
-                    <h2 id="benefits-title">لماذا تختار «على الندهة»؟</h2>
-                    <p>نوفّر وقتك ونبسط طلباتك اليومية من البداية حتى التسليم.</p>
-                </header>
+                <div class="section-heading reveal">
+                    <span class="section-heading__label">لماذا نحن؟</span>
+                    <h2>لماذا تختار «ع الندهة»؟</h2>
+                    <p>صممنا التجربة لتكون سريعة، واضحة، محلية وقريبة من احتياجاتك اليومية.</p>
+                </div>
 
-                <div class="benefits">
-                    <div class="benefits-grid">
-                        <article class="benefit">
-                            <div class="benefit__icon">
-                                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                    <rect x="7" y="2" width="10" height="20" rx="2" stroke="currentColor" stroke-width="1.8"/>
-                                    <path d="M10 18h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                                </svg>
-                            </div>
-                            <h3>تطبيق واحد</h3>
-                            <p>مطاعم وسوبرماركت وتنظيف في مكان واحد.</p>
-                        </article>
+                <div class="benefits-grid">
+                    <article class="benefit-card reveal">
+                        <div class="benefit-card__icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M10 18h4"/></svg>
+                        </div>
+                        <h3>تطبيق واحد</h3>
+                        <p>كل الخدمات اليومية دون تحميل عدة تطبيقات.</p>
+                    </article>
 
-                        <article class="benefit">
-                            <div class="benefit__icon">
-                                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                    <path d="M12 3a9 9 0 1 0 9 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                                    <path d="M12 7v5l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                                    <path d="M17 3h4v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                                </svg>
-                            </div>
-                            <h3>استجابة سريعة</h3>
-                            <p>شبكة محلية تلبّي طلبك بأقصر وقت ممكن.</p>
-                        </article>
+                    <article class="benefit-card reveal">
+                        <div class="benefit-card__icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                        </div>
+                        <h3>استجابة سريعة</h3>
+                        <p>شبكة محلية تساعد على تنفيذ الطلب بأسرع وقت.</p>
+                    </article>
 
-                        <article class="benefit">
-                            <div class="benefit__icon">
-                                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                    <path d="M9 11V7a2 2 0 1 1 4 0v4M13 10V6a2 2 0 1 1 4 0v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                                    <path d="M9 10V8a2 2 0 1 0-4 0v6c0 5 3 8 8 8h1c4 0 6-3 6-7v-3a2 2 0 0 0-4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                                </svg>
-                            </div>
-                            <h3>واجهة بسيطة</h3>
-                            <p>اطلب خدمتك ببضع نقرات واضحة وسهلة.</p>
-                        </article>
+                    <article class="benefit-card reveal">
+                        <div class="benefit-card__icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 11V5a2 2 0 1 1 4 0v5M12 9V4a2 2 0 1 1 4 0v7M16 9a2 2 0 0 1 4 0v4c0 5-3 8-8 8h-1c-3 0-5-2-6-4l-2-4a2 2 0 0 1 3-2l2 2"/></svg>
+                        </div>
+                        <h3>واجهة بسيطة</h3>
+                        <p>طلب واضح وسلس ببضع نقرات فقط.</p>
+                    </article>
 
-                        <article class="benefit">
-                            <div class="benefit__icon">
-                                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                    <path d="m4 15 11-11 5 5-11 11H4v-5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-                                    <path d="M12 7h.01M16 11h.01" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
-                                </svg>
-                            </div>
-                            <h3>عروض مستمرة</h3>
-                            <p>خصومات حصرية على المطاعم والخدمات.</p>
-                        </article>
+                    <article class="benefit-card reveal">
+                        <div class="benefit-card__icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 4h16v16H4zM8 8h.01M16 16h.01M8 16l8-8"/></svg>
+                        </div>
+                        <h3>عروض مستمرة</h3>
+                        <p>خصومات حصرية على المطاعم والخدمات.</p>
+                    </article>
 
-                        <article class="benefit">
-                            <div class="benefit__icon">
-                                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                    <path d="M4 14v-3a8 8 0 0 1 16 0v3" stroke="currentColor" stroke-width="1.8"/>
-                                    <path d="M4 13H2v5h4v-5H4ZM20 13h2v5h-4v-5h2Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-                                    <path d="M18 20h-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                                </svg>
-                            </div>
-                            <h3>دعم فني محلي</h3>
-                            <p>فريق يتابع طلبك ويساعدك خطوة بخطوة.</p>
-                        </article>
+                    <article class="benefit-card reveal">
+                        <div class="benefit-card__icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 14v-2a8 8 0 0 1 16 0v2M4 14h3v6H5a1 1 0 0 1-1-1v-5ZM20 14h-3v6h2a1 1 0 0 0 1-1v-5Z"/></svg>
+                        </div>
+                        <h3>دعم محلي</h3>
+                        <p>فريق متواجد لمتابعة طلباتك ومساعدتك.</p>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section class="section section--soft join-section" id="join-us">
+            <div class="container">
+                <div class="section-heading reveal">
+                    <span class="section-heading__label">انضم إلى شبكة ع الندهة</span>
+                    <h2>كبّر أعمالك وابدأ استقبال الطلبات معنا</h2>
+                    <p>نرحب بأصحاب الأعمال ومقدمي الخدمات للانضمام إلى المنصة بعد التواصل مع فريق الإدارة.</p>
+                </div>
+
+                <div class="partner-grid">
+                    <article class="partner-card partner-card--cleaning reveal">
+                        <div class="partner-card__icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m8 3 2 5M5 8h10l-1 13H6L5 8ZM15 5h4M17 3v4"/></svg>
+                        </div>
+                        <h3>أصحاب خدمات التنظيف</h3>
+                        <p>أدر فرق العمل واستقبل طلبات تنظيف المنازل والمنشآت والمناسبات.</p>
+                        <a href="mailto:{{ $contactEmail }}?subject={{ rawurlencode('طلب انضمام - خدمات التنظيف') }}">
+                            تواصل مع الإدارة
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+                        </a>
+                    </article>
+
+                    <article class="partner-card partner-card--market reveal">
+                        <div class="partner-card__icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 5h2l2 10h9l2-7H7M9 20h.01M17 20h.01"/></svg>
+                        </div>
+                        <h3>أصحاب السوبرماركت</h3>
+                        <p>اعرض منتجات متجرك، استقبل الطلبات ووصل إلى عملاء أكثر داخل المدينة.</p>
+                        <a href="mailto:{{ $contactEmail }}?subject={{ rawurlencode('طلب انضمام - سوبرماركت') }}">
+                            تواصل مع الإدارة
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+                        </a>
+                    </article>
+
+                    <article class="partner-card partner-card--restaurant reveal">
+                        <div class="partner-card__icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 12h16M6 12a6 6 0 0 1 12 0M3 16h18M8 20h8"/></svg>
+                        </div>
+                        <h3>أصحاب المطاعم</h3>
+                        <p>أضف مطعمك وقائمتك، استقبل الطلبات ووسّع حضورك الرقمي بسهولة.</p>
+                        <a href="mailto:{{ $contactEmail }}?subject={{ rawurlencode('طلب انضمام - مطعم') }}">
+                            تواصل مع الإدارة
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+                        </a>
+                    </article>
+
+                    <article class="partner-card reveal">
+                        <div class="partner-card__icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 7h11v10H3zM14 10h4l3 3v4h-7zM7 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM18 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/></svg>
+                        </div>
+                        <h3>مقدمو خدمات التوصيل</h3>
+                        <p>انضم إلى شبكة المندوبين وساهم في توصيل الطلبات بسرعة وموثوقية.</p>
+                        <a href="mailto:{{ $contactEmail }}?subject={{ rawurlencode('طلب انضمام - خدمات التوصيل') }}">
+                            تواصل مع الإدارة
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+                        </a>
+                    </article>
+                </div>
+
+                <div class="contact-panel reveal" id="contact">
+                    <div class="contact-panel__content">
+                        <h2>جاهز لتكون شريكاً معنا؟</h2>
+                        <p>
+                            أرسل نوع النشاط، الاسم، رقم التواصل وموقع العمل إلى فريق الإدارة، وسنتابع معك خطوات التسجيل والتفعيل.
+                        </p>
+                    </div>
+                    <div class="contact-panel__action">
+                        <a class="contact-button" href="mailto:{{ $contactEmail }}?subject={{ rawurlencode('طلب انضمام إلى شبكة ع الندهة') }}">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 5h18v14H3z"/><path d="m3 6 9 7 9-7"/></svg>
+                            تواصل مع الإدارة
+                        </a>
                     </div>
                 </div>
             </div>
         </section>
 
-        <section class="cta" aria-labelledby="cta-title">
+        <section class="final-cta">
             <div class="container">
-                <div class="cta-card">
-                    <div class="cta-card__content">
-                        <h2 id="cta-title">متواجدون الآن في <span>حلب!</span></h2>
-                        <p>
-                            بدأنا من حلب وجاهزون لتلبية احتياجات أحيائها.
-                            حمّل التطبيق واجعل حياتك اليومية أسهل وأكثر راحة.
-                        </p>
+                <div class="final-cta__box reveal">
+                    <div>
+                        <h2>ع الندهة.. طلبك مجاب ووقتك محفوظ</h2>
+                        <p>حمّل التطبيق واجعل احتياجاتك اليومية أسهل وأكثر راحة.</p>
                     </div>
-
-                    <div class="cta-card__actions">
-                        <a class="store-button" href="#" aria-label="تحميل تطبيق على الندهة">
-                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                <path d="M12 3v12M7 10l5 5 5-5M5 21h14" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
-                            روابط التحميل قريباً
-                        </a>
-                        <p class="cta-note">سيتم تحديث الروابط عند نشر التطبيق على المتاجر.</p>
+                    <div class="download-actions">
+                        <a class="store-button" href="#">App Store</a>
+                        <a class="store-button store-button--secondary" href="#">Google Play</a>
                     </div>
                 </div>
             </div>
         </section>
     </main>
+</div>
+
+<script>
+    (() => {
+        const elements = document.querySelectorAll('.reveal');
+
+        if (!('IntersectionObserver' in window)) {
+            elements.forEach((element) => element.classList.add('is-visible'));
+            return;
+        }
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('is-visible');
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.12 });
+
+        elements.forEach((element, index) => {
+            element.style.transitionDelay = `${Math.min(index % 5, 4) * 70}ms`;
+            observer.observe(element);
+        });
+    })();
+</script>
 </body>
 </html>
