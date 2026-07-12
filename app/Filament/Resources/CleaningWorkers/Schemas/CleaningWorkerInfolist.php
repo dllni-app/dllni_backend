@@ -5,18 +5,19 @@ declare(strict_types=1);
 namespace App\Filament\Resources\CleaningWorkers\Schemas;
 
 use App\Models\Worker;
+use BackedEnum;
 use Filament\Infolists\Components\ImageEntry;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-use Illuminate\Support\Facades\DB;
-use Modules\Cleaning\Models\CleaningBooking;
-use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Services\DepositService;
 
 final class CleaningWorkerInfolist
 {
+    /** @var array<int, array<string, mixed>> */
+    private static array $summaryCache = [];
+
     public static function configure(Schema $schema): Schema
     {
         return $schema->components([
@@ -73,9 +74,9 @@ final class CleaningWorkerInfolist
                 ->columns(4)
                 ->schema([
                     TextEntry::make('total_completed_jobs')->label('المهام المنجزة')->formatStateUsing(fn ($state): string => self::number($state)),
-                    TextEntry::make('gross_revenue')->label('إجمالي الإيرادات')->state(fn (Worker $record): string => self::money(self::financialSummary($record)['gross_revenue'])),
-                    TextEntry::make('worker_net_earnings')->label('صافي مستحقات العامل')->state(fn (Worker $record): string => self::money(self::financialSummary($record)['worker_net_earnings'])),
-                    TextEntry::make('admin_margin_total')->label('هامش الإدارة')->state(fn (Worker $record): string => self::money(self::financialSummary($record)['admin_margin_total'])),
+                    TextEntry::make('gross_revenue')->label('إجمالي الإيرادات')->state(fn (Worker $record): string => self::money(self::summary($record)['totalRevenue'])),
+                    TextEntry::make('worker_net_earnings')->label('صافي مستحقات العامل')->state(fn (Worker $record): string => self::money(self::workerNetEarnings($record))),
+                    TextEntry::make('admin_margin_total')->label('هامش الإدارة المحتسب')->state(fn (Worker $record): string => self::money(self::summary($record)['totalCommission'])),
                 ]),
             Section::make('التأمين والأهلية')
                 ->description('القيم المالية المطلوبة لتحديد قدرة العامل على استقبال الطلبات.')
@@ -146,9 +147,6 @@ final class CleaningWorkerInfolist
         ]);
     }
 
-    /** @var array<int, array<string, mixed>> */
-    private static array $summaryCache = [];
-
     /**
      * @return array<string, mixed>
      */
@@ -206,6 +204,7 @@ final class CleaningWorkerInfolist
     private static function fallbackAvatarUrl(Worker $worker): string
     {
         $name = rawurlencode($worker->user?->name ?: $worker->first_name ?: 'Worker');
+
         return "https://ui-avatars.com/api/?name={$name}&background=f3f4f6&color=111827";
     }
 
@@ -246,7 +245,8 @@ final class CleaningWorkerInfolist
 
     private static function preferredWorkTypeLabel(mixed $state): string
     {
-        $value = $state instanceof \BackedEnum ? $state->value : (string) $state;
+        $value = $state instanceof BackedEnum ? $state->value : (string) $state;
+
         return match ($value) {
             'cleaning' => 'تنظيف',
             'events' => 'مناسبات',
@@ -255,27 +255,11 @@ final class CleaningWorkerInfolist
         };
     }
 
-    /** @return array{gross_revenue: float, worker_net_earnings: float, admin_margin_total: float} */
-    private static function financialSummary(Worker $worker): array
+    private static function workerNetEarnings(Worker $worker): float
     {
-        $assignmentTotals = CleaningBookingWorkerAssignment::query()
-            ->where('worker_id', $worker->id)
-            ->selectRaw('COALESCE(SUM(service_share_amount + travel_fee + admin_margin_amount), 0) as gross_total')
-            ->selectRaw('COALESCE(SUM(worker_amount), 0) as worker_total')
-            ->selectRaw('COALESCE(SUM(admin_margin_amount), 0) as admin_total')
-            ->first();
+        $summary = self::summary($worker);
 
-        $legacyGross = (float) CleaningBooking::query()
-            ->where('worker_id', $worker->id)
-            ->whereDoesntHave('workerAssignments', fn ($query) => $query->where('worker_id', $worker->id))
-            ->where('status', 'completed')
-            ->sum('total_price');
-
-        return [
-            'gross_revenue' => (float) ($assignmentTotals?->gross_total ?? 0) + $legacyGross,
-            'worker_net_earnings' => (float) ($assignmentTotals?->worker_total ?? 0) + $legacyGross,
-            'admin_margin_total' => (float) ($assignmentTotals?->admin_total ?? 0),
-        ];
+        return max(0.0, (float) $summary['totalRevenue'] - (float) $summary['totalCommission']);
     }
 
     /** @return array<int, string> */
@@ -295,6 +279,7 @@ final class CleaningWorkerInfolist
             $day = $state[$key] ?? null;
             if (! is_array($day) || (isset($day['available']) && ! $day['available'])) {
                 $lines[] = $label.': غير متاح';
+
                 continue;
             }
 

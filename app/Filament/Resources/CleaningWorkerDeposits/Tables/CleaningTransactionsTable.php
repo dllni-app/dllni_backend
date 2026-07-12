@@ -24,7 +24,13 @@ final class CleaningTransactionsTable
                     ->sortable(),
                 TextColumn::make('worker.first_name')
                     ->label(__('cleaning_admin.transactions.fields.worker'))
-                    ->searchable()
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        return $query->whereHas('worker', function (Builder $workerQuery) use ($search): void {
+                            $workerQuery
+                                ->where('first_name', 'like', "%{$search}%")
+                                ->orWhereHas('user', fn (Builder $userQuery): Builder => $userQuery->where('name', 'like', "%{$search}%"));
+                        });
+                    })
                     ->placeholder('—'),
                 TextColumn::make('type')
                     ->label(__('cleaning_admin.transactions.fields.type'))
@@ -167,11 +173,10 @@ final class CleaningTransactionsTable
     /**
      * @return array<int, mixed>
      */
-    public static function exportRows(): array
+    public static function exportRows(Builder $query): array
     {
-        return CleaningDepositTransaction::query()
+        return $query
             ->with(['worker', 'createdByAdmin'])
-            ->latest()
             ->get()
             ->map(fn (CleaningDepositTransaction $tx): array => [
                 __('cleaning_admin.transactions.fields.id') => $tx->id,

@@ -724,7 +724,7 @@ return [
         'pricing' => [
             'final' => 'Final',
             'provisional' => 'Provisional',
-            'formula' => 'Base :base + add-ons :addons + travel :travel + cancellation :cancellation = total :total',
+            'formula' => 'Base :base + add-ons :addons + travel :travel + cancellation :cancellation + admin fee :admin = total :total',
             'worker_payout_formula' => 'Worker payout: share :share + travel :travel + admin :admin = :total',
             'worker_payout_formula_legacy' => 'Legacy payout: total :total - admin :admin = worker :worker',
         ],

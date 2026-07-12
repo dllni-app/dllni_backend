@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Models;
 
 use App\Models\Worker;
+use Closure;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -70,35 +71,37 @@ final class CleaningBookingWorkerAssignment extends Model
 
     protected function workerFinishedCleaningServices(): Attribute
     {
-        return $this->singleWorkerSnapshotFallback('worker_finished_cleaning_services');
+        return Attribute::make(
+            get: $this->snapshotFallbackGetter('worker_finished_cleaning_services'),
+        );
     }
 
     protected function workerFinishedPropertyRooms(): Attribute
     {
-        return $this->singleWorkerSnapshotFallback('worker_finished_property_rooms');
+        return Attribute::make(
+            get: $this->snapshotFallbackGetter('worker_finished_property_rooms'),
+        );
     }
 
-    private function singleWorkerSnapshotFallback(string $bookingColumn): Attribute
+    private function snapshotFallbackGetter(string $bookingColumn): Closure
     {
-        return Attribute::make(
-            get: function (mixed $value) use ($bookingColumn): array {
-                $snapshot = $this->normalizeSnapshotValue($value);
+        return function (mixed $value) use ($bookingColumn): array {
+            $snapshot = $this->normalizeSnapshotValue($value);
 
-                if ($snapshot !== []) {
-                    return $snapshot;
-                }
+            if ($snapshot !== []) {
+                return $snapshot;
+            }
 
-                $booking = $this->relationLoaded('booking')
-                    ? $this->booking
-                    : $this->booking()->first();
+            $booking = $this->relationLoaded('booking')
+                ? $this->booking
+                : $this->booking()->first();
 
-                if (! $booking instanceof CleaningBooking || max(1, (int) ($booking->number_of_workers ?? 1)) > 1) {
-                    return $snapshot;
-                }
+            if (! $booking instanceof CleaningBooking || max(1, (int) ($booking->number_of_workers ?? 1)) > 1) {
+                return $snapshot;
+            }
 
-                return $this->normalizeSnapshotValue($booking->getAttribute($bookingColumn));
-            },
-        );
+            return $this->normalizeSnapshotValue($booking->getAttribute($bookingColumn));
+        };
     }
 
     /** @return array<int, mixed> */
@@ -108,7 +111,7 @@ final class CleaningBookingWorkerAssignment extends Model
             return array_values($value);
         }
 
-        if (! is_string($value) || trim($value) === '') {
+        if (! is_string($value) || mb_trim($value) === '') {
             return [];
         }
 

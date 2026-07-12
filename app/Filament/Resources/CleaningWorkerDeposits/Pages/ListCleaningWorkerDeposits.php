@@ -11,14 +11,15 @@ use App\Filament\Resources\CleaningWorkerDeposits\Widgets\CleaningWorkerDepositS
 use App\Models\Worker;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Database\Eloquent\Builder;
 use Modules\Cleaning\Services\DepositService;
 use Modules\Cleaning\Services\WorkerDebtService;
 use Rap2hpoutre\FastExcel\FastExcel;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
 final class ListCleaningWorkerDeposits extends ListRecords
@@ -77,7 +78,7 @@ final class ListCleaningWorkerDeposits extends ListRecords
                     $depositService = app(DepositService::class);
                     $debtService = app(WorkerDebtService::class);
                     $amount = (float) $data['amount'];
-                    $notes = isset($data['notes']) && trim((string) $data['notes']) !== '' ? trim((string) $data['notes']) : null;
+                    $notes = isset($data['notes']) && mb_trim((string) $data['notes']) !== '' ? mb_trim((string) $data['notes']) : null;
 
                     try {
                         match ($data['type']) {
@@ -101,7 +102,7 @@ final class ListCleaningWorkerDeposits extends ListRecords
                 ->label(__('cleaning_admin.transactions.actions.export'))
                 ->icon('heroicon-o-arrow-down-tray')
                 ->color('gray')
-                ->action(fn () => (new FastExcel(CleaningTransactionsTable::exportRows()))
+                ->action(fn (): StreamedResponse => (new FastExcel(CleaningTransactionsTable::exportRows($this->getTableQueryForExport())))
                     ->download('cleaning-transactions-'.now()->format('Y-m-d').'.xlsx')),
         ];
     }

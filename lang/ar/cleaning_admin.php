@@ -772,7 +772,7 @@ return [
         'pricing' => [
             'final' => 'نهائي',
             'provisional' => 'مبدئي',
-            'formula' => 'الأساسي :base + الإضافات :addons + التنقل :travel + الإلغاء :cancellation = الإجمالي :total',
+            'formula' => 'الأساسي :base + الإضافات :addons + التنقل :travel + الإلغاء :cancellation + عمولة الإدارة :admin = الإجمالي :total',
             'worker_payout_formula' => 'مستحقات العامل: الحصة :share + التنقل :travel + الإدارة :admin = :total',
             'worker_payout_formula_legacy' => 'المعادلة القديمة: الإجمالي :total - الإدارة :admin = العامل :worker',
         ],

@@ -6,6 +6,7 @@ namespace App\Filament\Resources\CleaningBookings\Tables;
 
 use App\Filament\Resources\CleaningPriceAdjustmentRequests\CleaningPriceAdjustmentRequestResource;
 use App\Models\Worker;
+use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
@@ -389,7 +390,7 @@ final class CleaningBookingsTable
 
     private static function cancellationSourceLabel(mixed $state): string
     {
-        $value = $state instanceof \BackedEnum ? $state->value : $state;
+        $value = $state instanceof BackedEnum ? $state->value : $state;
 
         return match ((string) $value) {
             'customer' => 'ألغاه العميل',
@@ -400,7 +401,7 @@ final class CleaningBookingsTable
 
     private static function cancellationSourceColor(mixed $state): string
     {
-        $value = $state instanceof \BackedEnum ? $state->value : $state;
+        $value = $state instanceof BackedEnum ? $state->value : $state;
 
         return match ((string) $value) {
             'customer' => 'danger',
@@ -421,6 +422,7 @@ final class CleaningBookingsTable
             'addons' => self::money($record->addons_total),
             'travel' => self::money($record->travel_fee),
             'cancellation' => self::money($record->cancellation_fee),
+            'admin' => self::money($record->admin_margin_amount),
             'total' => self::money($record->total_price),
         ]);
     }
@@ -662,16 +664,16 @@ final class CleaningBookingsTable
 
     private static function workerLabel(Worker $worker): string
     {
-        return trim(($worker->first_name ?: $worker->user?->name ?: '-').' ('.($worker->user?->phone ?: '-').')');
+        return mb_trim(($worker->first_name ?: $worker->user?->name ?: '-').' ('.($worker->user?->phone ?: '-').')');
     }
 
     private static function headerLabel(string $label, string $description): HtmlString
     {
         return new HtmlString(
             '<span style="display:flex;flex-direction:column;line-height:1.2;">'
-                . '<span style="display:block;font-weight:600;color:inherit;">'.e($label).'</span>'
-                . '<span style="display:block;margin-top:2px;font-size:11px;font-weight:400;color:#9ca3af;">'.e($description).'</span>'
-                . '</span>',
+                .'<span style="display:block;font-weight:600;color:inherit;">'.e($label).'</span>'
+                .'<span style="display:block;margin-top:2px;font-size:11px;font-weight:400;color:#9ca3af;">'.e($description).'</span>'
+                .'</span>',
         );
     }
 }
