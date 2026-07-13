@@ -19,6 +19,7 @@ final class DisputeData extends Data
         public ?int $bookingId,
         public ?string $bookingType,
         public ?string $ticketNumber,
+        public ?string $description,
         public ?string $category,
         public ?string $status,
         public ?string $resolution,
