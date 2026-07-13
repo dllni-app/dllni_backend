@@ -34,6 +34,11 @@ final class CleaningWorkerDepositsResource extends Resource
         return __('cleaning_admin.transactions.nav_label');
     }
 
+    public static function getNavigationTooltip(): ?string
+    {
+        return __('cleaning_finance_guidance.navigation_tooltip');
+    }
+
     public static function getModelLabel(): string
     {
         return __('cleaning_admin.transactions.model');

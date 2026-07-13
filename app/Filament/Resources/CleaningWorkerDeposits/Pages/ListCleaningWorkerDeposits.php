@@ -10,11 +10,13 @@ use App\Filament\Resources\CleaningWorkerDeposits\Tables\CleaningTransactionsTab
 use App\Filament\Resources\CleaningWorkerDeposits\Widgets\CleaningWorkerDepositStats;
 use App\Models\Worker;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Modules\Cleaning\Services\DepositService;
 use Modules\Cleaning\Services\WorkerDebtService;
@@ -25,6 +27,11 @@ use Throwable;
 final class ListCleaningWorkerDeposits extends ListRecords
 {
     protected static string $resource = CleaningWorkerDepositsResource::class;
+
+    public function getSubheading(): string|Htmlable|null
+    {
+        return __('cleaning_finance_guidance.transactions_page_subtitle');
+    }
 
     protected function getHeaderWidgets(): array
     {
@@ -48,6 +55,8 @@ final class ListCleaningWorkerDeposits extends ListRecords
                         ->required(),
                     Select::make('type')
                         ->label(__('cleaning_admin.transactions.fields.type'))
+                        ->placeholder(__('cleaning_finance_guidance.placeholders.type'))
+                        ->helperText(__('cleaning_finance_guidance.select_helper'))
                         ->options([
                             'deposit' => __('cleaning_admin.transactions.types.deposit'),
                             'debt' => __('cleaning_finance.types.debt'),
@@ -56,6 +65,10 @@ final class ListCleaningWorkerDeposits extends ListRecords
                         ])
                         ->default('deposit')
                         ->required(),
+                    Placeholder::make('transaction_type_guide')
+                        ->label(__('cleaning_finance_guidance.title'))
+                        ->content(__('cleaning_finance_guidance.compact'))
+                        ->columnSpanFull(),
                     TextInput::make('amount')
                         ->label(__('cleaning_admin.transactions.fields.amount'))
                         ->numeric()
