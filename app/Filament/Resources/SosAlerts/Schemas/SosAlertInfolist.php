@@ -7,8 +7,8 @@ namespace App\Filament\Resources\SosAlerts\Schemas;
 use App\Enums\SOSStatus;
 use App\Filament\Resources\SosAlerts\Tables\SosAlertsTable;
 use App\Models\SosAlert;
-use Filament\Infolists\Components\Grid;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Schema;
 
 final class SosAlertInfolist
