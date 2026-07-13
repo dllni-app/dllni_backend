@@ -39,9 +39,14 @@ final class WorkerSeeder extends Seeder
                 'lng' => 37.1456,
                 'birthday' => '1993-04-12',
                 'preferred_work_type' => WorkerPreferredWorkType::Cleaning->value,
-                'deposit_balance' => 827500,
-                'deposited_total' => 1000000,
-                'withdrawn_total' => 0,
+                'average_rating' => 4.9,
+                'total_completed_jobs' => 18,
+                'trust_score' => 96,
+                'acceptance_rate' => 94.5,
+                'cancellation_rate' => 1.2,
+                'deposit_balance' => 800000,
+                'deposited_total' => 800000,
+                'withdrawn_total' => 80000,
                 'trust_reason' => 'سجل حجوزات مكتملة بدون شكاوى خلال آخر شهر.',
                 'deposit_transactions' => self::runaDepositTimeline($timelineNow),
             ],
@@ -55,8 +60,16 @@ final class WorkerSeeder extends Seeder
                 'lng' => 37.1082,
                 'birthday' => '1990-09-03',
                 'preferred_work_type' => WorkerPreferredWorkType::Events->value,
-                'deposit_balance' => 5000000,
+                'average_rating' => 4.7,
+                'total_completed_jobs' => 11,
+                'trust_score' => 91,
+                'acceptance_rate' => 90.0,
+                'cancellation_rate' => 2.5,
+                'deposit_balance' => 1100000,
+                'deposited_total' => 1000000,
+                'withdrawn_total' => 50000,
                 'trust_reason' => 'التزام جيد بمواعيد قبول الحجوزات.',
+                'deposit_transactions' => self::ahmadDepositTimeline($timelineNow),
             ],
             [
                 'email' => 'worker3@dllni.sy',
@@ -68,8 +81,16 @@ final class WorkerSeeder extends Seeder
                 'lng' => 37.1317,
                 'birthday' => '1996-01-25',
                 'preferred_work_type' => WorkerPreferredWorkType::Both->value,
-                'deposit_balance' => 5000000,
+                'average_rating' => 4.8,
+                'total_completed_jobs' => 15,
+                'trust_score' => 94,
+                'acceptance_rate' => 93.0,
+                'cancellation_rate' => 1.8,
+                'deposit_balance' => 800000,
+                'deposited_total' => 850000,
+                'withdrawn_total' => 50000,
                 'trust_reason' => 'تقييمات عملاء مرتفعة وثابتة.',
+                'deposit_transactions' => self::lailaDepositTimeline($timelineNow),
             ],
         ];
 
@@ -117,11 +138,11 @@ final class WorkerSeeder extends Seeder
                     'first_name' => $data['first_name'],
                     'gender' => $data['gender'],
                     'bio' => $data['bio'],
-                    'average_rating' => fake()->randomFloat(2, 4.2, 5.0),
-                    'total_completed_jobs' => fake()->numberBetween(50, 300),
-                    'trust_score' => fake()->numberBetween(80, 100),
-                    'acceptance_rate' => fake()->randomFloat(2, 85, 99),
-                    'cancellation_rate' => fake()->randomFloat(2, 0, 5),
+                    'average_rating' => $data['average_rating'],
+                    'total_completed_jobs' => $data['total_completed_jobs'],
+                    'trust_score' => $data['trust_score'],
+                    'acceptance_rate' => $data['acceptance_rate'],
+                    'cancellation_rate' => $data['cancellation_rate'],
                     'open_disputes_count' => 0,
                     'is_active' => true,
                     'is_suspended' => false,
@@ -136,6 +157,12 @@ final class WorkerSeeder extends Seeder
                 'first_name' => $data['first_name'],
                 'gender' => $data['gender'],
                 'bio' => $data['bio'],
+                'average_rating' => $data['average_rating'],
+                'total_completed_jobs' => $data['total_completed_jobs'],
+                'trust_score' => $data['trust_score'],
+                'acceptance_rate' => $data['acceptance_rate'],
+                'cancellation_rate' => $data['cancellation_rate'],
+                'open_disputes_count' => 0,
                 'is_verified' => true,
                 'is_featured' => $index === 0,
                 'is_active' => true,
@@ -157,19 +184,24 @@ final class WorkerSeeder extends Seeder
 
             $worker->forceFill($workerUpdates)->save();
 
+            CleaningDepositTransaction::query()
+                ->where('worker_id', $worker->id)
+                ->where('reference', 'like', 'seed-%')
+                ->delete();
+
             CleaningWorkerDeposit::updateOrCreate(
                 ['worker_id' => $worker->id],
                 self::onlyExistingColumns('cleaning_worker_deposits', [
                     'current_balance' => $data['deposit_balance'],
-                    'deposited_total' => $data['deposited_total'] ?? $data['deposit_balance'],
-                    'withdrawn_total' => $data['withdrawn_total'] ?? 0,
+                    'deposited_total' => $data['deposited_total'],
+                    'withdrawn_total' => $data['withdrawn_total'],
                     'minimum_required' => 50000,
                     'max_negative_balance' => 0,
                     'is_active' => true,
                 ])
             );
 
-            foreach ($data['deposit_transactions'] ?? [] as $transactionData) {
+            foreach ($data['deposit_transactions'] as $transactionData) {
                 self::upsertDepositTransaction($worker, $transactionData);
             }
 
@@ -217,63 +249,65 @@ final class WorkerSeeder extends Seeder
         }
     }
 
-    /**
-     * @return array<int, array<string, mixed>>
-     */
+    /** @return array<int, array<string, mixed>> */
     private static function runaDepositTimeline(CarbonImmutable $now): array
     {
         return [
-            [
-                'type' => 'deposit',
-                'amount' => 500000,
-                'balance_before' => 0,
-                'balance_after' => 500000,
-                'reference' => 'seed-runa-opening-deposit',
-                'notes' => 'إيداع التأمين الافتتاحي لعامل التنظيف.',
-                'created_at' => $now->subDays(14)->setTime(10, 15),
-            ],
-            [
-                'type' => 'deposit',
-                'amount' => 500000,
-                'balance_before' => 500000,
-                'balance_after' => 1000000,
-                'reference' => 'seed-runa-second-deposit',
-                'notes' => 'تعزيز رصيد التأمين قبل استقبال طلبات إضافية.',
-                'created_at' => $now->subDays(10)->setTime(12, 30),
-            ],
-            [
-                'type' => 'admin_fee',
-                'amount' => 45000,
-                'balance_before' => 1000000,
-                'balance_after' => 955000,
-                'reference' => 'seed-runa-admin-fee-1',
-                'notes' => 'مديونية عمولة الإدارة عن طلب تنظيف مكتمل.',
-                'created_at' => $now->subDays(7)->setTime(16, 10),
-            ],
-            [
-                'type' => 'admin_fee',
-                'amount' => 57500,
-                'balance_before' => 955000,
-                'balance_after' => 897500,
-                'reference' => 'seed-runa-admin-fee-2',
-                'notes' => 'مديونية عمولة الإدارة عن طلب تنظيف عميق.',
-                'created_at' => $now->subDays(4)->setTime(18, 5),
-            ],
-            [
-                'type' => 'admin_fee',
-                'amount' => 70000,
-                'balance_before' => 897500,
-                'balance_after' => 827500,
-                'reference' => 'seed-runa-admin-fee-3',
-                'notes' => 'مديونية عمولة الإدارة عن طلب مناسبة مكتمل.',
-                'created_at' => $now->subDay()->setTime(20, 20),
-            ],
+            self::transaction('deposit', 500000, 0, 500000, 'seed-runa-opening-deposit', 'إيداع التأمين الافتتاحي.', $now->subDays(20)->setTime(10, 15)),
+            self::transaction('deposit', 300000, 500000, 800000, 'seed-runa-second-deposit', 'تعزيز رصيد التأمين قبل استقبال طلبات إضافية.', $now->subDays(15)->setTime(12, 30)),
+            self::transaction('debt', 200000, 800000, 1000000, 'seed-runa-platform-debt', 'تمويل مؤقت من الإدارة لتغطية التزامات تشغيلية.', $now->subDays(10)->setTime(11, 0)),
+            self::transaction('settlement', 120000, 1000000, 880000, 'seed-runa-debt-settlement', 'تسوية جزئية للدين الممول من الإدارة.', $now->subDays(5)->setTime(17, 20), 120000),
+            self::transaction('refund', 80000, 880000, 800000, 'seed-runa-refund', 'استرداد جزء من رصيد التأمين بناءً على طلب العامل.', $now->subDay()->setTime(14, 45)),
         ];
     }
 
-    /**
-     * @param  array<string, mixed>  $transactionData
-     */
+    /** @return array<int, array<string, mixed>> */
+    private static function ahmadDepositTimeline(CarbonImmutable $now): array
+    {
+        return [
+            self::transaction('deposit', 1000000, 0, 1000000, 'seed-ahmad-opening-deposit', 'إيداع تأمين للعامل قبل بدء استقبال طلبات المناسبات.', $now->subDays(18)->setTime(9, 30)),
+            self::transaction('debt', 250000, 1000000, 1250000, 'seed-ahmad-platform-debt', 'رصيد ممول من الإدارة لتجهيز مستلزمات مناسبة كبيرة.', $now->subDays(12)->setTime(13, 10)),
+            self::transaction('settlement', 100000, 1250000, 1150000, 'seed-ahmad-debt-settlement', 'دفعة تسوية جزئية من العامل.', $now->subDays(6)->setTime(16, 5), 100000),
+            self::transaction('refund', 50000, 1150000, 1100000, 'seed-ahmad-refund', 'استرداد جزئي من التأمين بعد انخفاض حجم الطلبات.', $now->subDays(2)->setTime(11, 40)),
+        ];
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private static function lailaDepositTimeline(CarbonImmutable $now): array
+    {
+        return [
+            self::transaction('deposit', 750000, 0, 750000, 'seed-laila-opening-deposit', 'إيداع التأمين الأساسي.', $now->subDays(22)->setTime(10, 0)),
+            self::transaction('debt', 100000, 750000, 850000, 'seed-laila-platform-debt', 'دعم مالي مؤقت من الإدارة.', $now->subDays(14)->setTime(15, 25)),
+            self::transaction('settlement', 100000, 850000, 750000, 'seed-laila-full-settlement', 'تسوية الدين الممول بالكامل.', $now->subDays(9)->setTime(18, 0), 100000),
+            self::transaction('refund', 50000, 750000, 700000, 'seed-laila-refund', 'استرداد جزء من التأمين.', $now->subDays(4)->setTime(12, 15)),
+            self::transaction('deposit', 100000, 700000, 800000, 'seed-laila-top-up', 'إعادة تعزيز رصيد التأمين.', $now->subDay()->setTime(9, 50)),
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private static function transaction(
+        string $type,
+        float $amount,
+        float $balanceBefore,
+        float $balanceAfter,
+        string $reference,
+        string $notes,
+        CarbonImmutable $createdAt,
+        float $debtSettledAmount = 0,
+    ): array {
+        return [
+            'type' => $type,
+            'amount' => $amount,
+            'debt_settled_amount' => $debtSettledAmount,
+            'balance_before' => $balanceBefore,
+            'balance_after' => $balanceAfter,
+            'reference' => $reference,
+            'notes' => $notes,
+            'created_at' => $createdAt,
+        ];
+    }
+
+    /** @param array<string, mixed> $transactionData */
     private static function upsertDepositTransaction(Worker $worker, array $transactionData): void
     {
         $createdAt = $transactionData['created_at'] ?? now();
@@ -284,10 +318,10 @@ final class WorkerSeeder extends Seeder
                 'reference' => $transactionData['reference'],
             ],
             self::onlyExistingColumns('cleaning_deposit_transactions', [
-                'cleaning_booking_id' => $transactionData['cleaning_booking_id'] ?? null,
                 'created_by_admin_id' => $transactionData['created_by_admin_id'] ?? null,
                 'type' => $transactionData['type'],
                 'amount' => $transactionData['amount'],
+                'debt_settled_amount' => $transactionData['debt_settled_amount'] ?? 0,
                 'balance_before' => $transactionData['balance_before'],
                 'balance_after' => $transactionData['balance_after'],
                 'notes' => $transactionData['notes'] ?? null,
