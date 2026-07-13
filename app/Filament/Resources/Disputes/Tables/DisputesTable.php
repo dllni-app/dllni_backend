@@ -42,15 +42,13 @@ final class DisputesTable
                     ->placeholder('-'),
                 TextColumn::make('customer_phone')
                     ->label('رقم هاتف العميل')
-                    ->getStateUsing(fn (Dispute $record): ?string => $record->booking?->customer?->phone)
+                    ->getStateUsing(fn (Dispute $record): ?string => self::customerPhone($record))
                     ->placeholder('-')
                     ->copyable()
                     ->toggleable(),
                 TextColumn::make('worker_phone')
                     ->label('رقم هاتف العامل')
-                    ->getStateUsing(fn (Dispute $record): ?string => $record->booking instanceof CleaningBooking
-                        ? $record->booking->worker?->user?->phone
-                        : null)
+                    ->getStateUsing(fn (Dispute $record): ?string => self::workerPhone($record))
                     ->placeholder('-')
                     ->copyable()
                     ->toggleable(),
@@ -108,6 +106,28 @@ final class DisputesTable
                     ->label(__('cleaning_admin.shared.actions.edit'))
                     ->url(fn (Dispute $record): string => DisputeResource::getUrl('edit', ['record' => $record])),
             ]);
+    }
+
+    private static function customerPhone(Dispute $record): ?string
+    {
+        $booking = $record->booking;
+
+        if (! ($booking instanceof CleaningBooking || $booking instanceof EventBooking)) {
+            return null;
+        }
+
+        return $booking->customer?->phone;
+    }
+
+    private static function workerPhone(Dispute $record): ?string
+    {
+        $booking = $record->booking;
+
+        if (! $booking instanceof CleaningBooking) {
+            return null;
+        }
+
+        return $booking->worker?->user?->phone;
     }
 
     private static function statusColor(DisputeStatus|string|null $status): string
