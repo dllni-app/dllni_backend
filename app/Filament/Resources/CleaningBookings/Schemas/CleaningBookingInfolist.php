@@ -10,6 +10,7 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
+use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class CleaningBookingInfolist
@@ -25,6 +26,11 @@ final class CleaningBookingInfolist
                             ->label('الحالة')
                             ->badge()
                             ->formatStateUsing(fn ($state): string => $state?->label() ?? '-'),
+                        TextEntry::make('booking_kind')
+                            ->label('نوع الحجز')
+                            ->state(fn ($record): string => self::bookingKindLabel($record))
+                            ->badge()
+                            ->color(fn ($record): string => self::bookingKindColor($record)),
                         TextEntry::make('cancelled_at')
                             ->label('وقت الإلغاء')
                             ->formatStateUsing(fn ($state): string => self::dateTime($state))
@@ -39,13 +45,15 @@ final class CleaningBookingInfolist
                             ->visible(fn ($record): bool => filled($record->cancelled_by_role)),
                         TextEntry::make('property_type')
                             ->label('نوع العقار')
-                            ->formatStateUsing(fn (?string $state): string => self::propertyTypeLabel($state)),
+                            ->formatStateUsing(fn (?string $state): string => self::propertyTypeLabel($state))
+                            ->visible(fn ($record): bool => ! self::isEventAssistance($record)),
                         TextEntry::make('number_of_workers')
                             ->label('عدد العاملين')
                             ->formatStateUsing(fn ($state): string => self::integer($state)),
                         TextEntry::make('estimated_sqm')
                             ->label('المساحة التقديرية')
-                            ->formatStateUsing(fn ($state): string => self::integer($state)),
+                            ->formatStateUsing(fn ($state): string => self::integer($state))
+                            ->visible(fn ($record): bool => ! self::isEventAssistance($record)),
                         TextEntry::make('estimated_hours')
                             ->label('الساعات التقديرية')
                             ->formatStateUsing(fn ($state): string => self::integer($state)),
@@ -80,7 +88,7 @@ final class CleaningBookingInfolist
                         TextEntry::make('property_details.notes')->label('ملاحظات')->placeholder('-'),
                     ])
                     ->columns(2)
-                    ->visible(fn ($record): bool => $record->property_type === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE),
+                    ->visible(fn ($record): bool => self::isEventAssistance($record)),
                 Section::make('التسعير')
                     ->schema([
                         TextEntry::make('base_price')->label('السعر الأساسي')->formatStateUsing(fn ($state): string => self::money($state)),
@@ -121,7 +129,8 @@ final class CleaningBookingInfolist
                             ->state(fn ($record): string => self::integer($record->remainingWorkerCount())),
                         TextEntry::make('room_coverage')
                             ->label('تغطية الغرف')
-                            ->state(fn ($record): string => self::roomCoverageLabel($record)),
+                            ->state(fn ($record): string => self::roomCoverageLabel($record))
+                            ->visible(fn ($record): bool => ! self::isEventAssistance($record)),
                     ])
                     ->columns(3),
                 Section::make('العاملون المقبولون')
@@ -139,8 +148,16 @@ final class CleaningBookingInfolist
                                     ->label('تاريخ القبول')
                                     ->formatStateUsing(fn ($state): string => self::dateTime($state))
                                     ->placeholder('-'),
-                                TextEntry::make('room_count')->label('عدد الغرف')->formatStateUsing(fn ($state): string => self::integer($state))->placeholder('-'),
-                                TextEntry::make('rooms_weight')->label('وزن الغرف')->formatStateUsing(fn ($state): string => self::integer($state))->placeholder('-'),
+                                TextEntry::make('room_count')
+                                    ->label('عدد الغرف')
+                                    ->formatStateUsing(fn ($state): string => self::integer($state))
+                                    ->placeholder('-')
+                                    ->visible(fn (CleaningBookingWorkerAssignment $record): bool => ! self::isEventAssistance($record->booking)),
+                                TextEntry::make('rooms_weight')
+                                    ->label('وزن الغرف')
+                                    ->formatStateUsing(fn ($state): string => self::integer($state))
+                                    ->placeholder('-')
+                                    ->visible(fn (CleaningBookingWorkerAssignment $record): bool => ! self::isEventAssistance($record->booking)),
                                 TextEntry::make('service_share_amount')->label('حصة الخدمة')->formatStateUsing(fn ($state): string => self::money($state)),
                                 TextEntry::make('travel_fee')->label('رسوم التنقل')->formatStateUsing(fn ($state): string => self::money($state)),
                                 TextEntry::make('admin_margin_amount')->label('هامش الإدارة')->formatStateUsing(fn ($state): string => self::money($state)),
@@ -163,7 +180,7 @@ final class CleaningBookingInfolist
                             ])
                             ->columns(3),
                     ])
-                    ->visible(fn ($record): bool => $record->rooms()->exists()),
+                    ->visible(fn ($record): bool => ! self::isEventAssistance($record) && $record->rooms()->exists()),
                 Section::make('تفصيل المستحقات')
                     ->schema([
                         TextEntry::make('worker_share_total')->label('إجمالي حصة العامل')->state(fn ($record): string => self::money(self::acceptedAssignmentsTotal($record, 'service_share_amount'))),
@@ -178,6 +195,22 @@ final class CleaningBookingInfolist
                     ])
                     ->visible(fn ($record): bool => $record->disputes()->exists()),
             ]);
+    }
+
+    private static function bookingKindLabel(mixed $record): string
+    {
+        return self::isEventAssistance($record) ? 'مساعدة مناسبة' : 'تنظيف عادي';
+    }
+
+    private static function bookingKindColor(mixed $record): string
+    {
+        return self::isEventAssistance($record) ? 'warning' : 'info';
+    }
+
+    private static function isEventAssistance(mixed $record): bool
+    {
+        return $record !== null
+            && $record->property_type === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE;
     }
 
     private static function preferredWorkerNames(mixed $record): array
@@ -208,6 +241,10 @@ final class CleaningBookingInfolist
 
     private static function roomCoverageLabel(mixed $record): string
     {
+        if (self::isEventAssistance($record)) {
+            return 'غير مطبق';
+        }
+
         $totalRooms = max(0, (int) $record->rooms()->count());
         if ($totalRooms === 0) {
             return '-';
@@ -269,7 +306,7 @@ final class CleaningBookingInfolist
             'house' => 'منزل',
             'office' => 'مكتب',
             'studio' => 'استوديو',
-            'event_assistance' => 'مساعدة المناسبات',
+            'event_assistance' => 'مساعدة مناسبة',
             null, '' => '-',
             default => $value,
         };
