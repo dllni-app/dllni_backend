@@ -92,6 +92,21 @@ it('allows an admin to load cleaning neighborhoods and geographic coverage pages
         ->assertSuccessful();
 });
 
+it('keeps geographic coverage read-only and links to canonical neighborhood management', function (): void {
+    $neighborhood = CleaningNeighborhood::factory()->create([
+        'name_ar' => 'Coverage test neighborhood',
+    ]);
+
+    Livewire::test(GeographicCoverage::class)
+        ->assertCanSeeTableRecords([$neighborhood])
+        ->assertTableActionDoesNotExist('edit', record: $neighborhood)
+        ->assertTableActionDoesNotExist('toggle_active', record: $neighborhood)
+        ->assertTableBulkActionDoesNotExist('activate')
+        ->assertTableBulkActionDoesNotExist('deactivate')
+        ->assertSee(CleaningNeighborhoodResource::getUrl('index', [], isAbsolute: false), escape: false)
+        ->assertDontSee(CleaningNeighborhoodResource::getUrl('create', [], isAbsolute: false), escape: false);
+});
+
 it('allows an admin to load and submit the cleaning neighborhood create form', function (): void {
     $this->get(CleaningNeighborhoodResource::getUrl('create', [], isAbsolute: false))
         ->assertSuccessful();

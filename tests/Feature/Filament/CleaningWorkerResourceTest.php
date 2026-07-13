@@ -49,6 +49,17 @@ it('creates a cleaning worker and syncs the linked user account', function (): v
         ->and($linkedUser->module_type)->toBe(UserModuleType::CleaningWorker);
 });
 
+it('shows required validation errors for an empty cleaning worker form', function (): void {
+    Livewire::test(CreateCleaningWorker::class)
+        ->fillForm([])
+        ->call('create')
+        ->assertHasFormErrors([
+            'first_name',
+            'user_phone',
+            'user_password',
+        ]);
+});
+
 it('rejects cleaning worker account phones outside the Syrian +963 mobile format', function (): void {
     Livewire::test(CreateCleaningWorker::class)
         ->fillForm([

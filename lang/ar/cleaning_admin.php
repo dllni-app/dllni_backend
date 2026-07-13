@@ -339,14 +339,36 @@ return [
 
     'event_bookings' => [
         'nav_label' => 'حجوزات المناسبات',
+        'sections' => [
+            'booking' => 'بيانات الحجز',
+            'schedule' => 'الجدول الزمني',
+            'pricing' => 'التسعير',
+            'policies' => 'السياسات',
+            'services' => 'الخدمات المرتبطة',
+        ],
         'fields' => [
             'booking_number' => 'رقم الحجز',
             'status' => 'الحالة',
             'event_type' => 'نوع المناسبة',
             'customer' => 'العميل',
+            'guest_count_min' => 'الحد الأدنى للضيوف',
+            'guest_count_max' => 'الحد الأقصى للضيوف',
+            'gender_preference' => 'تفضيل الجنس',
+            'suggested_team_size' => 'حجم الفريق المقترح',
             'scheduled_date' => 'التاريخ',
             'scheduled_time' => 'الوقت',
+            'total_hours' => 'عدد الساعات',
+            'terms_accepted' => 'تمت الموافقة على الشروط',
+            'cancelled_at' => 'وقت الإلغاء',
+            'base_price' => 'السعر الأساسي',
+            'travel_fee' => 'رسوم التنقل',
             'total_price' => 'الإجمالي',
+            'cancellation_policy' => 'سياسة الإلغاء',
+            'billing_policy' => 'سياسة الفوترة',
+            'service' => 'الخدمة',
+            'quantity' => 'الكمية',
+            'unit_price' => 'سعر الوحدة',
+            'service_total_price' => 'إجمالي الخدمة',
         ],
         'filters' => [
             'has_dispute' => 'يحتوي على نزاع',
@@ -413,6 +435,10 @@ return [
             'active' => 'الإضافات النشطة',
             'fixed' => 'سعر ثابت',
             'percentage' => 'نسبة مئوية',
+        ],
+        'validation' => [
+            'min_price' => 'يجب أن يكون السعر صفراً أو أكبر.',
+            'decimal_price' => 'يسمح السعر بمنزلتين عشريتين كحد أقصى.',
         ],
     ],
 
@@ -799,6 +825,7 @@ return [
             'description' => 'إدارة التسعير الأساسي والإضافات والعمولة وتكاليف التنقل وسياسة فوترة الوقت.',
         ],
         'geographic_coverage' => [
+            'manage_neighborhoods' => 'إدارة الأحياء',
             'title' => 'التغطية الجغرافية',
             'description' => 'عرض الطلب مقابل تغطية العاملين حسب المنطقة لاكتشاف الفجوات.',
             'search_placeholder' => 'ابحث باسم المنطقة...',
@@ -826,7 +853,7 @@ return [
                 'workers' => 'العاملون',
             ],
         ],
-        'geographic_coverage' => [
+        'geographic_coverage_legacy' => [
             'title' => 'التغطية الجغرافية',
             'description' => 'قائمة الأحياء مع عدد العاملين ومستوى التغطية.',
             'search_placeholder' => 'ابحث باسم الحي...',

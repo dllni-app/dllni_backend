@@ -21,12 +21,12 @@ use Modules\Cleaning\Models\CleaningNeighborhood;
 
 final class CleaningNeighborhoodsTable
 {
-    public static function configure(Table $table): Table
+    public static function configure(Table $table, bool $withManagementActions = true): Table
     {
         $thresholds = CleaningFinancialSetting::query()->first()?->coverage_thresholds ?? ['low' => 3, 'ok' => 7];
         $highCoverageThreshold = (int) ($thresholds['ok'] ?? 7);
 
-        return $table
+        $table = $table
             ->defaultSort('sort_order')
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->addSelect([
                 'workers_count' => WorkerZone::query()
@@ -61,7 +61,13 @@ final class CleaningNeighborhoodsTable
             ->filters([
                 TernaryFilter::make('is_active')
                     ->label(__('cleaning_admin.cleaning_neighborhoods.filters.is_active')),
-            ])
+            ]);
+
+        if (! $withManagementActions) {
+            return $table;
+        }
+
+        return $table
             ->recordActions([
                 EditAction::make()
                     ->label(__('cleaning_admin.shared.actions.edit'))

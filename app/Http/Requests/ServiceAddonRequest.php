@@ -21,7 +21,7 @@ final class ServiceAddonRequest extends FormRequest
             'name' => 'required|string|max:255',
             'slug' => 'required|string|max:255|unique:service_addons,slug,'.($serviceAddon?->id ?? 'NULL'),
             'pricingType' => 'required|string|in:fixed,percentage',
-            'priceValue' => 'required|numeric|min:0',
+            'priceValue' => 'required|numeric|min:0|decimal:0,2',
             'isActive' => 'nullable|boolean',
         ];
     }

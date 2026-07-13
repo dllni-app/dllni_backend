@@ -66,12 +66,13 @@ final class GeographicCoverage extends Page implements HasTable
     public function table(Table $table): Table
     {
         return CleaningNeighborhoodsTable::configure(
-            $table->query(CleaningNeighborhood::query())
+            $table->query(CleaningNeighborhood::query()),
+            withManagementActions: false,
         )->headerActions([
-            Action::make('create')
-                ->label(__('cleaning_admin.cleaning_neighborhoods.actions.create'))
-                ->icon('heroicon-o-plus')
-                ->url(CleaningNeighborhoodResource::getUrl('create')),
+            Action::make('manage')
+                ->label(__('cleaning_admin.pages.geographic_coverage.manage_neighborhoods'))
+                ->icon('heroicon-o-map-pin')
+                ->url(CleaningNeighborhoodResource::getUrl('index')),
         ]);
     }
 }

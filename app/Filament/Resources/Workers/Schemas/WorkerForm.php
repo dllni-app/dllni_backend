@@ -28,6 +28,7 @@ final class WorkerForm
                     ->schema([
                         TextInput::make('first_name')
                             ->label(__('cleaning_admin.workers.fields.first_name'))
+                            ->validationMessages(['required' => __('validation.required')])
                             ->required(),
                         Select::make('gender')
                             ->label(__('cleaning_admin.workers.fields.gender'))
@@ -40,6 +41,7 @@ final class WorkerForm
                             ->label(__('cleaning_admin.workers.fields.preferred_work_type'))
                             ->options(WorkerPreferredWorkType::options())
                             ->default(WorkerPreferredWorkType::Both->value)
+                            ->validationMessages(['required' => __('validation.required')])
                             ->required(),
                         DatePicker::make('birthday')
                             ->label(__('cleaning_admin.workers.fields.birthday'))
@@ -78,6 +80,7 @@ final class WorkerForm
                                 'inputmode' => 'tel',
                                 'pattern' => '^\\+9639[0-9]{8}$',
                             ])
+                            ->validationMessages(['required' => __('validation.required')])
                             ->required(fn (string $operation): bool => $operation === 'create')
                             ->rules(fn (?Worker $record, string $operation): array => [
                                 self::syrianPhoneFormatRule(),
@@ -89,6 +92,7 @@ final class WorkerForm
                             ->password()
                             ->revealable()
                             ->autocomplete('new-password')
+                            ->validationMessages(['required' => __('validation.required')])
                             ->required(fn (string $operation): bool => $operation === 'create')
                             ->minLength(8)
                             ->dehydrated(false),
@@ -103,7 +107,7 @@ final class WorkerForm
                 return;
             }
 
-            if (! is_string($value) || preg_match('/^\+9639\d{8}$/', trim($value)) !== 1) {
+            if (! is_string($value) || preg_match('/^\+9639\d{8}$/', mb_trim($value)) !== 1) {
                 $fail('أدخل رقم هاتف سوري بصيغة +9639XXXXXXXX، مثل +963912345678.');
             }
         };
@@ -116,7 +120,7 @@ final class WorkerForm
                 return;
             }
 
-            $user = User::query()->where('phone', trim((string) $value))->first();
+            $user = User::query()->where('phone', mb_trim((string) $value))->first();
 
             if (! $user instanceof User) {
                 return;
