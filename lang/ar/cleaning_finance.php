@@ -22,6 +22,7 @@ return [
     'references' => [
         'admin_debt' => 'دين مضاف من الإدارة',
         'admin_manual_debt' => 'دين مضاف من شاشة المعاملات',
+        'automatic_admin_commission' => 'مديونية إدارة مسجلة تلقائياً',
     ],
     'report' => [
         'outstanding_admin_due' => 'إجمالي مستحقات الإدارة (العمولات + الديون)',

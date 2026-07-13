@@ -37,9 +37,17 @@ it('returns the financial statistics shown to the admin after selecting a cleani
         'is_active' => true,
     ]);
 
-    createCleaningTransaction($worker, 'debt', 4000, 0, 7000, 11000);
-    createCleaningTransaction($worker, 'admin_fee', 2000, 0, 11000, 9000);
-    createCleaningTransaction($worker, 'settlement', 1000, 1000, 9000, 8000);
+    createCleaningTransaction($worker, 'debt', 4000, 0, 7000, 11000, 'test_manual_debt');
+    createCleaningTransaction(
+        $worker,
+        'debt',
+        2000,
+        0,
+        11000,
+        9000,
+        CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'test',
+    );
+    createCleaningTransaction($worker, 'settlement', 1000, 1000, 9000, 8000, 'test_settlement');
 
     $snapshot = app(AdminCleaningTransactionService::class)->snapshot($worker->fresh(['deposit']));
 
@@ -67,7 +75,7 @@ it('validates settlement and refund amounts before creating the transaction', fu
         'is_active' => true,
     ]);
 
-    createCleaningTransaction($worker, 'debt', 4000, 0, 3000, 7000);
+    createCleaningTransaction($worker, 'debt', 4000, 0, 3000, 7000, 'test_manual_debt');
 
     $service = app(AdminCleaningTransactionService::class);
     $freshWorker = $worker->fresh(['deposit']);
@@ -124,6 +132,7 @@ function createCleaningTransaction(
     float $debtSettledAmount,
     float $balanceBefore,
     float $balanceAfter,
+    string $reference,
 ): CleaningDepositTransaction {
     return CleaningDepositTransaction::query()->create([
         'worker_id' => $worker->id,
@@ -132,6 +141,6 @@ function createCleaningTransaction(
         'debt_settled_amount' => $debtSettledAmount,
         'balance_before' => $balanceBefore,
         'balance_after' => $balanceAfter,
-        'reference' => 'test_'.$type,
+        'reference' => $reference,
     ]);
 }

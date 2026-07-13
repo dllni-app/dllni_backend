@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningWorkers\Schemas;
 
+use App\Models\CleaningDepositTransaction;
 use App\Models\Worker;
 use BackedEnum;
 use Filament\Infolists\Components\ImageEntry;
@@ -84,7 +85,7 @@ final class CleaningWorkerInfolist
                 ->schema([
                     TextEntry::make('deposit.current_balance')->label('الرصيد الحالي')->money('SYP')->placeholder('SYP 0.00'),
                     TextEntry::make('deposit.deposited_total')->label('إجمالي الإيداع')->money('SYP')->placeholder('SYP 0.00'),
-                    TextEntry::make('deposit.withdrawn_total')->label('إجمالي السحب')->money('SYP')->placeholder('SYP 0.00'),
+                    TextEntry::make('deposit.withdrawn_total')->label('إجمالي الاسترداد')->money('SYP')->placeholder('SYP 0.00'),
                     TextEntry::make('deposit.minimum_required')->label('الحد الأدنى المطلوب')->money('SYP')->placeholder('SYP 0.00'),
                     TextEntry::make('deposit.max_negative_balance')->label('الحد الأقصى للرصيد السالب')->money('SYP')->placeholder('SYP 0.00'),
                     TextEntry::make('dispatch_eligibility')
@@ -103,7 +104,7 @@ final class CleaningWorkerInfolist
                     TextEntry::make('default_working_hours')->label('ساعات العمل الافتراضية')->state(fn (Worker $record): array => self::workingHours($record->default_working_hours))->listWithLineBreaks()->columnSpanFull(),
                 ]),
             Section::make('الملخص المالي')
-                ->description('نظرة مالية كاملة على التأمين وعمولات الإدارة والتسويات.')
+                ->description('نظرة مالية كاملة على التأمين ومستحقات الإدارة والتسويات.')
                 ->columns(4)
                 ->schema([
                     TextEntry::make('fin_current_deposit')->label('قيمة التأمين الحالية')
@@ -112,7 +113,7 @@ final class CleaningWorkerInfolist
                         ->state(fn (Worker $record): string => self::number(self::summary($record)['completedJobs'])),
                     TextEntry::make('fin_total_revenue')->label('إجمالي الإيرادات')
                         ->state(fn (Worker $record): string => self::money(self::summary($record)['totalRevenue'])),
-                    TextEntry::make('fin_commission_due')->label('عمولة الإدارة المستحقة')
+                    TextEntry::make('fin_commission_due')->label('المستحق للإدارة')
                         ->state(fn (Worker $record): string => self::money(self::summary($record)['commissionDue'])),
                     TextEntry::make('fin_total_settled')->label('إجمالي المبالغ المسددة')
                         ->state(fn (Worker $record): string => self::money(self::summary($record)['totalSettled'])),
@@ -126,18 +127,18 @@ final class CleaningWorkerInfolist
                         ->color(fn (Worker $record): string => self::accountStatusColor(self::summary($record)['status'])),
                 ]),
             Section::make('سجل المعاملات المالية')
-                ->description('جميع عمليات الإيداع والتسوية والاسترداد والتعديلات وعمولات الإدارة.')
+                ->description('عمليات الإيداع والدين والتسوية والاسترداد.')
                 ->schema([
                     RepeatableEntry::make('depositTransactions')
                         ->hiddenLabel()
-                        ->state(fn (Worker $record) => $record->depositTransactions()->with('createdByAdmin')->latest()->limit(100)->get())
+                        ->state(fn (Worker $record) => $record->depositTransactions()->publiclyVisible()->with('createdByAdmin')->latest()->limit(100)->get())
                         ->schema([
                             TextEntry::make('type')->label('النوع')
                                 ->badge()
                                 ->color(fn ($state): string => self::txTypeColor((string) $state))
                                 ->formatStateUsing(fn ($state): string => self::txTypeLabel((string) $state)),
                             TextEntry::make('amount')->label('المبلغ')->money('SYP'),
-                            TextEntry::make('balance_after')->label('الرصيد عند هذه العمولة')->money('SYP'),
+                            TextEntry::make('balance_after')->label('الرصيد بعد المعاملة')->money('SYP'),
                             TextEntry::make('created_at')->label('التاريخ')->dateTime('Y-m-d H:i'),
                             TextEntry::make('notes')->label('ملاحظات')->placeholder('-'),
                             TextEntry::make('createdByAdmin.name')->label('بواسطة')->placeholder('—'),
@@ -180,11 +181,9 @@ final class CleaningWorkerInfolist
     {
         return match ($type) {
             'deposit' => 'إيداع',
+            'debt' => 'دين',
             'settlement' => 'تسوية',
             'refund' => 'استرداد',
-            'withdrawal' => 'استرداد (سابق)',
-            'admin_fee' => 'عمولة الإدارة',
-            'adjustment' => 'تعديل',
             default => $type,
         };
     }
@@ -193,10 +192,9 @@ final class CleaningWorkerInfolist
     {
         return match ($type) {
             'deposit' => 'success',
+            'debt' => 'danger',
             'settlement' => 'primary',
-            'refund', 'withdrawal' => 'warning',
-            'admin_fee' => 'danger',
-            'adjustment' => 'gray',
+            'refund' => 'warning',
             default => 'gray',
         };
     }

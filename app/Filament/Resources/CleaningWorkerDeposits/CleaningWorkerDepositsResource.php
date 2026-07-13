@@ -71,8 +71,8 @@ final class CleaningWorkerDepositsResource extends Resource
                     TextEntry::make('worker.first_name')->label(__('cleaning_admin.transactions.fields.worker'))->placeholder('—'),
                     TextEntry::make('type')->label(__('cleaning_admin.transactions.fields.type'))
                         ->badge()
-                        ->color(fn (string $state): string => CleaningTransactionsTable::typeColor($state))
-                        ->formatStateUsing(fn (string $state): string => CleaningTransactionsTable::typeLabel($state)),
+                        ->color(fn (CleaningDepositTransaction $record): string => CleaningTransactionsTable::typeColor($record->publicType()))
+                        ->formatStateUsing(fn (CleaningDepositTransaction $record): string => CleaningTransactionsTable::typeLabel($record->publicType())),
                     TextEntry::make('amount')->label(__('cleaning_admin.transactions.fields.amount'))->money('SYP'),
                     TextEntry::make('balance_before')->label(__('cleaning_admin.transactions.fields.balance_before'))->money('SYP'),
                     TextEntry::make('balance_after')->label(__('cleaning_admin.transactions.fields.balance_after'))->money('SYP'),
@@ -88,7 +88,9 @@ final class CleaningWorkerDepositsResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with(['worker', 'createdByAdmin']);
+        return parent::getEloquentQuery()
+            ->publiclyVisible()
+            ->with(['worker', 'createdByAdmin']);
     }
 
     public static function getPages(): array

@@ -9,7 +9,7 @@ use App\Models\User;
 use App\Models\Worker;
 use Laravel\Sanctum\Sanctum;
 
-it('exposes worker deposit summary and filters timeline tab transactions', function (): void {
+it('exposes only the four public transaction types in the worker deposit timeline', function (): void {
     CleaningDepositSetting::query()->updateOrCreate(
         ['id' => CleaningDepositSetting::query()->orderBy('id')->value('id') ?? 1],
         [
@@ -48,9 +48,9 @@ it('exposes worker deposit summary and filters timeline tab transactions', funct
     $timeline = [
         ['type' => 'deposit', 'amount' => 500000, 'balance_before' => 0, 'balance_after' => 500000, 'reference' => 'test-opening-deposit', 'created_at' => now()->subDays(5)],
         ['type' => 'deposit', 'amount' => 500000, 'balance_before' => 500000, 'balance_after' => 1000000, 'reference' => 'test-second-deposit', 'created_at' => now()->subDays(4)],
-        ['type' => 'admin_fee', 'amount' => 45000, 'balance_before' => 1000000, 'balance_after' => 955000, 'reference' => 'test-admin-fee-1', 'created_at' => now()->subDays(3)],
-        ['type' => 'admin_fee', 'amount' => 57500, 'balance_before' => 955000, 'balance_after' => 897500, 'reference' => 'test-admin-fee-2', 'created_at' => now()->subDays(2)],
-        ['type' => 'admin_fee', 'amount' => 70000, 'balance_before' => 897500, 'balance_after' => 827500, 'reference' => 'test-admin-fee-3', 'created_at' => now()->subDay()],
+        ['type' => 'debt', 'amount' => 45000, 'balance_before' => 1000000, 'balance_after' => 955000, 'reference' => CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'test-1', 'created_at' => now()->subDays(3)],
+        ['type' => 'debt', 'amount' => 57500, 'balance_before' => 955000, 'balance_after' => 897500, 'reference' => CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'test-2', 'created_at' => now()->subDays(2)],
+        ['type' => 'debt', 'amount' => 70000, 'balance_before' => 897500, 'balance_after' => 827500, 'reference' => CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'test-3', 'created_at' => now()->subDay()],
     ];
 
     foreach ($timeline as $transactionData) {
@@ -80,15 +80,21 @@ it('exposes worker deposit summary and filters timeline tab transactions', funct
     $depositTimelineResponse = $this->getJson('/api/v1/cleaning/worker/account/deposit/transactions?type=deposit');
     $depositTimelineResponse->assertOk()
         ->assertJsonPath('meta.total', 2)
-        ->assertJsonPath('meta.filters.appliedType', 'deposit');
+        ->assertJsonPath('meta.filters.appliedType', 'deposit')
+        ->assertJsonMissingPath('data.0.cleaningBookingId');
 
     $debtTimelineResponse = $this->getJson('/api/v1/cleaning/worker/account/deposit/transactions?type=debt');
     $debtTimelineResponse->assertOk()
         ->assertJsonPath('meta.total', 3)
-        ->assertJsonPath('meta.filters.appliedType', 'admin_fee');
+        ->assertJsonPath('meta.filters.appliedType', 'debt')
+        ->assertJsonPath('meta.filters.appliedTypes.0', 'debt')
+        ->assertJsonPath('data.0.type', 'debt')
+        ->assertJsonPath('data.1.type', 'debt')
+        ->assertJsonPath('data.2.type', 'debt')
+        ->assertJsonMissingPath('data.0.cleaningBookingId');
 
-    $withdrawTimelineResponse = $this->getJson('/api/v1/cleaning/worker/account/deposit/transactions?type=withdraw');
-    $withdrawTimelineResponse->assertOk()
+    $refundTimelineResponse = $this->getJson('/api/v1/cleaning/worker/account/deposit/transactions?type=withdraw');
+    $refundTimelineResponse->assertOk()
         ->assertJsonPath('meta.total', 0)
-        ->assertJsonPath('meta.filters.appliedType', 'withdrawal');
+        ->assertJsonPath('meta.filters.appliedType', 'refund');
 });

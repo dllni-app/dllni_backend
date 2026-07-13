@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningWorkerDeposits\Tables;
 
+use App\Enums\UserModuleType;
 use App\Models\CleaningDepositTransaction;
+use App\Models\Worker;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Tables\Columns\TextColumn;
@@ -35,8 +37,8 @@ final class CleaningTransactionsTable
                 TextColumn::make('type')
                     ->label(__('cleaning_admin.transactions.fields.type'))
                     ->badge()
-                    ->color(fn (string $state): string => self::typeColor($state))
-                    ->formatStateUsing(fn (string $state): string => self::typeLabel($state)),
+                    ->color(fn (CleaningDepositTransaction $record): string => self::typeColor($record->publicType()))
+                    ->formatStateUsing(fn (CleaningDepositTransaction $record): string => self::typeLabel($record->publicType())),
                 TextColumn::make('amount')
                     ->label(__('cleaning_admin.transactions.fields.amount'))
                     ->money('SYP')
@@ -53,11 +55,6 @@ final class CleaningTransactionsTable
                 TextColumn::make('balance_after')
                     ->label(__('cleaning_admin.transactions.fields.balance_after'))
                     ->money('SYP'),
-                TextColumn::make('cleaning_booking_id')
-                    ->label('Booking')
-                    ->formatStateUsing(fn ($state): string => $state ? '#'.$state : '—')
-                    ->placeholder('—')
-                    ->toggleable(),
                 TextColumn::make('reference')
                     ->label(__('cleaning_admin.transactions.fields.reference'))
                     ->formatStateUsing(fn (?string $state): string => self::referenceLabel($state))
@@ -80,15 +77,21 @@ final class CleaningTransactionsTable
             ->filters([
                 SelectFilter::make('worker_id')
                     ->label(__('cleaning_admin.transactions.fields.worker'))
-                    ->relationship('worker', 'first_name')
+                    ->options(fn (): array => self::workerOptions())
                     ->searchable()
                     ->preload(),
                 SelectFilter::make('type')
                     ->label(__('cleaning_admin.transactions.fields.type'))
-                    ->options(self::typeOptions()),
-                Filter::make('has_booking')
-                    ->label('Linked to booking')
-                    ->query(fn (Builder $query): Builder => $query->whereNotNull('cleaning_booking_id')),
+                    ->options(self::typeOptions())
+                    ->query(function (Builder $query, array $data): Builder {
+                        $type = $data['value'] ?? null;
+
+                        if (! is_string($type) || ! in_array($type, CleaningDepositTransaction::PUBLIC_TYPES, true)) {
+                            return $query;
+                        }
+
+                        return $query->forPublicType($type);
+                    }),
                 Filter::make('created_at')
                     ->form([
                         DatePicker::make('from')->label(__('cleaning_admin.transactions.filters.from'))->native(false),
@@ -111,15 +114,13 @@ final class CleaningTransactionsTable
      */
     public static function typeOptions(): array
     {
-        return [
-            'deposit' => self::typeLabel('deposit'),
-            'debt' => self::typeLabel('debt'),
-            'settlement' => self::typeLabel('settlement'),
-            'refund' => self::typeLabel('refund'),
-            'adjustment' => self::typeLabel('adjustment'),
-            'admin_fee' => self::typeLabel('admin_fee'),
-            'withdrawal' => self::typeLabel('withdrawal'),
-        ];
+        $options = [];
+
+        foreach (CleaningDepositTransaction::PUBLIC_TYPES as $type) {
+            $options[$type] = self::typeLabel($type);
+        }
+
+        return $options;
     }
 
     public static function typeLabel(string $type): string
@@ -140,8 +141,11 @@ final class CleaningTransactionsTable
             return '—';
         }
 
-        if (preg_match('/^admin_fee_booking_(\d+)$/', $reference, $matches) === 1) {
-            return __('cleaning_admin.transactions.references.admin_fee_booking', ['id' => $matches[1]]);
+        if (
+            str_starts_with($reference, 'automatic_admin_commission:')
+            || preg_match('/^admin_fee_booking_\d+$/', $reference) === 1
+        ) {
+            return __('cleaning_finance.references.automatic_admin_commission');
         }
 
         $financeKey = 'cleaning_finance.references.'.$reference;
@@ -162,10 +166,8 @@ final class CleaningTransactionsTable
         return match ($type) {
             'deposit' => 'success',
             'settlement' => 'primary',
-            'debt' => 'warning',
-            'refund', 'withdrawal' => 'warning',
-            'admin_fee' => 'danger',
-            'adjustment' => 'gray',
+            'debt' => 'danger',
+            'refund' => 'warning',
             default => 'gray',
         };
     }
@@ -181,16 +183,30 @@ final class CleaningTransactionsTable
             ->map(fn (CleaningDepositTransaction $tx): array => [
                 __('cleaning_admin.transactions.fields.id') => $tx->id,
                 __('cleaning_admin.transactions.fields.worker') => $tx->worker?->first_name ?? '—',
-                __('cleaning_admin.transactions.fields.type') => self::typeLabel((string) $tx->type),
-                __('cleaning_admin.transactions.fields.amount') => (float) $tx->amount,
+                __('cleaning_admin.transactions.fields.type') => self::typeLabel($tx->publicType()),
+                __('cleaning_admin.transactions.fields.amount') => $tx->publicAmount(),
                 __('cleaning_finance.fields.debt_settled_amount') => (float) ($tx->debt_settled_amount ?? 0),
                 __('cleaning_admin.transactions.fields.balance_before') => (float) $tx->balance_before,
                 __('cleaning_admin.transactions.fields.balance_after') => (float) $tx->balance_after,
-                'Booking' => $tx->cleaning_booking_id,
                 __('cleaning_admin.transactions.fields.reference') => self::referenceLabel($tx->reference),
                 __('cleaning_admin.transactions.fields.date') => $tx->created_at?->format('Y-m-d H:i'),
                 __('cleaning_admin.transactions.fields.notes') => $tx->notes,
                 __('cleaning_admin.transactions.fields.created_by') => $tx->createdByAdmin?->name ?? '—',
+            ])
+            ->all();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private static function workerOptions(): array
+    {
+        return Worker::query()
+            ->whereHas('user', fn (Builder $query): Builder => $query->where('module_type', UserModuleType::CleaningWorker))
+            ->orderBy('first_name')
+            ->get(['id', 'first_name'])
+            ->mapWithKeys(fn (Worker $worker): array => [
+                $worker->id => ($worker->first_name ?: '#'.$worker->id).' (#'.$worker->id.')',
             ])
             ->all();
     }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Http\Controllers\API;
 
 use App\Models\CleaningDepositSetting;
+use App\Models\CleaningDepositTransaction;
 use App\Models\Worker;
 use Exception;
 use Illuminate\Http\JsonResponse;
@@ -47,6 +48,7 @@ final class DepositManagementController
         }
     }
 
+    /** @deprecated Use the refund transaction terminology in new clients. */
     public function recordWithdrawal(Request $request, Worker $worker): JsonResponse
     {
         $validated = $request->validate([
@@ -56,7 +58,7 @@ final class DepositManagementController
         ]);
 
         try {
-            $transaction = $this->depositService->recordWithdrawal(
+            $transaction = $this->depositService->recordRefund(
                 $worker,
                 (float) $validated['amount'],
                 $validated['reference'],
@@ -65,7 +67,7 @@ final class DepositManagementController
             );
 
             return response()->json([
-                'message' => 'Withdrawal recorded successfully',
+                'message' => 'Refund recorded successfully',
                 'transaction' => CleaningDepositTransactionResource::make($transaction),
             ], Response::HTTP_CREATED);
         } catch (Exception $e) {
@@ -82,13 +84,15 @@ final class DepositManagementController
             $perPage = 20;
         }
 
-        $type = $request->get('type');
+        $type = $request->string('type')->toString();
 
-        $query = \App\Models\CleaningDepositTransaction::where('worker_id', $worker->id);
-
-        if ($type && in_array($type, ['deposit', 'withdrawal', 'admin_fee'], true)) {
-            $query->where('type', $type);
-        }
+        $query = CleaningDepositTransaction::query()
+            ->where('worker_id', $worker->id)
+            ->publiclyVisible()
+            ->when(
+                in_array($type, CleaningDepositTransaction::PUBLIC_TYPES, true),
+                fn ($query) => $query->forPublicType($type),
+            );
 
         $transactions = $query->orderByDesc('created_at')->paginate($perPage);
 
@@ -99,6 +103,9 @@ final class DepositManagementController
                 'lastPage' => $transactions->lastPage(),
                 'perPage' => $transactions->perPage(),
                 'total' => $transactions->total(),
+                'filters' => [
+                    'type' => in_array($type, CleaningDepositTransaction::PUBLIC_TYPES, true) ? $type : null,
+                ],
             ],
         ]);
     }

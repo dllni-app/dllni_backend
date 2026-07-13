@@ -24,32 +24,23 @@ final class CleaningWorkerDepositStats extends StatsOverviewWidget
             ->value('total');
         $totalDeposits = $this->sumByType('deposit');
         $totalSettlements = $this->sumByType('settlement');
-        $totalAdminFees = $this->sumByType('admin_fee');
-        $totalRefunds = $this->sumByType('refund') + $this->sumByType('withdrawal');
-        $totalAdjustments = $this->sumByType('adjustment');
+        $totalRefunds = $this->sumByType('refund');
 
         return [
             Stat::make(__('Total current debt'), self::money($currentDebt))
                 ->icon('heroicon-o-exclamation-triangle')
                 ->color($currentDebt > 0 ? 'danger' : 'success'),
             Stat::make(__('Total deposits'), self::money($totalDeposits))
-                ->description(__('Manual deposit transactions'))
+                ->description(__('Deposit transactions'))
                 ->icon('heroicon-o-arrow-down-tray')
                 ->color('success'),
             Stat::make(__('Total settlements'), self::money($totalSettlements))
                 ->description(__('Debt settlement transactions'))
                 ->icon('heroicon-o-check-circle')
                 ->color('primary'),
-            Stat::make(__('Admin fees charged'), self::money($totalAdminFees))
-                ->description(__('Platform commissions charged to workers'))
-                ->icon('heroicon-o-currency-dollar')
-                ->color('danger'),
-            Stat::make(__('Refunds and withdrawals'), self::money($totalRefunds))
+            Stat::make(__('Total refunds'), self::money($totalRefunds))
                 ->icon('heroicon-o-arrow-uturn-left')
                 ->color('warning'),
-            Stat::make(__('Manual adjustments'), self::money($totalAdjustments))
-                ->icon('heroicon-o-adjustments-horizontal')
-                ->color('gray'),
         ];
     }
 

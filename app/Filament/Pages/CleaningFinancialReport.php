@@ -62,7 +62,7 @@ final class CleaningFinancialReport extends Page
         $ledger = app(WorkerDebtService::class)->globalSummary();
 
         $refunds = (float) CleaningDepositTransaction::query()
-            ->whereIn('type', ['refund', 'withdrawal'])
+            ->where('type', 'refund')
             ->sum('amount');
 
         $depositsHeld = (float) CleaningWorkerDeposit::query()

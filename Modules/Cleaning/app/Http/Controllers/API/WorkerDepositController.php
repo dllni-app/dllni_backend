@@ -18,13 +18,12 @@ final class WorkerDepositController
     /** @var array<string, string> */
     private const TRANSACTION_TYPE_ALIASES = [
         'deposit' => 'deposit',
-        'withdrawal' => 'withdrawal',
-        'withdraw' => 'withdrawal',
-        'admin_fee' => 'admin_fee',
         'debt' => 'debt',
+        'admin_fee' => 'debt',
         'settlement' => 'settlement',
         'refund' => 'refund',
-        'adjustment' => 'adjustment',
+        'withdrawal' => 'refund',
+        'withdraw' => 'refund',
     ];
 
     public function __construct(
@@ -67,15 +66,15 @@ final class WorkerDepositController
         }
 
         $type = $this->normalizeTransactionType($request->get('type'));
-        $appliedTypes = $type === 'debt' ? ['debt', 'admin_fee'] : ($type !== null ? [$type] : []);
 
         $query = CleaningDepositTransaction::query()
             ->where('worker_id', $worker->id)
+            ->publiclyVisible()
+            ->when(
+                $type !== null,
+                fn ($query) => $query->forPublicType($type),
+            )
             ->orderByDesc('created_at');
-
-        if ($appliedTypes !== []) {
-            $query->whereIn('type', $appliedTypes);
-        }
 
         $transactions = $query->paginate($perPage);
 
@@ -89,7 +88,7 @@ final class WorkerDepositController
                 'filters' => [
                     'requestedType' => $request->get('type'),
                     'appliedType' => $type,
-                    'appliedTypes' => $appliedTypes,
+                    'appliedTypes' => $type === null ? [] : [$type],
                 ],
             ],
         ]);
