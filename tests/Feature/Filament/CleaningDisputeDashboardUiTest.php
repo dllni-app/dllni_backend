@@ -31,6 +31,12 @@ beforeEach(function (): void {
 });
 
 it('shows cleaning dispute phones and hides the removed resolution actions', function (): void {
+    $pageSource = file_get_contents(app_path('Filament/Resources/Disputes/Pages/ViewDispute.php'));
+
+    expect($pageSource)
+        ->not->toContain("Action::make('reply')")
+        ->not->toContain("Action::make('refund_partial')");
+
     $customer = User::factory()->create([
         'name' => 'أحمد العميل',
         'phone' => '+963944000222',
@@ -38,7 +44,7 @@ it('shows cleaning dispute phones and hides the removed resolution actions', fun
     $workerUser = User::factory()->create([
         'name' => 'رنا العامل',
         'phone' => '+963900000001',
-        'module_type' => UserModuleType::CleaningWorker,
+        'module_type' => UserModuleType::CleaningWorker->value,
     ]);
     $worker = Worker::factory()->create([
         'user_id' => $workerUser->id,
