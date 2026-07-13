@@ -16,7 +16,6 @@ final class RolesTable
         return $table
             ->columns([
                 TextColumn::make('name')->label('اسم الدور')->searchable(),
-                TextColumn::make('guard_name')->label('نطاق الصلاحية'),
                 TextColumn::make('permissions_count')
                     ->label('عدد الصلاحيات')
                     ->counts('permissions'),
