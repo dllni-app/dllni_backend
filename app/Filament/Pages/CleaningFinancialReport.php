@@ -34,6 +34,11 @@ final class CleaningFinancialReport extends Page
         return __('cleaning_admin.report.nav_label');
     }
 
+    public static function getNavigationTooltip(): ?string
+    {
+        return __('cleaning_finance_guidance.report_page_subtitle');
+    }
+
     public function getTitle(): string
     {
         return __('cleaning_admin.report.title');
@@ -41,7 +46,7 @@ final class CleaningFinancialReport extends Page
 
     public function getSubheading(): ?string
     {
-        return __('cleaning_admin.report.subtitle');
+        return __('cleaning_finance_guidance.report_page_subtitle');
     }
 
     public function mount(): void
