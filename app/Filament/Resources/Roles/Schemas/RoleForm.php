@@ -38,7 +38,7 @@ final class RoleForm
     {
         $selected = [];
 
-        foreach (self::permissionGroups() as $section => $options) {
+        foreach (self::groupedPermissionOptions() as $section => $options) {
             $field = self::permissionFieldName($section);
 
             foreach ((array) ($data[$field] ?? []) as $permission) {
@@ -71,7 +71,7 @@ final class RoleForm
 
         $state = [];
 
-        foreach (self::permissionGroups() as $section => $options) {
+        foreach (self::groupedPermissionOptions() as $section => $options) {
             $state[self::permissionFieldName($section)] = array_values(array_filter(
                 array_keys($options),
                 static fn (string $permission): bool => isset($selectedLookup[$permission]),
@@ -88,31 +88,10 @@ final class RoleForm
         );
     }
 
-    /** @return array<int, Section> */
-    private static function permissionSections(): array
-    {
-        $sections = [];
-
-        foreach (self::permissionGroups() as $section => $options) {
-            $sections[] = Section::make($section)
-                ->schema([
-                    CheckboxList::make(self::permissionFieldName($section))
-                        ->hiddenLabel()
-                        ->options($options)
-                        ->columns(2)
-                        ->searchable()
-                        ->bulkToggleable()
-                        ->dehydrated(true),
-                ])
-                ->collapsible()
-                ->columnSpanFull();
-        }
-
-        return $sections;
-    }
-
-    /** @return array<string, array<string, string>> */
-    private static function permissionGroups(): array
+    /**
+     * @return array<string, array<string, string>>
+     */
+    public static function groupedPermissionOptions(): array
     {
         $sections = [];
 
@@ -137,6 +116,29 @@ final class RoleForm
 
         foreach ($sections as &$options) {
             asort($options, SORT_NATURAL);
+        }
+
+        return $sections;
+    }
+
+    /** @return array<int, Section> */
+    private static function permissionSections(): array
+    {
+        $sections = [];
+
+        foreach (self::groupedPermissionOptions() as $section => $options) {
+            $sections[] = Section::make($section)
+                ->schema([
+                    CheckboxList::make(self::permissionFieldName($section))
+                        ->hiddenLabel()
+                        ->options($options)
+                        ->columns(2)
+                        ->searchable()
+                        ->bulkToggleable()
+                        ->dehydrated(true),
+                ])
+                ->collapsible()
+                ->columnSpanFull();
         }
 
         return $sections;
