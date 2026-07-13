@@ -26,7 +26,7 @@ final class GeographicCoverage extends Page implements HasTable
 
     protected static ?int $navigationSort = 26;
 
-    protected static bool $shouldRegisterNavigation = true;
+    protected static bool $shouldRegisterNavigation = false;
 
     public static function getNavigationGroup(): ?string
     {
