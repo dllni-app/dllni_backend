@@ -17,17 +17,6 @@ final class CleaningDepositTransaction extends Model
     /** @var list<string> */
     public const PUBLIC_TYPES = ['deposit', 'debt', 'settlement', 'refund'];
 
-    /** @var list<string> */
-    public const STORED_VISIBLE_TYPES = [
-        'deposit',
-        'debt',
-        'settlement',
-        'refund',
-        'admin_fee',
-        'withdrawal',
-        'adjustment',
-    ];
-
     protected $fillable = [
         'worker_id',
         'created_by_admin_id',
@@ -60,34 +49,16 @@ final class CleaningDepositTransaction extends Model
 
     public function scopePubliclyVisible(Builder $query): Builder
     {
-        return $query->whereIn('type', self::STORED_VISIBLE_TYPES);
+        return $query->whereIn('type', self::PUBLIC_TYPES);
     }
 
     public function scopeForPublicType(Builder $query, string $type): Builder
     {
-        return match ($type) {
-            'deposit' => $query->where(function (Builder $typeQuery): void {
-                $typeQuery
-                    ->where('type', 'deposit')
-                    ->orWhere(function (Builder $legacyAdjustment): void {
-                        $legacyAdjustment
-                            ->where('type', 'adjustment')
-                            ->where('amount', '>=', 0);
-                    });
-            }),
-            'debt' => $query->whereIn('type', ['debt', 'admin_fee']),
-            'settlement' => $query->where('type', 'settlement'),
-            'refund' => $query->where(function (Builder $typeQuery): void {
-                $typeQuery
-                    ->whereIn('type', ['refund', 'withdrawal'])
-                    ->orWhere(function (Builder $legacyAdjustment): void {
-                        $legacyAdjustment
-                            ->where('type', 'adjustment')
-                            ->where('amount', '<', 0);
-                    });
-            }),
-            default => $query->whereRaw('1 = 0'),
-        };
+        if (! in_array($type, self::PUBLIC_TYPES, true)) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->where('type', $type);
     }
 
     public function publicType(): string
@@ -97,11 +68,13 @@ final class CleaningDepositTransaction extends Model
 
     public function publicAmount(): float
     {
-        $amount = (float) $this->amount;
-
-        return (string) $this->type === 'adjustment' ? abs($amount) : $amount;
+        return abs((float) $this->amount);
     }
 
+    /**
+     * Kept for compatibility while historical records are normalized by the
+     * migration that reduces the ledger to the four supported types.
+     */
     public static function normalizePublicType(string $type, float $amount = 0): string
     {
         return match ($type) {
