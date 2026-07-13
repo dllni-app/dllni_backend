@@ -69,7 +69,10 @@ final class RoleResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->where('guard_name', 'web');
+        return parent::getEloquentQuery()
+            ->where('guard_name', 'web')
+            ->with('permissions')
+            ->withCount('permissions');
     }
 
     public static function getRelations(): array
