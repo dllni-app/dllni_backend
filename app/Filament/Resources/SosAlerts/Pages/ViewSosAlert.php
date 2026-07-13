@@ -18,7 +18,7 @@ final class ViewSosAlert extends ViewRecord
 
     public function getTitle(): string|Htmlable
     {
-        return 'تفاصيل البلاغ أو الشكوى #'.$this->record->getKey();
+        return 'تفاصيل بلاغ الطوارئ #'.$this->record->getKey();
     }
 
     protected function getHeaderActions(): array
