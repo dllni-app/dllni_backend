@@ -8,7 +8,6 @@ use App\Filament\Resources\CleaningServices\Pages\CreateCleaningService;
 use App\Filament\Resources\CleaningServices\Pages\EditCleaningService;
 use App\Filament\Resources\CleaningServices\Pages\ListCleaningServices;
 use App\Filament\Resources\CleaningServices\Pages\ViewCleaningService;
-use App\Filament\Resources\CleaningServices\RelationManagers\PricingRelationManager;
 use App\Filament\Resources\CleaningServices\Schemas\CleaningServiceForm;
 use App\Filament\Resources\CleaningServices\Schemas\CleaningServiceInfolist;
 use App\Filament\Resources\CleaningServices\Tables\CleaningServicesTable;
@@ -95,9 +94,7 @@ final class CleaningServiceResource extends Resource
 
     public static function getRelations(): array
     {
-        return [
-            PricingRelationManager::class,
-        ];
+        return [];
     }
 
     public static function getPages(): array
