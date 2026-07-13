@@ -45,11 +45,11 @@ jobs:
 
       - name: Check PHP syntax
         run: |
-          find app/Enums app/Models app/Observers app/Services app/Http app/Filament/Resources/SupportCases tests/Feature/SupportCases -name '*.php' -print0 \
+          find app/Enums app/Models app/Observers app/Services app/Http app/Filament/Resources/SupportCases tests/Feature/SupportCases tests/Feature/Filament/UnifiedSupportCaseDashboardTest.php -name '*.php' -print0 \
             | xargs -0 -n1 php -l
 
       - name: Format support case sources
-        run: vendor/bin/pint app/Enums/SupportCaseKind.php app/Enums/SupportCasePriority.php app/Enums/SupportCaseReporterRole.php app/Enums/SupportCaseResolution.php app/Enums/SupportCaseStatus.php app/Models/SupportCase.php app/Models/SupportCaseMessage.php app/Models/SupportCaseEvent.php app/Services/SupportCaseService.php app/Services/LegacySupportCaseSyncService.php app/Http/Controllers/API/SupportCaseController.php app/Filament/Resources/SupportCases tests/Feature/SupportCases/SupportCaseApiTest.php
+        run: vendor/bin/pint app/Enums/SupportCaseKind.php app/Enums/SupportCasePriority.php app/Enums/SupportCaseReporterRole.php app/Enums/SupportCaseResolution.php app/Enums/SupportCaseStatus.php app/Models/SupportCase.php app/Models/SupportCaseMessage.php app/Models/SupportCaseEvent.php app/Services/SupportCaseService.php app/Services/LegacySupportCaseSyncService.php app/Http/Controllers/API/SupportCaseController.php app/Filament/Resources/SupportCases tests/Feature/SupportCases/SupportCaseApiTest.php tests/Feature/Filament/UnifiedSupportCaseDashboardTest.php
 
       - name: Run support case tests
         env:
@@ -58,7 +58,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          php artisan test tests/Feature/SupportCases/SupportCaseApiTest.php 2>&1 | tee support-case-test.log
+          php artisan test tests/Feature/SupportCases/SupportCaseApiTest.php tests/Feature/Filament/UnifiedSupportCaseDashboardTest.php 2>&1 | tee support-case-test.log
 
       - name: Upload diagnostics
         if: always()
