@@ -57,7 +57,7 @@ final class SupportCaseResource extends JsonResource
                     ] : null,
                     'worker' => $booking->relationLoaded('worker') && $booking->worker ? [
                         'id' => $booking->worker->id,
-                        'name' => trim((string) $booking->worker->first_name.' '.(string) $booking->worker->last_name),
+                        'name' => $booking->worker->user?->name ?: $booking->worker->first_name,
                         'phone' => $booking->worker->relationLoaded('user') ? $booking->worker->user?->phone : null,
                     ] : null,
                 ];
