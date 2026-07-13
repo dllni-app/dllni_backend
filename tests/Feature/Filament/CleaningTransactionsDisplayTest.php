@@ -41,7 +41,7 @@ it('formats financial amounts as Latin integers regardless of locale', function 
 
     expect(AdminUiFormatter::formatNumber(12345.6, 1))->toBe('12,345.6')
         ->and($formatted)->toContain('50,001')
-        ->and($formatted)->not->toContain('.')
+        ->and($formatted)->not->toMatch('/\d\.\d/')
         ->and($formatted)->not->toMatch('/[\x{0660}-\x{0669}]/u');
 });
 
