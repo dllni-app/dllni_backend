@@ -6,9 +6,9 @@ namespace App\Filament\Resources\CleaningWorkerDeposits\Widgets;
 
 use App\Filament\Support\AdminUiFormatter;
 use App\Models\CleaningDepositTransaction;
-use App\Models\CleaningWorkerDeposit;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
+use Modules\Cleaning\Services\WorkerDebtService;
 
 final class CleaningWorkerDepositStats extends StatsOverviewWidget
 {
@@ -18,10 +18,8 @@ final class CleaningWorkerDepositStats extends StatsOverviewWidget
 
     protected function getStats(): array
     {
-        $currentDebt = (float) CleaningWorkerDeposit::query()
-            ->where('current_balance', '<', 0)
-            ->selectRaw('COALESCE(SUM(ABS(current_balance)), 0) as total')
-            ->value('total');
+        $ledger = app(WorkerDebtService::class)->globalSummary();
+        $currentDebt = (float) $ledger['outstandingAdministrationDue'];
         $totalDeposits = $this->sumByType('deposit');
         $totalSettlements = $this->sumByType('settlement');
         $totalRefunds = $this->sumByType('refund');
@@ -46,7 +44,7 @@ final class CleaningWorkerDepositStats extends StatsOverviewWidget
 
     private static function money(float $amount): string
     {
-        return AdminUiFormatter::formatCurrency($amount);
+        return AdminUiFormatter::formatCurrency($amount, 0);
     }
 
     private function sumByType(string $type): float
