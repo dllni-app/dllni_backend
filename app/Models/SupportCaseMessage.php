@@ -9,7 +9,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
-use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 final class SupportCaseMessage extends Model implements HasMedia
 {
@@ -34,8 +33,7 @@ final class SupportCaseMessage extends Model implements HasMedia
 
     public function registerMediaCollections(): void
     {
-        $this->addMediaCollection('attachments')
-            ->acceptsFile(static fn (Media $media): bool => str_starts_with((string) $media->mime_type, 'image/'));
+        $this->addMediaCollection('attachments');
     }
 
     public function casts(): array
