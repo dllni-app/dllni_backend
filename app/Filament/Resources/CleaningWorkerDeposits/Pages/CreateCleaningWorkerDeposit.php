@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\CleaningWorkerDeposits\Pages;
 
 use App\Filament\Resources\CleaningWorkerDeposits\CleaningWorkerDepositsResource;
+use Filament\Actions\Action;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Model;
@@ -16,6 +17,8 @@ final class CreateCleaningWorkerDeposit extends CreateRecord
 {
     protected static string $resource = CleaningWorkerDepositsResource::class;
 
+    protected static bool $canCreateAnother = false;
+
     public function getTitle(): string|Htmlable
     {
         return __('cleaning_finance_guidance.form.page_title');
@@ -24,6 +27,12 @@ final class CreateCleaningWorkerDeposit extends CreateRecord
     public function getSubheading(): string|Htmlable|null
     {
         return __('cleaning_finance_guidance.form.page_subtitle');
+    }
+
+    protected function getCreateFormAction(): Action
+    {
+        return parent::getCreateFormAction()
+            ->label(__('cleaning_finance_guidance.form.submit'));
     }
 
     protected function handleRecordCreation(array $data): Model
