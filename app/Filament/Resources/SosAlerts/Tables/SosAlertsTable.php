@@ -27,20 +27,13 @@ final class SosAlertsTable
     {
         return $table
             ->columns([
-                TextColumn::make('id')
-                    ->label('المعرّف')
-                    ->sortable(),
+                TextColumn::make('id')->label('المعرّف')->sortable(),
                 TextColumn::make('booking.booking_number')
                     ->label('طلب التنظيف')
                     ->placeholder('-')
                     ->url(fn (SosAlert $record): ?string => $record->booking instanceof CleaningBooking
                         ? CleaningBookingResource::getUrl('view', ['record' => $record->booking])
                         : null),
-                TextColumn::make('source_app')
-                    ->label('التطبيق المرسل')
-                    ->badge()
-                    ->state(fn (SosAlert $record): string => self::sourceAppLabel($record))
-                    ->color(fn (SosAlert $record): string => self::sourceAppColor($record)),
                 TextColumn::make('user.name')
                     ->label('صاحب البلاغ')
                     ->placeholder('-')
@@ -67,56 +60,12 @@ final class SosAlertsTable
                     ->label('الحالة')
                     ->color(fn (mixed $state): string => self::statusColor($state))
                     ->formatStateUsing(fn (mixed $state): string => self::statusLabel($state)),
-                TextColumn::make('triggered_at')
-                    ->label('وقت الإرسال')
-                    ->since()
-                    ->sortable(),
-                TextColumn::make('acknowledged_at')
-                    ->label('وقت الاستلام')
-                    ->since()
-                    ->placeholder('-')
-                    ->sortable(),
-                TextColumn::make('resolved_at')
-                    ->label('وقت الحل')
-                    ->since()
-                    ->placeholder('-')
-                    ->sortable(),
+                TextColumn::make('triggered_at')->label('وقت الإرسال')->since()->sortable(),
+                TextColumn::make('acknowledged_at')->label('وقت الاستلام')->since()->placeholder('-')->sortable(),
+                TextColumn::make('resolved_at')->label('وقت الحل')->since()->placeholder('-')->sortable(),
             ])
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['user', 'booking']))
             ->filters([
-                SelectFilter::make('source_app')
-                    ->label('التطبيق المرسل')
-                    ->options([
-                        'dllni_user_app' => 'تطبيق المستخدم',
-                        'cleaning_owner_app' => 'تطبيق عامل التنظيف',
-                    ])
-                    ->query(function (Builder $query, array $data): Builder {
-                        $source = $data['value'] ?? null;
-
-                        if ($source === 'cleaning_owner_app') {
-                            return $query->where(function (Builder $query): void {
-                                $query->where('source', 'cleaning_owner_app')
-                                    ->orWhere(function (Builder $query): void {
-                                        $query->where('source', 'booking')
-                                            ->whereHas('user', fn (Builder $userQuery): Builder => $userQuery->where('module_type', UserModuleType::CleaningWorker->value));
-                                    });
-                            });
-                        }
-
-                        if ($source === 'dllni_user_app') {
-                            return $query->where(function (Builder $query): void {
-                                $query->where('source', 'dllni_user_app')
-                                    ->orWhere(function (Builder $query): void {
-                                        $query->where('source', 'booking')
-                                            ->whereHas('user', fn (Builder $userQuery): Builder => $userQuery
-                                                ->whereNull('module_type')
-                                                ->orWhere('module_type', '!=', UserModuleType::CleaningWorker->value));
-                                    });
-                            });
-                        }
-
-                        return $query;
-                    }),
                 SelectFilter::make('status')
                     ->label('الحالة')
                     ->options(collect(SOSStatus::cases())->mapWithKeys(fn (SOSStatus $case): array => [$case->value => self::statusLabel($case)])->all()),
@@ -149,10 +98,7 @@ final class SosAlertsTable
                             'acknowledged_by' => auth()->id(),
                         ])->save();
 
-                        Notification::make()
-                            ->title('تم استلام البلاغ')
-                            ->success()
-                            ->send();
+                        Notification::make()->title('تم استلام البلاغ')->success()->send();
                     }),
                 Action::make('resolve')
                     ->label('حل')
@@ -161,9 +107,7 @@ final class SosAlertsTable
                     ->visible(fn (SosAlert $record): bool => ! self::isResolved($record->status))
                     ->requiresConfirmation()
                     ->form([
-                        Textarea::make('resolution_note')
-                            ->label('ملاحظة الحل')
-                            ->maxLength(1000),
+                        Textarea::make('resolution_note')->label('ملاحظة الحل')->maxLength(1000),
                     ])
                     ->action(function (SosAlert $record, array $data): void {
                         $record->forceFill([
@@ -175,10 +119,7 @@ final class SosAlertsTable
                                 : null,
                         ])->save();
 
-                        Notification::make()
-                            ->title('تم حل البلاغ')
-                            ->success()
-                            ->send();
+                        Notification::make()->title('تم حل البلاغ')->success()->send();
                     }),
             ])
             ->defaultSort('created_at', 'desc');
@@ -225,26 +166,6 @@ final class SosAlertsTable
         return self::normalizeStatus($status) === SOSStatus::Resolved;
     }
 
-    public static function sourceAppLabel(SosAlert $record): string
-    {
-        if ($record->source === 'cleaning_owner_app') {
-            return 'تطبيق عامل التنظيف';
-        }
-
-        if ($record->source === 'dllni_user_app') {
-            return 'تطبيق المستخدم';
-        }
-
-        return $record->user?->module_type === UserModuleType::CleaningWorker
-            ? 'تطبيق عامل التنظيف'
-            : 'تطبيق المستخدم';
-    }
-
-    public static function sourceAppColor(SosAlert $record): string
-    {
-        return self::sourceAppLabel($record) === 'تطبيق عامل التنظيف' ? 'info' : 'gray';
-    }
-
     public static function roleLabel(SosAlert $record): string
     {
         return $record->user?->module_type === UserModuleType::CleaningWorker
@@ -254,9 +175,7 @@ final class SosAlertsTable
 
     public static function roleColor(SosAlert $record): string
     {
-        return $record->user?->module_type === UserModuleType::CleaningWorker
-            ? 'info'
-            : 'gray';
+        return $record->user?->module_type === UserModuleType::CleaningWorker ? 'info' : 'gray';
     }
 
     public static function emergencyLabel(EmergencyType|string|null $type): string
