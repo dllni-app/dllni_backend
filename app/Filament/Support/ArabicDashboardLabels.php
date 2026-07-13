@@ -4,8 +4,26 @@ declare(strict_types=1);
 
 namespace App\Filament\Support;
 
+use Illuminate\Support\Facades\Lang;
+
 final class ArabicDashboardLabels
 {
+    private const array PermissionActions = [
+        'view',
+        'list',
+        'create',
+        'update',
+        'edit',
+        'delete',
+        'approve',
+        'reject',
+        'manage',
+        'export',
+        'import',
+        'resolve',
+        'acknowledge',
+    ];
+
     public static function money(float|int|string|null $value): string
     {
         if ($value === null || $value === '') {
@@ -41,18 +59,35 @@ final class ArabicDashboardLabels
         };
     }
 
-    public static function permissionName(string $permission): string
+    public static function permissionName(string $permission, ?string $slug = null): string
     {
-        [$resource, $action] = array_pad(explode('.', $permission, 2), 2, null);
-
-        $resourceLabel = self::permissionResourceLabel($resource);
-        $actionLabel = self::permissionActionLabel($action ?? 'view');
-
-        if ($resourceLabel === null) {
-            return str($permission)->replace(['_', '.'], ' ')->headline()->toString();
+        if (filled($slug)) {
+            return trim((string) $slug);
         }
 
-        return trim($actionLabel.' '.$resourceLabel);
+        [$resource, $action] = self::permissionParts($permission);
+        $resourceLabel = self::permissionResourceLabel($resource);
+
+        if ($action === null) {
+            return $resourceLabel;
+        }
+
+        return trim(self::permissionActionLabel($action).' '.$resourceLabel);
+    }
+
+    public static function permissionSectionName(string $permission, ?string $group = null): string
+    {
+        if (filled($group) && Lang::has("permissions.sections.{$group}")) {
+            return __("permissions.sections.{$group}");
+        }
+
+        [$resource] = self::permissionParts($permission);
+
+        if (in_array($resource, ['admins', 'admin_users', 'users', 'roles', 'permissions'], true)) {
+            return __('permissions.sections.administration');
+        }
+
+        return self::permissionResourceLabel($resource);
     }
 
     public static function depositStatus(?string $status): string
@@ -67,50 +102,55 @@ final class ArabicDashboardLabels
         };
     }
 
-    private static function permissionResourceLabel(?string $resource): ?string
+    /** @return array{0: string, 1: string|null} */
+    private static function permissionParts(string $permission): array
     {
-        return match ($resource) {
-            'admins', 'admin_users' => 'مدراء النظام',
-            'banners' => 'البنرات',
-            'bookings', 'orders' => 'الطلبات',
-            'catalog' => 'الكتالوج',
-            'categories' => 'التصنيفات',
-            'cleaning_bookings' => 'حجوزات التنظيف',
-            'cleaning_services' => 'خدمات التنظيف',
-            'coupons' => 'الكوبونات',
-            'disputes' => 'النزاعات',
-            'financial_settings' => 'الإعدادات المالية',
-            'inventory' => 'المخزون',
-            'offers' => 'العروض',
-            'permissions' => 'الصلاحيات',
-            'products' => 'المنتجات',
-            'reports' => 'التقارير',
-            'roles' => 'الأدوار',
-            'sos_alerts' => 'تنبيهات SOS',
-            'stores' => 'المتاجر',
-            'users' => 'المستخدمين',
-            'workers' => 'العاملين',
-            null, '' => null,
-            default => str($resource)->replace('_', ' ')->headline()->toString(),
-        };
+        $segments = explode('.', $permission);
+        $candidateAction = count($segments) > 1 ? end($segments) : null;
+
+        if (is_string($candidateAction) && in_array($candidateAction, self::PermissionActions, true)) {
+            array_pop($segments);
+
+            return [self::normalizePermissionResource(implode('.', $segments)), $candidateAction];
+        }
+
+        if (str_starts_with($permission, 'ro.')) {
+            return [self::normalizePermissionResource(substr($permission, 3)), null];
+        }
+
+        return [self::normalizePermissionResource($permission), null];
     }
 
-    private static function permissionActionLabel(?string $action): string
+    private static function normalizePermissionResource(string $resource): string
     {
-        return match ($action) {
-            'view', 'list' => 'عرض',
-            'create' => 'إنشاء',
-            'update', 'edit' => 'تعديل',
-            'delete' => 'حذف',
-            'approve' => 'قبول',
-            'reject' => 'رفض',
-            'manage' => 'إدارة',
-            'export' => 'تصدير',
-            'import' => 'استيراد',
-            'resolve' => 'حل',
-            'acknowledge' => 'إقرار',
-            null, '' => '',
-            default => str($action)->replace('_', ' ')->headline()->toString(),
-        };
+        $resource = str_replace('.', '_', $resource);
+
+        if (str_starts_with($resource, 'sm_')) {
+            $resource = substr($resource, 3);
+        }
+
+        return $resource;
+    }
+
+    private static function permissionResourceLabel(string $resource): string
+    {
+        $key = "permissions.resources.{$resource}";
+
+        if (Lang::has($key)) {
+            return __($key);
+        }
+
+        return str($resource)->replace(['_', '.'], ' ')->headline()->toString();
+    }
+
+    private static function permissionActionLabel(string $action): string
+    {
+        $key = "permissions.actions.{$action}";
+
+        if (Lang::has($key)) {
+            return __($key);
+        }
+
+        return str($action)->replace('_', ' ')->headline()->toString();
     }
 }
