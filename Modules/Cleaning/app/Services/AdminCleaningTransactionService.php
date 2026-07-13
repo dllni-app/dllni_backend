@@ -62,10 +62,14 @@ final class AdminCleaningTransactionService
         $financial = $this->depositService->financialSummary($worker);
         $debt = $this->debtService->summary($worker);
         $limits = $this->depositService->resolveLimits($worker);
+        $hasDepositAccount = $worker->deposit !== null;
         $currentBalance = (float) ($worker->deposit?->current_balance ?? 0);
         $depositedTotal = (float) ($worker->deposit?->deposited_total ?? 0);
         $withdrawnTotal = (float) ($worker->deposit?->withdrawn_total ?? 0);
         $maxNegativeBalance = max(0.0, (float) $limits['maxNegativeBalance']);
+        $maxRefundable = $hasDepositAccount
+            ? max(0.0, $currentBalance + $maxNegativeBalance)
+            : 0.0;
 
         return [
             'currentBalance' => round($currentBalance, 2),
@@ -73,7 +77,7 @@ final class AdminCleaningTransactionService
             'withdrawnTotal' => round($withdrawnTotal, 2),
             'minimumRequired' => round((float) $limits['minimumRequired'], 2),
             'maxNegativeBalance' => round($maxNegativeBalance, 2),
-            'maxRefundable' => round(max(0.0, $currentBalance + $maxNegativeBalance), 2),
+            'maxRefundable' => round($maxRefundable, 2),
             'depositGap' => round(max(0.0, (float) $limits['minimumRequired'] - $currentBalance), 2),
             'totalRevenue' => round((float) $financial['totalRevenue'], 2),
             'completedJobs' => (int) $financial['completedJobs'],
