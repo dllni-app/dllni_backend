@@ -18,7 +18,7 @@ it('registers one cleaning support interface in the dashboard navigation', funct
         ->and(DisputeResource::shouldRegisterNavigation())->toBeFalse();
 });
 
-it('shows cleaning requests from both the user app and cleaning worker app', function (): void {
+it('shows cleaning requests from users and cleaning workers in one interface', function (): void {
     $customer = User::factory()->create(['module_type' => null]);
     $workerUser = User::factory()->create(['module_type' => UserModuleType::CleaningWorker->value]);
 
@@ -30,7 +30,7 @@ it('shows cleaning requests from both the user app and cleaning worker app', fun
         'booking_id' => $customerBooking->id,
         'booking_type' => CleaningBooking::class,
         'emergency_type' => EmergencyType::SafetyThreat->value,
-        'message' => 'Customer request from dllni-user-app.',
+        'message' => 'Customer cleaning request.',
         'source' => 'booking',
         'status' => SOSStatus::Triggered->value,
         'triggered_at' => now(),
@@ -41,7 +41,7 @@ it('shows cleaning requests from both the user app and cleaning worker app', fun
         'booking_id' => $workerBooking->id,
         'booking_type' => CleaningBooking::class,
         'emergency_type' => EmergencyType::MedicalEmergency->value,
-        'message' => 'Worker request from cleaning_owner_app.',
+        'message' => 'Worker cleaning request.',
         'source' => 'booking',
         'status' => SOSStatus::Triggered->value,
         'triggered_at' => now(),
@@ -58,8 +58,8 @@ it('shows cleaning requests from both the user app and cleaning worker app', fun
         'triggered_at' => now(),
     ]);
 
-    expect(SosAlertsTable::sourceAppLabel($customerRequest->load('user')))->toBe('تطبيق المستخدم')
-        ->and(SosAlertsTable::sourceAppLabel($workerRequest->load('user')))->toBe('تطبيق عامل التنظيف');
+    expect(SosAlertsTable::roleLabel($customerRequest->load('user')))->toBe('مستخدم')
+        ->and(SosAlertsTable::roleLabel($workerRequest->load('user')))->toBe('عامل تنظيف');
 
     $visibleIds = SosAlertResource::getEloquentQuery()->pluck('id')->all();
 
