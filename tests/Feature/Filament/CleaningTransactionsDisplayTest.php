@@ -51,11 +51,11 @@ it('exports only filtered transactions without exposing booking linkage', functi
     foreach ([$includedWorker, $excludedWorker] as $worker) {
         CleaningDepositTransaction::query()->create([
             'worker_id' => $worker->id,
-            'type' => 'admin_fee',
+            'type' => 'debt',
             'amount' => 100,
             'balance_before' => 1000,
             'balance_after' => 900,
-            'reference' => 'automatic_admin_commission:test-'.$worker->id,
+            'reference' => CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'test-'.$worker->id,
         ]);
     }
 
