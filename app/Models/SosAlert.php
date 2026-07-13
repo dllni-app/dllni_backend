@@ -6,12 +6,15 @@ namespace App\Models;
 
 use App\Enums\EmergencyType;
 use App\Enums\SOSStatus;
+use App\Observers\SosAlertObserver;
 use App\Traits\FilterQueries\SosAlertFilterQuery;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Modules\Resturants\Models\Order;
 
+#[ObservedBy([SosAlertObserver::class])]
 final class SosAlert extends Model
 {
     use SosAlertFilterQuery;
