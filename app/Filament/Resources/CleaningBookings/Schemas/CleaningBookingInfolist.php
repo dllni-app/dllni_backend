@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningBookings\Schemas;
 
+use Carbon\Carbon;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-use Modules\Cleaning\Enums\CleaningAssignmentMode;
-use Modules\Cleaning\Enums\CleaningBookingRoomAssignmentSource;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
@@ -17,16 +16,20 @@ final class CleaningBookingInfolist
 {
     public static function configure(Schema $schema): Schema
     {
-        $yesNo = fn ($state) => $state ? __('cleaning_admin.boolean.yes') : __('cleaning_admin.boolean.no');
-
         return $schema
             ->components([
-                Section::make(__('cleaning_admin.booking.sections.main'))
+                Section::make('الحجز')
                     ->schema([
-                        TextEntry::make('booking_number')->label(__('cleaning_admin.booking.fields.booking_number')),
-                        TextEntry::make('status')->label(__('cleaning_admin.booking.fields.status'))->badge()->formatStateUsing(fn ($state) => $state?->label()),
-                        TextEntry::make('terms_accepted')->label(__('cleaning_admin.booking.fields.terms_accepted'))->formatStateUsing($yesNo)->placeholder('-'),
-                        TextEntry::make('cancelled_at')->label(__('cleaning_admin.booking.fields.cancelled_at'))->dateTime('Y-m-d H:i')->placeholder('-'),
+                        TextEntry::make('booking_number')->label('رقم الحجز'),
+                        TextEntry::make('status')
+                            ->label('الحالة')
+                            ->badge()
+                            ->formatStateUsing(fn ($state): string => $state?->label() ?? '-'),
+                        TextEntry::make('cancelled_at')
+                            ->label('وقت الإلغاء')
+                            ->formatStateUsing(fn ($state): string => self::dateTime($state))
+                            ->placeholder('-')
+                            ->visible(fn ($record): bool => filled($record->cancelled_at)),
                         TextEntry::make('cancelled_by_role')
                             ->label('مصدر الإلغاء')
                             ->badge()
@@ -34,176 +37,294 @@ final class CleaningBookingInfolist
                             ->color(fn ($state): string => self::cancellationSourceColor($state))
                             ->placeholder('-')
                             ->visible(fn ($record): bool => filled($record->cancelled_by_role)),
-                        TextEntry::make('cancellationPolicy.name')->label(__('cleaning_admin.booking.fields.cancellation_policy'))->placeholder('-'),
-                        TextEntry::make('property_type')->label(__('cleaning_admin.booking.fields.property_type')),
-                        TextEntry::make('number_of_workers')->label(__('cleaning_admin.booking.fields.number_of_workers')),
-                        TextEntry::make('estimated_sqm')->label(__('cleaning_admin.booking.fields.estimated_sqm')),
-                        TextEntry::make('estimated_hours')->label(__('cleaning_admin.booking.fields.estimated_hours')),
-                        TextEntry::make('scheduled_date')->label(__('cleaning_admin.booking.fields.scheduled_date'))->date(),
-                        TextEntry::make('scheduled_time')->label(__('cleaning_admin.booking.fields.scheduled_time')),
+                        TextEntry::make('property_type')
+                            ->label('نوع العقار')
+                            ->formatStateUsing(fn (?string $state): string => self::propertyTypeLabel($state)),
+                        TextEntry::make('number_of_workers')
+                            ->label('عدد العاملين')
+                            ->formatStateUsing(fn ($state): string => self::integer($state)),
+                        TextEntry::make('estimated_sqm')
+                            ->label('المساحة التقديرية')
+                            ->formatStateUsing(fn ($state): string => self::integer($state)),
+                        TextEntry::make('estimated_hours')
+                            ->label('الساعات التقديرية')
+                            ->formatStateUsing(fn ($state): string => self::integer($state)),
+                        TextEntry::make('scheduled_date')
+                            ->label('التاريخ')
+                            ->formatStateUsing(fn ($state): string => self::date($state)),
+                        TextEntry::make('scheduled_time')
+                            ->label('الوقت')
+                            ->formatStateUsing(fn ($state): string => self::time($state)),
                     ])
                     ->columns(2),
-                Section::make(__('cleaning_admin.booking.sections.event_details'))
+                Section::make('تفاصيل المناسبة')
                     ->schema([
-                        TextEntry::make('property_details.event_type')->label(__('cleaning_admin.booking.fields.event_type'))->placeholder('-'),
-                        TextEntry::make('property_details.guest_count')->label(__('cleaning_admin.booking.fields.guest_count'))->placeholder('-'),
-                        TextEntry::make('property_details.venue_type')->label(__('cleaning_admin.booking.fields.venue_type'))->placeholder('-'),
-                        TextEntry::make('property_details.custom_service')->label(__('cleaning_admin.booking.fields.custom_service'))->placeholder('-'),
-                        TextEntry::make('property_details.hours')->label(__('cleaning_admin.booking.fields.hours'))->placeholder('-'),
-                        TextEntry::make('property_details.special_requirement')->label(__('cleaning_admin.booking.fields.special_requirement'))->placeholder('-'),
-                        TextEntry::make('property_details.notes')->label(__('cleaning_admin.booking.fields.notes'))->placeholder('-'),
+                        TextEntry::make('property_details.event_type')
+                            ->label('نوع المناسبة')
+                            ->formatStateUsing(fn (?string $state): string => self::eventTypeLabel($state))
+                            ->placeholder('-'),
+                        TextEntry::make('property_details.guest_count')
+                            ->label('عدد الضيوف')
+                            ->formatStateUsing(fn ($state): string => self::integer($state))
+                            ->placeholder('-'),
+                        TextEntry::make('property_details.venue_type')
+                            ->label('نوع المكان')
+                            ->formatStateUsing(fn (?string $state): string => self::propertyTypeLabel($state))
+                            ->placeholder('-'),
+                        TextEntry::make('property_details.custom_service')->label('الخدمة المخصصة')->placeholder('-'),
+                        TextEntry::make('property_details.hours')
+                            ->label('عدد الساعات')
+                            ->formatStateUsing(fn ($state): string => self::integer($state))
+                            ->placeholder('-'),
+                        TextEntry::make('property_details.special_requirement')->label('متطلب خاص')->placeholder('-'),
+                        TextEntry::make('property_details.notes')->label('ملاحظات')->placeholder('-'),
                     ])
                     ->columns(2)
                     ->visible(fn ($record): bool => $record->property_type === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE),
-                Section::make(__('cleaning_admin.booking.sections.pricing'))
+                Section::make('التسعير')
                     ->schema([
-                        TextEntry::make('base_price')->label(__('cleaning_admin.booking.fields.base_price'))->money(config('app.currency', 'SYP')),
-                        TextEntry::make('addons_total')->label(__('cleaning_admin.booking.fields.addons_total'))->money(config('app.currency', 'SYP')),
-                        TextEntry::make('travel_fee')->label(__('cleaning_admin.booking.fields.travel_fee'))->money(config('app.currency', 'SYP')),
-                        TextEntry::make('travel_distance_km')->label(__('cleaning_admin.booking.fields.travel_distance_km'))->placeholder('-'),
-                        TextEntry::make('admin_margin_amount')->label(__('cleaning_admin.booking.fields.admin_margin_amount'))->money(config('app.currency', 'SYP')),
-                        TextEntry::make('is_pricing_final')->label(__('cleaning_admin.booking.fields.is_pricing_final'))->formatStateUsing($yesNo),
-                        TextEntry::make('total_price')->label(__('cleaning_admin.booking.fields.total_price'))->money(config('app.currency', 'SYP')),
+                        TextEntry::make('base_price')->label('السعر الأساسي')->formatStateUsing(fn ($state): string => self::money($state)),
+                        TextEntry::make('addons_total')->label('الإضافات')->formatStateUsing(fn ($state): string => self::money($state)),
+                        TextEntry::make('travel_fee')->label('رسوم التنقل')->formatStateUsing(fn ($state): string => self::money($state)),
+                        TextEntry::make('travel_distance_km')->label('مسافة التنقل (كم)')->formatStateUsing(fn ($state): string => self::integer($state))->placeholder('-'),
+                        TextEntry::make('admin_margin_amount')->label('هامش الإدارة')->formatStateUsing(fn ($state): string => self::money($state)),
+                        TextEntry::make('total_price')->label('الإجمالي')->formatStateUsing(fn ($state): string => self::money($state))->weight('bold'),
                     ])
                     ->columns(2),
-                Section::make(__('cleaning_admin.booking.sections.execution_times'))
+                Section::make('أوقات التنفيذ')
                     ->schema([
-                        TextEntry::make('work_started_at')->label(__('cleaning_admin.booking.fields.work_started_at'))->dateTime('Y-m-d H:i')->placeholder('-'),
-                        TextEntry::make('work_finished_at')->label(__('cleaning_admin.booking.fields.work_finished_at'))->dateTime('Y-m-d H:i')->placeholder('-'),
-                        TextEntry::make('customer_confirmed_at')->label(__('cleaning_admin.booking.fields.customer_confirmed_at'))->dateTime('Y-m-d H:i')->placeholder('-'),
+                        TextEntry::make('work_started_at')->label('بدأ العمل')->formatStateUsing(fn ($state): string => self::dateTime($state))->placeholder('-'),
+                        TextEntry::make('work_finished_at')->label('انتهى العمل')->formatStateUsing(fn ($state): string => self::dateTime($state))->placeholder('-'),
+                        TextEntry::make('customer_confirmed_at')->label('تأكيد العميل')->formatStateUsing(fn ($state): string => self::dateTime($state))->placeholder('-'),
                     ])
                     ->columns(3),
-                Section::make(__('cleaning_admin.booking.sections.parties'))
+                Section::make('الأطراف')
                     ->schema([
-                        TextEntry::make('customer.name')->label(__('cleaning_admin.booking.fields.customer')),
-                        TextEntry::make('worker.first_name')->label(__('cleaning_admin.booking.fields.primary_worker'))->placeholder('-'),
-                        TextEntry::make('preferredWorker.first_name')->label(__('cleaning_admin.booking.fields.preferred_worker'))->placeholder('-'),
+                        TextEntry::make('customer.name')->label('العميل')->placeholder('-'),
+                        TextEntry::make('worker.first_name')->label('العامل الأساسي')->placeholder('-'),
+                        TextEntry::make('preferred_workers')
+                            ->label('العاملون المفضلون')
+                            ->state(fn ($record): array => self::preferredWorkerNames($record))
+                            ->badge()
+                            ->color('info')
+                            ->placeholder('-')
+                            ->columnSpanFull(),
                     ])
                     ->columns(2),
-                Section::make(__('cleaning_admin.booking.sections.team'))
+                Section::make('الفريق')
                     ->schema([
-                        TextEntry::make('assignment_mode')
-                            ->label(__('cleaning_admin.booking.fields.assignment_mode'))
-                            ->badge()
-                            ->color(fn ($state, $record): string => self::assignmentModeColor($record))
-                            ->state(fn ($record): string => self::assignmentModeLabel($record)),
                         TextEntry::make('worker_acceptance')
-                            ->label(__('cleaning_admin.booking.fields.worker_acceptance'))
-                            ->state(fn ($record): string => self::workerAcceptanceLabel($record)),
+                            ->label('قبول العاملين')
+                            ->state(fn ($record): string => sprintf('%d / %d', $record->acceptedWorkerCount(), max(1, (int) ($record->number_of_workers ?? 1)))),
                         TextEntry::make('remaining_workers')
-                            ->label(__('cleaning_admin.booking.fields.remaining_workers'))
-                            ->state(fn ($record): string => (string) $record->remainingWorkerCount()),
+                            ->label('العاملون المتبقون')
+                            ->state(fn ($record): string => self::integer($record->remainingWorkerCount())),
                         TextEntry::make('room_coverage')
-                            ->label(__('cleaning_admin.booking.fields.room_coverage'))
+                            ->label('تغطية الغرف')
                             ->state(fn ($record): string => self::roomCoverageLabel($record)),
                     ])
-                    ->columns(2),
-                Section::make(__('cleaning_admin.booking.sections.accepted_workers'))
+                    ->columns(3),
+                Section::make('العاملون المقبولون')
                     ->schema([
                         RepeatableEntry::make('acceptedWorkerAssignments')
-                            ->label('')
+                            ->label('تعيينات العاملين المقبولين')
                             ->schema([
-                                TextEntry::make('worker.first_name')
-                                    ->label(__('cleaning_admin.booking.fields.accepted_worker'))
-                                    ->placeholder('-'),
+                                TextEntry::make('worker.first_name')->label('العامل المقبول')->placeholder('-'),
                                 TextEntry::make('status')
-                                    ->label(__('cleaning_admin.booking.fields.status'))
+                                    ->label('الحالة')
                                     ->badge()
                                     ->formatStateUsing(fn ($state): string => self::workerAssignmentStatusLabel($state))
                                     ->color(fn ($state): string => self::workerAssignmentStatusColor($state)),
                                 TextEntry::make('accepted_at')
-                                    ->label(__('cleaning_admin.booking.fields.accepted_at'))
-                                    ->dateTime('Y-m-d H:i')
+                                    ->label('تاريخ القبول')
+                                    ->formatStateUsing(fn ($state): string => self::dateTime($state))
                                     ->placeholder('-'),
-                                TextEntry::make('room_count')
-                                    ->label(__('cleaning_admin.booking.fields.room_count'))
-                                    ->placeholder('-'),
-                                TextEntry::make('rooms_weight')
-                                    ->label(__('cleaning_admin.booking.fields.rooms_weight'))
-                                    ->placeholder('-'),
-                                TextEntry::make('service_share_amount')
-                                    ->label(__('cleaning_admin.booking.fields.service_share_amount'))
-                                    ->money(config('app.currency', 'SYP')),
-                                TextEntry::make('travel_fee')
-                                    ->label(__('cleaning_admin.booking.fields.travel_fee'))
-                                    ->money(config('app.currency', 'SYP')),
-                                TextEntry::make('admin_margin_amount')
-                                    ->label(__('cleaning_admin.booking.fields.admin_margin_amount'))
-                                    ->money(config('app.currency', 'SYP')),
-                                TextEntry::make('worker_amount')
-                                    ->label(__('cleaning_admin.booking.fields.worker_payout'))
-                                    ->money(config('app.currency', 'SYP')),
+                                TextEntry::make('room_count')->label('عدد الغرف')->formatStateUsing(fn ($state): string => self::integer($state))->placeholder('-'),
+                                TextEntry::make('rooms_weight')->label('وزن الغرف')->formatStateUsing(fn ($state): string => self::integer($state))->placeholder('-'),
+                                TextEntry::make('service_share_amount')->label('حصة الخدمة')->formatStateUsing(fn ($state): string => self::money($state)),
+                                TextEntry::make('travel_fee')->label('رسوم التنقل')->formatStateUsing(fn ($state): string => self::money($state)),
+                                TextEntry::make('admin_margin_amount')->label('هامش الإدارة')->formatStateUsing(fn ($state): string => self::money($state)),
+                                TextEntry::make('worker_amount')->label('مستحقات العامل')->formatStateUsing(fn ($state): string => self::money($state)),
                             ])
                             ->columns(4),
                     ])
                     ->visible(fn ($record): bool => $record->acceptedWorkerAssignments()->exists()),
-                Section::make(__('cleaning_admin.booking.sections.room_assignments'))
+                Section::make('توزيع الغرف')
                     ->schema([
                         RepeatableEntry::make('rooms')
-                            ->label('')
+                            ->label('الغرف')
                             ->schema([
-                                TextEntry::make('display_label')
-                                    ->label(__('cleaning_admin.booking.fields.room_label'))
-                                    ->placeholder('-'),
-                                TextEntry::make('room_type')
-                                    ->label(__('cleaning_admin.booking.fields.room_type'))
-                                    ->formatStateUsing(fn (?string $state): string => self::roomTypeLabel($state))
-                                    ->placeholder('-'),
-                                TextEntry::make('room_size')
-                                    ->label(__('cleaning_admin.booking.fields.room_size'))
-                                    ->formatStateUsing(fn (?string $state): string => self::roomSizeLabel($state))
-                                    ->placeholder('-'),
-                                TextEntry::make('weight')
-                                    ->label(__('cleaning_admin.booking.fields.room_weight'))
-                                    ->placeholder('-'),
-                                TextEntry::make('assignedWorker.first_name')
-                                    ->label(__('cleaning_admin.booking.fields.assigned_worker'))
-                                    ->placeholder('-'),
-                                TextEntry::make('assignment_source')
-                                    ->label(__('cleaning_admin.booking.fields.assignment_source'))
-                                    ->badge()
-                                    ->formatStateUsing(fn ($state): string => self::roomAssignmentSourceLabel($state)),
+                                TextEntry::make('display_label')->label('اسم الغرفة')->placeholder('-'),
+                                TextEntry::make('room_type')->label('نوع الغرفة')->formatStateUsing(fn (?string $state): string => self::roomTypeLabel($state))->placeholder('-'),
+                                TextEntry::make('room_size')->label('حجم الغرفة')->formatStateUsing(fn (?string $state): string => self::roomSizeLabel($state))->placeholder('-'),
+                                TextEntry::make('weight')->label('وزن الغرفة')->formatStateUsing(fn ($state): string => self::integer($state))->placeholder('-'),
+                                TextEntry::make('assignedWorker.first_name')->label('العامل المعيّن')->placeholder('-'),
+                                TextEntry::make('assignment_source')->label('مصدر التعيين')->badge()->formatStateUsing(fn ($state): string => self::roomAssignmentSourceLabel($state)),
                             ])
                             ->columns(3),
                     ])
                     ->visible(fn ($record): bool => $record->rooms()->exists()),
-                Section::make(__('cleaning_admin.booking.sections.payout_breakdown'))
+                Section::make('تفصيل المستحقات')
                     ->schema([
-                        TextEntry::make('worker_share_total')
-                            ->label(__('cleaning_admin.booking.fields.worker_share_total'))
-                            ->state(fn ($record): string => self::money(self::acceptedAssignmentsTotal($record, 'service_share_amount'))),
-                        TextEntry::make('worker_travel_total')
-                            ->label(__('cleaning_admin.booking.fields.worker_travel_total'))
-                            ->state(fn ($record): string => self::money(self::acceptedAssignmentsTotal($record, 'travel_fee'))),
-                        TextEntry::make('worker_admin_total')
-                            ->label(__('cleaning_admin.booking.fields.worker_admin_total'))
-                            ->state(fn ($record): string => self::money(self::acceptedAssignmentsTotal($record, 'admin_margin_amount'))),
-                        TextEntry::make('worker_amount_total')
-                            ->label(__('cleaning_admin.booking.fields.worker_payout'))
-                            ->state(fn ($record): string => self::money(self::acceptedAssignmentsTotal($record, 'worker_amount'))),
+                        TextEntry::make('worker_share_total')->label('إجمالي حصة العامل')->state(fn ($record): string => self::money(self::acceptedAssignmentsTotal($record, 'service_share_amount'))),
+                        TextEntry::make('worker_travel_total')->label('إجمالي التنقل للعامل')->state(fn ($record): string => self::money(self::acceptedAssignmentsTotal($record, 'travel_fee'))),
+                        TextEntry::make('worker_admin_total')->label('إجمالي هامش الإدارة للعامل')->state(fn ($record): string => self::money(self::acceptedAssignmentsTotal($record, 'admin_margin_amount'))),
+                        TextEntry::make('worker_amount_total')->label('مستحقات العامل')->state(fn ($record): string => self::money(self::acceptedAssignmentsTotal($record, 'worker_amount'))),
                     ])
                     ->columns(2),
-                Section::make(__('cleaning_admin.booking.sections.disputes'))
+                Section::make('النزاعات')
                     ->schema([
-                        TextEntry::make('disputes_count')->counts('disputes')->label(__('cleaning_admin.booking.fields.disputes_count')),
+                        TextEntry::make('disputes_count')->counts('disputes')->label('عدد النزاعات'),
                     ])
-                    ->visible(fn ($record) => $record->disputes()->count() > 0),
+                    ->visible(fn ($record): bool => $record->disputes()->exists()),
             ]);
     }
 
-    private static function assignmentModeLabel(mixed $record): string
+    private static function preferredWorkerNames(mixed $record): array
     {
-        $mode = $record->resolvedAssignmentMode();
+        $names = collect();
 
-        return self::translatedValue('cleaning_admin.booking.enums.assignment_mode.', $mode);
+        if ($record->preferredWorker !== null) {
+            $names->push($record->preferredWorker->first_name ?: $record->preferredWorker->user?->name);
+        }
+
+        $rooms = $record->relationLoaded('rooms')
+            ? $record->rooms
+            : $record->rooms()->with('plannedPreferredWorker.user')->get();
+
+        foreach ($rooms as $room) {
+            $worker = $room->plannedPreferredWorker;
+            if ($worker !== null) {
+                $names->push($worker->first_name ?: $worker->user?->name);
+            }
+        }
+
+        return $names
+            ->filter(fn ($name): bool => filled($name))
+            ->unique()
+            ->values()
+            ->all();
     }
 
-    private static function assignmentModeColor(mixed $record): string
+    private static function roomCoverageLabel(mixed $record): string
     {
-        return match ($record->resolvedAssignmentMode()) {
-            CleaningAssignmentMode::PreferredWorker->value => 'info',
-            CleaningAssignmentMode::OpenCount->value => 'primary',
+        $totalRooms = max(0, (int) $record->rooms()->count());
+        if ($totalRooms === 0) {
+            return '-';
+        }
+
+        $assignedRooms = max(0, (int) $record->rooms()->whereNotNull('assigned_worker_id')->count());
+        $percent = (int) round(($assignedRooms / $totalRooms) * 100);
+
+        return sprintf('%d/%d (%d%%)', $assignedRooms, $totalRooms, $percent);
+    }
+
+    private static function acceptedAssignmentsTotal(mixed $record, string $field): float
+    {
+        return (float) $record->workerAssignments()
+            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
+            ->sum($field);
+    }
+
+    private static function workerAssignmentStatusLabel(mixed $state): string
+    {
+        $value = $state?->value ?? $state;
+
+        return match ((string) $value) {
+            'pending' => 'قيد الانتظار',
+            'accepted' => 'مقبول',
+            'accepted_waiting_for_order_start' => 'مقبول وبانتظار بدء الطلب',
+            'awaiting_start_verification' => 'بانتظار التحقق من البدء',
+            'start_approved' => 'تمت الموافقة على البدء',
+            'in_progress' => 'قيد التنفيذ',
+            'awaiting_customer_completion' => 'بانتظار تأكيد العميل',
+            'time_extension_requested' => 'تم طلب تمديد الوقت',
+            'completed' => 'مكتمل',
+            'rejected' => 'مرفوض',
+            'withdrawn' => 'منسحب',
+            'cancelled' => 'ملغى',
+            default => '-',
+        };
+    }
+
+    private static function workerAssignmentStatusColor(mixed $state): string
+    {
+        $value = $state?->value ?? $state;
+
+        return match ((string) $value) {
+            'completed' => 'success',
+            'rejected', 'cancelled' => 'danger',
+            'withdrawn' => 'warning',
+            'in_progress', 'time_extension_requested' => 'primary',
+            'accepted', 'accepted_waiting_for_order_start', 'awaiting_start_verification', 'start_approved', 'awaiting_customer_completion' => 'info',
             default => 'gray',
+        };
+    }
+
+    private static function propertyTypeLabel(?string $value): string
+    {
+        return match ($value) {
+            'apartment' => 'شقة',
+            'villa' => 'فيلا',
+            'house' => 'منزل',
+            'office' => 'مكتب',
+            'studio' => 'استوديو',
+            'event_assistance' => 'مساعدة المناسبات',
+            null, '' => '-',
+            default => $value,
+        };
+    }
+
+    private static function eventTypeLabel(?string $value): string
+    {
+        return match ($value) {
+            'family_dinner' => 'عشاء عائلي',
+            'birthday' => 'عيد ميلاد',
+            'large_gathering' => 'تجمع كبير',
+            'funeral' => 'عزاء',
+            'other' => 'أخرى',
+            null, '' => '-',
+            default => $value,
+        };
+    }
+
+    private static function roomTypeLabel(?string $value): string
+    {
+        return match ($value) {
+            'bedroom' => 'غرفة نوم',
+            'bathroom' => 'حمام',
+            'toilet' => 'دورة مياه',
+            'kitchen' => 'مطبخ',
+            'living_room' => 'غرفة معيشة',
+            'balcony' => 'شرفة',
+            'corridor' => 'ممر',
+            'room' => 'غرفة',
+            null, '' => '-',
+            default => $value,
+        };
+    }
+
+    private static function roomSizeLabel(?string $value): string
+    {
+        return match ($value) {
+            'small' => 'صغير',
+            'medium' => 'متوسط',
+            'large' => 'كبير',
+            null, '' => '-',
+            default => $value,
+        };
+    }
+
+    private static function roomAssignmentSourceLabel(mixed $state): string
+    {
+        $value = $state?->value ?? $state;
+
+        return match ((string) $value) {
+            'customer' => 'العميل',
+            'worker' => 'العامل',
+            'auto' => 'تلقائي',
+            'admin' => 'الإدارة',
+            default => '-',
         };
     }
 
@@ -229,88 +350,56 @@ final class CleaningBookingInfolist
         };
     }
 
-    private static function workerAcceptanceLabel(mixed $record): string
-    {
-        return sprintf('%d / %d', $record->acceptedWorkerCount(), max(1, (int) ($record->number_of_workers ?? 1)));
-    }
-
-    private static function roomCoverageLabel(mixed $record): string
-    {
-        $totalRooms = max(0, (int) ($record->rooms()->count() ?? 0));
-        if ($totalRooms <= 0) {
-            return '-';
-        }
-
-        $assignedRooms = max(0, (int) ($record->rooms()->whereNotNull('assigned_worker_id')->count() ?? 0));
-        $percent = (int) round(($assignedRooms / max(1, $totalRooms)) * 100);
-
-        return sprintf('%d/%d (%d%%)', $assignedRooms, $totalRooms, $percent);
-    }
-
-    private static function roomTypeLabel(?string $state): string
-    {
-        return self::translatedValue('cleaning_admin.booking.enums.room_type.', $state);
-    }
-
-    private static function roomSizeLabel(?string $state): string
-    {
-        return self::translatedValue('cleaning_admin.booking.enums.room_size.', $state);
-    }
-
-    private static function roomAssignmentSourceLabel(mixed $state): string
-    {
-        $value = $state?->value ?? $state;
-        if (! is_string($value) || $value === '') {
-            return '-';
-        }
-
-        return self::translatedValue('cleaning_admin.booking.enums.room_assignment_source.', $value);
-    }
-
-    private static function workerAssignmentStatusLabel(mixed $state): string
-    {
-        $value = $state?->value ?? $state;
-        if (! is_string($value) || $value === '') {
-            return '-';
-        }
-
-        return self::translatedValue('cleaning_admin.booking.enums.worker_assignment_status.', $value);
-    }
-
-    private static function workerAssignmentStatusColor(mixed $state): string
-    {
-        $value = $state?->value ?? $state;
-
-        return match ($value) {
-            CleaningBookingWorkerAssignmentStatus::Accepted->value => 'success',
-            CleaningBookingWorkerAssignmentStatus::Withdrawn->value => 'warning',
-            CleaningBookingWorkerAssignmentStatus::Rejected->value => 'danger',
-            default => 'gray',
-        };
-    }
-
-    private static function acceptedAssignmentsTotal(mixed $record, string $field): float
-    {
-        $assignments = $record->workerAssignments()
-            ->where('status', CleaningBookingWorkerAssignmentStatus::Accepted->value)
-            ->get();
-
-        return round((float) $assignments->sum($field), 2);
-    }
-
     private static function money(mixed $amount): string
     {
-        return number_format((float) $amount, 2).' '.config('app.currency', 'SYP');
+        return self::integer($amount).' ل.س';
     }
 
-    private static function translatedValue(string $prefix, ?string $value): string
+    private static function integer(mixed $value): string
     {
-        if (! $value) {
+        if ($value === null || $value === '') {
+            return '0';
+        }
+
+        return number_format((int) round((float) $value), 0, '.', ',');
+    }
+
+    private static function date(mixed $value): string
+    {
+        if ($value === null || $value === '') {
             return '-';
         }
 
-        $key = $prefix.$value;
+        try {
+            return Carbon::parse($value)->format('Y-m-d');
+        } catch (\Throwable) {
+            return (string) $value;
+        }
+    }
 
-        return __($key) === $key ? $value : __($key);
+    private static function time(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '-';
+        }
+
+        try {
+            return Carbon::parse((string) $value)->format('h:i A');
+        } catch (\Throwable) {
+            return (string) $value;
+        }
+    }
+
+    private static function dateTime(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '-';
+        }
+
+        try {
+            return Carbon::parse($value)->format('Y-m-d h:i A');
+        } catch (\Throwable) {
+            return (string) $value;
+        }
     }
 }
