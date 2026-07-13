@@ -9,10 +9,13 @@ use App\Enums\SupportCasePriority;
 use App\Enums\SupportCaseReporterRole;
 use App\Enums\SupportCaseResolution;
 use App\Enums\SupportCaseStatus;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\EventBooking;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 
@@ -79,6 +82,17 @@ final class SupportCase extends Model implements HasMedia
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection('attachments');
+    }
+
+    protected function bookingType(): Attribute
+    {
+        return Attribute::make(
+            set: static fn (mixed $value): mixed => match ($value) {
+                CleaningBooking::class => 'cleaning_booking',
+                EventBooking::class => 'event_booking',
+                default => $value,
+            },
+        );
     }
 
     public function casts(): array
