@@ -114,10 +114,13 @@ final class CleaningTransactionsTable
      */
     public static function typeOptions(): array
     {
-        return array_combine(
-            CleaningDepositTransaction::PUBLIC_TYPES,
-            array_map(self::typeLabel(...), CleaningDepositTransaction::PUBLIC_TYPES),
-        );
+        $options = [];
+
+        foreach (CleaningDepositTransaction::PUBLIC_TYPES as $type) {
+            $options[$type] = self::typeLabel($type);
+        }
+
+        return $options;
     }
 
     public static function typeLabel(string $type): string
