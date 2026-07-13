@@ -28,11 +28,6 @@ final class CleaningServiceResource extends Resource
 
     protected static ?int $navigationSort = 21;
 
-    public static function shouldRegisterNavigation(): bool
-    {
-        return false;
-    }
-
     public static function getNavigationGroup(): ?string
     {
         return __('cleaning_admin.nav_groups.operations');
