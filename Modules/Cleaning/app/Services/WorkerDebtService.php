@@ -71,8 +71,8 @@ final class WorkerDebtService
             $balanceBefore = (float) $deposit->current_balance;
 
             // Paying administration-funded debt removes the temporary credit from
-            // the worker balance. Any remainder settles commission (or remains a
-            // legacy prepayment) and therefore credits the deposit balance.
+            // the worker balance. Any remainder settles automatic administration
+            // debt and therefore credits the deposit balance.
             $balanceDelta = $amount - (2 * $debtSettledAmount);
             $balanceAfter = $balanceBefore + $balanceDelta;
 
@@ -110,12 +110,8 @@ final class WorkerDebtService
      */
     public function summary(Worker $worker): array
     {
-        $totals = CleaningDepositTransaction::query()
+        $totals = $this->totalsQuery()
             ->where('worker_id', $worker->id)
-            ->selectRaw("COALESCE(SUM(CASE WHEN type = 'debt' THEN amount ELSE 0 END), 0) as debt_total")
-            ->selectRaw("COALESCE(SUM(CASE WHEN type = 'admin_fee' THEN amount ELSE 0 END), 0) as admin_fee_total")
-            ->selectRaw("COALESCE(SUM(CASE WHEN type = 'settlement' THEN amount ELSE 0 END), 0) as settlement_total")
-            ->selectRaw("COALESCE(SUM(CASE WHEN type = 'settlement' THEN debt_settled_amount ELSE 0 END), 0) as debt_settled_total")
             ->first();
 
         return $this->buildSummary(
@@ -140,12 +136,7 @@ final class WorkerDebtService
      */
     public function globalSummary(): array
     {
-        $totals = CleaningDepositTransaction::query()
-            ->selectRaw("COALESCE(SUM(CASE WHEN type = 'debt' THEN amount ELSE 0 END), 0) as debt_total")
-            ->selectRaw("COALESCE(SUM(CASE WHEN type = 'admin_fee' THEN amount ELSE 0 END), 0) as admin_fee_total")
-            ->selectRaw("COALESCE(SUM(CASE WHEN type = 'settlement' THEN amount ELSE 0 END), 0) as settlement_total")
-            ->selectRaw("COALESCE(SUM(CASE WHEN type = 'settlement' THEN debt_settled_amount ELSE 0 END), 0) as debt_settled_total")
-            ->first();
+        $totals = $this->totalsQuery()->first();
 
         return $this->buildSummary(
             debtTotal: (float) ($totals?->debt_total ?? 0),
@@ -158,6 +149,17 @@ final class WorkerDebtService
     public function outstandingAdministrationDue(Worker $worker): float
     {
         return (float) $this->summary($worker)['outstandingAdministrationDue'];
+    }
+
+    private function totalsQuery(): \Illuminate\Database\Eloquent\Builder
+    {
+        $automaticPrefix = CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'%';
+
+        return CleaningDepositTransaction::query()
+            ->selectRaw("COALESCE(SUM(CASE WHEN type = 'debt' AND (reference IS NULL OR reference NOT LIKE ?) THEN amount ELSE 0 END), 0) as debt_total", [$automaticPrefix])
+            ->selectRaw("COALESCE(SUM(CASE WHEN type = 'debt' AND reference LIKE ? THEN amount ELSE 0 END), 0) as admin_fee_total", [$automaticPrefix])
+            ->selectRaw("COALESCE(SUM(CASE WHEN type = 'settlement' THEN amount ELSE 0 END), 0) as settlement_total")
+            ->selectRaw("COALESCE(SUM(CASE WHEN type = 'settlement' THEN debt_settled_amount ELSE 0 END), 0) as debt_settled_total");
     }
 
     private function lockOrCreateDeposit(Worker $worker): CleaningWorkerDeposit
