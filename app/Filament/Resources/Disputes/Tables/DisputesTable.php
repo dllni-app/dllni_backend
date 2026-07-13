@@ -14,7 +14,11 @@ use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\HtmlString;
+use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\EventBooking;
 
 final class DisputesTable
 {
@@ -36,6 +40,20 @@ final class DisputesTable
                     ))
                     ->getStateUsing(fn ($record) => $record->booking?->booking_number ?? '-')
                     ->placeholder('-'),
+                TextColumn::make('customer_phone')
+                    ->label('رقم هاتف العميل')
+                    ->getStateUsing(fn (Dispute $record): ?string => $record->booking?->customer?->phone)
+                    ->placeholder('-')
+                    ->copyable()
+                    ->toggleable(),
+                TextColumn::make('worker_phone')
+                    ->label('رقم هاتف العامل')
+                    ->getStateUsing(fn (Dispute $record): ?string => $record->booking instanceof CleaningBooking
+                        ? $record->booking->worker?->user?->phone
+                        : null)
+                    ->placeholder('-')
+                    ->copyable()
+                    ->toggleable(),
                 TextColumn::make('category')
                     ->label(self::headerLabel(
                         __('cleaning_admin.disputes.fields.category'),
@@ -69,7 +87,14 @@ final class DisputesTable
                     ->since()
                     ->sortable(),
             ])
-            ->modifyQueryUsing(fn ($query) => $query->with('booking'))
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with([
+                'booking' => function (MorphTo $morphTo): void {
+                    $morphTo->morphWith([
+                        CleaningBooking::class => ['customer', 'worker.user'],
+                        EventBooking::class => ['customer'],
+                    ]);
+                },
+            ]))
             ->filters([
                 SelectFilter::make('status')->label(__('cleaning_admin.disputes.fields.status'))->options(collect(DisputeStatus::cases())->mapWithKeys(fn ($c) => [$c->value => $c->label()])->all()),
                 SelectFilter::make('category')->label(__('cleaning_admin.disputes.fields.category'))->options(collect(DisputeCategory::cases())->mapWithKeys(fn ($c) => [$c->value => $c->label()])->all()),
