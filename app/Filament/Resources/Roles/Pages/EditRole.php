@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Roles\Pages;
 
 use App\Filament\Resources\Roles\RoleResource;
+use App\Filament\Resources\Roles\Schemas\RoleForm;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\ViewAction;
 use Filament\Resources\Pages\EditRecord;
@@ -23,7 +24,10 @@ final class EditRole extends EditRecord
 
     public function mutateFormDataBeforeFill(array $data): array
     {
-        $data['permissions'] = $this->record->permissions->pluck('name')->all();
+        $data = array_merge(
+            $data,
+            RoleForm::selectedPermissionState($this->record->permissions->pluck('name')->all()),
+        );
 
         unset($data['guard_name']);
 
@@ -32,10 +36,7 @@ final class EditRole extends EditRecord
 
     public function mutateFormDataBeforeSave(array $data): array
     {
-        $this->selectedPermissions = array_values($data['permissions'] ?? []);
-
-        unset($data['permissions']);
-
+        $this->selectedPermissions = RoleForm::extractSelectedPermissions($data);
         $data['guard_name'] = 'web';
 
         return $data;
