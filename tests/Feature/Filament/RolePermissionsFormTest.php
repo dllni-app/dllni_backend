@@ -44,19 +44,27 @@ it('creates dashboard roles with the web guard without exposing the guard field'
         ->and($role->hasPermissionTo('pricing.view', 'web'))->toBeTrue();
 });
 
-it('renders role view and edit pages without passing grouped option arrays as labels', function (): void {
-    $permission = Permission::findOrCreate('pricing.view', 'web');
+it('renders role permissions as separate translated section cards', function (): void {
+    $pricingPermission = Permission::findOrCreate('pricing.view', 'web');
+    $settingsPermission = Permission::findOrCreate('settings.view', 'web');
     $role = Role::findOrCreate('Pricing Reviewer', 'web');
-    $role->syncPermissions([$permission]);
+    $role->syncPermissions([$pricingPermission, $settingsPermission]);
 
     $this->get(RoleResource::getUrl('view', ['record' => $role], isAbsolute: false))
         ->assertSuccessful()
-        ->assertSee('عرض التسعير');
+        ->assertSee('بيانات الدور')
+        ->assertSee('التسعير')
+        ->assertSee('عرض التسعير')
+        ->assertSee('الإعدادات')
+        ->assertSee('عرض الإعدادات')
+        ->assertSee('عدد الصلاحيات: 1');
 
     $this->get(RoleResource::getUrl('edit', ['record' => $role], isAbsolute: false))
         ->assertSuccessful()
         ->assertSee('التسعير')
-        ->assertSee('عرض التسعير');
+        ->assertSee('عرض التسعير')
+        ->assertSee('الإعدادات')
+        ->assertSee('عرض الإعدادات');
 });
 
 it('shows Arabic permission labels grouped by translated sections', function (): void {
