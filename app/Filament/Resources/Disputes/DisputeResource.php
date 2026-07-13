@@ -48,7 +48,9 @@ final class DisputeResource extends Resource
 
     public static function getNavigationTooltip(): ?string
     {
-        return __('cleaning_admin.disputes.tooltip');
+        return app()->getLocale() === 'ar'
+            ? 'معالجة نزاعات التنظيف: بيانات الحجز والأطراف، سجل الرسائل، الخصم من العامل أو إغلاق النزاع.'
+            : 'Review cleaning disputes, booking parties, message history, worker deductions, and closure.';
     }
 
     public static function getNavigationBadge(): ?string
