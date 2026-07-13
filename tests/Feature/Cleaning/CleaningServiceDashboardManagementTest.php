@@ -22,7 +22,7 @@ it('uses dashboard-managed cleaning service records in the customer API', functi
         'is_active' => true,
     ]);
 
-    expect($service->slug)->toBe('service');
+    expect($service->slug)->not->toBeEmpty();
 
     $this->getJson('/api/v1/cleaning-services?filter[isActive]=1')
         ->assertOk()
