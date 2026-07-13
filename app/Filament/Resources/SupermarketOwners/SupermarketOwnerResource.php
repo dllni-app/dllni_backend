@@ -30,7 +30,7 @@ final class SupermarketOwnerResource extends Resource
 
     public static function getNavigationGroup(): ?string
     {
-        return 'إدارة المتاجر';
+        return 'قسم المتاجر';
     }
 
     public static function getNavigationLabel(): string
