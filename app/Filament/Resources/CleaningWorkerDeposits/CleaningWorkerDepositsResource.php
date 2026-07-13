@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningWorkerDeposits;
 
+use App\Filament\Resources\CleaningWorkerDeposits\Pages\CreateCleaningWorkerDeposit;
 use App\Filament\Resources\CleaningWorkerDeposits\Pages\ListCleaningWorkerDeposits;
+use App\Filament\Resources\CleaningWorkerDeposits\Schemas\CleaningTransactionForm;
 use App\Filament\Resources\CleaningWorkerDeposits\Tables\CleaningTransactionsTable;
 use App\Models\CleaningDepositTransaction;
 use BackedEnum;
@@ -49,6 +51,11 @@ final class CleaningWorkerDepositsResource extends Resource
         return __('cleaning_admin.transactions.plural');
     }
 
+    public static function form(Schema $schema): Schema
+    {
+        return CleaningTransactionForm::configure($schema);
+    }
+
     public static function table(Table $table): Table
     {
         return CleaningTransactionsTable::configure($table);
@@ -84,15 +91,11 @@ final class CleaningWorkerDepositsResource extends Resource
         return parent::getEloquentQuery()->with(['worker', 'createdByAdmin']);
     }
 
-    public static function canCreate(): bool
-    {
-        return false;
-    }
-
     public static function getPages(): array
     {
         return [
             'index' => ListCleaningWorkerDeposits::route('/'),
+            'create' => CreateCleaningWorkerDeposit::route('/create'),
         ];
     }
 }
