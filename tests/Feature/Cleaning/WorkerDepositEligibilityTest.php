@@ -69,19 +69,20 @@ it('records admin deposit and increases balance and deposited total', function (
     expect((float) $deposit->withdrawn_total)->toBe(0.0);
 });
 
-it('records withdrawal and increases withdrawn total without treating it as admin fee', function (): void {
+it('stores the legacy withdrawal operation as a refund', function (): void {
     seedDepositSettings();
     $worker = Worker::factory()->create(['trust_score' => 80]);
     seedWorkerDeposit($worker, 1000);
 
-    app(DepositService::class)->recordWithdrawal($worker, 300, 'WD-001');
+    $transaction = app(DepositService::class)->recordWithdrawal($worker, 300, 'WD-001');
 
     $deposit = $worker->fresh()->deposit;
-    expect((float) $deposit->current_balance)->toBe(700.0);
-    expect((float) $deposit->withdrawn_total)->toBe(300.0);
+    expect((float) $deposit->current_balance)->toBe(700.0)
+        ->and((float) $deposit->withdrawn_total)->toBe(300.0)
+        ->and($transaction->type)->toBe('refund');
 });
 
-it('records admin fee debit without storing a booking relation', function (): void {
+it('records automatic administration debt without storing a booking relation', function (): void {
     seedDepositSettings();
     $worker = Worker::factory()->create(['trust_score' => 80]);
     seedWorkerDeposit($worker, 1000);
@@ -97,9 +98,9 @@ it('records admin fee debit without storing a booking relation', function (): vo
     expect((float) $deposit->current_balance)->toBe(850.0)
         ->and((float) $deposit->withdrawn_total)->toBe(0.0)
         ->and($transaction)->toBeInstanceOf(CleaningDepositTransaction::class)
-        ->and($transaction?->type)->toBe('admin_fee')
+        ->and($transaction?->type)->toBe('debt')
         ->and((float) $transaction?->amount)->toBe(150.0)
-        ->and($transaction?->reference)->toStartWith('automatic_admin_commission:')
+        ->and($transaction?->reference)->toStartWith(CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX)
         ->and(Schema::hasColumn('cleaning_deposit_transactions', 'cleaning_booking_id'))->toBeFalse();
 });
 
@@ -218,7 +219,7 @@ it('applies trust penalty when rejecting after accept', function (): void {
     ]);
 });
 
-it('debits admin fee when customer confirms completion without linking the ledger row to the booking', function (): void {
+it('debits automatic administration debt when customer confirms completion without linking the ledger row to the booking', function (): void {
     seedDepositSettings();
     $worker = Worker::factory()->create(['trust_score' => 80]);
     seedWorkerDeposit($worker, 5000);
@@ -247,12 +248,13 @@ it('debits admin fee when customer confirms completion without linking the ledge
 
     $transaction = CleaningDepositTransaction::query()
         ->where('worker_id', $worker->id)
-        ->where('type', 'admin_fee')
+        ->where('type', 'debt')
+        ->where('reference', 'like', CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'%')
         ->first();
 
     expect($transaction)->toBeInstanceOf(CleaningDepositTransaction::class)
         ->and((float) $transaction?->amount)->toBe(100.0)
-        ->and($transaction?->reference)->toStartWith('automatic_admin_commission:')
+        ->and($transaction?->reference)->toStartWith(CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX)
         ->and((float) $worker->fresh()->deposit->current_balance)->toBe(4900.0);
 });
 
