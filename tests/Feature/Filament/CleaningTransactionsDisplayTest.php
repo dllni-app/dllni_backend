@@ -34,12 +34,15 @@ it('maps internal references and legacy types to public financial labels', funct
         ->and(CleaningDepositTransaction::normalizePublicType('adjustment', -100))->toBe('refund');
 });
 
-it('formats currency and numbers with latin digits regardless of locale', function (): void {
+it('formats financial amounts as Latin integers regardless of locale', function (): void {
     app()->setLocale('ar');
 
+    $formatted = AdminUiFormatter::formatCurrency(50000.75, 0);
+
     expect(AdminUiFormatter::formatNumber(12345.6, 1))->toBe('12,345.6')
-        ->and(AdminUiFormatter::formatCurrency(50000))->toContain('50,000.00')
-        ->and(AdminUiFormatter::formatCurrency(50000))->not->toMatch('/[\x{0660}-\x{0669}]/u');
+        ->and($formatted)->toContain('50,001')
+        ->and($formatted)->not->toContain('.')
+        ->and($formatted)->not->toMatch('/[\x{0660}-\x{0669}]/u');
 });
 
 it('exports only filtered transactions without exposing booking linkage', function (): void {
@@ -52,9 +55,9 @@ it('exports only filtered transactions without exposing booking linkage', functi
         CleaningDepositTransaction::query()->create([
             'worker_id' => $worker->id,
             'type' => 'debt',
-            'amount' => 100,
-            'balance_before' => 1000,
-            'balance_after' => 900,
+            'amount' => 100.40,
+            'balance_before' => 1000.20,
+            'balance_after' => 899.80,
             'reference' => CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'test-'.$worker->id,
         ]);
     }
@@ -66,5 +69,8 @@ it('exports only filtered transactions without exposing booking linkage', functi
     expect($rows)->toHaveCount(1)
         ->and(array_values($rows[0]))->toContain('Included Worker')
         ->and(array_values($rows[0]))->toContain('Debt')
+        ->and($rows[0][__('cleaning_admin.transactions.fields.amount')])->toBe(100)
+        ->and($rows[0][__('cleaning_admin.transactions.fields.balance_before')])->toBe(1000)
+        ->and($rows[0][__('cleaning_admin.transactions.fields.balance_after')])->toBe(900)
         ->and($rows[0])->not->toHaveKey('Booking');
 });
