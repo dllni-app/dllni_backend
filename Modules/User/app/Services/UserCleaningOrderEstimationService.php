@@ -8,9 +8,6 @@ use App\Models\CleaningFinancialSetting;
 use App\Models\Worker;
 use Illuminate\Support\Arr;
 use InvalidArgumentException;
-use Modules\Cleaning\Enums\ServiceCategory;
-use Modules\Cleaning\Models\CleaningService;
-use Modules\Cleaning\Models\ServicePricing;
 use Modules\Cleaning\Services\CleaningPricingCalculator;
 use Modules\Cleaning\Support\CleaningFinancialDefaults;
 
@@ -89,7 +86,6 @@ final class UserCleaningOrderEstimationService
             'addressLatitude' => $this->normalizeCoordinate($addressLatitude),
             'addressLongitude' => $this->normalizeCoordinate($addressLongitude),
             'preferredWorkerId' => $this->normalizePreferredWorkerId($preferredWorkerId),
-            'serviceIds' => $this->normalizeServiceIds($serviceIds ?? []),
         ];
     }
 
@@ -153,8 +149,8 @@ final class UserCleaningOrderEstimationService
             $regularCalculation = $this->calculateRegularCleaningFromSettings($input['propertyDetails'], $input['propertyType']);
             $basePrice = $this->pricingCalculator->roundMoney((float) $regularCalculation['basePrice']);
             $estimation = ['recommendation' => null];
-            $lines = $this->resolveRegularCleaningPricingLines($input['serviceIds'], $input['propertyType'], (string) ($input['propertyDetails']['living_room_size'] ?? 'medium'), (float) $regularCalculation['estimatedSqm']);
-            $addonsTotal = $this->pricingCalculator->roundMoney(array_sum(array_map(static fn (array $line): float => (float) $line['totalPrice'], $lines)));
+            $lines = [];
+            $addonsTotal = 0.0;
         }
 
         if ($input['preferredWorkerId'] === null) {
@@ -308,36 +304,6 @@ final class UserCleaningOrderEstimationService
     private function baseSqmByPropertyTypeLegacy(string $type): float { return match ($type) { 'villa' => 120.0, 'house' => 90.0, 'office' => 75.0, default => 65.0 }; }
     private function livingRoomSqmAdjustmentLegacy(string $size): float { return match ($size) { 'small' => 10.0, 'large' => 25.0, 'very_large' => 40.0, default => 15.0 }; }
     private function pricePerSqmByPropertyTypeLegacy(string $type): float { return match ($type) { 'villa' => 9.0, 'house' => 8.0, 'office' => 8.5, default => 8.0 }; }
-
-    private function normalizeServiceIds(array $ids): array
-    {
-        $normalized = [];
-        foreach ($ids as $id) { if (is_numeric($id) && (int) $id > 0 && ! in_array((int) $id, $normalized, true)) { $normalized[] = (int) $id; } }
-        return $normalized;
-    }
-
-    private function resolveRegularCleaningPricingLines(array $serviceIds, string $propertyType, string $livingRoomSize, float $estimatedSqm): array
-    {
-        if ($serviceIds === []) { return []; }
-        $services = CleaningService::query()->whereIn('id', $serviceIds)->where('is_active', true)->where('category', ServiceCategory::Cleaning->value)->with(['pricing' => fn ($query) => $query->orderBy('id')])->get()->keyBy('id');
-        if ($services->count() !== count($serviceIds)) { throw new InvalidArgumentException('One or more selected regular cleaning services are invalid.'); }
-        $lines = [];
-        foreach ($serviceIds as $serviceId) {
-            $service = $services->get($serviceId);
-            if (! $service instanceof CleaningService) { throw new InvalidArgumentException('One or more selected regular cleaning services are invalid.'); }
-            $pricing = $service->pricing->first(fn (ServicePricing $row): bool => $row->property_type === $propertyType && $row->living_room_size === $livingRoomSize)
-                ?? $service->pricing->first(fn (ServicePricing $row): bool => $row->property_type === $propertyType && $row->living_room_size === null)
-                ?? $service->pricing->first(fn (ServicePricing $row): bool => $row->property_type === $propertyType)
-                ?? $service->pricing->first();
-            if (! $pricing instanceof ServicePricing) { throw new InvalidArgumentException("No pricing configured for regular cleaning service [{$service->name}]."); }
-            $basePrice = $this->pricingCalculator->roundMoney((float) $pricing->base_price);
-            $sqmPrice = $pricing->price_per_sqm !== null ? $this->pricingCalculator->roundMoney((float) $pricing->price_per_sqm * $estimatedSqm) : null;
-            $servicePrice = (float) ($service->price ?? 0);
-            $unitPrice = $this->pricingCalculator->roundMoney($servicePrice > 0 ? $servicePrice : ($sqmPrice !== null ? max($basePrice, $sqmPrice) : $basePrice));
-            $lines[] = ['cleaningServiceId' => (int) $service->id, 'name' => (string) $service->name, 'description' => $service->description, 'price' => $unitPrice, 'quantity' => 1.0, 'unitPrice' => $unitPrice, 'totalPrice' => $unitPrice, 'minHours' => round((float) ($pricing->min_hours ?? 0), 2)];
-        }
-        return $lines;
-    }
 
     private function legacyDetailsToRoomBreakdown(array $details): array
     {
