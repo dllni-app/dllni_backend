@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\CleaningWorkerDeposits\Tables;
 
 use App\Enums\UserModuleType;
+use App\Filament\Support\AdminUiFormatter;
 use App\Models\CleaningDepositTransaction;
 use App\Models\Worker;
 use Filament\Actions\ViewAction;
@@ -41,20 +42,20 @@ final class CleaningTransactionsTable
                     ->formatStateUsing(fn (CleaningDepositTransaction $record): string => self::typeLabel($record->publicType())),
                 TextColumn::make('amount')
                     ->label(__('cleaning_admin.transactions.fields.amount'))
-                    ->money('SYP')
+                    ->formatStateUsing(fn ($state): string => self::money($state))
                     ->sortable(),
                 TextColumn::make('debt_settled_amount')
                     ->label(__('cleaning_finance.fields.debt_settled_amount'))
-                    ->money('SYP')
+                    ->formatStateUsing(fn ($state): string => self::money($state))
                     ->placeholder('—')
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('balance_before')
                     ->label(__('cleaning_admin.transactions.fields.balance_before'))
-                    ->money('SYP')
+                    ->formatStateUsing(fn ($state): string => self::money($state))
                     ->toggleable(),
                 TextColumn::make('balance_after')
                     ->label(__('cleaning_admin.transactions.fields.balance_after'))
-                    ->money('SYP'),
+                    ->formatStateUsing(fn ($state): string => self::money($state)),
                 TextColumn::make('reference')
                     ->label(__('cleaning_admin.transactions.fields.reference'))
                     ->formatStateUsing(fn (?string $state): string => self::referenceLabel($state))
@@ -184,16 +185,21 @@ final class CleaningTransactionsTable
                 __('cleaning_admin.transactions.fields.id') => $tx->id,
                 __('cleaning_admin.transactions.fields.worker') => $tx->worker?->first_name ?? '—',
                 __('cleaning_admin.transactions.fields.type') => self::typeLabel($tx->publicType()),
-                __('cleaning_admin.transactions.fields.amount') => $tx->publicAmount(),
-                __('cleaning_finance.fields.debt_settled_amount') => (float) ($tx->debt_settled_amount ?? 0),
-                __('cleaning_admin.transactions.fields.balance_before') => (float) $tx->balance_before,
-                __('cleaning_admin.transactions.fields.balance_after') => (float) $tx->balance_after,
+                __('cleaning_admin.transactions.fields.amount') => (int) round($tx->publicAmount()),
+                __('cleaning_finance.fields.debt_settled_amount') => (int) round((float) ($tx->debt_settled_amount ?? 0)),
+                __('cleaning_admin.transactions.fields.balance_before') => (int) round((float) $tx->balance_before),
+                __('cleaning_admin.transactions.fields.balance_after') => (int) round((float) $tx->balance_after),
                 __('cleaning_admin.transactions.fields.reference') => self::referenceLabel($tx->reference),
                 __('cleaning_admin.transactions.fields.date') => $tx->created_at?->format('Y-m-d H:i'),
                 __('cleaning_admin.transactions.fields.notes') => $tx->notes,
                 __('cleaning_admin.transactions.fields.created_by') => $tx->createdByAdmin?->name ?? '—',
             ])
             ->all();
+    }
+
+    private static function money(mixed $amount): string
+    {
+        return AdminUiFormatter::formatCurrency((float) ($amount ?? 0), 0);
     }
 
     /**
