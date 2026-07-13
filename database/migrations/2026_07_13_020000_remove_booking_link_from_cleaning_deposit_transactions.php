@@ -57,7 +57,7 @@ return new class extends Migration
             ->chunkById(100, function ($transactions) use ($hasBookingColumn): void {
                 foreach ($transactions as $transaction) {
                     $sourceId = $hasBookingColumn && $transaction->cleaning_booking_id !== null
-                        ? 'booking:'.((int) $transaction->cleaning_booking_id)
+                        ? (string) ((int) $transaction->cleaning_booking_id)
                         : 'legacy-transaction:'.((int) $transaction->id);
 
                     DB::table('cleaning_deposit_transactions')
