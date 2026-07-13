@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Filament\Resources\Roles\Pages\CreateRole;
 use App\Filament\Resources\Roles\RoleResource;
+use App\Filament\Resources\Roles\Schemas\RoleForm;
 use App\Filament\Support\ArabicDashboardLabels;
 use App\Models\User;
 use Livewire\Livewire;
@@ -32,7 +33,7 @@ it('creates dashboard roles with the web guard without exposing the guard field'
     Livewire::test(CreateRole::class)
         ->fillForm([
             'name' => 'مدير اختبار',
-            'permissions' => ['pricing.view'],
+            RoleForm::permissionFieldFor('pricing.view') => ['pricing.view'],
         ])
         ->call('create')
         ->assertHasNoFormErrors();
@@ -41,6 +42,21 @@ it('creates dashboard roles with the web guard without exposing the guard field'
 
     expect($role->guard_name)->toBe('web')
         ->and($role->hasPermissionTo('pricing.view', 'web'))->toBeTrue();
+});
+
+it('renders role view and edit pages without passing grouped option arrays as labels', function (): void {
+    $permission = Permission::findOrCreate('pricing.view', 'web');
+    $role = Role::findOrCreate('Pricing Reviewer', 'web');
+    $role->syncPermissions([$permission]);
+
+    $this->get(RoleResource::getUrl('view', ['record' => $role], isAbsolute: false))
+        ->assertSuccessful()
+        ->assertSee('عرض التسعير');
+
+    $this->get(RoleResource::getUrl('edit', ['record' => $role], isAbsolute: false))
+        ->assertSuccessful()
+        ->assertSee('التسعير')
+        ->assertSee('عرض التسعير');
 });
 
 it('shows Arabic permission labels grouped by translated sections', function (): void {
