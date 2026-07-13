@@ -20,6 +20,7 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Illuminate\Support\Str;
 use Modules\Cleaning\Models\CleaningBooking;
+use Spatie\QueryBuilder\QueryBuilder;
 use Throwable;
 
 final class DisputeController
@@ -112,7 +113,7 @@ final class DisputeController
         return response()->noContent();
     }
 
-    private function authorizedQuery(User $user): Builder
+    private function authorizedQuery(User $user): QueryBuilder
     {
         $query = Dispute::getQuery();
 
