@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace App\Filament\Resources\CleaningBookings;
 
 use App\Enums\DisputeStatus;
+use App\Enums\SupportCaseKind;
+use App\Enums\SupportCaseStatus;
 use App\Filament\Resources\CleaningBookings\Pages\EditCleaningBooking;
 use App\Filament\Resources\CleaningBookings\Pages\ListCleaningBookings;
 use App\Filament\Resources\CleaningBookings\Pages\ViewCleaningBooking;
 use App\Filament\Resources\CleaningBookings\Schemas\CleaningBookingForm;
 use App\Filament\Resources\CleaningBookings\Schemas\CleaningBookingInfolist;
 use App\Filament\Resources\CleaningBookings\Tables\CleaningBookingsTable;
+use App\Models\SupportCase;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -71,7 +74,12 @@ final class CleaningBookingResource extends Resource
             ->pushColumns([
                 TextColumn::make('open_dispute_status')
                     ->label('نزاع مفتوح')
-                    ->getStateUsing(fn (CleaningBooking $record): string => (int) ($record->open_disputes_count ?? 0) > 0 ? 'open' : 'none')
+                    ->getStateUsing(function (CleaningBooking $record): string {
+                        $count = (int) ($record->open_disputes_count ?? 0)
+                            + (int) ($record->open_support_cases_count ?? 0);
+
+                        return $count > 0 ? 'open' : 'none';
+                    })
                     ->badge()
                     ->formatStateUsing(fn (string $state): string => $state === 'open' ? 'يوجد نزاع مفتوح' : 'لا يوجد نزاع مفتوح')
                     ->color(fn (string $state): string => $state === 'open' ? 'danger' : 'gray')
@@ -96,6 +104,14 @@ final class CleaningBookingResource extends Resource
                     DisputeStatus::Open->value,
                     DisputeStatus::UnderReview->value,
                 ]),
+            ])
+            ->addSelect([
+                'open_support_cases_count' => SupportCase::query()
+                    ->selectRaw('COUNT(*)')
+                    ->whereColumn('support_cases.booking_id', 'cleaning_bookings.id')
+                    ->where('support_cases.booking_type', CleaningBooking::class)
+                    ->where('support_cases.kind', SupportCaseKind::Complaint->value)
+                    ->whereIn('support_cases.status', SupportCaseStatus::activeValues()),
             ]);
     }
 
