@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\API;
 
-use App\Enums\SupportCaseKind;
-use App\Enums\SupportCaseStatus;
 use App\Http\Requests\SupportCaseMessageStoreRequest;
 use App\Http\Requests\SupportCaseStoreRequest;
 use App\Http\Resources\SupportCaseResource;
@@ -14,6 +12,7 @@ use App\Models\User;
 use App\Services\SupportCaseService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Modules\Cleaning\Models\CleaningBooking;
@@ -45,7 +44,7 @@ final class SupportCaseController
         );
     }
 
-    public function store(SupportCaseStoreRequest $request): SupportCaseResource
+    public function store(SupportCaseStoreRequest $request): JsonResponse
     {
         /** @var User $user */
         $user = $request->user();
@@ -58,8 +57,7 @@ final class SupportCaseController
 
         return SupportCaseResource::make($supportCase)
             ->response()
-            ->setStatusCode(Response::HTTP_CREATED)
-            ->getOriginalContent();
+            ->setStatusCode(Response::HTTP_CREATED);
     }
 
     public function show(SupportCase $supportCase): SupportCaseResource
