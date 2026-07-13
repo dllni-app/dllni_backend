@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Disputes\Widgets;
 
 use App\Enums\DisputeStatus;
-use App\Models\Dispute;
+use App\Filament\Resources\Disputes\DisputeResource;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
@@ -18,7 +18,7 @@ final class DisputeStats extends StatsOverviewWidget
     protected function getStats(): array
     {
         return [
-            Stat::make(__('cleaning_admin.disputes.stats.total'), Dispute::query()->count())
+            Stat::make(__('cleaning_admin.disputes.stats.total'), DisputeResource::getEloquentQuery()->count())
                 ->icon('heroicon-o-exclamation-triangle')
                 ->color('primary'),
             Stat::make(__('cleaning_admin.disputes.stats.open'), $this->statusCount(DisputeStatus::Open))
@@ -35,6 +35,6 @@ final class DisputeStats extends StatsOverviewWidget
 
     private function statusCount(DisputeStatus $status): int
     {
-        return Dispute::query()->where('status', $status->value)->count();
+        return DisputeResource::getEloquentQuery()->where('status', $status->value)->count();
     }
 }
