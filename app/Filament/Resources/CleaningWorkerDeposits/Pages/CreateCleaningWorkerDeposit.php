@@ -32,7 +32,7 @@ final class CreateCleaningWorkerDeposit extends CreateRecord
     protected function getCreateFormAction(): Action
     {
         return parent::getCreateFormAction()
-            ->label(__('cleaning_finance_guidance.form.submit'));
+            ->label(__('cleaning_admin.transactions.actions.create'));
     }
 
     protected function handleRecordCreation(array $data): Model
