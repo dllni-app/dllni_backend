@@ -1,11 +1,4 @@
 <x-filament-hub.page-shell>
-    <div class="grid gap-3 md:grid-cols-3">
-        <a href="{{ \App\Filament\Pages\CleaningOverview::getUrl() }}"
-            class="rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 text-center text-sm font-semibold text-primary-700 transition hover:border-primary-600 hover:shadow-sm dark:border-primary-700/60 dark:bg-primary-900/20 dark:text-primary-300">
-            {{ __('cleaning_admin.shared.actions.view') }}: {{ __('cleaning_admin.overview.title') }}
-        </a>
-    </div>
-
     <x-filament::section :heading="__('cleaning_admin.financial.sections.pricing_algorithm')">
         <p class="mb-4 text-sm text-gray-500 dark:text-gray-400">
             {{ __('cleaning_admin.financial.pricing_algorithm_description') }}
@@ -122,18 +115,29 @@
 
     <x-filament::section :heading="__('cleaning_admin.financial.sections.worker_finance')">
         <div class="grid gap-4 md:grid-cols-2">
-            <label class="flex items-center gap-2 md:col-span-2">
-                <input type="checkbox" class="fi-checkbox rounded border-gray-300 dark:border-gray-600" wire:model.live="workerFinanceEnabled">
-                <span class="text-sm">{{ __('cleaning_admin.financial.fields.worker_finance_enabled') }}</span>
-            </label>
+            <div class="flex flex-col gap-1 md:col-span-2">
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" class="fi-checkbox rounded border-gray-300 dark:border-gray-600" wire:model.live="workerFinanceEnabled">
+                    <span class="text-sm">{{ __('cleaning_admin.financial.fields.worker_finance_enabled') }}</span>
+                </label>
+                <span class="text-xs text-gray-500 dark:text-gray-400">
+                    عند تعطيل هذا الخيار لن يتم تطبيق قيود التأمين والرصيد على أهلية العامل لاستقبال طلبات جديدة.
+                </span>
+            </div>
             <label class="flex flex-col gap-1">
                 <span class="text-sm">{{ __('cleaning_admin.financial.fields.minimum_deposit_amount') }}</span>
                 <input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="minimumDepositAmount">
+                <span class="text-xs text-gray-500 dark:text-gray-400">
+                    أقل مبلغ تأمين يجب أن يتوفر في حساب العامل حتى يصبح مؤهلاً لاستقبال طلبات جديدة.
+                </span>
                 @error('minimumDepositAmount') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
             </label>
             <label class="flex flex-col gap-1">
                 <span class="text-sm">{{ __('cleaning_admin.financial.fields.default_max_negative_balance') }}</span>
                 <input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="defaultMaxNegativeBalance">
+                <span class="text-xs text-gray-500 dark:text-gray-400">
+                    أقصى قيمة رصيد سالب مسموحة افتراضياً قبل تقييد العامل ومنعه من استقبال طلبات جديدة.
+                </span>
                 @error('defaultMaxNegativeBalance') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
             </label>
             <label class="flex flex-col gap-1">
@@ -151,6 +155,9 @@
             <label class="flex flex-col gap-1">
                 <span class="text-sm">{{ __('cleaning_admin.financial.fields.trust_minimum_for_dispatch') }}</span>
                 <input type="number" min="0" max="100" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="trustMinimumForDispatch">
+                <span class="text-xs text-gray-500 dark:text-gray-400">
+                    أدنى درجة ثقة يجب أن يملكها العامل حتى يدخل ضمن قائمة العاملين المؤهلين لإرسال الطلبات.
+                </span>
                 @error('trustMinimumForDispatch') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
             </label>
         </div>
