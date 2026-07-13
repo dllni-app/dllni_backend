@@ -14,7 +14,7 @@ final class SupportCaseResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $booking = $this->booking;
+        $booking = $this->relationLoaded('booking') ? $this->booking : null;
 
         return [
             'id' => $this->id,
