@@ -22,6 +22,7 @@ return [
     'references' => [
         'admin_debt' => 'Debt added by administration',
         'admin_manual_debt' => 'Debt added from transaction screen',
+        'automatic_admin_commission' => 'Automatically recorded administration debt',
     ],
     'report' => [
         'outstanding_admin_due' => 'Outstanding administration due (commission + debt)',
