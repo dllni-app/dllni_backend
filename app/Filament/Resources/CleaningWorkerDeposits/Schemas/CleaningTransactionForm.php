@@ -109,32 +109,8 @@ final class CleaningTransactionForm
                             ->required()
                             ->live(debounce: 400)
                             ->helperText(fn (Get $get): string => self::amountHelper($get('worker_id'), $get('type')))
-                            ->rules([
-                                fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
-                                    $worker = self::worker($get('worker_id'));
-
-                                    if (! $worker instanceof Worker) {
-                                        $fail(__('cleaning_finance_guidance.validation.worker_required'));
-
-                                        return;
-                                    }
-
-                                    if (! is_numeric($value)) {
-                                        $fail(__('cleaning_finance_guidance.validation.amount_positive'));
-
-                                        return;
-                                    }
-
-                                    $message = app(AdminCleaningTransactionService::class)->validationMessage(
-                                        $worker,
-                                        (string) $get('type'),
-                                        (float) $value,
-                                    );
-
-                                    if ($message !== null) {
-                                        $fail($message);
-                                    }
-                                },
+                            ->rules(fn (Get $get): array => [
+                                self::amountRule($get('worker_id'), $get('type')),
                             ]),
                         Placeholder::make('amount_validation')
                             ->label(__('cleaning_finance_guidance.fields.validation_result'))
@@ -186,9 +162,23 @@ final class CleaningTransactionForm
             return null;
         }
 
+        $workerId = (int) $workerId;
+        $cacheKey = 'cleaning-transaction-form.worker.'.$workerId;
+
+        if (request()->attributes->has($cacheKey)) {
+            $cached = request()->attributes->get($cacheKey);
+
+            return $cached instanceof Worker ? $cached : null;
+        }
+
         try {
-            return app(AdminCleaningTransactionService::class)->findWorker((int) $workerId);
+            $worker = app(AdminCleaningTransactionService::class)->findWorker($workerId);
+            request()->attributes->set($cacheKey, $worker);
+
+            return $worker;
         } catch (Throwable) {
+            request()->attributes->set($cacheKey, null);
+
             return null;
         }
     }
@@ -198,11 +188,27 @@ final class CleaningTransactionForm
      */
     private static function snapshot(mixed $workerId): array
     {
-        $worker = self::worker($workerId);
+        if (! is_numeric($workerId) || (int) $workerId <= 0) {
+            return [];
+        }
 
-        return $worker instanceof Worker
+        $workerId = (int) $workerId;
+        $cacheKey = 'cleaning-transaction-form.snapshot.'.$workerId;
+
+        if (request()->attributes->has($cacheKey)) {
+            $cached = request()->attributes->get($cacheKey);
+
+            return is_array($cached) ? $cached : [];
+        }
+
+        $worker = self::worker($workerId);
+        $snapshot = $worker instanceof Worker
             ? app(AdminCleaningTransactionService::class)->snapshot($worker)
             : [];
+
+        request()->attributes->set($cacheKey, $snapshot);
+
+        return $snapshot;
     }
 
     /**
@@ -217,6 +223,35 @@ final class CleaningTransactionForm
         }
 
         return app(AdminCleaningTransactionService::class)->suggestedAmounts($worker, $type);
+    }
+
+    private static function amountRule(mixed $workerId, mixed $type): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail) use ($workerId, $type): void {
+            $worker = self::worker($workerId);
+
+            if (! $worker instanceof Worker) {
+                $fail(__('cleaning_finance_guidance.validation.worker_required'));
+
+                return;
+            }
+
+            if (! is_numeric($value)) {
+                $fail(__('cleaning_finance_guidance.validation.amount_positive'));
+
+                return;
+            }
+
+            $message = app(AdminCleaningTransactionService::class)->validationMessage(
+                $worker,
+                (string) $type,
+                (float) $value,
+            );
+
+            if ($message !== null) {
+                $fail($message);
+            }
+        };
     }
 
     private static function amountHelper(mixed $workerId, mixed $type): string
