@@ -38,6 +38,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['legacy_type', 'legacy_id']);
+            $table->unique(['reporter_id', 'client_request_id']);
             $table->index(['reporter_id', 'booking_type', 'booking_id']);
             $table->index(['kind', 'status', 'created_at']);
         });
@@ -87,6 +88,8 @@ return new class extends Migration
                     'closed', 'rejected' => 'closed',
                     default => 'new',
                 };
+                $bookingType = $this->normalizeBookingType((string) $dispute->booking_type);
+                $customerId = $this->bookingCustomerId($bookingType, (int) $dispute->booking_id);
 
                 $caseId = DB::table('support_cases')->insertGetId([
                     'case_number' => filled($dispute->ticket_number ?? null)
@@ -95,8 +98,8 @@ return new class extends Migration
                     'kind' => 'complaint',
                     'priority' => 'normal',
                     'booking_id' => $dispute->booking_id,
-                    'booking_type' => $dispute->booking_type,
-                    'reporter_id' => null,
+                    'booking_type' => $bookingType,
+                    'reporter_id' => $customerId,
                     'reporter_role' => 'customer',
                     'category' => $dispute->category,
                     'description' => (string) ($dispute->description ?? 'Legacy dispute'),
@@ -119,7 +122,7 @@ return new class extends Migration
                             DB::table('support_case_messages')->insert([
                                 'support_case_id' => $caseId,
                                 'sender_id' => $message->sender_id,
-                                'sender_role' => $message->sender_type ?: 'customer',
+                                'sender_role' => $this->normalizeReporterRole((string) ($message->sender_type ?? '')),
                                 'body' => (string) $message->body,
                                 'created_at' => $message->created_at ?? now(),
                                 'updated_at' => $message->updated_at ?? now(),
@@ -143,15 +146,21 @@ return new class extends Migration
                     'resolved' => 'resolved',
                     default => 'new',
                 };
+                $bookingType = $this->normalizeBookingType((string) $alert->booking_type);
+                $customerId = $this->bookingCustomerId($bookingType, (int) $alert->booking_id);
+                $reporterRole = str_contains((string) ($alert->source ?? ''), 'worker')
+                    || ($customerId !== null && (int) $alert->user_id !== $customerId)
+                    ? 'worker'
+                    : 'customer';
 
                 DB::table('support_cases')->insert([
                     'case_number' => 'SOS-'.str_pad((string) $alert->id, 8, '0', STR_PAD_LEFT),
                     'kind' => 'emergency',
                     'priority' => 'critical',
                     'booking_id' => $alert->booking_id,
-                    'booking_type' => $alert->booking_type,
+                    'booking_type' => $bookingType,
                     'reporter_id' => $alert->user_id,
-                    'reporter_role' => $this->legacyReporterRole((string) ($alert->source ?? '')),
+                    'reporter_role' => $reporterRole,
                     'category' => $alert->emergency_type,
                     'description' => (string) ($alert->message ?? 'Legacy SOS alert'),
                     'status' => $status,
@@ -181,8 +190,38 @@ return new class extends Migration
         };
     }
 
-    private function legacyReporterRole(string $source): string
+    private function normalizeBookingType(string $bookingType): string
     {
-        return str_contains($source, 'worker') ? 'worker' : 'customer';
+        return match ($bookingType) {
+            'Modules\\Cleaning\\Models\\CleaningBooking' => 'cleaning_booking',
+            'Modules\\Cleaning\\Models\\EventBooking' => 'event_booking',
+            default => $bookingType,
+        };
+    }
+
+    private function bookingCustomerId(string $bookingType, int $bookingId): ?int
+    {
+        $table = match ($bookingType) {
+            'cleaning_booking' => 'cleaning_bookings',
+            'event_booking' => 'event_bookings',
+            default => null,
+        };
+
+        if ($table === null || ! Schema::hasTable($table)) {
+            return null;
+        }
+
+        $value = DB::table($table)->where('id', $bookingId)->value('customer_id');
+
+        return $value === null ? null : (int) $value;
+    }
+
+    private function normalizeReporterRole(string $role): string
+    {
+        return match (strtolower(trim($role))) {
+            'worker' => 'worker',
+            'admin', 'support' => 'admin',
+            default => 'customer',
+        };
     }
 };
