@@ -14,6 +14,8 @@ final class CleaningDepositTransaction extends Model
 {
     use LogsActivity;
 
+    public const AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX = 'automatic_admin_commission:';
+
     /** @var list<string> */
     public const PUBLIC_TYPES = ['deposit', 'debt', 'settlement', 'refund'];
 
