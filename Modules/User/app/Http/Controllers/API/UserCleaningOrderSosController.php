@@ -67,7 +67,7 @@ final class UserCleaningOrderSosController
                 'booking_type' => CleaningBooking::class,
                 'emergency_type' => $data['emergency_type'],
                 'message' => $data['message'],
-                'source' => 'booking',
+                'source' => 'dllni_user_app',
                 'status' => SOSStatus::Triggered->value,
                 'latitude' => $latitude,
                 'longitude' => $longitude,
@@ -82,6 +82,7 @@ final class UserCleaningOrderSosController
                 'status' => SystemAlertStatus::New->value,
                 'payload' => [
                     'source' => 'user_cleaning_order_sos',
+                    'source_app' => 'dllni_user_app',
                     'sos_alert_id' => $sos->id,
                     'user_id' => $userId,
                     'order_id' => $booking->id,
