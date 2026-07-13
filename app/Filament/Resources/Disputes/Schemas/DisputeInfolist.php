@@ -31,9 +31,11 @@ final class DisputeInfolist
                     ->schema([
                         TextEntry::make('booking.booking_number')->label(__('cleaning_admin.disputes.fields.booking_number'))->placeholder('-'),
                         TextEntry::make('booking.customer.name')->label(__('cleaning_admin.disputes.fields.customer'))->placeholder('-'),
+                        TextEntry::make('booking.customer.phone')->label('رقم هاتف العميل')->placeholder('-')->copyable(),
                         TextEntry::make('booking.worker.first_name')->label(__('cleaning_admin.disputes.fields.worker'))->placeholder('-'),
+                        TextEntry::make('booking.worker.user.phone')->label('رقم هاتف العامل')->placeholder('-')->copyable(),
                     ])
-                    ->columns(3)
+                    ->columns(2)
                     ->visible(fn ($record) => $record->booking),
                 Section::make(__('cleaning_admin.disputes.sections.messages'))
                     ->schema([
