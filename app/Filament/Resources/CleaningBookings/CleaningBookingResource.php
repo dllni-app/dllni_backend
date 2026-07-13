@@ -71,11 +71,11 @@ final class CleaningBookingResource extends Resource
             ->pushColumns([
                 TextColumn::make('open_dispute_status')
                     ->label('نزاع مفتوح')
-                    ->state(fn (CleaningBooking $record): bool => (int) ($record->open_disputes_count ?? 0) > 0)
+                    ->state(fn (CleaningBooking $record): string => (int) ($record->open_disputes_count ?? 0) > 0 ? 'open' : 'none')
                     ->badge()
-                    ->formatStateUsing(fn (bool $state): string => $state ? 'يوجد نزاع مفتوح' : 'لا يوجد نزاع مفتوح')
-                    ->color(fn (bool $state): string => $state ? 'danger' : 'gray')
-                    ->icon(fn (bool $state): string => $state ? 'heroicon-o-exclamation-triangle' : 'heroicon-o-check-circle'),
+                    ->formatStateUsing(fn (string $state): string => $state === 'open' ? 'يوجد نزاع مفتوح' : 'لا يوجد نزاع مفتوح')
+                    ->color(fn (string $state): string => $state === 'open' ? 'danger' : 'gray')
+                    ->icon(fn (string $state): string => $state === 'open' ? 'heroicon-o-exclamation-triangle' : 'heroicon-o-check-circle'),
             ]);
     }
 
