@@ -12,6 +12,7 @@ use App\Models\WorkerTrustLog;
 use App\Notifications\Cleaning\NewOrderRequestNotification;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
@@ -80,7 +81,7 @@ it('records withdrawal and increases withdrawn total without treating it as admi
     expect((float) $deposit->withdrawn_total)->toBe(300.0);
 });
 
-it('records admin fee debit without changing withdrawn total', function (): void {
+it('records admin fee debit without storing a booking relation', function (): void {
     seedDepositSettings();
     $worker = Worker::factory()->create(['trust_score' => 80]);
     seedWorkerDeposit($worker, 1000);
@@ -89,17 +90,17 @@ it('records admin fee debit without changing withdrawn total', function (): void
         'status' => CleaningBookingStatus::Completed,
     ]);
 
-    app(DepositService::class)->recordAdminFeeDebit($worker, $booking, 150);
+    $transaction = app(DepositService::class)->recordAdminFeeDebit($worker, $booking, 150);
 
     $deposit = $worker->fresh()->deposit;
-    expect((float) $deposit->current_balance)->toBe(850.0);
-    expect((float) $deposit->withdrawn_total)->toBe(0.0);
-    $this->assertDatabaseHas('cleaning_deposit_transactions', [
-        'worker_id' => $worker->id,
-        'type' => 'admin_fee',
-        'cleaning_booking_id' => $booking->id,
-        'amount' => 150,
-    ]);
+
+    expect((float) $deposit->current_balance)->toBe(850.0)
+        ->and((float) $deposit->withdrawn_total)->toBe(0.0)
+        ->and($transaction)->toBeInstanceOf(CleaningDepositTransaction::class)
+        ->and($transaction?->type)->toBe('admin_fee')
+        ->and((float) $transaction?->amount)->toBe(150.0)
+        ->and($transaction?->reference)->toStartWith('automatic_admin_commission:')
+        ->and(Schema::hasColumn('cleaning_deposit_transactions', 'cleaning_booking_id'))->toBeFalse();
 });
 
 it('marks worker ineligible when balance crosses below configured floor', function (): void {
@@ -217,7 +218,7 @@ it('applies trust penalty when rejecting after accept', function (): void {
     ]);
 });
 
-it('debits admin fee when customer confirms completion', function (): void {
+it('debits admin fee when customer confirms completion without linking the ledger row to the booking', function (): void {
     seedDepositSettings();
     $worker = Worker::factory()->create(['trust_score' => 80]);
     seedWorkerDeposit($worker, 5000);
@@ -244,13 +245,15 @@ it('debits admin fee when customer confirms completion', function (): void {
 
     app(UserCleaningOrderService::class)->confirmCompletion($booking);
 
-    $this->assertDatabaseHas('cleaning_deposit_transactions', [
-        'worker_id' => $worker->id,
-        'type' => 'admin_fee',
-        'cleaning_booking_id' => $booking->id,
-        'amount' => 100,
-    ]);
-    expect((float) $worker->fresh()->deposit->current_balance)->toBe(4900.0);
+    $transaction = CleaningDepositTransaction::query()
+        ->where('worker_id', $worker->id)
+        ->where('type', 'admin_fee')
+        ->first();
+
+    expect($transaction)->toBeInstanceOf(CleaningDepositTransaction::class)
+        ->and((float) $transaction?->amount)->toBe(100.0)
+        ->and($transaction?->reference)->toStartWith('automatic_admin_commission:')
+        ->and((float) $worker->fresh()->deposit->current_balance)->toBe(4900.0);
 });
 
 it('excludes ineligible workers from dispatch notifications', function (): void {
