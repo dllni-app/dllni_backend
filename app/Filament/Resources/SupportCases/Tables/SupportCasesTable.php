@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\SupportCases\Tables;
 
+use App\Enums\DisputeCategory;
+use App\Enums\EmergencyType;
 use App\Enums\SupportCaseKind;
 use App\Enums\SupportCasePriority;
 use App\Enums\SupportCaseStatus;
@@ -66,6 +68,7 @@ final class SupportCasesTable
                 TextColumn::make('category')
                     ->label('التصنيف')
                     ->badge()
+                    ->formatStateUsing(fn ($state, SupportCase $record): string => self::categoryLabel($record, (string) $state))
                     ->color('gray'),
                 TextColumn::make('status')
                     ->label('الحالة')
@@ -98,6 +101,20 @@ final class SupportCasesTable
             ->recordActions([
                 ViewAction::make()->label('عرض'),
             ]);
+    }
+
+    private static function categoryLabel(SupportCase $record, string $category): string
+    {
+        if ($record->kind === SupportCaseKind::Emergency) {
+            return match (EmergencyType::tryFrom($category)) {
+                EmergencyType::SafetyThreat => 'تهديد أو عدم أمان',
+                EmergencyType::MedicalEmergency => 'حالة طبية طارئة',
+                EmergencyType::SevereConflict => 'خلاف حاد',
+                default => $category,
+            };
+        }
+
+        return DisputeCategory::tryFrom($category)?->label() ?? $category;
     }
 
     private static function otherPartyPhone(SupportCase $record): ?string
