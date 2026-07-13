@@ -24,11 +24,6 @@ final class SosAlertInfolist
                         ->badge()
                         ->color(fn (mixed $state): string => self::statusColor($state))
                         ->formatStateUsing(fn (mixed $state): string => self::statusLabel($state)),
-                    TextEntry::make('source_app')
-                        ->label('التطبيق المرسل')
-                        ->badge()
-                        ->state(fn (SosAlert $record): string => SosAlertsTable::sourceAppLabel($record))
-                        ->color(fn (SosAlert $record): string => SosAlertsTable::sourceAppColor($record)),
                     TextEntry::make('reporter_role')
                         ->label('صفة المُبلِّغ')
                         ->badge()
