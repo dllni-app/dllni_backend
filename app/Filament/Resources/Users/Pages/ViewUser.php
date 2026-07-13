@@ -12,10 +12,15 @@ final class ViewUser extends ViewRecord
 {
     protected static string $resource = UserResource::class;
 
+    public function getTitle(): string
+    {
+        return 'تفاصيل مدير النظام';
+    }
+
     protected function getHeaderActions(): array
     {
         return [
-            EditAction::make(),
+            EditAction::make()->label('تعديل'),
         ];
     }
 }
