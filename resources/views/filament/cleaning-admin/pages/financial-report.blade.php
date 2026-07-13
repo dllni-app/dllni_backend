@@ -17,31 +17,5 @@
                 </div>
             @endforeach
         </div>
-
-        @php($transactionTypes = __('cleaning_finance_guidance.types'))
-
-        @if (is_array($transactionTypes))
-            <section class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-900">
-                <h2 class="text-base font-bold text-gray-950 dark:text-white">
-                    {{ __('cleaning_finance_guidance.title') }}
-                </h2>
-                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    {{ __('cleaning_finance_guidance.intro') }}
-                </p>
-
-                <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    @foreach ($transactionTypes as $transactionType)
-                        <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
-                            <p class="font-semibold text-gray-950 dark:text-white">
-                                {{ $transactionType['label'] ?? '' }}
-                            </p>
-                            <p class="mt-1 text-sm leading-6 text-gray-500 dark:text-gray-400">
-                                {{ $transactionType['description'] ?? '' }}
-                            </p>
-                        </div>
-                    @endforeach
-                </div>
-            </section>
-        @endif
     </div>
 </x-filament-panels::page>
