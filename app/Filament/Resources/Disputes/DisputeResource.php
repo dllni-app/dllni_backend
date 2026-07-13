@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Disputes;
 
+use App\Enums\DisputeStatus;
 use App\Filament\Resources\Disputes\Pages\CreateDispute;
 use App\Filament\Resources\Disputes\Pages\EditDispute;
 use App\Filament\Resources\Disputes\Pages\ListDisputes;
@@ -17,7 +18,10 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\EventBooking;
 
 final class DisputeResource extends Resource
 {
@@ -29,7 +33,7 @@ final class DisputeResource extends Resource
 
     public static function shouldRegisterNavigation(): bool
     {
-        return false;
+        return true;
     }
 
     public static function getNavigationGroup(): ?string
@@ -45,6 +49,23 @@ final class DisputeResource extends Resource
     public static function getNavigationTooltip(): ?string
     {
         return __('cleaning_admin.disputes.tooltip');
+    }
+
+    public static function getNavigationBadge(): ?string
+    {
+        $count = static::getEloquentQuery()
+            ->whereIn('status', [
+                DisputeStatus::Open->value,
+                DisputeStatus::UnderReview->value,
+            ])
+            ->count();
+
+        return $count > 0 ? (string) $count : null;
+    }
+
+    public static function getNavigationBadgeColor(): string|array|null
+    {
+        return 'danger';
     }
 
     public static function getModelLabel(): string
@@ -70,6 +91,17 @@ final class DisputeResource extends Resource
     public static function table(Table $table): Table
     {
         return DisputesTable::configure($table);
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->whereIn('booking_type', [
+                'cleaning_booking',
+                CleaningBooking::class,
+                'event_booking',
+                EventBooking::class,
+            ]);
     }
 
     public static function canViewAny(): bool
