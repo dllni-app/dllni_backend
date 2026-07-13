@@ -29,6 +29,10 @@ final class LegacySupportCaseSyncService
             return null;
         }
 
+        $booking = $dispute->relationLoaded('booking')
+            ? $dispute->booking
+            : $dispute->booking()->first();
+
         return SupportCase::query()->updateOrCreate(
             ['legacy_type' => 'dispute', 'legacy_id' => $dispute->id],
             [
@@ -37,6 +41,7 @@ final class LegacySupportCaseSyncService
                 'priority' => SupportCasePriority::Normal,
                 'booking_id' => $dispute->booking_id,
                 'booking_type' => $dispute->booking_type,
+                'reporter_id' => $booking?->customer_id,
                 'reporter_role' => SupportCaseReporterRole::Customer,
                 'category' => $dispute->category?->value ?? $dispute->category,
                 'description' => $dispute->description ?: 'Legacy dispute',
@@ -61,7 +66,7 @@ final class LegacySupportCaseSyncService
                 'created_at' => $message->created_at,
             ],
             [
-                'sender_role' => $message->sender_type ?: SupportCaseReporterRole::Customer->value,
+                'sender_role' => $this->normalizeReporterRole((string) $message->sender_type),
                 'body' => $message->body,
                 'updated_at' => $message->updated_at,
             ],
@@ -70,7 +75,14 @@ final class LegacySupportCaseSyncService
 
     public function syncSosAlert(SosAlert $alert): SupportCase
     {
+        $booking = $alert->relationLoaded('booking')
+            ? $alert->booking
+            : $alert->booking()->first();
         $source = (string) $alert->source;
+        $isWorker = str_contains($source, 'worker')
+            || ($booking instanceof CleaningBooking
+                && $alert->user_id !== null
+                && (int) $booking->customer_id !== (int) $alert->user_id);
 
         return SupportCase::query()->updateOrCreate(
             ['legacy_type' => 'sos_alert', 'legacy_id' => $alert->id],
@@ -81,7 +93,7 @@ final class LegacySupportCaseSyncService
                 'booking_id' => $alert->booking_id,
                 'booking_type' => $alert->booking_type,
                 'reporter_id' => $alert->user_id,
-                'reporter_role' => str_contains($source, 'worker')
+                'reporter_role' => $isWorker
                     ? SupportCaseReporterRole::Worker
                     : SupportCaseReporterRole::Customer,
                 'category' => $alert->emergency_type?->value ?? $alert->emergency_type,
@@ -124,6 +136,15 @@ final class LegacySupportCaseSyncService
             'full_refund', 'partial_refund' => 'refund',
             'dismissed' => 'dismissed',
             default => null,
+        };
+    }
+
+    private function normalizeReporterRole(string $role): SupportCaseReporterRole
+    {
+        return match (strtolower(trim($role))) {
+            'worker' => SupportCaseReporterRole::Worker,
+            'admin', 'support' => SupportCaseReporterRole::Admin,
+            default => SupportCaseReporterRole::Customer,
         };
     }
 }
