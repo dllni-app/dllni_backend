@@ -39,7 +39,7 @@ final class CleaningServiceResource extends Resource
 
     public static function getNavigationTooltip(): ?string
     {
-        return __('cleaning_admin.cleaning_services.tooltip');
+        return null;
     }
 
     public static function getModelLabel(): string
