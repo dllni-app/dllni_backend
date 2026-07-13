@@ -17,36 +17,50 @@ final class RoleForm
         return $schema
             ->components([
                 TextInput::make('name')
-                    ->label('اسم الدور')
-                    ->helperText('استخدم اسماً واضحاً للدور مثل: مدير عمليات التنظيف أو دعم العملاء.')
+                    ->label(__('permissions.form.role_name'))
+                    ->helperText(__('permissions.form.role_name_helper'))
                     ->required()
                     ->maxLength(255)
                     ->unique(ignoreRecord: true),
-                TextInput::make('guard_name')
-                    ->label('نطاق الصلاحية')
-                    ->helperText('اترك القيمة web للأدوار المستخدمة داخل لوحة الإدارة.')
-                    ->default('web')
-                    ->required()
-                    ->maxLength(255)
-                    ->dehydrated(),
                 CheckboxList::make('permissions')
-                    ->label('الصلاحيات')
-                    ->helperText('اختر الصلاحيات حسب مهمة الدور. تظهر الصلاحيات هنا بأسماء عربية بدلاً من الأكواد التقنية.')
+                    ->label(__('permissions.form.permissions'))
+                    ->helperText(__('permissions.form.permissions_helper'))
                     ->options(self::permissionOptions())
                     ->columns(2)
                     ->searchable()
+                    ->bulkToggleable()
                     ->dehydrated(true),
             ]);
     }
 
-    /** @return array<string, string> */
+    /** @return array<string, array<string, string>> */
     private static function permissionOptions(): array
     {
-        return Permission::query()
+        $sections = [];
+
+        $permissions = Permission::query()
             ->where('guard_name', 'web')
             ->orderBy('name')
-            ->pluck('name', 'name')
-            ->map(fn (string $permission): string => ArabicDashboardLabels::permissionName($permission))
-            ->all();
+            ->get(['name', 'slug', 'group']);
+
+        foreach ($permissions as $permission) {
+            $section = ArabicDashboardLabels::permissionSectionName(
+                $permission->name,
+                $permission->group,
+            );
+
+            $sections[$section][$permission->name] = ArabicDashboardLabels::permissionName(
+                $permission->name,
+                $permission->slug,
+            );
+        }
+
+        ksort($sections, SORT_NATURAL);
+
+        foreach ($sections as &$options) {
+            asort($options, SORT_NATURAL);
+        }
+
+        return $sections;
     }
 }
