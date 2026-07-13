@@ -166,10 +166,12 @@ final class DepositService
             return null;
         }
 
+        $reference = $this->adminFeeReference($worker->id, $booking->id);
+
         $existing = CleaningDepositTransaction::query()
             ->where('worker_id', $worker->id)
             ->where('type', 'admin_fee')
-            ->where('cleaning_booking_id', $booking->id)
+            ->where('reference', $reference)
             ->first();
 
         if ($existing instanceof CleaningDepositTransaction) {
@@ -180,9 +182,8 @@ final class DepositService
             worker: $worker,
             type: 'admin_fee',
             amount: $amount,
-            reference: "admin_fee_booking_{$booking->id}",
-            notes: "Admin fee for booking #{$booking->id}",
-            cleaningBookingId: $booking->id,
+            reference: $reference,
+            notes: null,
             createdByAdminId: $createdByAdminId,
         );
     }
@@ -538,7 +539,6 @@ final class DepositService
         float $amount,
         string $reference,
         ?string $notes = null,
-        ?int $cleaningBookingId = null,
         ?int $createdByAdminId = null,
         ?callable $onBalanceChange = null,
     ): CleaningDepositTransaction {
@@ -548,7 +548,6 @@ final class DepositService
             $amount,
             $reference,
             $notes,
-            $cleaningBookingId,
             $createdByAdminId,
             $onBalanceChange,
         ): CleaningDepositTransaction {
@@ -590,7 +589,6 @@ final class DepositService
 
             $transaction = CleaningDepositTransaction::query()->create($this->onlyExistingColumns('cleaning_deposit_transactions', [
                 'worker_id' => $worker->id,
-                'cleaning_booking_id' => $cleaningBookingId,
                 'created_by_admin_id' => $createdByAdminId,
                 'type' => $type,
                 'amount' => $amount,
@@ -619,10 +617,14 @@ final class DepositService
         );
     }
 
+    private function adminFeeReference(int $workerId, int $bookingId): string
+    {
+        return 'automatic_admin_commission:'.hash('sha256', $workerId.':'.$bookingId);
+    }
+
     private function supportsAdminFeeTransactions(): bool
     {
-        return $this->hasColumn('cleaning_deposit_transactions', 'cleaning_booking_id')
-            && $this->hasColumn('cleaning_deposit_transactions', 'created_by_admin_id');
+        return $this->hasColumn('cleaning_deposit_transactions', 'created_by_admin_id');
     }
 
     private function hasColumn(string $table, string $column): bool
