@@ -15,7 +15,9 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 
 final class CleaningBookingResource extends Resource
@@ -66,6 +68,19 @@ final class CleaningBookingResource extends Resource
         return CleaningBookingsTable::configure($table);
     }
 
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->with([
+            'customer',
+            'worker.user',
+            'preferredWorker.user',
+            'rooms.assignedWorker.user',
+            'rooms.plannedPreferredWorker.user',
+            'workerAssignments.worker.user',
+            'acceptedWorkerAssignments.worker.user',
+        ]);
+    }
+
     public static function canViewAny(): bool
     {
         return self::hasPermission('bookings.view');
@@ -83,7 +98,22 @@ final class CleaningBookingResource extends Resource
 
     public static function canEdit(Model $record): bool
     {
-        return self::hasPermission('bookings.update');
+        if (! self::hasPermission('bookings.update')) {
+            return false;
+        }
+
+        if (! $record instanceof CleaningBooking) {
+            return false;
+        }
+
+        $status = $record->status instanceof CleaningBookingStatus
+            ? $record->status
+            : CleaningBookingStatus::tryFrom((string) $record->status);
+
+        return ! in_array($status, [
+            CleaningBookingStatus::Completed,
+            CleaningBookingStatus::Cancelled,
+        ], true);
     }
 
     public static function canDelete(Model $record): bool
