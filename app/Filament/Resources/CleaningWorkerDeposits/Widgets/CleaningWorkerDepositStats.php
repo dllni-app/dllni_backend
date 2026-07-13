@@ -5,10 +5,9 @@ declare(strict_types=1);
 namespace App\Filament\Resources\CleaningWorkerDeposits\Widgets;
 
 use App\Filament\Support\AdminUiFormatter;
-use App\Models\CleaningDepositTransaction;
-use App\Models\CleaningWorkerDeposit;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
+use Modules\Cleaning\Services\CleaningFinancialOverviewService;
 
 final class CleaningWorkerDepositStats extends StatsOverviewWidget
 {
@@ -18,27 +17,21 @@ final class CleaningWorkerDepositStats extends StatsOverviewWidget
 
     protected function getStats(): array
     {
-        $currentDebt = (float) CleaningWorkerDeposit::query()
-            ->where('current_balance', '<', 0)
-            ->selectRaw('COALESCE(SUM(ABS(current_balance)), 0) as total')
-            ->value('total');
-        $totalDeposits = $this->sumByType('deposit');
-        $totalSettlements = $this->sumByType('settlement');
-        $totalRefunds = $this->sumByType('refund');
+        $metrics = app(CleaningFinancialOverviewService::class)->transactionMetrics();
 
         return [
-            Stat::make(__('Total current debt'), self::money($currentDebt))
+            Stat::make(__('Total current debt'), self::money($metrics['currentDebt']))
                 ->icon('heroicon-o-exclamation-triangle')
-                ->color($currentDebt > 0 ? 'danger' : 'success'),
-            Stat::make(__('Total deposits'), self::money($totalDeposits))
+                ->color($metrics['currentDebt'] > 0 ? 'danger' : 'success'),
+            Stat::make(__('Total deposits'), self::money($metrics['totalDeposits']))
                 ->description(__('Deposit transactions'))
                 ->icon('heroicon-o-arrow-down-tray')
                 ->color('success'),
-            Stat::make(__('Total settlements'), self::money($totalSettlements))
+            Stat::make(__('Total settlements'), self::money($metrics['totalSettlements']))
                 ->description(__('Debt settlement transactions'))
                 ->icon('heroicon-o-check-circle')
                 ->color('primary'),
-            Stat::make(__('Total refunds'), self::money($totalRefunds))
+            Stat::make(__('Total refunds'), self::money($metrics['totalRefunds']))
                 ->icon('heroicon-o-arrow-uturn-left')
                 ->color('warning'),
         ];
@@ -46,13 +39,6 @@ final class CleaningWorkerDepositStats extends StatsOverviewWidget
 
     private static function money(float $amount): string
     {
-        return AdminUiFormatter::formatCurrency($amount);
-    }
-
-    private function sumByType(string $type): float
-    {
-        return (float) CleaningDepositTransaction::query()
-            ->where('type', $type)
-            ->sum('amount');
+        return AdminUiFormatter::formatCurrency($amount, 0);
     }
 }
