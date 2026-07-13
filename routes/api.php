@@ -6,16 +6,17 @@ use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\AppDownloadController;
 use App\Http\Controllers\API\CancellationPolicyController;
 use App\Http\Controllers\API\DisputeController;
-use App\Http\Controllers\DeepLinks\OpenDeepLinkController;
-use App\Http\Controllers\DeepLinks\ResolveDeepLinkController;
 use App\Http\Controllers\API\ServiceAddonController;
+use App\Http\Controllers\API\SupportCaseController;
 use App\Http\Controllers\API\SystemAlertController;
-use App\Http\Controllers\DeepLinks\TrackDeepLinkEventController;
 use App\Http\Controllers\API\TravelCostConfigController;
 use App\Http\Controllers\API\UserAuthController;
 use App\Http\Controllers\API\UserController;
 use App\Http\Controllers\API\UserNotificationController;
 use App\Http\Controllers\API\WorkerController;
+use App\Http\Controllers\DeepLinks\OpenDeepLinkController;
+use App\Http\Controllers\DeepLinks\ResolveDeepLinkController;
+use App\Http\Controllers\DeepLinks\TrackDeepLinkEventController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('login', [UserAuthController::class, 'login']);
@@ -45,10 +46,17 @@ Route::prefix('v1/apps')->group(function (): void {
     Route::get('download', AppDownloadController::class);
 });
 
-Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
+Route::middleware(['auth:sanctum'])->prefix('v1')->group(function (): void {
     Route::get('notifications', [UserNotificationController::class, 'index'])->name('notifications.index');
     Route::patch('notifications/{id}/read', [UserNotificationController::class, 'markAsRead'])->name('notifications.markAsRead');
     Route::apiResource('workers', WorkerController::class);
+
+    Route::get('support-cases', [SupportCaseController::class, 'index'])->name('support-cases.index');
+    Route::post('support-cases', [SupportCaseController::class, 'store'])->name('support-cases.store');
+    Route::get('support-cases/{supportCase}', [SupportCaseController::class, 'show'])->name('support-cases.show');
+    Route::post('support-cases/{supportCase}/messages', [SupportCaseController::class, 'storeMessage'])->name('support-cases.messages.store');
+
+    // Legacy endpoints remain available while installed app versions migrate.
     Route::post('disputes/{dispute}/messages', [DisputeController::class, 'storeMessage']);
     Route::apiResource('disputes', DisputeController::class);
     Route::apiResource('system-alerts', SystemAlertController::class)->only(['index', 'show', 'update']);
