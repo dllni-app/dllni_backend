@@ -43,6 +43,11 @@ final class CleaningBookingsTable
                     ->badge()
                     ->color(fn ($state): string => self::statusColor($state))
                     ->formatStateUsing(fn ($state): string => self::statusLabel($state)),
+                TextColumn::make('booking_kind')
+                    ->label(self::headerLabel('نوع الحجز', 'يميز بين حجز تنظيف عادي وطلب مساعدة مناسبة.'))
+                    ->getStateUsing(fn (CleaningBooking $record): string => self::bookingKindLabel($record))
+                    ->badge()
+                    ->color(fn (CleaningBooking $record): string => self::bookingKindColor($record)),
                 TextColumn::make('cancelled_by_role')
                     ->label(self::headerLabel('مصدر الإلغاء', 'يوضح الجهة التي ألغت الحجز.'))
                     ->badge()
@@ -93,7 +98,7 @@ final class CleaningBookingsTable
                     ->label(self::headerLabel('الوقت', 'وقت بداية الخدمة بنظام 12 ساعة.'))
                     ->formatStateUsing(fn ($state): string => self::time($state)),
                 TextColumn::make('room_coverage')
-                    ->label(self::headerLabel('تغطية الغرف', 'عدد الغرف المخصصة من إجمالي الغرف.'))
+                    ->label(self::headerLabel('تغطية الغرف', 'عدد الغرف المخصصة من إجمالي الغرف، ولا ينطبق على المناسبات.'))
                     ->getStateUsing(fn (CleaningBooking $record): string => self::roomCoverageLabel($record))
                     ->badge()
                     ->color(fn (CleaningBooking $record): string => self::roomCoverageColor($record)),
@@ -152,16 +157,18 @@ final class CleaningBookingsTable
                     ->query(fn (Builder $query): Builder => $query->where('status', CleaningBookingStatus::WorkerAssigned->value)),
                 Filter::make('unassigned_rooms')
                     ->label('غرف غير مخصصة')
-                    ->query(fn (Builder $query): Builder => $query->whereHas('rooms', fn (Builder $roomsQuery): Builder => $roomsQuery->whereNull('assigned_worker_id'))),
+                    ->query(fn (Builder $query): Builder => $query
+                        ->where('property_type', '!=', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
+                        ->whereHas('rooms', fn (Builder $roomsQuery): Builder => $roomsQuery->whereNull('assigned_worker_id'))),
                 SelectFilter::make('property_type')
-                    ->label('نوع العقار')
+                    ->label('نوع الحجز / العقار')
                     ->options([
-                        UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE => 'مساعدة المناسبات',
-                        'apartment' => 'شقة',
-                        'villa' => 'فيلا',
-                        'house' => 'منزل',
-                        'office' => 'مكتب',
-                        'studio' => 'استوديو',
+                        UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE => 'مساعدة مناسبة',
+                        'apartment' => 'تنظيف شقة',
+                        'villa' => 'تنظيف فيلا',
+                        'house' => 'تنظيف منزل',
+                        'office' => 'تنظيف مكتب',
+                        'studio' => 'تنظيف استوديو',
                     ]),
             ])
             ->recordActions([
@@ -180,7 +187,10 @@ final class CleaningBookingsTable
                         CheckboxList::make('room_ids')
                             ->label('الغرف')
                             ->options(fn (?CleaningBooking $record): array => self::roomOptions($record))
-                            ->columns(2),
+                            ->columns(2)
+                            ->visible(fn (?CleaningBooking $record): bool => $record !== null
+                                && ! self::isEventAssistance($record)
+                                && (int) ($record->rooms_count ?? $record->rooms()->count()) > 0),
                     ])
                     ->action(function (CleaningBooking $record, array $data): void {
                         $worker = Worker::query()->with('user')->findOrFail((int) $data['worker_id']);
@@ -225,7 +235,10 @@ final class CleaningBookingsTable
                     ->label('تعيين الغرف')
                     ->icon('heroicon-o-squares-plus')
                     ->color('primary')
-                    ->visible(fn (CleaningBooking $record): bool => in_array($record->status, [CleaningBookingStatus::Pending, CleaningBookingStatus::WorkerAssigned], true) && $record->acceptedWorkerCount() > 0 && (int) ($record->rooms_count ?? 0) > 0)
+                    ->visible(fn (CleaningBooking $record): bool => ! self::isEventAssistance($record)
+                        && in_array($record->status, [CleaningBookingStatus::Pending, CleaningBookingStatus::WorkerAssigned], true)
+                        && $record->acceptedWorkerCount() > 0
+                        && (int) ($record->rooms_count ?? 0) > 0)
                     ->modalHeading('تعيين الغرف')
                     ->form([
                         Select::make('worker_id')
@@ -256,6 +269,21 @@ final class CleaningBookingsTable
                         && $record->property_type !== UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE),
                 ViewAction::make()->label('عرض'),
             ]);
+    }
+
+    private static function bookingKindLabel(CleaningBooking $record): string
+    {
+        return self::isEventAssistance($record) ? 'مساعدة مناسبة' : 'تنظيف عادي';
+    }
+
+    private static function bookingKindColor(CleaningBooking $record): string
+    {
+        return self::isEventAssistance($record) ? 'warning' : 'info';
+    }
+
+    private static function isEventAssistance(CleaningBooking $record): bool
+    {
+        return $record->property_type === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE;
     }
 
     private static function assignedWorkerNames(CleaningBooking $record): array
@@ -408,6 +436,10 @@ final class CleaningBookingsTable
 
     private static function roomCoverageLabel(CleaningBooking $record): string
     {
+        if (self::isEventAssistance($record)) {
+            return 'غير مطبق';
+        }
+
         $totalRooms = max(0, (int) ($record->rooms_count ?? 0));
         if ($totalRooms === 0) {
             return '-';
@@ -421,6 +453,10 @@ final class CleaningBookingsTable
 
     private static function roomCoverageColor(CleaningBooking $record): string
     {
+        if (self::isEventAssistance($record)) {
+            return 'gray';
+        }
+
         if (max(0, (int) ($record->unassigned_rooms_count ?? 0)) === 0) {
             return 'success';
         }
@@ -527,7 +563,7 @@ final class CleaningBookingsTable
 
     private static function roomOptions(?CleaningBooking $record): array
     {
-        if ($record === null) {
+        if ($record === null || self::isEventAssistance($record)) {
             return [];
         }
 
