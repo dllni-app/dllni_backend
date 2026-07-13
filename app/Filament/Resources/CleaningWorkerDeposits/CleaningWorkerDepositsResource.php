@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningWorkerDeposits;
 
+use App\Enums\UserModuleType;
 use App\Filament\Resources\CleaningWorkerDeposits\Pages\CreateCleaningWorkerDeposit;
 use App\Filament\Resources\CleaningWorkerDeposits\Pages\ListCleaningWorkerDeposits;
 use App\Filament\Resources\CleaningWorkerDeposits\Schemas\CleaningTransactionForm;
 use App\Filament\Resources\CleaningWorkerDeposits\Tables\CleaningTransactionsTable;
+use App\Filament\Support\AdminUiFormatter;
 use App\Models\CleaningDepositTransaction;
 use BackedEnum;
 use Filament\Infolists\Components\TextEntry;
@@ -73,9 +75,12 @@ final class CleaningWorkerDepositsResource extends Resource
                         ->badge()
                         ->color(fn (CleaningDepositTransaction $record): string => CleaningTransactionsTable::typeColor($record->publicType()))
                         ->formatStateUsing(fn (CleaningDepositTransaction $record): string => CleaningTransactionsTable::typeLabel($record->publicType())),
-                    TextEntry::make('amount')->label(__('cleaning_admin.transactions.fields.amount'))->money('SYP'),
-                    TextEntry::make('balance_before')->label(__('cleaning_admin.transactions.fields.balance_before'))->money('SYP'),
-                    TextEntry::make('balance_after')->label(__('cleaning_admin.transactions.fields.balance_after'))->money('SYP'),
+                    TextEntry::make('amount')->label(__('cleaning_admin.transactions.fields.amount'))
+                        ->formatStateUsing(fn ($state): string => self::money($state)),
+                    TextEntry::make('balance_before')->label(__('cleaning_admin.transactions.fields.balance_before'))
+                        ->formatStateUsing(fn ($state): string => self::money($state)),
+                    TextEntry::make('balance_after')->label(__('cleaning_admin.transactions.fields.balance_after'))
+                        ->formatStateUsing(fn ($state): string => self::money($state)),
                     TextEntry::make('reference')->label(__('cleaning_admin.transactions.fields.reference'))
                         ->formatStateUsing(fn (?string $state): string => CleaningTransactionsTable::referenceLabel($state))
                         ->placeholder('—'),
@@ -90,6 +95,10 @@ final class CleaningWorkerDepositsResource extends Resource
     {
         return parent::getEloquentQuery()
             ->publiclyVisible()
+            ->whereHas('worker.user', fn (Builder $query): Builder => $query->where(
+                'module_type',
+                UserModuleType::CleaningWorker->value,
+            ))
             ->with(['worker', 'createdByAdmin']);
     }
 
@@ -99,5 +108,10 @@ final class CleaningWorkerDepositsResource extends Resource
             'index' => ListCleaningWorkerDeposits::route('/'),
             'create' => CreateCleaningWorkerDeposit::route('/create'),
         ];
+    }
+
+    private static function money(mixed $amount): string
+    {
+        return AdminUiFormatter::formatCurrency((float) ($amount ?? 0), 0);
     }
 }
