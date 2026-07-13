@@ -8,7 +8,6 @@ use App\Enums\UserModuleType;
 use App\Models\CleaningWorkerDeposit;
 use App\Models\Worker;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\DB;
 
 final class CleaningFinancialOverviewService
 {
