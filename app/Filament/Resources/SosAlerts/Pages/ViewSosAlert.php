@@ -4,16 +4,22 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\SosAlerts\Pages;
 
+use App\Enums\SOSStatus;
 use App\Filament\Resources\SosAlerts\SosAlertResource;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
-use App\Enums\SOSStatus;
+use Illuminate\Contracts\Support\Htmlable;
 
 final class ViewSosAlert extends ViewRecord
 {
     protected static string $resource = SosAlertResource::class;
+
+    public function getTitle(): string|Htmlable
+    {
+        return 'تفاصيل البلاغ أو الشكوى #'.$this->record->getKey();
+    }
 
     protected function getHeaderActions(): array
     {
@@ -22,7 +28,7 @@ final class ViewSosAlert extends ViewRecord
                 ->label('استلام')
                 ->icon('heroicon-o-hand-raised')
                 ->color('warning')
-                ->visible(fn (): bool => $this->record->status !== SOSStatus::Resolved)
+                ->visible(fn (): bool => in_array($this->record->status, [SOSStatus::Pending, SOSStatus::Triggered], true))
                 ->requiresConfirmation()
                 ->action(function (): void {
                     $this->record->forceFill([
@@ -39,7 +45,7 @@ final class ViewSosAlert extends ViewRecord
                     ]);
 
                     Notification::make()
-                        ->title('تم استلام تنبيه الطوارئ')
+                        ->title('تم استلام البلاغ')
                         ->success()
                         ->send();
                 }),
@@ -73,7 +79,7 @@ final class ViewSosAlert extends ViewRecord
                     ]);
 
                     Notification::make()
-                        ->title('تم حل تنبيه الطوارئ')
+                        ->title('تم حل البلاغ')
                         ->success()
                         ->send();
                 }),

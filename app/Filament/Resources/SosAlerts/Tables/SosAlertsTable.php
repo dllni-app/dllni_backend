@@ -7,7 +7,7 @@ namespace App\Filament\Resources\SosAlerts\Tables;
 use App\Enums\EmergencyType;
 use App\Enums\SOSStatus;
 use App\Enums\UserModuleType;
-use App\Filament\Resources\Orders\OrderResource;
+use App\Filament\Resources\CleaningBookings\CleaningBookingResource;
 use App\Filament\Resources\Users\UserResource;
 use App\Models\SosAlert;
 use Filament\Actions\Action;
@@ -19,6 +19,7 @@ use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Modules\Cleaning\Models\CleaningBooking;
 
 final class SosAlertsTable
 {
@@ -29,30 +30,35 @@ final class SosAlertsTable
                 TextColumn::make('id')
                     ->label('المعرّف')
                     ->sortable(),
-                TextColumn::make('order.order_number')
-                    ->label('الطلب')
+                TextColumn::make('booking.booking_number')
+                    ->label('طلب التنظيف')
                     ->placeholder('-')
-                    ->url(fn (SosAlert $record): ?string => $record->order instanceof \Modules\Resturants\Models\Order
-                        ? OrderResource::getUrl('view', ['record' => $record->order])
+                    ->url(fn (SosAlert $record): ?string => $record->booking instanceof CleaningBooking
+                        ? CleaningBookingResource::getUrl('view', ['record' => $record->booking])
                         : null),
+                TextColumn::make('source_app')
+                    ->label('التطبيق المرسل')
+                    ->badge()
+                    ->state(fn (SosAlert $record): string => self::sourceAppLabel($record))
+                    ->color(fn (SosAlert $record): string => self::sourceAppColor($record)),
                 TextColumn::make('user.name')
-                    ->label('المستخدم')
+                    ->label('صاحب البلاغ')
                     ->placeholder('-')
                     ->url(fn (SosAlert $record): ?string => $record->user instanceof \App\Models\User
                         ? UserResource::getUrl('view', ['record' => $record->user])
                         : null),
                 TextColumn::make('reporter_role')
-                    ->label('نوع المُبلِّغ')
+                    ->label('صفة المُبلِّغ')
                     ->badge()
                     ->state(fn (SosAlert $record): string => self::roleLabel($record))
                     ->color(fn (SosAlert $record): string => self::roleColor($record)),
                 TextColumn::make('emergency_type')
-                    ->label('نوع الطوارئ')
+                    ->label('نوع البلاغ')
                     ->badge()
                     ->formatStateUsing(fn (mixed $state): string => self::emergencyLabel($state))
                     ->color(fn (mixed $state): string => self::emergencyColor($state)),
                 TextColumn::make('message')
-                    ->label('معاينة الرسالة')
+                    ->label('الرسالة')
                     ->limit(60)
                     ->wrap()
                     ->tooltip(fn (SosAlert $record): ?string => $record->message),
@@ -62,7 +68,7 @@ final class SosAlertsTable
                     ->color(fn (mixed $state): string => self::statusColor($state))
                     ->formatStateUsing(fn (mixed $state): string => self::statusLabel($state)),
                 TextColumn::make('triggered_at')
-                    ->label('وقت الإطلاق')
+                    ->label('وقت الإرسال')
                     ->since()
                     ->sortable(),
                 TextColumn::make('acknowledged_at')
@@ -76,13 +82,47 @@ final class SosAlertsTable
                     ->placeholder('-')
                     ->sortable(),
             ])
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['user', 'order']))
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['user', 'booking']))
             ->filters([
+                SelectFilter::make('source_app')
+                    ->label('التطبيق المرسل')
+                    ->options([
+                        'dllni_user_app' => 'تطبيق المستخدم',
+                        'cleaning_owner_app' => 'تطبيق عامل التنظيف',
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        $source = $data['value'] ?? null;
+
+                        if ($source === 'cleaning_owner_app') {
+                            return $query->where(function (Builder $query): void {
+                                $query->where('source', 'cleaning_owner_app')
+                                    ->orWhere(function (Builder $query): void {
+                                        $query->where('source', 'booking')
+                                            ->whereHas('user', fn (Builder $userQuery): Builder => $userQuery->where('module_type', UserModuleType::CleaningWorker->value));
+                                    });
+                            });
+                        }
+
+                        if ($source === 'dllni_user_app') {
+                            return $query->where(function (Builder $query): void {
+                                $query->where('source', 'dllni_user_app')
+                                    ->orWhere(function (Builder $query): void {
+                                        $query->where('source', 'booking')
+                                            ->whereHas('user', fn (Builder $userQuery): Builder => $userQuery
+                                                ->whereNull('module_type')
+                                                ->orWhere('module_type', '!=', UserModuleType::CleaningWorker->value));
+                                    });
+                            });
+                        }
+
+                        return $query;
+                    }),
                 SelectFilter::make('status')
+                    ->label('الحالة')
                     ->options(collect(SOSStatus::cases())->mapWithKeys(fn (SOSStatus $case): array => [$case->value => self::statusLabel($case)])->all()),
                 SelectFilter::make('emergency_type')
-                    ->label('نوع الطوارئ')
-                    ->options(collect(\App\Enums\EmergencyType::cases())->mapWithKeys(fn (\App\Enums\EmergencyType $case): array => [$case->value => self::emergencyLabel($case)])->all()),
+                    ->label('نوع البلاغ')
+                    ->options(collect(EmergencyType::cases())->mapWithKeys(fn (EmergencyType $case): array => [$case->value => self::emergencyLabel($case)])->all()),
                 Filter::make('created_at')
                     ->form([
                         \Filament\Forms\Components\DatePicker::make('from')->label('من'),
@@ -95,7 +135,7 @@ final class SosAlertsTable
                     }),
             ])
             ->recordActions([
-                ViewAction::make(),
+                ViewAction::make()->label('عرض'),
                 Action::make('acknowledge')
                     ->label('استلام')
                     ->icon('heroicon-o-hand-raised')
@@ -110,7 +150,7 @@ final class SosAlertsTable
                         ])->save();
 
                         Notification::make()
-                            ->title('تم استلام تنبيه الطوارئ')
+                            ->title('تم استلام البلاغ')
                             ->success()
                             ->send();
                     }),
@@ -136,7 +176,7 @@ final class SosAlertsTable
                         ])->save();
 
                         Notification::make()
-                            ->title('تم حل تنبيه الطوارئ')
+                            ->title('تم حل البلاغ')
                             ->success()
                             ->send();
                     }),
@@ -148,7 +188,7 @@ final class SosAlertsTable
     {
         return match (self::normalizeStatus($status)) {
             SOSStatus::Pending => 'قيد الانتظار',
-            SOSStatus::Triggered => 'تم الإطلاق',
+            SOSStatus::Triggered => 'جديد',
             SOSStatus::Acknowledged => 'تم الاستلام',
             SOSStatus::Resolved => 'تم الحل',
             default => '-',
@@ -177,7 +217,7 @@ final class SosAlertsTable
 
     private static function isPending(SOSStatus|string|null $status): bool
     {
-        return self::normalizeStatus($status) === SOSStatus::Pending;
+        return in_array(self::normalizeStatus($status), [SOSStatus::Pending, SOSStatus::Triggered], true);
     }
 
     private static function isResolved(SOSStatus|string|null $status): bool
@@ -185,20 +225,36 @@ final class SosAlertsTable
         return self::normalizeStatus($status) === SOSStatus::Resolved;
     }
 
+    public static function sourceAppLabel(SosAlert $record): string
+    {
+        if ($record->source === 'cleaning_owner_app') {
+            return 'تطبيق عامل التنظيف';
+        }
+
+        if ($record->source === 'dllni_user_app') {
+            return 'تطبيق المستخدم';
+        }
+
+        return $record->user?->module_type === UserModuleType::CleaningWorker
+            ? 'تطبيق عامل التنظيف'
+            : 'تطبيق المستخدم';
+    }
+
+    public static function sourceAppColor(SosAlert $record): string
+    {
+        return self::sourceAppLabel($record) === 'تطبيق عامل التنظيف' ? 'info' : 'gray';
+    }
+
     public static function roleLabel(SosAlert $record): string
     {
-        $module = $record->user?->module_type;
-
-        return in_array($module, [UserModuleType::CleaningWorker, UserModuleType::DeliveryDriver], true)
-            ? 'عامل'
+        return $record->user?->module_type === UserModuleType::CleaningWorker
+            ? 'عامل تنظيف'
             : 'مستخدم';
     }
 
     public static function roleColor(SosAlert $record): string
     {
-        $module = $record->user?->module_type;
-
-        return in_array($module, [UserModuleType::CleaningWorker, UserModuleType::DeliveryDriver], true)
+        return $record->user?->module_type === UserModuleType::CleaningWorker
             ? 'info'
             : 'gray';
     }
@@ -210,7 +266,7 @@ final class SosAlertsTable
         return match ($type) {
             EmergencyType::SafetyThreat => 'تهديد للسلامة',
             EmergencyType::MedicalEmergency => 'حالة طبية طارئة',
-            EmergencyType::SevereConflict => 'نزاع حاد',
+            EmergencyType::SevereConflict => 'نزاع أو شكوى عاجلة',
             default => '-',
         };
     }
