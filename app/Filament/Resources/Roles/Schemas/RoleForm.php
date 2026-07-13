@@ -38,16 +38,18 @@ final class RoleForm
     {
         $selected = [];
 
-        foreach (self::groupedPermissionOptions() as $section => $options) {
-            $field = self::permissionFieldName($section);
+        foreach (self::groupedPermissionOptions() as $mainSection => $resourceSections) {
+            foreach ($resourceSections as $resourceSection => $options) {
+                $field = self::permissionFieldName($mainSection, $resourceSection);
 
-            foreach ((array) ($data[$field] ?? []) as $permission) {
-                if (is_string($permission) && array_key_exists($permission, $options)) {
-                    $selected[] = $permission;
+                foreach ((array) ($data[$field] ?? []) as $permission) {
+                    if (is_string($permission) && array_key_exists($permission, $options)) {
+                        $selected[] = $permission;
+                    }
                 }
-            }
 
-            unset($data[$field]);
+                unset($data[$field]);
+            }
         }
 
         return array_values(array_unique($selected));
@@ -71,11 +73,13 @@ final class RoleForm
 
         $state = [];
 
-        foreach (self::groupedPermissionOptions() as $section => $options) {
-            $state[self::permissionFieldName($section)] = array_values(array_filter(
-                array_keys($options),
-                static fn (string $permission): bool => isset($selectedLookup[$permission]),
-            ));
+        foreach (self::groupedPermissionOptions() as $mainSection => $resourceSections) {
+            foreach ($resourceSections as $resourceSection => $options) {
+                $state[self::permissionFieldName($mainSection, $resourceSection)] = array_values(array_filter(
+                    array_keys($options),
+                    static fn (string $permission): bool => isset($selectedLookup[$permission]),
+                ));
+            }
         }
 
         return $state;
@@ -83,13 +87,14 @@ final class RoleForm
 
     public static function permissionFieldFor(string $permission, ?string $group = null): string
     {
-        return self::permissionFieldName(
-            ArabicDashboardLabels::permissionSectionName($permission, $group),
-        );
+        $mainSection = ArabicDashboardLabels::permissionMainSectionName($permission, $group);
+        $resourceSection = ArabicDashboardLabels::permissionSectionName($permission, $group);
+
+        return self::permissionFieldName($mainSection, $resourceSection);
     }
 
     /**
-     * @return array<string, array<string, string>>
+     * @return array<string, array<string, array<string, string>>>
      */
     public static function groupedPermissionOptions(): array
     {
@@ -101,24 +106,43 @@ final class RoleForm
             ->get(['name', 'slug', 'group']);
 
         foreach ($permissions as $permission) {
-            $section = ArabicDashboardLabels::permissionSectionName(
+            $mainSection = ArabicDashboardLabels::permissionMainSectionName(
+                $permission->name,
+                $permission->group,
+            );
+            $resourceSection = ArabicDashboardLabels::permissionSectionName(
                 $permission->name,
                 $permission->group,
             );
 
-            $sections[$section][$permission->name] = ArabicDashboardLabels::permissionName(
+            $sections[$mainSection][$resourceSection][$permission->name] = ArabicDashboardLabels::permissionName(
                 $permission->name,
                 $permission->slug,
             );
         }
 
-        ksort($sections, SORT_NATURAL);
+        foreach ($sections as &$resourceSections) {
+            ksort($resourceSections, SORT_NATURAL);
 
-        foreach ($sections as &$options) {
-            asort($options, SORT_NATURAL);
+            foreach ($resourceSections as &$options) {
+                asort($options, SORT_NATURAL);
+            }
         }
 
-        return $sections;
+        $ordered = [];
+
+        foreach (ArabicDashboardLabels::permissionMainSectionOrder() as $mainSection) {
+            if (isset($sections[$mainSection])) {
+                $ordered[$mainSection] = $sections[$mainSection];
+                unset($sections[$mainSection]);
+            }
+        }
+
+        foreach ($sections as $mainSection => $resourceSections) {
+            $ordered[$mainSection] = $resourceSections;
+        }
+
+        return $ordered;
     }
 
     /** @return array<int, Section> */
@@ -126,16 +150,30 @@ final class RoleForm
     {
         $sections = [];
 
-        foreach (self::groupedPermissionOptions() as $section => $options) {
-            $sections[] = Section::make($section)
-                ->schema([
-                    CheckboxList::make(self::permissionFieldName($section))
-                        ->hiddenLabel()
-                        ->options($options)
-                        ->columns(2)
-                        ->searchable()
-                        ->bulkToggleable()
-                        ->dehydrated(true),
+        foreach (self::groupedPermissionOptions() as $mainSection => $resourceSections) {
+            $resourceCards = [];
+
+            foreach ($resourceSections as $resourceSection => $options) {
+                $resourceCards[] = Section::make($resourceSection)
+                    ->schema([
+                        CheckboxList::make(self::permissionFieldName($mainSection, $resourceSection))
+                            ->hiddenLabel()
+                            ->options($options)
+                            ->columns(2)
+                            ->searchable()
+                            ->bulkToggleable()
+                            ->dehydrated(true),
+                    ])
+                    ->collapsible()
+                    ->columnSpan(1);
+            }
+
+            $sections[] = Section::make($mainSection)
+                ->description('الصلاحيات الخاصة بهذا القسم من لوحة الإدارة.')
+                ->schema($resourceCards)
+                ->columns([
+                    'default' => 1,
+                    'xl' => 2,
                 ])
                 ->collapsible()
                 ->columnSpanFull();
@@ -144,8 +182,8 @@ final class RoleForm
         return $sections;
     }
 
-    private static function permissionFieldName(string $section): string
+    private static function permissionFieldName(string $mainSection, string $resourceSection): string
     {
-        return self::PermissionFieldPrefix.md5($section);
+        return self::PermissionFieldPrefix.md5($mainSection.'|'.$resourceSection);
     }
 }
