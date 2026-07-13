@@ -14,18 +14,23 @@ final class ViewCleaningBooking extends ViewRecord
 {
     protected static string $resource = CleaningBookingResource::class;
 
+    public function getTitle(): string
+    {
+        return 'عرض حجز تنظيف';
+    }
+
     protected function getHeaderActions(): array
     {
-        $actions = [
+        return [
             Action::make('view_dispute')
-                ->label(__('cleaning_admin.booking.actions.view_dispute'))
+                ->label('عرض النزاع')
                 ->url(fn () => $this->record->disputes()->first()
                     ? DisputeResource::getUrl('view', ['record' => $this->record->disputes()->first()])
                     : '#')
-                ->visible(fn () => $this->record->disputes()->exists()),
-            EditAction::make(),
+                ->visible(fn (): bool => $this->record->disputes()->exists()),
+            EditAction::make()
+                ->label('تعديل')
+                ->visible(fn (): bool => CleaningBookingResource::canEdit($this->record)),
         ];
-
-        return $actions;
     }
 }
