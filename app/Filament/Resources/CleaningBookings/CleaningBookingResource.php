@@ -71,7 +71,7 @@ final class CleaningBookingResource extends Resource
             ->pushColumns([
                 TextColumn::make('open_dispute_status')
                     ->label('نزاع مفتوح')
-                    ->state(fn (CleaningBooking $record): string => (int) ($record->open_disputes_count ?? 0) > 0 ? 'open' : 'none')
+                    ->getStateUsing(fn (CleaningBooking $record): string => (int) ($record->open_disputes_count ?? 0) > 0 ? 'open' : 'none')
                     ->badge()
                     ->formatStateUsing(fn (string $state): string => $state === 'open' ? 'يوجد نزاع مفتوح' : 'لا يوجد نزاع مفتوح')
                     ->color(fn (string $state): string => $state === 'open' ? 'danger' : 'gray')
