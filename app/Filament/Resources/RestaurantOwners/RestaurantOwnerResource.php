@@ -30,7 +30,7 @@ final class RestaurantOwnerResource extends Resource
 
     public static function getNavigationGroup(): ?string
     {
-        return 'إدارة المطاعم';
+        return 'قسم المطاعم';
     }
 
     public static function getNavigationLabel(): string
