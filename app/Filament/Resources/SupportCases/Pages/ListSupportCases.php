@@ -7,8 +7,8 @@ namespace App\Filament\Resources\SupportCases\Pages;
 use App\Enums\SupportCaseKind;
 use App\Enums\SupportCaseStatus;
 use App\Filament\Resources\SupportCases\SupportCaseResource;
-use Filament\Resources\Components\Tab;
 use Filament\Resources\Pages\ListRecords;
+use Filament\Schemas\Components\Tabs\Tab;
 use Illuminate\Database\Eloquent\Builder;
 
 final class ListSupportCases extends ListRecords
