@@ -25,7 +25,7 @@ final class SosAlertResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedExclamationTriangle;
 
-    protected static ?int $navigationSort = 4;
+    protected static ?int $navigationSort = 5;
 
     public static function getNavigationGroup(): ?string
     {
@@ -34,18 +34,18 @@ final class SosAlertResource extends Resource
 
     public static function getNavigationLabel(): string
     {
-        return 'النزاعات والشكاوى';
+        return 'بلاغات الطوارئ (SOS)';
     }
 
     public static function getNavigationTooltip(): ?string
     {
-        return 'متابعة بلاغات المستخدمين وعمال التنظيف من تطبيق المستخدم وتطبيق العامل.';
+        return 'متابعة بلاغات الطوارئ المرسلة من العملاء وعمال التنظيف.';
     }
 
     public static function getNavigationBadge(): ?string
     {
         $count = SosAlert::query()
-            ->where('booking_type', CleaningBooking::class)
+            ->whereIn('booking_type', ['cleaning_booking', CleaningBooking::class])
             ->whereIn('status', [
                 SOSStatus::Pending->value,
                 SOSStatus::Triggered->value,
@@ -63,12 +63,12 @@ final class SosAlertResource extends Resource
 
     public static function getModelLabel(): string
     {
-        return 'بلاغ أو شكوى';
+        return 'بلاغ طوارئ';
     }
 
     public static function getPluralModelLabel(): string
     {
-        return 'النزاعات والشكاوى';
+        return 'بلاغات الطوارئ';
     }
 
     public static function form(Schema $schema): Schema
@@ -114,7 +114,7 @@ final class SosAlertResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
-            ->where('booking_type', CleaningBooking::class)
+            ->whereIn('booking_type', ['cleaning_booking', CleaningBooking::class])
             ->with([
                 'user',
                 'booking',
