@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Pages;
 
+use App\Filament\Support\AdminUiFormatter;
 use App\Models\CleaningDepositTransaction;
 use App\Models\CleaningWorkerDeposit;
 use App\Models\Worker;
@@ -76,13 +77,13 @@ final class CleaningFinancialReport extends Page
             ['label' => __('cleaning_finance.report.outstanding_admin_due'), 'value' => $this->money((float) $ledger['outstandingAdministrationDue']), 'tone' => 'danger'],
             ['label' => __('cleaning_admin.report.metrics.settlements_received'), 'value' => $this->money((float) $ledger['totalSettled']), 'tone' => 'success'],
             ['label' => __('cleaning_admin.report.metrics.deposit_refunds'), 'value' => $this->money($refunds), 'tone' => 'warning'],
-            ['label' => __('cleaning_admin.report.metrics.active_workers'), 'value' => (string) $activeWorkers, 'tone' => 'success'],
-            ['label' => __('cleaning_admin.report.metrics.restricted_workers'), 'value' => (string) $restrictedWorkers, 'tone' => 'danger'],
+            ['label' => __('cleaning_admin.report.metrics.active_workers'), 'value' => AdminUiFormatter::formatNumber($activeWorkers), 'tone' => 'success'],
+            ['label' => __('cleaning_admin.report.metrics.restricted_workers'), 'value' => AdminUiFormatter::formatNumber($restrictedWorkers), 'tone' => 'danger'],
         ];
     }
 
     private function money(float $value): string
     {
-        return 'SYP '.number_format($value, 2);
+        return AdminUiFormatter::formatCurrency($value, 0, 'SYP');
     }
 }
