@@ -48,9 +48,9 @@ it('exposes only the four public transaction types in the worker deposit timelin
     $timeline = [
         ['type' => 'deposit', 'amount' => 500000, 'balance_before' => 0, 'balance_after' => 500000, 'reference' => 'test-opening-deposit', 'created_at' => now()->subDays(5)],
         ['type' => 'deposit', 'amount' => 500000, 'balance_before' => 500000, 'balance_after' => 1000000, 'reference' => 'test-second-deposit', 'created_at' => now()->subDays(4)],
-        ['type' => 'admin_fee', 'amount' => 45000, 'balance_before' => 1000000, 'balance_after' => 955000, 'reference' => 'automatic_admin_commission:test-1', 'created_at' => now()->subDays(3)],
-        ['type' => 'admin_fee', 'amount' => 57500, 'balance_before' => 955000, 'balance_after' => 897500, 'reference' => 'automatic_admin_commission:test-2', 'created_at' => now()->subDays(2)],
-        ['type' => 'admin_fee', 'amount' => 70000, 'balance_before' => 897500, 'balance_after' => 827500, 'reference' => 'automatic_admin_commission:test-3', 'created_at' => now()->subDay()],
+        ['type' => 'debt', 'amount' => 45000, 'balance_before' => 1000000, 'balance_after' => 955000, 'reference' => CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'test-1', 'created_at' => now()->subDays(3)],
+        ['type' => 'debt', 'amount' => 57500, 'balance_before' => 955000, 'balance_after' => 897500, 'reference' => CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'test-2', 'created_at' => now()->subDays(2)],
+        ['type' => 'debt', 'amount' => 70000, 'balance_before' => 897500, 'balance_after' => 827500, 'reference' => CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'test-3', 'created_at' => now()->subDay()],
     ];
 
     foreach ($timeline as $transactionData) {
