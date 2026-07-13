@@ -71,7 +71,7 @@ it('adds administration debt as usable worker balance without counting it as a d
         ->assertJsonPath('data.0.type', 'debt');
 });
 
-it('settles administration-funded debt before admin commission and keeps the balance chain correct', function (): void {
+it('settles administration-funded debt before automatic administration debt and keeps the balance chain correct', function (): void {
     $user = User::factory()->create();
     $worker = Worker::factory()->create([
         'user_id' => $user->id,
@@ -94,12 +94,12 @@ it('settles administration-funded debt before admin commission and keeps the bal
 
     CleaningDepositTransaction::query()->create([
         'worker_id' => $worker->id,
-        'type' => 'admin_fee',
+        'type' => 'debt',
         'amount' => 20000,
         'debt_settled_amount' => 0,
         'balance_before' => 100000,
         'balance_after' => 80000,
-        'reference' => 'test_admin_fee',
+        'reference' => CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'test',
     ]);
 
     CleaningWorkerDeposit::query()
