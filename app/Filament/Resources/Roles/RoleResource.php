@@ -16,6 +16,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Spatie\Permission\Models\Role;
 
 final class RoleResource extends Resource
@@ -64,6 +65,11 @@ final class RoleResource extends Resource
     public static function table(Table $table): Table
     {
         return RolesTable::configure($table);
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->where('guard_name', 'web');
     }
 
     public static function getRelations(): array
