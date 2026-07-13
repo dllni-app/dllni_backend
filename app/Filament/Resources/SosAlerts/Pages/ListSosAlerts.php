@@ -15,12 +15,12 @@ final class ListSosAlerts extends ListRecords
 
     public function getTitle(): string|Htmlable
     {
-        return 'النزاعات والشكاوى';
+        return 'بلاغات الطوارئ (SOS)';
     }
 
     public function getSubheading(): ?string
     {
-        return 'متابعة البلاغات الواردة من تطبيق المستخدم وتطبيق عامل التنظيف ضمن واجهة واحدة.';
+        return 'متابعة بلاغات الطوارئ الواردة من تطبيق المستخدم وتطبيق عامل التنظيف.';
     }
 
     protected function getHeaderActions(): array

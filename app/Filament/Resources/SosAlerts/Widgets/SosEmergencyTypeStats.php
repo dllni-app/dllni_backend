@@ -14,12 +14,12 @@ use Modules\Cleaning\Models\CleaningBooking;
 
 final class SosEmergencyTypeStats extends StatsOverviewWidget
 {
-    protected ?string $heading = 'ملخص البلاغات والشكاوى الواردة';
+    protected ?string $heading = 'ملخص بلاغات الطوارئ';
 
     protected function getStats(): array
     {
         $baseQuery = SosAlert::query()
-            ->where('booking_type', CleaningBooking::class);
+            ->whereIn('booking_type', ['cleaning_booking', CleaningBooking::class]);
 
         $counts = (clone $baseQuery)
             ->selectRaw('emergency_type, COUNT(*) as total')

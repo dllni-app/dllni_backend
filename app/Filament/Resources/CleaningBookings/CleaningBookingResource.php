@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningBookings;
 
+use App\Enums\DisputeStatus;
 use App\Filament\Resources\CleaningBookings\Pages\EditCleaningBooking;
 use App\Filament\Resources\CleaningBookings\Pages\ListCleaningBookings;
 use App\Filament\Resources\CleaningBookings\Pages\ViewCleaningBooking;
@@ -14,6 +15,7 @@ use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -65,20 +67,36 @@ final class CleaningBookingResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return CleaningBookingsTable::configure($table);
+        return CleaningBookingsTable::configure($table)
+            ->pushColumns([
+                TextColumn::make('open_dispute_status')
+                    ->label('نزاع مفتوح')
+                    ->getStateUsing(fn (CleaningBooking $record): string => (int) ($record->open_disputes_count ?? 0) > 0 ? 'open' : 'none')
+                    ->badge()
+                    ->formatStateUsing(fn (string $state): string => $state === 'open' ? 'يوجد نزاع مفتوح' : 'لا يوجد نزاع مفتوح')
+                    ->color(fn (string $state): string => $state === 'open' ? 'danger' : 'gray')
+                    ->icon(fn (string $state): string => $state === 'open' ? 'heroicon-o-exclamation-triangle' : 'heroicon-o-check-circle'),
+            ]);
     }
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with([
-            'customer',
-            'worker.user',
-            'preferredWorker.user',
-            'rooms.assignedWorker.user',
-            'rooms.plannedPreferredWorker.user',
-            'workerAssignments.worker.user',
-            'acceptedWorkerAssignments.worker.user',
-        ]);
+        return parent::getEloquentQuery()
+            ->with([
+                'customer',
+                'worker.user',
+                'preferredWorker.user',
+                'rooms.assignedWorker.user',
+                'rooms.plannedPreferredWorker.user',
+                'workerAssignments.worker.user',
+                'acceptedWorkerAssignments.worker.user',
+            ])
+            ->withCount([
+                'disputes as open_disputes_count' => fn (Builder $query): Builder => $query->whereIn('status', [
+                    DisputeStatus::Open->value,
+                    DisputeStatus::UnderReview->value,
+                ]),
+            ]);
     }
 
     public static function canViewAny(): bool
