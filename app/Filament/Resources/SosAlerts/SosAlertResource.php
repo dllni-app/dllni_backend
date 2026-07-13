@@ -44,7 +44,8 @@ final class SosAlertResource extends Resource
 
     public static function getNavigationBadge(): ?string
     {
-        $count = self::cleaningRequestsQuery()
+        $count = SosAlert::query()
+            ->where('booking_type', CleaningBooking::class)
             ->whereIn('status', [
                 SOSStatus::Pending->value,
                 SOSStatus::Triggered->value,
@@ -112,12 +113,14 @@ final class SosAlertResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return self::cleaningRequestsQuery()->with([
-            'user',
-            'booking',
-            'acknowledgedBy',
-            'resolvedBy',
-        ]);
+        return parent::getEloquentQuery()
+            ->where('booking_type', CleaningBooking::class)
+            ->with([
+                'user',
+                'booking',
+                'acknowledgedBy',
+                'resolvedBy',
+            ]);
     }
 
     public static function getRelations(): array
@@ -131,12 +134,6 @@ final class SosAlertResource extends Resource
             'index' => ListSosAlerts::route('/'),
             'view' => ViewSosAlert::route('/{record}'),
         ];
-    }
-
-    private static function cleaningRequestsQuery(): Builder
-    {
-        return SosAlert::query()
-            ->where('booking_type', CleaningBooking::class);
     }
 
     private static function isDashboardAdmin(): bool
