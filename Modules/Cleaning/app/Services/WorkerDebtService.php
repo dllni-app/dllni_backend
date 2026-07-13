@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Services;
 
+use App\Enums\UserModuleType;
 use App\Models\CleaningDepositTransaction;
 use App\Models\CleaningWorkerDeposit;
 use App\Models\Worker;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -136,7 +138,12 @@ final class WorkerDebtService
      */
     public function globalSummary(): array
     {
-        $totals = $this->totalsQuery()->first();
+        $totals = $this->totalsQuery()
+            ->whereHas('worker.user', fn (Builder $query): Builder => $query->where(
+                'module_type',
+                UserModuleType::CleaningWorker->value,
+            ))
+            ->first();
 
         return $this->buildSummary(
             debtTotal: (float) ($totals?->debt_total ?? 0),
@@ -151,7 +158,7 @@ final class WorkerDebtService
         return (float) $this->summary($worker)['outstandingAdministrationDue'];
     }
 
-    private function totalsQuery(): \Illuminate\Database\Eloquent\Builder
+    private function totalsQuery(): Builder
     {
         $automaticPrefix = CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'%';
 
