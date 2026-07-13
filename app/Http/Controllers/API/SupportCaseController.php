@@ -27,7 +27,14 @@ final class SupportCaseController
         $user = request()->user();
 
         $query = $this->authorizedQuery($user)
-            ->with(['reporter'])
+            ->with([
+                'reporter',
+                'booking' => function (MorphTo $morphTo): void {
+                    $morphTo->morphWith([
+                        CleaningBooking::class => ['customer', 'worker.user'],
+                    ]);
+                },
+            ])
             ->withCount('messages')
             ->latest('id');
 
@@ -55,7 +62,7 @@ final class SupportCaseController
             attachments: $request->file('attachments', []),
         );
 
-        return SupportCaseResource::make($supportCase)
+        return SupportCaseResource::make($this->loadDetails($supportCase))
             ->response()
             ->setStatusCode(Response::HTTP_CREATED);
     }
