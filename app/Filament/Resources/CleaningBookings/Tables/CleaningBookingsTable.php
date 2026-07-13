@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningBookings\Tables;
 
-use App\Filament\Resources\CleaningPriceAdjustmentRequests\CleaningPriceAdjustmentRequestResource;
+use App\Filament\Resources\CleaningBookings\CleaningBookingResource;
 use App\Models\Worker;
 use BackedEnum;
+use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
@@ -21,12 +22,9 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\HtmlString;
-use Modules\Cleaning\Enums\CleaningAssignmentMode;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
-use Modules\Cleaning\Enums\CleaningPriceAdjustmentRequestStatus;
 use Modules\Cleaning\Models\CleaningBooking;
-use Modules\Cleaning\Models\CleaningBookingPriceAdjustmentRequest;
 use Modules\Cleaning\Services\CleaningBookingTeamService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
@@ -37,151 +35,83 @@ final class CleaningBookingsTable
         return $table
             ->columns([
                 TextColumn::make('booking_number')
-                    ->label(self::headerLabel(
-                        __('cleaning_admin.booking.fields.booking_number'),
-                        __('cleaning_admin.column_descriptions.booking_number'),
-                    ))
+                    ->label(self::headerLabel('رقم الحجز', 'المعرّف الفريد للحجز.'))
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('status')
-                    ->label(self::headerLabel(
-                        __('cleaning_admin.booking.fields.status'),
-                        __('cleaning_admin.column_descriptions.status'),
-                    ))
+                    ->label(self::headerLabel('الحالة', 'الحالة الحالية للحجز.'))
                     ->badge()
                     ->color(fn ($state): string => self::statusColor($state))
                     ->formatStateUsing(fn ($state): string => self::statusLabel($state)),
                 TextColumn::make('cancelled_by_role')
-                    ->label(self::headerLabel('مصدر الإلغاء', 'يوضح إذا كان العميل هو من ألغى الطلب.'))
+                    ->label(self::headerLabel('مصدر الإلغاء', 'يوضح الجهة التي ألغت الحجز.'))
                     ->badge()
                     ->color(fn ($state): string => self::cancellationSourceColor($state))
                     ->formatStateUsing(fn ($state): string => self::cancellationSourceLabel($state))
-                    ->placeholder('-'),
-                TextColumn::make('assignment_mode')
-                    ->label(self::headerLabel(
-                        __('cleaning_admin.booking.fields.assignment_mode'),
-                        __('cleaning_admin.column_descriptions.assignment_mode'),
-                    ))
-                    ->badge()
-                    ->color(fn ($state, CleaningBooking $record): string => self::assignmentModeColor($record))
-                    ->getStateUsing(fn (CleaningBooking $record): string => self::assignmentModeLabel($record)),
+                    ->placeholder('-')
+                    ->toggleable(),
                 TextColumn::make('customer.name')
-                    ->label(self::headerLabel(
-                        __('cleaning_admin.booking.fields.customer'),
-                        __('cleaning_admin.column_descriptions.customer'),
-                    ))
+                    ->label(self::headerLabel('العميل', 'العميل الذي طلب الخدمة.'))
                     ->searchable(),
                 TextColumn::make('worker.first_name')
-                    ->label(self::headerLabel(
-                        __('cleaning_admin.booking.fields.primary_worker'),
-                        __('cleaning_admin.column_descriptions.primary_worker'),
-                    ))
+                    ->label(self::headerLabel('العامل الأساسي', 'العامل الأساسي المعيّن للحجز.'))
                     ->placeholder('-'),
-                TextColumn::make('preferredWorker.first_name')
-                    ->label(self::headerLabel(
-                        __('cleaning_admin.booking.fields.preferred_worker'),
-                        __('cleaning_admin.column_descriptions.preferred_worker'),
-                    ))
+                TextColumn::make('preferred_workers')
+                    ->label(self::headerLabel('العاملون المفضلون', 'قد يحتوي الحجز على أكثر من عامل مفضل.'))
+                    ->getStateUsing(fn (CleaningBooking $record): array => self::preferredWorkerNames($record))
+                    ->badge()
+                    ->color('info')
                     ->placeholder('-')
                     ->toggleable(),
                 TextColumn::make('number_of_workers')
-                    ->label(self::headerLabel(
-                        __('cleaning_admin.booking.fields.required_workers'),
-                        __('cleaning_admin.column_descriptions.required_workers'),
-                    ))
+                    ->label(self::headerLabel('عدد العاملين المطلوب', 'عدد العاملين المطلوبين لتنفيذ الحجز.'))
+                    ->formatStateUsing(fn ($state): string => self::integer($state))
                     ->sortable(),
                 TextColumn::make('accepted_workers')
-                    ->label(self::headerLabel(
-                        __('cleaning_admin.booking.fields.accepted_workers'),
-                        __('cleaning_admin.column_descriptions.accepted_workers'),
-                    ))
+                    ->label(self::headerLabel('العاملون المقبولون', 'عدد العاملين الذين قبلوا الحجز.'))
                     ->getStateUsing(fn (CleaningBooking $record): int => $record->acceptedWorkerCount())
-                    ->sortable(false)
                     ->badge()
                     ->color(fn (CleaningBooking $record): string => $record->isTeamFulfilled() ? 'success' : ($record->acceptedWorkerCount() > 0 ? 'warning' : 'gray')),
                 TextColumn::make('remaining_workers')
-                    ->label(self::headerLabel(
-                        __('cleaning_admin.booking.fields.remaining_workers'),
-                        __('cleaning_admin.column_descriptions.remaining_workers'),
-                    ))
+                    ->label(self::headerLabel('العاملون المتبقون', 'العدد المتبقي لإكمال الفريق.'))
                     ->getStateUsing(fn (CleaningBooking $record): int => $record->remainingWorkerCount())
                     ->badge()
                     ->color(fn (CleaningBooking $record): string => $record->remainingWorkerCount() > 0 ? 'warning' : 'success'),
                 TextColumn::make('property_details.event_type')
-                    ->label(self::headerLabel(
-                        __('cleaning_admin.booking.fields.event_type'),
-                        __('cleaning_admin.column_descriptions.event_type'),
-                    ))
-                    ->formatStateUsing(fn (?string $state): string => self::translatedValue('cleaning_admin.enums.event_type.', $state))
+                    ->label(self::headerLabel('نوع المناسبة', 'نوع المناسبة في طلبات مساعدة المناسبات.'))
+                    ->formatStateUsing(fn (?string $state): string => self::eventTypeLabel($state))
                     ->placeholder('-')
                     ->toggleable(),
                 TextColumn::make('scheduled_date')
-                    ->label(self::headerLabel(
-                        __('cleaning_admin.booking.fields.scheduled_date'),
-                        __('cleaning_admin.column_descriptions.scheduled_date'),
-                    ))
-                    ->date()
+                    ->label(self::headerLabel('التاريخ', 'تاريخ تنفيذ الخدمة.'))
+                    ->date('Y-m-d')
                     ->sortable(),
                 TextColumn::make('scheduled_time')
-                    ->label(self::headerLabel(
-                        __('cleaning_admin.booking.fields.scheduled_time'),
-                        __('cleaning_admin.column_descriptions.scheduled_time'),
-                    )),
+                    ->label(self::headerLabel('الوقت', 'وقت بداية الخدمة بنظام 12 ساعة.'))
+                    ->formatStateUsing(fn ($state): string => self::time($state)),
                 TextColumn::make('room_coverage')
-                    ->label(self::headerLabel(
-                        __('cleaning_admin.booking.fields.room_coverage'),
-                        __('cleaning_admin.column_descriptions.room_coverage'),
-                    ))
+                    ->label(self::headerLabel('تغطية الغرف', 'عدد الغرف المخصصة من إجمالي الغرف.'))
                     ->getStateUsing(fn (CleaningBooking $record): string => self::roomCoverageLabel($record))
                     ->badge()
                     ->color(fn (CleaningBooking $record): string => self::roomCoverageColor($record)),
                 TextColumn::make('total_price')
-                    ->label(self::headerLabel(
-                        __('cleaning_admin.booking.fields.total_price'),
-                        __('cleaning_admin.column_descriptions.total_price'),
-                    ))
+                    ->label(self::headerLabel('الإجمالي', 'المبلغ الإجمالي بأرقام صحيحة.'))
                     ->formatStateUsing(fn ($state): string => self::money($state))
                     ->weight(FontWeight::Bold)
                     ->color('success')
                     ->tooltip(fn (CleaningBooking $record): string => self::priceFormula($record))
-                    ->extraAttributes(fn (CleaningBooking $record): array => [
-                        'title' => self::priceFormula($record),
-                    ])
                     ->sortable(),
                 TextColumn::make('worker_payout')
-                    ->label(self::headerLabel(
-                        __('cleaning_admin.booking.fields.worker_payout'),
-                        __('cleaning_admin.column_descriptions.worker_payout'),
-                    ))
+                    ->label(self::headerLabel('مستحقات العامل', 'إجمالي المستحقات المحسوبة للعاملين.'))
                     ->getStateUsing(fn (CleaningBooking $record): float => self::workerPayoutAmount($record))
                     ->formatStateUsing(fn ($state): string => self::money($state))
                     ->weight(FontWeight::Bold)
                     ->color('info')
                     ->tooltip(fn (CleaningBooking $record): string => self::workerPayoutFormula($record))
-                    ->extraAttributes(fn (CleaningBooking $record): array => [
-                        'title' => self::workerPayoutFormula($record),
-                    ])
-                    ->toggleable(),
-                TextColumn::make('is_pricing_final')
-                    ->label(self::headerLabel(
-                        __('cleaning_admin.booking.fields.pricing_status'),
-                        __('cleaning_admin.column_descriptions.pricing_status'),
-                    ))
-                    ->badge()
-                    ->color(fn ($state): string => $state ? 'success' : 'warning')
-                    ->formatStateUsing(fn ($state): string => $state ? __('cleaning_admin.booking.pricing.final') : __('cleaning_admin.booking.pricing.provisional')),
-                TextColumn::make('price_adjustment_review')
-                    ->label(self::headerLabel('تعديل السعر', 'حالة طلب تعديل السعر المرتبط بالحجز قبل بدء العمل.'))
-                    ->getStateUsing(fn (CleaningBooking $record): string => self::priceAdjustmentState($record))
-                    ->badge()
-                    ->color(fn (CleaningBooking $record): string => self::priceAdjustmentColor($record))
                     ->toggleable(),
                 TextColumn::make('disputes_count')
                     ->getStateUsing(fn (CleaningBooking $record): int => (int) ($record->disputes_count ?? 0))
-                    ->label(self::headerLabel(
-                        __('cleaning_admin.booking.fields.disputes_count'),
-                        __('cleaning_admin.column_descriptions.disputes_count'),
-                    )),
+                    ->label(self::headerLabel('عدد النزاعات', 'عدد النزاعات المرتبطة بالحجز.')),
             ])
             ->modifyQueryUsing(fn (Builder $query): Builder => $query
                 ->with([
@@ -189,6 +119,7 @@ final class CleaningBookingsTable
                     'worker.user',
                     'preferredWorker.user',
                     'rooms.assignedWorker.user',
+                    'rooms.plannedPreferredWorker.user',
                     'workerAssignments.worker.user',
                 ])
                 ->withCount([
@@ -200,60 +131,51 @@ final class CleaningBookingsTable
                 ]))
             ->filters([
                 SelectFilter::make('status')
-                    ->label(__('cleaning_admin.booking.filters.status'))
+                    ->label('الحالة')
                     ->options(collect(CleaningBookingStatus::cases())->mapWithKeys(fn (CleaningBookingStatus $case): array => [$case->value => $case->label()])->all()),
-                SelectFilter::make('assignment_mode')
-                    ->label(__('cleaning_admin.booking.filters.assignment_mode'))
-                    ->options([
-                        CleaningAssignmentMode::PreferredWorker->value => __('cleaning_admin.enums.assignment_mode.preferred_worker'),
-                        CleaningAssignmentMode::OpenCount->value => __('cleaning_admin.enums.assignment_mode.open_count'),
-                    ]),
                 Filter::make('has_dispute')
-                    ->label(__('cleaning_admin.booking.filters.has_dispute'))
+                    ->label('يوجد نزاع')
                     ->query(fn (Builder $query): Builder => $query->whereHas('disputes')),
                 Filter::make('scheduled_today')
-                    ->label(__('cleaning_admin.booking.filters.scheduled_today'))
+                    ->label('مجدول اليوم')
                     ->query(fn (Builder $query): Builder => $query->whereDate('scheduled_date', today())),
-                Filter::make('pending_price_adjustment')
-                    ->label('يوجد طلب تعديل سعر قيد المراجعة')
-                    ->query(fn (Builder $query): Builder => self::whereHasPendingPriceAdjustment($query)),
                 Filter::make('partial_team')
-                    ->label(__('cleaning_admin.booking.filters.partial_team'))
+                    ->label('فريق جزئي')
                     ->query(fn (Builder $query): Builder => $query
                         ->where('status', CleaningBookingStatus::Pending->value)
                         ->whereHas('acceptedWorkerAssignments')),
                 Filter::make('fulfilled_team')
-                    ->label(__('cleaning_admin.booking.filters.fulfilled_team'))
+                    ->label('فريق مكتمل')
                     ->query(fn (Builder $query): Builder => $query->where('status', CleaningBookingStatus::WorkerAssigned->value)),
                 Filter::make('unassigned_rooms')
-                    ->label(__('cleaning_admin.booking.filters.unassigned_rooms'))
+                    ->label('غرف غير مخصصة')
                     ->query(fn (Builder $query): Builder => $query->whereHas('rooms', fn (Builder $roomsQuery): Builder => $roomsQuery->whereNull('assigned_worker_id'))),
                 SelectFilter::make('property_type')
-                    ->label(__('cleaning_admin.booking.filters.property_type'))
+                    ->label('نوع العقار')
                     ->options([
-                        UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE => __('cleaning_admin.booking.property_types.event_assistance'),
-                        'apartment' => __('cleaning_admin.booking.property_types.apartment'),
-                        'villa' => __('cleaning_admin.booking.property_types.villa'),
-                        'house' => __('cleaning_admin.booking.property_types.house'),
-                        'office' => __('cleaning_admin.booking.property_types.office'),
-                        'studio' => __('cleaning_admin.booking.property_types.studio'),
+                        UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE => 'مساعدة المناسبات',
+                        'apartment' => 'شقة',
+                        'villa' => 'فيلا',
+                        'house' => 'منزل',
+                        'office' => 'مكتب',
+                        'studio' => 'استوديو',
                     ]),
             ])
             ->recordActions([
                 Action::make('add_worker')
-                    ->label(__('cleaning_admin.booking.actions.add_worker'))
+                    ->label('إضافة عامل')
                     ->icon('heroicon-o-user-plus')
                     ->color('success')
                     ->visible(fn (CleaningBooking $record): bool => ! in_array($record->status, [CleaningBookingStatus::InProgress, CleaningBookingStatus::Completed, CleaningBookingStatus::Cancelled], true) && $record->acceptedWorkerCount() < max(1, (int) ($record->number_of_workers ?? 1)))
-                    ->modalHeading(__('cleaning_admin.booking.actions.add_worker'))
+                    ->modalHeading('إضافة عامل')
                     ->form([
                         Select::make('worker_id')
-                            ->label(__('cleaning_admin.booking.actions.worker'))
+                            ->label('العامل')
                             ->options(fn (): array => self::activeWorkerOptions())
                             ->searchable()
                             ->required(),
                         CheckboxList::make('room_ids')
-                            ->label(__('cleaning_admin.booking.actions.room_ids'))
+                            ->label('الغرف')
                             ->options(fn (?CleaningBooking $record): array => self::roomOptions($record))
                             ->columns(2),
                     ])
@@ -268,26 +190,21 @@ final class CleaningBookingsTable
 
                         $record->setRawAttributes($updated->getAttributes(), true);
 
-                        Notification::make()
-                            ->title(__('cleaning_admin.booking.actions.worker_added'))
-                            ->success()
-                            ->send();
+                        Notification::make()->title('تمت إضافة العامل')->success()->send();
                     }),
                 Action::make('release_worker')
-                    ->label(__('cleaning_admin.booking.actions.release_worker'))
+                    ->label('إلغاء تعيين العامل')
                     ->icon('heroicon-o-user-minus')
                     ->color('warning')
                     ->visible(fn (CleaningBooking $record): bool => in_array($record->status, [CleaningBookingStatus::Pending, CleaningBookingStatus::WorkerAssigned], true) && $record->acceptedWorkerCount() > 0)
-                    ->modalHeading(__('cleaning_admin.booking.actions.release_worker'))
+                    ->modalHeading('إلغاء تعيين العامل')
                     ->form([
                         Select::make('worker_id')
-                            ->label(__('cleaning_admin.booking.actions.worker'))
+                            ->label('العامل')
                             ->options(fn (?CleaningBooking $record): array => self::acceptedWorkerOptions($record))
                             ->searchable()
                             ->required(),
-                        TextInput::make('reason')
-                            ->label(__('cleaning_admin.booking.actions.reason'))
-                            ->maxLength(255),
+                        TextInput::make('reason')->label('السبب')->maxLength(255),
                     ])
                     ->action(function (CleaningBooking $record, array $data): void {
                         $worker = Worker::query()->with('user')->findOrFail((int) $data['worker_id']);
@@ -299,25 +216,22 @@ final class CleaningBookingsTable
 
                         $record->setRawAttributes($updated->getAttributes(), true);
 
-                        Notification::make()
-                            ->title(__('cleaning_admin.booking.actions.worker_released'))
-                            ->success()
-                            ->send();
+                        Notification::make()->title('تم إلغاء تعيين العامل')->success()->send();
                     }),
                 Action::make('assign_rooms')
-                    ->label(__('cleaning_admin.booking.actions.assign_rooms'))
+                    ->label('تعيين الغرف')
                     ->icon('heroicon-o-squares-plus')
                     ->color('primary')
                     ->visible(fn (CleaningBooking $record): bool => in_array($record->status, [CleaningBookingStatus::Pending, CleaningBookingStatus::WorkerAssigned], true) && $record->acceptedWorkerCount() > 0 && (int) ($record->rooms_count ?? 0) > 0)
-                    ->modalHeading(__('cleaning_admin.booking.actions.assign_rooms'))
+                    ->modalHeading('تعيين الغرف')
                     ->form([
                         Select::make('worker_id')
-                            ->label(__('cleaning_admin.booking.actions.accepted_worker'))
+                            ->label('العامل المقبول')
                             ->options(fn (?CleaningBooking $record): array => self::acceptedWorkerOptions($record))
                             ->searchable()
                             ->required(),
                         CheckboxList::make('room_ids')
-                            ->label(__('cleaning_admin.booking.actions.room_ids'))
+                            ->label('الغرف')
                             ->options(fn (?CleaningBooking $record): array => self::roomOptions($record))
                             ->columns(2)
                             ->required(),
@@ -328,51 +242,57 @@ final class CleaningBookingsTable
 
                         app(CleaningBookingTeamService::class)->assignRoomsFromCustomer(
                             $record->fresh(['rooms.assignedWorker.user', 'workerAssignments.worker.user']),
-                            array_map(
-                                static fn (int $roomId): array => ['roomId' => $roomId, 'workerId' => $workerId],
-                                $roomIds,
-                            ),
+                            array_map(static fn (int $roomId): array => ['roomId' => $roomId, 'workerId' => $workerId], $roomIds),
                         );
 
-                        Notification::make()
-                            ->title(__('cleaning_admin.booking.actions.rooms_assigned'))
-                            ->success()
-                            ->send();
+                        Notification::make()->title('تم تعيين الغرف')->success()->send();
                     }),
-                Action::make('review_price_adjustment')
-                    ->label('مراجعة تعديل السعر')
-                    ->icon('heroicon-o-currency-dollar')
-                    ->color('warning')
-                    ->visible(fn (CleaningBooking $record): bool => self::pendingPriceAdjustmentRequestId($record) !== null)
-                    ->url(fn (CleaningBooking $record): string => CleaningPriceAdjustmentRequestResource::getUrl('view', [
-                        'record' => self::pendingPriceAdjustmentRequestId($record),
-                    ])),
                 EditAction::make()
-                    ->label(__('filament-actions::edit.single.label'))
-                    ->visible(fn (CleaningBooking $record): bool => $record->property_type !== UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE),
-                ViewAction::make()
-                    ->label(__('filament-actions::view.single.label')),
+                    ->label('تعديل')
+                    ->visible(fn (CleaningBooking $record): bool => CleaningBookingResource::canEdit($record)
+                        && $record->property_type !== UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE),
+                ViewAction::make()->label('عرض'),
             ]);
+    }
+
+    private static function preferredWorkerNames(CleaningBooking $record): array
+    {
+        $names = collect();
+
+        if ($record->preferredWorker !== null) {
+            $names->push($record->preferredWorker->first_name ?: $record->preferredWorker->user?->name);
+        }
+
+        $rooms = $record->relationLoaded('rooms')
+            ? $record->rooms
+            : $record->rooms()->with('plannedPreferredWorker.user')->get();
+
+        foreach ($rooms as $room) {
+            $worker = $room->plannedPreferredWorker;
+            if ($worker !== null) {
+                $names->push($worker->first_name ?: $worker->user?->name);
+            }
+        }
+
+        return $names->filter(fn ($name): bool => filled($name))->unique()->values()->all();
     }
 
     private static function statusLabel(CleaningBookingStatus|string|null $status): string
     {
-        $status = self::normalizeStatus($status);
-
-        return $status?->label() ?? '-';
+        return self::normalizeStatus($status)?->label() ?? '-';
     }
 
     private static function statusColor(CleaningBookingStatus|string|null $status): string
     {
-        $status = self::normalizeStatus($status);
-
-        return match ($status) {
+        return match (self::normalizeStatus($status)) {
             CleaningBookingStatus::Pending => 'warning',
             CleaningBookingStatus::WorkerAssigned,
-            CleaningBookingStatus::AwaitingStartVerification => 'info',
+            CleaningBookingStatus::AwaitingStartVerification,
+            CleaningBookingStatus::AwaitingWorkerStartConfirmation => 'info',
             CleaningBookingStatus::InProgress,
             CleaningBookingStatus::TimeExtensionRequested => 'primary',
-            CleaningBookingStatus::AwaitingCustomerCompletion => 'gray',
+            CleaningBookingStatus::AwaitingCustomerCompletion,
+            CleaningBookingStatus::UnderDispute => 'gray',
             CleaningBookingStatus::Completed => 'success',
             CleaningBookingStatus::Cancelled => 'danger',
             default => 'gray',
@@ -412,66 +332,69 @@ final class CleaningBookingsTable
 
     private static function money(mixed $amount): string
     {
-        return number_format((float) $amount, 2).' '.config('app.currency', 'SYP');
+        return self::integer($amount).' ل.س';
+    }
+
+    private static function integer(mixed $value): string
+    {
+        return number_format((int) round((float) ($value ?? 0)), 0, '.', ',');
+    }
+
+    private static function time(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '-';
+        }
+
+        try {
+            return Carbon::parse((string) $value)->format('h:i A');
+        } catch (\Throwable) {
+            return (string) $value;
+        }
+    }
+
+    private static function eventTypeLabel(?string $value): string
+    {
+        return match ($value) {
+            'family_dinner' => 'عشاء عائلي',
+            'birthday' => 'عيد ميلاد',
+            'large_gathering' => 'تجمع كبير',
+            'funeral' => 'عزاء',
+            'other' => 'أخرى',
+            null, '' => '-',
+            default => $value,
+        };
     }
 
     private static function priceFormula(CleaningBooking $record): string
     {
-        return __('cleaning_admin.booking.pricing.formula', [
-            'base' => self::money($record->base_price),
-            'addons' => self::money($record->addons_total),
-            'travel' => self::money($record->travel_fee),
-            'cancellation' => self::money($record->cancellation_fee),
-            'admin' => self::money($record->admin_margin_amount),
-            'total' => self::money($record->total_price),
-        ]);
-    }
-
-    private static function translatedValue(string $prefix, ?string $value): string
-    {
-        if (! $value) {
-            return '-';
-        }
-
-        $key = $prefix.$value;
-
-        return __($key) === $key ? $value : __($key);
-    }
-
-    private static function assignmentModeLabel(CleaningBooking $record): string
-    {
-        $mode = $record->resolvedAssignmentMode();
-
-        return self::translatedValue('cleaning_admin.enums.assignment_mode.', $mode);
-    }
-
-    private static function assignmentModeColor(CleaningBooking $record): string
-    {
-        return match ($record->resolvedAssignmentMode()) {
-            CleaningAssignmentMode::PreferredWorker->value => 'info',
-            CleaningAssignmentMode::OpenCount->value => 'primary',
-            default => 'gray',
-        };
+        return sprintf(
+            'الأساسي %s + الإضافات %s + التنقل %s + الإلغاء %s + هامش الإدارة %s = الإجمالي %s',
+            self::money($record->base_price),
+            self::money($record->addons_total),
+            self::money($record->travel_fee),
+            self::money($record->cancellation_fee),
+            self::money($record->admin_margin_amount),
+            self::money($record->total_price),
+        );
     }
 
     private static function roomCoverageLabel(CleaningBooking $record): string
     {
         $totalRooms = max(0, (int) ($record->rooms_count ?? 0));
-        if ($totalRooms <= 0) {
+        if ($totalRooms === 0) {
             return '-';
         }
 
         $assignedRooms = max(0, (int) ($record->assigned_rooms_count ?? 0));
-        $percent = (int) round(($assignedRooms / max(1, $totalRooms)) * 100);
+        $percent = (int) round(($assignedRooms / $totalRooms) * 100);
 
         return sprintf('%d/%d (%d%%)', $assignedRooms, $totalRooms, $percent);
     }
 
     private static function roomCoverageColor(CleaningBooking $record): string
     {
-        $remaining = max(0, (int) ($record->unassigned_rooms_count ?? 0));
-
-        if ($remaining === 0) {
+        if (max(0, (int) ($record->unassigned_rooms_count ?? 0)) === 0) {
             return 'success';
         }
 
@@ -485,15 +408,19 @@ final class CleaningBookingsTable
             : $record->workerAssignments()->get();
 
         $acceptedAssignments = $assignments->filter(
-            static fn ($assignment): bool => (string) ($assignment->status?->value ?? $assignment->status) === CleaningBookingWorkerAssignmentStatus::Accepted->value
+            static fn ($assignment): bool => in_array(
+                (string) ($assignment->status?->value ?? $assignment->status),
+                CleaningBookingWorkerAssignmentStatus::acceptedValues(),
+                true,
+            ),
         );
 
         if ($acceptedAssignments->isNotEmpty()) {
-            return round((float) $acceptedAssignments->sum('worker_amount'), 2);
+            return (float) $acceptedAssignments->sum('worker_amount');
         }
 
         if ($record->worker_id !== null && max(1, (int) ($record->number_of_workers ?? 1)) <= 1) {
-            return max(0.0, round((float) ($record->total_price ?? 0) - (float) ($record->admin_margin_amount ?? 0), 2));
+            return max(0.0, (float) ($record->total_price ?? 0) - (float) ($record->admin_margin_amount ?? 0));
         }
 
         return 0.0;
@@ -506,88 +433,29 @@ final class CleaningBookingsTable
             : $record->workerAssignments()->get();
 
         $acceptedAssignments = $assignments->filter(
-            static fn ($assignment): bool => (string) ($assignment->status?->value ?? $assignment->status) === CleaningBookingWorkerAssignmentStatus::Accepted->value
+            static fn ($assignment): bool => in_array(
+                (string) ($assignment->status?->value ?? $assignment->status),
+                CleaningBookingWorkerAssignmentStatus::acceptedValues(),
+                true,
+            ),
         );
 
         if ($acceptedAssignments->isNotEmpty()) {
-            return __('cleaning_admin.booking.pricing.worker_payout_formula', [
-                'share' => self::money($acceptedAssignments->sum('service_share_amount')),
-                'travel' => self::money($acceptedAssignments->sum('travel_fee')),
-                'admin' => self::money($acceptedAssignments->sum('admin_margin_amount')),
-                'total' => self::money($acceptedAssignments->sum('worker_amount')),
-            ]);
+            return sprintf(
+                'الحصة %s + التنقل %s - هامش الإدارة %s = المستحق %s',
+                self::money($acceptedAssignments->sum('service_share_amount')),
+                self::money($acceptedAssignments->sum('travel_fee')),
+                self::money($acceptedAssignments->sum('admin_margin_amount')),
+                self::money($acceptedAssignments->sum('worker_amount')),
+            );
         }
 
-        return __('cleaning_admin.booking.pricing.worker_payout_formula_legacy', [
-            'total' => self::money($record->total_price),
-            'admin' => self::money($record->admin_margin_amount),
-            'worker' => self::money(self::workerPayoutAmount($record)),
-        ]);
-    }
-
-    private static function priceAdjustmentState(CleaningBooking $record): string
-    {
-        $request = self::latestPriceAdjustmentRequest($record);
-
-        if (! $request instanceof CleaningBookingPriceAdjustmentRequest) {
-            return '-';
-        }
-
-        $status = $request->status instanceof CleaningPriceAdjustmentRequestStatus
-            ? $request->status
-            : CleaningPriceAdjustmentRequestStatus::tryFrom((string) $request->status);
-
-        return $status?->label() ?? '-';
-    }
-
-    private static function priceAdjustmentColor(CleaningBooking $record): string
-    {
-        $request = self::latestPriceAdjustmentRequest($record);
-
-        if (! $request instanceof CleaningBookingPriceAdjustmentRequest) {
-            return 'gray';
-        }
-
-        $status = $request->status instanceof CleaningPriceAdjustmentRequestStatus
-            ? $request->status
-            : CleaningPriceAdjustmentRequestStatus::tryFrom((string) $request->status);
-
-        return match ($status) {
-            CleaningPriceAdjustmentRequestStatus::Pending => 'warning',
-            CleaningPriceAdjustmentRequestStatus::Approved => 'success',
-            CleaningPriceAdjustmentRequestStatus::Rejected => 'danger',
-            CleaningPriceAdjustmentRequestStatus::ResolvedWithoutChange => 'info',
-            default => 'gray',
-        };
-    }
-
-    private static function latestPriceAdjustmentRequest(CleaningBooking $record): ?CleaningBookingPriceAdjustmentRequest
-    {
-        return CleaningBookingPriceAdjustmentRequest::query()
-            ->where('cleaning_booking_id', $record->id)
-            ->latest()
-            ->first();
-    }
-
-    private static function pendingPriceAdjustmentRequestId(CleaningBooking $record): ?int
-    {
-        $id = CleaningBookingPriceAdjustmentRequest::query()
-            ->where('cleaning_booking_id', $record->id)
-            ->where('status', CleaningPriceAdjustmentRequestStatus::Pending->value)
-            ->latest()
-            ->value('id');
-
-        return $id !== null ? (int) $id : null;
-    }
-
-    private static function whereHasPendingPriceAdjustment(Builder $query): Builder
-    {
-        return $query->whereExists(function ($subQuery): void {
-            $subQuery->selectRaw('1')
-                ->from('cleaning_booking_price_adjustment_requests')
-                ->whereColumn('cleaning_booking_price_adjustment_requests.cleaning_booking_id', 'cleaning_bookings.id')
-                ->where('cleaning_booking_price_adjustment_requests.status', CleaningPriceAdjustmentRequestStatus::Pending->value);
-        });
+        return sprintf(
+            'الإجمالي %s - هامش الإدارة %s = مستحق العامل %s',
+            self::money($record->total_price),
+            self::money($record->admin_margin_amount),
+            self::money(self::workerPayoutAmount($record)),
+        );
     }
 
     private static function activeWorkerOptions(): array
@@ -597,9 +465,7 @@ final class CleaningBookingsTable
             ->where('is_active', true)
             ->orderBy('first_name')
             ->get()
-            ->mapWithKeys(fn (Worker $worker): array => [
-                $worker->id => self::workerLabel($worker),
-            ])
+            ->mapWithKeys(fn (Worker $worker): array => [$worker->id => self::workerLabel($worker)])
             ->all();
     }
 
@@ -613,14 +479,13 @@ final class CleaningBookingsTable
             ? $record->workerAssignments
             : $record->workerAssignments()->with('worker.user')->get();
 
-        $acceptedAssignments = $assignments->filter(
-            static fn ($assignment): bool => (string) ($assignment->status?->value ?? $assignment->status) === CleaningBookingWorkerAssignmentStatus::Accepted->value
-        );
-
-        $options = $acceptedAssignments
-            ->mapWithKeys(fn ($assignment): array => [
-                (int) $assignment->worker_id => self::workerLabel($assignment->worker),
-            ])
+        $options = $assignments
+            ->filter(static fn ($assignment): bool => in_array(
+                (string) ($assignment->status?->value ?? $assignment->status),
+                CleaningBookingWorkerAssignmentStatus::acceptedValues(),
+                true,
+            ))
+            ->mapWithKeys(fn ($assignment): array => [(int) $assignment->worker_id => self::workerLabel($assignment->worker)])
             ->all();
 
         if ($options === [] && $record->worker_id !== null && max(1, (int) ($record->number_of_workers ?? 1)) <= 1) {
@@ -643,23 +508,15 @@ final class CleaningBookingsTable
             ? $record->rooms
             : $record->rooms()->with('assignedWorker.user')->orderBy('id')->get();
 
-        return $rooms
-            ->mapWithKeys(fn ($room): array => [
-                $room->id => self::roomLabel($room),
-            ])
-            ->all();
+        return $rooms->mapWithKeys(fn ($room): array => [$room->id => self::roomLabel($room)])->all();
     }
 
     private static function roomLabel(object $room): string
     {
-        $label = (string) ($room->display_label ?? $room->room_key ?? __('cleaning_admin.booking.rooms.unknown'));
+        $label = (string) ($room->display_label ?? $room->room_key ?? 'غرفة غير معروفة');
         $assignedWorker = $room->assignedWorker?->first_name ?? $room->assignedWorker?->user?->name;
 
-        if (filled($assignedWorker)) {
-            return sprintf('%s - %s', $label, $assignedWorker);
-        }
-
-        return $label;
+        return filled($assignedWorker) ? sprintf('%s - %s', $label, $assignedWorker) : $label;
     }
 
     private static function workerLabel(Worker $worker): string
