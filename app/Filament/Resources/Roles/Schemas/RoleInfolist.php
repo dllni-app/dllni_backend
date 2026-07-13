@@ -34,9 +34,12 @@ final class RoleInfolist
                                     ->icon(Heroicon::OutlinedKey)
                                     ->weight('bold'),
                             ])
-                            ->columns(2)
+                            ->columns([
+                                'default' => 1,
+                                'md' => 2,
+                            ])
                             ->columnSpanFull(),
-                        ...self::permissionSections(),
+                        ...self::permissionMainSections(),
                     ]),
             ]);
     }
@@ -44,28 +47,36 @@ final class RoleInfolist
     /**
      * @return array<int, Section>
      */
-    private static function permissionSections(): array
+    private static function permissionMainSections(): array
     {
         $sections = [];
 
-        foreach (RoleForm::groupedPermissionOptions() as $section => $options) {
-            $sections[] = Section::make($section)
-                ->description(fn (Role $record): string => 'عدد الصلاحيات: '.count(self::selectedPermissionLabels($record, $options)))
-                ->schema([
-                    TextEntry::make('permission_section_'.md5($section))
-                        ->hiddenLabel()
-                        ->state(fn (Role $record): array => self::selectedPermissionLabels($record, $options))
-                        ->badge()
-                        ->color('gray')
-                        ->placeholder('لا توجد صلاحيات')
-                        ->columnSpanFull(),
+        foreach (RoleForm::groupedPermissionOptions() as $mainSection => $resourceSections) {
+            $entries = [];
+
+            foreach ($resourceSections as $resourceSection => $options) {
+                $entries[] = TextEntry::make('permission_section_'.md5($mainSection.'|'.$resourceSection))
+                    ->label($resourceSection)
+                    ->state(fn (Role $record): array => self::selectedPermissionLabels($record, $options))
+                    ->badge()
+                    ->color('gray')
+                    ->placeholder('لا توجد صلاحيات')
+                    ->hidden(fn (Role $record): bool => self::selectedPermissionLabels($record, $options) === [])
+                    ->columnSpan(1);
+            }
+
+            $sections[] = Section::make($mainSection)
+                ->description(fn (Role $record): string => 'إجمالي صلاحيات القسم: '.self::selectedPermissionCount($record, $resourceSections))
+                ->schema($entries)
+                ->columns([
+                    'default' => 1,
+                    'md' => 2,
+                    'xl' => 3,
+                    '2xl' => 4,
                 ])
-                ->hidden(fn (Role $record): bool => self::selectedPermissionLabels($record, $options) === [])
+                ->hidden(fn (Role $record): bool => self::selectedPermissionCount($record, $resourceSections) === 0)
                 ->collapsible()
-                ->columnSpan([
-                    'default' => 12,
-                    'lg' => 6,
-                ]);
+                ->columnSpanFull();
         }
 
         return $sections;
@@ -85,6 +96,17 @@ final class RoleInfolist
         return array_values(array_intersect_key(
             $options,
             array_fill_keys($selectedNames, true),
+        ));
+    }
+
+    /**
+     * @param  array<string, array<string, string>>  $resourceSections
+     */
+    private static function selectedPermissionCount(Role $record, array $resourceSections): int
+    {
+        return array_sum(array_map(
+            fn (array $options): int => count(self::selectedPermissionLabels($record, $options)),
+            $resourceSections,
         ));
     }
 }
