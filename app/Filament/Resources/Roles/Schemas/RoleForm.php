@@ -61,16 +61,13 @@ final class RoleForm
      */
     public static function selectedPermissionState(iterable $selectedPermissions): array
     {
-        $selectedLookup = array_fill_keys(array_values(iterator_to_array(
-            (function () use ($selectedPermissions): \Generator {
-                foreach ($selectedPermissions as $permission) {
-                    if (is_string($permission)) {
-                        yield $permission;
-                    }
-                }
-            })(),
-            false,
-        )), true);
+        $selectedLookup = [];
+
+        foreach ($selectedPermissions as $permission) {
+            if (is_string($permission)) {
+                $selectedLookup[$permission] = true;
+            }
+        }
 
         $state = [];
 
