@@ -53,8 +53,11 @@ final class CleaningBookingsTable
                 TextColumn::make('customer.name')
                     ->label(self::headerLabel('العميل', 'العميل الذي طلب الخدمة.'))
                     ->searchable(),
-                TextColumn::make('worker.first_name')
-                    ->label(self::headerLabel('العامل الأساسي', 'العامل الأساسي المعيّن للحجز.'))
+                TextColumn::make('assigned_workers')
+                    ->label(self::headerLabel('العاملون المستلمون', 'جميع العاملين الذين قبلوا أو استلموا هذا الحجز.'))
+                    ->getStateUsing(fn (CleaningBooking $record): array => self::assignedWorkerNames($record))
+                    ->badge()
+                    ->color('success')
                     ->placeholder('-'),
                 TextColumn::make('preferred_workers')
                     ->label(self::headerLabel('العاملون المفضلون', 'قد يحتوي الحجز على أكثر من عامل مفضل.'))
@@ -253,6 +256,30 @@ final class CleaningBookingsTable
                         && $record->property_type !== UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE),
                 ViewAction::make()->label('عرض'),
             ]);
+    }
+
+    private static function assignedWorkerNames(CleaningBooking $record): array
+    {
+        $assignments = $record->relationLoaded('workerAssignments')
+            ? $record->workerAssignments
+            : $record->workerAssignments()->with('worker.user')->get();
+
+        $names = $assignments
+            ->filter(static fn ($assignment): bool => in_array(
+                (string) ($assignment->status?->value ?? $assignment->status),
+                CleaningBookingWorkerAssignmentStatus::acceptedValues(),
+                true,
+            ))
+            ->map(static fn ($assignment): ?string => $assignment->worker?->first_name ?: $assignment->worker?->user?->name)
+            ->filter(fn ($name): bool => filled($name))
+            ->unique()
+            ->values();
+
+        if ($names->isEmpty() && $record->worker !== null) {
+            $names->push($record->worker->first_name ?: $record->worker->user?->name);
+        }
+
+        return $names->filter(fn ($name): bool => filled($name))->unique()->values()->all();
     }
 
     private static function preferredWorkerNames(CleaningBooking $record): array
