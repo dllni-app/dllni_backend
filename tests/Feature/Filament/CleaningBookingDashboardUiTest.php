@@ -8,6 +8,7 @@ use App\Models\Worker;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingRoom;
+use Modules\User\Services\UserCleaningOrderEstimationService;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -99,4 +100,49 @@ it('shows multiple preferred workers with Arabic labels and integer values', fun
         ->assertDontSee('نمط التعيين')
         ->assertDontSee('تم تثبيت التسعير')
         ->assertDontSee('Accepted worker assignments');
+});
+
+it('distinguishes event assistance bookings and hides room information', function (): void {
+    $booking = CleaningBooking::factory()->create([
+        'status' => CleaningBookingStatus::Pending,
+        'property_type' => UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE,
+        'property_details' => [
+            'event_type' => 'funeral',
+            'guest_count' => 80,
+            'venue_type' => 'house',
+            'custom_service' => 'تجهيز وخدمة المناسبة',
+            'hours' => 4,
+        ],
+        'estimated_sqm' => 0,
+        'estimated_hours' => 4,
+    ]);
+
+    // Keep a stale room row to verify that event bookings never expose room UI.
+    CleaningBookingRoom::query()->create([
+        'cleaning_booking_id' => $booking->id,
+        'room_key' => 'living-room-1',
+        'room_type' => 'living_room',
+        'room_size' => 'medium',
+        'display_label' => 'Living Room 1 - Medium',
+        'weight' => 1.80,
+        'planned_worker_slot' => 1,
+    ]);
+
+    $this->get(CleaningBookingResource::getUrl('index', isAbsolute: false))
+        ->assertSuccessful()
+        ->assertSee('نوع الحجز')
+        ->assertSee('مساعدة مناسبة')
+        ->assertSee('غير مطبق');
+
+    $this->get(CleaningBookingResource::getUrl('view', ['record' => $booking], isAbsolute: false))
+        ->assertSuccessful()
+        ->assertSee('نوع الحجز')
+        ->assertSee('مساعدة مناسبة')
+        ->assertSee('تفاصيل المناسبة')
+        ->assertSee('عزاء')
+        ->assertDontSee('نوع العقار')
+        ->assertDontSee('المساحة التقديرية')
+        ->assertDontSee('تغطية الغرف')
+        ->assertDontSee('توزيع الغرف')
+        ->assertDontSee('Living Room 1 - Medium');
 });
