@@ -75,7 +75,7 @@ final class CleaningBookingResource extends Resource
                     ->badge()
                     ->formatStateUsing(fn (bool $state): string => $state ? 'يوجد نزاع مفتوح' : 'لا يوجد نزاع مفتوح')
                     ->color(fn (bool $state): string => $state ? 'danger' : 'gray')
-                    ->icon(fn (bool $state): string => $state ? 'heroicon-o-exclamation-triangle' : 'heroicon-o-check-circle');
+                    ->icon(fn (bool $state): string => $state ? 'heroicon-o-exclamation-triangle' : 'heroicon-o-check-circle'),
             ]);
     }
 
