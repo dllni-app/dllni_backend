@@ -49,4 +49,15 @@ jobs:
         env:
           DB_CONNECTION: sqlite
           DB_DATABASE: database/database.sqlite
-        run: php artisan test tests/Feature/Cleaning/CleaningWorkerLocationPersistenceTest.php
+        shell: bash
+        run: |
+          set -o pipefail
+          php artisan test tests/Feature/Cleaning/CleaningWorkerLocationPersistenceTest.php 2>&1 | tee cleaning-worker-tracking-test.log
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cleaning-worker-tracking-diagnostics
+          path: cleaning-worker-tracking-test.log
+          if-no-files-found: ignore
