@@ -42,8 +42,8 @@ jobs:
           DB_DATABASE: database/database.sqlite
         run: php artisan migrate --force
 
-      - name: Check formatting
-        run: vendor/bin/pint --test Modules/Cleaning/app/Http/Controllers/API/CleaningBookingLocationController.php Modules/Cleaning/app/Http/Controllers/API/CleaningBookingWorkerLocationsController.php Modules/Cleaning/app/Models/CleaningBookingWorkerAssignment.php Modules/Cleaning/database/migrations/2026_07_14_150000_add_live_location_to_cleaning_worker_assignments.php Modules/Cleaning/routes/api.php tests/Feature/Cleaning/CleaningWorkerLocationPersistenceTest.php
+      - name: Format tracking sources
+        run: vendor/bin/pint Modules/Cleaning/app/Http/Controllers/API/CleaningBookingLocationController.php Modules/Cleaning/app/Http/Controllers/API/CleaningBookingWorkerLocationsController.php Modules/Cleaning/app/Models/CleaningBookingWorkerAssignment.php Modules/Cleaning/database/migrations/2026_07_14_150000_add_live_location_to_cleaning_worker_assignments.php Modules/Cleaning/routes/api.php tests/Feature/Cleaning/CleaningWorkerLocationPersistenceTest.php
 
       - name: Run tracking tests
         env:
