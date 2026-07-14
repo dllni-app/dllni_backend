@@ -1,0 +1,52 @@
+name: Cleaning Worker Tracking
+
+on:
+  pull_request:
+    paths:
+      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingLocationController.php'
+      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingWorkerLocationsController.php'
+      - 'Modules/Cleaning/app/Models/CleaningBookingWorkerAssignment.php'
+      - 'Modules/Cleaning/database/migrations/**'
+      - 'Modules/Cleaning/routes/api.php'
+      - 'tests/Feature/Cleaning/CleaningWorkerLocationPersistenceTest.php'
+      - '.github/workflows/cleaning-worker-tracking.yml'
+
+jobs:
+  tracking:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, bcmath, intl, gd
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare application
+        run: |
+          cp .env.example .env
+          touch database/database.sqlite
+          php artisan key:generate
+
+      - name: Migrate database
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        run: php artisan migrate --force
+
+      - name: Check formatting
+        run: vendor/bin/pint --test Modules/Cleaning/app/Http/Controllers/API/CleaningBookingLocationController.php Modules/Cleaning/app/Http/Controllers/API/CleaningBookingWorkerLocationsController.php Modules/Cleaning/app/Models/CleaningBookingWorkerAssignment.php Modules/Cleaning/database/migrations/2026_07_14_150000_add_live_location_to_cleaning_worker_assignments.php Modules/Cleaning/routes/api.php tests/Feature/Cleaning/CleaningWorkerLocationPersistenceTest.php
+
+      - name: Run tracking tests
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        run: php artisan test tests/Feature/Cleaning/CleaningWorkerLocationPersistenceTest.php
