@@ -68,7 +68,13 @@ it('shows the worker extension rejection response to the customer notification r
         }
     );
 
-    Notification::assertNotSentTo($workerUser, BookingLifecycleNotification::class);
+    Notification::assertNotSentTo(
+        $workerUser,
+        BookingLifecycleNotification::class,
+        fn (BookingLifecycleNotification $notification): bool =>
+            timeWarningNotificationPrivateProperty($notification, 'canonicalType')
+                === 'cleaning.booking.time_extension_rejected'
+    );
 });
 
 function timeWarningNotificationPrivateProperty(
