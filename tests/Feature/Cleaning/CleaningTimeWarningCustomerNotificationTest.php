@@ -12,7 +12,7 @@ use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningTimeWarning;
 
-it('shows the worker extension rejection response to the customer notification recipient', function (): void {
+it('notifies both customer and worker when worker rejects an extension request', function (): void {
     $billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
         'name' => 'Default',
         'billing_mode' => 'actual_working_time',
@@ -68,12 +68,19 @@ it('shows the worker extension rejection response to the customer notification r
         }
     );
 
-    Notification::assertNotSentTo(
+    Notification::assertSentTo(
         $workerUser,
         BookingLifecycleNotification::class,
-        fn (BookingLifecycleNotification $notification): bool =>
-            timeWarningNotificationPrivateProperty($notification, 'canonicalType')
-                === 'cleaning.booking.time_extension_rejected'
+        function (BookingLifecycleNotification $notification) use ($message): bool {
+            $extraData = timeWarningNotificationPrivateProperty($notification, 'extraData');
+
+            return timeWarningNotificationPrivateProperty($notification, 'canonicalType')
+                    === 'cleaning.booking.time_extension_rejected'
+                && timeWarningNotificationPrivateProperty($notification, 'targetRole') === 'worker'
+                && ($extraData['message'] ?? null) === $message
+                && ($extraData['workerRejectMessage'] ?? null) === $message
+                && ($extraData['worker_reject_message'] ?? null) === $message;
+        }
     );
 });
 
