@@ -56,6 +56,8 @@ final class CleaningTimeWarningWorkerNotificationService
             'warningId' => $warning->id,
             'assignmentId' => $assignmentId,
             'message' => $message,
+            'workerRejectMessage' => $message,
+            'worker_reject_message' => $message,
         ];
         $templateContext = [
             'warningId' => $warning->id,
@@ -74,11 +76,20 @@ final class CleaningTimeWarningWorkerNotificationService
                 extraData: $extraData,
                 templateContext: $templateContext,
             );
-
-            return;
+        } else {
+            $this->lifecycleNotifications->notifyWorker(
+                booking: $booking,
+                canonicalType: $canonicalType,
+                action: $action,
+                actorRole: 'worker',
+                fromStatus: $fromStatus,
+                occurredAt: $occurredAt,
+                extraData: $extraData,
+                templateContext: $templateContext,
+            );
         }
 
-        $this->lifecycleNotifications->notifyWorker(
+        $this->lifecycleNotifications->notifyCustomer(
             booking: $booking,
             canonicalType: $canonicalType,
             action: $action,
