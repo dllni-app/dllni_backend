@@ -24,6 +24,10 @@ final class CleaningBookingLocationController
             abort(403, 'User must have an associated worker.');
         }
 
+        $latitude = (float) $request->validated('latitude');
+        $longitude = (float) $request->validated('longitude');
+        $recordedAt = now();
+
         $assignment = CleaningBookingWorkerAssignment::query()
             ->where('cleaning_booking_id', $cleaning_booking->id)
             ->where('worker_id', $worker->id)
@@ -35,14 +39,20 @@ final class CleaningBookingLocationController
                 return $this->ignoredResponse();
             }
 
+            $assignment->forceFill([
+                'last_latitude' => $latitude,
+                'last_longitude' => $longitude,
+                'location_updated_at' => $recordedAt,
+            ])->save();
+
             BroadcastAfterResponse::send(new WorkerLocationUpdated(
                 $cleaning_booking->id,
-                (float) $request->validated('latitude'),
-                (float) $request->validated('longitude'),
+                $latitude,
+                $longitude,
                 $worker->id,
             ));
 
-            return $this->successResponse();
+            return $this->successResponse($recordedAt->toIso8601String());
         }
 
         if ((int) $cleaning_booking->worker_id !== (int) $worker->id) {
@@ -57,22 +67,29 @@ final class CleaningBookingLocationController
             return $this->ignoredResponse();
         }
 
+        $cleaning_booking->forceFill([
+            'last_worker_latitude' => $latitude,
+            'last_worker_longitude' => $longitude,
+            'worker_location_updated_at' => $recordedAt,
+        ])->save();
+
         BroadcastAfterResponse::send(new WorkerLocationUpdated(
             $cleaning_booking->id,
-            (float) $request->validated('latitude'),
-            (float) $request->validated('longitude'),
+            $latitude,
+            $longitude,
             $worker->id,
         ));
 
-        return $this->successResponse();
+        return $this->successResponse($recordedAt->toIso8601String());
     }
 
-    private function successResponse(): JsonResponse
+    private function successResponse(string $updatedAt): JsonResponse
     {
         return response()->json([
             'data' => [
                 'ok' => true,
                 'ignored' => false,
+                'updatedAt' => $updatedAt,
             ],
         ]);
     }
