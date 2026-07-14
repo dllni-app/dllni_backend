@@ -65,8 +65,31 @@ final class CleaningTimeWarningWorkerNotificationService
             'assignmentId' => $assignmentId,
         ];
 
-        // The worker has just performed this action in the worker app. The
-        // decision result belongs to the customer who requested the extension.
+        if ($workerId !== null) {
+            $this->lifecycleNotifications->notifyWorkerById(
+                booking: $booking,
+                workerId: (int) $workerId,
+                canonicalType: $canonicalType,
+                action: $action,
+                actorRole: 'worker',
+                fromStatus: $fromStatus,
+                occurredAt: $occurredAt,
+                extraData: $extraData,
+                templateContext: $templateContext,
+            );
+        } else {
+            $this->lifecycleNotifications->notifyWorker(
+                booking: $booking,
+                canonicalType: $canonicalType,
+                action: $action,
+                actorRole: 'worker',
+                fromStatus: $fromStatus,
+                occurredAt: $occurredAt,
+                extraData: $extraData,
+                templateContext: $templateContext,
+            );
+        }
+
         $this->lifecycleNotifications->notifyCustomer(
             booking: $booking,
             canonicalType: $canonicalType,
