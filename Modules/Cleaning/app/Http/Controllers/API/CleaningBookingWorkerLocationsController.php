@@ -7,6 +7,7 @@ namespace Modules\Cleaning\Http\Controllers\API;
 use App\Models\Worker;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
@@ -43,6 +44,7 @@ final class CleaningBookingWorkerLocationsController
         if ($locations === [] && $cleaning_booking->worker_id !== null) {
             $cleaning_booking->loadMissing('worker.user');
             $legacyWorker = $cleaning_booking->worker;
+            $legacyLocationUpdatedAt = $cleaning_booking->getAttribute('worker_location_updated_at');
 
             $locations[] = [
                 'assignmentId' => null,
@@ -56,7 +58,9 @@ final class CleaningBookingWorkerLocationsController
                 'longitude' => $cleaning_booking->last_worker_longitude !== null
                     ? (float) $cleaning_booking->last_worker_longitude
                     : null,
-                'updatedAt' => $cleaning_booking->worker_location_updated_at?->toIso8601String(),
+                'updatedAt' => $legacyLocationUpdatedAt === null
+                    ? null
+                    : Carbon::parse((string) $legacyLocationUpdatedAt)->toIso8601String(),
                 'worker' => $legacyWorker === null ? null : [
                     'id' => $legacyWorker->id,
                     'name' => $legacyWorker->user?->name ?? $legacyWorker->first_name,
