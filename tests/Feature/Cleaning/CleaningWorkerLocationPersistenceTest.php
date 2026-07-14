@@ -69,7 +69,20 @@ it('persists and restores independent locations for every worker in a team booki
         ->and((float) $locations[$secondWorker->id]['latitude'])->toBe(33.525)
         ->and((float) $locations[$secondWorker->id]['longitude'])->toBe(36.289);
 
-    Event::assertDispatchedTimes(WorkerLocationUpdated::class, 2);
+    Event::assertDispatched(
+        WorkerLocationUpdated::class,
+        fn (WorkerLocationUpdated $event): bool => $event->cleaningBookingId === $booking->id
+            && $event->workerId === $firstWorker->id
+            && $event->latitude === 33.5138
+            && $event->longitude === 36.2765,
+    );
+    Event::assertDispatched(
+        WorkerLocationUpdated::class,
+        fn (WorkerLocationUpdated $event): bool => $event->cleaningBookingId === $booking->id
+            && $event->workerId === $secondWorker->id
+            && $event->latitude === 33.525
+            && $event->longitude === 36.289,
+    );
 });
 
 it('keeps travelling workers visible after another team worker arrives', function (): void {
