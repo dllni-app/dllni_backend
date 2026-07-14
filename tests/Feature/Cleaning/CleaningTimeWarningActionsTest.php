@@ -5,6 +5,8 @@ declare(strict_types=1);
 use App\Models\User;
 use App\Models\Worker;
 use App\Jobs\NotifyWorkerExtensionRequestJob;
+use App\Notifications\Cleaning\BookingLifecycleNotification;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
@@ -360,4 +362,55 @@ it('dispatches worker extension notification when a time warning is created', fu
     ]);
 
     Queue::assertPushed(NotifyWorkerExtensionRequestJob::class);
+});
+
+it('notifies the customer when worker rejects an extension request', function () {
+    Notification::fake();
+
+    $customer = User::factory()->create(['email' => 'customer-ext-reject-notify@example.com']);
+    $workerUser = User::factory()->create(['email' => 'worker-ext-reject-notify@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $booking = CleaningBooking::factory()->create([
+        'customer_id' => $customer->id,
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'status' => CleaningBookingStatus::TimeExtensionRequested,
+    ]);
+
+    $warning = CleaningTimeWarning::create([
+        'booking_id' => $booking->id,
+        'booking_type' => 'cleaning_booking',
+        'worker_response' => null,
+        'worker_responded_at' => null,
+        'sent_at' => now(),
+        'additional_minutes' => 20,
+        'quoted_amount' => 1000,
+        'quoted_currency' => 'SYP',
+        'price_applied_at' => null,
+    ]);
+
+    $message = 'Sorry, I cannot extend.';
+    $response = $this->postJson("/api/v1/cleaning-time-warnings/{$warning->id}/reject", [
+        'message' => $message,
+    ]);
+
+    $response->assertOk();
+
+    Notification::assertSentTo(
+        $customer,
+        BookingLifecycleNotification::class,
+        function (BookingLifecycleNotification $notification) use ($message): bool {
+            $canonicalType = new ReflectionProperty($notification, 'canonicalType');
+            $targetRole = new ReflectionProperty($notification, 'targetRole');
+            $extraData = new ReflectionProperty($notification, 'extraData');
+
+            $payload = $extraData->getValue($notification);
+
+            return $canonicalType->getValue($notification) === 'cleaning.booking.time_extension_rejected'
+                && $targetRole->getValue($notification) === 'customer'
+                && ($payload['workerRejectMessage'] ?? null) === $message;
+        },
+    );
 });
