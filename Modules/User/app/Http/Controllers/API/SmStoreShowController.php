@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\User\Http\Controllers\API;
 
+use App\Services\DeepLinks\CanonicalDeepLinkGenerator;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,6 +18,7 @@ final class SmStoreShowController
 {
     public function __construct(
         private readonly UserSupermarketCartService $carts,
+        private readonly CanonicalDeepLinkGenerator $deepLinkGenerator,
     ) {}
 
     public function __invoke(Request $request, int $store): JsonResponse
@@ -95,6 +97,7 @@ final class SmStoreShowController
         return response()->json([
             'store' => SmStoreResource::make($model),
             'cart' => $cartPayload,
+            'shareUrl' => $this->deepLinkGenerator->store((int) $model->id),
         ]);
     }
 }
