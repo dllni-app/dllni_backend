@@ -11,6 +11,7 @@ use Modules\Cleaning\Database\Seeders\AleppoNeighborhoodSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningBillingPolicySeeder;
 use Modules\Cleaning\Database\Seeders\CleaningBannerSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningFinancialSettingsSeeder;
+use Modules\Cleaning\Database\Seeders\CleaningHomeTypeSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningBookingSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningServiceSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningWorkerArabicDataSeeder;
@@ -75,6 +76,7 @@ final class DatabaseSeeder extends Seeder
             TravelCostConfigSeeder::class,
             CleaningBillingPolicySeeder::class,
             CleaningFinancialSettingsSeeder::class,
+            CleaningHomeTypeSeeder::class,
             AleppoNeighborhoodSeeder::class,
         ];
     }
