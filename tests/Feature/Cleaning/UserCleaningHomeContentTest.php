@@ -50,7 +50,7 @@ it('returns public cleaning home content with active types ordered by section so
     $occasion = CleaningHomeType::query()->create([
         'section' => CleaningHomeType::SECTION_OCCASION,
         'code' => 'graduation_party',
-        'booking_value' => 'other',
+        'booking_value' => 'birthday',
         'title' => 'حفلة تخرج',
         'external_image_url' => 'https://example.com/graduation.jpg',
         'sort_order' => 5,
@@ -64,9 +64,12 @@ it('returns public cleaning home content with active types ordered by section so
         ->assertJsonCount(1, 'occasionTypes')
         ->assertJsonPath('propertyTypes.0.id', $propertyFirst->id)
         ->assertJsonPath('propertyTypes.0.code', 'small_apartment')
+        ->assertJsonPath('propertyTypes.0.contentCode', 'small_apartment')
         ->assertJsonPath('propertyTypes.0.value', 'apartment')
         ->assertJsonPath('propertyTypes.0.imageUrl', 'https://example.com/apartment.jpg')
         ->assertJsonPath('propertyTypes.1.id', $propertySecond->id)
         ->assertJsonPath('occasionTypes.0.id', $occasion->id)
-        ->assertJsonPath('occasionTypes.0.value', 'other');
+        ->assertJsonPath('occasionTypes.0.code', 'birthday_party')
+        ->assertJsonPath('occasionTypes.0.contentCode', 'graduation_party')
+        ->assertJsonPath('occasionTypes.0.value', 'birthday');
 });
