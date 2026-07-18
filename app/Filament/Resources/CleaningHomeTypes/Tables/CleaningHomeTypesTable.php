@@ -30,8 +30,13 @@ final class CleaningHomeTypesTable
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('code')
-                    ->label('الرمز')
+                    ->label('رمز الواجهة')
                     ->searchable()
+                    ->copyable()
+                    ->toggleable(),
+                TextColumn::make('booking_value')
+                    ->label('قيمة الطلب')
+                    ->badge()
                     ->copyable()
                     ->toggleable(),
                 TextColumn::make('section')
@@ -56,7 +61,7 @@ final class CleaningHomeTypesTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->searchPlaceholder('ابحث بالاسم أو رمز النوع')
+            ->searchPlaceholder('ابحث بالاسم أو رمز الواجهة أو قيمة الطلب')
             ->defaultSort('sort_order')
             ->filters([
                 SelectFilter::make('section')
@@ -75,7 +80,7 @@ final class CleaningHomeTypesTable
                 DeleteAction::make()
                     ->label('حذف')
                     ->requiresConfirmation()
-                    ->modalDescription('سيختفي النوع من التطبيق، لكن سيبقى رمز النوع محفوظاً لدعم الطلبات السابقة.'),
+                    ->modalDescription('سيختفي النوع من التطبيق، وتبقى الطلبات السابقة محفوظة دون تغيير.'),
             ])
             ->emptyStateHeading('لا توجد أنواع لواجهة التنظيف')
             ->emptyStateDescription('أضف أنواع العقارات أو المناسبات التي يجب أن تظهر في تطبيق المستخدم.')
