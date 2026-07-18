@@ -8,7 +8,7 @@ use Illuminate\Support\Arr;
 
 final class WorkerRoomAssignmentPlanner
 {
-    public const ROOM_TYPE_ORDER = ['bedroom', 'bathroom', 'kitchen', 'living_room', 'balcony', 'corridor'];
+    public const ROOM_TYPE_ORDER = ['bedroom', 'bathroom', 'kitchen', 'living_room', 'balcony', 'corridor', 'shed'];
 
     public const ROOM_SIZE_ORDER = ['small', 'medium', 'large'];
 
@@ -390,6 +390,7 @@ final class WorkerRoomAssignmentPlanner
             'living_room' => ['count' => 1, 'size' => mb_strtolower((string) Arr::get($propertyDetails, 'living_room_size', 'medium'))],
             'balcony' => ['count' => max(0, (int) Arr::get($propertyDetails, 'balconies', 0)), 'size' => 'small'],
             'corridor' => ['count' => max(0, (int) Arr::get($propertyDetails, 'corridors', 0)), 'size' => 'medium'],
+            'shed' => ['count' => max(0, (int) Arr::get($propertyDetails, 'sheds', 0)), 'size' => 'medium'],
             'room' => ['count' => max(0, (int) Arr::get($propertyDetails, 'rooms', 0)), 'size' => 'medium'],
         ];
 
@@ -424,6 +425,7 @@ final class WorkerRoomAssignmentPlanner
             'living_room' => 'Living Room',
             'balcony' => 'Balcony',
             'corridor' => 'Corridor',
+            'shed' => 'Shed',
             default => 'Room',
         };
 
@@ -439,6 +441,7 @@ final class WorkerRoomAssignmentPlanner
             'living_room' => 1.2,
             'balcony' => 0.5,
             'corridor' => 0.6,
+            'shed' => 1.0,
             default => 1.0,
         };
 

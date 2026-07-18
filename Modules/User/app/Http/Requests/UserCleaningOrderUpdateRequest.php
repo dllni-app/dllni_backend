@@ -28,7 +28,7 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
 
         return [
             'propertyType' => ['sometimes', 'string', Rule::in(UserCleaningOrderEstimationService::PROPERTY_TYPES)],
-            'propertyDetails' => ['sometimes', 'array:address,location_name,bedrooms,rooms,bathrooms,toilets,kitchens,balconies,living_room_size,cleaning_mode,room_size_breakdown,eventType,guestCount,venueType,customService,hours,specialRequirement,notes'],
+            'propertyDetails' => ['sometimes', 'array:address,location_name,bedrooms,rooms,bathrooms,toilets,kitchens,balconies,sheds,living_room_size,cleaning_mode,room_size_breakdown,eventType,guestCount,venueType,customService,hours,specialRequirement,notes'],
             'propertyDetails.address' => ['sometimes', 'string', 'max:500'],
             'propertyDetails.location_name' => ['nullable', 'string', 'max:255'],
             'propertyDetails.bedrooms' => ['nullable', 'integer', 'min:0', 'max:20'],
@@ -37,9 +37,10 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
             'propertyDetails.toilets' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.kitchens' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.balconies' => ['nullable', 'integer', 'min:0', 'max:20'],
+            'propertyDetails.sheds' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.living_room_size' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::LIVING_ROOM_SIZES)],
             'propertyDetails.cleaning_mode' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::CLEANING_MODES)],
-            'propertyDetails.room_size_breakdown' => ['nullable', 'array:bedroom,bathroom,toilet,kitchen,living_room,balcony,corridor'],
+            'propertyDetails.room_size_breakdown' => ['nullable', 'array:bedroom,bathroom,toilet,kitchen,living_room,balcony,corridor,shed'],
             'propertyDetails.room_size_breakdown.bedroom' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.bathroom' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.toilet' => ['sometimes', 'array:small,medium,large'],
@@ -47,6 +48,7 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
             'propertyDetails.room_size_breakdown.living_room' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.balcony' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.corridor' => ['sometimes', 'array:small,medium,large'],
+            'propertyDetails.room_size_breakdown.shed' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.*.small' => ['sometimes', 'integer', 'min:0'],
             'propertyDetails.room_size_breakdown.*.medium' => ['sometimes', 'integer', 'min:0'],
             'propertyDetails.room_size_breakdown.*.large' => ['sometimes', 'integer', 'min:0'],

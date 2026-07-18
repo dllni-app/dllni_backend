@@ -6,7 +6,7 @@ namespace Modules\Cleaning\Support;
 
 final class CleaningFinancialDefaults
 {
-    public const ROOM_TYPES = ['bedroom', 'bathroom', 'toilet', 'kitchen', 'living_room', 'balcony', 'corridor'];
+    public const ROOM_TYPES = ['bedroom', 'bathroom', 'toilet', 'kitchen', 'living_room', 'balcony', 'corridor', 'shed'];
     public const ROOM_SIZES = ['small', 'medium', 'large'];
     public const BASE_UNIT_PRICE = 30000.00;
     public const DEEP_CLEANING_MULTIPLIER = 4.00;
@@ -23,6 +23,7 @@ final class CleaningFinancialDefaults
             'living_room' => ['small' => ['min' => 12.0, 'max' => 16.0, 'average' => 14.0], 'medium' => ['min' => 17.0, 'max' => 24.0, 'average' => 20.5], 'large' => ['min' => 25.0, 'max' => 35.0, 'average' => 30.0]],
             'balcony' => ['small' => ['min' => 3.0, 'max' => 5.0, 'average' => 4.0], 'medium' => ['min' => 6.0, 'max' => 9.0, 'average' => 7.5], 'large' => ['min' => 10.0, 'max' => 15.0, 'average' => 12.5]],
             'corridor' => ['small' => ['min' => 4.0, 'max' => 6.0, 'average' => 5.0], 'medium' => ['min' => 7.0, 'max' => 10.0, 'average' => 8.5], 'large' => ['min' => 11.0, 'max' => 15.0, 'average' => 13.0]],
+            'shed' => ['small' => ['min' => 6.0, 'max' => 10.0, 'average' => 8.0], 'medium' => ['min' => 11.0, 'max' => 16.0, 'average' => 13.5], 'large' => ['min' => 17.0, 'max' => 23.0, 'average' => 20.0]],
         ];
     }
 
@@ -36,6 +37,7 @@ final class CleaningFinancialDefaults
             'living_room' => ['small' => 1.0, 'medium' => 1.5, 'large' => 2.0],
             'balcony' => ['small' => 0.5, 'medium' => 1.5, 'large' => 2.0],
             'corridor' => ['small' => 0.25, 'medium' => 0.5, 'large' => 0.75],
+            'shed' => ['small' => 1.0, 'medium' => 1.5, 'large' => 2.0],
         ];
     }
 
@@ -49,6 +51,7 @@ final class CleaningFinancialDefaults
             'living_room' => ['small' => ['regular' => 30, 'deep' => 60], 'medium' => ['regular' => 40, 'deep' => 80], 'large' => ['regular' => 55, 'deep' => 110]],
             'balcony' => ['small' => ['regular' => 12, 'deep' => 25], 'medium' => ['regular' => 18, 'deep' => 35], 'large' => ['regular' => 25, 'deep' => 45]],
             'corridor' => ['small' => ['regular' => 8, 'deep' => 15], 'medium' => ['regular' => 12, 'deep' => 22], 'large' => ['regular' => 16, 'deep' => 28]],
+            'shed' => ['small' => ['regular' => 25, 'deep' => 50], 'medium' => ['regular' => 35, 'deep' => 70], 'large' => ['regular' => 50, 'deep' => 100]],
         ];
     }
 }

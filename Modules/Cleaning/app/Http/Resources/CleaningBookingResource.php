@@ -99,6 +99,7 @@ final class CleaningBookingResource extends JsonResource
             'numberOfRooms' => Arr::get($details, 'bedrooms') ?? Arr::get($details, 'rooms'),
             'numberOfKitchens' => Arr::get($details, 'kitchens', 0),
             'numberOfBalconies' => Arr::get($details, 'balconies', 0),
+            'numberOfSheds' => Arr::get($details, 'sheds', 0),
             'estimatedSqm' => $this->estimated_sqm,
             'estimatedHours' => $this->estimated_hours,
             'scheduledDate' => $this->scheduled_date?->format('Y-m-d'),

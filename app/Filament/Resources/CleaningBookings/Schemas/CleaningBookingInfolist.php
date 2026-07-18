@@ -335,6 +335,7 @@ final class CleaningBookingInfolist
             'living_room' => 'غرفة معيشة',
             'balcony' => 'شرفة',
             'corridor' => 'ممر',
+            'shed' => 'سقيفة',
             'room' => 'غرفة',
             null, '' => '-',
             default => $value,

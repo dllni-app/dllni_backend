@@ -50,6 +50,7 @@ final class UserCleaningOrderEstimationService
             $toilets = $this->sumRoomTypeBuckets($breakdown['toilet']);
             $kitchens = $this->sumRoomTypeBuckets($breakdown['kitchen']);
             $balconies = $this->sumRoomTypeBuckets($breakdown['balcony']);
+            $sheds = $this->sumRoomTypeBuckets($breakdown['shed']);
             $bedrooms = $this->sumAllRoomBuckets($breakdown);
         } else {
             $livingRoomSize = mb_strtolower((string) Arr::get($propertyDetails, 'living_room_size', 'medium'));
@@ -59,7 +60,8 @@ final class UserCleaningOrderEstimationService
             $toilets = max(0, (int) Arr::get($propertyDetails, 'toilets', 0));
             $kitchens = max(0, (int) Arr::get($propertyDetails, 'kitchens', Arr::get($propertyDetails, 'kitchen_included') ? 1 : 0));
             $balconies = max(0, (int) Arr::get($propertyDetails, 'balconies', 0));
-            $bedrooms = $rooms + $bathrooms + $toilets + $kitchens + $balconies + 1;
+            $sheds = max(0, (int) Arr::get($propertyDetails, 'sheds', 0));
+            $bedrooms = $rooms + $bathrooms + $toilets + $kitchens + $balconies + $sheds + 1;
         }
 
         return [
@@ -71,6 +73,7 @@ final class UserCleaningOrderEstimationService
             'toilets' => $toilets,
             'kitchens' => $kitchens,
             'balconies' => $balconies,
+            'sheds' => $sheds,
             'living_room_size' => $livingRoomSize,
             'cleaning_mode' => $cleaningMode,
             'room_size_breakdown' => $breakdown,
@@ -251,9 +254,10 @@ final class UserCleaningOrderEstimationService
         $bathrooms = (int) ($details['bathrooms'] ?? 0);
         $kitchens = (int) ($details['kitchens'] ?? 0);
         $balconies = (int) ($details['balconies'] ?? 0);
+        $sheds = (int) ($details['sheds'] ?? 0);
         $livingRoomSize = (string) ($details['living_room_size'] ?? 'medium');
-        $estimatedSqm = max(25.0, $this->baseSqmByPropertyTypeLegacy($propertyType) + ($bedrooms * 18.0) + ($rooms * 8.0) + ($bathrooms * 6.0) + ($kitchens * 10.0) + ($balconies * 4.0) + $this->livingRoomSqmAdjustmentLegacy($livingRoomSize));
-        $rawHours = ($estimatedSqm / 35.0) + ($bathrooms * 0.25) + ($kitchens * 0.20) + ($balconies * 0.10) + ($livingRoomSize === 'large' ? 0.25 : 0.0) + ($livingRoomSize === 'very_large' ? 0.50 : 0.0);
+        $estimatedSqm = max(25.0, $this->baseSqmByPropertyTypeLegacy($propertyType) + ($bedrooms * 18.0) + ($rooms * 8.0) + ($bathrooms * 6.0) + ($kitchens * 10.0) + ($balconies * 4.0) + ($sheds * 10.0) + $this->livingRoomSqmAdjustmentLegacy($livingRoomSize));
+        $rawHours = ($estimatedSqm / 35.0) + ($bathrooms * 0.25) + ($kitchens * 0.20) + ($balconies * 0.10) + ($sheds * 0.20) + ($livingRoomSize === 'large' ? 0.25 : 0.0) + ($livingRoomSize === 'very_large' ? 0.50 : 0.0);
         $estimatedHours = $this->roundToHalfHour(max(1.0, $this->roundToHalfHour($rawHours)) * $factor);
         $basePrice = $this->pricingCalculator->roundMoney(max(250.0, $estimatedSqm * $this->pricePerSqmByPropertyTypeLegacy($propertyType)) * $factor);
         return ['basePrice' => $basePrice, 'estimatedSqm' => $estimatedSqm, 'estimatedHours' => $estimatedHours, 'estimatedRawMinutes' => (int) round($estimatedHours * 60), 'estimatedMinutesWithBuffer' => (int) round($estimatedHours * 60), 'setupBufferMinutes' => 0, 'baseUnitPrice' => null, 'deepCleaningMultiplier' => $factor, 'areaMarginMultiplier' => null, 'unitTotal' => 0.0, 'modeMultiplier' => $factor, 'roomPricingLines' => []];
@@ -314,6 +318,7 @@ final class UserCleaningOrderEstimationService
         $breakdown['kitchen']['medium'] = max(0, (int) ($details['kitchens'] ?? 0));
         $breakdown['living_room'][$this->normalizeRoomSize((string) ($details['living_room_size'] ?? 'medium'))] = 1;
         $breakdown['balcony']['small'] = max(0, (int) ($details['balconies'] ?? 0));
+        $breakdown['shed']['medium'] = max(0, (int) ($details['sheds'] ?? 0));
         return $breakdown;
     }
 
