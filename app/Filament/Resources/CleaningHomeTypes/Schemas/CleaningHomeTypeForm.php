@@ -34,7 +34,7 @@ final class CleaningHomeTypeForm
                             ->required()
                             ->native(false)
                             ->live()
-                            ->afterStateUpdated(fn (Set $set): mixed => $set('booking_value', null)),
+                            ->afterStateUpdated(fn (Set $set) => $set('booking_value', null)),
                         TextInput::make('title')
                             ->label('الاسم الظاهر للمستخدم')
                             ->required()
@@ -56,7 +56,7 @@ final class CleaningHomeTypeForm
                             ),
                         Select::make('booking_value')
                             ->label('القيمة المستخدمة في الطلب')
-                            ->helperText('يمكن إضافة أنواع عرض جديدة بأسماء وصور مختلفة، مع ربطها بأحد أنواع الطلب المدعومة لضمان عمل التسعير والتحقق دون تغيير.')
+                            ->helperText('يمكن إضافة بطاقات جديدة بأسماء وصور مختلفة وربطها بأحد أنواع الطلب المدعومة، من دون تغيير منطق التسعير والتحقق.')
                             ->options(fn (Get $get): array => match ($get('section')) {
                                 CleaningHomeType::SECTION_PROPERTY => [
                                     'apartment' => 'شقة',
@@ -70,7 +70,6 @@ final class CleaningHomeTypeForm
                                     'birthday' => 'عيد ميلاد',
                                     'large_gathering' => 'تجمع كبير',
                                     'funeral' => 'عزاء',
-                                    'other' => 'مناسبة أخرى / نوع مخصص',
                                 ],
                                 default => [],
                             })
