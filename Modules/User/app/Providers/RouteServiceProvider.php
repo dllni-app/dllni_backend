@@ -6,6 +6,7 @@ namespace Modules\User\Providers;
 
 use Illuminate\Foundation\Support\Providers\RouteServiceProvider as ServiceProvider;
 use Illuminate\Support\Facades\Route;
+use Modules\User\Http\Controllers\API\UserCleaningHomeContentController;
 
 final class RouteServiceProvider extends ServiceProvider
 {
@@ -33,6 +34,11 @@ final class RouteServiceProvider extends ServiceProvider
             ->prefix('api/v1/user')
             ->name('api.')
             ->get('cleaning/orders/female-worker-safety-policy', \Modules\User\Http\Controllers\API\UserCleaningFemaleWorkerSafetyPolicyController::class);
+
+        Route::middleware('api')
+            ->prefix('api/v1/user')
+            ->name('api.')
+            ->get('cleaning/home/content', UserCleaningHomeContentController::class);
 
         Route::middleware('api')->prefix('api')->name('api.')->group(module_path($this->name, '/routes/api.php'));
     }
