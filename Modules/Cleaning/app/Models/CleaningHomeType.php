@@ -21,6 +21,7 @@ final class CleaningHomeType extends Model
     protected $fillable = [
         'section',
         'code',
+        'booking_value',
         'title',
         'image_path',
         'external_image_url',
