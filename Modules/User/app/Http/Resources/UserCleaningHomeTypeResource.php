@@ -22,6 +22,7 @@ final class UserCleaningHomeTypeResource extends JsonResource
             'id' => $type->id,
             'section' => $type->section,
             'code' => $type->code,
+            'value' => $type->booking_value,
             'title' => $type->title,
             'imageUrl' => $type->imageUrl(),
             'sortOrder' => $type->sort_order,
