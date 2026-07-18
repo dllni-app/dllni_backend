@@ -41,7 +41,14 @@ final class ActivityLogResource extends JsonResource
             }
         }
 
-        $avatarUrl = $causer?->avatar_url;
+        if ($causer === null || ! method_exists($causer, 'getAttributes')) {
+            return null;
+        }
+
+        $attributes = $causer->getAttributes();
+        $avatarUrl = array_key_exists('avatar_url', $attributes)
+            ? $causer->getAttribute('avatar_url')
+            : null;
 
         return is_string($avatarUrl) && trim($avatarUrl) !== ''
             ? $avatarUrl

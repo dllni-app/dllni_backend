@@ -8,6 +8,10 @@ use App\Models\CleaningDepositTransaction;
 use App\Models\CleaningWorkerDeposit;
 use App\Models\User;
 use App\Models\Worker;
+use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
+use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Services\AdminCleaningTransactionService;
 
 beforeEach(function (): void {
@@ -60,6 +64,40 @@ it('returns the financial statistics shown to the admin after selecting a cleani
         ->and($snapshot['adminFeeDue'])->toBe(2000.0)
         ->and($snapshot['outstandingAdministrationDue'])->toBe(5000.0)
         ->and($snapshot['totalSettled'])->toBe(1000.0);
+});
+
+it('counts completed orders from actual booking records instead of the seeded worker counter', function (): void {
+    $worker = createCleaningWorkerForAdminTransaction();
+    $worker->forceFill(['total_completed_jobs' => 120])->save();
+
+    CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'status' => CleaningBookingStatus::Completed->value,
+    ]);
+
+    CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'status' => CleaningBookingStatus::Cancelled->value,
+    ]);
+
+    $teamBooking = CleaningBooking::factory()->create([
+        'worker_id' => null,
+        'number_of_workers' => 2,
+        'status' => CleaningBookingStatus::Completed->value,
+    ]);
+
+    CleaningBookingWorkerAssignment::query()->create([
+        'cleaning_booking_id' => $teamBooking->id,
+        'worker_id' => $worker->id,
+        'status' => CleaningBookingWorkerAssignmentStatus::Completed->value,
+        'accepted_at' => now()->subHour(),
+        'work_finished_at' => now(),
+    ]);
+
+    $snapshot = app(AdminCleaningTransactionService::class)->snapshot($worker->fresh(['deposit']));
+
+    expect((int) $worker->fresh()->total_completed_jobs)->toBe(120)
+        ->and($snapshot['completedJobs'])->toBe(2);
 });
 
 it('validates settlement and refund amounts before creating the transaction', function (): void {

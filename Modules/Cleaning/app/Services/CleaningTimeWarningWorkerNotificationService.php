@@ -55,6 +55,7 @@ final class CleaningTimeWarningWorkerNotificationService
         $extraData = [
             'warningId' => $warning->id,
             'assignmentId' => $assignmentId,
+            'workerId' => $workerId,
             'message' => $message,
             'workerRejectMessage' => $message,
             'worker_reject_message' => $message,

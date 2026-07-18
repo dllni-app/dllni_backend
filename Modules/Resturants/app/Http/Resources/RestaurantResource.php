@@ -73,7 +73,22 @@ final class RestaurantResource extends JsonResource
                 'name' => $ct->name,
                 'slug' => $ct->slug,
             ])),
-            'operatingHours' => $this->whenLoaded('operatingHours'),
+            'operatingHours' => $this->whenLoaded('operatingHours', fn () => $this->operatingHours->map(function ($hour): array {
+                $dayOfWeek = $hour->day_of_week?->value ?? $hour->day_of_week;
+
+                return [
+                    'id' => $hour->id,
+                    'dayOfWeek' => $dayOfWeek,
+                    'openTime' => $hour->open_time,
+                    'closeTime' => $hour->close_time,
+                    'isClosed' => (bool) $hour->is_closed,
+                    // Keep the original aliases for backward compatibility with older clients.
+                    'day_of_week' => $dayOfWeek,
+                    'open_time' => $hour->open_time,
+                    'close_time' => $hour->close_time,
+                    'is_closed' => (bool) $hour->is_closed,
+                ];
+            })->values()),
             'documents' => $this->whenLoaded('documents'),
             'reputationLogs' => $this->whenLoaded('reputationLogs'),
             'penalties' => $this->whenLoaded('penalties'),

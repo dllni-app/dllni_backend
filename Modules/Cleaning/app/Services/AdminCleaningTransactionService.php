@@ -9,6 +9,9 @@ use App\Models\CleaningDepositTransaction;
 use App\Models\Worker;
 use Illuminate\Database\Eloquent\Builder;
 use InvalidArgumentException;
+use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
+use Modules\Cleaning\Models\CleaningBooking;
 
 final class AdminCleaningTransactionService
 {
@@ -80,7 +83,7 @@ final class AdminCleaningTransactionService
             'maxRefundable' => round($maxRefundable, 2),
             'depositGap' => round(max(0.0, (float) $limits['minimumRequired'] - $currentBalance), 2),
             'totalRevenue' => round((float) $financial['totalRevenue'], 2),
-            'completedJobs' => (int) $financial['completedJobs'],
+            'completedJobs' => $this->completedBookingsCount($worker),
             'totalCommission' => round((float) $financial['totalCommission'], 2),
             'commissionDue' => round((float) $financial['commissionDue'], 2),
             'totalSettled' => round((float) $debt['totalSettled'], 2),
@@ -224,6 +227,21 @@ final class AdminCleaningTransactionService
             'refund' => $this->depositService->recordRefund($worker, $amount, 'admin_manual', $notes, $createdByAdminId),
             default => throw new InvalidArgumentException(__('cleaning_finance_guidance.validation.type_required')),
         };
+    }
+
+    private function completedBookingsCount(Worker $worker): int
+    {
+        return CleaningBooking::query()
+            ->where('status', CleaningBookingStatus::Completed->value)
+            ->where(function (Builder $query) use ($worker): void {
+                $query->where('worker_id', $worker->id)
+                    ->orWhereHas('workerAssignments', function (Builder $assignments) use ($worker): void {
+                        $assignments
+                            ->where('worker_id', $worker->id)
+                            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
+                    });
+            })
+            ->count();
     }
 
     /**
