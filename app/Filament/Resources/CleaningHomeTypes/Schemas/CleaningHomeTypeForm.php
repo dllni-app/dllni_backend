@@ -10,6 +10,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Illuminate\Validation\Rules\Unique;
 use Modules\Cleaning\Models\CleaningHomeType;
@@ -32,14 +33,15 @@ final class CleaningHomeTypeForm
                             ])
                             ->required()
                             ->native(false)
-                            ->live(),
+                            ->live()
+                            ->afterStateUpdated(fn (Set $set): mixed => $set('booking_value', null)),
                         TextInput::make('title')
                             ->label('الاسم الظاهر للمستخدم')
                             ->required()
                             ->maxLength(255),
                         TextInput::make('code')
                             ->label('رمز النوع')
-                            ->helperText('قيمة ثابتة ترسلها التطبيقات إلى واجهات API. استخدم أحرفاً إنجليزية صغيرة وأرقاماً وشرطة سفلية فقط، ولا تغيّرها بعد استخدام النوع في الطلبات.')
+                            ->helperText('معرّف ثابت لعنصر الواجهة. استخدم أحرفاً إنجليزية صغيرة وأرقاماً وشرطة سفلية فقط، ولا تغيّره بعد نشر النوع.')
                             ->required()
                             ->maxLength(100)
                             ->regex('/^[a-z0-9_]+$/')
@@ -52,6 +54,29 @@ final class CleaningHomeTypeForm
                                     return $rule->where('section', (string) $get('section'));
                                 },
                             ),
+                        Select::make('booking_value')
+                            ->label('القيمة المستخدمة في الطلب')
+                            ->helperText('يمكن إضافة أنواع عرض جديدة بأسماء وصور مختلفة، مع ربطها بأحد أنواع الطلب المدعومة لضمان عمل التسعير والتحقق دون تغيير.')
+                            ->options(fn (Get $get): array => match ($get('section')) {
+                                CleaningHomeType::SECTION_PROPERTY => [
+                                    'apartment' => 'شقة',
+                                    'villa' => 'فيلا',
+                                    'house' => 'منزل',
+                                    'office' => 'مكتب',
+                                    'studio' => 'استديو',
+                                ],
+                                CleaningHomeType::SECTION_OCCASION => [
+                                    'family_dinner' => 'عشاء عائلي',
+                                    'birthday' => 'عيد ميلاد',
+                                    'large_gathering' => 'تجمع كبير',
+                                    'funeral' => 'عزاء',
+                                    'other' => 'مناسبة أخرى / نوع مخصص',
+                                ],
+                                default => [],
+                            })
+                            ->required()
+                            ->native(false)
+                            ->disabled(fn (Get $get): bool => blank($get('section'))),
                         TextInput::make('sort_order')
                             ->label('ترتيب العرض')
                             ->numeric()
