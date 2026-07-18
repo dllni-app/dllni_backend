@@ -14,6 +14,7 @@ return new class () extends Migration {
             $table->id();
             $table->string('section', 32);
             $table->string('code', 100);
+            $table->string('booking_value', 100);
             $table->string('title');
             $table->string('image_path')->nullable();
             $table->text('external_image_url')->nullable();
@@ -33,6 +34,7 @@ return new class () extends Migration {
             [
                 'section' => 'property',
                 'code' => 'villa',
+                'booking_value' => 'villa',
                 'title' => 'فيلا دوبلكس',
                 'external_image_url' => $assetBaseUrl.'/villa_image.png',
                 'sort_order' => 10,
@@ -43,6 +45,7 @@ return new class () extends Migration {
             [
                 'section' => 'property',
                 'code' => 'office',
+                'booking_value' => 'office',
                 'title' => 'مكتب',
                 'external_image_url' => $assetBaseUrl.'/office_image.png',
                 'sort_order' => 20,
@@ -53,6 +56,7 @@ return new class () extends Migration {
             [
                 'section' => 'property',
                 'code' => 'apartment',
+                'booking_value' => 'apartment',
                 'title' => 'شقة',
                 'external_image_url' => $assetBaseUrl.'/home_image.png',
                 'sort_order' => 30,
@@ -63,6 +67,7 @@ return new class () extends Migration {
             [
                 'section' => 'property',
                 'code' => 'studio',
+                'booking_value' => 'studio',
                 'title' => 'استديو',
                 'external_image_url' => $assetBaseUrl.'/studio_image.png',
                 'sort_order' => 40,
@@ -73,6 +78,7 @@ return new class () extends Migration {
             [
                 'section' => 'occasion',
                 'code' => 'family_dinner',
+                'booking_value' => 'family_dinner',
                 'title' => 'عشاء عائلي',
                 'external_image_url' => $assetBaseUrl.'/family_dinner.png',
                 'sort_order' => 10,
@@ -83,6 +89,7 @@ return new class () extends Migration {
             [
                 'section' => 'occasion',
                 'code' => 'birthday',
+                'booking_value' => 'birthday',
                 'title' => 'حفلة عيد ميلاد',
                 'external_image_url' => $assetBaseUrl.'/party.png',
                 'sort_order' => 20,
@@ -93,6 +100,7 @@ return new class () extends Migration {
             [
                 'section' => 'occasion',
                 'code' => 'large_gathering',
+                'booking_value' => 'large_gathering',
                 'title' => 'عزيمة كبيرة',
                 'external_image_url' => $assetBaseUrl.'/big_launch.png',
                 'sort_order' => 30,
@@ -103,6 +111,7 @@ return new class () extends Migration {
             [
                 'section' => 'occasion',
                 'code' => 'funeral',
+                'booking_value' => 'funeral',
                 'title' => 'عزاء',
                 'external_image_url' => $assetBaseUrl.'/aza.png',
                 'sort_order' => 40,
