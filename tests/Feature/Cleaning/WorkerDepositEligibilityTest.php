@@ -300,7 +300,7 @@ it('excludes workers whose deposit and remaining debt capacity cannot cover an o
             ],
         ]);
         $eligibleWorker->zones()->create(['name' => 'Zone Y', 'is_active' => true]);
-        seedWorkerDeposit($eligibleWorker, 5000, 0);
+        seedWorkerDeposit($eligibleWorker, 5000000, 0);
 
         $booking = CleaningBooking::factory()->create([
             'worker_id' => null,
