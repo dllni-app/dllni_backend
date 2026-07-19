@@ -115,7 +115,7 @@ final class WorkerDispatchEligibilityService
         return match ($reasonCode) {
             self::REASON_ELIGIBLE => 'Account ready for new requests',
             self::REASON_WORKER_INACTIVE => 'Account is inactive',
-            self::REASON_WORKER_SUSPENDED => 'Account is suspended',
+            self::REASON_WORKER_SUSPENDED => 'Worker stopped by admin',
             self::REASON_TRUST_SCORE_TOO_LOW => 'Trust score is too low',
             self::REASON_DEPOSIT_BELOW_ALLOWED_BALANCE => 'Deposit balance is below the allowed limit',
             self::REASON_DEPOSIT_REQUIRED_BEFORE_START => 'Deposit balance is below the required amount',
@@ -131,7 +131,7 @@ final class WorkerDispatchEligibilityService
         return match ($reasonCode) {
             self::REASON_ELIGIBLE => 'Your account can receive and accept new requests.',
             self::REASON_WORKER_INACTIVE => 'Your account is inactive. Reactivate your account to receive new requests.',
-            self::REASON_WORKER_SUSPENDED => 'Your account is suspended. Please contact support for more details.',
+            self::REASON_WORKER_SUSPENDED => 'Your worker account was stopped by the admin. You will not receive new orders until the admin removes the suspension.',
             self::REASON_TRUST_SCORE_TOO_LOW => 'Your trust score is below the minimum required to receive new requests.',
             self::REASON_DEPOSIT_BELOW_ALLOWED_BALANCE => sprintf(
                 'Your deposit balance is below the allowed limit by %s. Please recharge your deposit account to receive new requests.',
