@@ -11,26 +11,19 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
+use Modules\Cleaning\Services\AdminCleaningTransactionService;
 use Modules\Cleaning\Services\DepositService;
-use Modules\Cleaning\Services\WorkerDebtService;
 use Throwable;
 
-/**
- * Reusable admin financial actions for a cleaning worker. Used both as table
- * row actions and as view-page header actions (Filament v5 unified actions).
- */
 final class WorkerDepositActions
 {
-    /**
-     * @return array<int, Action|ActionGroup>
-     */
     public static function make(): array
     {
         return [
             ActionGroup::make([
                 self::deposit(),
                 self::debt(),
-                self::settlement(),
+                self::settleFullDebt(),
                 self::refund(),
                 self::reactivate(),
             ])
@@ -46,16 +39,13 @@ final class WorkerDepositActions
             ->label(__('cleaning_admin.workers.finance.deposit.label'))
             ->icon('heroicon-o-arrow-down-tray')
             ->color('success')
+            ->modalDescription(app()->isLocale('ar')
+                ? 'إذا كان لدى العامل مديونية، يخصص النظام مبلغ الإيداع لتسويتها أولاً ثم يضيف المتبقي إلى رصيد الإيداع.'
+                : 'If the worker has debt, the deposit settles it first and only the remainder becomes available deposit.')
             ->form(self::amountForm())
             ->action(function (Worker $record, array $data): void {
                 self::run(
-                    fn () => app(DepositService::class)->recordDeposit(
-                        $record,
-                        (float) $data['amount'],
-                        'admin_deposit',
-                        self::composeNotes($data),
-                        auth()->id(),
-                    ),
+                    fn () => app(AdminCleaningTransactionService::class)->create($record, 'deposit', (float) $data['amount'], self::composeNotes($data), auth()->id()),
                     __('cleaning_admin.workers.finance.deposit.success'),
                 );
             });
@@ -67,40 +57,43 @@ final class WorkerDepositActions
             ->label(__('cleaning_finance.debt.label'))
             ->icon('heroicon-o-plus-circle')
             ->color('warning')
-            ->modalDescription(__('cleaning_finance.debt.description'))
+            ->modalDescription(app()->isLocale('ar')
+                ? 'تخصم المديونية من رصيد الإيداع أولاً، ولا يظهر دين فعلي إلا بعد نفاد الإيداع.'
+                : 'The charge consumes the deposit first. Actual debt is created only after the deposit reaches zero.')
             ->requiresConfirmation()
-            ->form(self::amountForm(__('cleaning_finance.fields.positive_amount_hint')))
+            ->form(self::amountForm(__('cleaning_finance.fields.positive_amount_hint'), notesRequired: true))
             ->action(function (Worker $record, array $data): void {
                 self::run(
-                    fn () => app(WorkerDebtService::class)->recordDebt(
-                        $record,
-                        (float) $data['amount'],
-                        'admin_debt',
-                        self::composeNotes($data),
-                        auth()->id(),
-                    ),
+                    fn () => app(AdminCleaningTransactionService::class)->create($record, 'debt', (float) $data['amount'], self::composeNotes($data), auth()->id()),
                     __('cleaning_finance.debt.success'),
                 );
             });
     }
 
-    private static function settlement(): Action
+    private static function settleFullDebt(): Action
     {
-        return Action::make('recordSettlement')
-            ->label(__('cleaning_admin.workers.finance.settlement.label'))
+        return Action::make('settleFullDebt')
+            ->label(app()->isLocale('ar') ? 'تصفير المديونية' : 'Settle full debt')
             ->icon('heroicon-o-check-circle')
             ->color('primary')
-            ->modalDescription(__('cleaning_finance.settlement.description'))
-            ->form(self::amountForm())
+            ->visible(fn (Worker $record): bool => (float) (app(AdminCleaningTransactionService::class)->snapshot($record)['outstandingAdministrationDue'] ?? 0) > 0)
+            ->requiresConfirmation()
+            ->modalHeading(app()->isLocale('ar') ? 'تسوية كامل المديونية' : 'Settle the full debt')
+            ->modalDescription(function (Worker $record): string {
+                $amount = (float) (app(AdminCleaningTransactionService::class)->snapshot($record)['outstandingAdministrationDue'] ?? 0);
+
+                return app()->isLocale('ar')
+                    ? 'سيقوم النظام بتسجيل تسوية بقيمة '.number_format($amount, 2).' '.config('app.currency', 'SYP').' وتصفير المديونية.'
+                    : 'The system will record a settlement of '.number_format($amount, 2).' '.config('app.currency', 'SYP').' and clear the debt.';
+            })
+            ->form([
+                Textarea::make('notes')
+                    ->label(__('cleaning_admin.workers.finance.fields.notes'))
+                    ->maxLength(1000),
+            ])
             ->action(function (Worker $record, array $data): void {
                 self::run(
-                    fn () => app(WorkerDebtService::class)->recordSettlement(
-                        $record,
-                        (float) $data['amount'],
-                        'admin_settlement',
-                        self::composeNotes($data),
-                        auth()->id(),
-                    ),
+                    fn () => app(AdminCleaningTransactionService::class)->settleFullDebt($record, isset($data['notes']) ? trim((string) $data['notes']) : null, auth()->id()),
                     __('cleaning_admin.workers.finance.settlement.success'),
                 );
             });
@@ -112,16 +105,13 @@ final class WorkerDepositActions
             ->label(__('cleaning_admin.workers.finance.refund.label'))
             ->icon('heroicon-o-arrow-uturn-left')
             ->color('warning')
+            ->modalDescription(app()->isLocale('ar')
+                ? 'الحد الأقصى للاسترداد هو رصيد الإيداع الحالي فقط. يجب ألا توجد مديونية أو عمولات محجوزة لطلبات نشطة.'
+                : 'The maximum refund is the current deposit only. Debt and active reserved commission must both be zero.')
             ->form(self::amountForm())
             ->action(function (Worker $record, array $data): void {
                 self::run(
-                    fn () => app(DepositService::class)->recordRefund(
-                        $record,
-                        (float) $data['amount'],
-                        'admin_refund',
-                        self::composeNotes($data),
-                        auth()->id(),
-                    ),
+                    fn () => app(AdminCleaningTransactionService::class)->create($record, 'refund', (float) $data['amount'], self::composeNotes($data), auth()->id()),
                     __('cleaning_admin.workers.finance.refund.success'),
                 );
             });
@@ -139,17 +129,11 @@ final class WorkerDepositActions
                 $record->update(['is_active' => true, 'is_suspended' => false]);
                 app(DepositService::class)->syncEligibilityStatus($record->fresh(['deposit']) ?? $record);
 
-                Notification::make()
-                    ->title(__('cleaning_admin.workers.finance.reactivate.success'))
-                    ->success()
-                    ->send();
+                Notification::make()->title(__('cleaning_admin.workers.finance.reactivate.success'))->success()->send();
             });
     }
 
-    /**
-     * @return array<int, \Filament\Forms\Components\Field>
-     */
-    private static function amountForm(?string $helperText = null): array
+    private static function amountForm(?string $helperText = null, bool $notesRequired = false): array
     {
         return [
             TextInput::make('amount')
@@ -164,13 +148,11 @@ final class WorkerDepositActions
                 ->default(now()),
             Textarea::make('notes')
                 ->label(__('cleaning_admin.workers.finance.fields.notes'))
+                ->required($notesRequired)
                 ->maxLength(1000),
         ];
     }
 
-    /**
-     * @param  array<string, mixed>  $data
-     */
     private static function composeNotes(array $data): ?string
     {
         $notes = isset($data['notes']) ? trim((string) $data['notes']) : '';
@@ -188,11 +170,7 @@ final class WorkerDepositActions
     {
         try {
             $callback();
-
-            Notification::make()
-                ->title($successMessage)
-                ->success()
-                ->send();
+            Notification::make()->title($successMessage)->success()->send();
         } catch (Throwable $exception) {
             Notification::make()
                 ->title(__('cleaning_admin.workers.finance.error'))
