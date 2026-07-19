@@ -9,8 +9,6 @@ use Modules\Cleaning\Models\CleaningHomeType;
 
 final class CleaningHomeTypeSeeder extends Seeder
 {
-    private const ASSET_BASE_URL = 'https://raw.githubusercontent.com/dllni-app/dllni-user-app/2b0fd06b62b470a33dc7c0d3f4431adecc627a52/assets/images';
-
     public function run(): void
     {
         foreach ($this->items() as $item) {
@@ -24,8 +22,8 @@ final class CleaningHomeTypeSeeder extends Seeder
                     [
                         'booking_value' => $item['booking_value'],
                         'title' => $item['title'],
-                        'image_path' => null,
-                        'external_image_url' => self::ASSET_BASE_URL.'/'.$item['image'],
+                        'image_path' => 'cleaning-home-types/'.$item['image'],
+                        'external_image_url' => null,
                         'sort_order' => $item['sort_order'],
                         'is_active' => true,
                     ],
