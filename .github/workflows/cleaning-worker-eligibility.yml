@@ -13,19 +13,14 @@ on:
       - 'tests/Feature/Cleaning/SuspendedWorkerDispatchTest.php'
       - '.github/workflows/cleaning-worker-eligibility.yml'
 
-permissions:
-  contents: write
-
 jobs:
   eligibility:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
-      - name: Checkout pull-request branch
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -49,35 +44,15 @@ jobs:
           DB_DATABASE: database/database.sqlite
         run: php artisan migrate --force
 
-      - name: Format eligibility sources
+      - name: Check formatting
         run: |
-          vendor/bin/pint \
+          vendor/bin/pint --test \
             Modules/User/app/Http/Controllers/API/UserCleaningPreviousWorkersController.php \
             Modules/User/app/Http/Requests/UserCleaningPreviousWorkersRequest.php \
             Modules/User/app/Observers/CleaningBookingPreferredWorkerEligibilityObserver.php \
             Modules/User/app/Providers/UserServiceProvider.php \
             app/Jobs/NotifyEligibleWorkersNewOrderJob.php \
             tests/Feature/UserModule/UserCleaningPreviousWorkersEligibilityTest.php
-
-      - name: Commit formatting when needed
-        shell: bash
-        run: |
-          if git diff --quiet; then
-            echo "No formatting changes required."
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            Modules/User/app/Http/Controllers/API/UserCleaningPreviousWorkersController.php \
-            Modules/User/app/Http/Requests/UserCleaningPreviousWorkersRequest.php \
-            Modules/User/app/Observers/CleaningBookingPreferredWorkerEligibilityObserver.php \
-            Modules/User/app/Providers/UserServiceProvider.php \
-            app/Jobs/NotifyEligibleWorkersNewOrderJob.php \
-            tests/Feature/UserModule/UserCleaningPreviousWorkersEligibilityTest.php
-          git commit -m "chore: format cleaning worker eligibility sources"
-          git push
 
       - name: Run eligibility tests
         env:
