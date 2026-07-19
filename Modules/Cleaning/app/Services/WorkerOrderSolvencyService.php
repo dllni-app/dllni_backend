@@ -8,6 +8,7 @@ use App\Models\CleaningWorkerDeposit;
 use App\Models\Worker;
 use InvalidArgumentException;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 
@@ -43,11 +44,11 @@ final class WorkerOrderSolvencyService
             && $worker->is_active
             && ! $worker->is_suspended
             && $this->depositService->isWorkerEligibleForDispatch($worker)
-            && $capacity['availableCommissionCapacity'] >= $requiredCommission;
+            && (float) $capacity['availableCommissionCapacity'] >= $requiredCommission;
 
         if (! $canReceive && $reasonCode === self::REASON_ELIGIBLE) {
             $reasonCode = self::REASON_INSUFFICIENT_COMMISSION_CAPACITY;
-            $message = 'Worker balance and allowed negative limit do not cover this booking platform commission.';
+            $message = 'The available deposit and remaining debt capacity do not cover this booking platform commission.';
         }
 
         return array_merge($capacity, [
@@ -69,7 +70,6 @@ final class WorkerOrderSolvencyService
     public function assertWorkerCanAcceptBooking(Worker $worker, CleaningBooking $booking, ?array $roomIds = null): void
     {
         CleaningWorkerDeposit::query()->where('worker_id', $worker->id)->lockForUpdate()->first();
-
         $payload = $this->solvencyPayloadForBooking($worker->fresh(['deposit']) ?? $worker, $booking, $roomIds);
 
         if (! (bool) $payload['canAcceptBooking']) {
@@ -83,7 +83,7 @@ final class WorkerOrderSolvencyService
         $capacity = $this->workerCapacitySummary($worker->fresh(['deposit']) ?? $worker, (int) $booking->id);
 
         if ((float) $capacity['availableCommissionCapacity'] < $requiredCommission) {
-            throw new InvalidArgumentException('Worker balance and allowed negative limit do not cover this booking platform commission.');
+            throw new InvalidArgumentException('The available deposit and remaining debt capacity do not cover this booking platform commission.');
         }
     }
 
@@ -91,16 +91,21 @@ final class WorkerOrderSolvencyService
     {
         $worker->loadMissing('deposit');
         $limits = $this->depositService->resolveLimits($worker);
-        $currentBalance = (float) ($worker->deposit?->current_balance ?? 0);
-        $allowedNegativeLimit = (float) ($limits['maxNegativeBalance'] ?? 0);
+        $depositBalance = max(0.0, (float) ($worker->deposit?->current_balance ?? 0));
+        $debtBalance = $this->debtService->outstandingAdministrationDue($worker);
+        $allowedDebtLimit = max(0.0, (float) ($limits['maxNegativeBalance'] ?? 0));
+        $remainingDebtCapacity = max(0.0, $allowedDebtLimit - $debtBalance);
         $activeReservedCommission = $this->activeReservedCommission($worker, $excludeBookingId);
 
         return [
-            'currentBalance' => round($currentBalance, 2),
-            'allowedDebtLimit' => round($allowedNegativeLimit, 2),
-            'currentDebtAmount' => $this->debtService->outstandingAdministrationDue($worker),
+            'currentBalance' => round($depositBalance, 2),
+            'depositBalance' => round($depositBalance, 2),
+            'allowedDebtLimit' => round($allowedDebtLimit, 2),
+            'maxNegativeBalance' => round($allowedDebtLimit, 2),
+            'currentDebtAmount' => round($debtBalance, 2),
+            'remainingDebtCapacity' => round($remainingDebtCapacity, 2),
             'activeReservedCommission' => round($activeReservedCommission, 2),
-            'availableCommissionCapacity' => round($currentBalance + $allowedNegativeLimit - $activeReservedCommission, 2),
+            'availableCommissionCapacity' => $this->depositService->availableCommissionCapacity($worker, $activeReservedCommission),
         ];
     }
 
@@ -123,7 +128,7 @@ final class WorkerOrderSolvencyService
         $query = CleaningBookingWorkerAssignment::query()
             ->join('cleaning_bookings', 'cleaning_bookings.id', '=', 'cleaning_booking_worker_assignments.cleaning_booking_id')
             ->where('cleaning_booking_worker_assignments.worker_id', $worker->id)
-            ->whereIn('cleaning_booking_worker_assignments.status', ['accepted', 'accepted_waiting_team', 'accepted_waiting_for_order_start'])
+            ->whereIn('cleaning_booking_worker_assignments.status', CleaningBookingWorkerAssignmentStatus::activeValues())
             ->whereNotIn('cleaning_bookings.status', [CleaningBookingStatus::Completed->value, CleaningBookingStatus::Cancelled->value]);
 
         if ($excludeBookingId !== null) {
