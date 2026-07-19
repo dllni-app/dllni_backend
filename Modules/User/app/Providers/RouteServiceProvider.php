@@ -7,6 +7,7 @@ namespace Modules\User\Providers;
 use Illuminate\Foundation\Support\Providers\RouteServiceProvider as ServiceProvider;
 use Illuminate\Support\Facades\Route;
 use Modules\User\Http\Controllers\API\UserCleaningHomeContentController;
+use Modules\User\Http\Controllers\API\UserCouponsIndexController;
 
 final class RouteServiceProvider extends ServiceProvider
 {
@@ -33,7 +34,10 @@ final class RouteServiceProvider extends ServiceProvider
         Route::middleware(['api', 'auth:sanctum'])
             ->prefix('api/v1/user')
             ->name('api.')
-            ->get('cleaning/orders/female-worker-safety-policy', \Modules\User\Http\Controllers\API\UserCleaningFemaleWorkerSafetyPolicyController::class);
+            ->group(function (): void {
+                Route::get('cleaning/orders/female-worker-safety-policy', \Modules\User\Http\Controllers\API\UserCleaningFemaleWorkerSafetyPolicyController::class);
+                Route::get('coupons', UserCouponsIndexController::class);
+            });
 
         Route::middleware('api')
             ->prefix('api/v1/user')

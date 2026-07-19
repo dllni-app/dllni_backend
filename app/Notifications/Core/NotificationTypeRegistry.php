@@ -8,9 +8,7 @@ use InvalidArgumentException;
 
 final class NotificationTypeRegistry
 {
-    /**
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     public function definition(string $canonicalType): array
     {
         $definition = $this->types()[$canonicalType] ?? null;
@@ -62,19 +60,19 @@ final class NotificationTypeRegistry
         return is_string($iconPath) ? $iconPath : null;
     }
 
-    /**
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     private function types(): array
     {
         $configuredTypes = config('notification_types.types', []);
         $extensionTypes = config('notification_type_extensions.types', []);
         $cleaningRepeatedTypes = config('cleaning_repeated_notification_types.types', []);
+        $platformCouponTypes = config('platform_coupon_notification_types.types', []);
 
         return array_replace(
             is_array($configuredTypes) ? $configuredTypes : [],
             is_array($extensionTypes) ? $extensionTypes : [],
             is_array($cleaningRepeatedTypes) ? $cleaningRepeatedTypes : [],
+            is_array($platformCouponTypes) ? $platformCouponTypes : [],
         );
     }
 }
