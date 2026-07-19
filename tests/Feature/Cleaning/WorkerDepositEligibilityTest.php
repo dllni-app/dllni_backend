@@ -284,6 +284,9 @@ it('excludes workers whose deposit and remaining debt capacity cannot cover an o
         $ineligibleWorker = Worker::factory()->create([
             'user_id' => $ineligibleUser->id,
             'trust_score' => 80,
+            'home_address' => 'Aleppo',
+            'home_latitude' => 36.2000,
+            'home_longitude' => 37.1500,
             'default_working_hours' => [
                 $dayKey => ['available' => true, 'data' => [['09:00' => '18:00']]],
             ],
@@ -295,6 +298,9 @@ it('excludes workers whose deposit and remaining debt capacity cannot cover an o
         $eligibleWorker = Worker::factory()->create([
             'user_id' => $eligibleUser->id,
             'trust_score' => 80,
+            'home_address' => 'Aleppo',
+            'home_latitude' => 36.2000,
+            'home_longitude' => 37.1500,
             'default_working_hours' => [
                 $dayKey => ['available' => true, 'data' => [['09:00' => '18:00']]],
             ],
@@ -308,6 +314,8 @@ it('excludes workers whose deposit and remaining debt capacity cannot cover an o
             'gender_preference' => 'any',
             'scheduled_date' => $bookingDate,
             'scheduled_time' => '15:00',
+            'address_latitude' => 36.2000,
+            'address_longitude' => 37.1500,
         ]);
 
         (new NotifyEligibleWorkersNewOrderJob($booking->id))->handle();
