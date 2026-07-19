@@ -17,7 +17,7 @@ final class CleaningDepositTransaction extends Model
     public const AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX = 'automatic_admin_commission:';
 
     /** @var list<string> */
-    public const PUBLIC_TYPES = ['deposit', 'debt', 'settlement', 'refund'];
+    public const PUBLIC_TYPES = ['deposit', 'commission', 'debt', 'settlement', 'refund'];
 
     protected $fillable = [
         'worker_id',
@@ -27,6 +27,8 @@ final class CleaningDepositTransaction extends Model
         'debt_settled_amount',
         'balance_before',
         'balance_after',
+        'debt_balance_before',
+        'debt_balance_after',
         'reference',
         'notes',
     ];
@@ -51,20 +53,59 @@ final class CleaningDepositTransaction extends Model
 
     public function scopePubliclyVisible(Builder $query): Builder
     {
-        return $query->whereIn('type', self::PUBLIC_TYPES);
+        return $query->whereIn('type', [
+            'deposit',
+            'commission',
+            'debt',
+            'settlement',
+            'refund',
+            'admin_fee',
+            'withdrawal',
+            'adjustment',
+        ]);
     }
 
     public function scopeForPublicType(Builder $query, string $type): Builder
     {
-        if (! in_array($type, self::PUBLIC_TYPES, true)) {
-            return $query->whereRaw('1 = 0');
-        }
-
-        return $query->where('type', $type);
+        return match ($type) {
+            'commission' => $query->where(function (Builder $query): void {
+                $query->whereIn('type', ['commission', 'admin_fee'])
+                    ->orWhere(function (Builder $query): void {
+                        $query->where('type', 'debt')
+                            ->where('reference', 'like', self::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'%');
+                    });
+            }),
+            'debt' => $query->where('type', 'debt')
+                ->where(function (Builder $query): void {
+                    $query->whereNull('reference')
+                        ->orWhere('reference', 'not like', self::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'%');
+                }),
+            'deposit' => $query->where(function (Builder $query): void {
+                $query->where('type', 'deposit')
+                    ->orWhere(function (Builder $query): void {
+                        $query->where('type', 'adjustment')->where('amount', '>=', 0);
+                    });
+            }),
+            'refund' => $query->where(function (Builder $query): void {
+                $query->whereIn('type', ['refund', 'withdrawal'])
+                    ->orWhere(function (Builder $query): void {
+                        $query->where('type', 'adjustment')->where('amount', '<', 0);
+                    });
+            }),
+            'settlement' => $query->where('type', 'settlement'),
+            default => $query->whereRaw('1 = 0'),
+        };
     }
 
     public function publicType(): string
     {
+        if (
+            in_array((string) $this->type, ['commission', 'admin_fee'], true)
+            || ((string) $this->type === 'debt' && str_starts_with((string) $this->reference, self::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX))
+        ) {
+            return 'commission';
+        }
+
         return self::normalizePublicType((string) $this->type, (float) $this->amount);
     }
 
@@ -73,14 +114,10 @@ final class CleaningDepositTransaction extends Model
         return abs((float) $this->amount);
     }
 
-    /**
-     * Kept for compatibility while historical records are normalized by the
-     * migration that reduces the ledger to the four supported types.
-     */
     public static function normalizePublicType(string $type, float $amount = 0): string
     {
         return match ($type) {
-            'admin_fee' => 'debt',
+            'admin_fee', 'commission' => 'commission',
             'withdrawal' => 'refund',
             'adjustment' => $amount < 0 ? 'refund' : 'deposit',
             'deposit', 'debt', 'settlement', 'refund' => $type,
@@ -96,6 +133,8 @@ final class CleaningDepositTransaction extends Model
             'debt_settled_amount' => 'decimal:2',
             'balance_before' => 'decimal:2',
             'balance_after' => 'decimal:2',
+            'debt_balance_before' => 'decimal:2',
+            'debt_balance_after' => 'decimal:2',
         ];
     }
 }
