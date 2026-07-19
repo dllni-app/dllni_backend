@@ -13,7 +13,6 @@ use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 
@@ -61,10 +60,6 @@ final class WorkerForm
                             ->columnSpanFull(),
                         Textarea::make('bio')
                             ->label(__('cleaning_admin.workers.fields.bio')),
-                        Toggle::make('is_active')
-                            ->label(__('cleaning_admin.workers.fields.is_active'))
-                            ->default(true)
-                            ->live(),
                     ]),
                 Section::make(__('cleaning_admin.workers.sections.account'))
                     ->columns(2)
