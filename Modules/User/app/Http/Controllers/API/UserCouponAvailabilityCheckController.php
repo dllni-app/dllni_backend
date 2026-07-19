@@ -14,11 +14,14 @@ final class UserCouponAvailabilityCheckController
         UserCouponAvailabilityCheckRequest $request,
         UserCouponAvailabilityService $couponAvailability,
     ): JsonResponse {
+        $validated = $request->validated();
+
         return response()->json([
             'data' => $couponAvailability->check(
                 userId: (int) $request->user()->id,
-                section: (string) $request->string('section'),
-                couponCode: $request->input('couponCode'),
+                section: (string) $validated['section'],
+                couponCode: (string) $validated['couponCode'],
+                context: $validated,
             ),
         ]);
     }
