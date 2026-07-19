@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Modules\User\Services;
 
+use App\Models\PlatformCoupon;
+use App\Services\Coupons\PlatformCouponRedemptionService;
 use Illuminate\Validation\ValidationException;
 use Modules\Delivery\Services\DeliveryOrderCreationService;
 use Modules\Resturants\Enums\OrderStatus;
@@ -22,6 +24,7 @@ final class UserRestaurantCheckoutPipelineService
         private readonly RestaurantCheckoutService $checkoutService,
         private readonly RestaurantOrderNotificationService $notifications,
         private readonly DeliveryOrderCreationService $deliveryOrders,
+        private readonly PlatformCouponRedemptionService $platformCoupons,
     ) {}
 
     public function preview(int $userId, int $cartId, string $fulfillmentType, string $receiveMode, ?string $scheduledAt, ?string $couponCode, ?string $note, ?int $addressId = null): array
@@ -41,7 +44,7 @@ final class UserRestaurantCheckoutPipelineService
         }
 
         $subtotal = (float) $cart->items->sum(fn ($item): float => (float) ($item->total_price ?? 0));
-        $discount = $this->computeDiscount((int) $cart->restaurant_id, $couponCode, $subtotal);
+        $discount = $this->computeDiscount($userId, (int) $cart->restaurant_id, $couponCode, $subtotal);
         $serviceFee = 0.0;
         $tax = 0.0;
         $total = max(0.0, $subtotal - $discount) + $serviceFee + $tax;
@@ -74,9 +77,21 @@ final class UserRestaurantCheckoutPipelineService
             $this->assertDeliveryCoordinates($cart, $address);
         }
 
-        $order = $this->checkoutService->checkoutCart(userId: $userId, cartId: $cartId, orderType: $fulfillmentType, pickupMode: $receiveMode === 'scheduled' ? RestaurantPickupMode::ScheduledPickup->value : RestaurantPickupMode::ImmediatePickup->value, pickupScheduledFor: $scheduledAt, promoCode: $couponCode, specialInstructions: $note, userAddressId: $address?->id);
+        $order = $this->checkoutService->checkoutCart(
+            userId: $userId,
+            cartId: $cartId,
+            orderType: $fulfillmentType,
+            pickupMode: $receiveMode === 'scheduled' ? RestaurantPickupMode::ScheduledPickup->value : RestaurantPickupMode::ImmediatePickup->value,
+            pickupScheduledFor: $scheduledAt,
+            promoCode: $couponCode,
+            specialInstructions: $note,
+            userAddressId: $address?->id,
+        );
 
-        OrderStatusLog::query()->firstOrCreate(['order_id' => $order->id, 'to_status' => OrderStatus::Pending->value], ['from_status' => null, 'note' => 'Order placed by customer.']);
+        OrderStatusLog::query()->firstOrCreate(
+            ['order_id' => $order->id, 'to_status' => OrderStatus::Pending->value],
+            ['from_status' => null, 'note' => 'Order placed by customer.']
+        );
 
         $order = $order->fresh(['restaurant', 'user', 'userAddress', 'orderItems.product', 'orderStatusLogs']);
         if ($fulfillmentType === OrderType::Delivery->value) {
@@ -89,38 +104,33 @@ final class UserRestaurantCheckoutPipelineService
         return $order;
     }
 
-    private function computeDiscount(int $restaurantId, ?string $couponCode, float $subtotal): float
+    private function computeDiscount(int $userId, int $restaurantId, ?string $couponCode, float $subtotal): float
     {
-        if (! is_string($couponCode) || mb_trim($couponCode) === '') {
-            return 0.0;
+        $platformQuote = $this->platformCoupons->preview(
+            userId: $userId,
+            section: PlatformCoupon::SECTION_RESTAURANT,
+            couponCode: $couponCode,
+            subtotal: $subtotal,
+        );
+        if ($platformQuote) {
+            return $platformQuote['discount'];
         }
-        $coupon = PromoCode::query()->where('restaurant_id', $restaurantId)->where('code', $couponCode)->first();
-        if (! $coupon || ! $coupon->is_active) {
-            return 0.0;
-        }
-        if ($coupon->starts_at && now()->lt($coupon->starts_at)) {
-            return 0.0;
-        }
-        if ($coupon->ends_at && now()->gt($coupon->ends_at)) {
-            return 0.0;
-        }
-        if ($coupon->min_order_amount !== null && $subtotal < (float) $coupon->min_order_amount) {
-            return 0.0;
-        }
-        if ($coupon->usage_limit !== null && (int) $coupon->usage_count >= (int) $coupon->usage_limit) {
-            return 0.0;
-        }
-        if ($coupon->discount_type?->value === 'percentage') {
-            return round($subtotal * ((float) $coupon->discount_value / 100), 2);
-        }
+
+        if (! is_string($couponCode) || trim($couponCode) === '') return 0.0;
+        $coupon = PromoCode::query()->where('restaurant_id', $restaurantId)->whereRaw('UPPER(code) = ?', [mb_strtoupper(trim($couponCode))])->first();
+        if (! $coupon || ! $coupon->is_active) return 0.0;
+        if ($coupon->starts_at && now()->lt($coupon->starts_at)) return 0.0;
+        if ($coupon->ends_at && now()->gt($coupon->ends_at)) return 0.0;
+        if ($coupon->min_order_amount !== null && $subtotal < (float) $coupon->min_order_amount) return 0.0;
+        if ($coupon->usage_limit !== null && (int) $coupon->usage_count >= (int) $coupon->usage_limit) return 0.0;
+        if ($coupon->discount_type?->value === 'percentage') return round($subtotal * ((float) $coupon->discount_value / 100), 2);
+
         return round(min((float) $coupon->discount_value, $subtotal), 2);
     }
 
     private function resolveUserAddress(int $userId, ?int $addressId): ?UserAddress
     {
-        if ($addressId === null) {
-            return null;
-        }
+        if ($addressId === null) return null;
         $address = UserAddress::query()->whereKey($addressId)->where('user_id', $userId)->first();
         if (! $address) {
             throw ValidationException::withMessages(['addressId' => ['The selected address does not belong to the authenticated user.']]);
@@ -135,8 +145,7 @@ final class UserRestaurantCheckoutPipelineService
 
     private function assertCartItemsBelongToRestaurant(Cart $cart): void
     {
-        $invalidItemExists = $cart->items->contains(fn ($item): bool => (int) $item->product?->restaurant_id !== (int) $cart->restaurant_id);
-        if ($invalidItemExists) {
+        if ($cart->items->contains(fn ($item): bool => (int) $item->product?->restaurant_id !== (int) $cart->restaurant_id)) {
             throw ValidationException::withMessages(['cart' => ['Cart contains items from another restaurant.']]);
         }
     }

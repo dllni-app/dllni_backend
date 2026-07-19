@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Modules\User\Services;
 
+use App\Models\PlatformCoupon;
+use App\Services\Coupons\PlatformCouponRedemptionService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -17,10 +19,8 @@ use Modules\Resturants\Models\PromoCode;
 
 final class RestaurantCheckoutService
 {
-    /**
-     * Creates one Order from exactly one merchant-scoped cart.
-     * Every cart item must belong to the cart restaurant and the cart is deleted after checkout.
-     */
+    public function __construct(private readonly PlatformCouponRedemptionService $platformCoupons) {}
+
     public function checkoutCart(
         int $userId,
         int $cartId,
@@ -41,21 +41,26 @@ final class RestaurantCheckoutService
                 ->firstOrFail();
 
             if ($cart->items->isEmpty()) {
-                throw ValidationException::withMessages([
-                    'cart' => ['Cart is empty.'],
-                ]);
+                throw ValidationException::withMessages(['cart' => ['Cart is empty.']]);
             }
 
             $this->assertCartItemsBelongToRestaurant($cart);
-
             $subtotal = (float) $cart->items->sum(fn ($item): float => (float) ($item->total_price ?? 0));
             $restaurantId = (int) $cart->restaurant_id;
 
-            [$discountAmount, $promoCodeId] = $this->resolveDiscount(
-                $restaurantId,
-                $promoCode,
-                $subtotal,
+            $platformQuote = $this->platformCoupons->quoteForPlacement(
+                userId: $userId,
+                section: PlatformCoupon::SECTION_RESTAURANT,
+                couponCode: $promoCode,
+                subtotal: $subtotal,
             );
+
+            if ($platformQuote) {
+                $discountAmount = $platformQuote['discount'];
+                $promoCodeId = null;
+            } else {
+                [$discountAmount, $promoCodeId] = $this->resolveLegacyDiscount($restaurantId, $promoCode, $subtotal);
+            }
 
             $taxAmount = 0.0;
             $serviceFee = 0.0;
@@ -99,31 +104,39 @@ final class RestaurantCheckoutService
                         'price' => (float) $row->price,
                         'created_at' => now(),
                         'updated_at' => now(),
-                    ])
-                    ->all();
+                    ])->all();
 
                 if ($modifierRows !== []) {
                     DB::table('order_item_modifier')->insert($modifierRows);
                 }
             }
 
+            if ($platformQuote) {
+                $this->platformCoupons->record(
+                    coupon: $platformQuote['coupon'],
+                    userId: $userId,
+                    section: PlatformCoupon::SECTION_RESTAURANT,
+                    subtotal: $subtotal,
+                    discount: $discountAmount,
+                    order: $order,
+                );
+            }
+
             $cart->delete();
 
-            return $order;
+            return $order->fresh();
         });
     }
 
-    /**
-     * @return array{float, int|null}
-     */
-    private function resolveDiscount(int $restaurantId, ?string $promoCode, float $subtotal): array
+    /** @return array{float, int|null} */
+    private function resolveLegacyDiscount(int $restaurantId, ?string $promoCode, float $subtotal): array
     {
-        if (! is_string($promoCode) || mb_trim($promoCode) === '') {
+        if (! is_string($promoCode) || trim($promoCode) === '') {
             return [0.0, null];
         }
 
         $promo = PromoCode::query()
-            ->where('code', $promoCode)
+            ->whereRaw('UPPER(code) = ?', [mb_strtoupper(trim($promoCode))])
             ->where('restaurant_id', $restaurantId)
             ->first();
 
@@ -131,35 +144,21 @@ final class RestaurantCheckoutService
             return [0.0, null];
         }
 
-        return [$this->calculateDiscount($promo, $subtotal), $promo->id];
+        return [$this->calculateLegacyDiscount($promo, $subtotal), $promo->id];
     }
 
     private function promoIsValid(PromoCode $promo, float $subtotal): bool
     {
-        if (! $promo->is_active) {
-            return false;
-        }
-
-        if ($promo->starts_at && now()->lessThan($promo->starts_at)) {
-            return false;
-        }
-
-        if ($promo->ends_at && now()->greaterThan($promo->ends_at)) {
-            return false;
-        }
-
-        if ($promo->min_order_amount !== null && $subtotal < (float) $promo->min_order_amount) {
-            return false;
-        }
-
-        if ($promo->usage_limit !== null && (int) $promo->usage_count >= (int) $promo->usage_limit) {
-            return false;
-        }
+        if (! $promo->is_active) return false;
+        if ($promo->starts_at && now()->lessThan($promo->starts_at)) return false;
+        if ($promo->ends_at && now()->greaterThan($promo->ends_at)) return false;
+        if ($promo->min_order_amount !== null && $subtotal < (float) $promo->min_order_amount) return false;
+        if ($promo->usage_limit !== null && (int) $promo->usage_count >= (int) $promo->usage_limit) return false;
 
         return true;
     }
 
-    private function calculateDiscount(PromoCode $promo, float $subtotal): float
+    private function calculateLegacyDiscount(PromoCode $promo, float $subtotal): float
     {
         return match ($promo->discount_type) {
             DiscountType::Percentage => round($subtotal * ((float) $promo->discount_value / 100), 2),
@@ -170,14 +169,8 @@ final class RestaurantCheckoutService
 
     private function assertCartItemsBelongToRestaurant(Cart $cart): void
     {
-        $invalidItemExists = $cart->items->contains(
-            fn ($item): bool => (int) $item->product?->restaurant_id !== (int) $cart->restaurant_id
-        );
-
-        if ($invalidItemExists) {
-            throw ValidationException::withMessages([
-                'cart' => ['Cart contains items from another restaurant.'],
-            ]);
+        if ($cart->items->contains(fn ($item): bool => (int) $item->product?->restaurant_id !== (int) $cart->restaurant_id)) {
+            throw ValidationException::withMessages(['cart' => ['Cart contains items from another restaurant.']]);
         }
     }
 }
