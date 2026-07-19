@@ -28,6 +28,7 @@ final class WorkerSuspensionActions
             ->modalDescription(fn (Worker $record): string => $record->is_suspended
                 ? 'سيتمكن العامل من استقبال الطلبات الجديدة مجدداً إذا كانت بقية شروط الأهلية مستوفاة.'
                 : 'لن يستقبل العامل أي طلبات جديدة، وسيظهر له في الصفحة الرئيسية أن الحساب أوقف من قبل الإدارة. الطلبات الحالية لن تُلغى تلقائياً.')
+            ->modalSubmitActionLabel(fn (Worker $record): string => $record->is_suspended ? 'تأكيد إلغاء الإيقاف' : 'تأكيد الإيقاف')
             ->action(function (Worker $record): void {
                 $shouldSuspend = ! (bool) $record->is_suspended;
 
