@@ -1,0 +1,117 @@
+name: Cleaning Financial Ledger V2
+
+on:
+  pull_request:
+    paths:
+      - 'Modules/Cleaning/app/Http/Controllers/API/DepositManagementController.php'
+      - 'Modules/Cleaning/app/Http/Controllers/API/WorkerDepositController.php'
+      - 'Modules/Cleaning/app/Http/Resources/CleaningDepositTransactionResource.php'
+      - 'Modules/Cleaning/app/Http/Resources/CleaningWorkerDepositResource.php'
+      - 'Modules/Cleaning/app/Services/AdminCleaningTransactionService.php'
+      - 'Modules/Cleaning/app/Services/DepositService.php'
+      - 'Modules/Cleaning/app/Services/WorkerDebtService.php'
+      - 'Modules/Cleaning/app/Services/WorkerOrderSolvencyService.php'
+      - 'Modules/Cleaning/routes/api.php'
+      - 'app/Console/Commands/ReconcileCleaningWorkerFinancialBalances.php'
+      - 'app/Filament/Pages/CleaningFinancialReport.php'
+      - 'app/Filament/Pages/FinancialSettings.php'
+      - 'app/Filament/Resources/CleaningWorkerDeposits/**'
+      - 'app/Filament/Resources/CleaningWorkers/**'
+      - 'app/Models/CleaningDepositTransaction.php'
+      - 'app/Models/CleaningWorkerDeposit.php'
+      - 'database/migrations/2026_07_19_210000_add_separate_debt_balance_to_cleaning_worker_deposits.php'
+      - 'database/seeders/WorkerSeeder.php'
+      - 'resources/views/filament/cleaning-admin/pages/financial-settings.blade.php'
+      - 'tests/Feature/Cleaning/AdminCleaningTransactionServiceTest.php'
+      - 'tests/Feature/Cleaning/WorkerDebtLedgerTest.php'
+      - 'tests/Feature/Cleaning/WorkerDepositEligibilityTest.php'
+      - 'tests/Feature/Cleaning/WorkerDepositTimelineApiTest.php'
+      - 'tests/Feature/Filament/CleaningFinancialSettingsPageTest.php'
+      - 'tests/Feature/Seeders/WorkerFinancialScenarioSeederTest.php'
+      - '.github/workflows/cleaning-financial-ledger-v2.yml'
+
+jobs:
+  financial-ledger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, bcmath, intl, gd
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare application
+        run: |
+          cp .env.example .env
+          touch database/database.sqlite
+          php artisan key:generate
+
+      - name: Migrate database
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        run: php artisan migrate --force
+
+      - name: Check financial ledger formatting
+        run: |
+          vendor/bin/pint --test \
+            Modules/Cleaning/app/Http/Controllers/API/DepositManagementController.php \
+            Modules/Cleaning/app/Http/Controllers/API/WorkerDepositController.php \
+            Modules/Cleaning/app/Http/Resources/CleaningDepositTransactionResource.php \
+            Modules/Cleaning/app/Http/Resources/CleaningWorkerDepositResource.php \
+            Modules/Cleaning/app/Services/AdminCleaningTransactionService.php \
+            Modules/Cleaning/app/Services/DepositService.php \
+            Modules/Cleaning/app/Services/WorkerDebtService.php \
+            Modules/Cleaning/app/Services/WorkerOrderSolvencyService.php \
+            app/Console/Commands/ReconcileCleaningWorkerFinancialBalances.php \
+            app/Filament/Pages/CleaningFinancialReport.php \
+            app/Filament/Pages/FinancialSettings.php \
+            app/Filament/Resources/CleaningWorkerDeposits/Schemas/CleaningTransactionForm.php \
+            app/Filament/Resources/CleaningWorkerDeposits/Tables/CleaningTransactionsTable.php \
+            app/Filament/Resources/CleaningWorkers/Schemas/CleaningWorkerInfolist.php \
+            app/Filament/Resources/CleaningWorkers/Support/WorkerDepositActions.php \
+            app/Filament/Resources/CleaningWorkers/Tables/CleaningWorkersTable.php \
+            app/Filament/Resources/CleaningWorkers/Widgets/CleaningWorkerFinancialStats.php \
+            app/Models/CleaningDepositTransaction.php \
+            app/Models/CleaningWorkerDeposit.php \
+            database/migrations/2026_07_19_210000_add_separate_debt_balance_to_cleaning_worker_deposits.php \
+            database/seeders/WorkerSeeder.php \
+            tests/Feature/Cleaning/AdminCleaningTransactionServiceTest.php \
+            tests/Feature/Cleaning/WorkerDebtLedgerTest.php \
+            tests/Feature/Cleaning/WorkerDepositEligibilityTest.php \
+            tests/Feature/Cleaning/WorkerDepositTimelineApiTest.php \
+            tests/Feature/Filament/CleaningFinancialSettingsPageTest.php \
+            tests/Feature/Seeders/WorkerFinancialScenarioSeederTest.php
+
+      - name: Run financial ledger tests
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        shell: bash
+        run: |
+          set -o pipefail
+          php artisan test \
+            tests/Feature/Cleaning/AdminCleaningTransactionServiceTest.php \
+            tests/Feature/Cleaning/WorkerDebtLedgerTest.php \
+            tests/Feature/Cleaning/WorkerDepositEligibilityTest.php \
+            tests/Feature/Cleaning/WorkerDepositTimelineApiTest.php \
+            tests/Feature/Filament/CleaningFinancialSettingsPageTest.php \
+            tests/Feature/Seeders/WorkerFinancialScenarioSeederTest.php \
+            2>&1 | tee cleaning-financial-ledger-v2-test.log
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cleaning-financial-ledger-v2-diagnostics
+          path: cleaning-financial-ledger-v2-test.log
+          if-no-files-found: ignore

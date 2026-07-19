@@ -7,7 +7,7 @@ use App\Models\Worker;
 use Database\Seeders\WorkerSeeder;
 use Illuminate\Support\Facades\Schema;
 
-it('seeds realistic continuous financial scenarios using only four transaction types', function (): void {
+it('seeds continuous financial scenarios with separate deposit and debt balances', function (): void {
     $this->seed(WorkerSeeder::class);
 
     $types = CleaningDepositTransaction::query()
@@ -17,8 +17,10 @@ it('seeds realistic continuous financial scenarios using only four transaction t
         ->pluck('type')
         ->all();
 
-    expect($types)->toBe(['debt', 'deposit', 'refund', 'settlement'])
-        ->and(Schema::hasColumn('cleaning_deposit_transactions', 'cleaning_booking_id'))->toBeFalse();
+    expect($types)->toBe(['commission', 'deposit', 'refund', 'settlement'])
+        ->and(Schema::hasColumn('cleaning_deposit_transactions', 'cleaning_booking_id'))->toBeFalse()
+        ->and(Schema::hasColumn('cleaning_deposit_transactions', 'debt_balance_before'))->toBeTrue()
+        ->and(Schema::hasColumn('cleaning_deposit_transactions', 'debt_balance_after'))->toBeTrue();
 
     $workers = Worker::query()
         ->whereHas('user', fn ($query) => $query->whereIn('email', [
@@ -41,15 +43,20 @@ it('seeds realistic continuous financial scenarios using only four transaction t
 
         expect($transactions)->not->toBeEmpty()
             ->and((float) $transactions->first()->balance_before)->toBe(0.0)
-            ->and((float) $transactions->last()->balance_after)->toBe((float) $worker->deposit?->current_balance);
+            ->and((float) $transactions->first()->debt_balance_before)->toBe(0.0)
+            ->and((float) $transactions->last()->balance_after)->toBe((float) $worker->deposit?->current_balance)
+            ->and((float) $transactions->last()->debt_balance_after)->toBe((float) $worker->deposit?->debt_balance)
+            ->and(min((float) $worker->deposit?->current_balance, (float) $worker->deposit?->debt_balance))->toBe(0.0);
 
         for ($index = 1; $index < $transactions->count(); $index++) {
             expect((float) $transactions[$index - 1]->balance_after)
-                ->toBe((float) $transactions[$index]->balance_before);
+                ->toBe((float) $transactions[$index]->balance_before)
+                ->and((float) $transactions[$index - 1]->debt_balance_after)
+                ->toBe((float) $transactions[$index]->debt_balance_before);
         }
 
         foreach ($transactions as $transaction) {
-            expect($transaction->type)->toBeIn(CleaningDepositTransaction::PUBLIC_TYPES)
+            expect($transaction->publicType())->toBeIn(CleaningDepositTransaction::PUBLIC_TYPES)
                 ->and($transaction->notes)->not->toBeEmpty();
         }
     }

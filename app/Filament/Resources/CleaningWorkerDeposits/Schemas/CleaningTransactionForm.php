@@ -44,11 +44,12 @@ final class CleaningTransactionForm
                         Select::make('type')
                             ->label(__('cleaning_admin.transactions.fields.type'))
                             ->placeholder(__('cleaning_finance_guidance.placeholders.type'))
-                            ->helperText(__('cleaning_finance_guidance.select_helper'))
+                            ->helperText(app()->isLocale('ar')
+                                ? 'التسوية لم تعد عملية يدوية. استخدم زر تصفير المديونية من صفحة العامل.'
+                                : 'Settlement is no longer a manual transaction. Use the Settle full debt action on the worker page.')
                             ->options([
                                 'deposit' => __('cleaning_admin.transactions.types.deposit'),
                                 'debt' => __('cleaning_finance.types.debt'),
-                                'settlement' => __('cleaning_admin.transactions.types.settlement'),
                                 'refund' => __('cleaning_admin.transactions.types.refund'),
                             ])
                             ->required()
@@ -59,24 +60,23 @@ final class CleaningTransactionForm
                             }),
                     ]),
                 Section::make(__('cleaning_finance_guidance.form.financial_summary'))
-                    ->description(__('cleaning_finance_guidance.form.financial_summary_description'))
+                    ->description(app()->isLocale('ar')
+                        ? 'الإيداع والمديونية رصيدان منفصلان، ولا يمكن أن يكون كلاهما موجباً في الوقت نفسه.'
+                        : 'Deposit and debt are separate balances and cannot both be positive at the same time.')
                     ->visible(fn (Get $get): bool => self::worker($get('worker_id')) instanceof Worker)
-                    ->columns([
-                        'default' => 2,
-                        'md' => 3,
-                        'xl' => 4,
-                    ])
+                    ->columns(['default' => 2, 'md' => 3, 'xl' => 4])
                     ->schema([
-                        self::moneyMetric('current_balance', 'currentBalance'),
-                        self::moneyMetric('minimum_required', 'minimumRequired'),
-                        self::moneyMetric('deposited_total', 'depositedTotal'),
-                        self::moneyMetric('withdrawn_total', 'withdrawnTotal'),
-                        self::moneyMetric('outstanding_due', 'outstandingAdministrationDue'),
-                        self::moneyMetric('manual_debt_due', 'manualDebtDue'),
-                        self::moneyMetric('admin_fee_due', 'adminFeeDue'),
-                        self::moneyMetric('total_settled', 'totalSettled'),
-                        self::moneyMetric('total_revenue', 'totalRevenue'),
-                        self::moneyMetric('total_commission', 'totalCommission'),
+                        self::moneyMetric('deposit_balance', 'depositBalance', app()->isLocale('ar') ? 'رصيد الإيداع' : 'Deposit balance'),
+                        self::moneyMetric('debt_balance', 'debtBalance', app()->isLocale('ar') ? 'المديونية الحالية' : 'Current debt'),
+                        self::moneyMetric('allowed_debt_limit', 'allowedDebtLimit', app()->isLocale('ar') ? 'حد المديونية المسموح' : 'Allowed debt limit'),
+                        self::moneyMetric('remaining_debt_capacity', 'remainingDebtCapacity', app()->isLocale('ar') ? 'سعة المديونية المتبقية' : 'Remaining debt capacity'),
+                        self::moneyMetric('reserved_commission', 'activeReservedCommission', app()->isLocale('ar') ? 'العمولات المحجوزة' : 'Reserved commission'),
+                        self::moneyMetric('available_commission_capacity', 'availableCommissionCapacity', app()->isLocale('ar') ? 'سعة العمولات المتاحة' : 'Available commission capacity'),
+                        self::moneyMetric('deposited_total', 'depositedTotal', __('cleaning_finance_guidance.metrics.deposited_total')),
+                        self::moneyMetric('withdrawn_total', 'withdrawnTotal', __('cleaning_finance_guidance.metrics.withdrawn_total')),
+                        self::moneyMetric('total_settled', 'totalSettled', __('cleaning_finance_guidance.metrics.total_settled')),
+                        self::moneyMetric('total_revenue', 'totalRevenue', __('cleaning_finance_guidance.metrics.total_revenue')),
+                        self::moneyMetric('total_commission', 'totalCommission', __('cleaning_finance_guidance.metrics.total_commission')),
                         Placeholder::make('completed_jobs_metric')
                             ->label(__('cleaning_finance_guidance.metrics.completed_jobs'))
                             ->content(fn (Get $get): string => (string) (self::snapshot($get('worker_id'))['completedJobs'] ?? 0)),
@@ -91,7 +91,6 @@ final class CleaningTransactionForm
                         Select::make('suggested_amount')
                             ->label(__('cleaning_finance_guidance.fields.suggested_amount'))
                             ->placeholder(__('cleaning_finance_guidance.placeholders.suggested_amount'))
-                            ->helperText(__('cleaning_finance_guidance.fields.suggested_amount_helper'))
                             ->options(fn (Get $get): array => self::suggestedAmounts($get('worker_id'), $get('type')))
                             ->visible(fn (Get $get): bool => self::suggestedAmounts($get('worker_id'), $get('type')) !== [])
                             ->live()
@@ -109,24 +108,18 @@ final class CleaningTransactionForm
                             ->required()
                             ->live(debounce: 400)
                             ->helperText(fn (Get $get): string => self::amountHelper($get('worker_id'), $get('type')))
-                            ->rules(fn (Get $get): array => [
-                                self::amountRule($get('worker_id'), $get('type')),
-                            ]),
+                            ->rules(fn (Get $get): array => [self::amountRule($get('worker_id'), $get('type'))]),
                         Placeholder::make('amount_validation')
                             ->label(__('cleaning_finance_guidance.fields.validation_result'))
-                            ->content(fn (Get $get): string => self::validationResult(
-                                $get('worker_id'),
-                                $get('type'),
-                                $get('amount'),
-                            ))
-                            ->columnSpanFull(),
-                        Placeholder::make('transaction_type_guide')
-                            ->label(__('cleaning_finance_guidance.title'))
-                            ->content(fn (Get $get): string => self::typeDescription((string) $get('type')))
+                            ->content(fn (Get $get): string => self::validationResult($get('worker_id'), $get('type'), $get('amount')))
                             ->columnSpanFull(),
                         Textarea::make('notes')
                             ->label(__('cleaning_admin.transactions.fields.notes'))
                             ->placeholder(__('cleaning_finance_guidance.placeholders.notes'))
+                            ->required(fn (Get $get): bool => $get('type') === 'debt')
+                            ->helperText(fn (Get $get): ?string => $get('type') === 'debt'
+                                ? (app()->isLocale('ar') ? 'سبب المديونية اليدوية مطلوب.' : 'A reason is required for manual debt.')
+                                : null)
                             ->rows(4)
                             ->maxLength(1000)
                             ->columnSpanFull(),
@@ -134,25 +127,20 @@ final class CleaningTransactionForm
             ]);
     }
 
-    private static function moneyMetric(string $name, string $snapshotKey): Placeholder
+    private static function moneyMetric(string $name, string $snapshotKey, string $label): Placeholder
     {
         return Placeholder::make($name.'_metric')
-            ->label(__('cleaning_finance_guidance.metrics.'.$name))
+            ->label($label)
             ->content(fn (Get $get): string => self::money((float) (self::snapshot($get('worker_id'))[$snapshotKey] ?? 0)));
     }
 
-    /**
-     * @return array<int, string>
-     */
     private static function workerOptions(): array
     {
         return Worker::query()
             ->whereHas('user', fn (Builder $query): Builder => $query->where('module_type', UserModuleType::CleaningWorker))
             ->orderBy('first_name')
             ->get()
-            ->mapWithKeys(fn (Worker $worker): array => [
-                $worker->id => ($worker->first_name ?: ('#'.$worker->id)).' (#'.$worker->id.')',
-            ])
+            ->mapWithKeys(fn (Worker $worker): array => [$worker->id => ($worker->first_name ?: ('#'.$worker->id)).' (#'.$worker->id.')'])
             ->all();
     }
 
@@ -164,7 +152,6 @@ final class CleaningTransactionForm
 
         $workerId = (int) $workerId;
         $cacheKey = 'cleaning-transaction-form.worker.'.$workerId;
-
         if (request()->attributes->has($cacheKey)) {
             $cached = request()->attributes->get($cacheKey);
 
@@ -183,9 +170,6 @@ final class CleaningTransactionForm
         }
     }
 
-    /**
-     * @return array<string, mixed>
-     */
     private static function snapshot(mixed $workerId): array
     {
         if (! is_numeric($workerId) || (int) $workerId <= 0) {
@@ -194,7 +178,6 @@ final class CleaningTransactionForm
 
         $workerId = (int) $workerId;
         $cacheKey = 'cleaning-transaction-form.snapshot.'.$workerId;
-
         if (request()->attributes->has($cacheKey)) {
             $cached = request()->attributes->get($cacheKey);
 
@@ -202,22 +185,15 @@ final class CleaningTransactionForm
         }
 
         $worker = self::worker($workerId);
-        $snapshot = $worker instanceof Worker
-            ? app(AdminCleaningTransactionService::class)->snapshot($worker)
-            : [];
-
+        $snapshot = $worker instanceof Worker ? app(AdminCleaningTransactionService::class)->snapshot($worker) : [];
         request()->attributes->set($cacheKey, $snapshot);
 
         return $snapshot;
     }
 
-    /**
-     * @return array<string, string>
-     */
     private static function suggestedAmounts(mixed $workerId, mixed $type): array
     {
         $worker = self::worker($workerId);
-
         if (! $worker instanceof Worker || ! is_string($type) || $type === '') {
             return [];
         }
@@ -229,25 +205,18 @@ final class CleaningTransactionForm
     {
         return function (string $attribute, mixed $value, Closure $fail) use ($workerId, $type): void {
             $worker = self::worker($workerId);
-
             if (! $worker instanceof Worker) {
                 $fail(__('cleaning_finance_guidance.validation.worker_required'));
 
                 return;
             }
-
             if (! is_numeric($value)) {
                 $fail(__('cleaning_finance_guidance.validation.amount_positive'));
 
                 return;
             }
 
-            $message = app(AdminCleaningTransactionService::class)->validationMessage(
-                $worker,
-                (string) $type,
-                (float) $value,
-            );
-
+            $message = app(AdminCleaningTransactionService::class)->validationMessage($worker, (string) $type, (float) $value);
             if ($message !== null) {
                 $fail($message);
             }
@@ -257,22 +226,18 @@ final class CleaningTransactionForm
     private static function amountHelper(mixed $workerId, mixed $type): string
     {
         $snapshot = self::snapshot($workerId);
-
         if ($snapshot === [] || ! is_string($type) || $type === '') {
             return __('cleaning_finance_guidance.fields.amount_helper_default');
         }
 
         return match ($type) {
-            'deposit' => __('cleaning_finance_guidance.fields.amount_helper_deposit', [
-                'gap' => self::money((float) $snapshot['depositGap']),
-            ]),
-            'debt' => __('cleaning_finance_guidance.fields.amount_helper_debt'),
-            'settlement' => __('cleaning_finance_guidance.fields.amount_helper_settlement', [
-                'due' => self::money((float) $snapshot['outstandingAdministrationDue']),
-            ]),
-            'refund' => __('cleaning_finance_guidance.fields.amount_helper_refund', [
-                'maximum' => self::money((float) $snapshot['maxRefundable']),
-            ]),
+            'deposit' => app()->isLocale('ar')
+                ? 'يسدد الإيداع المديونية أولاً. المديونية الحالية: '.self::money((float) $snapshot['debtBalance']).'.'
+                : 'The deposit settles debt first. Current debt: '.self::money((float) $snapshot['debtBalance']).'.',
+            'debt' => app()->isLocale('ar')
+                ? 'يخصم من الإيداع أولاً، ثم ينشئ مديونية فقط للجزء غير المغطى.'
+                : 'Consumes the deposit first, then creates debt only for the uncovered amount.',
+            'refund' => __('cleaning_finance_guidance.fields.amount_helper_refund', ['maximum' => self::money((float) $snapshot['maxRefundable'])]),
             default => __('cleaning_finance_guidance.fields.amount_helper_default'),
         };
     }
@@ -280,43 +245,25 @@ final class CleaningTransactionForm
     private static function validationResult(mixed $workerId, mixed $type, mixed $amount): string
     {
         $worker = self::worker($workerId);
-
         if (! $worker instanceof Worker) {
             return __('cleaning_finance_guidance.validation.select_worker_first');
         }
-
         if (! is_string($type) || $type === '') {
             return __('cleaning_finance_guidance.validation.select_type_first');
         }
-
         if (! is_numeric($amount) || (float) $amount <= 0) {
             return __('cleaning_finance_guidance.validation.enter_amount_first');
         }
 
         $service = app(AdminCleaningTransactionService::class);
         $message = $service->validationMessage($worker, $type, (float) $amount);
-
         if ($message !== null) {
             return __('cleaning_finance_guidance.validation.invalid_prefix', ['message' => $message]);
         }
 
-        $projectedBalance = $service->projectedBalance($worker, $type, (float) $amount);
-
         return __('cleaning_finance_guidance.validation.valid_with_balance', [
-            'balance' => self::money((float) $projectedBalance),
+            'balance' => self::money((float) $service->projectedBalance($worker, $type, (float) $amount)),
         ]);
-    }
-
-    private static function typeDescription(string $type): string
-    {
-        if ($type === '') {
-            return __('cleaning_finance_guidance.compact');
-        }
-
-        $key = 'cleaning_finance_guidance.types.'.$type.'.description';
-        $description = __($key);
-
-        return $description === $key ? __('cleaning_finance_guidance.compact') : $description;
     }
 
     private static function statusLabel(string $status): string

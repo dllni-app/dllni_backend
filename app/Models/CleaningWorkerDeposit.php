@@ -17,6 +17,7 @@ final class CleaningWorkerDeposit extends Model
     protected $fillable = [
         'worker_id',
         'current_balance',
+        'debt_balance',
         'deposited_total',
         'withdrawn_total',
         'minimum_required',
@@ -46,6 +47,7 @@ final class CleaningWorkerDeposit extends Model
     {
         return [
             'current_balance' => 'decimal:2',
+            'debt_balance' => 'decimal:2',
             'deposited_total' => 'decimal:2',
             'withdrawn_total' => 'decimal:2',
             'minimum_required' => 'decimal:2',
