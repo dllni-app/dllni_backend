@@ -104,6 +104,7 @@ final class DatabaseSeeder extends Seeder
             SupermarketDatabaseSeeder::class,
             MarketingOfferSeeder::class,
             UserAppScenarioSeeder::class,
+            PlatformCouponDemoSeeder::class,
         ];
     }
 
