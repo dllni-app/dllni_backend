@@ -66,7 +66,6 @@ final class CleaningWorkerInfolist
                     TextEntry::make('user.email')->label('البريد الإلكتروني')->placeholder('-')->copyable(),
                     TextEntry::make('user.phone')->label('رقم الهاتف')->placeholder('-')->copyable(),
                     TextEntry::make('gender')->label('الجنس')->formatStateUsing(fn ($state): string => self::genderLabel($state))->placeholder('-'),
-                    TextEntry::make('birthday')->label('تاريخ الميلاد')->date('Y-m-d')->placeholder('-'),
                     TextEntry::make('preferred_work_type')->label('نوع العمل المفضل')->formatStateUsing(fn ($state): string => self::preferredWorkTypeLabel($state))->placeholder('-'),
                     TextEntry::make('bio')->label('نبذة')->placeholder('-')->columnSpanFull(),
                 ]),

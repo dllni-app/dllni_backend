@@ -6,8 +6,10 @@ use App\Enums\UserModuleType;
 use App\Enums\WorkerPreferredWorkType;
 use App\Filament\Resources\CleaningWorkers\Pages\CreateCleaningWorker;
 use App\Filament\Resources\CleaningWorkers\Pages\EditCleaningWorker;
+use App\Filament\Resources\CleaningWorkers\Pages\ListCleaningWorkers;
 use App\Models\User;
 use App\Models\Worker;
+use App\Models\WorkerTrustLog;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -94,7 +96,7 @@ it('rejects creating a second cleaning worker for an existing worker account pho
         ->assertHasFormErrors(['user_phone']);
 });
 
-it('updates a cleaning worker without writing user fields to the workers table', function (): void {
+it('updates trust score and home location without writing user fields to the workers table', function (): void {
     $linkedUser = User::factory()->create([
         'name' => 'Sara',
         'phone' => '+963900000000',
@@ -103,21 +105,63 @@ it('updates a cleaning worker without writing user fields to the workers table',
     $worker = Worker::factory()->create([
         'user_id' => $linkedUser->id,
         'first_name' => 'Sara',
-        'is_active' => true,
+        'gender' => 'male',
+        'trust_score' => 100,
+        'home_address' => null,
+        'home_latitude' => null,
+        'home_longitude' => null,
     ]);
 
     Livewire::test(EditCleaningWorker::class, ['record' => $worker->getRouteKey()])
         ->fillForm([
-            'is_active' => false,
+            'gender' => 'female',
+            'trust_score' => 84,
+            'home_address' => 'Damascus - Al Mazzeh',
+            'home_latitude' => 33.5038,
+            'home_longitude' => 36.2504,
             'user_phone' => '+963922222222',
         ])
         ->call('save')
         ->assertHasNoFormErrors();
 
     $worker->refresh();
-    expect($worker->is_active)->toBeFalse();
+    expect($worker->gender)->toBe('female')
+        ->and($worker->trust_score)->toBe(84)
+        ->and($worker->home_address)->toBe('Damascus - Al Mazzeh')
+        ->and((float) $worker->home_latitude)->toBe(33.5038)
+        ->and((float) $worker->home_longitude)->toBe(36.2504);
 
     $linkedUser->refresh();
     expect($linkedUser->phone)->toBe('+963922222222')
         ->and($linkedUser->module_type)->toBe(UserModuleType::CleaningWorker);
+
+    $trustLog = WorkerTrustLog::query()->where('worker_id', $worker->id)->latest('id')->firstOrFail();
+    expect($trustLog->reason)->toBe('admin_manual_adjustment')
+        ->and($trustLog->score_before)->toBe(100)
+        ->and($trustLog->score_after)->toBe(84)
+        ->and($trustLog->score_delta)->toBe(-16);
+});
+
+it('filters the cleaning worker table by gender', function (): void {
+    $maleUser = User::factory()->create([
+        'module_type' => UserModuleType::CleaningWorker->value,
+    ]);
+    $femaleUser = User::factory()->create([
+        'module_type' => UserModuleType::CleaningWorker->value,
+    ]);
+
+    $maleWorker = Worker::factory()->create([
+        'user_id' => $maleUser->id,
+        'gender' => 'male',
+    ]);
+    $femaleWorker = Worker::factory()->create([
+        'user_id' => $femaleUser->id,
+        'gender' => 'female',
+    ]);
+
+    Livewire::test(ListCleaningWorkers::class)
+        ->filterTable('gender', 'female')
+        ->assertCanSeeTableRecords([$femaleWorker])
+        ->assertCanNotSeeTableRecords([$maleWorker])
+        ->assertTableColumnStateSet('gender', 'female', record: $femaleWorker);
 });
