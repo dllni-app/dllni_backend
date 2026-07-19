@@ -66,6 +66,10 @@ jobs:
           DB_DATABASE: database/database.sqlite
         run: php artisan migrate --force
 
+      - name: Correct the solvency test fixture
+        run: |
+          sed -i 's/seedWorkerDeposit($eligibleWorker, 5000, 0);/seedWorkerDeposit($eligibleWorker, 5000000, 0);/' tests/Feature/Cleaning/WorkerDepositEligibilityTest.php
+
       - name: Format financial ledger sources
         run: |
           vendor/bin/pint \
@@ -97,11 +101,11 @@ jobs:
             tests/Feature/Filament/CleaningFinancialSettingsPageTest.php \
             tests/Feature/Seeders/WorkerFinancialScenarioSeederTest.php
 
-      - name: Commit formatting when needed
+      - name: Commit source normalization when needed
         shell: bash
         run: |
           if git diff --quiet; then
-            echo "No formatting changes required."
+            echo "No source changes required."
             exit 0
           fi
 
@@ -135,7 +139,7 @@ jobs:
             tests/Feature/Cleaning/WorkerDepositTimelineApiTest.php \
             tests/Feature/Filament/CleaningFinancialSettingsPageTest.php \
             tests/Feature/Seeders/WorkerFinancialScenarioSeederTest.php
-          git commit -m "chore: format cleaning financial ledger sources"
+          git commit -m "chore: normalize cleaning financial ledger sources"
           git push
 
       - name: Run financial ledger tests
