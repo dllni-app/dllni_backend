@@ -63,7 +63,7 @@ final class CleaningHomeTypeSeeder extends Seeder
                 'code' => 'office',
                 'booking_value' => 'office',
                 'title' => 'مكتب',
-                'image' => 'office_image.png',
+                'image' => 'cleaning_banner.png',
                 'sort_order' => 20,
             ],
             [

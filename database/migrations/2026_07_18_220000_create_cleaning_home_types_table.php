@@ -47,7 +47,7 @@ return new class () extends Migration {
                 'code' => 'office',
                 'booking_value' => 'office',
                 'title' => 'مكتب',
-                'external_image_url' => $assetBaseUrl.'/office_image.png',
+                'external_image_url' => $assetBaseUrl.'/cleaning_banner.png',
                 'sort_order' => 20,
                 'is_active' => true,
                 'created_at' => $now,
