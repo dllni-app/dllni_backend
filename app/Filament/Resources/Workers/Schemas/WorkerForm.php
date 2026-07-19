@@ -8,7 +8,6 @@ use App\Enums\WorkerPreferredWorkType;
 use App\Models\User;
 use App\Models\Worker;
 use Closure;
-use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -42,9 +41,6 @@ final class WorkerForm
                             ->default(WorkerPreferredWorkType::Both->value)
                             ->validationMessages(['required' => __('validation.required')])
                             ->required(),
-                        DatePicker::make('birthday')
-                            ->label(__('cleaning_admin.workers.fields.birthday'))
-                            ->native(false),
                         FileUpload::make('avatar_upload')
                             ->label(app()->isLocale('ar') ? 'صورة الملف الشخصي' : 'Profile image')
                             ->helperText(app()->isLocale('ar')
@@ -59,7 +55,45 @@ final class WorkerForm
                             ->visible(fn (string $operation): bool => $operation === 'create')
                             ->columnSpanFull(),
                         Textarea::make('bio')
-                            ->label(__('cleaning_admin.workers.fields.bio')),
+                            ->label(__('cleaning_admin.workers.fields.bio'))
+                            ->columnSpanFull(),
+                    ]),
+                Section::make(__('cleaning_admin.workers.sections.metrics'))
+                    ->description(app()->isLocale('ar')
+                        ? 'يمكن تعديل درجة الثقة يدوياً من 0 إلى 100، وسيتم تسجيل التغيير في سجل الثقة.'
+                        : 'Trust score can be adjusted manually from 0 to 100. The change is recorded in the trust log.')
+                    ->columns(2)
+                    ->visible(fn (string $operation): bool => $operation === 'edit')
+                    ->schema([
+                        TextInput::make('trust_score')
+                            ->label(__('cleaning_admin.workers.fields.trust_score'))
+                            ->numeric()
+                            ->minValue(0)
+                            ->maxValue(100)
+                            ->required(),
+                    ]),
+                Section::make(__('cleaning_admin.workers.sections.location'))
+                    ->description(app()->isLocale('ar')
+                        ? 'يجب حفظ عنوان المنزل والإحداثيات حتى يتمكن العامل من قبول حجوزات التنظيف.'
+                        : 'Home address and coordinates are required before the worker can accept cleaning bookings.')
+                    ->columns(2)
+                    ->schema([
+                        TextInput::make('home_address')
+                            ->label(__('cleaning_admin.workers.fields.home_address'))
+                            ->maxLength(255)
+                            ->columnSpanFull(),
+                        TextInput::make('home_latitude')
+                            ->label(__('cleaning_admin.workers.fields.home_latitude'))
+                            ->numeric()
+                            ->step('any')
+                            ->minValue(-90)
+                            ->maxValue(90),
+                        TextInput::make('home_longitude')
+                            ->label(__('cleaning_admin.workers.fields.home_longitude'))
+                            ->numeric()
+                            ->step('any')
+                            ->minValue(-180)
+                            ->maxValue(180),
                     ]),
                 Section::make(__('cleaning_admin.workers.sections.account'))
                     ->columns(2)
