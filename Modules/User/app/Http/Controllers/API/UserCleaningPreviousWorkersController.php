@@ -15,6 +15,7 @@ use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Services\DepositService;
 use Modules\User\Http\Requests\UserCleaningPreviousWorkersRequest;
+use Throwable;
 
 final class UserCleaningPreviousWorkersController
 {
@@ -161,7 +162,7 @@ final class UserCleaningPreviousWorkersController
 
         try {
             return Carbon::parse($scheduledDate.' '.mb_trim($scheduledTime), config('app.timezone'));
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return null;
         }
     }

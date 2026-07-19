@@ -147,6 +147,7 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
         foreach ($workers as $worker) {
             if (! $this->isDispatchable($worker, $bookingDateTime, $depositService)) {
                 $ineligibleCount++;
+
                 continue;
             }
 
