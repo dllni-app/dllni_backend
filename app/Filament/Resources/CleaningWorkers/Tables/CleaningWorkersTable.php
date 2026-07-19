@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\CleaningWorkers\Tables;
 
 use App\Filament\Resources\CleaningWorkers\Support\WorkerDepositActions;
+use App\Filament\Resources\Workers\Support\WorkerSuspensionActions;
 use App\Filament\Support\ArabicDashboardLabels;
 use App\Models\Worker;
 use Filament\Actions\EditAction;
@@ -62,10 +63,11 @@ final class CleaningWorkersTable
                     ->formatStateUsing(fn (?string $state): string => self::depositStatusLabel($state))
                     ->badge()
                     ->color(fn (?string $state): string => self::depositStatusColor($state)),
-                IconColumn::make('is_active')->label(__('cleaning_admin.workers.fields.is_active'))->boolean(),
+                IconColumn::make('is_suspended')
+                    ->label(__('cleaning_admin.workers.fields.suspended'))
+                    ->boolean(),
             ])
             ->filters([
-                TernaryFilter::make('is_active')->label(__('cleaning_admin.workers.fields.is_active')),
                 TernaryFilter::make('is_suspended')->label(__('cleaning_admin.workers.fields.suspended')),
                 SelectFilter::make('security_deposit_status')
                     ->label('حالة التأمين')
@@ -84,6 +86,7 @@ final class CleaningWorkersTable
             ])
             ->recordActions([
                 ViewAction::make()->label('عرض'),
+                ...WorkerSuspensionActions::make(),
                 EditAction::make()->label('تعديل'),
                 ...WorkerDepositActions::make(),
             ]);
