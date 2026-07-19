@@ -30,19 +30,14 @@ on:
       - 'tests/Feature/Seeders/WorkerFinancialScenarioSeederTest.php'
       - '.github/workflows/cleaning-financial-ledger-v2.yml'
 
-permissions:
-  contents: write
-
 jobs:
   financial-ledger:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
-      - name: Checkout pull-request branch
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -66,27 +61,9 @@ jobs:
           DB_DATABASE: database/database.sqlite
         run: php artisan migrate --force
 
-      - name: Complete the solvency test pricing fixture
+      - name: Check financial ledger formatting
         run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path('tests/Feature/Cleaning/WorkerDepositEligibilityTest.php')
-          content = path.read_text()
-          content = content.replace(
-              "'trust_score' => 80,\n            'default_working_hours' => [",
-              "'trust_score' => 80,\n            'home_address' => 'Aleppo',\n            'home_latitude' => 36.2000,\n            'home_longitude' => 37.1500,\n            'default_working_hours' => [",
-          )
-          content = content.replace(
-              "'scheduled_time' => '15:00',",
-              "'scheduled_time' => '15:00',\n            'address_latitude' => 36.2000,\n            'address_longitude' => 37.1500,",
-          )
-          path.write_text(content)
-          PY
-
-      - name: Format financial ledger sources
-        run: |
-          vendor/bin/pint \
+          vendor/bin/pint --test \
             Modules/Cleaning/app/Http/Controllers/API/DepositManagementController.php \
             Modules/Cleaning/app/Http/Controllers/API/WorkerDepositController.php \
             Modules/Cleaning/app/Http/Resources/CleaningDepositTransactionResource.php \
@@ -114,47 +91,6 @@ jobs:
             tests/Feature/Cleaning/WorkerDepositTimelineApiTest.php \
             tests/Feature/Filament/CleaningFinancialSettingsPageTest.php \
             tests/Feature/Seeders/WorkerFinancialScenarioSeederTest.php
-
-      - name: Commit source normalization when needed
-        shell: bash
-        run: |
-          if git diff --quiet; then
-            echo "No source changes required."
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            Modules/Cleaning/app/Http/Controllers/API/DepositManagementController.php \
-            Modules/Cleaning/app/Http/Controllers/API/WorkerDepositController.php \
-            Modules/Cleaning/app/Http/Resources/CleaningDepositTransactionResource.php \
-            Modules/Cleaning/app/Http/Resources/CleaningWorkerDepositResource.php \
-            Modules/Cleaning/app/Services/AdminCleaningTransactionService.php \
-            Modules/Cleaning/app/Services/DepositService.php \
-            Modules/Cleaning/app/Services/WorkerDebtService.php \
-            Modules/Cleaning/app/Services/WorkerOrderSolvencyService.php \
-            app/Console/Commands/ReconcileCleaningWorkerFinancialBalances.php \
-            app/Filament/Pages/CleaningFinancialReport.php \
-            app/Filament/Pages/FinancialSettings.php \
-            app/Filament/Resources/CleaningWorkerDeposits/Schemas/CleaningTransactionForm.php \
-            app/Filament/Resources/CleaningWorkerDeposits/Tables/CleaningTransactionsTable.php \
-            app/Filament/Resources/CleaningWorkers/Schemas/CleaningWorkerInfolist.php \
-            app/Filament/Resources/CleaningWorkers/Support/WorkerDepositActions.php \
-            app/Filament/Resources/CleaningWorkers/Tables/CleaningWorkersTable.php \
-            app/Filament/Resources/CleaningWorkers/Widgets/CleaningWorkerFinancialStats.php \
-            app/Models/CleaningDepositTransaction.php \
-            app/Models/CleaningWorkerDeposit.php \
-            database/migrations/2026_07_19_210000_add_separate_debt_balance_to_cleaning_worker_deposits.php \
-            database/seeders/WorkerSeeder.php \
-            tests/Feature/Cleaning/AdminCleaningTransactionServiceTest.php \
-            tests/Feature/Cleaning/WorkerDebtLedgerTest.php \
-            tests/Feature/Cleaning/WorkerDepositEligibilityTest.php \
-            tests/Feature/Cleaning/WorkerDepositTimelineApiTest.php \
-            tests/Feature/Filament/CleaningFinancialSettingsPageTest.php \
-            tests/Feature/Seeders/WorkerFinancialScenarioSeederTest.php
-          git commit -m "chore: normalize cleaning financial ledger sources"
-          git push
 
       - name: Run financial ledger tests
         env:
