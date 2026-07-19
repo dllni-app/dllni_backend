@@ -11,7 +11,6 @@ use App\Models\Worker;
 use BackedEnum;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
-use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Services\WorkerDebtService;
 
 final class CleaningFinancialReport extends Page
@@ -63,17 +62,17 @@ final class CleaningFinancialReport extends Page
         $ledger = app(WorkerDebtService::class)->globalSummary();
 
         $refunds = (float) CleaningDepositTransaction::query()
-            ->where('type', 'refund')
+            ->whereIn('type', ['refund', 'withdrawal'])
             ->sum('amount');
 
         $depositsHeld = (float) CleaningWorkerDeposit::query()
-            ->sum(DB::raw('COALESCE(deposited_total, 0) - COALESCE(withdrawn_total, 0)'));
+            ->sum('current_balance');
 
         $activeWorkers = Worker::query()->activeAvailable()->count();
         $restrictedWorkers = Worker::query()->restricted()->count();
 
         return [
-            ['label' => __('cleaning_admin.report.metrics.deposits_held'), 'value' => $this->money($depositsHeld), 'tone' => 'primary'],
+            ['label' => __('cleaning_admin.report.metrics.deposits_held'), 'value' => $this->money(max(0.0, $depositsHeld)), 'tone' => 'primary'],
             ['label' => __('cleaning_finance.report.outstanding_admin_due'), 'value' => $this->money((float) $ledger['outstandingAdministrationDue']), 'tone' => 'danger'],
             ['label' => __('cleaning_admin.report.metrics.settlements_received'), 'value' => $this->money((float) $ledger['totalSettled']), 'tone' => 'success'],
             ['label' => __('cleaning_admin.report.metrics.deposit_refunds'), 'value' => $this->money($refunds), 'tone' => 'warning'],

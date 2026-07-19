@@ -40,32 +40,39 @@ final class CleaningWorkersTable
                 TextColumn::make('average_rating')->label(__('cleaning_admin.workers.fields.average_rating'))->sortable()->toggleable(),
                 TextColumn::make('total_completed_jobs')->label(__('cleaning_admin.workers.fields.total_completed_jobs'))->sortable()->toggleable(),
                 TextColumn::make('deposit.current_balance')
-                    ->label('الرصيد الحالي')
-                    ->formatStateUsing(fn ($state): string => ArabicDashboardLabels::money($state))
+                    ->label('رصيد الإيداع')
+                    ->formatStateUsing(fn ($state): string => ArabicDashboardLabels::money(max(0, (float) ($state ?? 0))))
+                    ->alignEnd()
+                    ->sortable(),
+                TextColumn::make('deposit.debt_balance')
+                    ->label('المديونية الحالية')
+                    ->formatStateUsing(fn ($state): string => ArabicDashboardLabels::money(max(0, (float) ($state ?? 0))))
+                    ->badge()
+                    ->color(fn ($state): string => (float) ($state ?? 0) > 0 ? 'danger' : 'success')
                     ->alignEnd()
                     ->sortable(),
                 TextColumn::make('deposit.max_negative_balance')
-                    ->label('الحد الأدنى للمديونية')
-                    ->formatStateUsing(fn ($state): string => ArabicDashboardLabels::money($state ?? 0))
+                    ->label('حد المديونية المسموح')
+                    ->formatStateUsing(fn ($state): string => ArabicDashboardLabels::money(max(0, (float) ($state ?? 0))))
                     ->placeholder('0.00 ل.س')
                     ->alignEnd()
                     ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('current_debt_amount')
-                    ->label('المديونية الحالية')
-                    ->state(fn (Worker $record): float => self::capacity($record)['currentDebtAmount'])
+                TextColumn::make('remaining_debt_capacity')
+                    ->label('سعة المديونية المتبقية')
+                    ->state(fn (Worker $record): float => self::capacity($record)['remainingDebtCapacity'])
                     ->formatStateUsing(fn ($state): string => ArabicDashboardLabels::money($state))
                     ->badge()
-                    ->color(fn (float $state): string => $state > 0 ? 'danger' : 'success')
+                    ->color(fn (float $state): string => $state > 0 ? 'success' : 'danger')
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('available_commission_capacity')
-                    ->label('هامش العمولة المتاح')
+                    ->label('السعة المالية للطلبات')
                     ->state(fn (Worker $record): float => self::capacity($record)['availableCommissionCapacity'])
                     ->formatStateUsing(fn ($state): string => ArabicDashboardLabels::money($state))
                     ->badge()
                     ->color(fn (float $state): string => $state > 0 ? 'success' : 'danger')
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('security_deposit_status')
-                    ->label('حالة التأمين')
+                    ->label('حالة الحساب المالي')
                     ->formatStateUsing(fn (?string $state): string => self::depositStatusLabel($state))
                     ->badge()
                     ->color(fn (?string $state): string => self::depositStatusColor($state)),
@@ -82,18 +89,17 @@ final class CleaningWorkersTable
                     ]),
                 TernaryFilter::make('is_suspended')->label(__('cleaning_admin.workers.fields.suspended')),
                 SelectFilter::make('security_deposit_status')
-                    ->label('حالة التأمين')
+                    ->label('حالة الحساب المالي')
                     ->options([
                         'active' => 'نشط',
-                        'insufficient_balance' => 'رصيد غير كافٍ',
-                        'missing_deposit' => 'لا يوجد تأمين',
+                        'insufficient_balance' => 'السعة المالية غير كافية',
                         'suspended' => 'موقوف',
                     ]),
                 Filter::make('has_debt')
                     ->label('لديه مديونية')
-                    ->query(fn (Builder $query): Builder => $query->whereHas('deposit', fn (Builder $deposit): Builder => $deposit->where('current_balance', '<', 0))),
+                    ->query(fn (Builder $query): Builder => $query->whereHas('deposit', fn (Builder $deposit): Builder => $deposit->where('debt_balance', '>', 0))),
                 Filter::make('blocked_by_balance')
-                    ->label('محجوب بسبب الرصيد')
+                    ->label('محجوب بسبب السعة المالية')
                     ->query(fn (Builder $query): Builder => $query->where('security_deposit_status', 'insufficient_balance')),
             ])
             ->recordActions([
@@ -130,7 +136,9 @@ final class CleaningWorkersTable
 
     private static function depositStatusLabel(?string $status): string
     {
-        return ArabicDashboardLabels::depositStatus($status);
+        return $status === 'insufficient_balance'
+            ? 'السعة المالية غير كافية'
+            : ArabicDashboardLabels::depositStatus($status);
     }
 
     private static function depositStatusColor(?string $status): string

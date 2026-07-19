@@ -46,11 +46,7 @@ final class FinancialSettings extends Page
 
     public float $extensionRatePer30Minutes = 0.0;
 
-    public float $minimumDepositAmount = 0.0;
-
     public float $defaultMaxNegativeBalance = 0.0;
-
-    public float $restrictionThresholdPercent = 80.0;
 
     public int $trustRejectAfterAcceptPenalty = 10;
 
@@ -90,16 +86,11 @@ final class FinancialSettings extends Page
     public static function canAccess(): bool
     {
         $user = auth()->user();
-
         if (! $user) {
             return false;
         }
 
-        if ($user->hasAnyRole(['admin', 'Super Admin'])) {
-            return true;
-        }
-
-        return $user->can('pricing.view') || $user->can('settings.view');
+        return $user->hasAnyRole(['admin', 'Super Admin']) || $user->can('pricing.view') || $user->can('settings.view');
     }
 
     public function getMaxContentWidth(): ?string
@@ -145,9 +136,7 @@ final class FinancialSettings extends Page
 
         $depositSetting = CleaningDepositSetting::query()->first();
         if ($depositSetting) {
-            $this->minimumDepositAmount = (float) $depositSetting->minimum_deposit_amount;
-            $this->defaultMaxNegativeBalance = (float) $depositSetting->default_max_negative_balance;
-            $this->restrictionThresholdPercent = (float) ($depositSetting->restriction_threshold_percent ?? 80);
+            $this->defaultMaxNegativeBalance = max(0.0, (float) $depositSetting->default_max_negative_balance);
             $this->trustRejectAfterAcceptPenalty = (int) $depositSetting->trust_reject_after_accept_penalty;
             $this->trustMinimumForDispatch = (int) $depositSetting->trust_minimum_for_dispatch;
             $this->workerFinanceEnabled = (bool) $depositSetting->is_enabled;
@@ -172,9 +161,7 @@ final class FinancialSettings extends Page
             'extensionRatePer30Minutes' => ['required', 'numeric', 'min:0'],
             'extensionRanges' => ['array'],
             'extensionRanges.*.price' => ['required', 'numeric', 'min:0'],
-            'minimumDepositAmount' => ['required', 'numeric', 'min:0'],
             'defaultMaxNegativeBalance' => ['required', 'numeric', 'min:0'],
-            'restrictionThresholdPercent' => ['required', 'numeric', 'min:0', 'max:100'],
             'trustRejectAfterAcceptPenalty' => ['required', 'integer', 'min:0'],
             'trustMinimumForDispatch' => ['required', 'integer', 'min:0', 'max:100'],
             'workerFinanceEnabled' => ['required', 'boolean'],
@@ -215,9 +202,9 @@ final class FinancialSettings extends Page
         CleaningDepositSetting::query()->updateOrCreate(
             ['id' => CleaningDepositSetting::query()->orderBy('id')->value('id') ?? 1],
             [
-                'minimum_deposit_amount' => $this->minimumDepositAmount,
+                'minimum_deposit_amount' => 0,
                 'default_max_negative_balance' => $this->defaultMaxNegativeBalance,
-                'restriction_threshold_percent' => $this->restrictionThresholdPercent,
+                'restriction_threshold_percent' => 100,
                 'trust_reject_after_accept_penalty' => $this->trustRejectAfterAcceptPenalty,
                 'trust_minimum_for_dispatch' => $this->trustMinimumForDispatch,
                 'is_enabled' => $this->workerFinanceEnabled,
@@ -225,7 +212,6 @@ final class FinancialSettings extends Page
         );
 
         app(DepositService::class)->syncAllWorkerDepositStatuses();
-
         Notification::make()->title(__('cleaning_admin.financial.saved'))->success()->send();
     }
 

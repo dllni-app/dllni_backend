@@ -22,7 +22,7 @@ beforeEach(function (): void {
     $this->actingAs($adminUser);
 });
 
-it('persists extension_rate_per_30_minutes from financial settings page', function (): void {
+it('persists the allowed debt limit and removes the legacy minimum deposit threshold', function (): void {
     CleaningFinancialSetting::query()->create([
         'default_commission_rate' => 5,
         'vat_rate' => 10,
@@ -53,7 +53,6 @@ it('persists extension_rate_per_30_minutes from financial settings page', functi
         ->set('minBillableMinutes', 30)
         ->set('timeWarningMinutesBeforeEnd', 10)
         ->set('extensionRatePer30Minutes', 4500.50)
-        ->set('minimumDepositAmount', 1500)
         ->set('defaultMaxNegativeBalance', 250)
         ->set('trustRejectAfterAcceptPenalty', 12)
         ->set('trustMinimumForDispatch', 60)
@@ -67,8 +66,9 @@ it('persists extension_rate_per_30_minutes from financial settings page', functi
     ]);
 
     $this->assertDatabaseHas('cleaning_deposit_settings', [
-        'minimum_deposit_amount' => 1500,
+        'minimum_deposit_amount' => 0,
         'default_max_negative_balance' => 250,
+        'restriction_threshold_percent' => 100,
         'trust_reject_after_accept_penalty' => 12,
         'trust_minimum_for_dispatch' => 60,
         'is_enabled' => true,
