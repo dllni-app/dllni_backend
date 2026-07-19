@@ -11,6 +11,7 @@ use App\Enums\SystemAlertStatus;
 use App\Models\SystemAlert;
 use App\Models\Worker;
 use App\Notifications\Cleaning\NewOrderRequestNotification;
+use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -44,6 +45,7 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
 
         $depositService = app(DepositService::class);
         $solvencyService = app(WorkerOrderSolvencyService::class);
+        $bookingDateTime = $this->bookingDateTime($booking);
 
         $assignmentMode = $booking->resolvedAssignmentMode();
         $rejectedWorkerIds = $booking->rejections()->pluck('worker_id')->map(static fn (mixed $workerId): int => (int) $workerId)->all();
@@ -61,18 +63,25 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
             $worker = Worker::query()
                 ->whereKey($booking->preferred_worker_id)
                 ->where('is_active', true)
-                ->where(function ($q) {
-                    $q->whereNull('is_suspended')->orWhere('is_suspended', false);
+                ->where(function ($query): void {
+                    $query->whereNull('is_suspended')->orWhere('is_suspended', false);
+                })
+                ->whereHas('user', function ($query): void {
+                    $query->where('is_active', true);
                 })
                 ->whereNotIn('id', $rejectedWorkerIds)
+                ->when(
+                    $booking->neighborhood_id !== null,
+                    fn ($query) => $query->coversNeighborhood((int) $booking->neighborhood_id),
+                )
                 ->with(['user', 'deposit'])
                 ->first();
 
-            if (! $worker?->user || ! $depositService->isWorkerEligibleForDispatch($worker)) {
+            if (! $worker instanceof Worker || ! $this->isDispatchable($worker, $bookingDateTime, $depositService)) {
                 $this->createDispatchAlert(
                     $booking,
                     'preferred_worker_not_eligible',
-                    'Preferred worker is not currently eligible for dispatch.',
+                    'Preferred worker is not currently eligible, available, or inside the booking neighborhood.',
                     ['preferredWorkerId' => (int) $booking->preferred_worker_id],
                 );
 
@@ -98,15 +107,22 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
 
         $workers = Worker::query()
             ->where('is_active', true)
-            ->where(function ($q) {
-                $q->whereNull('is_suspended')->orWhere('is_suspended', false);
+            ->where(function ($query): void {
+                $query->whereNull('is_suspended')->orWhere('is_suspended', false);
+            })
+            ->whereHas('user', function ($query): void {
+                $query->where('is_active', true);
             })
             ->when(
                 $booking->gender_preference instanceof GenderPreference
                     && $booking->gender_preference !== GenderPreference::Any,
-                fn ($query) => $query->where('gender', $booking->gender_preference->value)
+                fn ($query) => $query->where('gender', $booking->gender_preference->value),
             )
             ->whereNotIn('id', array_values(array_unique(array_merge($rejectedWorkerIds, $acceptedWorkerIds))))
+            ->when(
+                $booking->neighborhood_id !== null,
+                fn ($query) => $query->coversNeighborhood((int) $booking->neighborhood_id),
+            )
             ->with(['user', 'deposit'])
             ->limit(50)
             ->get();
@@ -114,8 +130,10 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
         if ($workers->isEmpty()) {
             $this->createDispatchAlert(
                 $booking,
-                'no_active_workers',
-                'No active workers are available for this booking.',
+                $booking->neighborhood_id !== null ? 'no_neighborhood_coverage' : 'no_active_workers',
+                $booking->neighborhood_id !== null
+                    ? 'No active worker covers the booking neighborhood.'
+                    : 'No active worker is available for this booking.',
             );
 
             return;
@@ -127,8 +145,9 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
         $lastBlockedPayload = null;
 
         foreach ($workers as $worker) {
-            if (! $worker->user || ! $depositService->isWorkerEligibleForDispatch($worker)) {
+            if (! $this->isDispatchable($worker, $bookingDateTime, $depositService)) {
                 $ineligibleCount++;
+
                 continue;
             }
 
@@ -148,7 +167,7 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
             $this->createDispatchAlert(
                 $booking,
                 'no_financially_solvent_workers',
-                'No eligible worker has enough balance or allowed negative limit to cover the booking platform commission.',
+                'No eligible worker has enough deposit or remaining debt capacity to cover the booking platform commission.',
                 [
                     'financiallyBlockedWorkersCount' => $financiallyBlockedCount,
                     'lastBlockedSolvencyPayload' => $lastBlockedPayload,
@@ -160,9 +179,34 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
             $this->createDispatchAlert(
                 $booking,
                 'no_dispatch_eligible_workers',
-                'Active workers exist, but none are currently eligible for dispatch.',
+                'Workers match the booking area, but none are currently available and eligible for dispatch.',
                 ['ineligibleWorkersCount' => $ineligibleCount],
             );
+        }
+    }
+
+    private function isDispatchable(Worker $worker, ?Carbon $bookingDateTime, DepositService $depositService): bool
+    {
+        return $worker->user !== null
+            && (bool) $worker->user->is_active
+            && $bookingDateTime !== null
+            && $worker->isAvailableAt($bookingDateTime)
+            && $depositService->isWorkerEligibleForDispatch($worker);
+    }
+
+    private function bookingDateTime(CleaningBooking $booking): ?Carbon
+    {
+        if ($booking->scheduled_date === null || $booking->scheduled_time === null) {
+            return null;
+        }
+
+        try {
+            return Carbon::parse(
+                $booking->scheduled_date->format('Y-m-d').' '.mb_trim((string) $booking->scheduled_time),
+                config('app.timezone'),
+            );
+        } catch (Throwable) {
+            return null;
         }
     }
 
