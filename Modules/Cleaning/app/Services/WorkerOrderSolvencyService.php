@@ -21,6 +21,7 @@ final class WorkerOrderSolvencyService
         private readonly CleaningPricingCalculator $pricingCalculator,
         private readonly DepositService $depositService,
         private readonly WorkerDebtService $debtService,
+        private readonly WorkerBookingScheduleConflictService $scheduleConflictService,
     ) {}
 
     public function solvencyPayloadForBooking(Worker $worker, CleaningBooking $booking, ?array $roomIds = null): array
@@ -63,6 +64,10 @@ final class WorkerOrderSolvencyService
 
     public function canWorkerReceiveBooking(Worker $worker, CleaningBooking $booking): bool
     {
+        if ($this->scheduleConflictService->hasConflict($worker, $booking)) {
+            return false;
+        }
+
         return (bool) $this->solvencyPayloadForBooking($worker, $booking)['canReceiveOrder'];
     }
 
