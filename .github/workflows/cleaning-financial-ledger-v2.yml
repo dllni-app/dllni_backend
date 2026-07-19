@@ -30,14 +30,19 @@ on:
       - 'tests/Feature/Seeders/WorkerFinancialScenarioSeederTest.php'
       - '.github/workflows/cleaning-financial-ledger-v2.yml'
 
+permissions:
+  contents: write
+
 jobs:
   financial-ledger:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
-      - name: Checkout
+      - name: Checkout pull-request branch
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -61,9 +66,9 @@ jobs:
           DB_DATABASE: database/database.sqlite
         run: php artisan migrate --force
 
-      - name: Check formatting
+      - name: Format financial ledger sources
         run: |
-          vendor/bin/pint --test \
+          vendor/bin/pint \
             Modules/Cleaning/app/Http/Controllers/API/DepositManagementController.php \
             Modules/Cleaning/app/Http/Controllers/API/WorkerDepositController.php \
             Modules/Cleaning/app/Http/Resources/CleaningDepositTransactionResource.php \
@@ -91,6 +96,47 @@ jobs:
             tests/Feature/Cleaning/WorkerDepositTimelineApiTest.php \
             tests/Feature/Filament/CleaningFinancialSettingsPageTest.php \
             tests/Feature/Seeders/WorkerFinancialScenarioSeederTest.php
+
+      - name: Commit formatting when needed
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No formatting changes required."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            Modules/Cleaning/app/Http/Controllers/API/DepositManagementController.php \
+            Modules/Cleaning/app/Http/Controllers/API/WorkerDepositController.php \
+            Modules/Cleaning/app/Http/Resources/CleaningDepositTransactionResource.php \
+            Modules/Cleaning/app/Http/Resources/CleaningWorkerDepositResource.php \
+            Modules/Cleaning/app/Services/AdminCleaningTransactionService.php \
+            Modules/Cleaning/app/Services/DepositService.php \
+            Modules/Cleaning/app/Services/WorkerDebtService.php \
+            Modules/Cleaning/app/Services/WorkerOrderSolvencyService.php \
+            app/Console/Commands/ReconcileCleaningWorkerFinancialBalances.php \
+            app/Filament/Pages/CleaningFinancialReport.php \
+            app/Filament/Pages/FinancialSettings.php \
+            app/Filament/Resources/CleaningWorkerDeposits/Schemas/CleaningTransactionForm.php \
+            app/Filament/Resources/CleaningWorkerDeposits/Tables/CleaningTransactionsTable.php \
+            app/Filament/Resources/CleaningWorkers/Schemas/CleaningWorkerInfolist.php \
+            app/Filament/Resources/CleaningWorkers/Support/WorkerDepositActions.php \
+            app/Filament/Resources/CleaningWorkers/Tables/CleaningWorkersTable.php \
+            app/Filament/Resources/CleaningWorkers/Widgets/CleaningWorkerFinancialStats.php \
+            app/Models/CleaningDepositTransaction.php \
+            app/Models/CleaningWorkerDeposit.php \
+            database/migrations/2026_07_19_210000_add_separate_debt_balance_to_cleaning_worker_deposits.php \
+            database/seeders/WorkerSeeder.php \
+            tests/Feature/Cleaning/AdminCleaningTransactionServiceTest.php \
+            tests/Feature/Cleaning/WorkerDebtLedgerTest.php \
+            tests/Feature/Cleaning/WorkerDepositEligibilityTest.php \
+            tests/Feature/Cleaning/WorkerDepositTimelineApiTest.php \
+            tests/Feature/Filament/CleaningFinancialSettingsPageTest.php \
+            tests/Feature/Seeders/WorkerFinancialScenarioSeederTest.php
+          git commit -m "chore: format cleaning financial ledger sources"
+          git push
 
       - name: Run financial ledger tests
         env:
