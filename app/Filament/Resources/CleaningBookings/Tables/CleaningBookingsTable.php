@@ -22,6 +22,8 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\HtmlString;
+use InvalidArgumentException;
+use Modules\Cleaning\Enums\CleaningAssignmentMode;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
@@ -181,7 +183,8 @@ final class CleaningBookingsTable
                     ->form([
                         Select::make('worker_id')
                             ->label('العامل')
-                            ->options(fn (): array => self::activeWorkerOptions())
+                            ->options(fn (?CleaningBooking $record): array => self::activeWorkerOptions($record))
+                            ->helperText('تظهر فقط الحسابات النشطة غير الموقوفة والمطابقة لجنس الحجز والتي تملك عنواناً وإحداثيات منزل مكتملة.')
                             ->searchable()
                             ->required(),
                         CheckboxList::make('room_ids')
@@ -193,13 +196,24 @@ final class CleaningBookingsTable
                                 && (int) ($record->rooms_count ?? $record->rooms()->count()) > 0),
                     ])
                     ->action(function (CleaningBooking $record, array $data): void {
-                        $worker = Worker::query()->with('user')->findOrFail((int) $data['worker_id']);
-                        $roomIds = array_values(array_filter(array_map('intval', (array) ($data['room_ids'] ?? []))));
-                        $updated = app(CleaningBookingTeamService::class)->acceptWorker(
-                            $record->fresh(['rooms.assignedWorker.user', 'workerAssignments.worker.user']),
-                            $worker,
-                            $roomIds !== [] ? $roomIds : null,
-                        );
+                        try {
+                            $worker = Worker::query()->with('user')->findOrFail((int) $data['worker_id']);
+                            $roomIds = array_values(array_filter(array_map('intval', (array) ($data['room_ids'] ?? []))));
+                            $updated = app(CleaningBookingTeamService::class)->acceptWorker(
+                                $record->fresh(['rooms.assignedWorker.user', 'workerAssignments.worker.user']),
+                                $worker,
+                                $roomIds !== [] ? $roomIds : null,
+                            );
+                        } catch (InvalidArgumentException $exception) {
+                            Notification::make()
+                                ->title('تعذر إضافة العامل')
+                                ->body(self::workerAssignmentErrorMessage($exception->getMessage()))
+                                ->danger()
+                                ->persistent()
+                                ->send();
+
+                            return;
+                        }
 
                         $record->setRawAttributes($updated->getAttributes(), true);
 
@@ -521,11 +535,43 @@ final class CleaningBookingsTable
         );
     }
 
-    private static function activeWorkerOptions(): array
+    private static function activeWorkerOptions(?CleaningBooking $record): array
     {
-        return Worker::query()
+        if ($record === null) {
+            return [];
+        }
+
+        $query = Worker::query()
             ->with('user')
-            ->where('is_active', true)
+            ->activeAvailable()
+            ->whereNotNull('home_address')
+            ->where('home_address', '!=', '')
+            ->whereNotNull('home_latitude')
+            ->whereNotNull('home_longitude');
+
+        $genderPreference = $record->gender_preference instanceof BackedEnum
+            ? $record->gender_preference->value
+            : (string) ($record->gender_preference ?? 'any');
+        if (in_array($genderPreference, ['male', 'female'], true)) {
+            $query->where('gender', $genderPreference);
+        }
+
+        $assignmentMode = $record->assignment_mode instanceof BackedEnum
+            ? $record->assignment_mode->value
+            : $record->assignment_mode;
+        $isPreferredWorkerBooking = $assignmentMode === CleaningAssignmentMode::PreferredWorker->value
+            || ($assignmentMode === null && $record->preferred_worker_id !== null && max(1, (int) ($record->number_of_workers ?? 1)) === 1);
+        if ($isPreferredWorkerBooking && $record->preferred_worker_id !== null) {
+            $query->whereKey((int) $record->preferred_worker_id);
+        }
+
+        $acceptedWorkerIds = $record->acceptedWorkerAssignments()->pluck('worker_id')->map(static fn ($id): int => (int) $id)->all();
+        if ($acceptedWorkerIds !== []) {
+            $query->whereNotIn('id', $acceptedWorkerIds);
+        }
+
+        return $query
+            ->orderByDesc('trust_score')
             ->orderBy('first_name')
             ->get()
             ->mapWithKeys(fn (Worker $worker): array => [$worker->id => self::workerLabel($worker)])
@@ -584,7 +630,28 @@ final class CleaningBookingsTable
 
     private static function workerLabel(Worker $worker): string
     {
-        return mb_trim(($worker->first_name ?: $worker->user?->name ?: '-').' ('.($worker->user?->phone ?: '-').')');
+        $gender = match ($worker->gender) {
+            'male' => 'ذكر',
+            'female' => 'أنثى',
+            default => 'غير محدد',
+        };
+
+        return mb_trim(($worker->first_name ?: $worker->user?->name ?: '-').' ('.($worker->user?->phone ?: '-').') - '.$gender);
+    }
+
+    private static function workerAssignmentErrorMessage(string $message): string
+    {
+        return match ($message) {
+            'Booking gender preference does not match worker profile.' => 'جنس العامل لا يطابق تفضيل الحجز. اختر عاملاً من الجنس المطلوب.',
+            'Worker home location is required before accepting bookings.' => 'عنوان منزل العامل وإحداثياته غير مكتملة. حدّث بيانات موقع العامل ثم أعد المحاولة.',
+            'Customer location coordinates are required before accepting bookings.' => 'إحداثيات موقع العميل غير مكتملة في الحجز. حدّث موقع الحجز ثم أعد المحاولة.',
+            'Worker is not eligible to accept new requests.' => 'العامل غير مؤهل لاستقبال طلبات جديدة بسبب حالة الحساب أو التأمين.',
+            'Worker has already accepted this booking.' => 'العامل مضاف إلى هذا الحجز مسبقاً.',
+            'Booking already has the required number of workers.' => 'اكتمل العدد المطلوب من العاملين لهذا الحجز.',
+            'Booking is reserved for a different preferred worker.' => 'الحجز محجوز لعامل مفضل آخر.',
+            'Booking cannot be accepted in current status.' => 'لا يمكن إضافة عامل في الحالة الحالية للحجز.',
+            default => 'تعذر إضافة العامل بسبب عدم استيفاء شروط الحجز. راجع بيانات العامل والحجز ثم أعد المحاولة.',
+        };
     }
 
     private static function headerLabel(string $label, string $description): HtmlString
