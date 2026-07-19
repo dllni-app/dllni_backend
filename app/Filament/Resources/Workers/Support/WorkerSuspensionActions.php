@@ -31,13 +31,21 @@ final class WorkerSuspensionActions
             ->action(function (Worker $record): void {
                 $shouldSuspend = ! (bool) $record->is_suspended;
 
-                $record->forceFill([
+                $attributes = [
                     'is_suspended' => $shouldSuspend,
                     'suspended_until' => null,
-                ])->save();
+                ];
 
-                $freshWorker = $record->fresh(['deposit']) ?? $record;
-                app(DepositService::class)->syncEligibilityStatus($freshWorker);
+                if ($shouldSuspend) {
+                    $attributes['security_deposit_status'] = 'suspended';
+                }
+
+                $record->forceFill($attributes)->save();
+
+                if (! $shouldSuspend) {
+                    $freshWorker = $record->fresh(['deposit']) ?? $record;
+                    app(DepositService::class)->syncEligibilityStatus($freshWorker);
+                }
 
                 Notification::make()
                     ->title($shouldSuspend ? 'تم إيقاف العامل' : 'تم إلغاء إيقاف العامل')
