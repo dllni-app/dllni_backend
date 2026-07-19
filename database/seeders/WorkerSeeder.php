@@ -62,7 +62,26 @@ final class WorkerSeeder extends Seeder
                 'phone_verified_at' => now(),
             ])->save();
 
-            $worker = Worker::firstOrCreate(['user_id' => $user->id]);
+            $worker = Worker::firstOrCreate(
+                ['user_id' => $user->id],
+                [
+                    'first_name' => $data['first_name'],
+                    'gender' => $data['gender'],
+                    'bio' => $data['bio'],
+                    'average_rating' => $data['average_rating'],
+                    'total_completed_jobs' => $data['total_completed_jobs'],
+                    'trust_score' => $data['trust_score'],
+                    'acceptance_rate' => $data['acceptance_rate'],
+                    'cancellation_rate' => $data['cancellation_rate'],
+                    'open_disputes_count' => 0,
+                    'is_active' => true,
+                    'is_suspended' => false,
+                    'home_address' => $data['address'],
+                    'home_latitude' => $data['lat'],
+                    'home_longitude' => $data['lng'],
+                    'default_working_hours' => self::defaultWorkingHours(),
+                ],
+            );
             $workerUpdates = [
                 'first_name' => $data['first_name'],
                 'gender' => $data['gender'],
