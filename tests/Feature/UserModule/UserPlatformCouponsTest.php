@@ -10,8 +10,15 @@ use App\Models\PlatformCouponRedemption;
 use App\Models\User;
 use App\Notifications\PlatformCouponAvailableNotification;
 use App\Services\Coupons\PlatformCouponEligibilityService;
+use App\Services\Coupons\PlatformCouponRedemptionService;
+use Database\Factories\ProductFactory;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Laravel\Sanctum\Sanctum;
+use Modules\Resturants\Models\Cart;
+use Modules\Resturants\Models\CartItem;
+use Modules\Resturants\Models\Order;
+use Modules\Resturants\Models\Restaurant;
 
 it('requires authentication to list platform coupons', function (): void {
     $this->getJson('/api/v1/user/coupons')->assertUnauthorized();
@@ -59,6 +66,49 @@ it('lists only active coupons available to the authenticated user and requested 
     expect(collect($response->json('coupons'))->pluck('code')->all())
         ->toContain($allUsers->code, $targeted->code)
         ->not->toContain($otherTargeted->code, 'EXPIRED', 'RESTAURANT');
+});
+
+it('checks a platform restaurant coupon against the explicit cart', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $restaurant = Restaurant::factory()->create();
+    $product = ProductFactory::new()->create(['restaurant_id' => $restaurant->id]);
+    $cart = Cart::query()->create([
+        'user_id' => $user->id,
+        'restaurant_id' => $restaurant->id,
+    ]);
+    CartItem::query()->create([
+        'cart_id' => $cart->id,
+        'product_id' => $product->id,
+        'quantity' => 2,
+        'unit_price' => 60,
+        'total_price' => 120,
+        'signature_hash' => 'coupon-test-item',
+    ]);
+
+    PlatformCoupon::query()->create(couponData([
+        'code' => 'CART20',
+        'section' => PlatformCoupon::SECTION_RESTAURANT,
+        'discount_type' => PlatformCoupon::DISCOUNT_FIXED,
+        'discount_value' => 20,
+        'min_order_amount' => 100,
+    ]));
+
+    $this->postJson('/api/v1/user/coupons/check', [
+        'section' => 'restaurants',
+        'couponCode' => 'cart20',
+        'cartId' => $cart->id,
+    ])
+        ->assertOk()
+        ->assertJsonPath('data.section', PlatformCoupon::SECTION_RESTAURANT)
+        ->assertJsonPath('data.couponCode', 'CART20')
+        ->assertJsonPath('data.isAvailable', true)
+        ->assertJsonPath('data.isValid', true)
+        ->assertJsonPath('data.amounts.subtotal', 120)
+        ->assertJsonPath('data.amounts.discount', 20)
+        ->assertJsonPath('data.amounts.total', 100)
+        ->assertJsonPath('data.coupon.source', 'platform');
 });
 
 it('enforces cleaning property mode and event constraints', function (): void {
@@ -114,6 +164,55 @@ it('enforces per-user usage limit and percentage maximum discount', function ():
 
     expect($service->evaluate($coupon->fresh(), $user->id, PlatformCoupon::SECTION_RESTAURANT, 1000))
         ->toMatchArray(['isValid' => false, 'reason' => 'user_usage_limit_reached']);
+});
+
+it('records redemption usage and order coupon snapshots in one transaction', function (): void {
+    $user = User::factory()->create();
+    $order = Order::factory()->create([
+        'user_id' => $user->id,
+        'subtotal' => 200,
+        'discount_amount' => 30,
+        'total_amount' => 170,
+    ]);
+    $coupon = PlatformCoupon::query()->create(couponData([
+        'code' => 'ORDER30',
+        'section' => PlatformCoupon::SECTION_RESTAURANT,
+        'discount_value' => 30,
+        'total_usage_limit' => 2,
+        'per_user_usage_limit' => 1,
+    ]));
+    $service = app(PlatformCouponRedemptionService::class);
+
+    DB::transaction(function () use ($service, $coupon, $user, $order): void {
+        $quote = $service->quoteForPlacement(
+            userId: $user->id,
+            section: PlatformCoupon::SECTION_RESTAURANT,
+            couponCode: $coupon->code,
+            subtotal: 200,
+            required: true,
+        );
+
+        $service->record(
+            coupon: $quote['coupon'],
+            userId: $user->id,
+            section: PlatformCoupon::SECTION_RESTAURANT,
+            subtotal: 200,
+            discount: (float) $quote['discount'],
+            order: $order,
+        );
+    });
+
+    $this->assertDatabaseHas('platform_coupon_redemptions', [
+        'platform_coupon_id' => $coupon->id,
+        'user_id' => $user->id,
+        'order_id' => $order->id,
+        'coupon_code' => 'ORDER30',
+        'discount_amount' => 30,
+    ]);
+
+    expect($coupon->fresh()->used_count)->toBe(1)
+        ->and($order->fresh()->platform_coupon_id)->toBe($coupon->id)
+        ->and($order->fresh()->platform_coupon_code)->toBe('ORDER30');
 });
 
 it('dispatches coupon notifications only to selected users', function (): void {
