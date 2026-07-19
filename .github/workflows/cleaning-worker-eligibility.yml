@@ -1,0 +1,76 @@
+name: Cleaning Worker Eligibility
+
+on:
+  pull_request:
+    paths:
+      - 'Modules/User/app/Http/Controllers/API/UserCleaningPreviousWorkersController.php'
+      - 'Modules/User/app/Http/Requests/UserCleaningPreviousWorkersRequest.php'
+      - 'Modules/User/app/Observers/CleaningBookingPreferredWorkerEligibilityObserver.php'
+      - 'Modules/User/app/Providers/UserServiceProvider.php'
+      - 'app/Jobs/NotifyEligibleWorkersNewOrderJob.php'
+      - 'tests/Feature/UserModule/UserCleaningPreviousWorkersEligibilityTest.php'
+      - 'tests/Feature/Cleaning/WorkerDepositEligibilityTest.php'
+      - 'tests/Feature/Cleaning/SuspendedWorkerDispatchTest.php'
+      - '.github/workflows/cleaning-worker-eligibility.yml'
+
+jobs:
+  eligibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, bcmath, intl, gd
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare application
+        run: |
+          cp .env.example .env
+          touch database/database.sqlite
+          php artisan key:generate
+
+      - name: Migrate database
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        run: php artisan migrate --force
+
+      - name: Check formatting
+        run: |
+          vendor/bin/pint --test \
+            Modules/User/app/Http/Controllers/API/UserCleaningPreviousWorkersController.php \
+            Modules/User/app/Http/Requests/UserCleaningPreviousWorkersRequest.php \
+            Modules/User/app/Observers/CleaningBookingPreferredWorkerEligibilityObserver.php \
+            Modules/User/app/Providers/UserServiceProvider.php \
+            app/Jobs/NotifyEligibleWorkersNewOrderJob.php \
+            tests/Feature/UserModule/UserCleaningPreviousWorkersEligibilityTest.php
+
+      - name: Run eligibility tests
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        shell: bash
+        run: |
+          set -o pipefail
+          php artisan test \
+            tests/Feature/UserModule/UserCleaningPreviousWorkersEligibilityTest.php \
+            tests/Feature/Cleaning/WorkerDepositEligibilityTest.php \
+            tests/Feature/Cleaning/SuspendedWorkerDispatchTest.php \
+            2>&1 | tee cleaning-worker-eligibility-test.log
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cleaning-worker-eligibility-diagnostics
+          path: cleaning-worker-eligibility-test.log
+          if-no-files-found: ignore
