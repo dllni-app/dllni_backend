@@ -30,6 +30,12 @@ final class CleaningWorkersTable
                 TextColumn::make('first_name')->label(__('cleaning_admin.workers.fields.first_name'))->searchable()->wrap(),
                 TextColumn::make('user.name')->label(__('cleaning_admin.workers.fields.user_name'))->searchable()->wrap(),
                 TextColumn::make('user.phone')->label(__('cleaning_admin.workers.fields.phone'))->copyable(),
+                TextColumn::make('gender')
+                    ->label(__('cleaning_admin.workers.fields.gender'))
+                    ->formatStateUsing(fn (?string $state): string => self::genderLabel($state))
+                    ->badge()
+                    ->color(fn (?string $state): string => self::genderColor($state))
+                    ->sortable(),
                 TextColumn::make('trust_score')->label(__('cleaning_admin.workers.fields.trust_score'))->sortable(),
                 TextColumn::make('average_rating')->label(__('cleaning_admin.workers.fields.average_rating'))->sortable()->toggleable(),
                 TextColumn::make('total_completed_jobs')->label(__('cleaning_admin.workers.fields.total_completed_jobs'))->sortable()->toggleable(),
@@ -68,6 +74,12 @@ final class CleaningWorkersTable
                     ->boolean(),
             ])
             ->filters([
+                SelectFilter::make('gender')
+                    ->label(__('cleaning_admin.workers.fields.gender'))
+                    ->options([
+                        'male' => __('cleaning_admin.workers.gender_options.male'),
+                        'female' => __('cleaning_admin.workers.gender_options.female'),
+                    ]),
                 TernaryFilter::make('is_suspended')->label(__('cleaning_admin.workers.fields.suspended')),
                 SelectFilter::make('security_deposit_status')
                     ->label('حالة التأمين')
@@ -96,6 +108,24 @@ final class CleaningWorkersTable
     private static function capacity(Worker $worker): array
     {
         return app(WorkerOrderSolvencyService::class)->workerCapacitySummary($worker);
+    }
+
+    private static function genderLabel(?string $gender): string
+    {
+        return match ($gender) {
+            'male' => __('cleaning_admin.workers.gender_options.male'),
+            'female' => __('cleaning_admin.workers.gender_options.female'),
+            default => '-',
+        };
+    }
+
+    private static function genderColor(?string $gender): string
+    {
+        return match ($gender) {
+            'male' => 'info',
+            'female' => 'warning',
+            default => 'gray',
+        };
     }
 
     private static function depositStatusLabel(?string $status): string
