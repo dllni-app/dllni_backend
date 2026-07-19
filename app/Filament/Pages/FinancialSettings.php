@@ -17,59 +17,31 @@ final class FinancialSettings extends Page
     private const EXTENSION_BLOCKS = [[0, 15], [16, 30], [31, 45], [46, 60], [61, 75], [76, 90]];
 
     public float $defaultCommissionRate = 0.0;
-
     public float $vatRate = 0.0;
-
     public string $commissionType = 'percent';
-
     public ?float $commissionFixedAmount = null;
-
     public string $travelMarkupType = 'fixed';
-
     public float $travelMarkupValue = 0.0;
-
     public float $travelPerKm = 0.0;
-
     public string $travelDistanceStartPoint = 'worker_home';
-
     public int $coverageLow = 3;
-
     public int $coverageOk = 7;
-
     public array $extensionRanges = [];
-
     public string $timeBillingMode = 'actual';
-
     public ?int $minBillableMinutes = null;
-
     public ?int $timeWarningMinutesBeforeEnd = null;
-
     public float $extensionRatePer30Minutes = 0.0;
-
-    public float $minimumDepositAmount = 0.0;
-
     public float $defaultMaxNegativeBalance = 0.0;
-
-    public float $restrictionThresholdPercent = 80.0;
-
     public int $trustRejectAfterAcceptPenalty = 10;
-
     public int $trustMinimumForDispatch = 0;
-
     public bool $workerFinanceEnabled = true;
-
     public float $cleaningBaseUnitPrice = CleaningFinancialDefaults::BASE_UNIT_PRICE;
-
     public float $cleaningDeepMultiplier = CleaningFinancialDefaults::DEEP_CLEANING_MULTIPLIER;
-
     public float $cleaningAreaMarginMultiplier = CleaningFinancialDefaults::AREA_MARGIN_MULTIPLIER;
-
     public int $cleaningSetupBufferMinutes = CleaningFinancialDefaults::SETUP_BUFFER_MINUTES;
 
     protected static string|BackedEnum|null $navigationIcon = \Filament\Support\Icons\Heroicon::OutlinedCurrencyDollar;
-
     protected string $view = 'filament.cleaning-admin.pages.financial-settings';
-
     protected static ?int $navigationSort = 20;
 
     public static function getNavigationGroup(): ?string
@@ -90,16 +62,11 @@ final class FinancialSettings extends Page
     public static function canAccess(): bool
     {
         $user = auth()->user();
-
         if (! $user) {
             return false;
         }
 
-        if ($user->hasAnyRole(['admin', 'Super Admin'])) {
-            return true;
-        }
-
-        return $user->can('pricing.view') || $user->can('settings.view');
+        return $user->hasAnyRole(['admin', 'Super Admin']) || $user->can('pricing.view') || $user->can('settings.view');
     }
 
     public function getMaxContentWidth(): ?string
@@ -145,9 +112,7 @@ final class FinancialSettings extends Page
 
         $depositSetting = CleaningDepositSetting::query()->first();
         if ($depositSetting) {
-            $this->minimumDepositAmount = (float) $depositSetting->minimum_deposit_amount;
-            $this->defaultMaxNegativeBalance = (float) $depositSetting->default_max_negative_balance;
-            $this->restrictionThresholdPercent = (float) ($depositSetting->restriction_threshold_percent ?? 80);
+            $this->defaultMaxNegativeBalance = max(0.0, (float) $depositSetting->default_max_negative_balance);
             $this->trustRejectAfterAcceptPenalty = (int) $depositSetting->trust_reject_after_accept_penalty;
             $this->trustMinimumForDispatch = (int) $depositSetting->trust_minimum_for_dispatch;
             $this->workerFinanceEnabled = (bool) $depositSetting->is_enabled;
@@ -172,9 +137,7 @@ final class FinancialSettings extends Page
             'extensionRatePer30Minutes' => ['required', 'numeric', 'min:0'],
             'extensionRanges' => ['array'],
             'extensionRanges.*.price' => ['required', 'numeric', 'min:0'],
-            'minimumDepositAmount' => ['required', 'numeric', 'min:0'],
             'defaultMaxNegativeBalance' => ['required', 'numeric', 'min:0'],
-            'restrictionThresholdPercent' => ['required', 'numeric', 'min:0', 'max:100'],
             'trustRejectAfterAcceptPenalty' => ['required', 'integer', 'min:0'],
             'trustMinimumForDispatch' => ['required', 'integer', 'min:0', 'max:100'],
             'workerFinanceEnabled' => ['required', 'boolean'],
@@ -215,9 +178,9 @@ final class FinancialSettings extends Page
         CleaningDepositSetting::query()->updateOrCreate(
             ['id' => CleaningDepositSetting::query()->orderBy('id')->value('id') ?? 1],
             [
-                'minimum_deposit_amount' => $this->minimumDepositAmount,
+                'minimum_deposit_amount' => 0,
                 'default_max_negative_balance' => $this->defaultMaxNegativeBalance,
-                'restriction_threshold_percent' => $this->restrictionThresholdPercent,
+                'restriction_threshold_percent' => 100,
                 'trust_reject_after_accept_penalty' => $this->trustRejectAfterAcceptPenalty,
                 'trust_minimum_for_dispatch' => $this->trustMinimumForDispatch,
                 'is_enabled' => $this->workerFinanceEnabled,
@@ -225,7 +188,6 @@ final class FinancialSettings extends Page
         );
 
         app(DepositService::class)->syncAllWorkerDepositStatuses();
-
         Notification::make()->title(__('cleaning_admin.financial.saved'))->success()->send();
     }
 
