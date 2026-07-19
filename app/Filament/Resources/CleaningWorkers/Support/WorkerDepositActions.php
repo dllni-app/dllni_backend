@@ -8,8 +8,8 @@ use App\Models\Worker;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Modules\Cleaning\Services\AdminCleaningTransactionService;
 use Modules\Cleaning\Services\DepositService;
@@ -93,7 +93,7 @@ final class WorkerDepositActions
             ])
             ->action(function (Worker $record, array $data): void {
                 self::run(
-                    fn () => app(AdminCleaningTransactionService::class)->settleFullDebt($record, isset($data['notes']) ? trim((string) $data['notes']) : null, auth()->id()),
+                    fn () => app(AdminCleaningTransactionService::class)->settleFullDebt($record, isset($data['notes']) ? mb_trim((string) $data['notes']) : null, auth()->id()),
                     __('cleaning_admin.workers.finance.settlement.success'),
                 );
             });
@@ -155,7 +155,7 @@ final class WorkerDepositActions
 
     private static function composeNotes(array $data): ?string
     {
-        $notes = isset($data['notes']) ? trim((string) $data['notes']) : '';
+        $notes = isset($data['notes']) ? mb_trim((string) $data['notes']) : '';
         $date = $data['date'] ?? null;
 
         if ($date) {

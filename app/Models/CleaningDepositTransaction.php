@@ -33,6 +33,17 @@ final class CleaningDepositTransaction extends Model
         'notes',
     ];
 
+    public static function normalizePublicType(string $type, float $amount = 0): string
+    {
+        return match ($type) {
+            'admin_fee', 'commission' => 'commission',
+            'withdrawal' => 'refund',
+            'adjustment' => $amount < 0 ? 'refund' : 'deposit',
+            'deposit', 'debt', 'settlement', 'refund' => $type,
+            default => $type,
+        };
+    }
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
@@ -112,17 +123,6 @@ final class CleaningDepositTransaction extends Model
     public function publicAmount(): float
     {
         return abs((float) $this->amount);
-    }
-
-    public static function normalizePublicType(string $type, float $amount = 0): string
-    {
-        return match ($type) {
-            'admin_fee', 'commission' => 'commission',
-            'withdrawal' => 'refund',
-            'adjustment' => $amount < 0 ? 'refund' : 'deposit',
-            'deposit', 'debt', 'settlement', 'refund' => $type,
-            default => $type,
-        };
     }
 
     protected function casts(): array

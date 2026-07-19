@@ -88,7 +88,7 @@ final class ReconcileCleaningWorkerFinancialBalances extends Command
     {
         $transactions = CleaningDepositTransaction::query()
             ->where('worker_id', $account->worker_id)
-            ->selectRaw("COUNT(*) as transaction_count")
+            ->selectRaw('COUNT(*) as transaction_count')
             ->selectRaw("COALESCE(SUM(CASE WHEN type = 'deposit' THEN ABS(amount) WHEN type = 'adjustment' AND amount > 0 THEN amount ELSE 0 END), 0) as deposits")
             ->selectRaw("COALESCE(SUM(CASE WHEN type IN ('refund', 'withdrawal') THEN ABS(amount) WHEN type = 'adjustment' AND amount < 0 THEN ABS(amount) ELSE 0 END), 0) as refunds")
             ->selectRaw("COALESCE(SUM(CASE WHEN type IN ('commission', 'admin_fee', 'debt') THEN ABS(amount) ELSE 0 END), 0) as charges")

@@ -154,15 +154,18 @@ final class CleaningTransactionForm
         $cacheKey = 'cleaning-transaction-form.worker.'.$workerId;
         if (request()->attributes->has($cacheKey)) {
             $cached = request()->attributes->get($cacheKey);
+
             return $cached instanceof Worker ? $cached : null;
         }
 
         try {
             $worker = app(AdminCleaningTransactionService::class)->findWorker($workerId);
             request()->attributes->set($cacheKey, $worker);
+
             return $worker;
         } catch (Throwable) {
             request()->attributes->set($cacheKey, null);
+
             return null;
         }
     }
@@ -177,12 +180,14 @@ final class CleaningTransactionForm
         $cacheKey = 'cleaning-transaction-form.snapshot.'.$workerId;
         if (request()->attributes->has($cacheKey)) {
             $cached = request()->attributes->get($cacheKey);
+
             return is_array($cached) ? $cached : [];
         }
 
         $worker = self::worker($workerId);
         $snapshot = $worker instanceof Worker ? app(AdminCleaningTransactionService::class)->snapshot($worker) : [];
         request()->attributes->set($cacheKey, $snapshot);
+
         return $snapshot;
     }
 
@@ -202,10 +207,12 @@ final class CleaningTransactionForm
             $worker = self::worker($workerId);
             if (! $worker instanceof Worker) {
                 $fail(__('cleaning_finance_guidance.validation.worker_required'));
+
                 return;
             }
             if (! is_numeric($value)) {
                 $fail(__('cleaning_finance_guidance.validation.amount_positive'));
+
                 return;
             }
 
@@ -263,6 +270,7 @@ final class CleaningTransactionForm
     {
         $key = 'cleaning_finance_guidance.statuses.'.$status;
         $label = __($key);
+
         return $label === $key ? $status : $label;
     }
 

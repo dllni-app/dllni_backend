@@ -11,6 +11,7 @@ use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use InvalidArgumentException;
 use Modules\Cleaning\Http\Resources\CleaningDepositTransactionResource;
 use Modules\Cleaning\Services\AdminCleaningTransactionService;
 use Modules\Cleaning\Services\DepositService;
@@ -83,7 +84,7 @@ final class DepositManagementController
         return $this->runTransaction(function () use ($worker, $validated) {
             $message = $this->transactionService->validationMessage($worker, 'refund', (float) $validated['amount']);
             if ($message !== null) {
-                throw new \InvalidArgumentException($message);
+                throw new InvalidArgumentException($message);
             }
 
             return $this->depositService->recordRefund(

@@ -283,6 +283,7 @@ final class CleaningWorkerInfolist
             $day = $state[$key] ?? null;
             if (! is_array($day) || (isset($day['available']) && ! $day['available'])) {
                 $lines[] = $label.': غير متاح';
+
                 continue;
             }
 

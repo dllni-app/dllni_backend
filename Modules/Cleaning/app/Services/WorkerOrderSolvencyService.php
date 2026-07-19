@@ -11,11 +11,14 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
+use Throwable;
 
 final class WorkerOrderSolvencyService
 {
     public const REASON_ELIGIBLE = 'eligible';
+
     public const REASON_INSUFFICIENT_COMMISSION_CAPACITY = 'insufficient_commission_capacity';
+
     public const REASON_COMMISSION_UNAVAILABLE = 'commission_unavailable';
 
     public function __construct(
@@ -34,7 +37,7 @@ final class WorkerOrderSolvencyService
 
         try {
             $requiredCommission = $this->requiredCommissionForBookingAndWorker($booking, $worker, $roomIds);
-        } catch (\Throwable $exception) {
+        } catch (Throwable $exception) {
             report($exception);
             $reasonCode = self::REASON_COMMISSION_UNAVAILABLE;
             $message = 'Platform commission cannot be calculated for this worker and booking.';

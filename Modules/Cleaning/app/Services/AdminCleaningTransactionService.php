@@ -146,7 +146,7 @@ final class AdminCleaningTransactionService
             throw new InvalidArgumentException($validationMessage);
         }
 
-        if ($type === 'debt' && trim((string) $notes) === '') {
+        if ($type === 'debt' && mb_trim((string) $notes) === '') {
             throw new InvalidArgumentException(app()->isLocale('ar') ? 'الملاحظات مطلوبة عند إضافة مديونية يدوية.' : 'Notes are required when adding manual debt.');
         }
 

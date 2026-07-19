@@ -55,6 +55,7 @@ final class CleaningTransactionsTable
                     ->options(self::typeOptions())
                     ->query(function (Builder $query, array $data): Builder {
                         $type = $data['value'] ?? null;
+
                         return is_string($type) && in_array($type, CleaningDepositTransaction::PUBLIC_TYPES, true)
                             ? $query->forPublicType($type)
                             : $query;
@@ -78,6 +79,7 @@ final class CleaningTransactionsTable
         foreach (CleaningDepositTransaction::PUBLIC_TYPES as $type) {
             $options[$type] = self::typeLabel($type);
         }
+
         return $options;
     }
 
@@ -110,6 +112,7 @@ final class CleaningTransactionsTable
 
         $key = 'cleaning_admin.transactions.references.'.$reference;
         $label = __($key);
+
         return $label === $key ? $reference : $label;
     }
 

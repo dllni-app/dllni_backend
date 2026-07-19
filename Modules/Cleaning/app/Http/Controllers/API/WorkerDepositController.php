@@ -92,11 +92,11 @@ final class WorkerDepositController
 
     private function normalizeTransactionType(mixed $type): ?string
     {
-        if (! is_string($type) || trim($type) === '') {
+        if (! is_string($type) || mb_trim($type) === '') {
             return null;
         }
 
-        return self::TRANSACTION_TYPE_ALIASES[trim($type)] ?? null;
+        return self::TRANSACTION_TYPE_ALIASES[mb_trim($type)] ?? null;
     }
 
     private function getWorker(): ?Worker

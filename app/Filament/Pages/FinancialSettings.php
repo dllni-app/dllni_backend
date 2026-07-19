@@ -17,31 +17,55 @@ final class FinancialSettings extends Page
     private const EXTENSION_BLOCKS = [[0, 15], [16, 30], [31, 45], [46, 60], [61, 75], [76, 90]];
 
     public float $defaultCommissionRate = 0.0;
+
     public float $vatRate = 0.0;
+
     public string $commissionType = 'percent';
+
     public ?float $commissionFixedAmount = null;
+
     public string $travelMarkupType = 'fixed';
+
     public float $travelMarkupValue = 0.0;
+
     public float $travelPerKm = 0.0;
+
     public string $travelDistanceStartPoint = 'worker_home';
+
     public int $coverageLow = 3;
+
     public int $coverageOk = 7;
+
     public array $extensionRanges = [];
+
     public string $timeBillingMode = 'actual';
+
     public ?int $minBillableMinutes = null;
+
     public ?int $timeWarningMinutesBeforeEnd = null;
+
     public float $extensionRatePer30Minutes = 0.0;
+
     public float $defaultMaxNegativeBalance = 0.0;
+
     public int $trustRejectAfterAcceptPenalty = 10;
+
     public int $trustMinimumForDispatch = 0;
+
     public bool $workerFinanceEnabled = true;
+
     public float $cleaningBaseUnitPrice = CleaningFinancialDefaults::BASE_UNIT_PRICE;
+
     public float $cleaningDeepMultiplier = CleaningFinancialDefaults::DEEP_CLEANING_MULTIPLIER;
+
     public float $cleaningAreaMarginMultiplier = CleaningFinancialDefaults::AREA_MARGIN_MULTIPLIER;
+
     public int $cleaningSetupBufferMinutes = CleaningFinancialDefaults::SETUP_BUFFER_MINUTES;
 
     protected static string|BackedEnum|null $navigationIcon = \Filament\Support\Icons\Heroicon::OutlinedCurrencyDollar;
+
     protected string $view = 'filament.cleaning-admin.pages.financial-settings';
+
     protected static ?int $navigationSort = 20;
 
     public static function getNavigationGroup(): ?string
