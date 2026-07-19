@@ -55,16 +55,6 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
             ->map(static fn (mixed $workerId): int => (int) $workerId)
             ->all();
 
-        if ($booking->neighborhood_id === null) {
-            $this->createDispatchAlert(
-                $booking,
-                'missing_neighborhood',
-                'Booking cannot be dispatched because neighborhood is missing.',
-            );
-
-            return;
-        }
-
         if ($assignmentMode === CleaningAssignmentMode::PreferredWorker->value && $booking->preferred_worker_id !== null) {
             if (in_array((int) $booking->preferred_worker_id, $acceptedWorkerIds, true)) {
                 return;
@@ -80,7 +70,10 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
                     $query->where('is_active', true);
                 })
                 ->whereNotIn('id', $rejectedWorkerIds)
-                ->coversNeighborhood((int) $booking->neighborhood_id)
+                ->when(
+                    $booking->neighborhood_id !== null,
+                    fn ($query) => $query->coversNeighborhood((int) $booking->neighborhood_id),
+                )
                 ->with(['user', 'deposit'])
                 ->first();
 
@@ -126,7 +119,10 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
                 fn ($query) => $query->where('gender', $booking->gender_preference->value),
             )
             ->whereNotIn('id', array_values(array_unique(array_merge($rejectedWorkerIds, $acceptedWorkerIds))))
-            ->coversNeighborhood((int) $booking->neighborhood_id)
+            ->when(
+                $booking->neighborhood_id !== null,
+                fn ($query) => $query->coversNeighborhood((int) $booking->neighborhood_id),
+            )
             ->with(['user', 'deposit'])
             ->limit(50)
             ->get();
@@ -134,8 +130,10 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
         if ($workers->isEmpty()) {
             $this->createDispatchAlert(
                 $booking,
-                'no_neighborhood_coverage',
-                'No active worker covers the booking neighborhood.',
+                $booking->neighborhood_id !== null ? 'no_neighborhood_coverage' : 'no_active_workers',
+                $booking->neighborhood_id !== null
+                    ? 'No active worker covers the booking neighborhood.'
+                    : 'No active worker is available for this booking.',
             );
 
             return;
@@ -180,7 +178,7 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
             $this->createDispatchAlert(
                 $booking,
                 'no_dispatch_eligible_workers',
-                'Workers cover the neighborhood, but none are currently available and eligible for dispatch.',
+                'Workers match the booking area, but none are currently available and eligible for dispatch.',
                 ['ineligibleWorkersCount' => $ineligibleCount],
             );
         }
