@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\UserModuleType;
 use App\Jobs\DispatchPlatformCouponNotifications;
 use App\Models\PlatformCoupon;
 use App\Models\PlatformCouponConstraint;
@@ -131,6 +132,27 @@ it('dispatches coupon notifications only to selected users', function (): void {
     Notification::assertSentTo($selected, PlatformCouponAvailableNotification::class);
     Notification::assertNotSentTo($other, PlatformCouponAvailableNotification::class);
     expect($coupon->fresh()->notification_sent_at)->not->toBeNull();
+});
+
+it('dispatches all-user coupon notifications only to active customer accounts', function (): void {
+    Notification::fake();
+
+    $customer = User::factory()->create(['is_active' => true, 'module_type' => null]);
+    $inactiveCustomer = User::factory()->create(['is_active' => false, 'module_type' => null]);
+    $worker = User::factory()->create([
+        'is_active' => true,
+        'module_type' => UserModuleType::CleaningWorker->value,
+    ]);
+    $coupon = PlatformCoupon::query()->create(couponData([
+        'code' => 'CUSTOMERS10',
+        'audience_type' => PlatformCoupon::AUDIENCE_ALL_USERS,
+    ]));
+
+    (new DispatchPlatformCouponNotifications($coupon->id))->handle();
+
+    Notification::assertSentTo($customer, PlatformCouponAvailableNotification::class);
+    Notification::assertNotSentTo($inactiveCustomer, PlatformCouponAvailableNotification::class);
+    Notification::assertNotSentTo($worker, PlatformCouponAvailableNotification::class);
 });
 
 /** @return array<string, mixed> */

@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\PlatformCoupons\Tables;
 
+use App\Jobs\DispatchPlatformCouponNotifications;
 use App\Models\PlatformCoupon;
+use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
+use Filament\Notifications\Notification;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -38,6 +41,7 @@ final class PlatformCouponsTable
                 ),
                 TextColumn::make('used_count')->label('الاستخدامات')->sortable(),
                 TextColumn::make('expires_at')->label('تاريخ الانتهاء')->dateTime('Y-m-d H:i')->placeholder('بدون انتهاء')->sortable(),
+                TextColumn::make('notification_sent_at')->label('آخر إرسال')->dateTime('Y-m-d H:i')->placeholder('لم يرسل')->toggleable(),
                 IconColumn::make('is_active')->label('فعال')->boolean(),
             ])
             ->defaultSort('id', 'desc')
@@ -56,6 +60,21 @@ final class PlatformCouponsTable
             ])
             ->recordActions([
                 EditAction::make()->label('تعديل'),
+                Action::make('resend_notifications')
+                    ->label('إعادة إرسال الإشعار')
+                    ->icon('heroicon-o-bell-alert')
+                    ->color('info')
+                    ->requiresConfirmation()
+                    ->modalDescription('سيتم إرسال إشعار الكوبون مرة أخرى إلى جميع المستخدمين المؤهلين حالياً.')
+                    ->action(function (PlatformCoupon $record): void {
+                        $record->forceFill(['notification_sent_at' => null])->saveQuietly();
+                        DispatchPlatformCouponNotifications::dispatch((int) $record->id)->afterCommit();
+
+                        Notification::make()
+                            ->title('تمت جدولة إعادة إرسال إشعار الكوبون')
+                            ->success()
+                            ->send();
+                    }),
                 DeleteAction::make()->label('حذف')->requiresConfirmation()
                     ->hidden(fn (PlatformCoupon $record): bool => $record->redemptions()->exists()),
             ])

@@ -28,6 +28,7 @@ final class DispatchPlatformCouponNotifications implements ShouldQueue
 
         $query = User::query()
             ->where('is_active', true)
+            ->whereNull('module_type')
             ->whereDoesntHave('roles', fn ($query) => $query->whereIn('name', [
                 'admin',
                 'Super Admin',

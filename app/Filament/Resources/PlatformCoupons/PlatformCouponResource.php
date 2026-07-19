@@ -7,6 +7,7 @@ namespace App\Filament\Resources\PlatformCoupons;
 use App\Filament\Resources\PlatformCoupons\Pages\CreatePlatformCoupon;
 use App\Filament\Resources\PlatformCoupons\Pages\EditPlatformCoupon;
 use App\Filament\Resources\PlatformCoupons\Pages\ListPlatformCoupons;
+use App\Filament\Resources\PlatformCoupons\RelationManagers\RedemptionsRelationManager;
 use App\Filament\Resources\PlatformCoupons\Schemas\PlatformCouponForm;
 use App\Filament\Resources\PlatformCoupons\Tables\PlatformCouponsTable;
 use App\Models\PlatformCoupon;
@@ -53,6 +54,13 @@ final class PlatformCouponResource extends Resource
     public static function table(Table $table): Table
     {
         return PlatformCouponsTable::configure($table);
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            RedemptionsRelationManager::class,
+        ];
     }
 
     public static function canViewAny(): bool
