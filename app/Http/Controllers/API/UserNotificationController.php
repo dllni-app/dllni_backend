@@ -44,4 +44,19 @@ final class UserNotificationController
 
         return response()->noContent();
     }
+
+    public function destroy(string $id): Response
+    {
+        $notification = auth()->user()->notifications()->where('id', $id)->firstOrFail();
+        $notification->delete();
+
+        return response()->noContent();
+    }
+
+    public function destroyAll(): Response
+    {
+        auth()->user()->notifications()->delete();
+
+        return response()->noContent();
+    }
 }

@@ -63,6 +63,8 @@ Route::prefix('v1')->group(function () {
             Route::put('working-hours', [WorkerWorkingHoursController::class, 'update']);
             Route::get('notifications', [UserNotificationController::class, 'index']);
             Route::patch('notifications/read-all', [UserNotificationController::class, 'markAllAsRead']);
+            Route::delete('notifications/all', [UserNotificationController::class, 'destroyAll']);
+            Route::delete('notifications/{id}', [UserNotificationController::class, 'destroy']);
             Route::patch('notifications/{id}/read', [UserNotificationController::class, 'markAsRead']);
             Route::put('notifications/token', RegisterFcmTokenController::class);
             Route::get('transactions', WorkerTransactionsController::class);
