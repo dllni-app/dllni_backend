@@ -100,7 +100,7 @@ final class WorkerOrderSolvencyService
         $worker->loadMissing('deposit');
         $limits = $this->depositService->resolveLimits($worker);
         $depositBalance = max(0.0, (float) ($worker->deposit?->current_balance ?? 0));
-        $debtBalance = $this->debtService->outstandingAdministrationDue($worker);
+        $debtBalance = $this->debtService->indebtednessBalance($worker);
         $allowedDebtLimit = max(0.0, (float) ($limits['maxNegativeBalance'] ?? 0));
         $remainingDebtCapacity = max(0.0, $allowedDebtLimit - $debtBalance);
         $activeReservedCommission = $this->activeReservedCommission($worker, $excludeBookingId);
@@ -111,6 +111,7 @@ final class WorkerOrderSolvencyService
             'allowedDebtLimit' => round($allowedDebtLimit, 2),
             'maxNegativeBalance' => round($allowedDebtLimit, 2),
             'currentDebtAmount' => round($debtBalance, 2),
+            'indebtednessBalance' => round($debtBalance, 2),
             'remainingDebtCapacity' => round($remainingDebtCapacity, 2),
             'activeReservedCommission' => round($activeReservedCommission, 2),
             'availableCommissionCapacity' => $this->depositService->availableCommissionCapacity($worker, $activeReservedCommission),
