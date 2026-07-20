@@ -105,13 +105,28 @@ final class WorkerDepositActions
             ->label(__('cleaning_admin.workers.finance.refund.label'))
             ->icon('heroicon-o-arrow-uturn-left')
             ->color('warning')
-            ->modalDescription(app()->isLocale('ar')
-                ? 'الحد الأقصى للاسترداد هو رصيد الإيداع الحالي فقط. يجب ألا توجد مديونية أو عمولات محجوزة لطلبات نشطة.'
-                : 'The maximum refund is the current deposit only. Debt and active reserved commission must both be zero.')
-            ->form(self::amountForm())
+            ->visible(function (Worker $record): bool {
+                $snapshot = app(AdminCleaningTransactionService::class)->snapshot($record);
+
+                return (float) ($snapshot['depositBalance'] ?? 0) > 0
+                    || (float) ($snapshot['adminCommissionBalance'] ?? 0) > 0;
+            })
+            ->requiresConfirmation()
+            ->modalHeading(app()->isLocale('ar') ? 'تصفير الحساب المالي' : 'Close the financial account')
+            ->modalDescription(function (Worker $record): string {
+                $snapshot = app(AdminCleaningTransactionService::class)->snapshot($record);
+                $deposit = number_format((float) ($snapshot['depositBalance'] ?? 0), 2);
+                $commission = number_format((float) ($snapshot['adminCommissionBalance'] ?? 0), 2);
+                $currency = config('app.currency', 'SYP');
+
+                return app()->isLocale('ar')
+                    ? "سيتم استرداد كامل رصيد الإيداع ({$deposit} {$currency}) وتحويل عمولة الإدارة ({$commission} {$currency}) إلى إيرادات الإدارة المسحوبة، ثم يصبح الرصيدان صفراً. لا يمكن تنفيذ العملية مع وجود مديونية أو عمولات محجوزة لطلبات نشطة."
+                    : "The full deposit balance ({$deposit} {$currency}) will be refunded and the administration commission ({$commission} {$currency}) will be moved to withdrawn administration revenue. Both balances will then be zero. The action is blocked while debt or active reserved commission exists.";
+            })
+            ->form(self::notesForm())
             ->action(function (Worker $record, array $data): void {
                 self::run(
-                    fn () => app(AdminCleaningTransactionService::class)->create($record, 'refund', (float) $data['amount'], self::composeNotes($data), auth()->id()),
+                    fn () => app(AdminCleaningTransactionService::class)->refundFullBalance($record, self::composeNotes($data), auth()->id()),
                     __('cleaning_admin.workers.finance.refund.success'),
                 );
             });
@@ -142,6 +157,13 @@ final class WorkerDepositActions
                 ->numeric()
                 ->minValue(0.01)
                 ->required(),
+            ...self::notesForm($notesRequired),
+        ];
+    }
+
+    private static function notesForm(bool $notesRequired = false): array
+    {
+        return [
             DatePicker::make('date')
                 ->label(__('cleaning_admin.workers.finance.fields.date'))
                 ->native(false)
