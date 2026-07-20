@@ -12,6 +12,7 @@ use Illuminate\Http\Response;
 use Modules\Cleaning\Http\Resources\CleaningDepositTransactionResource;
 use Modules\Cleaning\Services\DepositService;
 use Modules\Cleaning\Services\WorkerDebtService;
+use Modules\Cleaning\Services\WorkerFinancialAccountStatusService;
 use Modules\Cleaning\Services\WorkerOrderSolvencyService;
 
 final class WorkerDepositController
@@ -31,6 +32,7 @@ final class WorkerDepositController
         private readonly DepositService $depositService,
         private readonly WorkerDebtService $debtService,
         private readonly WorkerOrderSolvencyService $solvencyService,
+        private readonly WorkerFinancialAccountStatusService $statusService,
     ) {}
 
     public function getStatus(Request $request): JsonResponse
@@ -44,6 +46,7 @@ final class WorkerDepositController
         $payload = $this->depositService->depositStatusPayload($worker);
         $debtSummary = $this->debtService->summary($worker);
         $capacity = $this->solvencyService->workerCapacitySummary($worker);
+        $status = $this->statusService->status($worker);
 
         $indebtedness = (float) $debtSummary['indebtednessBalance'];
         $adminLoan = (float) $debtSummary['adminLoanBalance'];
@@ -65,7 +68,10 @@ final class WorkerDepositController
             : null;
         $payload['activeReservedCommission'] = $capacity['activeReservedCommission'];
         $payload['availableCommissionCapacity'] = $capacity['availableCommissionCapacity'];
-        $payload['isFinancialAccountActive'] = (bool) ($worker->deposit?->is_active ?? true);
+        $payload['status'] = $status;
+        $payload['isEligibleForNewRequests'] = $status === WorkerFinancialAccountStatusService::ACTIVE
+            && (bool) ($payload['isEligibleForNewRequests'] ?? false);
+        unset($payload['isFinancialAccountActive'], $payload['isActive']);
 
         return response()->json($payload);
     }
