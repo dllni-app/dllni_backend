@@ -137,6 +137,20 @@ final class CleaningDepositTransaction extends Model
         });
     }
 
+    protected function casts(): array
+    {
+        return [
+            'type' => 'string',
+            'amount' => 'decimal:2',
+            'debt_settled_amount' => 'decimal:2',
+            'admin_revenue_withdrawn_amount' => 'decimal:2',
+            'balance_before' => 'decimal:2',
+            'balance_after' => 'decimal:2',
+            'debt_balance_before' => 'decimal:2',
+            'debt_balance_after' => 'decimal:2',
+        ];
+    }
+
     private static function syncWorkerAccountTotals(int $workerId): void
     {
         if ($workerId <= 0) {
@@ -155,19 +169,5 @@ final class CleaningDepositTransaction extends Model
                 'deposited_total' => round(max(0.0, (float) ($totals?->deposited_total ?? 0)), 2),
                 'withdrawn_total' => round(max(0.0, (float) ($totals?->withdrawn_total ?? 0)), 2),
             ]);
-    }
-
-    protected function casts(): array
-    {
-        return [
-            'type' => 'string',
-            'amount' => 'decimal:2',
-            'debt_settled_amount' => 'decimal:2',
-            'admin_revenue_withdrawn_amount' => 'decimal:2',
-            'balance_before' => 'decimal:2',
-            'balance_after' => 'decimal:2',
-            'debt_balance_before' => 'decimal:2',
-            'debt_balance_after' => 'decimal:2',
-        ];
     }
 }
