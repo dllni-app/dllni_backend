@@ -22,6 +22,7 @@ final class CleaningWorkerDepositResource extends JsonResource
             'debtAmount' => $debtBalance,
             'depositedTotal' => (float) $this->deposited_total,
             'withdrawnTotal' => (float) $this->withdrawn_total,
+            'withdrawnAdminRevenueTotal' => (float) ($this->admin_revenue_withdrawn_total ?? 0),
             'allowedDebtLimit' => max(0.0, (float) ($this->max_negative_balance ?? 0)),
             'isActive' => $this->is_active,
             'createdAt' => $this->created_at?->toIso8601String(),
