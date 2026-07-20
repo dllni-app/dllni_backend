@@ -1,12 +1,67 @@
 <x-filament-hub.page-shell>
-    <x-filament::section :heading="__('cleaning_admin.financial.sections.pricing_algorithm')">
-        <p class="mb-4 text-sm text-gray-500 dark:text-gray-400">{{ __('cleaning_admin.financial.pricing_algorithm_description') }}</p>
-        <div class="grid gap-4 md:grid-cols-4">
-            <label class="flex flex-col gap-1"><span class="text-sm">{{ __('cleaning_admin.financial.fields.cleaning_base_unit_price') }}</span><input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="cleaningBaseUnitPrice">@error('cleaningBaseUnitPrice') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror</label>
-            <label class="flex flex-col gap-1"><span class="text-sm">{{ __('cleaning_admin.financial.fields.cleaning_deep_multiplier') }}</span><input type="number" min="1" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="cleaningDeepMultiplier">@error('cleaningDeepMultiplier') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror</label>
-            <label class="flex flex-col gap-1"><span class="text-sm">{{ __('cleaning_admin.financial.fields.cleaning_area_margin_multiplier') }}</span><input type="number" min="1" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="cleaningAreaMarginMultiplier">@error('cleaningAreaMarginMultiplier') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror</label>
-            <label class="flex flex-col gap-1"><span class="text-sm">{{ __('cleaning_admin.financial.fields.cleaning_setup_buffer_minutes') }}</span><input type="number" min="0" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="cleaningSetupBufferMinutes">@error('cleaningSetupBufferMinutes') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror</label>
+    <x-filament::section :heading="__('cleaning_settings.pricing.section')">
+        <p class="mb-4 text-sm text-gray-500 dark:text-gray-400">{{ __('cleaning_settings.pricing.description') }}</p>
+
+        <div class="grid gap-4 md:grid-cols-2">
+            <label class="flex flex-col gap-1">
+                <span class="text-sm">{{ __('cleaning_settings.pricing.base_unit_price') }}</span>
+                <input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="cleaningBaseUnitPrice">
+                <span class="text-xs text-gray-500 dark:text-gray-400">{{ __('cleaning_settings.pricing.base_unit_price_hint') }}</span>
+                @error('cleaningBaseUnitPrice') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
+            </label>
+
+            <label class="flex flex-col gap-1">
+                <span class="text-sm">{{ __('cleaning_settings.pricing.deep_multiplier') }}</span>
+                <input type="number" min="1" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="cleaningDeepMultiplier">
+                <span class="text-xs text-gray-500 dark:text-gray-400">{{ __('cleaning_settings.pricing.deep_multiplier_hint') }}</span>
+                @error('cleaningDeepMultiplier') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
+            </label>
         </div>
+
+        <div class="mt-6 space-y-4">
+            @foreach ($roomTypes as $roomType)
+                <div class="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
+                    <div class="border-b border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/60">
+                        <h3 class="text-sm font-semibold text-gray-950 dark:text-white">{{ __('cleaning_settings.room_types.'.$roomType) }}</h3>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full min-w-[760px] divide-y divide-gray-200 text-sm dark:divide-gray-700">
+                            <thead class="bg-white dark:bg-gray-900">
+                                <tr>
+                                    <th class="px-4 py-3 text-start font-medium text-gray-700 dark:text-gray-300">{{ __('cleaning_settings.pricing.room_size') }}</th>
+                                    <th class="px-4 py-3 text-start font-medium text-gray-700 dark:text-gray-300">{{ __('cleaning_settings.pricing.pricing_unit') }}</th>
+                                    <th class="px-4 py-3 text-start font-medium text-gray-700 dark:text-gray-300">{{ __('cleaning_settings.pricing.regular_minutes') }}</th>
+                                    <th class="px-4 py-3 text-start font-medium text-gray-700 dark:text-gray-300">{{ __('cleaning_settings.pricing.deep_minutes') }}</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
+                                @foreach ($roomSizes as $roomSize)
+                                    <tr>
+                                        <td class="whitespace-nowrap px-4 py-3 font-medium text-gray-950 dark:text-white">{{ __('cleaning_settings.room_sizes.'.$roomSize) }}</td>
+                                        <td class="px-4 py-3">
+                                            <input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="roomPricingSettings.{{ $roomType }}.{{ $roomSize }}.pricingUnit">
+                                            @error('roomPricingSettings.'.$roomType.'.'.$roomSize.'.pricingUnit') <span class="mt-1 block text-xs text-danger-600">{{ $message }}</span> @enderror
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <input type="number" min="1" step="1" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="roomPricingSettings.{{ $roomType }}.{{ $roomSize }}.regularMinutes">
+                                            @error('roomPricingSettings.'.$roomType.'.'.$roomSize.'.regularMinutes') <span class="mt-1 block text-xs text-danger-600">{{ $message }}</span> @enderror
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <input type="number" min="1" step="1" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="roomPricingSettings.{{ $roomType }}.{{ $roomSize }}.deepMinutes">
+                                            @error('roomPricingSettings.'.$roomType.'.'.$roomSize.'.deepMinutes') <span class="mt-1 block text-xs text-danger-600">{{ $message }}</span> @enderror
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            @endforeach
+        </div>
+
+        <p class="mt-4 text-xs text-gray-500 dark:text-gray-400">{{ __('cleaning_settings.pricing.formula_hint') }}</p>
+        @error('roomPricingSettings') <span class="mt-2 block text-xs text-danger-600">{{ $message }}</span> @enderror
     </x-filament::section>
 
     <x-filament::section :heading="__('cleaning_admin.financial.sections.revenue_model')">
