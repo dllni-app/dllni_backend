@@ -20,6 +20,7 @@ on:
       - 'app/Models/CleaningDepositTransaction.php'
       - 'app/Models/CleaningWorkerDeposit.php'
       - 'database/migrations/2026_07_19_210000_add_separate_debt_balance_to_cleaning_worker_deposits.php'
+      - 'database/migrations/2026_07_20_120000_add_admin_revenue_withdrawal_tracking_to_cleaning_finances.php'
       - 'database/seeders/WorkerSeeder.php'
       - 'resources/views/filament/cleaning-admin/pages/financial-settings.blade.php'
       - 'tests/Feature/Cleaning/AdminCleaningTransactionServiceTest.php'
@@ -84,6 +85,7 @@ jobs:
             app/Models/CleaningDepositTransaction.php \
             app/Models/CleaningWorkerDeposit.php \
             database/migrations/2026_07_19_210000_add_separate_debt_balance_to_cleaning_worker_deposits.php \
+            database/migrations/2026_07_20_120000_add_admin_revenue_withdrawal_tracking_to_cleaning_finances.php \
             database/seeders/WorkerSeeder.php \
             tests/Feature/Cleaning/AdminCleaningTransactionServiceTest.php \
             tests/Feature/Cleaning/WorkerDebtLedgerTest.php \
