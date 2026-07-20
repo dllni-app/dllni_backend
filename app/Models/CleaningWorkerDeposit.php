@@ -44,19 +44,6 @@ final class CleaningWorkerDeposit extends Model
         return $this->hasMany(CleaningDepositTransaction::class, 'worker_id', 'worker_id');
     }
 
-    protected static function booted(): void
-    {
-        self::saving(function (self $account): void {
-            $financeEnabled = (bool) (CleaningDepositSetting::query()->value('is_enabled') ?? true);
-            $indebtedness = max(0.0, (float) $account->debt_balance);
-            $allowedDebtLimit = max(0.0, (float) $account->max_negative_balance);
-
-            // The financial account stays active through the allowed indebtedness limit
-            // and becomes inactive only after that limit is exceeded.
-            $account->is_active = ! $financeEnabled || $indebtedness <= $allowedDebtLimit;
-        });
-    }
-
     protected function casts(): array
     {
         return [
