@@ -47,17 +47,24 @@ final class AdminCleaningTransactionService
         $capacity = $this->solvencyService->workerCapacitySummary($worker);
         $limits = $this->depositService->resolveLimits($worker);
         $currentBalance = max(0.0, (float) ($worker->deposit?->current_balance ?? 0));
-        $debtBalance = max(0.0, (float) ($worker->deposit?->debt_balance ?? 0));
+        $indebtednessBalance = max(0.0, (float) ($worker->deposit?->debt_balance ?? 0));
+        $adminLoanBalance = max(0.0, (float) ($debt['adminLoanBalance'] ?? 0));
         $activeReservedCommission = (float) ($capacity['activeReservedCommission'] ?? 0);
         $withdrawnAdminRevenue = max(0.0, (float) ($worker->deposit?->admin_revenue_withdrawn_total ?? 0));
         $totalCommission = max(0.0, (float) ($financial['totalCommission'] ?? 0));
         $adminCommissionBalance = max(0.0, $totalCommission - $withdrawnAdminRevenue);
-        $maxRefundable = $debtBalance <= 0 && $activeReservedCommission <= 0 ? $currentBalance : 0.0;
+        $maxRefundable = $indebtednessBalance <= 0 && $activeReservedCommission <= 0
+            ? max(0.0, $currentBalance - $adminLoanBalance)
+            : 0.0;
 
         return [
             'currentBalance' => round($currentBalance, 2),
             'depositBalance' => round($currentBalance, 2),
-            'debtBalance' => round($debtBalance, 2),
+            'adminLoanBalance' => round($adminLoanBalance, 2),
+            'loanBalance' => round($adminLoanBalance, 2),
+            'hasAdminLoan' => $adminLoanBalance > 0,
+            'debtBalance' => round($indebtednessBalance, 2),
+            'indebtednessBalance' => round($indebtednessBalance, 2),
             'depositedTotal' => round((float) ($worker->deposit?->deposited_total ?? 0), 2),
             'withdrawnTotal' => round((float) ($worker->deposit?->withdrawn_total ?? 0), 2),
             'minimumRequired' => 0.0,
@@ -67,20 +74,22 @@ final class AdminCleaningTransactionService
             'activeReservedCommission' => round($activeReservedCommission, 2),
             'availableCommissionCapacity' => round((float) ($capacity['availableCommissionCapacity'] ?? 0), 2),
             'maxRefundable' => round($maxRefundable, 2),
+            'grossRefundBalance' => round($currentBalance, 2),
             'depositGap' => 0.0,
             'totalRevenue' => round((float) $financial['totalRevenue'], 2),
             'completedJobs' => $this->completedBookingsCount($worker),
             'totalCommission' => round($totalCommission, 2),
             'adminCommissionBalance' => round($adminCommissionBalance, 2),
             'withdrawnAdminRevenueTotal' => round($withdrawnAdminRevenue, 2),
-            'commissionDue' => round($debtBalance, 2),
+            'commissionDue' => round($indebtednessBalance, 2),
             'totalSettled' => round((float) $debt['totalSettled'], 2),
             'totalRefunded' => round((float) $financial['totalRefunded'], 2),
-            'manualDebtDue' => round((float) $debt['manualDebtDue'], 2),
-            'adminFeeDue' => round((float) $debt['adminFeeDue'], 2),
-            'outstandingAdministrationDue' => round($debtBalance, 2),
+            'manualDebtDue' => round($adminLoanBalance, 2),
+            'adminFeeDue' => round($indebtednessBalance, 2),
+            'outstandingAdministrationDue' => round($adminLoanBalance + $indebtednessBalance, 2),
             'utilizationPercent' => round((float) $financial['utilizationPercent'], 1),
             'status' => (string) $financial['status'],
+            'isFinancialAccountActive' => (bool) ($worker->deposit?->is_active ?? true),
         ];
     }
 
@@ -89,8 +98,8 @@ final class AdminCleaningTransactionService
         $snapshot = $this->snapshot($worker);
         $suggestions = [];
 
-        if ($type === 'deposit' && $snapshot['outstandingAdministrationDue'] > 0) {
-            $this->addSuggestion($suggestions, (float) $snapshot['outstandingAdministrationDue'], __('cleaning_finance_guidance.suggestions.full_outstanding_due'));
+        if ($type === 'deposit' && $snapshot['debtBalance'] > 0) {
+            $this->addSuggestion($suggestions, (float) $snapshot['debtBalance'], __('cleaning_finance_guidance.suggestions.full_outstanding_due'));
         }
 
         return $suggestions;
@@ -108,11 +117,11 @@ final class AdminCleaningTransactionService
                 return $message;
             }
 
-            $depositBalance = (float) $this->snapshot($worker)['depositBalance'];
-            if ($amount > 0 && abs($amount - $depositBalance) > 0.009) {
+            $workerRefund = (float) $this->snapshot($worker)['maxRefundable'];
+            if ($amount > 0 && abs($amount - $workerRefund) > 0.009) {
                 return app()->isLocale('ar')
-                    ? 'يتم احتساب الاسترداد تلقائياً لكامل رصيد الإيداع، ولا يمكن إدخال مبلغ جزئي.'
-                    : 'The refund is calculated automatically for the full deposit balance; partial amounts are not allowed.';
+                    ? 'يتم احتساب المبلغ المعاد للعامل تلقائياً بعد استرداد الدين الإداري، ولا يمكن إدخال مبلغ جزئي.'
+                    : 'The worker refund is calculated automatically after recovering the administration loan; partial amounts are not allowed.';
             }
 
             return null;
@@ -120,6 +129,20 @@ final class AdminCleaningTransactionService
 
         if ($amount <= 0) {
             return __('cleaning_finance_guidance.validation.amount_positive');
+        }
+
+        if ($type === 'debt') {
+            $snapshot = $this->snapshot($worker);
+            if ((float) $snapshot['depositBalance'] > 0) {
+                return app()->isLocale('ar')
+                    ? 'لا يمكن إضافة دين إداري للعامل طالما لديه رصيد إيداع قائم.'
+                    : 'An administration loan cannot be added while the worker has an existing deposit balance.';
+            }
+            if ((float) $snapshot['debtBalance'] > 0) {
+                return app()->isLocale('ar')
+                    ? 'يجب تسوية المديونية الحالية قبل إضافة دين إداري إلى رصيد الإيداع.'
+                    : 'The current indebtedness must be settled before adding an administration loan to the deposit balance.';
+            }
         }
 
         return null;
@@ -141,7 +164,7 @@ final class AdminCleaningTransactionService
 
         return round(match ($type) {
             'deposit' => $depositBalance + max(0.0, $amount - $debtBalance),
-            'debt' => max(0.0, $depositBalance - $amount),
+            'debt' => $depositBalance + $amount,
             default => $depositBalance,
         }, 2);
     }
@@ -158,12 +181,12 @@ final class AdminCleaningTransactionService
         }
 
         if ($type === 'debt' && mb_trim((string) $notes) === '') {
-            throw new InvalidArgumentException(app()->isLocale('ar') ? 'الملاحظات مطلوبة عند إضافة مديونية يدوية.' : 'Notes are required when adding manual debt.');
+            throw new InvalidArgumentException(app()->isLocale('ar') ? 'الملاحظات مطلوبة عند إضافة دين إداري.' : 'Notes are required when adding an administration loan.');
         }
 
         return match ($type) {
             'deposit' => $this->depositService->recordDeposit($worker, $amount, 'admin_manual_deposit', $notes, $createdByAdminId),
-            'debt' => $this->debtService->recordDebt($worker, $amount, 'admin_manual_debt', $notes, $createdByAdminId),
+            'debt' => $this->debtService->recordDebt($worker, $amount, WorkerDebtService::ADMIN_LOAN_REFERENCE, $notes, $createdByAdminId),
             default => throw new InvalidArgumentException(__('cleaning_finance_guidance.validation.type_required')),
         };
     }
@@ -196,11 +219,11 @@ final class AdminCleaningTransactionService
                 ->firstOrFail();
 
             $lockedWorker = $worker->fresh(['deposit']) ?? $worker;
-            $debtBalance = max(0.0, (float) $account->debt_balance);
+            $indebtednessBalance = max(0.0, (float) $account->debt_balance);
             $activeReservedCommission = (float) ($this->solvencyService->workerCapacitySummary($lockedWorker)['activeReservedCommission'] ?? 0);
 
-            if ($debtBalance > 0) {
-                throw new InvalidArgumentException(app()->isLocale('ar') ? 'يجب تسوية المديونية كاملة قبل تنفيذ الاسترداد.' : 'The outstanding debt must be settled before the refund.');
+            if ($indebtednessBalance > 0) {
+                throw new InvalidArgumentException(app()->isLocale('ar') ? 'يجب تسوية المديونية كاملة قبل تنفيذ الاسترداد.' : 'The outstanding indebtedness must be settled before the refund.');
             }
 
             if ($activeReservedCommission > 0) {
@@ -208,6 +231,9 @@ final class AdminCleaningTransactionService
             }
 
             $depositBefore = max(0.0, (float) $account->current_balance);
+            $adminLoanBalance = $this->debtService->loanBalance($lockedWorker);
+            $loanRecovered = min($depositBefore, $adminLoanBalance);
+            $workerRefund = max(0.0, $depositBefore - $loanRecovered);
             $withdrawnAdminRevenueBefore = max(0.0, (float) ($account->admin_revenue_withdrawn_total ?? 0));
             $adminCommissionBalance = max(0.0, $this->commissionTotalFor($worker->id) - $withdrawnAdminRevenueBefore);
 
@@ -216,7 +242,7 @@ final class AdminCleaningTransactionService
             }
 
             $account->current_balance = 0;
-            $account->withdrawn_total = (float) $account->withdrawn_total + $depositBefore;
+            $account->withdrawn_total = (float) $account->withdrawn_total + $workerRefund;
             $account->admin_revenue_withdrawn_total = $withdrawnAdminRevenueBefore + $adminCommissionBalance;
             $account->save();
 
@@ -224,8 +250,8 @@ final class AdminCleaningTransactionService
                 'worker_id' => $worker->id,
                 'created_by_admin_id' => $createdByAdminId,
                 'type' => 'refund',
-                'amount' => $depositBefore,
-                'debt_settled_amount' => 0,
+                'amount' => $workerRefund,
+                'debt_settled_amount' => $loanRecovered,
                 'admin_revenue_withdrawn_amount' => $adminCommissionBalance,
                 'balance_before' => $depositBefore,
                 'balance_after' => 0,
@@ -243,7 +269,7 @@ final class AdminCleaningTransactionService
 
     public function settleFullDebt(Worker $worker, ?string $notes, ?int $createdByAdminId): CleaningDepositTransaction
     {
-        $amount = (float) $this->snapshot($worker)['outstandingAdministrationDue'];
+        $amount = (float) $this->snapshot($worker)['debtBalance'];
         if ($amount <= 0) {
             throw new InvalidArgumentException(__('cleaning_finance_guidance.validation.no_outstanding_due'));
         }
@@ -255,8 +281,8 @@ final class AdminCleaningTransactionService
     {
         $snapshot = $this->snapshot($worker);
 
-        if ((float) $snapshot['outstandingAdministrationDue'] > 0) {
-            return app()->isLocale('ar') ? 'يجب تسوية المديونية كاملة قبل تنفيذ الاسترداد.' : 'The outstanding debt must be settled before the refund.';
+        if ((float) $snapshot['debtBalance'] > 0) {
+            return app()->isLocale('ar') ? 'يجب تسوية المديونية كاملة قبل تنفيذ الاسترداد.' : 'The outstanding indebtedness must be settled before the refund.';
         }
 
         if ((float) $snapshot['activeReservedCommission'] > 0) {
