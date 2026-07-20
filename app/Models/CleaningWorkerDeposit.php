@@ -46,7 +46,7 @@ final class CleaningWorkerDeposit extends Model
 
     protected static function booted(): void
     {
-        static::saving(function (self $account): void {
+        self::saving(function (self $account): void {
             $financeEnabled = (bool) (CleaningDepositSetting::query()->value('is_enabled') ?? true);
             $indebtedness = max(0.0, (float) $account->debt_balance);
             $allowedDebtLimit = max(0.0, (float) $account->max_negative_balance);
