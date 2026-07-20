@@ -58,14 +58,15 @@ final class CleaningTransactionForm
                     ]),
                 Section::make(__('cleaning_finance_guidance.form.financial_summary'))
                     ->description(app()->isLocale('ar')
-                        ? 'الإيداع والمديونية رصيدان منفصلان، ولا يمكن أن يكون كلاهما موجباً في الوقت نفسه.'
-                        : 'Deposit and debt are separate balances and cannot both be positive at the same time.')
+                        ? 'الدين الإداري يضاف إلى رصيد الإيداع مع بقائه معلّماً كدين، أما المديونية فهي رصيد مستقل ينتج عند تجاوز عمولات المنصة لرصيد الإيداع.'
+                        : 'An administration loan is added to the deposit balance while remaining marked as a loan. Indebtedness is separate and is created only when platform charges exceed the deposit.')
                     ->visible(fn (Get $get): bool => self::worker($get('worker_id')) instanceof Worker)
-                    ->columns(['default' => 2, 'md' => 3, 'xl' => 5])
+                    ->columns(['default' => 2, 'md' => 3, 'xl' => 6])
                     ->schema([
                         self::moneyMetric('deposit_balance', 'depositBalance', app()->isLocale('ar') ? 'رصيد الإيداع' : 'Deposit balance'),
-                        self::moneyMetric('debt_balance', 'debtBalance', app()->isLocale('ar') ? 'المديونية الحالية' : 'Current debt'),
-                        self::moneyMetric('allowed_debt_limit', 'allowedDebtLimit', app()->isLocale('ar') ? 'حد المديونية المسموح' : 'Allowed debt limit'),
+                        self::moneyMetric('admin_loan_balance', 'adminLoanBalance', app()->isLocale('ar') ? 'الدين الإداري ضمن الإيداع' : 'Administration loan in deposit'),
+                        self::moneyMetric('debt_balance', 'debtBalance', app()->isLocale('ar') ? 'المديونية الحالية' : 'Current indebtedness'),
+                        self::moneyMetric('allowed_debt_limit', 'allowedDebtLimit', app()->isLocale('ar') ? 'حد المديونية' : 'Indebtedness limit'),
                         self::moneyMetric('total_revenue', 'totalRevenue', app()->isLocale('ar') ? 'إجمالي الإيرادات' : 'Total revenue'),
                         self::moneyMetric('admin_commission_balance', 'adminCommissionBalance', app()->isLocale('ar') ? 'إجمالي عمولة الإدارة' : 'Administration commission balance'),
                     ]),
@@ -110,7 +111,7 @@ final class CleaningTransactionForm
                             ->placeholder(__('cleaning_finance_guidance.placeholders.notes'))
                             ->required(fn (Get $get): bool => $get('type') === 'debt')
                             ->helperText(fn (Get $get): ?string => $get('type') === 'debt'
-                                ? (app()->isLocale('ar') ? 'سبب المديونية اليدوية مطلوب.' : 'A reason is required for manual debt.')
+                                ? (app()->isLocale('ar') ? 'سبب الدين الإداري مطلوب، وسيظهر المبلغ داخل رصيد الإيداع مع تنبيه بأنه دين.' : 'A reason is required. The amount will appear in the deposit balance with an administration-loan warning.')
                                 : null)
                             ->rows(4)
                             ->maxLength(1000)
@@ -225,10 +226,10 @@ final class CleaningTransactionForm
         return match ($type) {
             'deposit' => app()->isLocale('ar')
                 ? 'يسدد الإيداع المديونية أولاً. المديونية الحالية: '.self::money((float) $snapshot['debtBalance']).'.'
-                : 'The deposit settles debt first. Current debt: '.self::money((float) $snapshot['debtBalance']).'.',
+                : 'The deposit settles indebtedness first. Current indebtedness: '.self::money((float) $snapshot['debtBalance']).'.',
             'debt' => app()->isLocale('ar')
-                ? 'يخصم من الإيداع أولاً، ثم ينشئ مديونية فقط للجزء غير المغطى.'
-                : 'Consumes the deposit first, then creates debt only for the uncovered amount.',
+                ? 'يضاف الدين الإداري إلى رصيد الإيداع، ولا يمكن إضافته إذا كان للعامل رصيد إيداع أو مديونية قائمة.'
+                : 'The administration loan is added to the deposit balance and cannot be added while a deposit or indebtedness already exists.',
             default => __('cleaning_finance_guidance.fields.amount_helper_default'),
         };
     }
@@ -264,12 +265,14 @@ final class CleaningTransactionForm
             return __('cleaning_finance_guidance.validation.select_worker_first');
         }
 
-        $deposit = self::money((float) ($snapshot['depositBalance'] ?? 0));
+        $deposit = self::money((float) ($snapshot['grossRefundBalance'] ?? $snapshot['depositBalance'] ?? 0));
+        $loan = self::money((float) ($snapshot['adminLoanBalance'] ?? 0));
         $commission = self::money((float) ($snapshot['adminCommissionBalance'] ?? 0));
+        $workerRefund = self::money((float) ($snapshot['maxRefundable'] ?? 0));
 
         return app()->isLocale('ar')
-            ? "سيتم استرداد كامل رصيد الإيداع ({$deposit}) وتحويل عمولة الإدارة ({$commission}) إلى إيرادات الإدارة المسحوبة، ثم يصبح الرصيدان صفراً."
-            : "The full deposit balance ({$deposit}) will be refunded and the administration commission ({$commission}) will be moved to withdrawn administration revenue. Both balances will then be zero.";
+            ? "سيتم إغلاق رصيد الإيداع ({$deposit}) بهذا الترتيب: استرداد الدين الإداري أولاً ({$loan})، ثم تحويل عمولة الإدارة ({$commission}) إلى إيرادات الإدارة المسحوبة، ثم إعادة المبلغ المتبقي للعامل ({$workerRefund})."
+            : "The deposit balance ({$deposit}) will be closed in this order: recover the administration loan first ({$loan}), move administration commission ({$commission}) to withdrawn administration revenue, then refund the remaining amount to the worker ({$workerRefund}).";
     }
 
     private static function money(float $amount): string
