@@ -11,7 +11,6 @@ use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use InvalidArgumentException;
 use Modules\Cleaning\Http\Resources\CleaningDepositTransactionResource;
 use Modules\Cleaning\Services\AdminCleaningTransactionService;
 use Modules\Cleaning\Services\DepositService;
@@ -76,25 +75,16 @@ final class DepositManagementController
     public function recordRefund(Request $request, Worker $worker): JsonResponse
     {
         $validated = $request->validate([
-            'amount' => 'required|numeric|min:0.01',
+            'amount' => 'nullable|numeric|min:0.01',
             'reference' => 'nullable|string|max:255',
             'notes' => 'nullable|string|max:1000',
         ]);
 
-        return $this->runTransaction(function () use ($worker, $validated) {
-            $message = $this->transactionService->validationMessage($worker, 'refund', (float) $validated['amount']);
-            if ($message !== null) {
-                throw new InvalidArgumentException($message);
-            }
-
-            return $this->depositService->recordRefund(
-                $worker,
-                (float) $validated['amount'],
-                $validated['reference'] ?? 'admin_api_refund',
-                $validated['notes'] ?? null,
-                auth()->id(),
-            );
-        }, 'Refund recorded successfully');
+        return $this->runTransaction(fn () => $this->transactionService->refundFullBalance(
+            worker: $worker,
+            notes: $validated['notes'] ?? null,
+            createdByAdminId: auth()->id(),
+        ), 'Full financial account refund recorded successfully');
     }
 
     public function getWorkerTransactions(Request $request, Worker $worker): JsonResponse
