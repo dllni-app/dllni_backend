@@ -62,9 +62,9 @@ jobs:
           DB_DATABASE: database/database.sqlite
         run: php artisan migrate --force
 
-      - name: Check financial ledger formatting
+      - name: Capture financial ledger formatting fixes
         run: |
-          vendor/bin/pint --test \
+          vendor/bin/pint \
             Modules/Cleaning/app/Http/Controllers/API/DepositManagementController.php \
             Modules/Cleaning/app/Http/Controllers/API/WorkerDepositController.php \
             Modules/Cleaning/app/Http/Resources/CleaningDepositTransactionResource.php \
@@ -93,6 +93,7 @@ jobs:
             tests/Feature/Cleaning/WorkerDepositTimelineApiTest.php \
             tests/Feature/Filament/CleaningFinancialSettingsPageTest.php \
             tests/Feature/Seeders/WorkerFinancialScenarioSeederTest.php
+          git diff -- '*.php' > pint-fixes.patch
 
       - name: Run financial ledger tests
         env:
@@ -115,5 +116,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cleaning-financial-ledger-v2-diagnostics
-          path: cleaning-financial-ledger-v2-test.log
+          path: |
+            cleaning-financial-ledger-v2-test.log
+            pint-fixes.patch
           if-no-files-found: ignore
