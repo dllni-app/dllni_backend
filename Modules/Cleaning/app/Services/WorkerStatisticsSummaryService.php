@@ -22,6 +22,7 @@ final class WorkerStatisticsSummaryService
 
     public function __construct(
         private readonly AdminCleaningTransactionService $transactionService,
+        private readonly WorkerFinancialAccountStatusService $statusService,
     ) {}
 
     /**
@@ -94,7 +95,7 @@ final class WorkerStatisticsSummaryService
             'minimumRequired' => round((float) ($financial['minimumRequired'] ?? 0), 2),
             'depositedTotal' => round((float) ($financial['depositedTotal'] ?? 0), 2),
             'withdrawnTotal' => round((float) ($financial['withdrawnTotal'] ?? 0), 2),
-            'status' => (string) ($financial['status'] ?? 'inactive'),
+            'status' => $this->statusService->status($worker),
         ];
     }
 
