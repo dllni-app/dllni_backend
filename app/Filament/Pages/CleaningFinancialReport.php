@@ -68,6 +68,9 @@ final class CleaningFinancialReport extends Page
         $depositsHeld = (float) CleaningWorkerDeposit::query()
             ->sum('current_balance');
 
+        $withdrawnAdminRevenue = (float) CleaningWorkerDeposit::query()
+            ->sum('admin_revenue_withdrawn_total');
+
         $activeWorkers = Worker::query()->activeAvailable()->count();
         $restrictedWorkers = Worker::query()->restricted()->count();
 
@@ -75,6 +78,7 @@ final class CleaningFinancialReport extends Page
             ['label' => __('cleaning_admin.report.metrics.deposits_held'), 'value' => $this->money(max(0.0, $depositsHeld)), 'tone' => 'primary'],
             ['label' => __('cleaning_finance.report.outstanding_admin_due'), 'value' => $this->money((float) $ledger['outstandingAdministrationDue']), 'tone' => 'danger'],
             ['label' => __('cleaning_admin.report.metrics.settlements_received'), 'value' => $this->money((float) $ledger['totalSettled']), 'tone' => 'success'],
+            ['label' => app()->isLocale('ar') ? 'إيرادات الإدارة المسحوبة' : 'Withdrawn administration revenue', 'value' => $this->money($withdrawnAdminRevenue), 'tone' => 'success'],
             ['label' => __('cleaning_admin.report.metrics.deposit_refunds'), 'value' => $this->money($refunds), 'tone' => 'warning'],
             ['label' => __('cleaning_admin.report.metrics.active_workers'), 'value' => AdminUiFormatter::formatNumber($activeWorkers), 'tone' => 'success'],
             ['label' => __('cleaning_admin.report.metrics.restricted_workers'), 'value' => AdminUiFormatter::formatNumber($restrictedWorkers), 'tone' => 'danger'],

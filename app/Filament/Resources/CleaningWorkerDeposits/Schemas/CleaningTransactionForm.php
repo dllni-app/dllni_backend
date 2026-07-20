@@ -44,9 +44,6 @@ final class CleaningTransactionForm
                         Select::make('type')
                             ->label(__('cleaning_admin.transactions.fields.type'))
                             ->placeholder(__('cleaning_finance_guidance.placeholders.type'))
-                            ->helperText(app()->isLocale('ar')
-                                ? 'التسوية لم تعد عملية يدوية. استخدم زر تصفير المديونية من صفحة العامل.'
-                                : 'Settlement is no longer a manual transaction. Use the Settle full debt action on the worker page.')
                             ->options([
                                 'deposit' => __('cleaning_admin.transactions.types.deposit'),
                                 'debt' => __('cleaning_finance.types.debt'),
@@ -64,25 +61,13 @@ final class CleaningTransactionForm
                         ? 'الإيداع والمديونية رصيدان منفصلان، ولا يمكن أن يكون كلاهما موجباً في الوقت نفسه.'
                         : 'Deposit and debt are separate balances and cannot both be positive at the same time.')
                     ->visible(fn (Get $get): bool => self::worker($get('worker_id')) instanceof Worker)
-                    ->columns(['default' => 2, 'md' => 3, 'xl' => 4])
+                    ->columns(['default' => 2, 'md' => 3, 'xl' => 5])
                     ->schema([
                         self::moneyMetric('deposit_balance', 'depositBalance', app()->isLocale('ar') ? 'رصيد الإيداع' : 'Deposit balance'),
                         self::moneyMetric('debt_balance', 'debtBalance', app()->isLocale('ar') ? 'المديونية الحالية' : 'Current debt'),
                         self::moneyMetric('allowed_debt_limit', 'allowedDebtLimit', app()->isLocale('ar') ? 'حد المديونية المسموح' : 'Allowed debt limit'),
-                        self::moneyMetric('remaining_debt_capacity', 'remainingDebtCapacity', app()->isLocale('ar') ? 'سعة المديونية المتبقية' : 'Remaining debt capacity'),
-                        self::moneyMetric('reserved_commission', 'activeReservedCommission', app()->isLocale('ar') ? 'العمولات المحجوزة' : 'Reserved commission'),
-                        self::moneyMetric('available_commission_capacity', 'availableCommissionCapacity', app()->isLocale('ar') ? 'سعة العمولات المتاحة' : 'Available commission capacity'),
-                        self::moneyMetric('deposited_total', 'depositedTotal', __('cleaning_finance_guidance.metrics.deposited_total')),
-                        self::moneyMetric('withdrawn_total', 'withdrawnTotal', __('cleaning_finance_guidance.metrics.withdrawn_total')),
-                        self::moneyMetric('total_settled', 'totalSettled', __('cleaning_finance_guidance.metrics.total_settled')),
-                        self::moneyMetric('total_revenue', 'totalRevenue', __('cleaning_finance_guidance.metrics.total_revenue')),
-                        self::moneyMetric('total_commission', 'totalCommission', __('cleaning_finance_guidance.metrics.total_commission')),
-                        Placeholder::make('completed_jobs_metric')
-                            ->label(__('cleaning_finance_guidance.metrics.completed_jobs'))
-                            ->content(fn (Get $get): string => (string) (self::snapshot($get('worker_id'))['completedJobs'] ?? 0)),
-                        Placeholder::make('account_status_metric')
-                            ->label(__('cleaning_finance_guidance.metrics.account_status'))
-                            ->content(fn (Get $get): string => self::statusLabel((string) (self::snapshot($get('worker_id'))['status'] ?? 'unknown'))),
+                        self::moneyMetric('total_revenue', 'totalRevenue', app()->isLocale('ar') ? 'إجمالي الإيرادات' : 'Total revenue'),
+                        self::moneyMetric('admin_commission_balance', 'adminCommissionBalance', app()->isLocale('ar') ? 'إجمالي عمولة الإدارة' : 'Administration commission balance'),
                     ]),
                 Section::make(__('cleaning_finance_guidance.form.transaction_section'))
                     ->description(__('cleaning_finance_guidance.form.transaction_section_description'))
@@ -92,7 +77,7 @@ final class CleaningTransactionForm
                             ->label(__('cleaning_finance_guidance.fields.suggested_amount'))
                             ->placeholder(__('cleaning_finance_guidance.placeholders.suggested_amount'))
                             ->options(fn (Get $get): array => self::suggestedAmounts($get('worker_id'), $get('type')))
-                            ->visible(fn (Get $get): bool => self::suggestedAmounts($get('worker_id'), $get('type')) !== [])
+                            ->visible(fn (Get $get): bool => $get('type') !== 'refund' && self::suggestedAmounts($get('worker_id'), $get('type')) !== [])
                             ->live()
                             ->dehydrated(false)
                             ->afterStateUpdated(function (mixed $state, Set $set): void {
@@ -105,13 +90,20 @@ final class CleaningTransactionForm
                             ->placeholder(__('cleaning_finance_guidance.placeholders.amount'))
                             ->numeric()
                             ->minValue(0.01)
-                            ->required()
+                            ->required(fn (Get $get): bool => $get('type') !== 'refund')
+                            ->visible(fn (Get $get): bool => $get('type') !== 'refund')
                             ->live(debounce: 400)
                             ->helperText(fn (Get $get): string => self::amountHelper($get('worker_id'), $get('type')))
                             ->rules(fn (Get $get): array => [self::amountRule($get('worker_id'), $get('type'))]),
                         Placeholder::make('amount_validation')
                             ->label(__('cleaning_finance_guidance.fields.validation_result'))
                             ->content(fn (Get $get): string => self::validationResult($get('worker_id'), $get('type'), $get('amount')))
+                            ->visible(fn (Get $get): bool => $get('type') !== 'refund')
+                            ->columnSpanFull(),
+                        Placeholder::make('automatic_refund_summary')
+                            ->label(app()->isLocale('ar') ? 'نتيجة الاسترداد التلقائي' : 'Automatic refund result')
+                            ->content(fn (Get $get): string => self::automaticRefundSummary($get('worker_id')))
+                            ->visible(fn (Get $get): bool => $get('type') === 'refund')
                             ->columnSpanFull(),
                         Textarea::make('notes')
                             ->label(__('cleaning_admin.transactions.fields.notes'))
@@ -237,7 +229,6 @@ final class CleaningTransactionForm
             'debt' => app()->isLocale('ar')
                 ? 'يخصم من الإيداع أولاً، ثم ينشئ مديونية فقط للجزء غير المغطى.'
                 : 'Consumes the deposit first, then creates debt only for the uncovered amount.',
-            'refund' => __('cleaning_finance_guidance.fields.amount_helper_refund', ['maximum' => self::money((float) $snapshot['maxRefundable'])]),
             default => __('cleaning_finance_guidance.fields.amount_helper_default'),
         };
     }
@@ -266,12 +257,19 @@ final class CleaningTransactionForm
         ]);
     }
 
-    private static function statusLabel(string $status): string
+    private static function automaticRefundSummary(mixed $workerId): string
     {
-        $key = 'cleaning_finance_guidance.statuses.'.$status;
-        $label = __($key);
+        $snapshot = self::snapshot($workerId);
+        if ($snapshot === []) {
+            return __('cleaning_finance_guidance.validation.select_worker_first');
+        }
 
-        return $label === $key ? $status : $label;
+        $deposit = self::money((float) ($snapshot['depositBalance'] ?? 0));
+        $commission = self::money((float) ($snapshot['adminCommissionBalance'] ?? 0));
+
+        return app()->isLocale('ar')
+            ? "سيتم استرداد كامل رصيد الإيداع ({$deposit}) وتحويل عمولة الإدارة ({$commission}) إلى إيرادات الإدارة المسحوبة، ثم يصبح الرصيدان صفراً."
+            : "The full deposit balance ({$deposit}) will be refunded and the administration commission ({$commission}) will be moved to withdrawn administration revenue. Both balances will then be zero.";
     }
 
     private static function money(float $amount): string

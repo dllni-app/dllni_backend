@@ -20,6 +20,7 @@ final class CleaningDepositTransactionResource extends JsonResource
             'type' => $transaction->publicType(),
             'amount' => $transaction->publicAmount(),
             'debtSettledAmount' => (float) ($transaction->debt_settled_amount ?? 0),
+            'adminRevenueWithdrawnAmount' => (float) ($transaction->admin_revenue_withdrawn_amount ?? 0),
             'depositBalanceBefore' => (float) $transaction->balance_before,
             'depositBalanceAfter' => (float) $transaction->balance_after,
             'debtBalanceBefore' => (float) ($transaction->debt_balance_before ?? 0),

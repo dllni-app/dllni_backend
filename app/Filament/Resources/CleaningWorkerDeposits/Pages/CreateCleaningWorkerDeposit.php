@@ -38,6 +38,7 @@ final class CreateCleaningWorkerDeposit extends CreateRecord
     protected function handleRecordCreation(array $data): Model
     {
         $service = app(AdminCleaningTransactionService::class);
+        $type = (string) ($data['type'] ?? '');
 
         try {
             $worker = $service->findWorker((int) ($data['worker_id'] ?? 0));
@@ -45,16 +46,24 @@ final class CreateCleaningWorkerDeposit extends CreateRecord
                 ? mb_trim((string) $data['notes'])
                 : null;
 
+            if ($type === 'refund') {
+                return $service->refundFullBalance(
+                    worker: $worker,
+                    notes: $notes,
+                    createdByAdminId: auth()->id(),
+                );
+            }
+
             return $service->create(
                 worker: $worker,
-                type: (string) ($data['type'] ?? ''),
+                type: $type,
                 amount: (float) ($data['amount'] ?? 0),
                 notes: $notes,
                 createdByAdminId: auth()->id(),
             );
         } catch (InvalidArgumentException $exception) {
             throw ValidationException::withMessages([
-                'data.amount' => $exception->getMessage(),
+                $type === 'refund' ? 'data.type' : 'data.amount' => $exception->getMessage(),
             ]);
         }
     }

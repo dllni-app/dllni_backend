@@ -38,6 +38,11 @@ final class CleaningTransactionsTable
                     ->color(fn (CleaningDepositTransaction $record): string => self::typeColor($record->publicType()))
                     ->formatStateUsing(fn (CleaningDepositTransaction $record): string => self::typeLabel($record->publicType())),
                 TextColumn::make('amount')->label(__('cleaning_admin.transactions.fields.amount'))->formatStateUsing(fn ($state): string => self::money($state))->sortable(),
+                TextColumn::make('admin_revenue_withdrawn_amount')
+                    ->label(app()->isLocale('ar') ? 'إيرادات الإدارة المسحوبة' : 'Withdrawn administration revenue')
+                    ->formatStateUsing(fn ($state): string => self::money($state))
+                    ->placeholder('—')
+                    ->toggleable(),
                 TextColumn::make('balance_before')->label(app()->isLocale('ar') ? 'الإيداع قبل' : 'Deposit before')->formatStateUsing(fn ($state): string => self::money($state))->toggleable(),
                 TextColumn::make('balance_after')->label(app()->isLocale('ar') ? 'الإيداع بعد' : 'Deposit after')->formatStateUsing(fn ($state): string => self::money($state)),
                 TextColumn::make('debt_balance_before')->label(app()->isLocale('ar') ? 'المديونية قبل' : 'Debt before')->formatStateUsing(fn ($state): string => self::money($state))->toggleable(isToggledHiddenByDefault: true),
@@ -103,6 +108,9 @@ final class CleaningTransactionsTable
         if (str_starts_with($reference, 'automatic_admin_commission:') || preg_match('/^admin_fee_booking_\d+$/', $reference) === 1) {
             return __('cleaning_finance.references.automatic_admin_commission');
         }
+        if ($reference === 'admin_full_account_refund') {
+            return app()->isLocale('ar') ? 'تصفير الحساب المالي بالكامل' : 'Full financial account settlement';
+        }
 
         $financeKey = 'cleaning_finance.references.'.$reference;
         $financeLabel = __($financeKey);
@@ -135,6 +143,7 @@ final class CleaningTransactionsTable
             __('cleaning_admin.transactions.fields.worker') => $tx->worker?->first_name ?? '—',
             __('cleaning_admin.transactions.fields.type') => self::typeLabel($tx->publicType()),
             __('cleaning_admin.transactions.fields.amount') => (int) round($tx->publicAmount()),
+            app()->isLocale('ar') ? 'إيرادات الإدارة المسحوبة' : 'Withdrawn administration revenue' => (int) round((float) ($tx->admin_revenue_withdrawn_amount ?? 0)),
             app()->isLocale('ar') ? 'الإيداع قبل' : 'Deposit before' => (int) round((float) $tx->balance_before),
             app()->isLocale('ar') ? 'الإيداع بعد' : 'Deposit after' => (int) round((float) $tx->balance_after),
             app()->isLocale('ar') ? 'المديونية قبل' : 'Debt before' => (int) round((float) ($tx->debt_balance_before ?? 0)),
