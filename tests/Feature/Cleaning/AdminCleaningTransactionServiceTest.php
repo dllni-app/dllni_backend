@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Enums\UserModuleType;
 use App\Models\CleaningDepositSetting;
+use App\Models\CleaningDepositTransaction;
 use App\Models\CleaningWorkerDeposit;
 use App\Models\User;
 use App\Models\Worker;
@@ -36,6 +37,7 @@ it('returns separate deposit debt and capacity values for the admin dashboard', 
         'debt_balance' => 0,
         'deposited_total' => 30000,
         'withdrawn_total' => 10000,
+        'admin_revenue_withdrawn_total' => 0,
         'minimum_required' => 0,
         'max_negative_balance' => 50000,
         'is_active' => true,
@@ -77,7 +79,7 @@ it('counts completed orders from actual booking records instead of the seeded wo
     expect((int) $worker->fresh()->total_completed_jobs)->toBe(120)->and($snapshot['completedJobs'])->toBe(2);
 });
 
-it('limits refund to the current deposit and blocks it while debt exists', function (): void {
+it('refunds the full deposit and moves the current commission to withdrawn administration revenue', function (): void {
     $worker = createCleaningWorkerForAdminTransaction();
     CleaningWorkerDeposit::query()->create([
         'worker_id' => $worker->id,
@@ -85,19 +87,60 @@ it('limits refund to the current deposit and blocks it while debt exists', funct
         'debt_balance' => 0,
         'deposited_total' => 5000,
         'withdrawn_total' => 2000,
+        'admin_revenue_withdrawn_total' => 0,
         'minimum_required' => 0,
         'max_negative_balance' => 50000,
         'is_active' => true,
     ]);
 
+    CleaningDepositTransaction::query()->create([
+        'worker_id' => $worker->id,
+        'type' => 'commission',
+        'amount' => 700,
+        'balance_before' => 3700,
+        'balance_after' => 3000,
+        'debt_balance_before' => 0,
+        'debt_balance_after' => 0,
+        'reference' => CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'test',
+    ]);
+
     $service = app(AdminCleaningTransactionService::class);
     $freshWorker = $worker->fresh(['deposit']);
-    expect($service->validationMessage($freshWorker, 'refund', 3000))->toBeNull()
-        ->and($service->validationMessage($freshWorker, 'refund', 3000.01))->not->toBeNull();
 
-    app(WorkerDebtService::class)->recordDebt($freshWorker, 4000, 'test_manual_debt', 'Required reason.');
-    expect($service->validationMessage($worker->fresh(['deposit']), 'refund', 1))->not->toBeNull();
+    expect($service->validationMessage($freshWorker, 'refund', 3000))->toBeNull()
+        ->and($service->validationMessage($freshWorker, 'refund', 1000))->not->toBeNull()
+        ->and($service->snapshot($freshWorker)['adminCommissionBalance'])->toBe(700.0);
+
+    $transaction = $service->refundFullBalance($freshWorker, 'Close the account.', null);
+    $account = $worker->fresh('deposit')->deposit;
+    $snapshot = $service->snapshot($worker->fresh(['deposit']));
+
+    expect($transaction->type)->toBe('refund')
+        ->and((float) $transaction->amount)->toBe(3000.0)
+        ->and((float) $transaction->admin_revenue_withdrawn_amount)->toBe(700.0)
+        ->and((float) $account->current_balance)->toBe(0.0)
+        ->and((float) $account->withdrawn_total)->toBe(5000.0)
+        ->and((float) $account->admin_revenue_withdrawn_total)->toBe(700.0)
+        ->and($snapshot['adminCommissionBalance'])->toBe(0.0)
+        ->and($snapshot['withdrawnAdminRevenueTotal'])->toBe(700.0);
 });
+
+it('blocks the full refund while debt exists', function (): void {
+    $worker = createCleaningWorkerForAdminTransaction();
+    CleaningWorkerDeposit::query()->create([
+        'worker_id' => $worker->id,
+        'current_balance' => 0,
+        'debt_balance' => 1000,
+        'deposited_total' => 0,
+        'withdrawn_total' => 0,
+        'admin_revenue_withdrawn_total' => 0,
+        'minimum_required' => 0,
+        'max_negative_balance' => 50000,
+        'is_active' => true,
+    ]);
+
+    app(AdminCleaningTransactionService::class)->refundFullBalance($worker->fresh(['deposit']), null, null);
+})->throws(InvalidArgumentException::class);
 
 it('settles the full debt using the one-click dashboard action', function (): void {
     $worker = createCleaningWorkerForAdminTransaction();
@@ -107,6 +150,7 @@ it('settles the full debt using the one-click dashboard action', function (): vo
         'debt_balance' => 18000,
         'deposited_total' => 0,
         'withdrawn_total' => 0,
+        'admin_revenue_withdrawn_total' => 0,
         'minimum_required' => 0,
         'max_negative_balance' => 50000,
         'is_active' => true,
@@ -127,6 +171,7 @@ it('requires notes for a manual debt transaction', function (): void {
         'debt_balance' => 0,
         'deposited_total' => 0,
         'withdrawn_total' => 0,
+        'admin_revenue_withdrawn_total' => 0,
         'minimum_required' => 0,
         'max_negative_balance' => 50000,
         'is_active' => true,
