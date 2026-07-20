@@ -13,16 +13,13 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Components\ViewEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Modules\Cleaning\Services\AdminCleaningTransactionService;
 use Modules\Cleaning\Services\DepositService;
-use Modules\Cleaning\Services\WorkerOrderSolvencyService;
 
 final class CleaningWorkerInfolist
 {
     /** @var array<int, array<string, mixed>> */
-    private static array $summaryCache = [];
-
-    /** @var array<int, array<string, mixed>> */
-    private static array $capacityCache = [];
+    private static array $financialSnapshotCache = [];
 
     public static function configure(Schema $schema): Schema
     {
@@ -66,27 +63,39 @@ final class CleaningWorkerInfolist
                     TextEntry::make('preferred_work_type')->label('نوع العمل المفضل')->formatStateUsing(fn ($state): string => self::preferredWorkTypeLabel($state))->placeholder('-'),
                     TextEntry::make('bio')->label('نبذة')->placeholder('-')->columnSpanFull(),
                 ]),
-            Section::make('الأداء والمالية')
-                ->description('مؤشرات الإيرادات والعمولات الخاصة بالعامل.')
+            Section::make('الأداء المالي')
+                ->description('الإيرادات والعمولات المرتبطة بالطلبات المنجزة للعامل.')
                 ->columns(4)
                 ->schema([
-                    TextEntry::make('total_completed_jobs')->label('المهام المنجزة')->formatStateUsing(fn ($state): string => self::number($state)),
-                    TextEntry::make('gross_revenue')->label('إجمالي الإيرادات')->state(fn (Worker $record): string => self::money(self::summary($record)['totalRevenue'])),
-                    TextEntry::make('worker_net_earnings')->label('صافي مستحقات العامل')->state(fn (Worker $record): string => self::money(self::workerNetEarnings($record))),
-                    TextEntry::make('admin_margin_total')->label('إجمالي عمولة المنصة')->state(fn (Worker $record): string => self::money(self::summary($record)['totalCommission'])),
+                    TextEntry::make('completed_jobs_financial')
+                        ->label('المهام المنجزة')
+                        ->state(fn (Worker $record): string => self::number(self::financialSnapshot($record)['completedJobs'])),
+                    TextEntry::make('total_revenue_financial')
+                        ->label('إجمالي الإيرادات')
+                        ->state(fn (Worker $record): string => self::money(self::financialSnapshot($record)['totalRevenue'])),
+                    TextEntry::make('current_admin_commission')
+                        ->label('رصيد عمولة الإدارة الحالي')
+                        ->state(fn (Worker $record): string => self::money(self::financialSnapshot($record)['adminCommissionBalance'])),
+                    TextEntry::make('withdrawn_admin_revenue')
+                        ->label('إيرادات الإدارة المسحوبة')
+                        ->state(fn (Worker $record): string => self::money(self::financialSnapshot($record)['withdrawnAdminRevenueTotal'])),
                 ]),
-            Section::make('الإيداع والمديونية والأهلية')
-                ->description('الإيداع والمديونية رصيدان منفصلان. تستخدم عمولات الطلبات الإيداع أولاً ثم سعة المديونية المتبقية.')
-                ->columns(4)
+            Section::make('الحساب المالي والأهلية')
+                ->description('الأرصدة الحالية والحد المسموح والعمولات المحجوزة التي تؤثر في استقبال الطلبات.')
+                ->columns(3)
                 ->schema([
-                    TextEntry::make('deposit.current_balance')->label('رصيد الإيداع')->money('SYP')->placeholder('SYP 0.00'),
-                    TextEntry::make('deposit.debt_balance')->label('المديونية الحالية')->money('SYP')->placeholder('SYP 0.00'),
-                    TextEntry::make('deposit.max_negative_balance')->label('حد المديونية المسموح')->money('SYP')->placeholder('SYP 0.00'),
-                    TextEntry::make('remaining_debt_capacity')->label('سعة المديونية المتبقية')->state(fn (Worker $record): string => self::money(self::capacity($record)['remainingDebtCapacity'])),
-                    TextEntry::make('active_reserved_commission')->label('العمولات المحجوزة')->state(fn (Worker $record): string => self::money(self::capacity($record)['activeReservedCommission'])),
-                    TextEntry::make('available_commission_capacity')->label('السعة المالية للطلبات')->state(fn (Worker $record): string => self::money(self::capacity($record)['availableCommissionCapacity'])),
-                    TextEntry::make('deposit.deposited_total')->label('إجمالي المبالغ المستلمة')->money('SYP')->placeholder('SYP 0.00'),
-                    TextEntry::make('deposit.withdrawn_total')->label('إجمالي الاسترداد')->money('SYP')->placeholder('SYP 0.00'),
+                    TextEntry::make('current_deposit_balance')
+                        ->label('رصيد الإيداع الحالي')
+                        ->state(fn (Worker $record): string => self::money(self::financialSnapshot($record)['depositBalance'])),
+                    TextEntry::make('current_debt_balance')
+                        ->label('المديونية الحالية')
+                        ->state(fn (Worker $record): string => self::money(self::financialSnapshot($record)['debtBalance'])),
+                    TextEntry::make('allowed_debt_limit')
+                        ->label('حد المديونية المسموح')
+                        ->state(fn (Worker $record): string => self::money(self::financialSnapshot($record)['allowedDebtLimit'])),
+                    TextEntry::make('reserved_active_commission')
+                        ->label('العمولات المحجوزة للطلبات النشطة')
+                        ->state(fn (Worker $record): string => self::money(self::financialSnapshot($record)['activeReservedCommission'])),
                     TextEntry::make('dispatch_eligibility')
                         ->label('أهلية استقبال الطلبات')
                         ->state(fn (Worker $record): string => app(DepositService::class)->isWorkerEligibleForNewRequests($record) ? 'مؤهل' : 'غير مؤهل')
@@ -106,24 +115,8 @@ final class CleaningWorkerInfolist
                         ->view('filament.resources.cleaning-workers.infolists.working-hours')
                         ->columnSpanFull(),
                 ]),
-            Section::make('الملخص المالي')
-                ->description('القيم الحالية والتاريخية للإيداع والمديونية والعمولات.')
-                ->columns(4)
-                ->schema([
-                    TextEntry::make('fin_current_deposit')->label('رصيد الإيداع الحالي')->state(fn (Worker $record): string => self::money(self::summary($record)['currentDeposit'])),
-                    TextEntry::make('fin_current_debt')->label('المديونية الحالية')->state(fn (Worker $record): string => self::money(self::summary($record)['debtBalance'])),
-                    TextEntry::make('fin_completed_jobs')->label('إجمالي المهام المنجزة')->state(fn (Worker $record): string => self::number(self::summary($record)['completedJobs'])),
-                    TextEntry::make('fin_total_revenue')->label('إجمالي الإيرادات')->state(fn (Worker $record): string => self::money(self::summary($record)['totalRevenue'])),
-                    TextEntry::make('fin_total_commission')->label('إجمالي عمولة المنصة')->state(fn (Worker $record): string => self::money(self::summary($record)['totalCommission'])),
-                    TextEntry::make('fin_total_settled')->label('إجمالي التسويات')->state(fn (Worker $record): string => self::money(self::summary($record)['totalSettled'])),
-                    TextEntry::make('fin_total_refunded')->label('إجمالي الاسترداد')->state(fn (Worker $record): string => self::money(self::summary($record)['totalRefunded'])),
-                    TextEntry::make('fin_status')->label('حالة الحساب المالي')
-                        ->state(fn (Worker $record): string => self::accountStatusLabel(self::summary($record)['status']))
-                        ->badge()
-                        ->color(fn (Worker $record): string => self::accountStatusColor(self::summary($record)['status'])),
-                ]),
             Section::make('سجل المعاملات المالية')
-                ->description('عمليات الإيداع وعمولة المنصة والمديونية والتسوية والاسترداد مع رصيدي الإيداع والمديونية بعد كل عملية.')
+                ->description('يعرض أثر كل عملية على رصيد الإيداع والمديونية، وقيمة إيرادات الإدارة المرحلة عند تصفير الحساب.')
                 ->schema([
                     RepeatableEntry::make('depositTransactions')
                         ->hiddenLabel()
@@ -133,6 +126,10 @@ final class CleaningWorkerInfolist
                                 ->color(fn (CleaningDepositTransaction $record): string => self::txTypeColor($record->publicType()))
                                 ->formatStateUsing(fn (CleaningDepositTransaction $record): string => self::txTypeLabel($record->publicType())),
                             TextEntry::make('amount')->label('المبلغ')->money('SYP'),
+                            TextEntry::make('admin_revenue_withdrawn_amount')
+                                ->label('إيرادات الإدارة المسحوبة')
+                                ->money('SYP')
+                                ->visible(fn (CleaningDepositTransaction $record): bool => (float) ($record->admin_revenue_withdrawn_amount ?? 0) > 0),
                             TextEntry::make('balance_after')->label('رصيد الإيداع بعد العملية')->money('SYP'),
                             TextEntry::make('debt_balance_after')->label('المديونية بعد العملية')->money('SYP'),
                             TextEntry::make('created_at')->label('التاريخ')->dateTime('Y-m-d H:i'),
@@ -145,36 +142,9 @@ final class CleaningWorkerInfolist
     }
 
     /** @return array<string, mixed> */
-    private static function summary(Worker $worker): array
+    private static function financialSnapshot(Worker $worker): array
     {
-        return self::$summaryCache[$worker->id] ??= app(DepositService::class)->financialSummary($worker);
-    }
-
-    /** @return array<string, mixed> */
-    private static function capacity(Worker $worker): array
-    {
-        return self::$capacityCache[$worker->id] ??= app(WorkerOrderSolvencyService::class)->workerCapacitySummary($worker);
-    }
-
-    private static function accountStatusLabel(string $status): string
-    {
-        return match ($status) {
-            'active' => 'نشط',
-            'restricted' => 'السعة المالية غير كافية',
-            'suspended' => 'موقوف',
-            'inactive' => 'غير نشط',
-            default => $status,
-        };
-    }
-
-    private static function accountStatusColor(string $status): string
-    {
-        return match ($status) {
-            'active' => 'success',
-            'restricted' => 'danger',
-            'suspended' => 'warning',
-            default => 'gray',
-        };
+        return self::$financialSnapshotCache[$worker->id] ??= app(AdminCleaningTransactionService::class)->snapshot($worker);
     }
 
     private static function txTypeLabel(string $type): string
@@ -184,7 +154,7 @@ final class CleaningWorkerInfolist
             'commission' => 'عمولة المنصة',
             'debt' => 'مديونية يدوية',
             'settlement' => 'تسوية مديونية',
-            'refund' => 'استرداد من الإيداع',
+            'refund' => 'تصفير الحساب المالي',
             default => $type,
         };
     }
@@ -262,12 +232,5 @@ final class CleaningWorkerInfolist
             'both' => 'كلاهما',
             default => '-',
         };
-    }
-
-    private static function workerNetEarnings(Worker $worker): float
-    {
-        $summary = self::summary($worker);
-
-        return max(0.0, (float) $summary['totalRevenue'] - (float) $summary['totalCommission']);
     }
 }

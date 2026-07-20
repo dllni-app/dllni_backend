@@ -5,13 +5,10 @@ declare(strict_types=1);
 namespace App\Filament\Pages;
 
 use App\Filament\Support\AdminUiFormatter;
-use App\Models\CleaningDepositTransaction;
-use App\Models\CleaningWorkerDeposit;
-use App\Models\Worker;
 use BackedEnum;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
-use Modules\Cleaning\Services\WorkerDebtService;
+use Modules\Cleaning\Services\CleaningFinancialSummaryService;
 
 final class CleaningFinancialReport extends Page
 {
@@ -36,7 +33,9 @@ final class CleaningFinancialReport extends Page
 
     public static function getNavigationTooltip(): ?string
     {
-        return __('cleaning_finance_guidance.report_page_subtitle');
+        return app()->isLocale('ar')
+            ? 'ملخص القيم المالية الحالية وإيرادات الإدارة.'
+            : 'Summary of current financial balances and administration revenue.';
     }
 
     public function getTitle(): string
@@ -46,7 +45,9 @@ final class CleaningFinancialReport extends Page
 
     public function getSubheading(): ?string
     {
-        return __('cleaning_finance_guidance.report_page_subtitle');
+        return app()->isLocale('ar')
+            ? 'يعرض التقرير الإيرادات والأرصدة الحالية فقط وفق دورة الإيداع والمديونية وتصفير الحساب.'
+            : 'This report shows only revenue and current balances according to the deposit, debt, and account-settlement lifecycle.';
     }
 
     public function mount(): void
@@ -59,29 +60,34 @@ final class CleaningFinancialReport extends Page
      */
     private function computeMetrics(): array
     {
-        $ledger = app(WorkerDebtService::class)->globalSummary();
-
-        $refunds = (float) CleaningDepositTransaction::query()
-            ->whereIn('type', ['refund', 'withdrawal'])
-            ->sum('amount');
-
-        $depositsHeld = (float) CleaningWorkerDeposit::query()
-            ->sum('current_balance');
-
-        $withdrawnAdminRevenue = (float) CleaningWorkerDeposit::query()
-            ->sum('admin_revenue_withdrawn_total');
-
-        $activeWorkers = Worker::query()->activeAvailable()->count();
-        $restrictedWorkers = Worker::query()->restricted()->count();
+        $summary = app(CleaningFinancialSummaryService::class)->global();
 
         return [
-            ['label' => __('cleaning_admin.report.metrics.deposits_held'), 'value' => $this->money(max(0.0, $depositsHeld)), 'tone' => 'primary'],
-            ['label' => __('cleaning_finance.report.outstanding_admin_due'), 'value' => $this->money((float) $ledger['outstandingAdministrationDue']), 'tone' => 'danger'],
-            ['label' => __('cleaning_admin.report.metrics.settlements_received'), 'value' => $this->money((float) $ledger['totalSettled']), 'tone' => 'success'],
-            ['label' => app()->isLocale('ar') ? 'إيرادات الإدارة المسحوبة' : 'Withdrawn administration revenue', 'value' => $this->money($withdrawnAdminRevenue), 'tone' => 'success'],
-            ['label' => __('cleaning_admin.report.metrics.deposit_refunds'), 'value' => $this->money($refunds), 'tone' => 'warning'],
-            ['label' => __('cleaning_admin.report.metrics.active_workers'), 'value' => AdminUiFormatter::formatNumber($activeWorkers), 'tone' => 'success'],
-            ['label' => __('cleaning_admin.report.metrics.restricted_workers'), 'value' => AdminUiFormatter::formatNumber($restrictedWorkers), 'tone' => 'danger'],
+            [
+                'label' => app()->isLocale('ar') ? 'إجمالي إيرادات الطلبات' : 'Total order revenue',
+                'value' => $this->money((float) $summary['totalRevenue']),
+                'tone' => 'primary',
+            ],
+            [
+                'label' => app()->isLocale('ar') ? 'إجمالي أرصدة الإيداع الحالية' : 'Current deposit balances',
+                'value' => $this->money((float) $summary['currentDepositBalance']),
+                'tone' => 'primary',
+            ],
+            [
+                'label' => app()->isLocale('ar') ? 'إجمالي المديونية الحالية' : 'Current debt balance',
+                'value' => $this->money((float) $summary['currentDebtBalance']),
+                'tone' => (float) $summary['currentDebtBalance'] > 0 ? 'danger' : 'success',
+            ],
+            [
+                'label' => app()->isLocale('ar') ? 'رصيد عمولة الإدارة الحالي' : 'Current administration commission',
+                'value' => $this->money((float) $summary['currentAdminCommissionBalance']),
+                'tone' => 'warning',
+            ],
+            [
+                'label' => app()->isLocale('ar') ? 'إيرادات الإدارة المسحوبة' : 'Withdrawn administration revenue',
+                'value' => $this->money((float) $summary['withdrawnAdminRevenue']),
+                'tone' => 'success',
+            ],
         ];
     }
 

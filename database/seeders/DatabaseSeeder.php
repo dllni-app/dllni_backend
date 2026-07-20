@@ -8,17 +8,17 @@ use App\Models\User;
 use Database\Seeders\Permissions\RestaurantOwnerEmployeePermissionsSeeder;
 use Illuminate\Database\Seeder;
 use Modules\Cleaning\Database\Seeders\AleppoNeighborhoodSeeder;
-use Modules\Cleaning\Database\Seeders\CleaningBillingPolicySeeder;
 use Modules\Cleaning\Database\Seeders\CleaningBannerSeeder;
+use Modules\Cleaning\Database\Seeders\CleaningBillingPolicySeeder;
+use Modules\Cleaning\Database\Seeders\CleaningBookingSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningFinancialSettingsSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningHomeTypeSeeder;
-use Modules\Cleaning\Database\Seeders\CleaningBookingSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningServiceSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningWorkerArabicDataSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningWorkerExtensionScenarioSeeder;
 use Modules\Cleaning\Database\Seeders\EventBookingSeeder;
-use Modules\Delivery\Database\Seeders\DeliveryPermissionsSeeder;
 use Modules\Delivery\Database\Seeders\DeliveryModuleDataSeeder;
+use Modules\Delivery\Database\Seeders\DeliveryPermissionsSeeder;
 use Modules\Delivery\Database\Seeders\MandoubDeliveryTestUserSeeder;
 use Modules\Delivery\Database\Seeders\MandoubPrimaryOfferScenarioSeeder;
 use Modules\Resturants\Database\Seeders\RestaurantSeeder;
@@ -48,7 +48,6 @@ final class DatabaseSeeder extends Seeder
             }
         }
 
-        $this->call(CleaningWorkerHighBalanceSeeder::class);
         $this->call(SyrianPoundSeedPriceNormalizer::class);
     }
 

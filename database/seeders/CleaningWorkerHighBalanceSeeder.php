@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
-use App\Models\CleaningWorkerDeposit;
 use App\Models\Worker;
 use Illuminate\Database\Seeder;
+use Modules\Cleaning\Services\DepositService;
 
 final class CleaningWorkerHighBalanceSeeder extends Seeder
 {
@@ -14,6 +14,8 @@ final class CleaningWorkerHighBalanceSeeder extends Seeder
 
     public function run(): void
     {
+        $depositService = app(DepositService::class);
+
         Worker::query()
             ->whereHas('user', fn ($query) => $query
                 ->whereIn('email', [
@@ -24,18 +26,22 @@ final class CleaningWorkerHighBalanceSeeder extends Seeder
                     'worker2@dllni.sy',
                     'worker3@dllni.sy',
                 ]))
-            ->each(function (Worker $worker): void {
-                CleaningWorkerDeposit::updateOrCreate(
-                    ['worker_id' => $worker->id],
-                    [
-                        'current_balance' => self::DefaultDepositBalance,
-                        'deposited_total' => self::DefaultDepositBalance,
-                        'withdrawn_total' => 0,
-                        'is_active' => true,
-                    ]
-                );
+            ->with('deposit')
+            ->each(function (Worker $worker) use ($depositService): void {
+                $depositBalance = max(0.0, (float) ($worker->deposit?->current_balance ?? 0));
+                $debtBalance = max(0.0, (float) ($worker->deposit?->debt_balance ?? 0));
+                $topUpAmount = $debtBalance + max(0.0, self::DefaultDepositBalance - $depositBalance);
 
-                $worker->forceFill(['security_deposit_status' => 'active'])->save();
+                if ($topUpAmount <= 0) {
+                    return;
+                }
+
+                $depositService->recordDeposit(
+                    worker: $worker,
+                    amount: $topUpAmount,
+                    reference: 'seed-high-balance-top-up',
+                    notes: 'تسوية المديونية ورفع رصيد الإيداع للحساب التجريبي دون تعديل السجل المالي مباشرة.',
+                );
             });
     }
 }
