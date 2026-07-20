@@ -45,9 +45,9 @@ final class CleaningTransactionsTable
                     ->toggleable(),
                 TextColumn::make('balance_before')->label(app()->isLocale('ar') ? 'الإيداع قبل' : 'Deposit before')->formatStateUsing(fn ($state): string => self::money($state))->toggleable(),
                 TextColumn::make('balance_after')->label(app()->isLocale('ar') ? 'الإيداع بعد' : 'Deposit after')->formatStateUsing(fn ($state): string => self::money($state)),
-                TextColumn::make('debt_balance_before')->label(app()->isLocale('ar') ? 'المديونية قبل' : 'Debt before')->formatStateUsing(fn ($state): string => self::money($state))->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('debt_balance_after')->label(app()->isLocale('ar') ? 'المديونية بعد' : 'Debt after')->formatStateUsing(fn ($state): string => self::money($state)),
-                TextColumn::make('debt_settled_amount')->label(__('cleaning_finance.fields.debt_settled_amount'))->formatStateUsing(fn ($state): string => self::money($state))->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('debt_balance_before')->label(app()->isLocale('ar') ? 'المديونية قبل' : 'Indebtedness before')->formatStateUsing(fn ($state): string => self::money($state))->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('debt_balance_after')->label(app()->isLocale('ar') ? 'المديونية بعد' : 'Indebtedness after')->formatStateUsing(fn ($state): string => self::money($state)),
+                TextColumn::make('debt_settled_amount')->label(app()->isLocale('ar') ? 'الدين الإداري المسترد' : 'Administration loan recovered')->formatStateUsing(fn ($state): string => self::money($state))->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('reference')->label(__('cleaning_admin.transactions.fields.reference'))->formatStateUsing(fn (?string $state): string => self::referenceLabel($state))->placeholder('—')->toggleable(),
                 TextColumn::make('created_at')->label(__('cleaning_admin.transactions.fields.date'))->dateTime('Y-m-d H:i')->sortable(),
                 TextColumn::make('notes')->label(__('cleaning_admin.transactions.fields.notes'))->limit(40)->placeholder('—')->toggleable(),
@@ -93,7 +93,7 @@ final class CleaningTransactionsTable
         return match ($type) {
             'commission' => app()->isLocale('ar') ? 'عمولة المنصة' : 'Platform commission',
             'debt' => __('cleaning_finance.types.debt'),
-            'settlement' => app()->isLocale('ar') ? 'تسوية مديونية' : 'Debt settlement',
+            'settlement' => app()->isLocale('ar') ? 'تسوية المديونية' : 'Indebtedness settlement',
             'deposit' => __('cleaning_admin.transactions.types.deposit'),
             'refund' => __('cleaning_admin.transactions.types.refund'),
             default => $type,
@@ -109,7 +109,7 @@ final class CleaningTransactionsTable
             return __('cleaning_finance.references.automatic_admin_commission');
         }
         if ($reference === 'admin_full_account_refund') {
-            return app()->isLocale('ar') ? 'تصفير الحساب المالي بالكامل' : 'Full financial account settlement';
+            return app()->isLocale('ar') ? 'إغلاق الحساب المالي بالكامل' : 'Full financial account closure';
         }
 
         $financeKey = 'cleaning_finance.references.'.$reference;
@@ -130,7 +130,7 @@ final class CleaningTransactionsTable
             'deposit' => 'success',
             'settlement' => 'primary',
             'commission' => 'info',
-            'debt' => 'danger',
+            'debt' => 'warning',
             'refund' => 'warning',
             default => 'gray',
         };
@@ -146,8 +146,9 @@ final class CleaningTransactionsTable
             app()->isLocale('ar') ? 'إيرادات الإدارة المسحوبة' : 'Withdrawn administration revenue' => (int) round((float) ($tx->admin_revenue_withdrawn_amount ?? 0)),
             app()->isLocale('ar') ? 'الإيداع قبل' : 'Deposit before' => (int) round((float) $tx->balance_before),
             app()->isLocale('ar') ? 'الإيداع بعد' : 'Deposit after' => (int) round((float) $tx->balance_after),
-            app()->isLocale('ar') ? 'المديونية قبل' : 'Debt before' => (int) round((float) ($tx->debt_balance_before ?? 0)),
-            app()->isLocale('ar') ? 'المديونية بعد' : 'Debt after' => (int) round((float) ($tx->debt_balance_after ?? 0)),
+            app()->isLocale('ar') ? 'المديونية قبل' : 'Indebtedness before' => (int) round((float) ($tx->debt_balance_before ?? 0)),
+            app()->isLocale('ar') ? 'المديونية بعد' : 'Indebtedness after' => (int) round((float) ($tx->debt_balance_after ?? 0)),
+            app()->isLocale('ar') ? 'الدين الإداري المسترد' : 'Administration loan recovered' => (int) round((float) ($tx->debt_settled_amount ?? 0)),
             __('cleaning_admin.transactions.fields.reference') => self::referenceLabel($tx->reference),
             __('cleaning_admin.transactions.fields.date') => $tx->created_at?->format('Y-m-d H:i'),
             __('cleaning_admin.transactions.fields.notes') => $tx->notes,

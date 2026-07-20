@@ -25,45 +25,76 @@ beforeEach(function (): void {
     );
 });
 
-it('consumes the deposit before creating actual debt', function (): void {
+it('adds an administration loan to deposit without increasing indebtedness', function (): void {
     $user = User::factory()->create();
     $worker = Worker::factory()->create(['user_id' => $user->id, 'trust_score' => 100, 'security_deposit_status' => 'active']);
 
     CleaningWorkerDeposit::query()->create([
         'worker_id' => $worker->id,
-        'current_balance' => 30000,
+        'current_balance' => 0,
         'debt_balance' => 0,
-        'deposited_total' => 30000,
+        'deposited_total' => 0,
         'withdrawn_total' => 0,
         'minimum_required' => 0,
         'max_negative_balance' => 50000,
         'is_active' => true,
     ]);
 
-    app(WorkerDebtService::class)->recordDebt($worker, 50000, 'test_manual_debt', 'Manual debt reason.');
+    app(WorkerDebtService::class)->recordDebt(
+        $worker,
+        50000,
+        WorkerDebtService::ADMIN_LOAN_REFERENCE,
+        'Administration-funded deposit.',
+    );
 
     $account = $worker->fresh('deposit')->deposit;
-    expect((float) $account->current_balance)->toBe(0.0)
-        ->and((float) $account->debt_balance)->toBe(20000.0);
+    expect((float) $account->current_balance)->toBe(50000.0)
+        ->and((float) $account->debt_balance)->toBe(0.0)
+        ->and((float) $account->deposited_total)->toBe(0.0);
 
     $transaction = CleaningDepositTransaction::query()->where('worker_id', $worker->id)->where('type', 'debt')->firstOrFail();
-    expect((float) $transaction->balance_before)->toBe(30000.0)
-        ->and((float) $transaction->balance_after)->toBe(0.0)
+    expect((float) $transaction->balance_before)->toBe(0.0)
+        ->and((float) $transaction->balance_after)->toBe(50000.0)
         ->and((float) $transaction->debt_balance_before)->toBe(0.0)
-        ->and((float) $transaction->debt_balance_after)->toBe(20000.0);
+        ->and((float) $transaction->debt_balance_after)->toBe(0.0)
+        ->and($transaction->reference)->toBe(WorkerDebtService::ADMIN_LOAN_REFERENCE);
 
     Sanctum::actingAs($user);
     $this->getJson('/api/v1/cleaning/worker/account/deposit')
         ->assertOk()
-        ->assertJsonPath('depositBalance', 0)
-        ->assertJsonPath('currentBalance', 0)
-        ->assertJsonPath('debtBalance', 20000)
-        ->assertJsonPath('debtAmount', 20000)
+        ->assertJsonPath('depositBalance', 50000)
+        ->assertJsonPath('currentBalance', 50000)
+        ->assertJsonPath('debtBalance', 0)
+        ->assertJsonPath('indebtednessBalance', 0)
+        ->assertJsonPath('adminLoanBalance', 50000)
+        ->assertJsonPath('hasAdminLoan', true)
         ->assertJsonPath('allowedDebtLimit', 50000)
-        ->assertJsonPath('remainingDebtCapacity', 30000);
+        ->assertJsonPath('remainingDebtCapacity', 50000);
 });
 
-it('uses a new deposit to settle debt first and stores only the remainder as deposit', function (): void {
+it('blocks an administration loan while the worker has a deposit balance', function (): void {
+    $worker = Worker::factory()->create(['trust_score' => 100, 'security_deposit_status' => 'active']);
+
+    CleaningWorkerDeposit::query()->create([
+        'worker_id' => $worker->id,
+        'current_balance' => 1000,
+        'debt_balance' => 0,
+        'deposited_total' => 1000,
+        'withdrawn_total' => 0,
+        'minimum_required' => 0,
+        'max_negative_balance' => 50000,
+        'is_active' => true,
+    ]);
+
+    app(WorkerDebtService::class)->recordDebt(
+        $worker,
+        5000,
+        WorkerDebtService::ADMIN_LOAN_REFERENCE,
+        'Should be rejected.',
+    );
+})->throws(InvalidArgumentException::class);
+
+it('uses a new worker deposit to settle indebtedness first and stores only the remainder as deposit', function (): void {
     $worker = Worker::factory()->create(['trust_score' => 100, 'security_deposit_status' => 'active']);
 
     CleaningWorkerDeposit::query()->create([
@@ -94,7 +125,7 @@ it('uses a new deposit to settle debt first and stores only the remainder as dep
         ->and((float) $transactions[1]->balance_after)->toBe(60000.0);
 });
 
-it('settles debt without increasing the deposit balance', function (): void {
+it('settles indebtedness without increasing the deposit balance', function (): void {
     $worker = Worker::factory()->create(['trust_score' => 100]);
 
     CleaningWorkerDeposit::query()->create([

@@ -45,11 +45,27 @@ final class WorkerDepositController
         $debtSummary = $this->debtService->summary($worker);
         $capacity = $this->solvencyService->workerCapacitySummary($worker);
 
-        $payload['debtAmount'] = $debtSummary['outstandingAdministrationDue'];
-        $payload['manualDebtAmount'] = $debtSummary['manualDebtDue'];
-        $payload['adminCommissionDebtAmount'] = $debtSummary['adminFeeDue'];
+        $indebtedness = (float) $debtSummary['indebtednessBalance'];
+        $adminLoan = (float) $debtSummary['adminLoanBalance'];
+
+        // Compatibility aliases remain additive, while the explicit fields define the business meaning.
+        $payload['debtBalance'] = $indebtedness;
+        $payload['debtAmount'] = $indebtedness;
+        $payload['indebtednessBalance'] = $indebtedness;
+        $payload['manualDebtAmount'] = $adminLoan;
+        $payload['loanBalance'] = $adminLoan;
+        $payload['adminLoanBalance'] = $adminLoan;
+        $payload['adminCommissionDebtAmount'] = $indebtedness;
+        $payload['totalAdministrationDue'] = (float) $debtSummary['outstandingAdministrationDue'];
+        $payload['hasAdminLoan'] = $adminLoan > 0;
+        $payload['adminLoanWarning'] = $adminLoan > 0
+            ? (app()->isLocale('ar')
+                ? 'يتضمن رصيد الإيداع ديناً ممولاً من الإدارة، وسيتم استرداده أولاً عند إغلاق الحساب المالي.'
+                : 'The deposit balance includes an administration-funded loan that will be recovered first when the financial account is closed.')
+            : null;
         $payload['activeReservedCommission'] = $capacity['activeReservedCommission'];
         $payload['availableCommissionCapacity'] = $capacity['availableCommissionCapacity'];
+        $payload['isFinancialAccountActive'] = (bool) ($worker->deposit?->is_active ?? true);
 
         return response()->json($payload);
     }

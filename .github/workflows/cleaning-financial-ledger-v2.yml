@@ -31,6 +31,7 @@ on:
       - 'tests/Feature/Cleaning/WorkerDebtLedgerTest.php'
       - 'tests/Feature/Cleaning/WorkerDepositEligibilityTest.php'
       - 'tests/Feature/Cleaning/WorkerDepositTimelineApiTest.php'
+      - 'tests/Feature/Cleaning/WorkerFinancialAccountActivityTest.php'
       - 'tests/Feature/Filament/CleaningFinancialSettingsPageTest.php'
       - 'tests/Feature/Seeders/WorkerFinancialScenarioSeederTest.php'
       - '.github/workflows/cleaning-financial-ledger-v2.yml'
@@ -100,6 +101,7 @@ jobs:
             tests/Feature/Cleaning/WorkerDebtLedgerTest.php \
             tests/Feature/Cleaning/WorkerDepositEligibilityTest.php \
             tests/Feature/Cleaning/WorkerDepositTimelineApiTest.php \
+            tests/Feature/Cleaning/WorkerFinancialAccountActivityTest.php \
             tests/Feature/Filament/CleaningFinancialSettingsPageTest.php \
             tests/Feature/Seeders/WorkerFinancialScenarioSeederTest.php
 
@@ -116,6 +118,7 @@ jobs:
             tests/Feature/Cleaning/WorkerDebtLedgerTest.php \
             tests/Feature/Cleaning/WorkerDepositEligibilityTest.php \
             tests/Feature/Cleaning/WorkerDepositTimelineApiTest.php \
+            tests/Feature/Cleaning/WorkerFinancialAccountActivityTest.php \
             tests/Feature/Filament/CleaningFinancialSettingsPageTest.php \
             tests/Feature/Seeders/WorkerFinancialScenarioSeederTest.php \
             2>&1 | tee cleaning-financial-ledger-v2-test.log

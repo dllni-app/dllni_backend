@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use App\Enums\UserModuleType;
 use App\Models\CleaningDepositSetting;
-use App\Models\CleaningDepositTransaction;
 use App\Models\CleaningWorkerDeposit;
 use App\Models\User;
 use App\Models\Worker;
@@ -13,7 +12,7 @@ use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Services\AdminCleaningTransactionService;
-use Modules\Cleaning\Services\WorkerDebtService;
+use Modules\Cleaning\Services\DepositService;
 
 beforeEach(function (): void {
     CleaningDepositSetting::query()->updateOrCreate(
@@ -29,28 +28,32 @@ beforeEach(function (): void {
     );
 });
 
-it('returns separate deposit debt and capacity values for the admin dashboard', function (): void {
+it('returns separate deposit administration loan indebtedness and capacity values for the dashboard', function (): void {
     $worker = createCleaningWorkerForAdminTransaction();
     CleaningWorkerDeposit::query()->create([
         'worker_id' => $worker->id,
-        'current_balance' => 20000,
+        'current_balance' => 0,
         'debt_balance' => 0,
-        'deposited_total' => 30000,
-        'withdrawn_total' => 10000,
+        'deposited_total' => 0,
+        'withdrawn_total' => 0,
         'admin_revenue_withdrawn_total' => 0,
         'minimum_required' => 0,
         'max_negative_balance' => 50000,
         'is_active' => true,
     ]);
 
-    app(WorkerDebtService::class)->recordDebt($worker, 35000, 'test_manual_debt', 'Required reason.');
-    $snapshot = app(AdminCleaningTransactionService::class)->snapshot($worker->fresh(['deposit']));
+    $service = app(AdminCleaningTransactionService::class);
+    $service->create($worker, 'debt', 35000, 'Administration-funded deposit.', null);
+    $snapshot = $service->snapshot($worker->fresh(['deposit']));
 
-    expect($snapshot['depositBalance'])->toBe(0.0)
-        ->and($snapshot['debtBalance'])->toBe(15000.0)
+    expect($snapshot['depositBalance'])->toBe(35000.0)
+        ->and($snapshot['adminLoanBalance'])->toBe(35000.0)
+        ->and($snapshot['hasAdminLoan'])->toBeTrue()
+        ->and($snapshot['debtBalance'])->toBe(0.0)
+        ->and($snapshot['indebtednessBalance'])->toBe(0.0)
         ->and($snapshot['allowedDebtLimit'])->toBe(50000.0)
-        ->and($snapshot['remainingDebtCapacity'])->toBe(35000.0)
-        ->and($snapshot['outstandingAdministrationDue'])->toBe(15000.0)
+        ->and($snapshot['remainingDebtCapacity'])->toBe(50000.0)
+        ->and($snapshot['outstandingAdministrationDue'])->toBe(35000.0)
         ->and($snapshot['maxRefundable'])->toBe(0.0);
 });
 
@@ -79,53 +82,57 @@ it('counts completed orders from actual booking records instead of the seeded wo
     expect((int) $worker->fresh()->total_completed_jobs)->toBe(120)->and($snapshot['completedJobs'])->toBe(2);
 });
 
-it('refunds the full deposit and moves the current commission to withdrawn administration revenue', function (): void {
+it('recovers the administration loan first then administration revenue and refunds the remainder to the worker', function (): void {
     $worker = createCleaningWorkerForAdminTransaction();
     CleaningWorkerDeposit::query()->create([
         'worker_id' => $worker->id,
-        'current_balance' => 3000,
+        'current_balance' => 0,
         'debt_balance' => 0,
-        'deposited_total' => 5000,
-        'withdrawn_total' => 2000,
+        'deposited_total' => 0,
+        'withdrawn_total' => 0,
         'admin_revenue_withdrawn_total' => 0,
         'minimum_required' => 0,
         'max_negative_balance' => 50000,
         'is_active' => true,
     ]);
 
-    CleaningDepositTransaction::query()->create([
-        'worker_id' => $worker->id,
-        'type' => 'commission',
-        'amount' => 700,
-        'balance_before' => 3700,
-        'balance_after' => 3000,
-        'debt_balance_before' => 0,
-        'debt_balance_after' => 0,
-        'reference' => CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'test',
-    ]);
-
     $service = app(AdminCleaningTransactionService::class);
-    $freshWorker = $worker->fresh(['deposit']);
+    $service->create($worker, 'debt', 2000, 'Administration-funded opening balance.', null);
+    app(DepositService::class)->recordDeposit($worker->fresh(['deposit']), 3000, 'worker_cash_deposit');
 
-    expect($service->validationMessage($freshWorker, 'refund', 3000))->toBeNull()
-        ->and($service->validationMessage($freshWorker, 'refund', 1000))->not->toBeNull()
-        ->and($service->snapshot($freshWorker)['adminCommissionBalance'])->toBe(700.0);
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'status' => CleaningBookingStatus::Completed->value,
+    ]);
+    app(DepositService::class)->recordAdminFeeDebit($worker->fresh(['deposit']), $booking, 700);
+
+    $freshWorker = $worker->fresh(['deposit']);
+    $snapshot = $service->snapshot($freshWorker);
+
+    expect($snapshot['depositBalance'])->toBe(4300.0)
+        ->and($snapshot['adminLoanBalance'])->toBe(2000.0)
+        ->and($snapshot['adminCommissionBalance'])->toBe(700.0)
+        ->and($snapshot['maxRefundable'])->toBe(2300.0)
+        ->and($service->validationMessage($freshWorker, 'refund', 2300))->toBeNull()
+        ->and($service->validationMessage($freshWorker, 'refund', 1000))->not->toBeNull();
 
     $transaction = $service->refundFullBalance($freshWorker, 'Close the account.', null);
     $account = $worker->fresh('deposit')->deposit;
-    $snapshot = $service->snapshot($worker->fresh(['deposit']));
+    $after = $service->snapshot($worker->fresh(['deposit']));
 
     expect($transaction->type)->toBe('refund')
-        ->and((float) $transaction->amount)->toBe(3000.0)
+        ->and((float) $transaction->amount)->toBe(2300.0)
+        ->and((float) $transaction->debt_settled_amount)->toBe(2000.0)
         ->and((float) $transaction->admin_revenue_withdrawn_amount)->toBe(700.0)
         ->and((float) $account->current_balance)->toBe(0.0)
-        ->and((float) $account->withdrawn_total)->toBe(5000.0)
+        ->and((float) $account->withdrawn_total)->toBe(2300.0)
         ->and((float) $account->admin_revenue_withdrawn_total)->toBe(700.0)
-        ->and($snapshot['adminCommissionBalance'])->toBe(0.0)
-        ->and($snapshot['withdrawnAdminRevenueTotal'])->toBe(700.0);
+        ->and($after['adminLoanBalance'])->toBe(0.0)
+        ->and($after['adminCommissionBalance'])->toBe(0.0)
+        ->and($after['withdrawnAdminRevenueTotal'])->toBe(700.0);
 });
 
-it('blocks the full refund while debt exists', function (): void {
+it('blocks the full refund while indebtedness exists', function (): void {
     $worker = createCleaningWorkerForAdminTransaction();
     CleaningWorkerDeposit::query()->create([
         'worker_id' => $worker->id,
@@ -142,7 +149,7 @@ it('blocks the full refund while debt exists', function (): void {
     app(AdminCleaningTransactionService::class)->refundFullBalance($worker->fresh(['deposit']), null, null);
 })->throws(InvalidArgumentException::class);
 
-it('settles the full debt using the one-click dashboard action', function (): void {
+it('settles the full indebtedness using the one-click dashboard action', function (): void {
     $worker = createCleaningWorkerForAdminTransaction();
     CleaningWorkerDeposit::query()->create([
         'worker_id' => $worker->id,
@@ -163,7 +170,7 @@ it('settles the full debt using the one-click dashboard action', function (): vo
         ->and((float) $worker->fresh('deposit')->deposit->debt_balance)->toBe(0.0);
 });
 
-it('requires notes for a manual debt transaction', function (): void {
+it('requires notes for an administration loan transaction', function (): void {
     $worker = createCleaningWorkerForAdminTransaction();
     CleaningWorkerDeposit::query()->create([
         'worker_id' => $worker->id,
