@@ -126,6 +126,37 @@ final class CleaningDepositTransaction extends Model
         return abs((float) $this->amount);
     }
 
+    protected static function booted(): void
+    {
+        self::saved(function (self $transaction): void {
+            self::syncWorkerAccountTotals((int) $transaction->worker_id);
+        });
+
+        self::deleted(function (self $transaction): void {
+            self::syncWorkerAccountTotals((int) $transaction->worker_id);
+        });
+    }
+
+    private static function syncWorkerAccountTotals(int $workerId): void
+    {
+        if ($workerId <= 0) {
+            return;
+        }
+
+        $totals = self::query()
+            ->where('worker_id', $workerId)
+            ->selectRaw("COALESCE(SUM(CASE WHEN type IN ('deposit', 'settlement') THEN ABS(amount) WHEN type = 'adjustment' AND amount > 0 THEN amount ELSE 0 END), 0) AS deposited_total")
+            ->selectRaw("COALESCE(SUM(CASE WHEN type IN ('refund', 'withdrawal') THEN ABS(amount) WHEN type = 'adjustment' AND amount < 0 THEN ABS(amount) ELSE 0 END), 0) AS withdrawn_total")
+            ->first();
+
+        CleaningWorkerDeposit::query()
+            ->where('worker_id', $workerId)
+            ->update([
+                'deposited_total' => round(max(0.0, (float) ($totals?->deposited_total ?? 0)), 2),
+                'withdrawn_total' => round(max(0.0, (float) ($totals?->withdrawn_total ?? 0)), 2),
+            ]);
+    }
+
     protected function casts(): array
     {
         return [
