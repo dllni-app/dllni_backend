@@ -6,6 +6,7 @@ use App\Filament\Pages\FinancialSettings;
 use App\Models\CleaningFinancialSetting;
 use App\Models\User;
 use Livewire\Livewire;
+use Modules\Cleaning\Support\CleaningFinancialDefaults;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -73,4 +74,40 @@ it('persists the allowed debt limit and removes the legacy minimum deposit thres
         'trust_minimum_for_dispatch' => 60,
         'is_enabled' => true,
     ]);
+});
+
+it('persists unit and regular and deep time for every app room size', function (): void {
+    CleaningFinancialSetting::query()->create([
+        'default_commission_rate' => 5,
+        'vat_rate' => 10,
+        'travel_markup_type' => 'fixed',
+        'travel_markup_value' => 2000,
+        'travel_per_km' => 100,
+        'travel_distance_start_point' => 'worker_home',
+        'coverage_thresholds' => ['low' => 2, 'ok' => 5],
+        'time_billing_mode' => 'actual',
+        'extension_rate_per_30_minutes' => 0,
+        'cleaning_room_pricing_units' => CleaningFinancialDefaults::roomPricingUnits(),
+        'cleaning_room_time_minutes' => CleaningFinancialDefaults::roomTimeMinutes(),
+    ]);
+
+    Livewire::test(FinancialSettings::class)
+        ->set('roomPricingSettings.bedroom.small.pricingUnit', 1.25)
+        ->set('roomPricingSettings.bedroom.small.regularMinutes', 31)
+        ->set('roomPricingSettings.bedroom.small.deepMinutes', 62)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $setting = CleaningFinancialSetting::query()->findOrFail(1);
+
+    expect((float) data_get($setting->cleaning_room_pricing_units, 'bedroom.small'))->toBe(1.25)
+        ->and((int) data_get($setting->cleaning_room_time_minutes, 'bedroom.small.regular'))->toBe(31)
+        ->and((int) data_get($setting->cleaning_room_time_minutes, 'bedroom.small.deep'))->toBe(62);
+});
+
+it('rejects incomplete room size settings', function (): void {
+    Livewire::test(FinancialSettings::class)
+        ->set('roomPricingSettings.bedroom', [])
+        ->call('save')
+        ->assertHasErrors(['roomPricingSettings.bedroom']);
 });

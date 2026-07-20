@@ -6,7 +6,16 @@ namespace Modules\Cleaning\Support;
 
 final class CleaningFinancialDefaults
 {
+    /**
+     * All room keys still accepted by the backend, including legacy payloads.
+     */
     public const ROOM_TYPES = ['bedroom', 'bathroom', 'toilet', 'kitchen', 'living_room', 'balcony', 'corridor', 'shed'];
+
+    /**
+     * Room types currently selectable in the Flutter customer app.
+     */
+    public const APP_ROOM_TYPES = ['bedroom', 'bathroom', 'kitchen', 'living_room', 'balcony', 'corridor', 'shed'];
+
     public const ROOM_SIZES = ['small', 'medium', 'large'];
     public const BASE_UNIT_PRICE = 30000.00;
     public const DEEP_CLEANING_MULTIPLIER = 4.00;
