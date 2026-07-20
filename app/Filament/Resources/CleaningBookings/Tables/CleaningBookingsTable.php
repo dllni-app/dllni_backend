@@ -313,6 +313,7 @@ final class CleaningBookingsTable
                 true,
             ))
             ->map(static fn ($assignment): ?string => $assignment->worker?->first_name ?: $assignment->worker?->user?->name)
+            ->toBase()
             ->filter(fn ($name): bool => filled($name))
             ->unique()
             ->values();
