@@ -1,15 +1,15 @@
 name: Temporary apply Filament cleaning fix
 
 on:
-  issues:
-    types: [opened]
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   patch:
-    if: github.event.issue.title == '[automation] apply Filament cleaning worker names fix'
     runs-on: ubuntu-latest
     steps:
       - name: Check out fix branch
