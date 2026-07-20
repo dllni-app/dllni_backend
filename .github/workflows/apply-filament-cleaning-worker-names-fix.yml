@@ -1,0 +1,74 @@
+name: Apply Filament cleaning worker names fix
+
+on:
+  push:
+    branches:
+      - fix/filament-cleaning-worker-names-collection
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/filament-cleaning-worker-names-collection
+          fetch-depth: 0
+
+      - name: Patch scalar collection handling
+        id: patch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('app/Filament/Resources/CleaningBookings/Tables/CleaningBookingsTable.php')
+          text = path.read_text(encoding='utf-8')
+          old = """            ->map(static fn ($assignment): ?string => $assignment->worker?->first_name ?: $assignment->worker?->user?->name)
+              ->filter(fn ($name): bool => filled($name))
+              ->unique()
+"""
+          new = """            ->map(static fn ($assignment): ?string => $assignment->worker?->first_name ?: $assignment->worker?->user?->name)
+              ->toBase()
+              ->filter(fn ($name): bool => filled($name))
+              ->unique()
+"""
+
+          if old in text:
+              path.write_text(text.replace(old, new, 1), encoding='utf-8')
+              print('changed=true')
+          elif new in text:
+              print('Fix already applied.')
+          else:
+              raise SystemExit('Expected assignedWorkerNames chain was not found; refusing to modify the file.')
+          PY
+
+          if git diff --quiet -- app/Filament/Resources/CleaningBookings/Tables/CleaningBookingsTable.php; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate PHP syntax
+        if: steps.patch.outputs.changed == 'true'
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - name: Run syntax check
+        if: steps.patch.outputs.changed == 'true'
+        run: php -l app/Filament/Resources/CleaningBookings/Tables/CleaningBookingsTable.php
+
+      - name: Commit fix
+        if: steps.patch.outputs.changed == 'true'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/Filament/Resources/CleaningBookings/Tables/CleaningBookingsTable.php
+          git commit -m "Fix Filament assigned worker name collection"
+          git push origin HEAD:fix/filament-cleaning-worker-names-collection
