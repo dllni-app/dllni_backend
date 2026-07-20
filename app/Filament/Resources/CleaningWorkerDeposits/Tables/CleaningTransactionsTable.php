@@ -60,10 +60,17 @@ final class CleaningTransactionsTable
                     ->options(self::typeOptions())
                     ->query(function (Builder $query, array $data): Builder {
                         $type = $data['value'] ?? null;
+                        if (! is_string($type) || ! in_array($type, CleaningDepositTransaction::PUBLIC_TYPES, true)) {
+                            return $query;
+                        }
 
-                        return is_string($type) && in_array($type, CleaningDepositTransaction::PUBLIC_TYPES, true)
-                            ? $query->forPublicType($type)
-                            : $query;
+                        if ($type === 'debt') {
+                            return $query->where(fn (Builder $typeQuery): Builder => $typeQuery
+                                ->forPublicType('debt')
+                                ->orWhere('type', 'settlement'));
+                        }
+
+                        return $query->forPublicType($type);
                     }),
                 Filter::make('created_at')
                     ->form([
@@ -82,6 +89,10 @@ final class CleaningTransactionsTable
     {
         $options = [];
         foreach (CleaningDepositTransaction::PUBLIC_TYPES as $type) {
+            if ($type === 'settlement') {
+                continue;
+            }
+
             $options[$type] = self::typeLabel($type);
         }
 
