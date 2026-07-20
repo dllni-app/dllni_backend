@@ -77,7 +77,7 @@ it('persists the allowed debt limit and removes the legacy minimum deposit thres
 });
 
 it('persists unit and regular and deep time for every app room size', function (): void {
-    CleaningFinancialSetting::query()->create([
+    $setting = CleaningFinancialSetting::query()->create([
         'default_commission_rate' => 5,
         'vat_rate' => 10,
         'travel_markup_type' => 'fixed',
@@ -87,11 +87,13 @@ it('persists unit and regular and deep time for every app room size', function (
         'coverage_thresholds' => ['low' => 2, 'ok' => 5],
         'time_billing_mode' => 'actual',
         'extension_rate_per_30_minutes' => 0,
-        'cleaning_area_margin_multiplier' => 9.50,
-        'cleaning_setup_buffer_minutes' => 99,
         'cleaning_room_pricing_units' => CleaningFinancialDefaults::roomPricingUnits(),
         'cleaning_room_time_minutes' => CleaningFinancialDefaults::roomTimeMinutes(),
     ]);
+    $setting->forceFill([
+        'cleaning_area_margin_multiplier' => 9.50,
+        'cleaning_setup_buffer_minutes' => 99,
+    ])->save();
 
     Livewire::test(FinancialSettings::class)
         ->set('roomPricingSettings.bedroom.small.pricingUnit', 1.25)
