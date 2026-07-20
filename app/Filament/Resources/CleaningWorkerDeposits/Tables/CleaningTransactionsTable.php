@@ -60,10 +60,17 @@ final class CleaningTransactionsTable
                     ->options(self::typeOptions())
                     ->query(function (Builder $query, array $data): Builder {
                         $type = $data['value'] ?? null;
+                        if (! is_string($type) || ! in_array($type, CleaningDepositTransaction::PUBLIC_TYPES, true)) {
+                            return $query;
+                        }
 
-                        return is_string($type) && in_array($type, CleaningDepositTransaction::PUBLIC_TYPES, true)
-                            ? $query->forPublicType($type)
-                            : $query;
+                        if ($type === 'debt') {
+                            return $query->where(fn (Builder $typeQuery): Builder => $typeQuery
+                                ->forPublicType('debt')
+                                ->orWhere('type', 'settlement'));
+                        }
+
+                        return $query->forPublicType($type);
                     }),
                 Filter::make('created_at')
                     ->form([
@@ -82,6 +89,10 @@ final class CleaningTransactionsTable
     {
         $options = [];
         foreach (CleaningDepositTransaction::PUBLIC_TYPES as $type) {
+            if ($type === 'settlement') {
+                continue;
+            }
+
             $options[$type] = self::typeLabel($type);
         }
 
@@ -93,7 +104,7 @@ final class CleaningTransactionsTable
         return match ($type) {
             'commission' => app()->isLocale('ar') ? 'عمولة المنصة' : 'Platform commission',
             'debt' => __('cleaning_finance.types.debt'),
-            'settlement' => app()->isLocale('ar') ? 'تسوية المديونية' : 'Indebtedness settlement',
+            'settlement' => __('cleaning_finance.types.debt'),
             'deposit' => __('cleaning_admin.transactions.types.deposit'),
             'refund' => __('cleaning_admin.transactions.types.refund'),
             default => $type,
@@ -128,7 +139,7 @@ final class CleaningTransactionsTable
     {
         return match ($type) {
             'deposit' => 'success',
-            'settlement' => 'primary',
+            'settlement' => 'warning',
             'commission' => 'info',
             'debt' => 'warning',
             'refund' => 'warning',

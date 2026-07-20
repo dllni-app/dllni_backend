@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Filament\Resources\CleaningWorkerDeposits\Tables\CleaningTransactionsTable;
 use App\Models\CleaningDepositSetting;
 use App\Models\CleaningDepositTransaction;
 use App\Models\CleaningWorkerDeposit;
@@ -80,7 +81,10 @@ it('exposes the separate public transaction types in the worker financial timeli
         ->assertJsonPath('depositedTotal', 1000000)
         ->assertJsonPath('withdrawnTotal', 0)
         ->assertJsonPath('minimumRequired', 0)
-        ->assertJsonPath('allowedDebtLimit', 50000);
+        ->assertJsonPath('allowedDebtLimit', 50000)
+        ->assertJsonPath('status', 'active')
+        ->assertJsonMissingPath('isActive')
+        ->assertJsonMissingPath('isFinancialAccountActive');
 
     $this->getJson('/api/v1/cleaning/worker/account/deposit/transactions?type=deposit')
         ->assertOk()
@@ -106,4 +110,197 @@ it('exposes the separate public transaction types in the worker financial timeli
         ->assertOk()
         ->assertJsonPath('meta.total', 0)
         ->assertJsonPath('meta.filters.appliedType', 'refund');
+});
+
+it('returns active status only when deposit is positive and debt stays within the allowed limit', function (): void {
+    CleaningDepositSetting::query()->updateOrCreate(
+        ['id' => CleaningDepositSetting::query()->orderBy('id')->value('id') ?? 1],
+        [
+            'minimum_deposit_amount' => 0,
+            'default_max_negative_balance' => 100,
+            'restriction_threshold_percent' => 100,
+            'is_enabled' => true,
+            'trust_reject_after_accept_penalty' => 10,
+            'trust_minimum_for_dispatch' => 0,
+        ],
+    );
+
+    $user = User::factory()->create(['phone' => '+963944100003']);
+    $worker = Worker::factory()->create([
+        'user_id' => $user->id,
+        'trust_score' => 90,
+        'security_deposit_status' => 'insufficient_balance',
+    ]);
+
+    CleaningWorkerDeposit::query()->create([
+        'worker_id' => $worker->id,
+        'current_balance' => 500,
+        'debt_balance' => 100,
+        'deposited_total' => 500,
+        'withdrawn_total' => 0,
+        'minimum_required' => 0,
+        'max_negative_balance' => 100,
+        'is_active' => false,
+    ]);
+
+    Sanctum::actingAs($user);
+
+    $this->getJson('/api/v1/cleaning/worker/account/deposit')
+        ->assertOk()
+        ->assertJsonPath('status', 'active')
+        ->assertJsonPath('isEligibleForNewRequests', true)
+        ->assertJsonMissingPath('isFinancialAccountActive');
+});
+
+it('returns inactive financial status when deposit is zero or debt exceeds its allowed limit', function (): void {
+    CleaningDepositSetting::query()->updateOrCreate(
+        ['id' => CleaningDepositSetting::query()->orderBy('id')->value('id') ?? 1],
+        [
+            'minimum_deposit_amount' => 0,
+            'default_max_negative_balance' => 100,
+            'restriction_threshold_percent' => 100,
+            'is_enabled' => true,
+            'trust_reject_after_accept_penalty' => 10,
+            'trust_minimum_for_dispatch' => 0,
+        ],
+    );
+
+    $zeroDepositUser = User::factory()->create(['phone' => '+963944100004']);
+    $zeroDepositWorker = Worker::factory()->create([
+        'user_id' => $zeroDepositUser->id,
+        'trust_score' => 90,
+        'security_deposit_status' => 'active',
+    ]);
+    CleaningWorkerDeposit::query()->create([
+        'worker_id' => $zeroDepositWorker->id,
+        'current_balance' => 0,
+        'debt_balance' => 50,
+        'deposited_total' => 0,
+        'withdrawn_total' => 0,
+        'minimum_required' => 0,
+        'max_negative_balance' => 100,
+        'is_active' => true,
+    ]);
+
+    Sanctum::actingAs($zeroDepositUser);
+    $this->getJson('/api/v1/cleaning/worker/account/deposit')
+        ->assertOk()
+        ->assertJsonPath('status', 'insufficient_balance')
+        ->assertJsonPath('isEligibleForNewRequests', false);
+
+    $exceededDebtUser = User::factory()->create(['phone' => '+963944100005']);
+    $exceededDebtWorker = Worker::factory()->create([
+        'user_id' => $exceededDebtUser->id,
+        'trust_score' => 90,
+        'security_deposit_status' => 'active',
+    ]);
+    CleaningWorkerDeposit::query()->create([
+        'worker_id' => $exceededDebtWorker->id,
+        'current_balance' => 500,
+        'debt_balance' => 101,
+        'deposited_total' => 500,
+        'withdrawn_total' => 0,
+        'minimum_required' => 0,
+        'max_negative_balance' => 100,
+        'is_active' => true,
+    ]);
+
+    Sanctum::actingAs($exceededDebtUser);
+    $this->getJson('/api/v1/cleaning/worker/account/deposit')
+        ->assertOk()
+        ->assertJsonPath('status', 'insufficient_balance')
+        ->assertJsonPath('isEligibleForNewRequests', false);
+});
+
+it('uses the debt label for settlement rows in the Filament transaction table', function (): void {
+    expect(CleaningTransactionsTable::typeLabel('settlement'))
+        ->toBe(CleaningTransactionsTable::typeLabel('debt'))
+        ->and(CleaningTransactionsTable::typeColor('settlement'))
+        ->toBe(CleaningTransactionsTable::typeColor('debt'));
+});
+
+it('keeps deposit API cumulative totals equal to the financial ledger', function (): void {
+    CleaningDepositSetting::query()->updateOrCreate(
+        ['id' => CleaningDepositSetting::query()->orderBy('id')->value('id') ?? 1],
+        [
+            'minimum_deposit_amount' => 0,
+            'default_max_negative_balance' => 50000,
+            'restriction_threshold_percent' => 100,
+            'is_enabled' => true,
+            'trust_reject_after_accept_penalty' => 10,
+            'trust_minimum_for_dispatch' => 0,
+        ],
+    );
+
+    $user = User::factory()->create([
+        'phone' => '+963944100002',
+        'password' => bcrypt('password'),
+    ]);
+
+    $worker = Worker::factory()->create([
+        'user_id' => $user->id,
+        'trust_score' => 90,
+        'security_deposit_status' => 'active',
+    ]);
+
+    CleaningWorkerDeposit::query()->create([
+        'worker_id' => $worker->id,
+        'current_balance' => 250000,
+        'debt_balance' => 0,
+        'deposited_total' => 3000000,
+        'withdrawn_total' => 2000000,
+        'minimum_required' => 0,
+        'max_negative_balance' => 50000,
+        'is_active' => true,
+    ]);
+
+    $timeline = [
+        [
+            'type' => 'settlement',
+            'amount' => 1000000,
+            'balance_before' => 0,
+            'balance_after' => 0,
+            'debt_balance_before' => 1000000,
+            'debt_balance_after' => 0,
+            'reference' => 'cash-deposit:debt-settlement',
+        ],
+        [
+            'type' => 'deposit',
+            'amount' => 500000,
+            'balance_before' => 0,
+            'balance_after' => 500000,
+            'debt_balance_before' => 0,
+            'debt_balance_after' => 0,
+            'reference' => 'cash-deposit:deposit-remainder',
+        ],
+        [
+            'type' => 'refund',
+            'amount' => 250000,
+            'balance_before' => 500000,
+            'balance_after' => 250000,
+            'debt_balance_before' => 0,
+            'debt_balance_after' => 0,
+            'reference' => 'partial-refund',
+        ],
+    ];
+
+    foreach ($timeline as $transactionData) {
+        CleaningDepositTransaction::query()->create([
+            'worker_id' => $worker->id,
+            ...$transactionData,
+        ]);
+    }
+
+    $account = $worker->fresh('deposit')->deposit;
+    expect((float) $account->deposited_total)->toBe(1500000.0)
+        ->and((float) $account->withdrawn_total)->toBe(250000.0);
+
+    Sanctum::actingAs($user);
+
+    $this->getJson('/api/v1/cleaning/worker/account/deposit')
+        ->assertOk()
+        ->assertJsonPath('currentBalance', 250000)
+        ->assertJsonPath('depositedTotal', 1500000)
+        ->assertJsonPath('withdrawnTotal', 250000)
+        ->assertJsonPath('status', 'active');
 });

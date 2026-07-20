@@ -6,6 +6,7 @@ use App\Models\CleaningDepositSetting;
 use App\Models\CleaningWorkerDeposit;
 use App\Models\Worker;
 use Modules\Cleaning\Services\DepositService;
+use Modules\Cleaning\Services\WorkerFinancialAccountStatusService;
 
 beforeEach(function (): void {
     CleaningDepositSetting::query()->updateOrCreate(
@@ -21,24 +22,26 @@ beforeEach(function (): void {
     );
 });
 
-it('keeps the financial account active through the indebtedness limit', function (): void {
+it('returns active status when deposit is positive and indebtedness is within the limit', function (): void {
     $worker = Worker::factory()->create(['trust_score' => 100]);
 
-    $account = CleaningWorkerDeposit::query()->create([
+    CleaningWorkerDeposit::query()->create([
         'worker_id' => $worker->id,
-        'current_balance' => 0,
+        'current_balance' => 1,
         'debt_balance' => 100,
-        'deposited_total' => 0,
+        'deposited_total' => 1,
         'withdrawn_total' => 0,
         'minimum_required' => 0,
         'max_negative_balance' => 100,
         'is_active' => false,
     ]);
 
-    expect((bool) $account->fresh()->is_active)->toBeTrue();
+    expect(app(WorkerFinancialAccountStatusService::class)->status($worker->fresh(['deposit'])))
+        ->toBe(WorkerFinancialAccountStatusService::ACTIVE)
+        ->and((bool) $worker->fresh('deposit')->deposit->is_active)->toBeFalse();
 });
 
-it('deactivates the financial account after indebtedness exceeds the limit', function (): void {
+it('returns insufficient balance status when indebtedness exceeds the limit', function (): void {
     $worker = Worker::factory()->create(['trust_score' => 100, 'security_deposit_status' => 'active']);
 
     CleaningWorkerDeposit::query()->create([
@@ -55,8 +58,10 @@ it('deactivates the financial account after indebtedness exceeds the limit', fun
     $booking = Modules\Cleaning\Models\CleaningBooking::factory()->create(['worker_id' => $worker->id]);
     app(DepositService::class)->recordAdminFeeDebit($worker, $booking, 150);
 
-    $account = $worker->fresh('deposit')->deposit;
-    expect((float) $account->debt_balance)->toBe(150.0)
-        ->and((bool) $account->is_active)->toBeFalse()
-        ->and(app(DepositService::class)->isWorkerEligibleForNewRequests($worker->fresh(['deposit'])))->toBeFalse();
+    $freshWorker = $worker->fresh(['deposit']);
+    expect((float) $freshWorker->deposit->debt_balance)->toBe(150.0)
+        ->and(app(WorkerFinancialAccountStatusService::class)->status($freshWorker))
+        ->toBe(WorkerFinancialAccountStatusService::INSUFFICIENT_BALANCE)
+        ->and((bool) $freshWorker->deposit->is_active)->toBeTrue()
+        ->and(app(DepositService::class)->isWorkerEligibleForNewRequests($freshWorker))->toBeFalse();
 });
