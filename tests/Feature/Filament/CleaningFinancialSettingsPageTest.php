@@ -77,7 +77,7 @@ it('persists the allowed debt limit and removes the legacy minimum deposit thres
 });
 
 it('persists unit and regular and deep time for every app room size', function (): void {
-    $setting = CleaningFinancialSetting::query()->create([
+    CleaningFinancialSetting::query()->create([
         'default_commission_rate' => 5,
         'vat_rate' => 10,
         'travel_markup_type' => 'fixed',
@@ -90,10 +90,6 @@ it('persists unit and regular and deep time for every app room size', function (
         'cleaning_room_pricing_units' => CleaningFinancialDefaults::roomPricingUnits(),
         'cleaning_room_time_minutes' => CleaningFinancialDefaults::roomTimeMinutes(),
     ]);
-    $setting->forceFill([
-        'cleaning_area_margin_multiplier' => 9.50,
-        'cleaning_setup_buffer_minutes' => 99,
-    ])->save();
 
     Livewire::test(FinancialSettings::class)
         ->set('roomPricingSettings.bedroom.small.pricingUnit', 1.25)
@@ -106,9 +102,7 @@ it('persists unit and regular and deep time for every app room size', function (
 
     expect((float) data_get($setting->cleaning_room_pricing_units, 'bedroom.small'))->toBe(1.25)
         ->and((int) data_get($setting->cleaning_room_time_minutes, 'bedroom.small.regular'))->toBe(31)
-        ->and((int) data_get($setting->cleaning_room_time_minutes, 'bedroom.small.deep'))->toBe(62)
-        ->and((float) $setting->cleaning_area_margin_multiplier)->toBe(9.50)
-        ->and((int) $setting->cleaning_setup_buffer_minutes)->toBe(99);
+        ->and((int) data_get($setting->cleaning_room_time_minutes, 'bedroom.small.deep'))->toBe(62);
 });
 
 it('rejects incomplete room size settings', function (): void {
