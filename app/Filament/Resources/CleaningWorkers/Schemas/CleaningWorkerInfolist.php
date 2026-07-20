@@ -10,6 +10,7 @@ use BackedEnum;
 use Filament\Infolists\Components\ImageEntry;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Components\ViewEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Modules\Cleaning\Services\DepositService;
@@ -93,13 +94,17 @@ final class CleaningWorkerInfolist
                         ->color(fn (Worker $record): string => app(DepositService::class)->isWorkerEligibleForNewRequests($record) ? 'success' : 'danger'),
                 ]),
             Section::make('الموقع والتوفر')
-                ->description('بيانات الموقع وساعات العمل الأساسية.')
+                ->description('بيانات الموقع وجدول العمل الأسبوعي للعامل.')
                 ->columns(2)
                 ->schema([
                     TextEntry::make('home_address')->label('عنوان المنزل')->placeholder('-')->columnSpanFull(),
                     TextEntry::make('home_latitude')->label('خط العرض')->placeholder('-'),
                     TextEntry::make('home_longitude')->label('خط الطول')->placeholder('-'),
-                    TextEntry::make('default_working_hours')->label('ساعات العمل الافتراضية')->state(fn (Worker $record): array => self::workingHours($record->default_working_hours))->listWithLineBreaks()->columnSpanFull(),
+                    ViewEntry::make('default_working_hours')
+                        ->label('ساعات العمل الافتراضية')
+                        ->getStateUsing(fn (Worker $record): array => $record->getNormalizedDefaultWorkingHours())
+                        ->view('filament.resources.cleaning-workers.infolists.working-hours')
+                        ->columnSpanFull(),
                 ]),
             Section::make('الملخص المالي')
                 ->description('القيم الحالية والتاريخية للإيداع والمديونية والعمولات.')
@@ -264,39 +269,5 @@ final class CleaningWorkerInfolist
         $summary = self::summary($worker);
 
         return max(0.0, (float) $summary['totalRevenue'] - (float) $summary['totalCommission']);
-    }
-
-    /** @return array<int, string> */
-    private static function workingHours(mixed $state): array
-    {
-        if (! is_array($state) || $state === []) {
-            return ['غير محدد'];
-        }
-
-        $days = [
-            'sunday' => 'الأحد', 'monday' => 'الإثنين', 'tuesday' => 'الثلاثاء',
-            'wednesday' => 'الأربعاء', 'thursday' => 'الخميس', 'friday' => 'الجمعة', 'saturday' => 'السبت',
-        ];
-
-        $lines = [];
-        foreach ($days as $key => $label) {
-            $day = $state[$key] ?? null;
-            if (! is_array($day) || (isset($day['available']) && ! $day['available'])) {
-                $lines[] = $label.': غير متاح';
-
-                continue;
-            }
-
-            $periods = is_array($day['data'] ?? null) ? $day['data'] : [$day];
-            $ranges = [];
-            foreach ($periods as $period) {
-                if (is_array($period) && isset($period['from'], $period['to'])) {
-                    $ranges[] = $period['from'].' - '.$period['to'];
-                }
-            }
-            $lines[] = $label.': '.($ranges === [] ? 'غير متاح' : implode('، ', $ranges));
-        }
-
-        return $lines;
     }
 }
