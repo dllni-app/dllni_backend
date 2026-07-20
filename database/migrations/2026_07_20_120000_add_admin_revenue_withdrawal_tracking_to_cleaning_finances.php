@@ -65,6 +65,7 @@ return new class extends Migration
 
                     if ($isCommission) {
                         $pendingCommission += abs($amount);
+
                         continue;
                     }
 
