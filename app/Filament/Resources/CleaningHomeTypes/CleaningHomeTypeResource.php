@@ -26,7 +26,7 @@ final class CleaningHomeTypeResource extends Resource
 
     public static function getNavigationGroup(): ?string
     {
-        return 'إعدادات التنظيف';
+        return __('cleaning_admin.nav_groups.operations');
     }
 
     public static function getNavigationLabel(): string
