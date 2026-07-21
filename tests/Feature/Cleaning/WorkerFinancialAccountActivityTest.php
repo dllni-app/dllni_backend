@@ -3,8 +3,10 @@
 declare(strict_types=1);
 
 use App\Models\CleaningWorkerDeposit;
+use App\Models\User;
 use App\Models\Worker;
 use Illuminate\Support\Facades\Schema;
+use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Services\DepositService;
 use Modules\Cleaning\Services\WorkerFinancialAccountStatusService;
 
@@ -79,4 +81,37 @@ it('does not fall back when the worker debt limit is missing', function (): void
 it('removes the global finance toggle and default debt limit columns', function (): void {
     expect(Schema::hasColumn('cleaning_deposit_settings', 'is_enabled'))->toBeFalse()
         ->and(Schema::hasColumn('cleaning_deposit_settings', 'default_max_negative_balance'))->toBeFalse();
+});
+
+it('keeps the legacy settings API response contract without applying global values', function (): void {
+    Sanctum::actingAs(User::factory()->create());
+
+    $this->putJson('/api/v1/admin/cleaning/deposits/settings', [
+        'allowed_debt_limit' => 999999,
+        'default_max_negative_balance' => 999999,
+        'is_enabled' => false,
+        'trust_reject_after_accept_penalty' => 12,
+        'trust_minimum_for_dispatch' => 60,
+    ])
+        ->assertOk()
+        ->assertJsonPath('allowedDebtLimit', 0)
+        ->assertJsonPath('defaultMaxNegativeBalance', 0)
+        ->assertJsonPath('isEnabled', true)
+        ->assertJsonPath('trustRejectAfterAcceptPenalty', 12)
+        ->assertJsonPath('trustMinimumForDispatch', 60);
+
+    $this->getJson('/api/v1/admin/cleaning/deposits/settings')
+        ->assertOk()
+        ->assertJsonStructure([
+            'minimumDepositAmount',
+            'allowedDebtLimit',
+            'defaultMaxNegativeBalance',
+            'restrictionThresholdPercent',
+            'trustRejectAfterAcceptPenalty',
+            'trustMinimumForDispatch',
+            'isEnabled',
+        ])
+        ->assertJsonPath('allowedDebtLimit', 0)
+        ->assertJsonPath('defaultMaxNegativeBalance', 0)
+        ->assertJsonPath('isEnabled', true);
 });
