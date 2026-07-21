@@ -38,16 +38,20 @@ final class WorkerHomepageEligibilityController
                 $eligibility['message'] = $dispatchEligibility['message']
                     ?? 'Your worker account cannot receive new orders right now.';
             } else {
-                $balanceEligible = (bool) ($depositSummary['isEligibleForNewRequests'] ?? false);
+                $accountEligible = (bool) ($depositSummary['isEligibleForNewRequests'] ?? false);
+                $commissionEligible = (bool) ($eligibility['canReceiveNewRequests'] ?? false);
+                $canReceiveNewRequests = $accountEligible && $commissionEligible;
 
-                $eligibility['canReceiveNewRequests'] = $balanceEligible;
-                $eligibility['canAcceptNewBookings'] = $balanceEligible;
-                $eligibility['reasonCode'] = $balanceEligible
-                    ? WorkerOrderSolvencyService::REASON_ELIGIBLE
-                    : WorkerOrderSolvencyService::REASON_INSUFFICIENT_COMMISSION_CAPACITY;
-                $eligibility['message'] = $balanceEligible
-                    ? 'Your deposit balance can receive new requests.'
-                    : 'Your deposit balance is not enough to receive new requests. Please recharge your deposit account.';
+                $eligibility['canReceiveNewRequests'] = $canReceiveNewRequests;
+                $eligibility['canAcceptNewBookings'] = $canReceiveNewRequests;
+
+                if (! $accountEligible) {
+                    $eligibility['reasonCode'] = WorkerOrderSolvencyService::REASON_INSUFFICIENT_COMMISSION_CAPACITY;
+                    $eligibility['message'] = 'Your worker debt exceeds the allowed limit. Settle the excess debt before receiving new requests.';
+                } elseif ($commissionEligible) {
+                    $eligibility['reasonCode'] = WorkerOrderSolvencyService::REASON_ELIGIBLE;
+                    $eligibility['message'] = 'Your available commission capacity can receive new requests.';
+                }
             }
 
             $payload['commissionCapacityEligibility'] = $eligibility;
