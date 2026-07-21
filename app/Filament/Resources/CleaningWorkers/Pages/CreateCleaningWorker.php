@@ -6,6 +6,7 @@ namespace App\Filament\Resources\CleaningWorkers\Pages;
 
 use App\Enums\UserModuleType;
 use App\Filament\Resources\CleaningWorkers\CleaningWorkerResource;
+use App\Filament\Resources\Workers\Pages\Concerns\SyncsWorkerDebtLimit;
 use App\Filament\Resources\Workers\Pages\Concerns\SyncsWorkerLinkedUser;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +14,7 @@ use Modules\Cleaning\Models\CleaningNeighborhood;
 
 final class CreateCleaningWorker extends CreateRecord
 {
+    use SyncsWorkerDebtLimit;
     use SyncsWorkerLinkedUser;
 
     protected static string $resource = CleaningWorkerResource::class;
@@ -22,6 +24,7 @@ final class CreateCleaningWorker extends CreateRecord
         $this->syncLinkedUserAccount();
         $this->syncWorkerAvatarFromForm();
         $this->syncCleaningWorkerCreationDefaults();
+        $this->syncWorkerDebtLimitFromForm();
 
         $this->record->user?->forceFill([
             'module_type' => UserModuleType::CleaningWorker->value,
