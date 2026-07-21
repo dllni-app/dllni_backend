@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\CleaningHomeTypes\Tables;
 
 use App\Filament\Resources\CleaningHomeTypes\CleaningHomeTypeResource;
+use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\IconColumn;
@@ -29,16 +30,6 @@ final class CleaningHomeTypesTable
                     ->label('الاسم')
                     ->searchable()
                     ->sortable(),
-                TextColumn::make('code')
-                    ->label('رمز الواجهة')
-                    ->searchable()
-                    ->copyable()
-                    ->toggleable(),
-                TextColumn::make('booking_value')
-                    ->label('قيمة الطلب')
-                    ->badge()
-                    ->copyable()
-                    ->toggleable(),
                 TextColumn::make('section')
                     ->label('القسم')
                     ->badge()
@@ -49,9 +40,6 @@ final class CleaningHomeTypesTable
                     })
                     ->color(fn (string $state): string => $state === CleaningHomeType::SECTION_OCCASION ? 'warning' : 'info')
                     ->sortable(),
-                TextColumn::make('sort_order')
-                    ->label('الترتيب')
-                    ->sortable(),
                 IconColumn::make('is_active')
                     ->label('ظاهر')
                     ->boolean(),
@@ -61,8 +49,14 @@ final class CleaningHomeTypesTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->searchPlaceholder('ابحث بالاسم أو رمز الواجهة أو قيمة الطلب')
+            ->searchPlaceholder('ابحث بالاسم')
             ->defaultSort('sort_order')
+            ->reorderable('sort_order')
+            ->reorderRecordsTriggerAction(
+                fn (Action $action, bool $isReordering): Action => $action
+                    ->button()
+                    ->label($isReordering ? 'إنهاء تغيير الترتيب' : 'تغيير الترتيب بالسحب والإفلات'),
+            )
             ->filters([
                 SelectFilter::make('section')
                     ->label('القسم')
