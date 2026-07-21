@@ -47,13 +47,9 @@ final class FinancialSettings extends Page
 
     public float $extensionRatePer30Minutes = 0.0;
 
-    public float $defaultMaxNegativeBalance = 0.0;
-
     public int $trustRejectAfterAcceptPenalty = 10;
 
     public int $trustMinimumForDispatch = 0;
-
-    public bool $workerFinanceEnabled = true;
 
     public float $cleaningBaseUnitPrice = CleaningFinancialDefaults::BASE_UNIT_PRICE;
 
@@ -146,10 +142,8 @@ final class FinancialSettings extends Page
 
         $depositSetting = CleaningDepositSetting::query()->first();
         if ($depositSetting) {
-            $this->defaultMaxNegativeBalance = max(0.0, (float) $depositSetting->default_max_negative_balance);
             $this->trustRejectAfterAcceptPenalty = (int) $depositSetting->trust_reject_after_accept_penalty;
             $this->trustMinimumForDispatch = (int) $depositSetting->trust_minimum_for_dispatch;
-            $this->workerFinanceEnabled = (bool) $depositSetting->is_enabled;
         }
     }
 
@@ -171,10 +165,8 @@ final class FinancialSettings extends Page
             'extensionRatePer30Minutes' => ['required', 'numeric', 'min:0'],
             'extensionRanges' => ['array'],
             'extensionRanges.*.price' => ['required', 'numeric', 'min:0'],
-            'defaultMaxNegativeBalance' => ['required', 'numeric', 'min:0'],
             'trustRejectAfterAcceptPenalty' => ['required', 'integer', 'min:0'],
             'trustMinimumForDispatch' => ['required', 'integer', 'min:0', 'max:100'],
-            'workerFinanceEnabled' => ['required', 'boolean'],
             'cleaningBaseUnitPrice' => ['required', 'numeric', 'min:0'],
             'cleaningDeepMultiplier' => ['required', 'numeric', 'min:1'],
             'roomPricingSettings' => ['required', 'array'],
@@ -220,11 +212,9 @@ final class FinancialSettings extends Page
             ['id' => CleaningDepositSetting::query()->orderBy('id')->value('id') ?? 1],
             [
                 'minimum_deposit_amount' => 0,
-                'default_max_negative_balance' => $this->defaultMaxNegativeBalance,
                 'restriction_threshold_percent' => 100,
                 'trust_reject_after_accept_penalty' => $this->trustRejectAfterAcceptPenalty,
                 'trust_minimum_for_dispatch' => $this->trustMinimumForDispatch,
-                'is_enabled' => $this->workerFinanceEnabled,
             ],
         );
 
