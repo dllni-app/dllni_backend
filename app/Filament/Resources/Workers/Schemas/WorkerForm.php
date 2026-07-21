@@ -72,6 +72,24 @@ final class WorkerForm
                             ->maxValue(100)
                             ->required(),
                     ]),
+                Section::make(app()->isLocale('ar') ? 'الإعدادات المالية' : 'Financial settings')
+                    ->description(app()->isLocale('ar')
+                        ? 'يتم تطبيق هذا الحد على هذا العامل فقط، ولا يوجد حد مديونية افتراضي عام.'
+                        : 'This limit applies only to this worker. There is no global default debt limit.')
+                    ->columns(2)
+                    ->schema([
+                        TextInput::make('worker_debt_limit')
+                            ->label(app()->isLocale('ar') ? 'حد المديونية للعامل' : 'Worker debt limit')
+                            ->helperText(app()->isLocale('ar')
+                                ? 'يمكن للعامل استقبال الطلبات ما دامت مديونيته لا تتجاوز هذا الحد.'
+                                : 'The worker may receive orders while their indebtedness does not exceed this limit.')
+                            ->numeric()
+                            ->minValue(0)
+                            ->step(0.01)
+                            ->default(0)
+                            ->required()
+                            ->dehydrated(false),
+                    ]),
                 Section::make(__('cleaning_admin.workers.sections.location'))
                     ->description(app()->isLocale('ar')
                         ? 'يجب حفظ عنوان المنزل والإحداثيات حتى يتمكن العامل من قبول حجوزات التنظيف.'
