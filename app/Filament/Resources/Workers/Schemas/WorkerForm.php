@@ -95,6 +95,7 @@ final class WorkerForm
                         ? 'يجب حفظ عنوان المنزل والإحداثيات حتى يتمكن العامل من قبول حجوزات التنظيف.'
                         : 'Home address and coordinates are required before the worker can accept cleaning bookings.')
                     ->columns(2)
+                    ->visible(fn (string $operation): bool => $operation === 'create')
                     ->schema([
                         TextInput::make('home_address')
                             ->label(__('cleaning_admin.workers.fields.home_address'))
