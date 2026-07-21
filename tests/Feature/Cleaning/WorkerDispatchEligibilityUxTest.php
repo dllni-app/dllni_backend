@@ -169,7 +169,7 @@ it('hides and warns about pending new requests when commission capacity is insuf
         'preferred_worker_id' => null,
         'base_price' => 20000,
         'addons_total' => 0,
-        'scheduled_date' => now()->toDateString(),
+        'scheduled_date' => now()->addDay()->toDateString(),
         'scheduled_time' => now()->addHour()->format('H:i'),
         'gender_preference' => 'any',
         'address_latitude' => 36.1795,
