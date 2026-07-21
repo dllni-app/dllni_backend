@@ -51,7 +51,7 @@ final class CleaningHomeTypesTable
             ])
             ->searchPlaceholder('ابحث بالاسم')
             ->defaultSort('sort_order')
-            ->reorderable('sort_order')
+            ->reorderable('sort_order', CleaningHomeTypeResource::canReorderTypes())
             ->reorderRecordsTriggerAction(
                 fn (Action $action, bool $isReordering): Action => $action
                     ->button()
