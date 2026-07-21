@@ -52,7 +52,10 @@ final class CleaningBookingPreferredWorkerEligibilityObserver
 
         if (
             $booking->neighborhood_id !== null
-            && ! $worker->hasActiveCoverageForNeighborhood((int) $booking->neighborhood_id)
+            && ! $worker->zones()
+                ->where('is_active', true)
+                ->where('neighborhood_id', (int) $booking->neighborhood_id)
+                ->exists()
         ) {
             throw ValidationException::withMessages([
                 'preferredWorkerId' => ['Selected worker does not cover the selected neighborhood.'],
