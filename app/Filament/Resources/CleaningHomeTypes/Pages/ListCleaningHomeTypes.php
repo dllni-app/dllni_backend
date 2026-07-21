@@ -20,7 +20,7 @@ final class ListCleaningHomeTypes extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'إدارة أسماء وصور وترتيب أنواع العقارات والمناسبات الظاهرة في تطبيق المستخدم.';
+        return 'إدارة أسماء وصور أنواع العقارات والمناسبات، واستخدام السحب والإفلات لتغيير ترتيب ظهورها في التطبيق.';
     }
 
     protected function getHeaderActions(): array
