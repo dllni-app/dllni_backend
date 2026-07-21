@@ -86,7 +86,7 @@ final class CleaningHomeType extends Model
     {
         $baseCode = Str::slug($title, '_');
 
-        if ($baseCode === '') {
+        if ($baseCode === '' || preg_match('/^[a-z0-9_]+$/', $baseCode) !== 1) {
             $prefix = $section !== '' ? $section : 'type';
             $baseCode = $prefix.'_'.substr(sha1($title), 0, 10);
         }
