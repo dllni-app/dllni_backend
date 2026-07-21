@@ -3,13 +3,16 @@ name: Cleaning Worker Eligibility
 on:
   pull_request:
     paths:
+      - 'Modules/Cleaning/app/Http/Controllers/API/WorkerHomepageEligibilityController.php'
       - 'Modules/User/app/Http/Controllers/API/UserCleaningPreviousWorkersController.php'
       - 'Modules/User/app/Http/Requests/UserCleaningPreviousWorkersRequest.php'
       - 'Modules/User/app/Observers/CleaningBookingPreferredWorkerEligibilityObserver.php'
       - 'Modules/User/app/Providers/UserServiceProvider.php'
       - 'app/Jobs/NotifyEligibleWorkersNewOrderJob.php'
       - 'tests/Feature/UserModule/UserCleaningPreviousWorkersEligibilityTest.php'
+      - 'tests/Feature/UserModule/UserCleaningOrderNeighborhoodTest.php'
       - 'tests/Feature/Cleaning/WorkerDepositEligibilityTest.php'
+      - 'tests/Feature/Cleaning/WorkerDispatchEligibilityUxTest.php'
       - 'tests/Feature/Cleaning/SuspendedWorkerDispatchTest.php'
       - '.github/workflows/cleaning-worker-eligibility.yml'
 
@@ -47,12 +50,15 @@ jobs:
       - name: Check formatting
         run: |
           vendor/bin/pint --test \
+            Modules/Cleaning/app/Http/Controllers/API/WorkerHomepageEligibilityController.php \
             Modules/User/app/Http/Controllers/API/UserCleaningPreviousWorkersController.php \
             Modules/User/app/Http/Requests/UserCleaningPreviousWorkersRequest.php \
             Modules/User/app/Observers/CleaningBookingPreferredWorkerEligibilityObserver.php \
             Modules/User/app/Providers/UserServiceProvider.php \
             app/Jobs/NotifyEligibleWorkersNewOrderJob.php \
-            tests/Feature/UserModule/UserCleaningPreviousWorkersEligibilityTest.php
+            tests/Feature/UserModule/UserCleaningPreviousWorkersEligibilityTest.php \
+            tests/Feature/UserModule/UserCleaningOrderNeighborhoodTest.php \
+            tests/Feature/Cleaning/WorkerDispatchEligibilityUxTest.php
 
       - name: Run eligibility tests
         env:
@@ -63,7 +69,9 @@ jobs:
           set -o pipefail
           php artisan test \
             tests/Feature/UserModule/UserCleaningPreviousWorkersEligibilityTest.php \
+            tests/Feature/UserModule/UserCleaningOrderNeighborhoodTest.php \
             tests/Feature/Cleaning/WorkerDepositEligibilityTest.php \
+            tests/Feature/Cleaning/WorkerDispatchEligibilityUxTest.php \
             tests/Feature/Cleaning/SuspendedWorkerDispatchTest.php \
             2>&1 | tee cleaning-worker-eligibility-test.log
 

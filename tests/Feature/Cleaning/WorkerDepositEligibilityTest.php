@@ -23,30 +23,21 @@ use Modules\User\Services\UserCleaningOrderService;
 
 function seedDepositSettings(array $overrides = []): CleaningDepositSetting
 {
+    $defaults = [
+        'minimum_deposit_amount' => 0,
+        'restriction_threshold_percent' => 100,
+        'trust_reject_after_accept_penalty' => 10,
+        'trust_minimum_for_dispatch' => 50,
+    ];
+
     return CleaningDepositSetting::query()->updateOrCreate(
         ['id' => CleaningDepositSetting::query()->orderBy('id')->value('id') ?? 1],
-        array_merge([
-            'minimum_deposit_amount' => 0,
-            'default_max_negative_balance' => 200,
-            'restriction_threshold_percent' => 100,
-            'is_enabled' => true,
-            'trust_reject_after_accept_penalty' => 10,
-            'trust_minimum_for_dispatch' => 50,
-        ], $overrides),
+        array_merge($defaults, array_intersect_key($overrides, $defaults)),
     );
 }
 
 function seedWorkerDeposit(Worker $worker, float $depositBalance, ?float $allowedDebtLimit = null, float $debtBalance = 0): CleaningWorkerDeposit
 {
-    $settings = CleaningDepositSetting::query()->firstOrCreate([], [
-        'minimum_deposit_amount' => 0,
-        'default_max_negative_balance' => 200,
-        'restriction_threshold_percent' => 100,
-        'is_enabled' => true,
-        'trust_reject_after_accept_penalty' => 10,
-        'trust_minimum_for_dispatch' => 50,
-    ]);
-
     return CleaningWorkerDeposit::query()->updateOrCreate(
         ['worker_id' => $worker->id],
         [
@@ -55,7 +46,7 @@ function seedWorkerDeposit(Worker $worker, float $depositBalance, ?float $allowe
             'deposited_total' => max($depositBalance, 0),
             'withdrawn_total' => 0,
             'minimum_required' => 0,
-            'max_negative_balance' => $allowedDebtLimit ?? $settings->default_max_negative_balance,
+            'max_negative_balance' => max(0, $allowedDebtLimit ?? 200),
         ],
     );
 }
@@ -109,8 +100,8 @@ it('records automatic commission and consumes deposit before debt', function ():
         ->and(Schema::hasColumn('cleaning_deposit_transactions', 'cleaning_booking_id'))->toBeFalse();
 });
 
-it('marks worker ineligible when debt exceeds the configured allowed debt limit', function (): void {
-    seedDepositSettings(['default_max_negative_balance' => 100]);
+it('marks worker ineligible when debt exceeds the worker-specific debt limit', function (): void {
+    seedDepositSettings();
     $worker = Worker::factory()->create(['trust_score' => 80, 'security_deposit_status' => 'active']);
     seedWorkerDeposit($worker, 50, 100);
 
@@ -132,7 +123,7 @@ it('marks worker ineligible when debt exceeds the configured allowed debt limit'
 });
 
 it('keeps sequential deposit and refund balance mutations consistent', function (): void {
-    seedDepositSettings(['default_max_negative_balance' => 1000]);
+    seedDepositSettings();
     $worker = Worker::factory()->create(['trust_score' => 80]);
     seedWorkerDeposit($worker, 0, 1000);
     $service = app(DepositService::class);
@@ -154,7 +145,7 @@ it('keeps sequential deposit and refund balance mutations consistent', function 
 });
 
 it('exposes explicit deposit debt and capacity values through the worker API', function (): void {
-    seedDepositSettings(['minimum_deposit_amount' => 1000, 'default_max_negative_balance' => 200]);
+    seedDepositSettings(['minimum_deposit_amount' => 1000]);
     $user = User::factory()->create();
     $worker = Worker::factory()->create(['user_id' => $user->id, 'trust_score' => 80]);
     seedWorkerDeposit($worker, 90, 200, 50);
@@ -271,12 +262,12 @@ it('charges commission when the customer confirms completion', function (): void
         ->and((float) $worker->fresh()->deposit->debt_balance)->toBe(50.0);
 });
 
-it('excludes workers whose deposit and remaining debt capacity cannot cover an order', function (): void {
+it('excludes workers whose debt exceeds their individual limit from new-order notifications', function (): void {
     Carbon::setTestNow(Carbon::parse('2026-06-16 12:00:00'));
     Notification::fake();
 
     try {
-        seedDepositSettings(['trust_minimum_for_dispatch' => 50, 'default_max_negative_balance' => 0, 'is_enabled' => true]);
+        seedDepositSettings(['trust_minimum_for_dispatch' => 50]);
         $bookingDate = Carbon::now()->toDateString();
         $dayKey = mb_strtolower(Carbon::now()->format('l'));
 
@@ -292,7 +283,7 @@ it('excludes workers whose deposit and remaining debt capacity cannot cover an o
             ],
         ]);
         $ineligibleWorker->zones()->create(['name' => 'Zone X', 'is_active' => true]);
-        seedWorkerDeposit($ineligibleWorker, 0, 0);
+        seedWorkerDeposit($ineligibleWorker, 0, 0, 1);
 
         $eligibleUser = User::factory()->create(['email' => 'eligible-deposit@example.com']);
         $eligibleWorker = Worker::factory()->create([

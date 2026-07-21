@@ -117,7 +117,7 @@ final class WorkerDispatchEligibilityService
             self::REASON_WORKER_INACTIVE => 'Account is inactive',
             self::REASON_WORKER_SUSPENDED => 'Worker stopped by admin',
             self::REASON_TRUST_SCORE_TOO_LOW => 'Trust score is too low',
-            self::REASON_DEPOSIT_BELOW_ALLOWED_BALANCE => 'Deposit balance is below the allowed limit',
+            self::REASON_DEPOSIT_BELOW_ALLOWED_BALANCE => 'Worker debt limit exceeded',
             self::REASON_DEPOSIT_REQUIRED_BEFORE_START => 'Deposit balance is below the required amount',
             default => 'Account cannot receive new requests',
         };
@@ -134,7 +134,7 @@ final class WorkerDispatchEligibilityService
             self::REASON_WORKER_SUSPENDED => 'Your worker account was stopped by the admin. You will not receive new orders until the admin removes the suspension.',
             self::REASON_TRUST_SCORE_TOO_LOW => 'Your trust score is below the minimum required to receive new requests.',
             self::REASON_DEPOSIT_BELOW_ALLOWED_BALANCE => sprintf(
-                'Your deposit balance is below the allowed limit by %s. Please recharge your deposit account to receive new requests.',
+                'Your indebtedness exceeds your worker debt limit by %s. Settle the excess debt before receiving new requests.',
                 number_format((float) ($depositSummary['exceedanceAmount'] ?? 0), 2, '.', '')
             ),
             self::REASON_DEPOSIT_REQUIRED_BEFORE_START => sprintf(
@@ -158,7 +158,7 @@ final class WorkerDispatchEligibilityService
             self::REASON_DEPOSIT_BELOW_ALLOWED_BALANCE,
             self::REASON_DEPOSIT_REQUIRED_BEFORE_START => [
                 'type' => 'open_deposit',
-                'label' => 'View deposit account',
+                'label' => 'View financial account',
             ],
             self::REASON_WORKER_SUSPENDED,
             self::REASON_TRUST_SCORE_TOO_LOW => [

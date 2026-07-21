@@ -14,9 +14,7 @@ final class CleaningDepositSetting extends Model
 
     protected $fillable = [
         'minimum_deposit_amount',
-        'default_max_negative_balance',
         'restriction_threshold_percent',
-        'is_enabled',
         'trust_reject_after_accept_penalty',
         'trust_minimum_for_dispatch',
     ];
@@ -25,9 +23,7 @@ final class CleaningDepositSetting extends Model
     {
         return [
             'minimum_deposit_amount' => 'decimal:2',
-            'default_max_negative_balance' => 'decimal:2',
             'restriction_threshold_percent' => 'decimal:2',
-            'is_enabled' => 'boolean',
             'trust_reject_after_accept_penalty' => 'integer',
             'trust_minimum_for_dispatch' => 'integer',
         ];

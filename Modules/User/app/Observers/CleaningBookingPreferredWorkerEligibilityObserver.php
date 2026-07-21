@@ -22,7 +22,7 @@ final class CleaningBookingPreferredWorkerEligibilityObserver
 
     public function updating(CleaningBooking $booking): void
     {
-        if (! $booking->isDirty(['preferred_worker_id', 'assignment_mode'])) {
+        if (! $booking->isDirty(['preferred_worker_id', 'assignment_mode', 'neighborhood_id'])) {
             return;
         }
 
@@ -47,6 +47,18 @@ final class CleaningBookingPreferredWorkerEligibilityObserver
         ) {
             throw ValidationException::withMessages([
                 'preferredWorkerId' => ['Selected worker cannot receive new cleaning requests.'],
+            ]);
+        }
+
+        if (
+            $booking->neighborhood_id !== null
+            && ! $worker->zones()
+                ->where('is_active', true)
+                ->where('neighborhood_id', (int) $booking->neighborhood_id)
+                ->exists()
+        ) {
+            throw ValidationException::withMessages([
+                'preferredWorkerId' => ['Selected worker does not cover the selected neighborhood.'],
             ]);
         }
     }

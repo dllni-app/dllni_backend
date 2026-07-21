@@ -105,6 +105,7 @@ final class DepositManagementController
     public function updateSettings(Request $request): JsonResponse
     {
         $validated = $request->validate([
+            // Kept as accepted no-op fields for backward compatibility with existing clients.
             'allowed_debt_limit' => 'nullable|numeric|min:0',
             'default_max_negative_balance' => 'nullable|numeric|min:0',
             'minimum_deposit_amount' => 'nullable|numeric|min:0',
@@ -114,15 +115,12 @@ final class DepositManagementController
             'is_enabled' => 'nullable|boolean',
         ]);
 
-        $allowedDebtLimit = $validated['allowed_debt_limit'] ?? $validated['default_max_negative_balance'] ?? null;
         $settings = $this->resolveSettings();
         $settings->update(array_filter([
             'minimum_deposit_amount' => 0,
-            'default_max_negative_balance' => $allowedDebtLimit,
             'restriction_threshold_percent' => 100,
             'trust_reject_after_accept_penalty' => $validated['trust_reject_after_accept_penalty'] ?? null,
             'trust_minimum_for_dispatch' => $validated['trust_minimum_for_dispatch'] ?? null,
-            'is_enabled' => $validated['is_enabled'] ?? null,
         ], static fn ($value) => $value !== null));
 
         $this->depositService->syncAllWorkerDepositStatuses();
@@ -164,9 +162,7 @@ final class DepositManagementController
     {
         return CleaningDepositSetting::query()->firstOrCreate([], [
             'minimum_deposit_amount' => 0,
-            'default_max_negative_balance' => 0,
             'restriction_threshold_percent' => 100,
-            'is_enabled' => true,
             'trust_reject_after_accept_penalty' => (int) config('cleaning.trust.reject_after_accept_penalty', 10),
             'trust_minimum_for_dispatch' => 0,
         ]);
@@ -174,16 +170,14 @@ final class DepositManagementController
 
     private function settingsPayload(CleaningDepositSetting $settings): array
     {
-        $allowedDebtLimit = max(0.0, (float) $settings->default_max_negative_balance);
-
         return [
             'minimumDepositAmount' => 0.0,
-            'allowedDebtLimit' => $allowedDebtLimit,
-            'defaultMaxNegativeBalance' => $allowedDebtLimit,
+            'allowedDebtLimit' => 0.0,
+            'defaultMaxNegativeBalance' => 0.0,
             'restrictionThresholdPercent' => 100.0,
             'trustRejectAfterAcceptPenalty' => (int) $settings->trust_reject_after_accept_penalty,
             'trustMinimumForDispatch' => (int) $settings->trust_minimum_for_dispatch,
-            'isEnabled' => (bool) $settings->is_enabled,
+            'isEnabled' => true,
         ];
     }
 

@@ -74,6 +74,25 @@ final class WorkerForm
                             ->maxValue(100)
                             ->required(),
                     ]),
+                Section::make(app()->isLocale('ar') ? 'الإعدادات المالية للعامل' : 'Worker financial settings')
+                    ->description(app()->isLocale('ar')
+                        ? 'يطبق حد المديونية على هذا العامل فقط، ولا يوجد حد افتراضي عام.'
+                        : 'The debt limit applies only to this worker. There is no global default limit.')
+                    ->columns(2)
+                    ->schema([
+                        TextInput::make('worker_debt_limit')
+                            ->label(app()->isLocale('ar') ? 'حد المديونية للعامل' : 'Worker debt limit')
+                            ->helperText(app()->isLocale('ar')
+                                ? 'يبقى الحساب المالي نشطاً ما دامت المديونية أقل من أو تساوي هذا الحد.'
+                                : 'The financial account remains active while indebtedness is less than or equal to this limit.')
+                            ->numeric()
+                            ->minValue(0)
+                            ->step(0.01)
+                            ->default(0)
+                            ->required()
+                            ->live()
+                            ->dehydrated(false),
+                    ]),
                 Section::make(__('cleaning_admin.workers.sections.location'))
                     ->description(app()->isLocale('ar')
                         ? 'أدخل عنوان منزل العامل ضمن بيانات الملف الشخصي.'
@@ -124,9 +143,13 @@ final class WorkerForm
                             ->columnSpanFull(),
                         Placeholder::make('initial_financial_transaction_warning')
                             ->label(app()->isLocale('ar') ? 'تنبيه' : 'Warning')
-                            ->content(app()->isLocale('ar')
-                                ? 'إكمال إضافة العامل بدون معاملة مالية يعني أن حسابه المالي سيبقى غير مؤهل لاستلام الطلبات حتى يتم تسجيل إيداع أو دين إداري لاحقاً.'
-                                : 'Creating the worker without a financial transaction leaves the financial account ineligible to receive orders until a deposit or administration loan is recorded later.')
+                            ->content(fn (Get $get): string => (float) ($get('worker_debt_limit') ?? 0) > 0
+                                ? (app()->isLocale('ar')
+                                    ? 'سيبدأ رصيد الإيداع بصفر، ويمكن للعامل العمل ضمن حد المديونية الفردي المحدد له.'
+                                    : 'The deposit balance starts at zero, and the worker may operate within the configured individual debt limit.')
+                                : (app()->isLocale('ar')
+                                    ? 'بدون إيداع ومع حد مديونية يساوي صفراً، لن تتوفر سعة مالية لقبول طلبات ذات عمولة.'
+                                    : 'Without a deposit and with a zero debt limit, there is no financial capacity for bookings with commission.'))
                             ->visible(fn (Get $get): bool => blank($get('initial_financial_transaction_type')))
                             ->extraAttributes([
                                 'class' => 'rounded-xl border border-warning-300 bg-warning-50 p-4 dark:border-warning-700 dark:bg-warning-950',

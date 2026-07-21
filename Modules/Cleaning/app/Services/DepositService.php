@@ -142,7 +142,7 @@ final class DepositService
     public function resolveLimits(Worker $worker): array
     {
         $worker->loadMissing('deposit');
-        $allowedDebt = (float) ($worker->deposit?->max_negative_balance ?? $this->settings()->default_max_negative_balance);
+        $allowedDebt = (float) ($worker->deposit?->max_negative_balance ?? 0);
 
         return ['minimumRequired' => 0.0, 'maxNegativeBalance' => max(0.0, $allowedDebt), 'restrictionThresholdPercent' => 100.0];
     }
@@ -199,15 +199,11 @@ final class DepositService
             return 'suspended';
         }
 
-        return $this->isFinanceEnabled() && $this->calculateExceedance($worker) !== null ? 'restricted' : 'active';
+        return $this->calculateExceedance($worker) !== null ? 'restricted' : 'active';
     }
 
     public function calculateExceedance(Worker $worker): ?float
     {
-        if (! $this->isFinanceEnabled()) {
-            return null;
-        }
-
         $worker->loadMissing('deposit');
         $debt = max(0.0, (float) ($worker->deposit?->debt_balance ?? 0));
         $allowed = $this->resolveLimits($worker)['maxNegativeBalance'];
@@ -231,20 +227,14 @@ final class DepositService
         if (! $worker->is_active || $worker->is_suspended) {
             return false;
         }
-        if (! $this->isFinanceEnabled()) {
-            return true;
-        }
 
-        return $this->passesTrustFloor($worker) && $this->availableCommissionCapacity($worker) > 0;
+        return $this->passesTrustFloor($worker) && $this->calculateExceedance($worker) === null;
     }
 
     public function isWorkerEligibleToStartWork(Worker $worker): bool
     {
         if (! $worker->is_active || $worker->is_suspended) {
             return false;
-        }
-        if (! $this->isFinanceEnabled()) {
-            return true;
         }
 
         return $this->passesTrustFloor($worker) && $this->calculateExceedance($worker) === null;
@@ -272,9 +262,10 @@ final class DepositService
 
     public function syncEligibilityStatus(Worker $worker): void
     {
-        $status = ! $this->isFinanceEnabled()
-            ? 'active'
-            : ($worker->is_suspended ? 'suspended' : ($this->availableCommissionCapacity($worker) > 0 && $this->calculateExceedance($worker) === null ? 'active' : 'insufficient_balance'));
+        $status = $worker->is_suspended
+            ? 'suspended'
+            : ($this->calculateExceedance($worker) === null ? 'active' : 'insufficient_balance');
+
         $worker->update(['security_deposit_status' => $status]);
     }
 
@@ -387,7 +378,7 @@ final class DepositService
             'deposited_total' => 0,
             'withdrawn_total' => 0,
             'minimum_required' => 0,
-            'max_negative_balance' => $this->settings()->default_max_negative_balance,
+            'max_negative_balance' => 0,
             'is_active' => true,
         ]);
 
@@ -414,11 +405,6 @@ final class DepositService
         }
     }
 
-    private function isFinanceEnabled(): bool
-    {
-        return (bool) $this->settings()->is_enabled;
-    }
-
     private function passesTrustFloor(Worker $worker): bool
     {
         return (int) $worker->trust_score >= (int) $this->settings()->trust_minimum_for_dispatch;
@@ -428,9 +414,7 @@ final class DepositService
     {
         $defaults = [
             'minimum_deposit_amount' => 0,
-            'default_max_negative_balance' => 0,
             'restriction_threshold_percent' => 100,
-            'is_enabled' => true,
             'trust_reject_after_accept_penalty' => (int) config('cleaning.trust.reject_after_accept_penalty', 10),
             'trust_minimum_for_dispatch' => 0,
         ];
