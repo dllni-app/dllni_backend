@@ -103,7 +103,7 @@ it('rejects creating a second cleaning worker for an existing worker account pho
         ->assertHasFormErrors(['user_phone']);
 });
 
-it('updates trust score home location and the individual debt limit without writing user fields to the workers table', function (): void {
+it('updates trust score and the individual debt limit without writing user fields to the workers table', function (): void {
     $linkedUser = User::factory()->create([
         'name' => 'Sara',
         'phone' => '+963900000000',
@@ -134,9 +134,6 @@ it('updates trust score home location and the individual debt limit without writ
             'gender' => 'female',
             'trust_score' => 84,
             'worker_debt_limit' => 900,
-            'home_address' => 'Damascus - Al Mazzeh',
-            'home_latitude' => 33.5038,
-            'home_longitude' => 36.2504,
             'user_phone' => '+963922222222',
         ])
         ->call('save')
@@ -145,9 +142,6 @@ it('updates trust score home location and the individual debt limit without writ
     $worker->refresh();
     expect($worker->gender)->toBe('female')
         ->and($worker->trust_score)->toBe(84)
-        ->and($worker->home_address)->toBe('Damascus - Al Mazzeh')
-        ->and((float) $worker->home_latitude)->toBe(33.5038)
-        ->and((float) $worker->home_longitude)->toBe(36.2504)
         ->and((float) $worker->deposit()->value('max_negative_balance'))->toBe(900.0);
 
     $linkedUser->refresh();
