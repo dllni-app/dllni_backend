@@ -29,6 +29,28 @@ final class CleaningHomeType extends Model
         'is_active',
     ];
 
+    protected static function booted(): void
+    {
+        static::creating(function (self $type): void {
+            $section = trim((string) $type->section);
+
+            if (blank($type->code)) {
+                $type->code = self::generateUniqueCode($section, (string) $type->title);
+            }
+
+            if (blank($type->booking_value)) {
+                $type->booking_value = $type->code;
+            }
+
+            if ($type->sort_order === null) {
+                $type->sort_order = ((int) static::query()
+                    ->withTrashed()
+                    ->where('section', $section)
+                    ->max('sort_order')) + 1;
+            }
+        });
+    }
+
     public function casts(): array
     {
         return [
@@ -58,5 +80,31 @@ final class CleaningHomeType extends Model
     public function scopeForSection(Builder $query, string $section): Builder
     {
         return $query->where('section', $section);
+    }
+
+    private static function generateUniqueCode(string $section, string $title): string
+    {
+        $baseCode = Str::slug($title, '_');
+
+        if ($baseCode === '') {
+            $prefix = $section !== '' ? $section : 'type';
+            $baseCode = $prefix.'_'.substr(sha1($title), 0, 10);
+        }
+
+        $baseCode = Str::limit($baseCode, 90, '');
+        $code = $baseCode;
+        $suffix = 2;
+
+        while (static::query()
+            ->withTrashed()
+            ->where('section', $section)
+            ->where('code', $code)
+            ->exists()) {
+            $suffixValue = '_'.$suffix;
+            $code = Str::limit($baseCode, 100 - strlen($suffixValue), '').$suffixValue;
+            $suffix++;
+        }
+
+        return $code;
     }
 }
