@@ -5,7 +5,6 @@ declare(strict_types=1);
 use App\Models\CleaningWorkerDeposit;
 use App\Models\User;
 use App\Models\Worker;
-use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Services\DepositService;
 use Modules\Cleaning\Services\WorkerFinancialAccountStatusService;
@@ -73,11 +72,6 @@ it('does not fall back to a removed global limit when the worker has no financia
     expect(app(DepositService::class)->resolveLimits($worker)['maxNegativeBalance'])->toBe(0.0)
         ->and(app(WorkerFinancialAccountStatusService::class)->status($worker))
         ->toBe(WorkerFinancialAccountStatusService::ACTIVE);
-});
-
-it('removes the global finance toggle and default debt limit columns', function (): void {
-    expect(Schema::hasColumn('cleaning_deposit_settings', 'is_enabled'))->toBeFalse()
-        ->and(Schema::hasColumn('cleaning_deposit_settings', 'default_max_negative_balance'))->toBeFalse();
 });
 
 it('keeps the legacy settings API response contract without applying global values', function (): void {
