@@ -23,7 +23,7 @@ beforeEach(function (): void {
     $this->actingAs($adminUser);
 });
 
-it('persists the allowed debt limit and removes the legacy minimum deposit threshold', function (): void {
+it('removes global worker finance controls and persists only shared trust settings', function (): void {
     CleaningFinancialSetting::query()->create([
         'default_commission_rate' => 5,
         'vat_rate' => 10,
@@ -38,7 +38,11 @@ it('persists the allowed debt limit and removes the legacy minimum deposit thres
         'extension_rate_per_30_minutes' => 0,
     ]);
 
-    $this->get(FinancialSettings::getUrl([], isAbsolute: false))->assertSuccessful();
+    $this->get(FinancialSettings::getUrl([], isAbsolute: false))
+        ->assertSuccessful()
+        ->assertDontSee('الدين الإداري يضاف إلى رصيد الإيداع')
+        ->assertDontSee('تفعيل قواعد مالية العاملين')
+        ->assertDontSee('حد المديونية الافتراضي');
 
     Livewire::test(FinancialSettings::class)
         ->set('defaultCommissionRate', 5)
@@ -54,10 +58,8 @@ it('persists the allowed debt limit and removes the legacy minimum deposit thres
         ->set('minBillableMinutes', 30)
         ->set('timeWarningMinutesBeforeEnd', 10)
         ->set('extensionRatePer30Minutes', 4500.50)
-        ->set('defaultMaxNegativeBalance', 250)
         ->set('trustRejectAfterAcceptPenalty', 12)
         ->set('trustMinimumForDispatch', 60)
-        ->set('workerFinanceEnabled', true)
         ->call('save')
         ->assertHasNoErrors();
 
@@ -68,11 +70,9 @@ it('persists the allowed debt limit and removes the legacy minimum deposit thres
 
     $this->assertDatabaseHas('cleaning_deposit_settings', [
         'minimum_deposit_amount' => 0,
-        'default_max_negative_balance' => 250,
         'restriction_threshold_percent' => 100,
         'trust_reject_after_accept_penalty' => 12,
         'trust_minimum_for_dispatch' => 60,
-        'is_enabled' => true,
     ]);
 });
 
