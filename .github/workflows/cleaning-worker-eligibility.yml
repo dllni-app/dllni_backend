@@ -10,6 +10,7 @@ on:
       - 'app/Jobs/NotifyEligibleWorkersNewOrderJob.php'
       - 'tests/Feature/UserModule/UserCleaningPreviousWorkersEligibilityTest.php'
       - 'tests/Feature/Cleaning/WorkerDepositEligibilityTest.php'
+      - 'tests/Feature/Cleaning/WorkerDispatchEligibilityUxTest.php'
       - 'tests/Feature/Cleaning/SuspendedWorkerDispatchTest.php'
       - '.github/workflows/cleaning-worker-eligibility.yml'
 
@@ -52,7 +53,8 @@ jobs:
             Modules/User/app/Observers/CleaningBookingPreferredWorkerEligibilityObserver.php \
             Modules/User/app/Providers/UserServiceProvider.php \
             app/Jobs/NotifyEligibleWorkersNewOrderJob.php \
-            tests/Feature/UserModule/UserCleaningPreviousWorkersEligibilityTest.php
+            tests/Feature/UserModule/UserCleaningPreviousWorkersEligibilityTest.php \
+            tests/Feature/Cleaning/WorkerDispatchEligibilityUxTest.php
 
       - name: Run eligibility tests
         env:
@@ -64,6 +66,7 @@ jobs:
           php artisan test \
             tests/Feature/UserModule/UserCleaningPreviousWorkersEligibilityTest.php \
             tests/Feature/Cleaning/WorkerDepositEligibilityTest.php \
+            tests/Feature/Cleaning/WorkerDispatchEligibilityUxTest.php \
             tests/Feature/Cleaning/SuspendedWorkerDispatchTest.php \
             2>&1 | tee cleaning-worker-eligibility-test.log
 
