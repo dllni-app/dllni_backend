@@ -9,10 +9,12 @@ use App\Models\User;
 use App\Models\Worker;
 use Closure;
 use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 
 final class WorkerForm
@@ -72,47 +74,64 @@ final class WorkerForm
                             ->maxValue(100)
                             ->required(),
                     ]),
-                Section::make(app()->isLocale('ar') ? 'الإعدادات المالية' : 'Financial settings')
-                    ->description(app()->isLocale('ar')
-                        ? 'يتم تطبيق هذا الحد على هذا العامل فقط، ولا يوجد حد مديونية افتراضي عام.'
-                        : 'This limit applies only to this worker. There is no global default debt limit.')
-                    ->columns(2)
-                    ->schema([
-                        TextInput::make('worker_debt_limit')
-                            ->label(app()->isLocale('ar') ? 'حد المديونية للعامل' : 'Worker debt limit')
-                            ->helperText(app()->isLocale('ar')
-                                ? 'يمكن للعامل استقبال الطلبات ما دامت مديونيته لا تتجاوز هذا الحد.'
-                                : 'The worker may receive orders while their indebtedness does not exceed this limit.')
-                            ->numeric()
-                            ->minValue(0)
-                            ->step(0.01)
-                            ->default(0)
-                            ->required()
-                            ->dehydrated(false),
-                    ]),
                 Section::make(__('cleaning_admin.workers.sections.location'))
                     ->description(app()->isLocale('ar')
-                        ? 'يجب حفظ عنوان المنزل والإحداثيات حتى يتمكن العامل من قبول حجوزات التنظيف.'
-                        : 'Home address and coordinates are required before the worker can accept cleaning bookings.')
-                    ->columns(2)
+                        ? 'أدخل عنوان منزل العامل ضمن بيانات الملف الشخصي.'
+                        : 'Enter the worker home address as part of the profile details.')
                     ->visible(fn (string $operation): bool => $operation === 'create')
                     ->schema([
                         TextInput::make('home_address')
                             ->label(__('cleaning_admin.workers.fields.home_address'))
                             ->maxLength(255)
                             ->columnSpanFull(),
-                        TextInput::make('home_latitude')
-                            ->label(__('cleaning_admin.workers.fields.home_latitude'))
+                    ]),
+                Section::make(app()->isLocale('ar') ? 'المعاملة المالية الأولية' : 'Initial financial transaction')
+                    ->description(app()->isLocale('ar')
+                        ? 'يمكن تسجيل إيداع أو دين إداري مباشرة عند إنشاء العامل. الدين الإداري يضاف إلى رصيد الإيداع مع بقائه معلّماً كدين.'
+                        : 'Optionally record a deposit or administration loan while creating the worker. An administration loan is added to the deposit balance and remains marked as a loan.')
+                    ->columns(2)
+                    ->visible(fn (string $operation): bool => $operation === 'create')
+                    ->schema([
+                        Select::make('initial_financial_transaction_type')
+                            ->label(app()->isLocale('ar') ? 'نوع المعاملة المالية' : 'Financial transaction type')
+                            ->placeholder(app()->isLocale('ar') ? 'بدون معاملة مالية' : 'No financial transaction')
+                            ->options([
+                                'deposit' => __('cleaning_admin.workers.finance.deposit.label'),
+                                'debt' => __('cleaning_finance.debt.label'),
+                            ])
+                            ->native(false)
+                            ->live()
+                            ->dehydrated(false),
+                        TextInput::make('initial_financial_transaction_amount')
+                            ->label(__('cleaning_admin.workers.finance.fields.amount'))
                             ->numeric()
-                            ->step('any')
-                            ->minValue(-90)
-                            ->maxValue(90),
-                        TextInput::make('home_longitude')
-                            ->label(__('cleaning_admin.workers.fields.home_longitude'))
-                            ->numeric()
-                            ->step('any')
-                            ->minValue(-180)
-                            ->maxValue(180),
+                            ->minValue(0.01)
+                            ->required(fn (Get $get): bool => filled($get('initial_financial_transaction_type')))
+                            ->visible(fn (Get $get): bool => filled($get('initial_financial_transaction_type')))
+                            ->dehydrated(false),
+                        Textarea::make('initial_financial_transaction_notes')
+                            ->label(__('cleaning_admin.workers.finance.fields.notes'))
+                            ->helperText(fn (Get $get): ?string => $get('initial_financial_transaction_type') === 'debt'
+                                ? (app()->isLocale('ar')
+                                    ? 'سبب الدين الإداري مطلوب، وسيظهر المبلغ داخل رصيد الإيداع مع تنبيه بأنه دين.'
+                                    : 'A reason is required. The amount appears in the deposit balance with an administration-loan warning.')
+                                : null)
+                            ->required(fn (Get $get): bool => $get('initial_financial_transaction_type') === 'debt')
+                            ->visible(fn (Get $get): bool => filled($get('initial_financial_transaction_type')))
+                            ->rows(3)
+                            ->maxLength(1000)
+                            ->dehydrated(false)
+                            ->columnSpanFull(),
+                        Placeholder::make('initial_financial_transaction_warning')
+                            ->label(app()->isLocale('ar') ? 'تنبيه' : 'Warning')
+                            ->content(app()->isLocale('ar')
+                                ? 'إكمال إضافة العامل بدون معاملة مالية يعني أن حسابه المالي سيبقى غير مؤهل لاستلام الطلبات حتى يتم تسجيل إيداع أو دين إداري لاحقاً.'
+                                : 'Creating the worker without a financial transaction leaves the financial account ineligible to receive orders until a deposit or administration loan is recorded later.')
+                            ->visible(fn (Get $get): bool => blank($get('initial_financial_transaction_type')))
+                            ->extraAttributes([
+                                'class' => 'rounded-xl border border-warning-300 bg-warning-50 p-4 dark:border-warning-700 dark:bg-warning-950',
+                            ])
+                            ->columnSpanFull(),
                     ]),
                 Section::make(__('cleaning_admin.workers.sections.account'))
                     ->columns(2)
