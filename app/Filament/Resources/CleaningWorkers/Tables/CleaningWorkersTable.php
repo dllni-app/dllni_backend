@@ -12,11 +12,12 @@ use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Services\WorkerFinancialAccountStatusService;
 use Modules\Cleaning\Services\WorkerOrderSolvencyService;
 
@@ -105,16 +106,50 @@ final class CleaningWorkersTable
                             ? self::applyFinancialStatusFilter($query, $status)
                             : $query;
                     }),
-                Filter::make('has_debt')
-                    ->label('لديه مديونية')
-                    ->query(fn (Builder $query): Builder => $query->whereHas('deposit', fn (Builder $deposit): Builder => $deposit->where('debt_balance', '>', 0))),
-                Filter::make('blocked_by_balance')
-                    ->label('حالة مبلغ التأمين غير نشطة')
-                    ->query(fn (Builder $query): Builder => self::applyFinancialStatusFilter(
-                        $query,
-                        WorkerFinancialAccountStatusService::INSUFFICIENT_BALANCE,
-                    )),
+                TernaryFilter::make('financially_blocked')
+                    ->label('الحالة المالية')
+                    ->placeholder('جميع العاملين')
+                    ->trueLabel('محجوب مالياً')
+                    ->falseLabel('غير محجوب مالياً')
+                    ->queries(
+                        true: fn (Builder $query): Builder => self::applyFinancialBlockFilter($query, true),
+                        false: fn (Builder $query): Builder => self::applyFinancialBlockFilter($query, false),
+                        blank: fn (Builder $query): Builder => $query,
+                    ),
+                TernaryFilter::make('has_debt')
+                    ->label('المديونية')
+                    ->placeholder('جميع العاملين')
+                    ->trueLabel('لديه مديونية')
+                    ->falseLabel('لا توجد مديونية')
+                    ->queries(
+                        true: fn (Builder $query): Builder => $query->whereHas(
+                            'deposit',
+                            fn (Builder $deposit): Builder => $deposit->where('debt_balance', '>', 0),
+                        ),
+                        false: fn (Builder $query): Builder => $query->where(function (Builder $workerQuery): void {
+                            $workerQuery
+                                ->whereDoesntHave('deposit')
+                                ->orWhereHas('deposit', fn (Builder $deposit): Builder => $deposit
+                                    ->where(function (Builder $debtQuery): void {
+                                        $debtQuery
+                                            ->whereNull('debt_balance')
+                                            ->orWhere('debt_balance', '<=', 0);
+                                    }));
+                        }),
+                        blank: fn (Builder $query): Builder => $query,
+                    ),
+                TernaryFilter::make('has_reserved_active_commission')
+                    ->label('العمولات المحجوزة للطلبات النشطة')
+                    ->placeholder('جميع العاملين')
+                    ->trueLabel('لديه عمولات محجوزة')
+                    ->falseLabel('لا توجد عمولات محجوزة')
+                    ->queries(
+                        true: fn (Builder $query): Builder => self::applyReservedActiveCommissionFilter($query, true),
+                        false: fn (Builder $query): Builder => self::applyReservedActiveCommissionFilter($query, false),
+                        blank: fn (Builder $query): Builder => $query,
+                    ),
             ])
+            ->persistFiltersInSession()
             ->recordActions([
                 ViewAction::make()->label('عرض'),
                 ...WorkerSuspensionActions::make(),
@@ -150,6 +185,42 @@ final class CleaningWorkersTable
                     ->whereRaw('COALESCE(debt_balance, 0) > COALESCE(max_negative_balance, 0)')),
             default => $query,
         };
+    }
+
+    private static function applyFinancialBlockFilter(Builder $query, bool $blocked): Builder
+    {
+        if ($blocked) {
+            return $query->whereHas('deposit', fn (Builder $deposit): Builder => $deposit
+                ->whereRaw('COALESCE(debt_balance, 0) > COALESCE(max_negative_balance, 0)'));
+        }
+
+        return $query->where(function (Builder $financialQuery): void {
+            $financialQuery
+                ->whereDoesntHave('deposit')
+                ->orWhereHas('deposit', fn (Builder $deposit): Builder => $deposit
+                    ->whereRaw('COALESCE(debt_balance, 0) <= COALESCE(max_negative_balance, 0)'));
+        });
+    }
+
+    private static function applyReservedActiveCommissionFilter(Builder $query, bool $hasReservedCommission): Builder
+    {
+        $workerIdsWithReservedCommission = function ($subQuery): void {
+            $subQuery
+                ->select('assignments.worker_id')
+                ->from('cleaning_booking_worker_assignments as assignments')
+                ->join('cleaning_bookings as bookings', 'bookings.id', '=', 'assignments.cleaning_booking_id')
+                ->whereIn('assignments.status', CleaningBookingWorkerAssignmentStatus::activeValues())
+                ->whereNotIn('bookings.status', [
+                    CleaningBookingStatus::Completed->value,
+                    CleaningBookingStatus::Cancelled->value,
+                ])
+                ->groupBy('assignments.worker_id')
+                ->havingRaw('COALESCE(SUM(assignments.admin_margin_amount), 0) > 0');
+        };
+
+        return $hasReservedCommission
+            ? $query->whereIn('workers.id', $workerIdsWithReservedCommission)
+            : $query->whereNotIn('workers.id', $workerIdsWithReservedCommission);
     }
 
     private static function genderLabel(?string $gender): string
