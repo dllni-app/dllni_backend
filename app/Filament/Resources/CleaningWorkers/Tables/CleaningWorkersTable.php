@@ -7,7 +7,6 @@ namespace App\Filament\Resources\CleaningWorkers\Tables;
 use App\Filament\Resources\CleaningWorkers\Support\WorkerDepositActions;
 use App\Filament\Resources\Workers\Support\WorkerSuspensionActions;
 use App\Filament\Support\ArabicDashboardLabels;
-use App\Models\CleaningDepositSetting;
 use App\Models\Worker;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
@@ -135,33 +134,22 @@ final class CleaningWorkersTable
         return match ($status) {
             WorkerFinancialAccountStatusService::SUSPENDED => $query->where('is_suspended', true),
             WorkerFinancialAccountStatusService::INACTIVE => $query->where('is_active', false),
-            WorkerFinancialAccountStatusService::ACTIVE => self::financeEnabled()
-                ? $query
-                    ->where('is_active', true)
-                    ->where('is_suspended', false)
-                    ->whereHas('deposit', fn (Builder $deposit): Builder => $deposit
-                        ->where('current_balance', '>', 0)
-                        ->whereRaw('COALESCE(debt_balance, 0) <= COALESCE(max_negative_balance, 0)'))
-                : $query->where('is_active', true)->where('is_suspended', false),
-            WorkerFinancialAccountStatusService::INSUFFICIENT_BALANCE => self::financeEnabled()
-                ? $query
-                    ->where('is_active', true)
-                    ->where('is_suspended', false)
-                    ->where(function (Builder $financialQuery): void {
-                        $financialQuery
-                            ->whereDoesntHave('deposit')
-                            ->orWhereHas('deposit', fn (Builder $deposit): Builder => $deposit
-                                ->where('current_balance', '<=', 0)
-                                ->orWhereRaw('COALESCE(debt_balance, 0) > COALESCE(max_negative_balance, 0)'));
-                    })
-                : $query->whereRaw('1 = 0'),
+            WorkerFinancialAccountStatusService::ACTIVE => $query
+                ->where('is_active', true)
+                ->where('is_suspended', false)
+                ->where(function (Builder $financialQuery): void {
+                    $financialQuery
+                        ->whereDoesntHave('deposit')
+                        ->orWhereHas('deposit', fn (Builder $deposit): Builder => $deposit
+                            ->whereRaw('COALESCE(debt_balance, 0) <= COALESCE(max_negative_balance, 0)'));
+                }),
+            WorkerFinancialAccountStatusService::INSUFFICIENT_BALANCE => $query
+                ->where('is_active', true)
+                ->where('is_suspended', false)
+                ->whereHas('deposit', fn (Builder $deposit): Builder => $deposit
+                    ->whereRaw('COALESCE(debt_balance, 0) > COALESCE(max_negative_balance, 0)')),
             default => $query,
         };
-    }
-
-    private static function financeEnabled(): bool
-    {
-        return (bool) (CleaningDepositSetting::query()->value('is_enabled') ?? true);
     }
 
     private static function genderLabel(?string $gender): string
