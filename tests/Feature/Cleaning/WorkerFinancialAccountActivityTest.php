@@ -10,7 +10,7 @@ use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Services\DepositService;
 use Modules\Cleaning\Services\WorkerFinancialAccountStatusService;
 
-function createFinancialAccount(Worker $worker, float $debt, ?float $limit): CleaningWorkerDeposit
+function createFinancialAccount(Worker $worker, float $debt, float $limit): CleaningWorkerDeposit
 {
     return CleaningWorkerDeposit::query()->create([
         'worker_id' => $worker->id,
@@ -67,15 +67,12 @@ it('uses each worker debt limit independently', function (): void {
         ->and($depositService->isWorkerEligibleForNewRequests($highLimitWorker->fresh(['deposit'])))->toBeTrue();
 });
 
-it('does not fall back when the worker debt limit is missing', function (): void {
+it('does not fall back to a removed global limit when the worker has no financial account yet', function (): void {
     $worker = Worker::factory()->create(['trust_score' => 100]);
-    createFinancialAccount($worker, debt: 1, limit: null);
 
-    $freshWorker = $worker->fresh(['deposit']);
-
-    expect(app(DepositService::class)->resolveLimits($freshWorker)['maxNegativeBalance'])->toBe(0.0)
-        ->and(app(WorkerFinancialAccountStatusService::class)->status($freshWorker))
-        ->toBe(WorkerFinancialAccountStatusService::INSUFFICIENT_BALANCE);
+    expect(app(DepositService::class)->resolveLimits($worker)['maxNegativeBalance'])->toBe(0.0)
+        ->and(app(WorkerFinancialAccountStatusService::class)->status($worker))
+        ->toBe(WorkerFinancialAccountStatusService::ACTIVE);
 });
 
 it('removes the global finance toggle and default debt limit columns', function (): void {
