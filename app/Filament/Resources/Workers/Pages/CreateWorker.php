@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Workers\Pages;
 
+use App\Filament\Resources\Workers\Pages\Concerns\SyncsWorkerDebtLimit;
 use App\Filament\Resources\Workers\Pages\Concerns\SyncsWorkerLinkedUser;
 use App\Filament\Resources\Workers\WorkerResource;
 use Filament\Actions\Action;
@@ -16,6 +17,7 @@ use Modules\Cleaning\Services\AdminCleaningTransactionService;
 
 final class CreateWorker extends CreateRecord
 {
+    use SyncsWorkerDebtLimit;
     use SyncsWorkerLinkedUser {
         handleRecordCreation as private createWorkerRecord;
     }
@@ -25,13 +27,14 @@ final class CreateWorker extends CreateRecord
     protected function getCreateFormAction(): Action
     {
         return parent::getCreateFormAction()
-            ->requiresConfirmation(fn (): bool => blank($this->data['initial_financial_transaction_type'] ?? null))
+            ->requiresConfirmation(fn (): bool => blank($this->data['initial_financial_transaction_type'] ?? null)
+                && (float) ($this->data['worker_debt_limit'] ?? 0) <= 0)
             ->modalIcon('heroicon-o-exclamation-triangle')
             ->modalIconColor('warning')
-            ->modalHeading(app()->isLocale('ar') ? 'إضافة العامل بدون معاملة مالية؟' : 'Create worker without a financial transaction?')
+            ->modalHeading(app()->isLocale('ar') ? 'إضافة العامل بدون سعة مالية؟' : 'Create worker without financial capacity?')
             ->modalDescription(app()->isLocale('ar')
-                ? 'إكمال الإضافة يعني أن الحساب المالي للعامل سيبقى غير مؤهل لاستلام الطلبات حتى يتم تسجيل إيداع أو دين إداري. هل أنت متأكد؟'
-                : 'Continuing means the worker financial account remains ineligible to receive orders until a deposit or administration loan is recorded. Are you sure?')
+                ? 'لم يتم تسجيل إيداع وحد المديونية للعامل يساوي صفراً، لذلك لن تتوفر له سعة مالية لقبول الطلبات ذات العمولة. هل أنت متأكد؟'
+                : 'No deposit was recorded and the worker debt limit is zero, so there will be no financial capacity for bookings with commission. Are you sure?')
             ->modalSubmitActionLabel(app()->isLocale('ar') ? 'إضافة العامل على أي حال' : 'Create worker anyway');
     }
 
@@ -67,6 +70,7 @@ final class CreateWorker extends CreateRecord
     {
         $this->syncLinkedUserAccount();
         $this->syncWorkerAvatarFromForm();
+        $this->syncWorkerDebtLimitFromForm();
     }
 
     private function initialFinancialTransactionType(): ?string
