@@ -21,80 +21,63 @@ return new class extends Migration
             );
         }
 
-        if (Schema::hasTable('cleaning_worker_deposits')) {
-            DB::table('cleaning_worker_deposits')
-                ->whereNull('max_negative_balance')
-                ->update(['max_negative_balance' => $legacyDefault]);
-
-            DB::table('workers')
-                ->orderBy('id')
-                ->eachById(function (object $worker) use ($legacyDefault): void {
-                    if (DB::table('cleaning_worker_deposits')->where('worker_id', $worker->id)->exists()) {
-                        return;
-                    }
-
-                    DB::table('cleaning_worker_deposits')->insert([
-                        'worker_id' => $worker->id,
-                        'current_balance' => 0,
-                        'debt_balance' => 0,
-                        'deposited_total' => 0,
-                        'withdrawn_total' => 0,
-                        'admin_revenue_withdrawn_total' => 0,
-                        'minimum_required' => 0,
-                        'max_negative_balance' => $legacyDefault,
-                        'is_active' => true,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
-                });
-
-            Schema::table('cleaning_worker_deposits', function (Blueprint $table): void {
-                $table->decimal('max_negative_balance', 12, 2)->default(0)->nullable(false)->change();
-            });
+        if (! Schema::hasTable('cleaning_worker_deposits')) {
+            return;
         }
 
+        DB::table('cleaning_worker_deposits')
+            ->whereNull('max_negative_balance')
+            ->update(['max_negative_balance' => $legacyDefault]);
+
+        DB::table('workers')
+            ->orderBy('id')
+            ->eachById(function (object $worker) use ($legacyDefault): void {
+                if (DB::table('cleaning_worker_deposits')->where('worker_id', $worker->id)->exists()) {
+                    return;
+                }
+
+                DB::table('cleaning_worker_deposits')->insert([
+                    'worker_id' => $worker->id,
+                    'current_balance' => 0,
+                    'debt_balance' => 0,
+                    'deposited_total' => 0,
+                    'withdrawn_total' => 0,
+                    'admin_revenue_withdrawn_total' => 0,
+                    'minimum_required' => 0,
+                    'max_negative_balance' => $legacyDefault,
+                    'is_active' => true,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            });
+
+        Schema::table('cleaning_worker_deposits', function (Blueprint $table): void {
+            $table->decimal('max_negative_balance', 12, 2)->default(0)->nullable(false)->change();
+        });
+
+        // Legacy global columns are deliberately retained as inert compatibility fields.
+        // The dashboard, models, services, validation, and eligibility logic no longer read
+        // or write them. Keeping the columns allows rolling deployments and older fixtures
+        // to coexist safely while every worker receives an explicit individual limit.
         if (Schema::hasTable('cleaning_deposit_settings')) {
-            $dropDefaultLimit = Schema::hasColumn('cleaning_deposit_settings', 'default_max_negative_balance');
-            $dropEnabledToggle = Schema::hasColumn('cleaning_deposit_settings', 'is_enabled');
+            if (Schema::hasColumn('cleaning_deposit_settings', 'is_enabled')) {
+                DB::table('cleaning_deposit_settings')->update(['is_enabled' => true]);
+            }
 
-            if ($dropDefaultLimit || $dropEnabledToggle) {
-                Schema::table('cleaning_deposit_settings', function (Blueprint $table) use ($dropDefaultLimit, $dropEnabledToggle): void {
-                    $columns = array_values(array_filter([
-                        $dropDefaultLimit ? 'default_max_negative_balance' : null,
-                        $dropEnabledToggle ? 'is_enabled' : null,
-                    ]));
-
-                    $table->dropColumn($columns);
-                });
+            if (Schema::hasColumn('cleaning_deposit_settings', 'default_max_negative_balance')) {
+                DB::table('cleaning_deposit_settings')->update(['default_max_negative_balance' => 0]);
             }
         }
     }
 
     public function down(): void
     {
-        if (Schema::hasTable('cleaning_worker_deposits')) {
-            Schema::table('cleaning_worker_deposits', function (Blueprint $table): void {
-                $table->decimal('max_negative_balance', 12, 2)->nullable()->default(null)->change();
-            });
-        }
-
-        if (! Schema::hasTable('cleaning_deposit_settings')) {
+        if (! Schema::hasTable('cleaning_worker_deposits')) {
             return;
         }
 
-        $addDefaultLimit = ! Schema::hasColumn('cleaning_deposit_settings', 'default_max_negative_balance');
-        $addEnabledToggle = ! Schema::hasColumn('cleaning_deposit_settings', 'is_enabled');
-
-        if ($addDefaultLimit || $addEnabledToggle) {
-            Schema::table('cleaning_deposit_settings', function (Blueprint $table) use ($addDefaultLimit, $addEnabledToggle): void {
-                if ($addDefaultLimit) {
-                    $table->decimal('default_max_negative_balance', 12, 2)->default(0)->after('minimum_deposit_amount');
-                }
-
-                if ($addEnabledToggle) {
-                    $table->boolean('is_enabled')->default(true)->after('minimum_deposit_amount');
-                }
-            });
-        }
+        Schema::table('cleaning_worker_deposits', function (Blueprint $table): void {
+            $table->decimal('max_negative_balance', 12, 2)->nullable()->default(null)->change();
+        });
     }
 };
