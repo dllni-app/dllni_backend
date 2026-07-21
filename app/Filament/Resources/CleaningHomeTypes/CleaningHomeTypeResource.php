@@ -84,6 +84,11 @@ final class CleaningHomeTypeResource extends Resource
         return self::hasPermission('cleaning-home-types.delete');
     }
 
+    public static function canReorderTypes(): bool
+    {
+        return self::hasPermission('cleaning-home-types.update');
+    }
+
     public static function getPages(): array
     {
         return [
