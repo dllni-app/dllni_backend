@@ -6,6 +6,7 @@ namespace App\Filament\Resources\CleaningWorkers\Pages;
 
 use App\Enums\UserModuleType;
 use App\Filament\Resources\CleaningWorkers\CleaningWorkerResource;
+use App\Filament\Resources\Workers\Pages\Concerns\SyncsWorkerDebtLimit;
 use App\Filament\Resources\Workers\Pages\Concerns\SyncsWorkerLinkedUser;
 use App\Models\WorkerTrustLog;
 use Filament\Actions\DeleteAction;
@@ -14,6 +15,7 @@ use Filament\Resources\Pages\EditRecord;
 
 final class EditCleaningWorker extends EditRecord
 {
+    use SyncsWorkerDebtLimit;
     use SyncsWorkerLinkedUser;
 
     protected static string $resource = CleaningWorkerResource::class;
@@ -22,7 +24,9 @@ final class EditCleaningWorker extends EditRecord
 
     protected function mutateFormDataBeforeFill(array $data): array
     {
-        return $this->mutateLinkedUserFormDataBeforeFill($data);
+        return $this->mutateWorkerDebtLimitFormDataBeforeFill(
+            $this->mutateLinkedUserFormDataBeforeFill($data),
+        );
     }
 
     protected function beforeSave(): void
@@ -34,6 +38,7 @@ final class EditCleaningWorker extends EditRecord
     {
         $this->syncLinkedUserAccount();
         $this->markLinkedUserAsCleaningWorker();
+        $this->syncWorkerDebtLimitFromForm();
         $this->logManualTrustScoreChange();
     }
 
