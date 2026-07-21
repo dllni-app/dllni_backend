@@ -16,9 +16,8 @@ function seedUxDepositSettings(array $overrides = []): CleaningDepositSetting
     return CleaningDepositSetting::query()->updateOrCreate(
         ['id' => CleaningDepositSetting::query()->orderBy('id')->value('id') ?? 1],
         array_merge([
-            'minimum_deposit_amount' => 1000,
-            'default_max_negative_balance' => 0,
-            'is_enabled' => true,
+            'minimum_deposit_amount' => 0,
+            'restriction_threshold_percent' => 100,
             'trust_reject_after_accept_penalty' => 10,
             'trust_minimum_for_dispatch' => 50,
         ], $overrides),
@@ -42,31 +41,24 @@ function seedUxFinancialSettings(array $overrides = []): CleaningFinancialSettin
     );
 }
 
-function seedUxWorkerDeposit(Worker $worker, float $balance, ?float $minimumRequired = null, ?float $maxNegativeBalance = null): CleaningWorkerDeposit
+function seedUxWorkerDeposit(Worker $worker, float $balance, float $debtBalance = 0, float $maxNegativeBalance = 0): CleaningWorkerDeposit
 {
-    $settings = CleaningDepositSetting::query()->firstOrCreate([], [
-        'minimum_deposit_amount' => 1000,
-        'default_max_negative_balance' => 0,
-        'is_enabled' => true,
-        'trust_reject_after_accept_penalty' => 10,
-        'trust_minimum_for_dispatch' => 50,
-    ]);
-
     return CleaningWorkerDeposit::query()->updateOrCreate(
         ['worker_id' => $worker->id],
         [
-            'current_balance' => $balance,
+            'current_balance' => max(0, $balance),
+            'debt_balance' => max(0, $debtBalance),
             'deposited_total' => max($balance, 0),
             'withdrawn_total' => 0,
-            'minimum_required' => $minimumRequired ?? $settings->minimum_deposit_amount,
-            'max_negative_balance' => $maxNegativeBalance ?? $settings->default_max_negative_balance,
+            'minimum_required' => 0,
+            'max_negative_balance' => max(0, $maxNegativeBalance),
         ],
     );
 }
 
 function actingAsIneligibleUxWorker(): Worker
 {
-    seedUxDepositSettings(['default_max_negative_balance' => 0]);
+    seedUxDepositSettings();
 
     $user = User::factory()->create();
     $worker = Worker::factory()->create([
@@ -75,7 +67,7 @@ function actingAsIneligibleUxWorker(): Worker
         'is_active' => true,
         'is_suspended' => false,
     ]);
-    seedUxWorkerDeposit($worker, -10, 0, 0);
+    seedUxWorkerDeposit($worker, balance: 0, debtBalance: 10, maxNegativeBalance: 0);
 
     Sanctum::actingAs($user);
 
@@ -132,11 +124,7 @@ it('hides pending new requests from ineligible workers in the current worker lis
 });
 
 it('hides and warns about pending new requests when commission capacity is insufficient', function (): void {
-    seedUxDepositSettings([
-        'minimum_deposit_amount' => 0,
-        'default_max_negative_balance' => 0,
-        'restriction_threshold_percent' => 100,
-    ]);
+    seedUxDepositSettings();
     seedUxFinancialSettings();
 
     $user = User::factory()->create();
@@ -149,7 +137,7 @@ it('hides and warns about pending new requests when commission capacity is insuf
         'home_latitude' => 36.20,
         'home_longitude' => 37.15,
     ]);
-    seedUxWorkerDeposit($worker, 1000, 0, 0);
+    seedUxWorkerDeposit($worker, balance: 1000, debtBalance: 0, maxNegativeBalance: 0);
 
     $acceptedBooking = CleaningBooking::factory()->create([
         'status' => CleaningBookingStatus::Pending->value,
