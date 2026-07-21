@@ -47,40 +47,54 @@ return new class extends Migration
                         'updated_at' => now(),
                     ]);
                 });
+
+            Schema::table('cleaning_worker_deposits', function (Blueprint $table): void {
+                $table->decimal('max_negative_balance', 12, 2)->default(0)->nullable(false)->change();
+            });
         }
 
         if (Schema::hasTable('cleaning_deposit_settings')) {
-            Schema::table('cleaning_deposit_settings', function (Blueprint $table): void {
-                $columns = array_values(array_filter([
-                    Schema::hasColumn('cleaning_deposit_settings', 'default_max_negative_balance')
-                        ? 'default_max_negative_balance'
-                        : null,
-                    Schema::hasColumn('cleaning_deposit_settings', 'is_enabled')
-                        ? 'is_enabled'
-                        : null,
-                ]));
+            $dropDefaultLimit = Schema::hasColumn('cleaning_deposit_settings', 'default_max_negative_balance');
+            $dropEnabledToggle = Schema::hasColumn('cleaning_deposit_settings', 'is_enabled');
 
-                if ($columns !== []) {
+            if ($dropDefaultLimit || $dropEnabledToggle) {
+                Schema::table('cleaning_deposit_settings', function (Blueprint $table) use ($dropDefaultLimit, $dropEnabledToggle): void {
+                    $columns = array_values(array_filter([
+                        $dropDefaultLimit ? 'default_max_negative_balance' : null,
+                        $dropEnabledToggle ? 'is_enabled' : null,
+                    ]));
+
                     $table->dropColumn($columns);
-                }
-            });
+                });
+            }
         }
     }
 
     public function down(): void
     {
+        if (Schema::hasTable('cleaning_worker_deposits')) {
+            Schema::table('cleaning_worker_deposits', function (Blueprint $table): void {
+                $table->decimal('max_negative_balance', 12, 2)->nullable()->default(null)->change();
+            });
+        }
+
         if (! Schema::hasTable('cleaning_deposit_settings')) {
             return;
         }
 
-        Schema::table('cleaning_deposit_settings', function (Blueprint $table): void {
-            if (! Schema::hasColumn('cleaning_deposit_settings', 'default_max_negative_balance')) {
-                $table->decimal('default_max_negative_balance', 12, 2)->default(0)->after('minimum_deposit_amount');
-            }
+        $addDefaultLimit = ! Schema::hasColumn('cleaning_deposit_settings', 'default_max_negative_balance');
+        $addEnabledToggle = ! Schema::hasColumn('cleaning_deposit_settings', 'is_enabled');
 
-            if (! Schema::hasColumn('cleaning_deposit_settings', 'is_enabled')) {
-                $table->boolean('is_enabled')->default(true)->after('minimum_deposit_amount');
-            }
-        });
+        if ($addDefaultLimit || $addEnabledToggle) {
+            Schema::table('cleaning_deposit_settings', function (Blueprint $table) use ($addDefaultLimit, $addEnabledToggle): void {
+                if ($addDefaultLimit) {
+                    $table->decimal('default_max_negative_balance', 12, 2)->default(0)->after('minimum_deposit_amount');
+                }
+
+                if ($addEnabledToggle) {
+                    $table->boolean('is_enabled')->default(true)->after('minimum_deposit_amount');
+                }
+            });
+        }
     }
 };
