@@ -7,6 +7,7 @@ use App\Enums\WorkerPreferredWorkType;
 use App\Filament\Resources\CleaningWorkers\Pages\CreateCleaningWorker;
 use App\Filament\Resources\CleaningWorkers\Pages\EditCleaningWorker;
 use App\Filament\Resources\CleaningWorkers\Pages\ListCleaningWorkers;
+use App\Models\CleaningWorkerDeposit;
 use App\Models\User;
 use App\Models\Worker;
 use App\Models\WorkerTrustLog;
@@ -25,7 +26,7 @@ beforeEach(function (): void {
     $this->actingAs($adminUser);
 });
 
-it('creates a cleaning worker and syncs the linked user account', function (): void {
+it('creates a cleaning worker with an individual debt limit and syncs the linked user account', function (): void {
     $linkedUser = User::factory()->create([
         'name' => 'Old Name',
         'phone' => '+963911111111',
@@ -36,6 +37,7 @@ it('creates a cleaning worker and syncs the linked user account', function (): v
         ->fillForm([
             'first_name' => 'Maher',
             'preferred_work_type' => WorkerPreferredWorkType::Both->value,
+            'worker_debt_limit' => 750,
             'user_phone' => '+963911111111',
             'user_password' => 'password',
         ])
@@ -44,6 +46,9 @@ it('creates a cleaning worker and syncs the linked user account', function (): v
 
     $worker = Worker::query()->where('user_id', $linkedUser->id)->firstOrFail();
     expect($worker->first_name)->toBe('Maher');
+
+    $deposit = CleaningWorkerDeposit::query()->where('worker_id', $worker->id)->firstOrFail();
+    expect((float) $deposit->max_negative_balance)->toBe(750.0);
 
     $linkedUser->refresh();
     expect($linkedUser->name)->toBe('Maher')
@@ -67,6 +72,7 @@ it('rejects cleaning worker account phones outside the Syrian +963 mobile format
         ->fillForm([
             'first_name' => 'Maher',
             'preferred_work_type' => WorkerPreferredWorkType::Both->value,
+            'worker_debt_limit' => 0,
             'user_phone' => '0911111111',
             'user_password' => 'password',
         ])
@@ -89,6 +95,7 @@ it('rejects creating a second cleaning worker for an existing worker account pho
         ->fillForm([
             'first_name' => 'Sara Duplicate',
             'preferred_work_type' => WorkerPreferredWorkType::Both->value,
+            'worker_debt_limit' => 0,
             'user_phone' => '+963933333333',
             'user_password' => 'password',
         ])
@@ -96,7 +103,7 @@ it('rejects creating a second cleaning worker for an existing worker account pho
         ->assertHasFormErrors(['user_phone']);
 });
 
-it('updates trust score and home location without writing user fields to the workers table', function (): void {
+it('updates trust score home location and the individual debt limit without writing user fields to the workers table', function (): void {
     $linkedUser = User::factory()->create([
         'name' => 'Sara',
         'phone' => '+963900000000',
@@ -111,11 +118,22 @@ it('updates trust score and home location without writing user fields to the wor
         'home_latitude' => null,
         'home_longitude' => null,
     ]);
+    CleaningWorkerDeposit::query()->create([
+        'worker_id' => $worker->id,
+        'current_balance' => 0,
+        'debt_balance' => 0,
+        'deposited_total' => 0,
+        'withdrawn_total' => 0,
+        'minimum_required' => 0,
+        'max_negative_balance' => 100,
+        'is_active' => true,
+    ]);
 
     Livewire::test(EditCleaningWorker::class, ['record' => $worker->getRouteKey()])
         ->fillForm([
             'gender' => 'female',
             'trust_score' => 84,
+            'worker_debt_limit' => 900,
             'home_address' => 'Damascus - Al Mazzeh',
             'home_latitude' => 33.5038,
             'home_longitude' => 36.2504,
@@ -129,7 +147,8 @@ it('updates trust score and home location without writing user fields to the wor
         ->and($worker->trust_score)->toBe(84)
         ->and($worker->home_address)->toBe('Damascus - Al Mazzeh')
         ->and((float) $worker->home_latitude)->toBe(33.5038)
-        ->and((float) $worker->home_longitude)->toBe(36.2504);
+        ->and((float) $worker->home_longitude)->toBe(36.2504)
+        ->and((float) $worker->deposit()->value('max_negative_balance'))->toBe(900.0);
 
     $linkedUser->refresh();
     expect($linkedUser->phone)->toBe('+963922222222')
