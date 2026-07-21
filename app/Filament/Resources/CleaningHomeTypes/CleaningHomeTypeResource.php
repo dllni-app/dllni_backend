@@ -26,7 +26,7 @@ final class CleaningHomeTypeResource extends Resource
 
     public static function getNavigationGroup(): ?string
     {
-        return 'إعدادات التنظيف';
+        return __('cleaning_admin.nav_groups.operations');
     }
 
     public static function getNavigationLabel(): string
@@ -82,6 +82,11 @@ final class CleaningHomeTypeResource extends Resource
     public static function canDelete(Model $record): bool
     {
         return self::hasPermission('cleaning-home-types.delete');
+    }
+
+    public static function canReorderTypes(): bool
+    {
+        return self::hasPermission('cleaning-home-types.update');
     }
 
     public static function getPages(): array
