@@ -56,9 +56,9 @@ it('creates a cleaning worker with an individual debt limit and syncs the linked
         ->and($linkedUser->module_type)->toBe(UserModuleType::CleaningWorker);
 });
 
-it('shows required validation errors for an empty cleaning worker form', function (): void {
+it('shows required validation errors when required worker fields are missing', function (): void {
     Livewire::test(CreateCleaningWorker::class)
-        ->fillForm([])
+        ->fillForm(['worker_debt_limit' => 1])
         ->call('create')
         ->assertHasFormErrors([
             'first_name',
@@ -72,7 +72,7 @@ it('rejects cleaning worker account phones outside the Syrian +963 mobile format
         ->fillForm([
             'first_name' => 'Maher',
             'preferred_work_type' => WorkerPreferredWorkType::Both->value,
-            'worker_debt_limit' => 0,
+            'worker_debt_limit' => 1,
             'user_phone' => '0911111111',
             'user_password' => 'password',
         ])
@@ -95,7 +95,7 @@ it('rejects creating a second cleaning worker for an existing worker account pho
         ->fillForm([
             'first_name' => 'Sara Duplicate',
             'preferred_work_type' => WorkerPreferredWorkType::Both->value,
-            'worker_debt_limit' => 0,
+            'worker_debt_limit' => 1,
             'user_phone' => '+963933333333',
             'user_password' => 'password',
         ])
