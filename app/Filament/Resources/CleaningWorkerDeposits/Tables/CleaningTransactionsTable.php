@@ -48,7 +48,6 @@ final class CleaningTransactionsTable
                 TextColumn::make('debt_balance_before')->label(app()->isLocale('ar') ? 'المديونية قبل' : 'Indebtedness before')->formatStateUsing(fn ($state): string => self::money($state))->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('debt_balance_after')->label(app()->isLocale('ar') ? 'المديونية بعد' : 'Indebtedness after')->formatStateUsing(fn ($state): string => self::money($state)),
                 TextColumn::make('debt_settled_amount')->label(app()->isLocale('ar') ? 'الدين الإداري المسترد' : 'Administration loan recovered')->formatStateUsing(fn ($state): string => self::money($state))->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('reference')->label(__('cleaning_admin.transactions.fields.reference'))->formatStateUsing(fn (?string $state): string => self::referenceLabel($state))->placeholder('—')->toggleable(),
                 TextColumn::make('created_at')->label(__('cleaning_admin.transactions.fields.date'))->dateTime('Y-m-d H:i')->sortable(),
                 TextColumn::make('notes')->label(__('cleaning_admin.transactions.fields.notes'))->limit(40)->placeholder('—')->toggleable(),
                 TextColumn::make('createdByAdmin.name')->label(__('cleaning_admin.transactions.fields.created_by'))->placeholder('—')->toggleable(),
@@ -62,12 +61,6 @@ final class CleaningTransactionsTable
                         $type = $data['value'] ?? null;
                         if (! is_string($type) || ! in_array($type, CleaningDepositTransaction::PUBLIC_TYPES, true)) {
                             return $query;
-                        }
-
-                        if ($type === 'debt') {
-                            return $query->where(fn (Builder $typeQuery): Builder => $typeQuery
-                                ->forPublicType('debt')
-                                ->orWhere('type', 'settlement'));
                         }
 
                         return $query->forPublicType($type);
@@ -89,10 +82,6 @@ final class CleaningTransactionsTable
     {
         $options = [];
         foreach (CleaningDepositTransaction::PUBLIC_TYPES as $type) {
-            if ($type === 'settlement') {
-                continue;
-            }
-
             $options[$type] = self::typeLabel($type);
         }
 
@@ -103,8 +92,7 @@ final class CleaningTransactionsTable
     {
         return match ($type) {
             'commission' => app()->isLocale('ar') ? 'عمولة المنصة' : 'Platform commission',
-            'debt' => __('cleaning_finance.types.debt'),
-            'settlement' => __('cleaning_finance.types.debt'),
+            'debt', 'settlement' => __('cleaning_finance.types.debt'),
             'deposit' => __('cleaning_admin.transactions.types.deposit'),
             'refund' => __('cleaning_admin.transactions.types.refund'),
             default => $type,
@@ -139,9 +127,8 @@ final class CleaningTransactionsTable
     {
         return match ($type) {
             'deposit' => 'success',
-            'settlement' => 'warning',
             'commission' => 'info',
-            'debt' => 'warning',
+            'debt', 'settlement' => 'warning',
             'refund' => 'warning',
             default => 'gray',
         };
@@ -160,7 +147,6 @@ final class CleaningTransactionsTable
             app()->isLocale('ar') ? 'المديونية قبل' : 'Indebtedness before' => (int) round((float) ($tx->debt_balance_before ?? 0)),
             app()->isLocale('ar') ? 'المديونية بعد' : 'Indebtedness after' => (int) round((float) ($tx->debt_balance_after ?? 0)),
             app()->isLocale('ar') ? 'الدين الإداري المسترد' : 'Administration loan recovered' => (int) round((float) ($tx->debt_settled_amount ?? 0)),
-            __('cleaning_admin.transactions.fields.reference') => self::referenceLabel($tx->reference),
             __('cleaning_admin.transactions.fields.date') => $tx->created_at?->format('Y-m-d H:i'),
             __('cleaning_admin.transactions.fields.notes') => $tx->notes,
             __('cleaning_admin.transactions.fields.created_by') => $tx->createdByAdmin?->name ?? '—',

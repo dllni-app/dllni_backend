@@ -93,6 +93,7 @@ final class DatabaseSeeder extends Seeder
             MasterProductSeeder::class,
             RecipeSeeder::class,
             WorkerSeeder::class,
+            WorkerFinancialTypeScenarioSeeder::class,
             CleaningServiceSeeder::class,
             CleaningBannerSeeder::class,
             RestaurantSeeder::class,

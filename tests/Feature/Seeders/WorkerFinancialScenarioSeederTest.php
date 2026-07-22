@@ -4,21 +4,25 @@ declare(strict_types=1);
 
 use App\Models\CleaningDepositTransaction;
 use App\Models\Worker;
+use Database\Seeders\WorkerFinancialTypeScenarioSeeder;
 use Database\Seeders\WorkerSeeder;
 use Illuminate\Support\Facades\Schema;
 use Modules\Cleaning\Services\AdminCleaningTransactionService;
 
-it('seeds continuous financial scenarios with separate deposit and debt balances', function (): void {
-    $this->seed(WorkerSeeder::class);
+it('seeds continuous financial scenarios with four public transaction types', function (): void {
+    $this->seed([
+        WorkerSeeder::class,
+        WorkerFinancialTypeScenarioSeeder::class,
+    ]);
 
     $types = CleaningDepositTransaction::query()
-        ->where('reference', 'like', 'seed-%')
+        ->where('reference', 'like', '%seed-%')
         ->distinct()
         ->orderBy('type')
         ->pluck('type')
         ->all();
 
-    expect($types)->toBe(['commission', 'deposit', 'refund', 'settlement'])
+    expect($types)->toBe(['commission', 'debt', 'deposit', 'refund'])
         ->and(Schema::hasColumn('cleaning_deposit_transactions', 'cleaning_booking_id'))->toBeFalse()
         ->and(Schema::hasColumn('cleaning_deposit_transactions', 'debt_balance_before'))->toBeTrue()
         ->and(Schema::hasColumn('cleaning_deposit_transactions', 'debt_balance_after'))->toBeTrue()
@@ -38,7 +42,7 @@ it('seeds continuous financial scenarios with separate deposit and debt balances
     foreach ($workers as $worker) {
         $transactions = CleaningDepositTransaction::query()
             ->where('worker_id', $worker->id)
-            ->where('reference', 'like', 'seed-%')
+            ->where('reference', 'like', '%seed-%')
             ->orderBy('created_at')
             ->orderBy('id')
             ->get();
@@ -73,7 +77,10 @@ it('seeds continuous financial scenarios with separate deposit and debt balances
 });
 
 it('seeds current commission and withdrawn administration revenue as separate values', function (): void {
-    $this->seed(WorkerSeeder::class);
+    $this->seed([
+        WorkerSeeder::class,
+        WorkerFinancialTypeScenarioSeeder::class,
+    ]);
 
     $worker = Worker::query()
         ->whereHas('user', fn ($query) => $query->where('email', 'worker1@dllni.sy'))
@@ -88,14 +95,38 @@ it('seeds current commission and withdrawn administration revenue as separate va
         ->and($snapshot['withdrawnAdminRevenueTotal'])->toBe(100000.0);
 });
 
+it('seeds an administration loan as debt while keeping indebtedness separate', function (): void {
+    $this->seed([
+        WorkerSeeder::class,
+        WorkerFinancialTypeScenarioSeeder::class,
+    ]);
+
+    $worker = Worker::query()
+        ->whereHas('user', fn ($query) => $query->where('email', 'worker2@dllni.sy'))
+        ->with('deposit')
+        ->firstOrFail();
+
+    $snapshot = app(AdminCleaningTransactionService::class)->snapshot($worker);
+
+    expect($snapshot['depositBalance'])->toBe(500000.0)
+        ->and($snapshot['adminLoanBalance'])->toBe(100000.0)
+        ->and($snapshot['debtBalance'])->toBe(0.0);
+});
+
 it('keeps the financial scenarios idempotent when reseeded', function (): void {
-    $this->seed(WorkerSeeder::class);
+    $this->seed([
+        WorkerSeeder::class,
+        WorkerFinancialTypeScenarioSeeder::class,
+    ]);
     $initialCount = CleaningDepositTransaction::query()
-        ->where('reference', 'like', 'seed-%')
+        ->where('reference', 'like', '%seed-%')
         ->count();
 
-    $this->seed(WorkerSeeder::class);
+    $this->seed([
+        WorkerSeeder::class,
+        WorkerFinancialTypeScenarioSeeder::class,
+    ]);
 
-    expect(CleaningDepositTransaction::query()->where('reference', 'like', 'seed-%')->count())
+    expect(CleaningDepositTransaction::query()->where('reference', 'like', '%seed-%')->count())
         ->toBe($initialCount);
 });

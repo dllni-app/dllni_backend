@@ -12,8 +12,8 @@ it('exposes only the four supported financial transaction types', function (): v
 
     expect(array_keys(CleaningTransactionsTable::typeOptions()))->toBe([
         'deposit',
+        'commission',
         'debt',
-        'settlement',
         'refund',
     ]);
 });
@@ -28,7 +28,8 @@ it('maps internal references and legacy types to public financial labels', funct
         ->and(CleaningTransactionsTable::referenceLabel('admin_fee_booking_42'))->toBe('Automatically recorded administration debt')
         ->and(CleaningTransactionsTable::referenceLabel(null))->toBe('—')
         ->and(CleaningTransactionsTable::referenceLabel('some_unknown_ref'))->toBe('some_unknown_ref')
-        ->and(CleaningDepositTransaction::normalizePublicType('admin_fee'))->toBe('debt')
+        ->and(CleaningDepositTransaction::normalizePublicType('admin_fee'))->toBe('commission')
+        ->and(CleaningDepositTransaction::normalizePublicType('settlement'))->toBe('debt')
         ->and(CleaningDepositTransaction::normalizePublicType('withdrawal'))->toBe('refund')
         ->and(CleaningDepositTransaction::normalizePublicType('adjustment', 100))->toBe('deposit')
         ->and(CleaningDepositTransaction::normalizePublicType('adjustment', -100))->toBe('refund');
@@ -42,7 +43,7 @@ it('formats currency and numbers with latin digits regardless of locale', functi
         ->and(AdminUiFormatter::formatCurrency(50000))->not->toMatch('/[\x{0660}-\x{0669}]/u');
 });
 
-it('exports only filtered transactions without exposing booking linkage', function (): void {
+it('exports only filtered transactions without exposing internal references', function (): void {
     app()->setLocale('en');
 
     $includedWorker = Worker::factory()->create(['first_name' => 'Included Worker']);
@@ -65,6 +66,7 @@ it('exports only filtered transactions without exposing booking linkage', functi
 
     expect($rows)->toHaveCount(1)
         ->and(array_values($rows[0]))->toContain('Included Worker')
-        ->and(array_values($rows[0]))->toContain('Debt')
-        ->and($rows[0])->not->toHaveKey('Booking');
+        ->and(array_values($rows[0]))->toContain('Platform commission')
+        ->and($rows[0])->not->toHaveKey('Booking')
+        ->and($rows[0])->not->toHaveKey('Reference');
 });

@@ -40,7 +40,9 @@ final class WorkerHomepageEligibilityController
             } else {
                 $accountEligible = (bool) ($depositSummary['isEligibleForNewRequests'] ?? false);
                 $commissionEligible = (bool) ($eligibility['canReceiveNewRequests'] ?? false);
-                $canReceiveNewRequests = $accountEligible && $commissionEligible;
+                $availableNewOrdersCount = max(0, (int) ($eligibility['availableNewOrdersCount'] ?? 0));
+                $hasAffordableNewOrder = $availableNewOrdersCount > 0;
+                $canReceiveNewRequests = $accountEligible && ($commissionEligible || $hasAffordableNewOrder);
 
                 $eligibility['canReceiveNewRequests'] = $canReceiveNewRequests;
                 $eligibility['canAcceptNewBookings'] = $canReceiveNewRequests;
@@ -48,9 +50,12 @@ final class WorkerHomepageEligibilityController
                 if (! $accountEligible) {
                     $eligibility['reasonCode'] = WorkerOrderSolvencyService::REASON_INSUFFICIENT_COMMISSION_CAPACITY;
                     $eligibility['message'] = 'Your worker debt exceeds the allowed limit. Settle the excess debt before receiving new requests.';
-                } elseif ($commissionEligible) {
+                } elseif ($canReceiveNewRequests) {
                     $eligibility['reasonCode'] = WorkerOrderSolvencyService::REASON_ELIGIBLE;
                     $eligibility['message'] = 'Your available commission capacity can receive new requests.';
+                } else {
+                    $eligibility['reasonCode'] = WorkerOrderSolvencyService::REASON_INSUFFICIENT_COMMISSION_CAPACITY;
+                    $eligibility['message'] = 'Your available commission capacity is not enough for the currently available requests.';
                 }
             }
 

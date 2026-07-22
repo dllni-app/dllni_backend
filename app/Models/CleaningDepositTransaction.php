@@ -17,7 +17,7 @@ final class CleaningDepositTransaction extends Model
     public const AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX = 'automatic_admin_commission:';
 
     /** @var list<string> */
-    public const PUBLIC_TYPES = ['deposit', 'commission', 'debt', 'settlement', 'refund'];
+    public const PUBLIC_TYPES = ['deposit', 'commission', 'debt', 'refund'];
 
     protected $fillable = [
         'worker_id',
@@ -38,9 +38,10 @@ final class CleaningDepositTransaction extends Model
     {
         return match ($type) {
             'admin_fee', 'commission' => 'commission',
+            'settlement' => 'debt',
             'withdrawal' => 'refund',
             'adjustment' => $amount < 0 ? 'refund' : 'deposit',
-            'deposit', 'debt', 'settlement', 'refund' => $type,
+            'deposit', 'debt', 'refund' => $type,
             default => $type,
         };
     }
@@ -87,11 +88,16 @@ final class CleaningDepositTransaction extends Model
                             ->where('reference', 'like', self::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'%');
                     });
             }),
-            'debt' => $query->where('type', 'debt')
-                ->where(function (Builder $query): void {
-                    $query->whereNull('reference')
-                        ->orWhere('reference', 'not like', self::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'%');
-                }),
+            'debt' => $query->where(function (Builder $query): void {
+                $query->where('type', 'settlement')
+                    ->orWhere(function (Builder $query): void {
+                        $query->where('type', 'debt')
+                            ->where(function (Builder $query): void {
+                                $query->whereNull('reference')
+                                    ->orWhere('reference', 'not like', self::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'%');
+                            });
+                    });
+            }),
             'deposit' => $query->where(function (Builder $query): void {
                 $query->where('type', 'deposit')
                     ->orWhere(function (Builder $query): void {
@@ -104,7 +110,6 @@ final class CleaningDepositTransaction extends Model
                         $query->where('type', 'adjustment')->where('amount', '<', 0);
                     });
             }),
-            'settlement' => $query->where('type', 'settlement'),
             default => $query->whereRaw('1 = 0'),
         };
     }
