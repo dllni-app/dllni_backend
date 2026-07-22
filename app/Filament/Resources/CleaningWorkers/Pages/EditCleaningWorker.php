@@ -6,6 +6,7 @@ namespace App\Filament\Resources\CleaningWorkers\Pages;
 
 use App\Enums\UserModuleType;
 use App\Filament\Resources\CleaningWorkers\CleaningWorkerResource;
+use App\Filament\Resources\Workers\Actions\ChangeWorkerAvatarAction;
 use App\Filament\Resources\Workers\Pages\Concerns\SyncsWorkerDebtLimit;
 use App\Filament\Resources\Workers\Pages\Concerns\SyncsWorkerLinkedUser;
 use App\Models\WorkerTrustLog;
@@ -73,6 +74,7 @@ final class EditCleaningWorker extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
+            ChangeWorkerAvatarAction::make(),
             ViewAction::make(),
             DeleteAction::make(),
         ];
