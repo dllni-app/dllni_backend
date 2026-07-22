@@ -96,7 +96,7 @@ final class DisputeFinancialPenaltyService
             return true;
         }
 
-        return $booking->workerAssignments()
+        return $booking->acceptedWorkerAssignments()
             ->where('worker_id', $worker->id)
             ->exists();
     }
