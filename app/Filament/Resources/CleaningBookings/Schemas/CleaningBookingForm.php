@@ -59,13 +59,6 @@ final class CleaningBookingForm
                             ->displayFormat('h:i A')
                             ->native(false)
                             ->required(),
-                        TextInput::make('cancellation_fee')
-                            ->label('رسوم الإلغاء')
-                            ->numeric()
-                            ->minValue(0)
-                            ->step(0.01)
-                            ->suffix('ل.س')
-                            ->helperText('يمكن تعديل رسوم الإلغاء يدوياً للعميل أو العامل.'),
                     ])
                     ->columns(2)
                     ->columnSpanFull(),
@@ -79,8 +72,8 @@ final class CleaningBookingForm
                         self::readOnlyPrice('addons_total', 'الإضافات'),
                         self::readOnlyPrice('travel_fee', 'رسوم التنقل'),
                         self::readOnlyInteger('travel_distance_km', 'مسافة التنقل (كم)'),
-                        self::readOnlyPrice('admin_margin_amount', 'هامش الإدارة (يُخصم من حصة العامل)'),
-                        self::readOnlyPrice('total_price', 'الإجمالي (يدفعه العميل)'),
+                        self::readOnlyPrice('admin_margin_amount', 'هامش الإدارة'),
+                        self::readOnlyPrice('total_price', 'الإجمالي'),
                     ])
                     ->columns(2)
                     ->columnSpanFull(),

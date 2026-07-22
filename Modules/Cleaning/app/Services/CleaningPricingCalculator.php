@@ -65,7 +65,7 @@ final class CleaningPricingCalculator
             'travelFee' => $travelFee,
             'distanceKm' => $distanceKm,
             'adminMargin' => $adminMargin,
-            'totalPrice' => $subtotal,
+            'totalPrice' => $this->roundMoney($subtotal + $adminMargin),
             'isPricingFinal' => true,
         ];
     }

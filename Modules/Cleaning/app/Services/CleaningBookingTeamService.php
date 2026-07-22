@@ -424,7 +424,7 @@ final class CleaningBookingTeamService
                 'worker_id' => $primaryWorkerId,
                 'travel_fee' => round($totalTravelFee, 2),
                 'admin_margin_amount' => round($totalAdminMargin, 2),
-                'total_price' => round($acceptedAssignments->sum(fn (CleaningBookingWorkerAssignment $assignment): float => (float) $assignment->service_share_amount + (float) $assignment->travel_fee), 2),
+                'total_price' => round($acceptedAssignments->sum(fn (CleaningBookingWorkerAssignment $assignment): float => (float) $assignment->service_share_amount + (float) $assignment->travel_fee + (float) $assignment->admin_margin_amount), 2),
                 'travel_distance_km' => null,
                 'is_pricing_final' => true,
             ])->save();

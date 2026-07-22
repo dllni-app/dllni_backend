@@ -17,8 +17,6 @@ final class CleaningDepositSetting extends Model
         'restriction_threshold_percent',
         'trust_reject_after_accept_penalty',
         'trust_minimum_for_dispatch',
-        'trust_low_rating_threshold',
-        'trust_low_rating_penalty',
     ];
 
     protected function casts(): array
@@ -28,8 +26,6 @@ final class CleaningDepositSetting extends Model
             'restriction_threshold_percent' => 'decimal:2',
             'trust_reject_after_accept_penalty' => 'integer',
             'trust_minimum_for_dispatch' => 'integer',
-            'trust_low_rating_threshold' => 'integer',
-            'trust_low_rating_penalty' => 'integer',
         ];
     }
 

@@ -34,12 +34,6 @@ final class CleaningFinancialSetting extends Model
         'cleaning_room_size_ranges',
         'cleaning_room_pricing_units',
         'cleaning_room_time_minutes',
-        'cancellation_user_free_until_hours',
-        'cancellation_user_within_24h_percentage',
-        'cancellation_user_within_12h_percentage',
-        'cancellation_worker_fee_percentage',
-        'pre_task_notifications_enabled',
-        'pre_task_reminder_minutes',
     ];
 
     public function casts(): array
@@ -60,12 +54,6 @@ final class CleaningFinancialSetting extends Model
             'cleaning_room_size_ranges' => 'array',
             'cleaning_room_pricing_units' => 'array',
             'cleaning_room_time_minutes' => 'array',
-            'cancellation_user_free_until_hours' => 'integer',
-            'cancellation_user_within_24h_percentage' => 'decimal:2',
-            'cancellation_user_within_12h_percentage' => 'decimal:2',
-            'cancellation_worker_fee_percentage' => 'decimal:2',
-            'pre_task_notifications_enabled' => 'boolean',
-            'pre_task_reminder_minutes' => 'integer',
         ];
     }
 

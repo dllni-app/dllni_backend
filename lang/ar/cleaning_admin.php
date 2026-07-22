@@ -126,11 +126,6 @@ return [
             'home_address' => 'عنوان المنزل',
             'home_latitude' => 'خط العرض',
             'home_longitude' => 'خط الطول',
-            'pending_home_address' => 'عنوان المنزل المعلق',
-            'pending_home_latitude' => 'خط العرض المعلق',
-            'pending_home_longitude' => 'خط الطول المعلق',
-            'home_location_status' => 'حالة موقع بدء المهمة',
-            'home_location_rejection_reason' => 'سبب رفض الموقع',
             'phone' => 'رقم الهاتف',
             'password' => 'كلمة المرور',
             'featured_until' => 'مميز حتى',
@@ -175,11 +170,6 @@ return [
             'cleaning' => 'تنظيف',
             'events' => 'مناسبات',
             'both' => 'كلاهما',
-        ],
-        'home_location_status' => [
-            'approved' => 'معتمد',
-            'pending' => 'بانتظار الموافقة',
-            'rejected' => 'مرفوض',
         ],
         'reviews' => 'تقييمات العملاء',
         'reviews_fields' => [

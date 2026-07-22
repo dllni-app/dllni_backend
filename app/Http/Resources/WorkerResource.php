@@ -42,11 +42,6 @@ final class WorkerResource extends JsonResource
             'homeAddress' => $this->home_address,
             'homeLatitude' => $this->home_latitude !== null ? (float) $this->home_latitude : null,
             'homeLongitude' => $this->home_longitude !== null ? (float) $this->home_longitude : null,
-            'pendingHomeAddress' => $this->pending_home_address,
-            'pendingHomeLatitude' => $this->pending_home_latitude !== null ? (float) $this->pending_home_latitude : null,
-            'pendingHomeLongitude' => $this->pending_home_longitude !== null ? (float) $this->pending_home_longitude : null,
-            'homeLocationStatus' => $this->home_location_status?->value ?? (string) $this->home_location_status,
-            'homeLocationRejectionReason' => $this->home_location_rejection_reason,
             'defaultWorkingHours' => $this->resource->getNormalizedDefaultWorkingHours(),
             'user' => $this->whenLoaded('user', fn () => [
                 'id' => $this->user->id,

@@ -56,19 +56,6 @@ it('persists and restores independent locations for every worker in a team booki
         'last_longitude' => 36.2890,
     ]);
 
-    $this->assertDatabaseHas('cleaning_worker_location_history', [
-        'cleaning_booking_id' => $booking->id,
-        'worker_id' => $firstWorker->id,
-        'latitude' => 33.5138,
-        'longitude' => 36.2765,
-    ]);
-    $this->assertDatabaseHas('cleaning_worker_location_history', [
-        'cleaning_booking_id' => $booking->id,
-        'worker_id' => $secondWorker->id,
-        'latitude' => 33.5250,
-        'longitude' => 36.2890,
-    ]);
-
     Sanctum::actingAs($customer);
     $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/worker-locations")
         ->assertOk()

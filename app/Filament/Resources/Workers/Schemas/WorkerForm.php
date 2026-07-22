@@ -46,14 +46,15 @@ final class WorkerForm
                         FileUpload::make('avatar_upload')
                             ->label(app()->isLocale('ar') ? 'صورة الملف الشخصي' : 'Profile image')
                             ->helperText(app()->isLocale('ar')
-                                ? 'اختياري: ارفع صورة واضحة للعامل. عند التعديل تستبدل الصورة الحالية.'
-                                : 'Optional: upload a clear worker photo. On edit, this replaces the current image.')
+                                ? 'اختياري: ارفع صورة واضحة للعامل. سيتم حفظها كصورة الملف الشخصي.'
+                                : 'Optional: upload a clear worker photo. It will be saved as the profile image.')
                             ->image()
                             ->imageEditor()
                             ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
                             ->maxSize(4096)
                             ->storeFiles(false)
                             ->dehydrated(false)
+                            ->visible(fn (string $operation): bool => $operation === 'create')
                             ->columnSpanFull(),
                         Textarea::make('bio')
                             ->label(__('cleaning_admin.workers.fields.bio'))

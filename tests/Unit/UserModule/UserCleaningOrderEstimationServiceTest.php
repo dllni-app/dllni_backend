@@ -63,7 +63,7 @@ it('computes distance-based pricing with percent admin margin', function (): voi
     expect($pricing['addonsTotal'])->toBe(0.0);
     expect($pricing['adminMargin'])->toBe(500.0);
     expect($pricing['isPricingFinal'])->toBeTrue();
-    expect($pricing['totalPrice'])->toBe(1500.0);
+    expect($pricing['totalPrice'])->toBe(2000.0);
     expect($pricing['currency'])->toBe((string) config('app.currency', 'SYP'));
 });
 
@@ -105,7 +105,7 @@ it('computes distance-based pricing with fixed admin margin', function (): void 
     expect($pricing['travelFee'])->toBe(0.0);
     expect($pricing['adminMargin'])->toBe(500.0);
     expect($pricing['isPricingFinal'])->toBeTrue();
-    expect($pricing['totalPrice'])->toBe(1000.0);
+    expect($pricing['totalPrice'])->toBe(1500.0);
 });
 
 it('returns provisional pricing when preferred worker is not selected', function (): void {

@@ -51,22 +51,6 @@ final class FinancialSettings extends Page
 
     public int $trustMinimumForDispatch = 0;
 
-    public int $trustLowRatingThreshold = 2;
-
-    public int $trustLowRatingPenalty = 5;
-
-    public bool $preTaskNotificationsEnabled = true;
-
-    public int $preTaskReminderMinutes = 60;
-
-    public int $cancellationUserFreeUntilHours = 24;
-
-    public float $cancellationUserWithin24hPercentage = 25.0;
-
-    public float $cancellationUserWithin12hPercentage = 50.0;
-
-    public float $cancellationWorkerFeePercentage = 25.0;
-
     public float $cleaningBaseUnitPrice = CleaningFinancialDefaults::BASE_UNIT_PRICE;
 
     public float $cleaningDeepMultiplier = CleaningFinancialDefaults::DEEP_CLEANING_MULTIPLIER;
@@ -154,20 +138,12 @@ final class FinancialSettings extends Page
             $this->extensionRatePer30Minutes = (float) ($setting->extension_rate_per_30_minutes ?? 0.0);
             $this->cleaningBaseUnitPrice = (float) ($setting->cleaning_base_unit_price ?? CleaningFinancialDefaults::BASE_UNIT_PRICE);
             $this->cleaningDeepMultiplier = (float) ($setting->cleaning_deep_multiplier ?? CleaningFinancialDefaults::DEEP_CLEANING_MULTIPLIER);
-            $this->cancellationUserFreeUntilHours = (int) ($setting->cancellation_user_free_until_hours ?? 24);
-            $this->cancellationUserWithin24hPercentage = (float) ($setting->cancellation_user_within_24h_percentage ?? 25);
-            $this->cancellationUserWithin12hPercentage = (float) ($setting->cancellation_user_within_12h_percentage ?? 50);
-            $this->cancellationWorkerFeePercentage = (float) ($setting->cancellation_worker_fee_percentage ?? 25);
-            $this->preTaskNotificationsEnabled = (bool) ($setting->pre_task_notifications_enabled ?? true);
-            $this->preTaskReminderMinutes = (int) ($setting->pre_task_reminder_minutes ?? 60);
         }
 
         $depositSetting = CleaningDepositSetting::query()->first();
         if ($depositSetting) {
             $this->trustRejectAfterAcceptPenalty = (int) $depositSetting->trust_reject_after_accept_penalty;
             $this->trustMinimumForDispatch = (int) $depositSetting->trust_minimum_for_dispatch;
-            $this->trustLowRatingThreshold = (int) ($depositSetting->trust_low_rating_threshold ?? 2);
-            $this->trustLowRatingPenalty = (int) ($depositSetting->trust_low_rating_penalty ?? 5);
         }
     }
 
@@ -191,14 +167,6 @@ final class FinancialSettings extends Page
             'extensionRanges.*.price' => ['required', 'numeric', 'min:0'],
             'trustRejectAfterAcceptPenalty' => ['required', 'integer', 'min:0'],
             'trustMinimumForDispatch' => ['required', 'integer', 'min:0', 'max:100'],
-            'trustLowRatingThreshold' => ['required', 'integer', 'min:1', 'max:5'],
-            'trustLowRatingPenalty' => ['required', 'integer', 'min:0'],
-            'preTaskNotificationsEnabled' => ['required', 'boolean'],
-            'preTaskReminderMinutes' => ['required', 'integer', 'min:10', 'max:180'],
-            'cancellationUserFreeUntilHours' => ['required', 'integer', 'min:0'],
-            'cancellationUserWithin24hPercentage' => ['required', 'numeric', 'min:0', 'max:100'],
-            'cancellationUserWithin12hPercentage' => ['required', 'numeric', 'min:0', 'max:100'],
-            'cancellationWorkerFeePercentage' => ['required', 'numeric', 'min:0', 'max:100'],
             'cleaningBaseUnitPrice' => ['required', 'numeric', 'min:0'],
             'cleaningDeepMultiplier' => ['required', 'numeric', 'min:1'],
             'roomPricingSettings' => ['required', 'array'],
@@ -237,12 +205,6 @@ final class FinancialSettings extends Page
                 'cleaning_deep_multiplier' => $this->cleaningDeepMultiplier,
                 'cleaning_room_pricing_units' => $roomPricingUnits,
                 'cleaning_room_time_minutes' => $roomTimeMinutes,
-                'cancellation_user_free_until_hours' => $this->cancellationUserFreeUntilHours,
-                'cancellation_user_within_24h_percentage' => $this->cancellationUserWithin24hPercentage,
-                'cancellation_user_within_12h_percentage' => $this->cancellationUserWithin12hPercentage,
-                'cancellation_worker_fee_percentage' => $this->cancellationWorkerFeePercentage,
-                'pre_task_notifications_enabled' => filter_var($this->preTaskNotificationsEnabled, FILTER_VALIDATE_BOOLEAN),
-                'pre_task_reminder_minutes' => $this->preTaskReminderMinutes,
             ],
         );
 
@@ -253,8 +215,6 @@ final class FinancialSettings extends Page
                 'restriction_threshold_percent' => 100,
                 'trust_reject_after_accept_penalty' => $this->trustRejectAfterAcceptPenalty,
                 'trust_minimum_for_dispatch' => $this->trustMinimumForDispatch,
-                'trust_low_rating_threshold' => $this->trustLowRatingThreshold,
-                'trust_low_rating_penalty' => $this->trustLowRatingPenalty,
             ],
         );
 

@@ -132,7 +132,17 @@ final class AdminCleaningTransactionService
         }
 
         if ($type === 'debt') {
-            return null;
+            $snapshot = $this->snapshot($worker);
+            if ((float) $snapshot['depositBalance'] > 0) {
+                return app()->isLocale('ar')
+                    ? 'لا يمكن إضافة دين إداري للعامل طالما لديه رصيد إيداع قائم.'
+                    : 'An administration loan cannot be added while the worker has an existing deposit balance.';
+            }
+            if ((float) $snapshot['debtBalance'] > 0) {
+                return app()->isLocale('ar')
+                    ? 'يجب تسوية المديونية الحالية قبل إضافة دين إداري إلى رصيد الإيداع.'
+                    : 'The current indebtedness must be settled before adding an administration loan to the deposit balance.';
+            }
         }
 
         return null;
@@ -154,7 +164,7 @@ final class AdminCleaningTransactionService
 
         return round(match ($type) {
             'deposit' => $depositBalance + max(0.0, $amount - $debtBalance),
-            'debt' => max(0.0, $depositBalance - $amount),
+            'debt' => $depositBalance + $amount,
             default => $depositBalance,
         }, 2);
     }
@@ -171,12 +181,12 @@ final class AdminCleaningTransactionService
         }
 
         if ($type === 'debt' && mb_trim((string) $notes) === '') {
-            throw new InvalidArgumentException(app()->isLocale('ar') ? 'الملاحظات مطلوبة عند إضافة مديونية.' : 'Notes are required when adding worker debt.');
+            throw new InvalidArgumentException(app()->isLocale('ar') ? 'الملاحظات مطلوبة عند إضافة دين إداري.' : 'Notes are required when adding an administration loan.');
         }
 
         return match ($type) {
             'deposit' => $this->depositService->recordDeposit($worker, $amount, 'admin_manual_deposit', $notes, $createdByAdminId),
-            'debt' => $this->depositService->recordDebtCharge($worker, $amount, 'admin_manual_debt', $notes, $createdByAdminId),
+            'debt' => $this->debtService->recordDebt($worker, $amount, WorkerDebtService::ADMIN_LOAN_REFERENCE, $notes, $createdByAdminId),
             default => throw new InvalidArgumentException(__('cleaning_finance_guidance.validation.type_required')),
         };
     }

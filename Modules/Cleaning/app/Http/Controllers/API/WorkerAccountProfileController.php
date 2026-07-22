@@ -60,23 +60,14 @@ final class WorkerAccountProfileController
         if (array_key_exists('isActive', $validated)) {
             $workerUpdates['is_active'] = (bool) $validated['isActive'];
         }
-
-        $homeLocationInput = [];
         if (array_key_exists('homeAddress', $validated)) {
-            $homeLocationInput['homeAddress'] = $validated['homeAddress'];
+            $workerUpdates['home_address'] = $validated['homeAddress'];
         }
         if (array_key_exists('homeLatitude', $validated)) {
-            $homeLocationInput['homeLatitude'] = $validated['homeLatitude'];
+            $workerUpdates['home_latitude'] = $validated['homeLatitude'];
         }
         if (array_key_exists('homeLongitude', $validated)) {
-            $homeLocationInput['homeLongitude'] = $validated['homeLongitude'];
-        }
-
-        if ($homeLocationInput !== []) {
-            $workerUpdates = [
-                ...$workerUpdates,
-                ...$worker->pendingHomeLocationUpdatesFrom($homeLocationInput),
-            ];
+            $workerUpdates['home_longitude'] = $validated['homeLongitude'];
         }
 
         if ($workerUpdates !== []) {

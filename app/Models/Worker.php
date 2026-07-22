@@ -6,7 +6,6 @@ namespace App\Models;
 
 use App\Enums\DayOfWeek;
 use App\Enums\UserModuleType;
-use App\Enums\WorkerHomeLocationStatus;
 use App\Enums\WorkerPreferredWorkType;
 use App\Traits\FilterQueries\WorkerFilterQuery;
 use Carbon\Carbon;
@@ -56,11 +55,6 @@ final class Worker extends Model implements HasMedia
         'home_address',
         'home_latitude',
         'home_longitude',
-        'pending_home_address',
-        'pending_home_latitude',
-        'pending_home_longitude',
-        'home_location_status',
-        'home_location_rejection_reason',
         'default_working_hours',
         'security_deposit_status',
     ];
@@ -174,9 +168,6 @@ final class Worker extends Model implements HasMedia
             'preferred_work_type' => WorkerPreferredWorkType::class,
             'home_latitude' => 'decimal:8',
             'home_longitude' => 'decimal:8',
-            'pending_home_latitude' => 'decimal:8',
-            'pending_home_longitude' => 'decimal:8',
-            'home_location_status' => WorkerHomeLocationStatus::class,
             'is_active' => 'boolean',
             'is_suspended' => 'boolean',
             'is_verified' => 'boolean',
@@ -413,106 +404,6 @@ final class Worker extends Model implements HasMedia
         }
 
         return $targetMinutes >= $startMinutes || $targetMinutes <= $endMinutes;
-    }
-
-    public function hasPendingHomeLocation(): bool
-    {
-        return $this->home_location_status === WorkerHomeLocationStatus::Pending
-            && (
-                $this->pending_home_address !== null
-                || $this->pending_home_latitude !== null
-                || $this->pending_home_longitude !== null
-            );
-    }
-
-    /**
-     * @param  array{homeAddress?: string|null, homeLatitude?: float|int|string|null, homeLongitude?: float|int|string|null}  $input
-     * @return array<string, mixed>
-     */
-    public function pendingHomeLocationUpdatesFrom(array $input): array
-    {
-        $nextAddress = array_key_exists('homeAddress', $input)
-            ? $input['homeAddress']
-            : $this->home_address;
-        $nextLatitude = array_key_exists('homeLatitude', $input)
-            ? $input['homeLatitude']
-            : $this->home_latitude;
-        $nextLongitude = array_key_exists('homeLongitude', $input)
-            ? $input['homeLongitude']
-            : $this->home_longitude;
-
-        if (! $this->homeLocationChanged($nextAddress, $nextLatitude, $nextLongitude)) {
-            if (! $this->hasPendingHomeLocation()) {
-                return [];
-            }
-
-            return [
-                'pending_home_address' => null,
-                'pending_home_latitude' => null,
-                'pending_home_longitude' => null,
-                'home_location_status' => WorkerHomeLocationStatus::Approved,
-                'home_location_rejection_reason' => null,
-            ];
-        }
-
-        return [
-            'pending_home_address' => $nextAddress,
-            'pending_home_latitude' => $nextLatitude,
-            'pending_home_longitude' => $nextLongitude,
-            'home_location_status' => WorkerHomeLocationStatus::Pending,
-            'home_location_rejection_reason' => null,
-        ];
-    }
-
-    public function approvePendingHomeLocation(): void
-    {
-        $this->forceFill([
-            'home_address' => $this->pending_home_address,
-            'home_latitude' => $this->pending_home_latitude,
-            'home_longitude' => $this->pending_home_longitude,
-            'pending_home_address' => null,
-            'pending_home_latitude' => null,
-            'pending_home_longitude' => null,
-            'home_location_status' => WorkerHomeLocationStatus::Approved,
-            'home_location_rejection_reason' => null,
-        ])->save();
-    }
-
-    public function rejectPendingHomeLocation(string $reason): void
-    {
-        $this->forceFill([
-            'pending_home_address' => null,
-            'pending_home_latitude' => null,
-            'pending_home_longitude' => null,
-            'home_location_status' => WorkerHomeLocationStatus::Rejected,
-            'home_location_rejection_reason' => $reason,
-        ])->save();
-    }
-
-    private function homeLocationChanged(mixed $address, mixed $latitude, mixed $longitude): bool
-    {
-        $normalizedAddress = $address === null ? null : mb_trim((string) $address);
-        $currentAddress = $this->home_address === null ? null : mb_trim((string) $this->home_address);
-
-        if ($normalizedAddress !== $currentAddress) {
-            return true;
-        }
-
-        return $this->coordinateChanged($latitude, $this->home_latitude)
-            || $this->coordinateChanged($longitude, $this->home_longitude);
-    }
-
-    private function coordinateChanged(mixed $next, mixed $current): bool
-    {
-        if ($next === null && $current === null) {
-            return false;
-        }
-
-        if ($next === null || $current === null) {
-            return true;
-        }
-
-        return abs((float) $next - (float) $current) > 0.0000001;
     }
 
     private function minutesFromTime(string $time): ?int

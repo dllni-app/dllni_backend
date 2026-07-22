@@ -14,7 +14,6 @@ use Modules\Cleaning\Models\CleaningBookingRoom;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Services\CleaningExtendedTimePricingService;
 use Modules\Cleaning\Services\CleaningOrderUrgencyService;
-use Modules\Cleaning\Support\WorkerAssignmentHoursResolver;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 /** @mixin CleaningBooking */
@@ -36,16 +35,7 @@ final class CleaningBookingResource extends JsonResource
         $team = $this->workerAcceptanceSummary();
         $workerLifecycleSummary = $this->workerLifecycleSummary();
         $address = $this->addressPayload($details);
-        $bookingTotalHours = WorkerAssignmentHoursResolver::bookingHours($this->resource);
-        $workerTotalHours = WorkerAssignmentHoursResolver::resolve(
-            $this->resource,
-            $myAssignmentModel,
-            $this->relationLoaded('rooms') ? $this->rooms : null,
-        );
-        $personalizedHours = $myAssignmentModel instanceof CleaningBookingWorkerAssignment
-            && max(1, (int) ($this->number_of_workers ?? 1)) > 1;
-        $responseTotalHours = $personalizedHours ? $workerTotalHours : $bookingTotalHours;
-        $workTimer = $this->workTimerPayload((string) $orderStatus, $myAssignmentModel, $responseTotalHours, $personalizedHours);
+        $workTimer = $this->workTimerPayload((string) $orderStatus, $myAssignmentModel);
         $finishedServices = $pendingCompletionAssignment instanceof CleaningBookingWorkerAssignment
             ? $this->finishedSnapshot($pendingCompletionAssignment->worker_finished_cleaning_services, 'service')
             : $this->finishedSnapshot($this->worker_finished_cleaning_services, 'service');
@@ -114,9 +104,7 @@ final class CleaningBookingResource extends JsonResource
             'estimatedHours' => $this->estimated_hours,
             'scheduledDate' => $this->scheduled_date?->format('Y-m-d'),
             'scheduledTime' => $this->scheduled_time,
-            'bookingTotalHours' => $bookingTotalHours,
-            'booking_total_hours' => $bookingTotalHours,
-            'totalHours' => $responseTotalHours,
+            'totalHours' => (float) $this->total_hours,
             'basePrice' => (float) ($this->base_price ?? 0),
             'servicePrice' => (float) ($this->base_price ?? 0),
             'service_price' => (float) ($this->base_price ?? 0),
@@ -318,11 +306,6 @@ final class CleaningBookingResource extends JsonResource
             'worker_finished_property_rooms' => $rooms,
             'roomCount' => (int) $assignment->room_count,
             'roomsWeight' => (float) $assignment->rooms_weight,
-            'totalHours' => WorkerAssignmentHoursResolver::resolve(
-                $this->resource,
-                $assignment,
-                $this->relationLoaded('rooms') ? $this->rooms : null,
-            ),
             'serviceShareAmount' => (float) $assignment->service_share_amount,
             'travelFee' => (float) $assignment->travel_fee,
             'adminMarginAmount' => (float) $assignment->admin_margin_amount,
@@ -520,47 +503,14 @@ final class CleaningBookingResource extends JsonResource
         return $format === 'iso' ? $value->toIso8601String() : $value->toDateTimeString();
     }
 
-    private function workTimerPayload(
-        string $status,
-        ?CleaningBookingWorkerAssignment $assignment = null,
-        ?float $durationHours = null,
-        bool $personalizedHours = false,
-    ): array {
+    private function workTimerPayload(string $status, ?CleaningBookingWorkerAssignment $assignment = null): array
+    {
         $start = $assignment?->work_started_at ?? $this->work_started_at ?? $this->arrived_at;
-        $hours = $durationHours ?? WorkerAssignmentHoursResolver::bookingHours($this->resource);
-        if ($start === null || $hours <= 0) {
-            return [
-                'timerStartAt' => $start?->toIso8601String(),
-                'expectedFinishAt' => null,
-                'durationHours' => $hours > 0 ? $hours : null,
-                'remainingWorkSeconds' => 0,
-                'overdueWorkSeconds' => 0,
-                'isWorkOverdue' => false,
-                'shouldShowWorkTimer' => false,
-                'source' => ['startField' => null, 'durationField' => null],
-            ];
-        }
+        $hours = (float) ($this->total_hours ?: $this->estimated_hours ?: 0);
+        if ($start === null || $hours <= 0) return ['timerStartAt' => $start?->toIso8601String(), 'expectedFinishAt' => null, 'durationHours' => $hours > 0 ? $hours : null, 'remainingWorkSeconds' => 0, 'overdueWorkSeconds' => 0, 'isWorkOverdue' => false, 'shouldShowWorkTimer' => false, 'source' => ['startField' => null, 'durationField' => null]];
         $expected = $start->copy()->addSeconds((int) round($hours * 3600));
         $diff = now()->diffInSeconds($expected, false);
         $show = in_array($status, [CleaningBookingStatus::InProgress->value, CleaningBookingStatus::TimeExtensionRequested->value], true);
-        $durationField = $personalizedHours
-            ? 'assignment.total_hours'
-            : ((float) ($this->total_hours ?? 0) > 0 ? 'total_hours' : 'estimated_hours');
-
-        return [
-            'timerStartAt' => $start->toIso8601String(),
-            'expectedFinishAt' => $expected->toIso8601String(),
-            'durationHours' => $hours,
-            'remainingWorkSeconds' => $show ? max(0, $diff) : 0,
-            'overdueWorkSeconds' => $show ? max(0, -$diff) : 0,
-            'isWorkOverdue' => $show && $diff < 0,
-            'shouldShowWorkTimer' => $show,
-            'source' => [
-                'startField' => $assignment?->work_started_at !== null
-                    ? 'assignment.work_started_at'
-                    : ($this->work_started_at !== null ? 'work_started_at' : 'arrived_at'),
-                'durationField' => $durationField,
-            ],
-        ];
+        return ['timerStartAt' => $start->toIso8601String(), 'expectedFinishAt' => $expected->toIso8601String(), 'durationHours' => $hours, 'remainingWorkSeconds' => $show ? max(0, $diff) : 0, 'overdueWorkSeconds' => $show ? max(0, -$diff) : 0, 'isWorkOverdue' => $show && $diff < 0, 'shouldShowWorkTimer' => $show, 'source' => ['startField' => $assignment?->work_started_at !== null ? 'assignment.work_started_at' : ($this->work_started_at !== null ? 'work_started_at' : 'arrived_at'), 'durationField' => $this->total_hours ? 'total_hours' : 'estimated_hours']];
     }
 }

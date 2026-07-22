@@ -27,13 +27,10 @@ use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningNeighborhood;
 use Modules\Cleaning\Models\CleaningTimeWarning;
 use Modules\Cleaning\Services\CleaningBookingTeamService;
-use Modules\Cleaning\Services\CleaningCancellationFeeCalculator;
 use Modules\Cleaning\Services\CleaningExtendedTimePricingService;
 use Modules\Cleaning\Services\CleaningLifecycleNotificationService;
 use Modules\Cleaning\Services\CleaningNeighborhoodResolver;
 use Modules\Cleaning\Services\DepositService;
-use Modules\Cleaning\Services\WorkerBookingScheduleConflictService;
-use Modules\Cleaning\Services\WorkerTrustService;
 use Modules\Cleaning\Support\WorkerRoomAssignmentPlanner;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -43,8 +40,6 @@ final class UserCleaningOrderService
 
     private const PREFERRED_WORKER_NEIGHBORHOOD_MESSAGE = "\u{645}\u{642}\u{62f}\u{645} \u{627}\u{644}\u{62e}\u{62f}\u{645}\u{629} \u{627}\u{644}\u{645}\u{62e}\u{62a}\u{627}\u{631} \u{644}\u{627} \u{64a}\u{639}\u{645}\u{644} \u{636}\u{645}\u{646} \u{627}\u{644}\u{62d}\u{64a} \u{627}\u{644}\u{645}\u{62d}\u{62f}\u{62f}.";
 
-    private const PREFERRED_WORKER_BUSY_MESSAGE = 'مقدم الخدمة المختار غير متاح في الوقت المطلوب. يرجى اختيار وقت آخر أو عامل آخر.';
-
     public function __construct(
         private UserCleaningOrderEstimationService $estimationService,
         private CleaningBookingTeamService $teamService,
@@ -52,9 +47,6 @@ final class UserCleaningOrderService
         private CleaningExtendedTimePricingService $extendedTimePricing,
         private DepositService $depositService,
         private CleaningNeighborhoodResolver $neighborhoodResolver,
-        private CleaningCancellationFeeCalculator $cancellationFeeCalculator,
-        private WorkerTrustService $workerTrustService,
-        private WorkerBookingScheduleConflictService $scheduleConflictService,
     ) {}
 
     public function store(User $user, array $validated): CleaningBooking
@@ -120,20 +112,9 @@ final class UserCleaningOrderService
             ];
 
             if ($resolvedAssignmentMode === 'preferred_worker') {
-                $preferredWorkerId = $normalizedInput['preferredWorkerId'] !== null
-                    ? (int) $normalizedInput['preferredWorkerId']
-                    : null;
-
                 $this->guardPreferredWorkerCoverage(
-                    $preferredWorkerId,
+                    $normalizedInput['preferredWorkerId'] !== null ? (int) $normalizedInput['preferredWorkerId'] : null,
                     $resolvedNeighborhood,
-                );
-                $this->guardPreferredWorkerAvailability(
-                    $preferredWorkerId,
-                    $validated['scheduledDate'] ?? null,
-                    $validated['scheduledTime'] ?? null,
-                    $estimation['estimatedHours'] ?? null,
-                    $requestedWorkers,
                 );
             }
 
@@ -371,14 +352,6 @@ final class UserCleaningOrderService
                     $effectivePreferredWorkerId !== null ? (int) $effectivePreferredWorkerId : null,
                     $resolvedNeighborhood,
                 );
-                $this->guardPreferredWorkerAvailability(
-                    $effectivePreferredWorkerId !== null ? (int) $effectivePreferredWorkerId : null,
-                    $updates['scheduled_date'] ?? $booking->scheduled_date,
-                    $updates['scheduled_time'] ?? $booking->scheduled_time,
-                    $updates['estimated_hours'] ?? $updates['total_hours'] ?? $booking->estimated_hours ?? $booking->total_hours,
-                    max(1, (int) ($updates['number_of_workers'] ?? $booking->number_of_workers ?? 1)),
-                    $booking,
-                );
             }
 
             if ($updates !== []) {
@@ -426,16 +399,13 @@ final class UserCleaningOrderService
             ]);
         }
 
-        $fee = $this->cancellationFeeCalculator->forCustomer($booking);
-
         $booking->update([
             'status' => CleaningBookingStatus::Cancelled,
             'cancelled_at' => now(),
             'cancellation_reason' => $reason,
-            'cancellation_fee' => $fee['fee'],
-            'cancelled_by_role' => 'customer',
         ]);
 
+        // TODO: add tag to order that cancelation is from the user if the CleaningBookingStatus::AwaitingStartVerification
         $updated = $booking->fresh();
         $this->dispatchTrackingUpdate($updated);
         $this->lifecycleNotifications->notifyWorker(
@@ -770,11 +740,6 @@ final class UserCleaningOrderService
             ]
         );
 
-        $worker = Worker::query()->find($workerId);
-        if ($worker instanceof Worker) {
-            $this->workerTrustService->applyLowRatingPenalty($worker, (int) $validated['rating'], $booking);
-        }
-
         return $review;
     }
 
@@ -935,45 +900,6 @@ final class UserCleaningOrderService
 
         throw ValidationException::withMessages([
             'preferredWorkerId' => [self::PREFERRED_WORKER_NEIGHBORHOOD_MESSAGE],
-        ]);
-    }
-
-    private function guardPreferredWorkerAvailability(
-        ?int $preferredWorkerId,
-        mixed $scheduledDate,
-        mixed $scheduledTime,
-        mixed $estimatedHours,
-        int $numberOfWorkers = 1,
-        ?CleaningBooking $existingBooking = null,
-    ): void {
-        if ($preferredWorkerId === null) {
-            return;
-        }
-
-        $worker = Worker::query()->find($preferredWorkerId);
-
-        if (! $worker instanceof Worker) {
-            return;
-        }
-
-        $candidate = new CleaningBooking([
-            'scheduled_date' => $scheduledDate,
-            'scheduled_time' => $scheduledTime,
-            'total_hours' => $estimatedHours,
-            'estimated_hours' => $estimatedHours,
-            'number_of_workers' => max(1, $numberOfWorkers),
-        ]);
-
-        if ($existingBooking instanceof CleaningBooking) {
-            $candidate->id = $existingBooking->id;
-        }
-
-        if (! $this->scheduleConflictService->hasConflict($worker, $candidate)) {
-            return;
-        }
-
-        throw ValidationException::withMessages([
-            'preferredWorkerId' => [self::PREFERRED_WORKER_BUSY_MESSAGE],
         ]);
     }
 

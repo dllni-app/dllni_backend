@@ -1105,7 +1105,7 @@ it('returns finalized pricing when preferred worker is selected in estimate endp
     expect((float) $response->json('pricing.distanceKm'))->toBe(11.119);
     expect((float) $response->json('pricing.travelFee'))->toBe(111.19);
     expect((float) $response->json('pricing.adminMargin'))->toBe(103.12);
-    expect((float) $response->json('pricing.totalPrice'))->toBe(1031.19);
+    expect((float) $response->json('pricing.totalPrice'))->toBe(1134.31);
 });
 
 it('creates a cleaning order with totals matching a prior estimate for the same inputs', function (): void {
