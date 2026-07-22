@@ -14,7 +14,9 @@ use Modules\Cleaning\Models\CleaningBookingRoom;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Services\CleaningExtendedTimePricingService;
 use Modules\Cleaning\Services\CleaningOrderUrgencyService;
+use Modules\Cleaning\Services\WorkerOrderSolvencyService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
+use Throwable;
 
 /** @mixin CleaningBooking */
 final class CleaningBookingResource extends JsonResource
@@ -24,12 +26,13 @@ final class CleaningBookingResource extends JsonResource
         $details = is_array($this->property_details) ? $this->property_details : [];
         $globalOrderStatus = $this->status?->value ?? $this->status;
         $myAssignmentModel = $this->currentWorkerAssignment($request);
+        $workerOffer = $this->currentWorkerOffer($request, $myAssignmentModel);
         $pendingCompletionAssignments = $this->pendingCustomerCompletionAssignments();
         $pendingCompletionAssignment = $pendingCompletionAssignments[0] ?? null;
         $completionRequests = $this->completionRequestsPayload($pendingCompletionAssignments);
         $myAssignment = $myAssignmentModel instanceof CleaningBookingWorkerAssignment
             ? $this->serializeWorkerAssignment($myAssignmentModel)
-            : null;
+            : $workerOffer;
         $orderStatus = $this->responseStatusForRequest($myAssignmentModel, (string) $globalOrderStatus);
         $workerOrderStatus = $this->workerOrderStatus($myAssignmentModel, (string) $globalOrderStatus);
         $team = $this->workerAcceptanceSummary();
@@ -46,6 +49,24 @@ final class CleaningBookingResource extends JsonResource
         $baseTitle = ($this->property_type === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE ? 'Event assistance order' : 'Cleaning order').' #'.$this->booking_number;
         $displayTitle = $urgency->displayTitle($baseTitle, $this->scheduled_date);
         $isHotOrder = $urgency->isHotOrder($this->scheduled_date);
+        $bookingHours = (float) ($this->total_hours ?? 0);
+        $workerHours = is_array($workerOffer) ? ($workerOffer['totalHours'] ?? null) : null;
+        $servicePrice = is_array($workerOffer)
+            ? (float) ($workerOffer['serviceShareAmount'] ?? 0)
+            : (float) ($this->base_price ?? 0);
+        $addonsTotal = is_array($workerOffer) ? 0.0 : (float) $this->addons_total;
+        $travelFee = is_array($workerOffer)
+            ? (float) ($workerOffer['travelFee'] ?? 0)
+            : (float) $this->travel_fee;
+        $adminMargin = is_array($workerOffer)
+            ? (float) ($workerOffer['adminMarginAmount'] ?? 0)
+            : (float) ($this->admin_margin_amount ?? 0);
+        $totalPrice = is_array($workerOffer)
+            ? (float) ($workerOffer['totalPrice'] ?? 0)
+            : (float) $this->total_price;
+        $isPricingFinal = is_array($workerOffer)
+            ? (bool) ($workerOffer['isPricingFinal'] ?? true)
+            : (bool) $this->is_pricing_final;
 
         return [
             'id' => $this->id,
@@ -104,20 +125,29 @@ final class CleaningBookingResource extends JsonResource
             'estimatedHours' => $this->estimated_hours,
             'scheduledDate' => $this->scheduled_date?->format('Y-m-d'),
             'scheduledTime' => $this->scheduled_time,
-            'totalHours' => (float) $this->total_hours,
-            'basePrice' => (float) ($this->base_price ?? 0),
-            'servicePrice' => (float) ($this->base_price ?? 0),
-            'service_price' => (float) ($this->base_price ?? 0),
-            'addonsTotal' => (float) $this->addons_total,
+            'totalHours' => $workerHours !== null ? (float) $workerHours : $bookingHours,
+            'bookingTotalHours' => $bookingHours,
+            'workerTotalHours' => $workerHours !== null ? (float) $workerHours : null,
+            'basePrice' => $servicePrice,
+            'servicePrice' => $servicePrice,
+            'service_price' => $servicePrice,
+            'serviceShareAmount' => is_array($workerOffer) ? (float) ($workerOffer['serviceShareAmount'] ?? 0) : null,
+            'addonsTotal' => $addonsTotal,
             'extensionFeeTotal' => (float) ($this->extension_fee_total ?? 0),
             'extendedTimeRanges' => app(CleaningExtendedTimePricingService::class)->ranges(),
-            'travelFee' => (float) $this->travel_fee,
-            'deliveryFee' => (float) $this->travel_fee,
+            'travelFee' => $travelFee,
+            'deliveryFee' => $travelFee,
             'travelDistanceKm' => $this->travel_distance_km !== null ? (float) $this->travel_distance_km : null,
-            'adminMargin' => (float) ($this->admin_margin_amount ?? 0),
-            'isPricingFinal' => (bool) $this->is_pricing_final,
+            'adminMargin' => $adminMargin,
+            'workerAmount' => is_array($workerOffer) ? (float) ($workerOffer['workerAmount'] ?? 0) : null,
+            'isPricingFinal' => $isPricingFinal,
             'cancellationFee' => (float) $this->cancellation_fee,
-            'totalPrice' => (float) $this->total_price,
+            'totalPrice' => $totalPrice,
+            'bookingBasePrice' => (float) ($this->base_price ?? 0),
+            'bookingAddonsTotal' => (float) $this->addons_total,
+            'bookingTravelFee' => (float) $this->travel_fee,
+            'bookingAdminMargin' => (float) ($this->admin_margin_amount ?? 0),
+            'bookingTotalPrice' => (float) $this->total_price,
             'currency' => (string) config('app.currency', 'SYP'),
             'termsAccepted' => $this->terms_accepted,
             'workStartedAt' => $this->workerTimestamp($myAssignmentModel, 'work_started_at', $this->work_started_at, 'dateTime'),
@@ -145,6 +175,8 @@ final class CleaningBookingResource extends JsonResource
             'workerAssignments' => $this->whenLoaded('workerAssignments', fn () => $this->workerAssignments->map(fn (CleaningBookingWorkerAssignment $assignment): array => $this->serializeWorkerAssignment($assignment))->values()),
             'workerRoomAssignments' => $this->whenLoaded('rooms', fn () => $this->serializeWorkerRoomAssignments()),
             'roomAssignments' => $this->whenLoaded('rooms', fn () => $this->rooms->map(fn (CleaningBookingRoom $room): array => $this->serializeRoomAssignment($room))->values()),
+            'workerOffer' => $workerOffer,
+            'worker_offer' => $workerOffer,
             'myAssignment' => $myAssignment,
             'worker_assignment' => $myAssignment,
             'addons' => $this->whenLoaded('addons'),
@@ -306,6 +338,7 @@ final class CleaningBookingResource extends JsonResource
             'worker_finished_property_rooms' => $rooms,
             'roomCount' => (int) $assignment->room_count,
             'roomsWeight' => (float) $assignment->rooms_weight,
+            'totalHours' => $this->workerDurationHours(),
             'serviceShareAmount' => (float) $assignment->service_share_amount,
             'travelFee' => (float) $assignment->travel_fee,
             'adminMarginAmount' => (float) $assignment->admin_margin_amount,
@@ -333,6 +366,24 @@ final class CleaningBookingResource extends JsonResource
         if ($workerId === null) return null;
         $assignment = $this->relationLoaded('workerAssignments') ? $this->workerAssignments->firstWhere('worker_id', $workerId) : $this->workerAssignments()->where('worker_id', $workerId)->first();
         return $assignment instanceof CleaningBookingWorkerAssignment ? $assignment : null;
+    }
+
+    private function currentWorkerOffer(Request $request, ?CleaningBookingWorkerAssignment $assignment): ?array
+    {
+        $worker = $request->user()?->worker;
+        if ($worker === null) return null;
+
+        try {
+            return app(WorkerOrderSolvencyService::class)->workerOfferForBooking(
+                $worker,
+                $this->resource,
+                $assignment,
+            );
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return null;
+        }
     }
 
     /** @return array<int, CleaningBookingWorkerAssignment> */
@@ -503,14 +554,32 @@ final class CleaningBookingResource extends JsonResource
         return $format === 'iso' ? $value->toIso8601String() : $value->toDateTimeString();
     }
 
+    private function workerDurationHours(): ?float
+    {
+        $details = is_array($this->property_details) ? $this->property_details : [];
+        $bookingHours = (float) (
+            $this->total_hours
+            ?: $this->estimated_hours
+            ?: Arr::get($details, 'hours', 0)
+        );
+
+        if ($bookingHours <= 0) {
+            return null;
+        }
+
+        return round($bookingHours / max(1, (int) ($this->number_of_workers ?? 1)), 2);
+    }
+
     private function workTimerPayload(string $status, ?CleaningBookingWorkerAssignment $assignment = null): array
     {
         $start = $assignment?->work_started_at ?? $this->work_started_at ?? $this->arrived_at;
-        $hours = (float) ($this->total_hours ?: $this->estimated_hours ?: 0);
+        $hours = $assignment instanceof CleaningBookingWorkerAssignment
+            ? (float) ($this->workerDurationHours() ?? 0)
+            : (float) ($this->total_hours ?: $this->estimated_hours ?: 0);
         if ($start === null || $hours <= 0) return ['timerStartAt' => $start?->toIso8601String(), 'expectedFinishAt' => null, 'durationHours' => $hours > 0 ? $hours : null, 'remainingWorkSeconds' => 0, 'overdueWorkSeconds' => 0, 'isWorkOverdue' => false, 'shouldShowWorkTimer' => false, 'source' => ['startField' => null, 'durationField' => null]];
         $expected = $start->copy()->addSeconds((int) round($hours * 3600));
         $diff = now()->diffInSeconds($expected, false);
         $show = in_array($status, [CleaningBookingStatus::InProgress->value, CleaningBookingStatus::TimeExtensionRequested->value], true);
-        return ['timerStartAt' => $start->toIso8601String(), 'expectedFinishAt' => $expected->toIso8601String(), 'durationHours' => $hours, 'remainingWorkSeconds' => $show ? max(0, $diff) : 0, 'overdueWorkSeconds' => $show ? max(0, -$diff) : 0, 'isWorkOverdue' => $show && $diff < 0, 'shouldShowWorkTimer' => $show, 'source' => ['startField' => $assignment?->work_started_at !== null ? 'assignment.work_started_at' : ($this->work_started_at !== null ? 'work_started_at' : 'arrived_at'), 'durationField' => $this->total_hours ? 'total_hours' : 'estimated_hours']];
+        return ['timerStartAt' => $start->toIso8601String(), 'expectedFinishAt' => $expected->toIso8601String(), 'durationHours' => $hours, 'remainingWorkSeconds' => $show ? max(0, $diff) : 0, 'overdueWorkSeconds' => $show ? max(0, -$diff) : 0, 'isWorkOverdue' => $show && $diff < 0, 'shouldShowWorkTimer' => $show, 'source' => ['startField' => $assignment?->work_started_at !== null ? 'assignment.work_started_at' : ($this->work_started_at !== null ? 'work_started_at' : 'arrived_at'), 'durationField' => $assignment instanceof CleaningBookingWorkerAssignment ? 'worker_total_hours' : ($this->total_hours ? 'total_hours' : 'estimated_hours')]];
     }
 }
