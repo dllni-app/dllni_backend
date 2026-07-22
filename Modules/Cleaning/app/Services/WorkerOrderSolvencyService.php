@@ -6,6 +6,7 @@ namespace Modules\Cleaning\Services;
 
 use App\Models\CleaningWorkerDeposit;
 use App\Models\Worker;
+use Illuminate\Support\Arr;
 use InvalidArgumentException;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
@@ -33,11 +34,13 @@ final class WorkerOrderSolvencyService
         $worker->loadMissing('deposit');
         $capacity = $this->workerCapacitySummary($worker, (int) $booking->id);
         $requiredCommission = 0.0;
+        $workerOffer = null;
         $reasonCode = self::REASON_ELIGIBLE;
         $message = 'Worker can cover this booking platform commission.';
 
         try {
-            $requiredCommission = $this->requiredCommissionForBookingAndWorker($booking, $worker, $roomIds);
+            $workerOffer = $this->workerOfferForBooking($worker, $booking);
+            $requiredCommission = (float) $workerOffer['adminMarginAmount'];
         } catch (Throwable $exception) {
             report($exception);
             $reasonCode = self::REASON_COMMISSION_UNAVAILABLE;
@@ -59,6 +62,7 @@ final class WorkerOrderSolvencyService
             'workerId' => (int) $worker->id,
             'bookingId' => (int) $booking->id,
             'requiredPlatformCommission' => round($requiredCommission, 2),
+            'workerOffer' => $workerOffer,
             'canReceiveOrder' => $canReceive,
             'canAcceptBooking' => $canReceive,
             'reasonCode' => $canReceive ? self::REASON_ELIGIBLE : $reasonCode,
@@ -118,9 +122,56 @@ final class WorkerOrderSolvencyService
         ];
     }
 
-    public function requiredCommissionForBookingAndWorker(CleaningBooking $booking, Worker $worker, ?array $roomIds = null): float
-    {
-        $serviceShare = round(((float) ($booking->base_price ?? 0) + (float) ($booking->addons_total ?? 0)) / max(1, (int) ($booking->number_of_workers ?? 1)), 2);
+    /**
+     * Returns the current worker's financial view of the booking before or after acceptance.
+     *
+     * Before acceptance, service cost is divided by the required worker count and transport
+     * is calculated from the current worker's home location. After acceptance, persisted
+     * assignment amounts are returned so the preview is replaced by the final worker share.
+     *
+     * @return array<string, mixed>
+     */
+    public function workerOfferForBooking(
+        Worker $worker,
+        CleaningBooking $booking,
+        ?CleaningBookingWorkerAssignment $assignment = null,
+    ): array {
+        $assignment ??= $this->assignmentForWorker($booking, $worker);
+        $totalHours = $this->workerDurationHours($booking);
+
+        if ($assignment instanceof CleaningBookingWorkerAssignment && $this->isAcceptedAssignment($assignment)) {
+            $serviceShare = (float) $assignment->service_share_amount;
+            $travelFee = (float) $assignment->travel_fee;
+            $adminMargin = (float) $assignment->admin_margin_amount;
+            $workerAmount = (float) $assignment->worker_amount;
+
+            return [
+                'id' => (int) $assignment->id,
+                'workerId' => (int) $assignment->worker_id,
+                'status' => $assignment->status instanceof CleaningBookingWorkerAssignmentStatus
+                    ? $assignment->status->value
+                    : (string) $assignment->status,
+                'acceptedAt' => $assignment->accepted_at?->toIso8601String(),
+                'roomCount' => (int) $assignment->room_count,
+                'roomsWeight' => (float) $assignment->rooms_weight,
+                'totalHours' => $totalHours,
+                'serviceShareAmount' => $serviceShare,
+                'travelFee' => $travelFee,
+                'adminMarginAmount' => $adminMargin,
+                'workerAmount' => $workerAmount,
+                'totalPrice' => round($serviceShare + $travelFee + $adminMargin, 2),
+                'currency' => (string) ($assignment->currency ?: config('app.currency', 'SYP')),
+                'roomIds' => [],
+                'isPricingFinal' => true,
+                'isPreview' => false,
+            ];
+        }
+
+        $workerCount = max(1, (int) ($booking->number_of_workers ?? 1));
+        $serviceShare = round(
+            ((float) ($booking->base_price ?? 0) + (float) ($booking->addons_total ?? 0)) / $workerCount,
+            2,
+        );
         $pricing = $this->pricingCalculator->finalizedForWorker(
             $serviceShare,
             0.0,
@@ -128,8 +179,67 @@ final class WorkerOrderSolvencyService
             $booking->address_longitude !== null ? (float) $booking->address_longitude : null,
             $worker,
         );
+        $travelFee = (float) $pricing['travelFee'];
+        $adminMargin = (float) $pricing['adminMargin'];
+        $workerAmount = round($serviceShare + $travelFee, 2);
 
-        return round((float) $pricing['adminMargin'], 2);
+        return [
+            'id' => null,
+            'workerId' => (int) $worker->id,
+            'status' => null,
+            'acceptedAt' => null,
+            'roomCount' => 0,
+            'roomsWeight' => 0.0,
+            'totalHours' => $totalHours,
+            'serviceShareAmount' => $serviceShare,
+            'travelFee' => $travelFee,
+            'adminMarginAmount' => $adminMargin,
+            'workerAmount' => $workerAmount,
+            'totalPrice' => round($workerAmount + $adminMargin, 2),
+            'currency' => (string) config('app.currency', 'SYP'),
+            'roomIds' => [],
+            'isPricingFinal' => true,
+            'isPreview' => true,
+        ];
+    }
+
+    public function requiredCommissionForBookingAndWorker(CleaningBooking $booking, Worker $worker, ?array $roomIds = null): float
+    {
+        return round((float) $this->workerOfferForBooking($worker, $booking)['adminMarginAmount'], 2);
+    }
+
+    private function assignmentForWorker(CleaningBooking $booking, Worker $worker): ?CleaningBookingWorkerAssignment
+    {
+        $assignment = $booking->relationLoaded('workerAssignments')
+            ? $booking->workerAssignments->firstWhere('worker_id', $worker->id)
+            : $booking->workerAssignments()->where('worker_id', $worker->id)->first();
+
+        return $assignment instanceof CleaningBookingWorkerAssignment ? $assignment : null;
+    }
+
+    private function isAcceptedAssignment(CleaningBookingWorkerAssignment $assignment): bool
+    {
+        $status = $assignment->status instanceof CleaningBookingWorkerAssignmentStatus
+            ? $assignment->status->value
+            : (string) $assignment->status;
+
+        return in_array($status, CleaningBookingWorkerAssignmentStatus::acceptedValues(), true);
+    }
+
+    private function workerDurationHours(CleaningBooking $booking): ?float
+    {
+        $details = is_array($booking->property_details) ? $booking->property_details : [];
+        $bookingHours = (float) (
+            $booking->total_hours
+            ?: $booking->estimated_hours
+            ?: Arr::get($details, 'hours', 0)
+        );
+
+        if ($bookingHours <= 0) {
+            return null;
+        }
+
+        return round($bookingHours / max(1, (int) ($booking->number_of_workers ?? 1)), 2);
     }
 
     private function activeReservedCommission(Worker $worker, ?int $excludeBookingId = null): float
