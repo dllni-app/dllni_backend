@@ -16,7 +16,7 @@ it('seeds continuous financial scenarios with four public transaction types', fu
     ]);
 
     $types = CleaningDepositTransaction::query()
-        ->where('reference', 'like', 'seed-%')
+        ->where('reference', 'like', '%seed-%')
         ->distinct()
         ->orderBy('type')
         ->pluck('type')
@@ -42,7 +42,7 @@ it('seeds continuous financial scenarios with four public transaction types', fu
     foreach ($workers as $worker) {
         $transactions = CleaningDepositTransaction::query()
             ->where('worker_id', $worker->id)
-            ->where('reference', 'like', 'seed-%')
+            ->where('reference', 'like', '%seed-%')
             ->orderBy('created_at')
             ->orderBy('id')
             ->get();
@@ -119,7 +119,7 @@ it('keeps the financial scenarios idempotent when reseeded', function (): void {
         WorkerFinancialTypeScenarioSeeder::class,
     ]);
     $initialCount = CleaningDepositTransaction::query()
-        ->where('reference', 'like', 'seed-%')
+        ->where('reference', 'like', '%seed-%')
         ->count();
 
     $this->seed([
@@ -127,6 +127,6 @@ it('keeps the financial scenarios idempotent when reseeded', function (): void {
         WorkerFinancialTypeScenarioSeeder::class,
     ]);
 
-    expect(CleaningDepositTransaction::query()->where('reference', 'like', 'seed-%')->count())
+    expect(CleaningDepositTransaction::query()->where('reference', 'like', '%seed-%')->count())
         ->toBe($initialCount);
 });
