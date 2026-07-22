@@ -11,6 +11,8 @@ use Illuminate\Database\Eloquent\Builder;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
+use Modules\Cleaning\Support\WorkerAssignmentHoursResolver;
 use Throwable;
 
 final class WorkerBookingScheduleConflictService
@@ -22,7 +24,7 @@ final class WorkerBookingScheduleConflictService
 
     public function hasConflict(Worker $worker, CleaningBooking $candidate): bool
     {
-        $candidateInterval = $this->intervalFor($candidate);
+        $candidateInterval = $this->intervalFor($candidate, $worker);
 
         if ($candidateInterval === null) {
             return false;
@@ -73,18 +75,25 @@ final class WorkerBookingScheduleConflictService
                             ->whereIn('status', CleaningBookingWorkerAssignmentStatus::activeValues());
                     });
             })
+            ->with([
+                'rooms',
+                'workerAssignments' => function ($query) use ($workerId): void {
+                    $query->where('worker_id', $workerId);
+                },
+            ])
             ->get([
                 'id',
                 'scheduled_date',
                 'scheduled_time',
                 'total_hours',
                 'estimated_hours',
+                'number_of_workers',
             ]);
 
         $intervals = [];
 
         foreach ($bookings as $booking) {
-            $interval = $this->intervalFor($booking);
+            $interval = $this->intervalFor($booking, $worker);
 
             if ($interval !== null) {
                 $intervals[] = $interval;
@@ -97,7 +106,7 @@ final class WorkerBookingScheduleConflictService
     /**
      * @return array{bookingId: int, start: CarbonImmutable, end: CarbonImmutable}|null
      */
-    private function intervalFor(CleaningBooking $booking): ?array
+    private function intervalFor(CleaningBooking $booking, Worker $worker): ?array
     {
         $date = $booking->scheduled_date instanceof CarbonInterface
             ? $booking->scheduled_date->toDateString()
@@ -114,11 +123,12 @@ final class WorkerBookingScheduleConflictService
             return null;
         }
 
-        $durationHours = (float) ($booking->total_hours ?? 0);
-
-        if ($durationHours <= 0) {
-            $durationHours = (float) ($booking->estimated_hours ?? 0);
-        }
+        $assignment = $this->assignmentForWorker($booking, $worker);
+        $durationHours = WorkerAssignmentHoursResolver::resolve(
+            $booking,
+            $assignment,
+            $booking->relationLoaded('rooms') ? $booking->rooms : null,
+        );
 
         $durationMinutes = max(1, (int) ceil(max($durationHours, 1.0) * 60));
 
@@ -127,5 +137,21 @@ final class WorkerBookingScheduleConflictService
             'start' => $start,
             'end' => $start->addMinutes($durationMinutes),
         ];
+    }
+
+    private function assignmentForWorker(CleaningBooking $booking, Worker $worker): ?CleaningBookingWorkerAssignment
+    {
+        if ($booking->relationLoaded('workerAssignments')) {
+            $assignment = $booking->workerAssignments->firstWhere('worker_id', $worker->id);
+
+            return $assignment instanceof CleaningBookingWorkerAssignment ? $assignment : null;
+        }
+
+        $assignment = CleaningBookingWorkerAssignment::query()
+            ->where('cleaning_booking_id', $booking->id)
+            ->where('worker_id', $worker->id)
+            ->first();
+
+        return $assignment instanceof CleaningBookingWorkerAssignment ? $assignment : null;
     }
 }

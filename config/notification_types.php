@@ -227,6 +227,23 @@ return [
                 ],
             ],
         ],
+        'cleaning.booking.preferred_worker_unavailable' => [
+            'legacy_type' => 'preferred_worker_unavailable',
+            'module' => 'cleaning',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'العامل المفضل غير متاح',
+                    'body' => 'العامل المفضل غير متاح لطلب التنظيف رقم :booking_number، وسيتم عرض الطلب على عاملين آخرين.',
+                ],
+                'en' => [
+                    'title' => 'Preferred worker unavailable',
+                    'body' => 'Your preferred worker is unavailable for booking :booking_number. The request was opened to other workers.',
+                ],
+            ],
+        ],
         'supermarket.smart_list.scheduled_order_sent' => [
             'legacy_type' => 'smart_list_scheduled_order_sent',
             'module' => 'supermarket',

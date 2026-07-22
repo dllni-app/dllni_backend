@@ -40,6 +40,24 @@ final class WorkerTrustService
         );
     }
 
+    public function applyLowRatingPenalty(Worker $worker, int $rating, ?CleaningBooking $booking = null): void
+    {
+        $settings = CleaningDepositSetting::query()->first();
+        $threshold = max(1, (int) ($settings?->trust_low_rating_threshold ?? 2));
+        $penalty = max(0, (int) ($settings?->trust_low_rating_penalty ?? 5));
+
+        if ($rating > $threshold || $penalty === 0) {
+            return;
+        }
+
+        $this->applyPenalty(
+            worker: $worker,
+            reason: 'low_customer_rating',
+            penalty: $penalty,
+            booking: $booking,
+        );
+    }
+
     private function applyPenalty(
         Worker $worker,
         string $reason,

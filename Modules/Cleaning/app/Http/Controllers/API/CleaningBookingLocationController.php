@@ -13,6 +13,7 @@ use Modules\Cleaning\Events\WorkerLocationUpdated;
 use Modules\Cleaning\Http\Requests\CleaningBookingLocationRequest;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
+use Modules\Cleaning\Models\CleaningWorkerLocationHistory;
 
 final class CleaningBookingLocationController
 {
@@ -45,6 +46,15 @@ final class CleaningBookingLocationController
                 'location_updated_at' => $recordedAt,
             ])->save();
 
+            $this->recordHistory(
+                booking: $cleaning_booking,
+                worker: $worker,
+                assignment: $assignment,
+                latitude: $latitude,
+                longitude: $longitude,
+                recordedAt: $recordedAt,
+            );
+
             BroadcastAfterResponse::send(new WorkerLocationUpdated(
                 $cleaning_booking->id,
                 $latitude,
@@ -73,6 +83,15 @@ final class CleaningBookingLocationController
             'worker_location_updated_at' => $recordedAt,
         ])->save();
 
+        $this->recordHistory(
+            booking: $cleaning_booking,
+            worker: $worker,
+            assignment: null,
+            latitude: $latitude,
+            longitude: $longitude,
+            recordedAt: $recordedAt,
+        );
+
         BroadcastAfterResponse::send(new WorkerLocationUpdated(
             $cleaning_booking->id,
             $latitude,
@@ -81,6 +100,24 @@ final class CleaningBookingLocationController
         ));
 
         return $this->successResponse($recordedAt->toIso8601String());
+    }
+
+    private function recordHistory(
+        CleaningBooking $booking,
+        Worker $worker,
+        ?CleaningBookingWorkerAssignment $assignment,
+        float $latitude,
+        float $longitude,
+        mixed $recordedAt,
+    ): void {
+        CleaningWorkerLocationHistory::query()->create([
+            'cleaning_booking_id' => $booking->id,
+            'worker_id' => $worker->id,
+            'assignment_id' => $assignment?->id,
+            'latitude' => $latitude,
+            'longitude' => $longitude,
+            'recorded_at' => $recordedAt,
+        ]);
     }
 
     private function successResponse(string $updatedAt): JsonResponse

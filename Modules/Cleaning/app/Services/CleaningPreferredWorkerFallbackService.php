@@ -12,6 +12,10 @@ use Modules\Cleaning\Models\CleaningBooking;
 
 final class CleaningPreferredWorkerFallbackService
 {
+    public function __construct(
+        private CleaningLifecycleNotificationService $lifecycleNotifications,
+    ) {}
+
     public function convertToOpenIfEligible(CleaningBooking $booking): bool
     {
         return DB::transaction(function () use ($booking): bool {
@@ -24,11 +28,28 @@ final class CleaningPreferredWorkerFallbackService
                 return false;
             }
 
+            $fromStatus = $booking->status instanceof CleaningBookingStatus
+                ? $booking->status->value
+                : (string) $booking->status;
+
             $booking->forceFill([
                 'assignment_mode' => CleaningAssignmentMode::OpenCount->value,
                 'converted_from_preferred_worker' => true,
                 'converted_from_preferred_worker_at' => now(),
             ])->save();
+
+            $booking = $booking->fresh(['customer']) ?? $booking;
+
+            $this->lifecycleNotifications->notifyCustomer(
+                booking: $booking,
+                canonicalType: 'cleaning.booking.preferred_worker_unavailable',
+                action: 'preferred_worker_fallback',
+                actorRole: 'system',
+                fromStatus: $fromStatus,
+                templateContext: [
+                    'booking_number' => $booking->booking_number,
+                ],
+            );
 
             NotifyEligibleWorkersNewOrderJob::dispatch($booking->id)->afterCommit();
 

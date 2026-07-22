@@ -901,3 +901,29 @@ html[dir='rtl'] body {
         grid-template-columns: 1fr;
     }
 }
+
+/* Cleaning bookings wide table: horizontal scroll + sticky identity columns */
+.fi-ta-content,
+.fi-ta-ctn {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.fi-ta-table {
+    min-width: max(100%, 960px);
+}
+
+.fi-ta-sticky-col {
+    position: sticky;
+    inset-inline-start: 0;
+    z-index: 2;
+    background: var(--color-white, #fff);
+}
+
+.fi-ta-sticky-col-2 {
+    inset-inline-start: 9.5rem;
+}
+
+.dark .fi-ta-sticky-col {
+    background: var(--color-gray-900, #111827);
+}

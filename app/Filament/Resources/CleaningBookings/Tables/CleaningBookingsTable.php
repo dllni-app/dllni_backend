@@ -39,24 +39,29 @@ final class CleaningBookingsTable
                 TextColumn::make('booking_number')
                     ->label(self::headerLabel('رقم الحجز', 'المعرّف الفريد للحجز.'))
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->extraHeaderAttributes(['class' => 'fi-ta-sticky-col'])
+                    ->extraCellAttributes(['class' => 'fi-ta-sticky-col']),
                 TextColumn::make('status')
                     ->label(self::headerLabel('الحالة', 'الحالة الحالية للحجز.'))
                     ->badge()
                     ->color(fn ($state): string => self::statusColor($state))
-                    ->formatStateUsing(fn ($state): string => self::statusLabel($state)),
+                    ->formatStateUsing(fn ($state): string => self::statusLabel($state))
+                    ->extraHeaderAttributes(['class' => 'fi-ta-sticky-col fi-ta-sticky-col-2'])
+                    ->extraCellAttributes(['class' => 'fi-ta-sticky-col fi-ta-sticky-col-2']),
                 TextColumn::make('booking_kind')
                     ->label(self::headerLabel('نوع الحجز', 'يميز بين حجز تنظيف عادي وطلب مساعدة مناسبة.'))
                     ->getStateUsing(fn (CleaningBooking $record): string => self::bookingKindLabel($record))
                     ->badge()
-                    ->color(fn (CleaningBooking $record): string => self::bookingKindColor($record)),
+                    ->color(fn (CleaningBooking $record): string => self::bookingKindColor($record))
+                    ->toggleable(),
                 TextColumn::make('cancelled_by_role')
                     ->label(self::headerLabel('مصدر الإلغاء', 'يوضح الجهة التي ألغت الحجز.'))
                     ->badge()
                     ->color(fn ($state): string => self::cancellationSourceColor($state))
                     ->formatStateUsing(fn ($state): string => self::cancellationSourceLabel($state))
                     ->placeholder('-')
-                    ->toggleable(),
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('customer.name')
                     ->label(self::headerLabel('العميل', 'العميل الذي طلب الخدمة.'))
                     ->searchable(),
@@ -65,33 +70,37 @@ final class CleaningBookingsTable
                     ->getStateUsing(fn (CleaningBooking $record): array => self::assignedWorkerNames($record))
                     ->badge()
                     ->color('success')
-                    ->placeholder('-'),
+                    ->placeholder('-')
+                    ->toggleable(),
                 TextColumn::make('preferred_workers')
                     ->label(self::headerLabel('العاملون المفضلون', 'قد يحتوي الحجز على أكثر من عامل مفضل.'))
                     ->getStateUsing(fn (CleaningBooking $record): array => self::preferredWorkerNames($record))
                     ->badge()
                     ->color('info')
                     ->placeholder('-')
-                    ->toggleable(),
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('number_of_workers')
                     ->label(self::headerLabel('عدد العاملين المطلوب', 'عدد العاملين المطلوبين لتنفيذ الحجز.'))
                     ->formatStateUsing(fn ($state): string => self::integer($state))
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('accepted_workers')
                     ->label(self::headerLabel('العاملون المقبولون', 'عدد العاملين الذين قبلوا الحجز.'))
                     ->getStateUsing(fn (CleaningBooking $record): int => $record->acceptedWorkerCount())
                     ->badge()
-                    ->color(fn (CleaningBooking $record): string => $record->isTeamFulfilled() ? 'success' : ($record->acceptedWorkerCount() > 0 ? 'warning' : 'gray')),
+                    ->color(fn (CleaningBooking $record): string => $record->isTeamFulfilled() ? 'success' : ($record->acceptedWorkerCount() > 0 ? 'warning' : 'gray'))
+                    ->toggleable(),
                 TextColumn::make('remaining_workers')
                     ->label(self::headerLabel('العاملون المتبقون', 'العدد المتبقي لإكمال الفريق.'))
                     ->getStateUsing(fn (CleaningBooking $record): int => $record->remainingWorkerCount())
                     ->badge()
-                    ->color(fn (CleaningBooking $record): string => $record->remainingWorkerCount() > 0 ? 'warning' : 'success'),
+                    ->color(fn (CleaningBooking $record): string => $record->remainingWorkerCount() > 0 ? 'warning' : 'success')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('property_details.event_type')
                     ->label(self::headerLabel('نوع المناسبة', 'نوع المناسبة في طلبات مساعدة المناسبات.'))
                     ->formatStateUsing(fn (?string $state): string => self::eventTypeLabel($state))
                     ->placeholder('-')
-                    ->toggleable(),
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('scheduled_date')
                     ->label(self::headerLabel('التاريخ', 'تاريخ تنفيذ الخدمة.'))
                     ->date('Y-m-d')
@@ -103,7 +112,8 @@ final class CleaningBookingsTable
                     ->label(self::headerLabel('تغطية الغرف', 'عدد الغرف المخصصة من إجمالي الغرف، ولا ينطبق على المناسبات.'))
                     ->getStateUsing(fn (CleaningBooking $record): string => self::roomCoverageLabel($record))
                     ->badge()
-                    ->color(fn (CleaningBooking $record): string => self::roomCoverageColor($record)),
+                    ->color(fn (CleaningBooking $record): string => self::roomCoverageColor($record))
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('total_price')
                     ->label(self::headerLabel('الإجمالي', 'المبلغ الإجمالي بأرقام صحيحة.'))
                     ->formatStateUsing(fn ($state): string => self::money($state))
@@ -118,10 +128,11 @@ final class CleaningBookingsTable
                     ->weight(FontWeight::Bold)
                     ->color('info')
                     ->tooltip(fn (CleaningBooking $record): string => self::workerPayoutFormula($record))
-                    ->toggleable(),
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('disputes_count')
                     ->getStateUsing(fn (CleaningBooking $record): int => (int) ($record->disputes_count ?? 0))
-                    ->label(self::headerLabel('عدد النزاعات', 'عدد النزاعات المرتبطة بالحجز.')),
+                    ->label(self::headerLabel('عدد النزاعات', 'عدد النزاعات المرتبطة بالحجز.'))
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->modifyQueryUsing(fn (Builder $query): Builder => $query
                 ->with([

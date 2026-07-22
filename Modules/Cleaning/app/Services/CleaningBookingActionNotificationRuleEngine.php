@@ -62,8 +62,13 @@ final class CleaningBookingActionNotificationRuleEngine
 
         $rules = [];
         $minutesUntilStart = (int) floor($now->diffInMinutes($scheduledAt, false));
+        $earlyReminderMinutes = max(
+            15,
+            (int) (\App\Models\CleaningFinancialSetting::query()->value('pre_task_reminder_minutes') ?? 60),
+        );
+        $earlyReminderEnd = max(10, (int) floor($earlyReminderMinutes / 2));
 
-        if ($this->within($now, $scheduledAt->subMinutes(60), $scheduledAt->subMinutes(30))) {
+        if ($this->within($now, $scheduledAt->subMinutes($earlyReminderMinutes), $scheduledAt->subMinutes($earlyReminderEnd))) {
             if ($customer instanceof User && $assignments->isNotEmpty()) {
                 $rules[] = $this->customerRule(
                     recipient: $customer,
@@ -72,7 +77,7 @@ final class CleaningBookingActionNotificationRuleEngine
                     requiredAction: 'prepare_for_booking',
                     reminderKind: 'reminder',
                     severity: 'normal',
-                    dueAt: $scheduledAt->subMinutes(60),
+                    dueAt: $scheduledAt->subMinutes($earlyReminderMinutes),
                     deadlineAt: $scheduledAt,
                     scheduledAt: $scheduledAt,
                     minutesUntilStart: $minutesUntilStart,
@@ -88,7 +93,7 @@ final class CleaningBookingActionNotificationRuleEngine
                         requiredAction: 'prepare_for_booking',
                         reminderKind: 'reminder',
                         severity: 'normal',
-                        dueAt: $scheduledAt->subMinutes(60),
+                        dueAt: $scheduledAt->subMinutes($earlyReminderMinutes),
                         deadlineAt: $scheduledAt,
                         scheduledAt: $scheduledAt,
                         minutesUntilStart: $minutesUntilStart,

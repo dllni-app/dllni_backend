@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\CleaningWorkers\Schemas;
 
 use App\Enums\WorkerCustomerRatingType;
+use App\Enums\WorkerHomeLocationStatus;
 use App\Enums\WorkerPreferredWorkType;
 use App\Models\Worker;
 use App\Models\WorkerCustomerRating;
@@ -67,13 +68,45 @@ final class CleaningWorkerInfolist
                                                 ->badge()
                                                 ->color('info'),
                                             TextEntry::make('home_address')
-                                                ->label('موقع بدء المهمة')
+                                                ->label('موقع بدء المهمة (المعتمد)')
                                                 ->placeholder('-'),
+                                            TextEntry::make('home_location_status')
+                                                ->label('حالة موقع بدء المهمة')
+                                                ->badge()
+                                                ->formatStateUsing(fn (Worker $record): string => self::homeLocationStatusLabel($record))
+                                                ->color(fn (Worker $record): string => self::homeLocationStatusColor($record)),
+                                            TextEntry::make('home_location_rejection_reason')
+                                                ->label('سبب رفض الموقع')
+                                                ->placeholder('-')
+                                                ->visible(fn (Worker $record): bool => $record->home_location_status === WorkerHomeLocationStatus::Rejected
+                                                    && filled($record->home_location_rejection_reason)),
                                         ])
                                         ->columns(3)
                                         ->columnSpan(3),
                                 ]),
                         ])
+                        ->columnSpanFull(),
+
+                    Section::make('موقع بدء المهمة المعلق')
+                        ->description('الموقع الذي أرسله العامل وينتظر موافقة الإدارة قبل اعتماده.')
+                        ->visible(fn (Worker $record): bool => $record->hasPendingHomeLocation())
+                        ->schema([
+                            TextEntry::make('pending_home_address')
+                                ->label('العنوان المعلق')
+                                ->placeholder('-'),
+                            TextEntry::make('pending_home_latitude')
+                                ->label('خط العرض المعلق')
+                                ->placeholder('-'),
+                            TextEntry::make('pending_home_longitude')
+                                ->label('خط الطول المعلق')
+                                ->placeholder('-'),
+                            ViewEntry::make('pending_home_location_map')
+                                ->hiddenLabel()
+                                ->getStateUsing(fn (Worker $record): array => self::pendingLocationMapState($record))
+                                ->view('filament.resources.workers.infolists.location-map')
+                                ->columnSpanFull(),
+                        ])
+                        ->columns(3)
                         ->columnSpanFull(),
 
                     Section::make('إحصائيات')
@@ -190,8 +223,15 @@ final class CleaningWorkerInfolist
                         ->columnSpanFull(),
 
                     Section::make('مناطق العمل')
-                        ->description('الأحياء والمناطق التي اختار العامل استقبال طلبات التنظيف ضمنها.')
+                        ->description('ملخص الأحياء التي يستقبل العامل طلبات التنظيف ضمنها. القسم مطوي افتراضياً لتقليل الازدحام.')
+                        ->collapsed()
+                        ->collapsible()
                         ->schema([
+                            TextEntry::make('work_areas_summary')
+                                ->label('الملخص')
+                                ->state(fn (Worker $record): string => self::workAreasSummary($record))
+                                ->weight('bold')
+                                ->columnSpanFull(),
                             TextEntry::make('work_areas_empty_state')
                                 ->hiddenLabel()
                                 ->state('لم يحدد العامل مناطق عمل بعد.')
@@ -200,7 +240,7 @@ final class CleaningWorkerInfolist
                                 ->columnSpanFull(),
                             RepeatableEntry::make('work_areas')
                                 ->hiddenLabel()
-                                ->getStateUsing(fn (Worker $record): array => self::workAreaEntries($record))
+                                ->getStateUsing(fn (Worker $record): array => self::workAreaEntries($record, limit: 8))
                                 ->visible(fn (Worker $record): bool => self::workAreaEntries($record) !== [])
                                 ->schema([
                                     TextEntry::make('name')
@@ -215,6 +255,12 @@ final class CleaningWorkerInfolist
                                         ->color(fn (mixed $state): string => (string) $state === 'نشطة' ? 'success' : 'gray'),
                                 ])
                                 ->columns(3)
+                                ->columnSpanFull(),
+                            TextEntry::make('work_areas_more')
+                                ->hiddenLabel()
+                                ->state(fn (Worker $record): string => self::workAreasMoreLabel($record))
+                                ->visible(fn (Worker $record): bool => count(self::workAreaEntries($record)) > 8)
+                                ->color('gray')
                                 ->columnSpanFull(),
                         ])
                         ->columnSpanFull(),
@@ -262,6 +308,45 @@ final class CleaningWorkerInfolist
             : (is_string($worker->preferred_work_type) ? $worker->preferred_work_type : WorkerPreferredWorkType::Both->value);
 
         return WorkerPreferredWorkType::options()[$value] ?? $value;
+    }
+
+    private static function homeLocationStatusLabel(Worker $worker): string
+    {
+        $status = $worker->home_location_status;
+
+        if ($status instanceof WorkerHomeLocationStatus) {
+            return $status->label();
+        }
+
+        return WorkerHomeLocationStatus::tryFrom((string) $status)?->label()
+            ?? WorkerHomeLocationStatus::Approved->label();
+    }
+
+    private static function homeLocationStatusColor(Worker $worker): string
+    {
+        $status = $worker->home_location_status;
+
+        if ($status instanceof WorkerHomeLocationStatus) {
+            return $status->color();
+        }
+
+        return WorkerHomeLocationStatus::tryFrom((string) $status)?->color() ?? 'gray';
+    }
+
+    /**
+     * @return array{hasCoordinates: bool, latitude: ?float, longitude: ?float, address: ?string}
+     */
+    private static function pendingLocationMapState(Worker $worker): array
+    {
+        $latitude = $worker->pending_home_latitude !== null ? (float) $worker->pending_home_latitude : null;
+        $longitude = $worker->pending_home_longitude !== null ? (float) $worker->pending_home_longitude : null;
+
+        return [
+            'hasCoordinates' => $latitude !== null && $longitude !== null,
+            'latitude' => $latitude,
+            'longitude' => $longitude,
+            'address' => $worker->pending_home_address,
+        ];
     }
 
     /**
@@ -453,11 +538,11 @@ final class CleaningWorkerInfolist
     /**
      * @return array<int, array{name:string,city:?string,status:string}>
      */
-    private static function workAreaEntries(Worker $worker): array
+    private static function workAreaEntries(Worker $worker, ?int $limit = null): array
     {
         $worker->loadMissing(['zones.neighborhood']);
 
-        return $worker->zones
+        $entries = $worker->zones
             ->sortByDesc(fn (WorkerZone $zone): bool => (bool) $zone->is_active)
             ->map(fn (WorkerZone $zone): array => [
                 'name' => $zone->neighborhood?->name_ar
@@ -469,6 +554,36 @@ final class CleaningWorkerInfolist
             ])
             ->values()
             ->all();
+
+        if ($limit === null) {
+            return $entries;
+        }
+
+        return array_slice($entries, 0, $limit);
+    }
+
+    private static function workAreasSummary(Worker $worker): string
+    {
+        $worker->loadMissing('zones');
+        $total = $worker->zones->count();
+        $active = $worker->zones->where('is_active', true)->count();
+
+        if ($total === 0) {
+            return 'لا توجد مناطق عمل.';
+        }
+
+        return "{$active} منطقة نشطة من أصل {$total}";
+    }
+
+    private static function workAreasMoreLabel(Worker $worker): string
+    {
+        $remaining = count(self::workAreaEntries($worker)) - 8;
+
+        if ($remaining <= 0) {
+            return '';
+        }
+
+        return "يتم عرض أول 8 مناطق فقط. المتبقي: {$remaining} منطقة (راجع مناطق العمل من تطبيق العامل أو أعد التعيين عند الإنشاء).";
     }
 
     private static function formatInteger(mixed $value): string

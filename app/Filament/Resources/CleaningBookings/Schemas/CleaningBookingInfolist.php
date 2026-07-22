@@ -7,12 +7,15 @@ namespace App\Filament\Resources\CleaningBookings\Schemas;
 use Carbon\Carbon;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Components\ViewEntry;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
+use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
+use Modules\Cleaning\Models\CleaningWorkerLocationHistory;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class CleaningBookingInfolist
@@ -116,6 +119,16 @@ final class CleaningBookingInfolist
                                             ->visible(fn ($record): bool => ! self::isEventAssistance($record)),
                                     ])
                                     ->columns(3),
+                                Section::make('تتبع حركة العاملين')
+                                    ->description('آخر مواقع العاملين أثناء التوجه للعميل مع سجل مختصر لأحدث النقاط.')
+                                    ->schema([
+                                        ViewEntry::make('worker_movement_map')
+                                            ->hiddenLabel()
+                                            ->getStateUsing(fn (CleaningBooking $record): array => self::workerMovementMapState($record))
+                                            ->view('filament.resources.cleaning-bookings.infolists.worker-movement-map')
+                                            ->columnSpanFull(),
+                                    ])
+                                    ->columnSpanFull(),
                                 Section::make('العاملون المقبولون')
                                     ->schema([
                                         RepeatableEntry::make('acceptedWorkerAssignments')
@@ -256,6 +269,75 @@ final class CleaningBookingInfolist
             ->unique()
             ->values()
             ->all();
+    }
+
+    /**
+     * @return array{
+     *     points: list<array{latitude: float, longitude: float, label: string}>,
+     *     history: list<array{workerName: string, latitude: float, longitude: float, recordedAt: string}>,
+     *     destination: ?array{latitude: float, longitude: float}
+     * }
+     */
+    private static function workerMovementMapState(CleaningBooking $record): array
+    {
+        $record->loadMissing(['workerAssignments.worker.user', 'worker.user']);
+
+        $points = [];
+
+        foreach ($record->workerAssignments as $assignment) {
+            if ($assignment->last_latitude === null || $assignment->last_longitude === null) {
+                continue;
+            }
+
+            $points[] = [
+                'latitude' => (float) $assignment->last_latitude,
+                'longitude' => (float) $assignment->last_longitude,
+                'label' => $assignment->worker?->first_name
+                    ?: $assignment->worker?->user?->name
+                    ?: 'عامل #'.$assignment->worker_id,
+            ];
+        }
+
+        if ($points === [] && $record->last_worker_latitude !== null && $record->last_worker_longitude !== null) {
+            $points[] = [
+                'latitude' => (float) $record->last_worker_latitude,
+                'longitude' => (float) $record->last_worker_longitude,
+                'label' => $record->worker?->first_name
+                    ?: $record->worker?->user?->name
+                    ?: 'العامل الأساسي',
+            ];
+        }
+
+        $history = CleaningWorkerLocationHistory::query()
+            ->with(['worker.user'])
+            ->where('cleaning_booking_id', $record->id)
+            ->orderByDesc('recorded_at')
+            ->orderByDesc('id')
+            ->limit(20)
+            ->get()
+            ->map(fn (CleaningWorkerLocationHistory $row): array => [
+                'workerName' => $row->worker?->first_name
+                    ?: $row->worker?->user?->name
+                    ?: 'عامل #'.$row->worker_id,
+                'latitude' => (float) $row->latitude,
+                'longitude' => (float) $row->longitude,
+                'recordedAt' => $row->recorded_at?->format('Y-m-d H:i:s') ?: '-',
+            ])
+            ->all();
+
+        $destination = null;
+        if ($record->address_latitude !== null && $record->address_longitude !== null) {
+            $destination = [
+                'latitude' => (float) $record->address_latitude,
+                'longitude' => (float) $record->address_longitude,
+            ];
+        }
+
+        return [
+            'points' => $points,
+            'history' => $history,
+            'destination' => $destination,
+        ];
     }
 
     private static function roomCoverageLabel(mixed $record): string

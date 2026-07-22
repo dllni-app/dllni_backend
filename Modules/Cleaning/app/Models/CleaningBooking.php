@@ -125,6 +125,13 @@ final class CleaningBooking extends Model
         return $this->hasMany(CleaningBookingWorkerAssignment::class, 'cleaning_booking_id');
     }
 
+    public function locationHistory(): HasMany
+    {
+        return $this->hasMany(CleaningWorkerLocationHistory::class, 'cleaning_booking_id')
+            ->orderByDesc('recorded_at')
+            ->orderByDesc('id');
+    }
+
     public function acceptedWorkerAssignments(): HasMany
     {
         return $this->hasMany(CleaningBookingWorkerAssignment::class, 'cleaning_booking_id')

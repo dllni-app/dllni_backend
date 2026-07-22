@@ -50,15 +50,11 @@ final class WorkerAccountProfileUpdateRequest extends FormRequest
                 return;
             }
 
-            $homeAddress = array_key_exists('homeAddress', $this->all())
-                ? $this->input('homeAddress')
-                : $worker->home_address;
-            $homeLatitude = array_key_exists('homeLatitude', $this->all())
-                ? $this->input('homeLatitude')
-                : $worker->home_latitude;
-            $homeLongitude = array_key_exists('homeLongitude', $this->all())
-                ? $this->input('homeLongitude')
-                : $worker->home_longitude;
+            // Activation depends on the approved home_* values only. Pending
+            // location submissions wait for admin approval before becoming active home.
+            $homeAddress = $worker->home_address;
+            $homeLatitude = $worker->home_latitude;
+            $homeLongitude = $worker->home_longitude;
 
             if ($homeAddress === null || mb_trim((string) $homeAddress) === '') {
                 $validator->errors()->add('homeAddress', 'Active workers must have a home address.');

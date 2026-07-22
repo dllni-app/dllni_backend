@@ -490,14 +490,15 @@ it('returns 403 for worker profile when user has no worker', function () {
     $response->assertForbidden();
 });
 
-it('updates worker profile home location fields', function () {
+it('queues worker profile home location updates for admin approval', function () {
     $workerUser = User::factory()->create(['email' => 'worker-profile-update@example.com']);
-    Worker::factory()->create([
+    $worker = Worker::factory()->create([
         'user_id' => $workerUser->id,
         'is_active' => true,
         'home_address' => 'Old Home',
         'home_latitude' => 33.4,
         'home_longitude' => 36.2,
+        'home_location_status' => 'approved',
     ]);
     Sanctum::actingAs($workerUser);
 
@@ -508,9 +509,18 @@ it('updates worker profile home location fields', function () {
     ]);
 
     $response->assertOk();
-    expect($response->json('data.homeAddress'))->toBe('Damascus, Al Mazzeh');
-    expect((float) $response->json('data.homeLatitude'))->toBe(33.5138);
-    expect((float) $response->json('data.homeLongitude'))->toBe(36.2765);
+    expect($response->json('data.homeAddress'))->toBe('Old Home');
+    expect((float) $response->json('data.homeLatitude'))->toBe(33.4);
+    expect((float) $response->json('data.homeLongitude'))->toBe(36.2);
+    expect($response->json('data.pendingHomeAddress'))->toBe('Damascus, Al Mazzeh');
+    expect((float) $response->json('data.pendingHomeLatitude'))->toBe(33.5138);
+    expect((float) $response->json('data.pendingHomeLongitude'))->toBe(36.2765);
+    expect($response->json('data.homeLocationStatus'))->toBe('pending');
+
+    $worker->refresh();
+    expect($worker->home_address)->toBe('Old Home');
+    expect($worker->pending_home_address)->toBe('Damascus, Al Mazzeh');
+    expect($worker->home_location_status->value)->toBe('pending');
 });
 
 it('updates worker birthday from worker profile and returns it in the response', function () {

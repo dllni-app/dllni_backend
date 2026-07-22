@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
+use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 
 final class CleaningFinancialSummaryService
@@ -22,7 +23,12 @@ final class CleaningFinancialSummaryService
             ->selectRaw('COALESCE(SUM(CASE WHEN current_balance > 0 THEN current_balance ELSE 0 END), 0) AS current_deposit')
             ->selectRaw('COALESCE(SUM(CASE WHEN debt_balance > 0 THEN debt_balance ELSE 0 END), 0) AS current_debt')
             ->selectRaw('COALESCE(SUM(CASE WHEN admin_revenue_withdrawn_total > 0 THEN admin_revenue_withdrawn_total ELSE 0 END), 0) AS withdrawn_admin_revenue')
+            ->selectRaw('COALESCE(SUM(CASE WHEN withdrawn_total > 0 THEN withdrawn_total ELSE 0 END), 0) AS withdrawn_total')
             ->first();
+
+        $depositedTotal = (float) CleaningDepositTransaction::query()
+            ->selectRaw("COALESCE(SUM(CASE WHEN type IN ('deposit', 'settlement') THEN ABS(amount) WHEN type = 'adjustment' AND amount > 0 THEN amount ELSE 0 END), 0) AS deposited_total")
+            ->value('deposited_total');
 
         $commissionTotal = (float) CleaningDepositTransaction::query()
             ->where(function (Builder $query): void {
@@ -41,6 +47,12 @@ final class CleaningFinancialSummaryService
             'currentDebtBalance' => round(max(0.0, (float) ($accountTotals?->current_debt ?? 0)), 2),
             'currentAdminCommissionBalance' => round(max(0.0, $commissionTotal - $withdrawnAdminRevenue), 2),
             'withdrawnAdminRevenue' => round($withdrawnAdminRevenue, 2),
+            'depositedTotal' => round(max(0.0, $depositedTotal), 2),
+            'withdrawnTotal' => round(max(0.0, (float) ($accountTotals?->withdrawn_total ?? 0)), 2),
+            'bookingsTotal' => CleaningBooking::query()->count(),
+            'completedBookingsTotal' => CleaningBooking::query()
+                ->where('status', CleaningBookingStatus::Completed->value)
+                ->count(),
             'totalRevenue' => round($this->totalRevenue(), 2),
             'reservedActiveCommission' => round($this->reservedActiveCommission(), 2),
             'financiallyBlockedWorkers' => Worker::query()

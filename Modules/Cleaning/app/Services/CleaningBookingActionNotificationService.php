@@ -29,6 +29,11 @@ final class CleaningBookingActionNotificationService
             return 0;
         }
 
+        $financial = \App\Models\CleaningFinancialSetting::query()->first();
+        if ($financial !== null && ! (bool) ($financial->pre_task_notifications_enabled ?? true)) {
+            return 0;
+        }
+
         $timezone = (string) config('cleaning_action_notifications.timezone', config('app.timezone'));
         $now = $clock instanceof CarbonInterface
             ? CarbonImmutable::instance($clock)->setTimezone($timezone)

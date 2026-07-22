@@ -47,6 +47,7 @@ final class CleaningBookingService
         private readonly CleaningBookingTeamService $teamService,
         private readonly WorkerTrustService $workerTrustService,
         private readonly DepositService $depositService,
+        private readonly CleaningCancellationFeeCalculator $cancellationFeeCalculator,
     ) {}
 
     public function store(CleaningBookingData $data): CleaningBooking
@@ -711,11 +712,24 @@ final class CleaningBookingService
                 throw new InvalidArgumentException('Booking cannot be cancelled in current status.');
             }
 
+            $fee = $this->cancellationFeeCalculator->forWorker($booking);
+
             $booking->update([
                 'status' => CleaningBookingStatus::Cancelled,
                 'cancelled_at' => now(),
                 'cancellation_reason' => $reason,
+                'cancellation_fee' => $fee['fee'],
+                'cancelled_by_role' => 'worker',
             ]);
+
+            if ($fee['fee'] > 0) {
+                $this->depositService->recordDebtCharge(
+                    $worker,
+                    $fee['fee'],
+                    'cancellation_fee:'.$booking->id,
+                    'Worker cancellation fee',
+                );
+            }
 
             $this->workerTrustService->applyBookingCancellationPenalty($worker, $booking);
 
