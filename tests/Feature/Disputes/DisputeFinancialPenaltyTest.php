@@ -11,7 +11,6 @@ use App\Models\User;
 use App\Models\Worker;
 use App\Services\DisputeFinancialPenaltyService;
 use Illuminate\Support\Facades\Queue;
-use InvalidArgumentException;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 
@@ -101,7 +100,7 @@ it('prevents applying the financial penalty twice to the same dispute', function
     $service->apply($dispute, $worker, 100, 'First penalty', null);
 
     expect(fn () => $service->apply($dispute->fresh(), $worker, 100, 'Duplicate penalty', null))
-        ->toThrow(InvalidArgumentException::class);
+        ->toThrow(\InvalidArgumentException::class);
 
     expect(CleaningDepositTransaction::query()
         ->where('reference', 'dispute_worker_penalty:'.$dispute->id)
