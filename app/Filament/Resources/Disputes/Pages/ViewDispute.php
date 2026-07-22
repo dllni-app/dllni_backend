@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Disputes\Pages;
 
-use App\Enums\DisputeResolution;
 use App\Enums\DisputeStatus;
 use App\Filament\Resources\Disputes\DisputeResource;
 use App\Models\Worker;
@@ -40,7 +39,7 @@ final class ViewDispute extends ViewRecord
                     CleaningBooking::class => [
                         'customer',
                         'worker.user',
-                        'workerAssignments.worker.user',
+                        'acceptedWorkerAssignments.worker.user',
                     ],
                     EventBooking::class => ['customer'],
                     Order::class => ['customer'],
@@ -144,7 +143,7 @@ final class ViewDispute extends ViewRecord
 
         $booking->loadMissing([
             'worker.user',
-            'workerAssignments.worker.user',
+            'acceptedWorkerAssignments.worker.user',
         ]);
 
         $workers = collect();
@@ -153,7 +152,7 @@ final class ViewDispute extends ViewRecord
             $workers->put($booking->worker->id, $booking->worker);
         }
 
-        foreach ($booking->workerAssignments as $assignment) {
+        foreach ($booking->acceptedWorkerAssignments as $assignment) {
             if ($assignment->worker instanceof Worker) {
                 $workers->put($assignment->worker->id, $assignment->worker);
             }
