@@ -27,7 +27,7 @@ final class WorkerFinancialTypeScenarioSeeder extends Seeder
         DB::transaction(function () use ($worker): void {
             CleaningDepositTransaction::query()
                 ->where('worker_id', $worker->id)
-                ->where('reference', 'like', 'seed-ahmad-%')
+                ->where('reference', 'like', '%seed-ahmad-%')
                 ->delete();
 
             CleaningWorkerDeposit::query()->updateOrCreate(
