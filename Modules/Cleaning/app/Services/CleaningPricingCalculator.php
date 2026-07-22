@@ -11,7 +11,6 @@ use InvalidArgumentException;
 final class CleaningPricingCalculator
 {
     private const DEFAULT_TRAVEL_PER_KM = 7500.0;
-
     private const SYRIAN_CASH_INCREMENT = 500.0;
 
     public function provisional(float $basePrice, float $addonsTotal = 0.0): array
