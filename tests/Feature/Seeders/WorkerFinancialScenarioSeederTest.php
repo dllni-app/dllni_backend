@@ -9,7 +9,7 @@ use Database\Seeders\WorkerSeeder;
 use Illuminate\Support\Facades\Schema;
 use Modules\Cleaning\Services\AdminCleaningTransactionService;
 
-it('seeds continuous financial scenarios with four public transaction types', function (): void {
+it('seeds continuous financial scenarios using only add-transaction types', function (): void {
     $this->seed([
         WorkerSeeder::class,
         WorkerFinancialTypeScenarioSeeder::class,
@@ -22,7 +22,10 @@ it('seeds continuous financial scenarios with four public transaction types', fu
         ->pluck('type')
         ->all();
 
-    expect($types)->toBe(['commission', 'debt', 'deposit', 'refund'])
+    $expectedTypes = AdminCleaningTransactionService::TYPES;
+    sort($expectedTypes);
+
+    expect($types)->toBe($expectedTypes)
         ->and(Schema::hasColumn('cleaning_deposit_transactions', 'cleaning_booking_id'))->toBeFalse()
         ->and(Schema::hasColumn('cleaning_deposit_transactions', 'debt_balance_before'))->toBeTrue()
         ->and(Schema::hasColumn('cleaning_deposit_transactions', 'debt_balance_after'))->toBeTrue()
@@ -64,11 +67,12 @@ it('seeds continuous financial scenarios with four public transaction types', fu
         }
 
         foreach ($transactions as $transaction) {
-            expect($transaction->publicType())->toBeIn(CleaningDepositTransaction::PUBLIC_TYPES)
+            expect((string) $transaction->type)->toBeIn(AdminCleaningTransactionService::TYPES)
                 ->and($transaction->notes)->not->toBeEmpty();
 
-            if ($transaction->publicType() === 'refund') {
-                expect((float) $transaction->amount)->toBe((float) $transaction->balance_before)
+            if ($transaction->type === 'refund') {
+                expect((float) $transaction->amount + (float) $transaction->debt_settled_amount)
+                    ->toBe((float) $transaction->balance_before)
                     ->and((float) $transaction->balance_after)->toBe(0.0)
                     ->and((float) $transaction->debt_balance_after)->toBe(0.0);
             }
@@ -76,23 +80,25 @@ it('seeds continuous financial scenarios with four public transaction types', fu
     }
 });
 
-it('seeds current commission and withdrawn administration revenue as separate values', function (): void {
+it('does not seed automatic or legacy transaction types in manual financial scenarios', function (): void {
     $this->seed([
         WorkerSeeder::class,
         WorkerFinancialTypeScenarioSeeder::class,
     ]);
 
-    $worker = Worker::query()
-        ->whereHas('user', fn ($query) => $query->where('email', 'worker1@dllni.sy'))
-        ->with('deposit')
-        ->firstOrFail();
+    $types = CleaningDepositTransaction::query()
+        ->where('reference', 'like', '%seed-%')
+        ->pluck('type')
+        ->unique()
+        ->values()
+        ->all();
 
-    $snapshot = app(AdminCleaningTransactionService::class)->snapshot($worker);
-
-    expect($snapshot['depositBalance'])->toBe(725000.0)
-        ->and($snapshot['debtBalance'])->toBe(0.0)
-        ->and($snapshot['adminCommissionBalance'])->toBe(75000.0)
-        ->and($snapshot['withdrawnAdminRevenueTotal'])->toBe(100000.0);
+    expect($types)
+        ->not->toContain('commission')
+        ->not->toContain('admin_fee')
+        ->not->toContain('settlement')
+        ->not->toContain('withdrawal')
+        ->not->toContain('adjustment');
 });
 
 it('seeds an administration loan as debt while keeping indebtedness separate', function (): void {
@@ -108,9 +114,10 @@ it('seeds an administration loan as debt while keeping indebtedness separate', f
 
     $snapshot = app(AdminCleaningTransactionService::class)->snapshot($worker);
 
-    expect($snapshot['depositBalance'])->toBe(500000.0)
+    expect($snapshot['depositBalance'])->toBe(600000.0)
         ->and($snapshot['adminLoanBalance'])->toBe(100000.0)
-        ->and($snapshot['debtBalance'])->toBe(0.0);
+        ->and($snapshot['debtBalance'])->toBe(0.0)
+        ->and($snapshot['adminCommissionBalance'])->toBe(0.0);
 });
 
 it('keeps the financial scenarios idempotent when reseeded', function (): void {
