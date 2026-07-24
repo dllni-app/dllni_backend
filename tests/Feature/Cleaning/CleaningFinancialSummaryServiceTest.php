@@ -39,34 +39,34 @@ it('returns only the canonical current financial balances', function (): void {
 
     CleaningDepositTransaction::query()->create([
         'worker_id' => $firstWorker->id,
-        'type' => 'commission',
+        'type' => 'debt',
         'amount' => 300,
         'balance_before' => 1300,
         'balance_after' => 1000,
         'debt_balance_before' => 0,
         'debt_balance_after' => 0,
-        'reference' => 'summary-test-first-commission',
+        'reference' => CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'summary-test-first',
     ]);
 
     CleaningDepositTransaction::query()->create([
         'worker_id' => $secondWorker->id,
-        'type' => 'commission',
+        'type' => 'debt',
         'amount' => 500,
         'balance_before' => 300,
         'balance_after' => 0,
         'debt_balance_before' => 0,
         'debt_balance_after' => 200,
-        'reference' => 'summary-test-second-commission',
+        'reference' => CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'summary-test-second',
     ]);
 
     $summary = app(CleaningFinancialSummaryService::class)->global();
 
     expect($summary['currentDepositBalance'])->toBe(1000.0)
         ->and($summary['currentDebtBalance'])->toBe(200.0)
-        ->and($summary['currentAdminCommissionBalance'])->toBe(650.0)
+        ->and($summary['currentAdministrationDueBalance'])->toBe(650.0)
         ->and($summary['withdrawnAdminRevenue'])->toBe(150.0)
         ->and($summary['financiallyBlockedWorkers'])->toBe(1)
-        ->and($summary['reservedActiveCommission'])->toBe(0.0);
+        ->and($summary['reservedActiveAdministrationDue'])->toBe(0.0);
 });
 
 function createWorkerForFinancialSummary(string $financialStatus): Worker
