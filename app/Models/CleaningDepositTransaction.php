@@ -14,10 +14,12 @@ final class CleaningDepositTransaction extends Model
 {
     use LogsActivity;
 
-    public const AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX = 'automatic_admin_commission:';
+    public const AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX = 'automatic_admin_debt:';
+
+    public const LEGACY_AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX = 'automatic_admin_commission:';
 
     /** @var list<string> */
-    public const PUBLIC_TYPES = ['deposit', 'commission', 'debt', 'refund'];
+    public const PUBLIC_TYPES = ['deposit', 'debt', 'refund'];
 
     protected $fillable = [
         'worker_id',
@@ -37,8 +39,7 @@ final class CleaningDepositTransaction extends Model
     public static function normalizePublicType(string $type, float $amount = 0): string
     {
         return match ($type) {
-            'admin_fee', 'commission' => 'commission',
-            'settlement' => 'debt',
+            'admin_fee', 'commission', 'settlement' => 'debt',
             'withdrawal' => 'refund',
             'adjustment' => $amount < 0 ? 'refund' : 'deposit',
             'deposit', 'debt', 'refund' => $type,
@@ -68,10 +69,10 @@ final class CleaningDepositTransaction extends Model
     {
         return $query->whereIn('type', [
             'deposit',
-            'commission',
             'debt',
             'settlement',
             'refund',
+            'commission',
             'admin_fee',
             'withdrawal',
             'adjustment',
@@ -81,23 +82,7 @@ final class CleaningDepositTransaction extends Model
     public function scopeForPublicType(Builder $query, string $type): Builder
     {
         return match ($type) {
-            'commission' => $query->where(function (Builder $query): void {
-                $query->whereIn('type', ['commission', 'admin_fee'])
-                    ->orWhere(function (Builder $query): void {
-                        $query->where('type', 'debt')
-                            ->where('reference', 'like', self::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'%');
-                    });
-            }),
-            'debt' => $query->where(function (Builder $query): void {
-                $query->where('type', 'settlement')
-                    ->orWhere(function (Builder $query): void {
-                        $query->where('type', 'debt')
-                            ->where(function (Builder $query): void {
-                                $query->whereNull('reference')
-                                    ->orWhere('reference', 'not like', self::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'%');
-                            });
-                    });
-            }),
+            'debt' => $query->whereIn('type', ['debt', 'settlement', 'commission', 'admin_fee']),
             'deposit' => $query->where(function (Builder $query): void {
                 $query->where('type', 'deposit')
                     ->orWhere(function (Builder $query): void {
@@ -116,13 +101,6 @@ final class CleaningDepositTransaction extends Model
 
     public function publicType(): string
     {
-        if (
-            in_array((string) $this->type, ['commission', 'admin_fee'], true)
-            || ((string) $this->type === 'debt' && str_starts_with((string) $this->reference, self::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX))
-        ) {
-            return 'commission';
-        }
-
         return self::normalizePublicType((string) $this->type, (float) $this->amount);
     }
 
