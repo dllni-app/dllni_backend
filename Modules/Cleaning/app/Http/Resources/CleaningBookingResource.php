@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Http\Resources;
 
+use App\Models\CleaningFinancialPenalty;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Arr;
@@ -169,6 +170,12 @@ final class CleaningBookingResource extends JsonResource
             'cancellationReason' => $this->cancellation_reason,
             'cancelledByRole' => $this->cancelled_by_role,
             'cancelled_by_role' => $this->cancelled_by_role,
+            'cancelledByUserId' => $this->cancelled_by_user_id,
+            'cancelledByWorkerId' => $this->cancelled_by_worker_id,
+            'cancellationOffsetMinutes' => $this->cancellation_offset_minutes,
+            'cancellationTimingLabel' => $this->cancellationTimingLabel(),
+            'workerCancellationSnapshots' => $this->workerCancellationSnapshots(),
+            'financialPenalty' => $this->financialPenaltyPayload(),
             'customer' => $this->whenLoaded('customer', fn () => ['id' => $this->customer->id, 'name' => $this->customer->name, 'email' => $this->customer->email, 'phone' => $this->customer->phone]),
             'preferredWorker' => $this->whenLoaded('preferredWorker', fn () => $this->preferredWorker ? $this->serializeWorker($this->preferredWorker) : null),
             'worker' => $this->whenLoaded('worker', fn () => $this->worker ? $this->serializeWorker($this->worker) : null),
@@ -325,6 +332,9 @@ final class CleaningBookingResource extends JsonResource
             'workerId' => $assignment->worker_id,
             'status' => $assignmentStatus,
             'statusLabel' => $this->label($assignmentStatus),
+            'statusBeforeBookingCancellation' => $assignment->status_before_booking_cancellation,
+            'bookingCancelledAt' => $assignment->booking_cancelled_at?->toIso8601String(),
+            'cancelledByThisWorker' => (bool) $assignment->cancelled_by_this_worker,
             'acceptedAt' => $assignment->accepted_at?->toIso8601String(),
             'startedTravelAt' => $assignment->started_travel_at?->toIso8601String(),
             'arrivedAt' => $assignment->arrived_at?->toIso8601String(),
@@ -534,6 +544,66 @@ final class CleaningBookingResource extends JsonResource
         return $assignment->status instanceof CleaningBookingWorkerAssignmentStatus
             ? $assignment->status->value
             : (string) $assignment->status;
+    }
+
+    private function cancellationTimingLabel(): ?string
+    {
+        if (! is_numeric($this->cancellation_offset_minutes)) {
+            return null;
+        }
+
+        $minutes = (int) $this->cancellation_offset_minutes;
+        if ($minutes > 0) {
+            return "Cancelled {$minutes} minutes before the scheduled start";
+        }
+        if ($minutes < 0) {
+            return 'Cancelled '.abs($minutes).' minutes after the scheduled start';
+        }
+
+        return 'Cancelled at the scheduled start time';
+    }
+
+    private function workerCancellationSnapshots(): array
+    {
+        return array_values(array_map(function (CleaningBookingWorkerAssignment $assignment): array {
+            $worker = $assignment->relationLoaded('worker') ? $assignment->worker : null;
+
+            return [
+                'assignmentId' => (int) $assignment->id,
+                'workerId' => (int) $assignment->worker_id,
+                'worker' => $worker ? $this->serializeWorker($worker) : null,
+                'statusBeforeCancellation' => $assignment->status_before_booking_cancellation,
+                'bookingCancelledAt' => $assignment->booking_cancelled_at?->toIso8601String(),
+                'cancelledByThisWorker' => (bool) $assignment->cancelled_by_this_worker,
+                'acceptedAt' => $assignment->accepted_at?->toIso8601String(),
+                'startedTravelAt' => $assignment->started_travel_at?->toIso8601String(),
+                'arrivedAt' => $assignment->arrived_at?->toIso8601String(),
+                'workStartedAt' => $assignment->work_started_at?->toIso8601String(),
+            ];
+        }, $this->workerAssignmentsForResource()));
+    }
+
+    private function financialPenaltyPayload(): ?array
+    {
+        $penalty = $this->relationLoaded('financialPenalty')
+            ? $this->financialPenalty
+            : $this->financialPenalty()->first();
+
+        if (! $penalty instanceof CleaningFinancialPenalty) {
+            return null;
+        }
+
+        return [
+            'id' => (int) $penalty->id,
+            'workerId' => (int) $penalty->worker_id,
+            'amount' => (float) $penalty->amount,
+            'currency' => (string) config('app.currency', 'SYP'),
+            'financialSource' => (string) $penalty->financial_source,
+            'status' => (string) $penalty->status,
+            'notes' => (string) $penalty->notes,
+            'appliedAt' => $penalty->applied_at?->toIso8601String(),
+            'clearedAt' => $penalty->cleared_at?->toIso8601String(),
+        ];
     }
 
     private function label(mixed $value): ?string
