@@ -40,7 +40,7 @@ it('calculates percentage administration margin from service costs without trave
         );
 });
 
-it('keeps the worker eligible when at least one new order fits the commission capacity', function (): void {
+it('keeps the worker eligible when at least one new order fits the administration capacity', function (): void {
     CleaningDepositSetting::query()->updateOrCreate(
         ['id' => CleaningDepositSetting::query()->orderBy('id')->value('id') ?? 1],
         [
@@ -120,11 +120,11 @@ it('keeps the worker eligible when at least one new order fits the commission ca
     $homepageResponse = $this->getJson('/api/v1/cleaning/worker/homepage');
 
     $homepageResponse->assertOk()
-        ->assertJsonPath('commissionCapacityEligibility.canReceiveNewRequests', true)
-        ->assertJsonPath('commissionCapacityEligibility.canAcceptNewBookings', true)
-        ->assertJsonPath('commissionCapacityEligibility.reasonCode', 'eligible')
-        ->assertJsonPath('commissionCapacityEligibility.availableNewOrdersCount', 1)
-        ->assertJsonPath('commissionCapacityEligibility.blockedNewOrdersCount', 1)
+        ->assertJsonPath('administrationCapacityEligibility.canReceiveNewRequests', true)
+        ->assertJsonPath('administrationCapacityEligibility.canAcceptNewBookings', true)
+        ->assertJsonPath('administrationCapacityEligibility.reasonCode', 'eligible')
+        ->assertJsonPath('administrationCapacityEligibility.availableNewOrdersCount', 1)
+        ->assertJsonPath('administrationCapacityEligibility.blockedNewOrdersCount', 1)
         ->assertJsonPath('newOrdersCount', 1);
 
     $listResponse = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
