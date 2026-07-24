@@ -97,17 +97,17 @@ it('exposes the separate public transaction types in the worker financial timeli
 
     $this->getJson('/api/v1/cleaning/worker/account/deposit/transactions?type=commission')
         ->assertOk()
-        ->assertJsonPath('meta.total', 3)
-        ->assertJsonPath('meta.filters.appliedType', 'commission')
-        ->assertJsonPath('data.0.type', 'commission')
-        ->assertJsonPath('data.1.type', 'commission')
-        ->assertJsonPath('data.2.type', 'commission')
-        ->assertJsonMissingPath('data.0.cleaningBookingId');
+        ->assertJsonPath('meta.total', 0)
+        ->assertJsonPath('meta.filters.appliedType', 'commission');
 
     $this->getJson('/api/v1/cleaning/worker/account/deposit/transactions?type=debt')
         ->assertOk()
-        ->assertJsonPath('meta.total', 0)
-        ->assertJsonPath('meta.filters.appliedType', 'debt');
+        ->assertJsonPath('meta.total', 3)
+        ->assertJsonPath('meta.filters.appliedType', 'debt')
+        ->assertJsonPath('data.0.type', 'debt')
+        ->assertJsonPath('data.1.type', 'debt')
+        ->assertJsonPath('data.2.type', 'debt')
+        ->assertJsonMissingPath('data.0.cleaningBookingId');
 
     $this->getJson('/api/v1/cleaning/worker/account/deposit/transactions?type=withdraw')
         ->assertOk()
