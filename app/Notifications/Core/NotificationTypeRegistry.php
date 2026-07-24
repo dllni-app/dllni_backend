@@ -67,12 +67,14 @@ final class NotificationTypeRegistry
         $extensionTypes = config('notification_type_extensions.types', []);
         $cleaningRepeatedTypes = config('cleaning_repeated_notification_types.types', []);
         $platformCouponTypes = config('platform_coupon_notification_types.types', []);
+        $cleaningPenaltyTypes = config('cleaning_financial_penalty_notification_types.types', []);
 
         return array_replace(
             is_array($configuredTypes) ? $configuredTypes : [],
             is_array($extensionTypes) ? $extensionTypes : [],
             is_array($cleaningRepeatedTypes) ? $cleaningRepeatedTypes : [],
             is_array($platformCouponTypes) ? $platformCouponTypes : [],
+            is_array($cleaningPenaltyTypes) ? $cleaningPenaltyTypes : [],
         );
     }
 }
