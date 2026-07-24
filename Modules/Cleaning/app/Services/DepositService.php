@@ -6,6 +6,7 @@ namespace Modules\Cleaning\Services;
 
 use App\Models\CleaningDepositSetting;
 use App\Models\CleaningDepositTransaction;
+use App\Models\CleaningFinancialPenalty;
 use App\Models\CleaningWorkerDeposit;
 use App\Models\Worker;
 use Illuminate\Database\QueryException;
@@ -47,7 +48,9 @@ final class DepositService
                 throw new RuntimeException('Unable to record deposit transaction.');
             }
 
-            $this->syncEligibilityStatus($worker->fresh(['deposit']) ?? $worker);
+            $freshWorker = $worker->fresh(['deposit']) ?? $worker;
+            $this->syncEligibilityStatus($freshWorker);
+            app(CleaningFinancialPenaltySettlementService::class)->clearDebtPenaltiesWhenDebtIsZero($freshWorker);
 
             return $last;
         });
@@ -75,7 +78,9 @@ final class DepositService
             }
 
             $transaction = $this->applySettlement($worker, $account, $amount, $reference, $notes, $createdByAdminId);
-            $this->syncEligibilityStatus($worker->fresh(['deposit']) ?? $worker);
+            $freshWorker = $worker->fresh(['deposit']) ?? $worker;
+            $this->syncEligibilityStatus($freshWorker);
+            app(CleaningFinancialPenaltySettlementService::class)->clearDebtPenaltiesWhenDebtIsZero($freshWorker);
 
             return $transaction;
         });
@@ -125,6 +130,17 @@ final class DepositService
         return $this->recordCharge($worker, $amount, 'debt', $reference, $notes, $createdByAdminId);
     }
 
+    /** @return array{transaction: CleaningDepositTransaction, financialSource: string} */
+    public function recordFinancialPenalty(Worker $worker, float $amount, string $reference, ?string $notes = null, ?int $createdByAdminId = null): array
+    {
+        $transaction = $this->recordCharge($worker, $amount, 'debt', $reference, $notes, $createdByAdminId);
+        $source = (float) $transaction->debt_balance_after > (float) $transaction->debt_balance_before
+            ? CleaningFinancialPenalty::SOURCE_DEBT
+            : CleaningFinancialPenalty::SOURCE_DEPOSIT;
+
+        return ['transaction' => $transaction, 'financialSource' => $source];
+    }
+
     public function recordAdminFeeDebit(Worker $worker, CleaningBooking $booking, float $amount, ?int $createdByAdminId = null): ?CleaningDepositTransaction
     {
         if ($amount <= 0) {
@@ -136,7 +152,7 @@ final class DepositService
             return null;
         }
 
-        return $this->recordCharge($worker, $amount, 'commission', $reference, null, $createdByAdminId);
+        return $this->recordCharge($worker, $amount, 'debt', $reference, null, $createdByAdminId);
     }
 
     public function resolveLimits(Worker $worker): array
@@ -160,10 +176,11 @@ final class DepositService
         $deposit = max(0.0, (float) ($account?->current_balance ?? 0));
         $debt = max(0.0, (float) ($account?->debt_balance ?? 0));
         $prefix = CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'%';
+        $legacyPrefix = CleaningDepositTransaction::LEGACY_AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'%';
 
         $totals = CleaningDepositTransaction::query()
             ->where('worker_id', $worker->id)
-            ->selectRaw("COALESCE(SUM(CASE WHEN type IN ('commission','admin_fee') OR (type='debt' AND reference LIKE ?) THEN amount ELSE 0 END),0) commission_total", [$prefix])
+            ->selectRaw("COALESCE(SUM(CASE WHEN type IN ('commission','admin_fee') OR (type='debt' AND (reference LIKE ? OR reference LIKE ?)) THEN amount ELSE 0 END),0) administration_due_total", [$prefix, $legacyPrefix])
             ->selectRaw("COALESCE(SUM(CASE WHEN type='settlement' THEN amount ELSE 0 END),0) settlement_total")
             ->selectRaw("COALESCE(SUM(CASE WHEN type IN ('refund','withdrawal') THEN ABS(amount) WHEN type='adjustment' AND amount<0 THEN ABS(amount) ELSE 0 END),0) refund_total")
             ->first();
@@ -178,8 +195,8 @@ final class DepositService
             'depositedTotal' => round((float) ($account?->deposited_total ?? 0), 2),
             'completedJobs' => (int) ($worker->total_completed_jobs ?? 0),
             'totalRevenue' => round($revenue, 2),
-            'totalCommission' => round((float) ($totals?->commission_total ?? 0), 2),
-            'commissionDue' => round($debt, 2),
+            'totalAdministrationDue' => round((float) ($totals?->administration_due_total ?? 0), 2),
+            'administrationDue' => round($debt, 2),
             'totalSettled' => round((float) ($totals?->settlement_total ?? 0), 2),
             'totalRefunded' => round((float) ($totals?->refund_total ?? $account?->withdrawn_total ?? 0), 2),
             'remainingBalance' => round($deposit, 2),
@@ -250,14 +267,20 @@ final class DepositService
             && $amount <= (float) $worker->deposit->current_balance;
     }
 
-    public function availableCommissionCapacity(Worker $worker, float $reservedCommission = 0): float
+    public function availableAdministrationCapacity(Worker $worker, float $reservedAdministrationDue = 0): float
     {
         $worker->loadMissing('deposit');
         $deposit = max(0.0, (float) ($worker->deposit?->current_balance ?? 0));
         $debt = max(0.0, (float) ($worker->deposit?->debt_balance ?? 0));
         $remainingDebt = max(0.0, $this->resolveLimits($worker)['maxNegativeBalance'] - $debt);
 
-        return round(max(0.0, $deposit + $remainingDebt - max(0.0, $reservedCommission)), 2);
+        return round(max(0.0, $deposit + $remainingDebt - max(0.0, $reservedAdministrationDue)), 2);
+    }
+
+    /** @deprecated Use availableAdministrationCapacity(). */
+    public function availableCommissionCapacity(Worker $worker, float $reservedCommission = 0): float
+    {
+        return $this->availableAdministrationCapacity($worker, $reservedCommission);
     }
 
     public function syncEligibilityStatus(Worker $worker): void
@@ -306,7 +329,7 @@ final class DepositService
             'allowedDebtLimit' => round($allowed, 2),
             'maxNegativeBalance' => round($allowed, 2),
             'remainingDebtCapacity' => round(max(0.0, $allowed - $debt), 2),
-            'availableCommissionCapacity' => $this->availableCommissionCapacity($worker),
+            'availableAdministrationCapacity' => $this->availableAdministrationCapacity($worker),
             'status' => $this->resolveAccountStatus($worker),
             'exceedanceAmount' => $this->calculateExceedance($worker),
             'isEligibleForNewRequests' => $this->isWorkerEligibleForNewRequests($worker),
