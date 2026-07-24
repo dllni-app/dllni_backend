@@ -82,6 +82,10 @@ final class CleaningCancellationFinancialPenaltyService
                 ->first();
 
             if ($transaction instanceof CleaningDepositTransaction) {
+                if (abs((float) $transaction->amount - $amount) > 0.009) {
+                    throw new InvalidArgumentException('يوجد قيد مالي سابق مختلف لهذا الطلب.');
+                }
+
                 $financialSource = (float) $transaction->debt_balance_after > (float) $transaction->debt_balance_before
                     ? CleaningFinancialPenalty::SOURCE_DEBT
                     : CleaningFinancialPenalty::SOURCE_DEPOSIT;
@@ -112,12 +116,10 @@ final class CleaningCancellationFinancialPenaltyService
             ])->load(['booking', 'worker.user', 'financialTransaction', 'appliedByAdmin']);
         });
 
-        DB::afterCommit(static function () use ($penalty): void {
-            $recipient = $penalty->worker?->user;
-            if ($recipient !== null) {
-                $recipient->notify(new CleaningFinancialPenaltyNotification($penalty));
-            }
-        });
+        $recipient = $penalty->worker?->user;
+        if ($recipient !== null) {
+            $recipient->notify(new CleaningFinancialPenaltyNotification($penalty));
+        }
 
         return $penalty;
     }
