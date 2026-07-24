@@ -19,7 +19,7 @@ final class WorkerHomepageEligibilityController
     {
         $response = ($this->homepageController)($request);
         $payload = $response->getData(true);
-        $eligibility = $payload['commissionCapacityEligibility'] ?? null;
+        $eligibility = $payload['administrationCapacityEligibility'] ?? null;
         $depositSummary = $payload['depositSummary'] ?? null;
         $dispatchEligibility = $payload['dispatchEligibility'] ?? null;
 
@@ -39,27 +39,27 @@ final class WorkerHomepageEligibilityController
                     ?? 'Your worker account cannot receive new orders right now.';
             } else {
                 $accountEligible = (bool) ($depositSummary['isEligibleForNewRequests'] ?? false);
-                $commissionEligible = (bool) ($eligibility['canReceiveNewRequests'] ?? false);
+                $capacityEligible = (bool) ($eligibility['canReceiveNewRequests'] ?? false);
                 $availableNewOrdersCount = max(0, (int) ($eligibility['availableNewOrdersCount'] ?? 0));
                 $hasAffordableNewOrder = $availableNewOrdersCount > 0;
-                $canReceiveNewRequests = $accountEligible && ($commissionEligible || $hasAffordableNewOrder);
+                $canReceiveNewRequests = $accountEligible && ($capacityEligible || $hasAffordableNewOrder);
 
                 $eligibility['canReceiveNewRequests'] = $canReceiveNewRequests;
                 $eligibility['canAcceptNewBookings'] = $canReceiveNewRequests;
 
                 if (! $accountEligible) {
-                    $eligibility['reasonCode'] = WorkerOrderSolvencyService::REASON_INSUFFICIENT_COMMISSION_CAPACITY;
+                    $eligibility['reasonCode'] = WorkerOrderSolvencyService::REASON_INSUFFICIENT_ADMINISTRATION_CAPACITY;
                     $eligibility['message'] = 'Your worker debt exceeds the allowed limit. Settle the excess debt before receiving new requests.';
                 } elseif ($canReceiveNewRequests) {
                     $eligibility['reasonCode'] = WorkerOrderSolvencyService::REASON_ELIGIBLE;
-                    $eligibility['message'] = 'Your available commission capacity can receive new requests.';
+                    $eligibility['message'] = 'Your available administration capacity can receive new requests.';
                 } else {
-                    $eligibility['reasonCode'] = WorkerOrderSolvencyService::REASON_INSUFFICIENT_COMMISSION_CAPACITY;
-                    $eligibility['message'] = 'Your available commission capacity is not enough for the currently available requests.';
+                    $eligibility['reasonCode'] = WorkerOrderSolvencyService::REASON_INSUFFICIENT_ADMINISTRATION_CAPACITY;
+                    $eligibility['message'] = 'Your available administration capacity is not enough for the currently available requests.';
                 }
             }
 
-            $payload['commissionCapacityEligibility'] = $eligibility;
+            $payload['administrationCapacityEligibility'] = $eligibility;
         }
 
         return response()->json($payload, $response->getStatusCode(), $response->headers->all());
