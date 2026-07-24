@@ -3,11 +3,21 @@ name: Cleaning Financial Ledger V2
 on:
   pull_request:
     paths:
+      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingController.php'
       - 'Modules/Cleaning/app/Http/Controllers/API/DepositManagementController.php'
       - 'Modules/Cleaning/app/Http/Controllers/API/WorkerDepositController.php'
+      - 'Modules/Cleaning/app/Http/Controllers/API/WorkerHomepageController.php'
+      - 'Modules/Cleaning/app/Http/Controllers/API/WorkerHomepageEligibilityController.php'
+      - 'Modules/Cleaning/app/Http/Resources/CleaningBookingResource.php'
       - 'Modules/Cleaning/app/Http/Resources/CleaningDepositTransactionResource.php'
       - 'Modules/Cleaning/app/Http/Resources/CleaningWorkerDepositResource.php'
+      - 'Modules/Cleaning/app/Models/CleaningBooking.php'
+      - 'Modules/Cleaning/app/Models/CleaningBookingWorkerAssignment.php'
+      - 'Modules/Cleaning/app/Observers/CleaningBookingObserver.php'
       - 'Modules/Cleaning/app/Services/AdminCleaningTransactionService.php'
+      - 'Modules/Cleaning/app/Services/CleaningBookingCancellationService.php'
+      - 'Modules/Cleaning/app/Services/CleaningCancellationFinancialPenaltyService.php'
+      - 'Modules/Cleaning/app/Services/CleaningFinancialPenaltySettlementService.php'
       - 'Modules/Cleaning/app/Services/CleaningFinancialSummaryService.php'
       - 'Modules/Cleaning/app/Services/DepositService.php'
       - 'Modules/Cleaning/app/Services/WorkerDebtService.php'
@@ -16,17 +26,28 @@ on:
       - 'app/Console/Commands/ReconcileCleaningWorkerFinancialBalances.php'
       - 'app/Filament/Pages/CleaningFinancialReport.php'
       - 'app/Filament/Pages/FinancialSettings.php'
+      - 'app/Filament/Resources/CleaningBookings/**'
+      - 'app/Filament/Resources/CleaningFinancialPenalties/**'
       - 'app/Filament/Resources/CleaningWorkerDeposits/**'
       - 'app/Filament/Resources/CleaningWorkers/**'
+      - 'app/Jobs/NotifyEligibleWorkersNewOrderJob.php'
       - 'app/Models/CleaningDepositTransaction.php'
+      - 'app/Models/CleaningFinancialPenalty.php'
       - 'app/Models/CleaningWorkerDeposit.php'
+      - 'app/Notifications/Cleaning/CleaningFinancialPenaltyNotification.php'
+      - 'app/Notifications/Core/NotificationTypeRegistry.php'
+      - 'config/cleaning_financial_penalty_notification_types.php'
       - 'database/migrations/2026_07_19_210000_add_separate_debt_balance_to_cleaning_worker_deposits.php'
       - 'database/migrations/2026_07_20_120000_add_admin_revenue_withdrawal_tracking_to_cleaning_finances.php'
+      - 'database/migrations/2026_07_24_000001_add_cleaning_cancellation_audit_fields.php'
+      - 'database/migrations/2026_07_24_000002_create_cleaning_financial_penalties_table.php'
+      - 'database/migrations/2026_07_24_000003_normalize_cleaning_commission_transactions_to_debt.php'
       - 'database/seeders/CleaningWorkerHighBalanceSeeder.php'
       - 'database/seeders/DatabaseSeeder.php'
       - 'database/seeders/WorkerSeeder.php'
       - 'resources/views/filament/cleaning-admin/pages/financial-settings.blade.php'
       - 'tests/Feature/Cleaning/AdminCleaningTransactionServiceTest.php'
+      - 'tests/Feature/Cleaning/CleaningFinancialPenaltyTest.php'
       - 'tests/Feature/Cleaning/CleaningFinancialSummaryServiceTest.php'
       - 'tests/Feature/Cleaning/WorkerDebtLedgerTest.php'
       - 'tests/Feature/Cleaning/WorkerDepositEligibilityTest.php'
@@ -70,11 +91,21 @@ jobs:
       - name: Check financial ledger formatting
         run: |
           vendor/bin/pint --test \
+            Modules/Cleaning/app/Http/Controllers/API/CleaningBookingController.php \
             Modules/Cleaning/app/Http/Controllers/API/DepositManagementController.php \
             Modules/Cleaning/app/Http/Controllers/API/WorkerDepositController.php \
+            Modules/Cleaning/app/Http/Controllers/API/WorkerHomepageController.php \
+            Modules/Cleaning/app/Http/Controllers/API/WorkerHomepageEligibilityController.php \
+            Modules/Cleaning/app/Http/Resources/CleaningBookingResource.php \
             Modules/Cleaning/app/Http/Resources/CleaningDepositTransactionResource.php \
             Modules/Cleaning/app/Http/Resources/CleaningWorkerDepositResource.php \
+            Modules/Cleaning/app/Models/CleaningBooking.php \
+            Modules/Cleaning/app/Models/CleaningBookingWorkerAssignment.php \
+            Modules/Cleaning/app/Observers/CleaningBookingObserver.php \
             Modules/Cleaning/app/Services/AdminCleaningTransactionService.php \
+            Modules/Cleaning/app/Services/CleaningBookingCancellationService.php \
+            Modules/Cleaning/app/Services/CleaningCancellationFinancialPenaltyService.php \
+            Modules/Cleaning/app/Services/CleaningFinancialPenaltySettlementService.php \
             Modules/Cleaning/app/Services/CleaningFinancialSummaryService.php \
             Modules/Cleaning/app/Services/DepositService.php \
             Modules/Cleaning/app/Services/WorkerDebtService.php \
@@ -82,21 +113,40 @@ jobs:
             app/Console/Commands/ReconcileCleaningWorkerFinancialBalances.php \
             app/Filament/Pages/CleaningFinancialReport.php \
             app/Filament/Pages/FinancialSettings.php \
+            app/Filament/Resources/CleaningBookings/CleaningBookingResource.php \
+            app/Filament/Resources/CleaningBookings/Pages/ViewCleaningBooking.php \
+            app/Filament/Resources/CleaningBookings/Schemas/CleaningBookingInfolist.php \
+            app/Filament/Resources/CleaningFinancialPenalties/CleaningFinancialPenaltyResource.php \
+            app/Filament/Resources/CleaningFinancialPenalties/Pages/ListCleaningFinancialPenalties.php \
+            app/Filament/Resources/CleaningFinancialPenalties/Pages/ViewCleaningFinancialPenalty.php \
+            app/Filament/Resources/CleaningFinancialPenalties/Schemas/CleaningFinancialPenaltyInfolist.php \
+            app/Filament/Resources/CleaningFinancialPenalties/Tables/CleaningFinancialPenaltiesTable.php \
             app/Filament/Resources/CleaningWorkerDeposits/Schemas/CleaningTransactionForm.php \
             app/Filament/Resources/CleaningWorkerDeposits/Tables/CleaningTransactionsTable.php \
             app/Filament/Resources/CleaningWorkerDeposits/Widgets/CleaningWorkerDepositStats.php \
+            app/Filament/Resources/CleaningWorkers/Pages/ViewCleaningWorker.php \
             app/Filament/Resources/CleaningWorkers/Schemas/CleaningWorkerInfolist.php \
             app/Filament/Resources/CleaningWorkers/Support/WorkerDepositActions.php \
             app/Filament/Resources/CleaningWorkers/Tables/CleaningWorkersTable.php \
             app/Filament/Resources/CleaningWorkers/Widgets/CleaningWorkerFinancialStats.php \
+            app/Filament/Resources/CleaningWorkers/Widgets/CleaningWorkerPenaltyStats.php \
+            app/Jobs/NotifyEligibleWorkersNewOrderJob.php \
             app/Models/CleaningDepositTransaction.php \
+            app/Models/CleaningFinancialPenalty.php \
             app/Models/CleaningWorkerDeposit.php \
+            app/Notifications/Cleaning/CleaningFinancialPenaltyNotification.php \
+            app/Notifications/Core/NotificationTypeRegistry.php \
+            config/cleaning_financial_penalty_notification_types.php \
             database/migrations/2026_07_19_210000_add_separate_debt_balance_to_cleaning_worker_deposits.php \
             database/migrations/2026_07_20_120000_add_admin_revenue_withdrawal_tracking_to_cleaning_finances.php \
+            database/migrations/2026_07_24_000001_add_cleaning_cancellation_audit_fields.php \
+            database/migrations/2026_07_24_000002_create_cleaning_financial_penalties_table.php \
+            database/migrations/2026_07_24_000003_normalize_cleaning_commission_transactions_to_debt.php \
             database/seeders/CleaningWorkerHighBalanceSeeder.php \
             database/seeders/DatabaseSeeder.php \
             database/seeders/WorkerSeeder.php \
             tests/Feature/Cleaning/AdminCleaningTransactionServiceTest.php \
+            tests/Feature/Cleaning/CleaningFinancialPenaltyTest.php \
             tests/Feature/Cleaning/CleaningFinancialSummaryServiceTest.php \
             tests/Feature/Cleaning/WorkerDebtLedgerTest.php \
             tests/Feature/Cleaning/WorkerDepositEligibilityTest.php \
@@ -114,6 +164,7 @@ jobs:
           set -o pipefail
           php artisan test \
             tests/Feature/Cleaning/AdminCleaningTransactionServiceTest.php \
+            tests/Feature/Cleaning/CleaningFinancialPenaltyTest.php \
             tests/Feature/Cleaning/CleaningFinancialSummaryServiceTest.php \
             tests/Feature/Cleaning/WorkerDebtLedgerTest.php \
             tests/Feature/Cleaning/WorkerDepositEligibilityTest.php \
