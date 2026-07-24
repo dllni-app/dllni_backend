@@ -4,19 +4,56 @@
 
 Add an auditable financial-penalty workflow for cancelled cleaning bookings in the Filament dashboard.
 
-The admin must be able to:
+The implementation must allow the admin to:
 
 - Open a cancelled cleaning booking.
-- See who cancelled it and the cancellation notes.
+- See exactly who cancelled the booking and the cancellation notes.
 - See how long before or after the scheduled start time the cancellation happened.
-- See the exact booking status of every assigned worker at the time of cancellation.
-- Apply a financial penalty to the responsible worker or customer, subject to the confirmed business rules.
-- Notify the penalized party.
-- View all financial penalties from a dedicated cleaning dashboard page.
-- See the worker's current financial-penalty value in the worker statistics section.
-- Clear the worker penalty value according to the deposit/refund settlement rules.
+- See the status of every assigned worker immediately before the booking was cancelled.
+- Add one manually entered financial penalty to the worker who cancelled the booking.
+- Notify that worker that a penalty was imposed.
+- View financial penalties from a dedicated cleaning dashboard page.
+- See the worker's current financial-penalty value inside the `إحصائيات` section.
+- Reset the displayed penalty value according to the confirmed deposit/debt settlement rule.
 
-## 2. Current Repository Findings
+This plan is for the backend and Filament dashboard. Existing Flutter API contracts must remain backward compatible.
+
+---
+
+## 2. Confirmed Business Decisions
+
+The following decisions are final for this feature:
+
+1. Customer penalty collection is not managed by the platform.
+2. This feature applies financial penalties to workers only.
+3. Only the worker who cancelled the booking may receive the penalty.
+4. Only one penalty is allowed per cancelled booking.
+5. The penalty is available for any cancelled booking cancelled by a worker; there is no late-cancellation threshold.
+6. The admin enters the penalty amount manually.
+7. The penalty amount must not exceed the booking total price.
+8. A penalty has one financial source only in the business/UI model:
+   - `deposit`, when it is fully covered by the worker deposit.
+   - `debt`, when the charge results in worker debt.
+9. Do not expose or store a split penalty state in the penalty domain/UI.
+10. A deposit-backed penalty is reset when the worker account is fully refunded.
+11. A debt-backed penalty is reset when a later deposit clears the worker debt.
+12. Partial penalty clearing is not part of the feature.
+13. Penalties cannot be reversed, voided, edited, or deleted after creation.
+14. The notification text is approved:
+
+```text
+تم فرض غرامة مالية عليك بقيمة {amount} بسبب إنهاء الطلب رقم {bookingNumber} في وقت متأخر.
+```
+
+15. There is no public financial transaction type called `commission`. Remove that type and its user-facing terminology from the cleaning financial flow.
+
+### Important terminology boundary
+
+Removing the `commission` transaction type does not remove the existing order pricing field `admin_margin_amount` unless separately requested. The order may still calculate an administration margin, but its financial ledger effect must be represented as debt/financial due, not as a public transaction category named commission.
+
+---
+
+## 3. Current Repository Findings
 
 ### Existing cancellation data
 
@@ -28,394 +65,603 @@ The admin must be able to:
 
 The booking API resource and Filament booking table already expose part of this information.
 
+### Cancellation gaps
+
+Current cancellation flows are not fully consistent:
+
+- Worker cancellation does not always explicitly save `cancelled_by_role = worker`.
+- The exact worker actor is not stored reliably.
+- Multi-worker assignment statuses are mutable and are not snapshotted before global cancellation.
+- The duration between cancellation and scheduled start is not stored as an immutable value.
+
 ### Existing worker financial ledger
 
 The current cleaning financial system already has:
 
 - Worker deposit balance.
 - Worker debt balance.
-- Deposit, debt, settlement, commission, and refund transactions.
-- A central `DepositService` that can charge an amount by consuming deposit first and moving the uncovered remainder to debt.
+- Deposit, debt, settlement, and refund transactions.
+- A central `DepositService` with row locking and transactions.
 - Admin deposit/refund flows.
 - Worker financial eligibility synchronization.
 
-This logic should be reused instead of creating a second wallet implementation.
+The penalty implementation must reuse this account and ledger infrastructure instead of creating a second wallet.
 
-### Existing dispute penalty pattern
+### Existing penalty pattern
 
-`DisputeFinancialPenaltyService` already demonstrates the expected pattern:
+`DisputeFinancialPenaltyService` already demonstrates useful implementation patterns:
 
 - Validate the worker belongs to the booking.
-- Create an idempotent financial transaction.
-- Save the transaction reference on a dedicated business record.
-- Save the amount, notes, admin, and applied timestamp.
+- Use an idempotent financial reference.
+- Create the balance transaction inside a database transaction.
+- Save the transaction ID on a dedicated business record.
+- Save the amount, notes, applying admin, and timestamp.
 
-The new cancellation penalty should follow this pattern but use a dedicated cancellation-penalty entity.
+The cancellation penalty should follow this pattern through a dedicated penalty entity.
 
-### Important ledger constraint
+### Existing ledger constraint
 
 A previous migration intentionally removed `cleaning_booking_id` from `cleaning_deposit_transactions`.
 
-Therefore, the booking relationship must be stored in a dedicated penalty table, while the ledger transaction remains a financial settlement record referenced by the penalty.
+Do not restore that foreign key. Keep the booking relationship in the dedicated financial-penalty table and reference the resulting ledger transaction from that record.
 
-### Current cancellation gap
+---
 
-Worker cancellation currently updates the booking to `cancelled` but does not always explicitly persist `cancelled_by_role = worker`.
+## 4. Recommended Domain Model
 
-The observer only infers the cancellation source for a limited set of previous statuses, so cancellations from other allowed statuses can remain without a reliable cancellation source.
+Create:
 
-## 3. Recommended Domain Model
+- Model: `CleaningFinancialPenalty`
+- Table: `cleaning_financial_penalties`
 
-Create a dedicated table and model:
-
-`cleaning_financial_penalties`
-
-Recommended columns:
+### Recommended columns
 
 | Column | Type | Purpose |
 |---|---|---|
 | `id` | bigint | Primary key |
-| `cleaning_booking_id` | foreignId | Cancelled booking |
-| `penalized_party_type` | enum/string | `worker` or `customer` |
-| `worker_id` | foreignId nullable | Penalized worker |
-| `customer_id` | foreignId nullable | Penalized customer |
-| `cancellation_actor_role` | string | Snapshot of who cancelled |
+| `cleaning_booking_id` | foreignId unique | The cancelled booking; enforces one penalty per booking |
+| `worker_id` | foreignId | Worker who cancelled and received the penalty |
+| `financial_transaction_id` | foreignId nullable unique | Ledger transaction produced by the charge |
+| `financial_source` | enum/string | `deposit` or `debt` |
 | `amount` | decimal(12,2) | Original penalty amount |
-| `deposit_component_amount` | decimal(12,2) | Amount deducted from worker deposit |
-| `debt_component_amount` | decimal(12,2) | Amount added to worker debt |
-| `deposit_component_cleared_amount` | decimal(12,2) | Deposit-funded amount already cleared |
-| `debt_component_cleared_amount` | decimal(12,2) | Debt-funded amount already settled |
-| `financial_transaction_id` | foreignId nullable | Ledger transaction created for worker penalty |
-| `status` | string | `active`, `partially_cleared`, `cleared`, `voided` |
-| `notes` | text | Admin reason/notes |
-| `cancellation_reason_snapshot` | text nullable | Immutable cancellation reason snapshot |
-| `cancellation_offset_minutes` | signed integer | Minutes before scheduled start; negative means after start |
-| `applied_by_admin_id` | foreignId | Admin who applied it |
-| `applied_at` | timestamp | Application time |
-| `cleared_at` | timestamp nullable | Full clearing time |
-| `voided_at` | timestamp nullable | Reversal/void time |
+| `status` | enum/string | `active` or `cleared` |
+| `notes` | text | Required admin notes |
+| `cancellation_reason_snapshot` | text nullable | Immutable cancellation reason at application time |
+| `cancellation_offset_minutes` | signed integer nullable | Immutable cancellation timing snapshot |
+| `applied_by_admin_id` | foreignId | Admin who applied the penalty |
+| `applied_at` | timestamp | Penalty creation time |
+| `cleared_at` | timestamp nullable | When the statistics value was reset |
 | timestamps | timestamps | Audit fields |
 
-### Constraints
+### Model constraints
 
-- Require exactly one target: worker or customer.
-- Booking must be cancelled.
-- Target must belong to the booking.
+- `cleaning_booking_id` must be unique.
+- The booking must have global status `cancelled`.
+- `cancelled_by_role` must equal `worker`.
+- `worker_id` must equal the exact worker cancellation actor stored on the booking.
+- The worker must belong to the booking or one of its assignments.
 - Amount must be greater than zero.
-- Prevent duplicate active penalties for the same booking and target unless multiple penalties are explicitly approved.
-- Do not delete penalty records; use `voided` with an audit trail.
+- Amount must be less than or equal to `cleaning_bookings.total_price`.
+- Notes are required.
+- The record is append-only after creation.
+- No edit, delete, reverse, or void actions.
 
-## 4. Cancellation Snapshot Design
+### Relationships
 
-### Booking-level cancellation timing
+Add:
 
-Add an immutable signed column to `cleaning_bookings`:
+- `CleaningBooking::financialPenalty(): HasOne`
+- `CleaningFinancialPenalty::booking(): BelongsTo`
+- `CleaningFinancialPenalty::worker(): BelongsTo`
+- `CleaningFinancialPenalty::financialTransaction(): BelongsTo`
+- `CleaningFinancialPenalty::appliedByAdmin(): BelongsTo`
+- `Worker::cleaningFinancialPenalties(): HasMany`
 
-- `cancellation_offset_minutes`
+---
 
-Calculation:
+## 5. Cancellation Audit and Snapshot Design
+
+### 5.1 Exact cancellation actor
+
+Add to `cleaning_bookings`:
+
+- `cancelled_by_user_id` nullable foreign key.
+- `cancelled_by_worker_id` nullable foreign key.
+- `cancellation_offset_minutes` nullable signed integer.
+
+Rules:
+
+- Customer cancellation sets `cancelled_by_role = customer` and `cancelled_by_user_id`.
+- Worker cancellation sets `cancelled_by_role = worker`, `cancelled_by_user_id`, and `cancelled_by_worker_id`.
+- Admin/system flows must explicitly set their actor role and available actor ID.
+- Do not infer the actor later from authentication state or mutable assignment data.
+
+### 5.2 Cancellation timing
+
+Calculate once when cancellation succeeds:
 
 ```text
-scheduled_start_at - cancelled_at
+scheduled_start_datetime - cancelled_at
 ```
 
 Display rules:
 
-- Positive: `Cancelled 45 minutes before the scheduled start`.
-- Zero: `Cancelled at the scheduled start time`.
-- Negative: `Cancelled 20 minutes after the scheduled start`.
+- Positive: cancelled before scheduled start.
+- Zero: cancelled at scheduled start.
+- Negative: cancelled after scheduled start.
 
-The value must be calculated once when the booking is cancelled and should not be recalculated if the schedule is edited later.
+Store the signed value permanently so later schedule edits do not change the cancellation history.
 
-### Per-worker status snapshot
+### 5.3 Per-worker status snapshot
 
 Add to `cleaning_booking_worker_assignments`:
 
-- `status_before_booking_cancellation`
-- `booking_cancelled_at`
+- `status_before_booking_cancellation` nullable string.
+- `booking_cancelled_at` nullable timestamp.
+- `cancelled_by_this_worker` boolean default false.
 
-When the booking is cancelled:
+When global booking cancellation occurs:
 
-1. Lock the booking and all worker assignments.
-2. Store each assignment's current status in `status_before_booking_cancellation`.
-3. Store the booking cancellation timestamp.
-4. Change active assignment statuses to `cancelled` for consistent lifecycle state.
-5. Preserve all assignment timestamps such as accepted, travel, arrival, and work-start timestamps.
+1. Lock the booking.
+2. Lock all worker assignments.
+3. Save each assignment's current status to `status_before_booking_cancellation`.
+4. Save `booking_cancelled_at`.
+5. Mark the exact actor assignment with `cancelled_by_this_worker = true`.
+6. Transition active assignment statuses to `cancelled`.
+7. Preserve acceptance, travel, arrival, work-start, and completion timestamps.
 
-This gives the dashboard an accurate answer for multi-worker bookings without relying on mutable current state.
+This snapshot is the source of truth for the dashboard's multi-worker cancellation table.
 
-## 5. Centralize Cancellation Logic
+---
 
-Create a service such as:
-
-`CleaningBookingCancellationService`
-
-Responsibilities:
-
-- Lock the booking.
-- Validate the cancellation transition.
-- Resolve and explicitly store the actor role: `customer`, `worker`, `admin`, or `system`.
-- Store the actor ID when available.
-- Store the cancellation reason.
-- Calculate and store `cancellation_offset_minutes`.
-- Snapshot every worker assignment status.
-- Transition active worker assignments to `cancelled`.
-- Update the global booking status.
-- Dispatch lifecycle/realtime events after commit.
-- Send the normal booking-cancelled notifications.
-
-Refactor these flows to use the same service:
-
-- Customer cancellation.
-- Worker cancellation.
-- Any future Filament/admin cancellation.
-
-This removes duplicated cancellation behavior and guarantees that cancellation metadata is always complete.
-
-## 6. Financial Penalty Application Service
+## 6. Centralize Cancellation Logic
 
 Create:
 
-`CleaningCancellationFinancialPenaltyService`
+`Modules/Cleaning/app/Services/CleaningBookingCancellationService.php`
 
-### Worker penalty flow
+### Responsibilities
 
-1. Validate that the booking is cancelled.
-2. Validate that the selected worker belongs to the booking or its worker assignments.
-3. Lock the worker deposit account and penalty target.
-4. Generate an idempotent reference such as:
+- Lock the booking and assignments.
+- Validate the requested cancellation transition.
+- Explicitly store cancellation actor role and IDs.
+- Store the cancellation reason.
+- Store `cancelled_at`.
+- Calculate and store `cancellation_offset_minutes`.
+- Snapshot every assignment's previous status.
+- Mark active assignments as cancelled.
+- Mark which worker caused the cancellation.
+- Update the global booking status.
+- Dispatch realtime/lifecycle events after commit.
+- Send existing booking-cancelled notifications.
+
+### Refactor callers
+
+Refactor these flows to use the service:
+
+- `UserCleaningOrderCancelController`
+- `UserCleaningOrderService` customer cancellation methods
+- `CleaningBookingService::cancel()`
+- Any Filament/admin cancellation flow
+
+### Scope decision for multi-worker orders
+
+The penalty action belongs to the globally cancelled booking page. A worker withdrawal/rejection that does not change the global booking status to `cancelled` is outside this penalty flow.
+
+---
+
+## 7. Financial Penalty Application Service
+
+Create:
+
+`Modules/Cleaning/app/Services/CleaningCancellationFinancialPenaltyService.php`
+
+### Validation flow
+
+1. Lock the booking.
+2. Confirm status is `cancelled`.
+3. Confirm `cancelled_by_role = worker`.
+4. Resolve `cancelled_by_worker_id`.
+5. Confirm no existing penalty for the booking.
+6. Validate amount `> 0`.
+7. Validate amount `<= booking.total_price`.
+8. Require admin notes.
+9. Lock the worker account.
+10. Apply the financial charge.
+11. Store the penalty and transaction link.
+12. Send the notification after commit.
+
+### Idempotency
+
+Use a stable reference:
 
 ```text
-cleaning_cancellation_penalty:{penalty_id}
+cleaning_cancellation_penalty:{booking_id}
 ```
 
-5. Reuse `DepositService::recordDebtCharge()`.
-6. Calculate the actual financial split from the transaction snapshots:
-   - Deposit component = `balance_before - balance_after`.
-   - Debt component = `debt_balance_after - debt_balance_before`.
-7. Save both components on the penalty record.
-8. Sync worker financial eligibility.
-9. Send the penalty notification after commit.
+The service must reject duplicate application even if the Filament action is submitted twice.
 
-The existing charge behavior already satisfies the requested rule:
+### Financial source resolution
 
-- Use the worker's deposit balance first.
-- Add only the uncovered amount to debt.
+The penalty domain exposes only one source:
 
-### Customer penalty flow
+#### Deposit source
 
-Do not implement financial collection until the customer-side financial source is confirmed.
+Use `deposit` when the penalty is fully covered by the current worker deposit balance.
 
-The model and UI may support a customer target, but the application service must use the confirmed customer payment/wallet/debt mechanism. It must not silently reuse the worker deposit ledger.
+Result:
 
-## 7. Penalty Clearing Rules
+- Deduct the full amount from `current_balance`.
+- Do not increase `debt_balance`.
+- Save `financial_source = deposit`.
 
-The worker statistics card should show the current uncleared penalty amount:
+#### Debt source
+
+Use `debt` when the penalty cannot be fully covered as a deposit-backed charge and the resulting account obligation is debt.
+
+Result:
+
+- Apply the amount through the worker debt flow using the existing financial-account rules.
+- The final worker account must preserve the invariant that deposit and debt are not both positive.
+- Save only `financial_source = debt` in the penalty record.
+- Do not expose a split source or split amounts in the penalty UI/API.
+
+### Recommended financial service method
+
+Add a dedicated method instead of relying blindly on the existing generic charge presentation:
+
+```php
+DepositService::recordFinancialPenalty(
+    Worker $worker,
+    float $amount,
+    string $reference,
+    ?string $notes,
+    ?int $createdByAdminId,
+): array
+```
+
+Recommended result:
+
+```php
+[
+    'transaction' => CleaningDepositTransaction,
+    'financialSource' => 'deposit' | 'debt',
+]
+```
+
+The method must run in one database transaction and call `syncEligibilityStatus()` after the account update.
+
+---
+
+## 8. Penalty Clearing Rules
+
+The worker statistics card displays the full amount of active penalties:
 
 ```text
-remaining deposit component + remaining debt component
+SUM(amount WHERE status = active)
 ```
 
-### Deposit-funded penalty component
+There is no partial-clearing state.
 
-When a full worker refund is completed:
+### 8.1 Deposit-backed penalty
 
-- Clear the remaining deposit-funded penalty components for that worker.
-- Record the cleared amount and clearing timestamp.
-- Update the penalty status.
+When the worker account is fully refunded:
 
-This hook should be added inside the same transaction as the refund operation.
+- Find active penalties with `financial_source = deposit`.
+- Mark them `cleared`.
+- Set `cleared_at` to the refund timestamp.
+- The statistics value becomes zero for those penalties.
 
-### Debt-funded penalty component
+The clearing hook must run inside the full-refund database transaction.
 
-When a new deposit settles worker debt:
+### 8.2 Debt-backed penalty
 
-- Allocate only the actual debt-settlement amount to active debt-funded penalty components.
-- Use a deterministic allocation order, recommended FIFO by `applied_at`.
-- Support partial clearing when the deposit is smaller than the outstanding penalty debt.
-- Mark the penalty fully cleared only when both components are fully cleared.
+When a later deposit clears the worker debt:
 
-Do not reset all debt-funded penalties merely because a deposit transaction exists; clearing should match the amount actually settled.
+- After the deposit/settlement operation, check the final `debt_balance`.
+- Only when final `debt_balance = 0`, mark active penalties with `financial_source = debt` as `cleared`.
+- Set `cleared_at` to the debt-clearance timestamp.
+- The statistics value becomes zero for those penalties.
 
-### Service
+Do not implement partial penalty clearing or allocation.
 
-Create a small settlement coordinator such as:
+### 8.3 Service
 
-`CleaningFinancialPenaltySettlementService`
+Create:
+
+`Modules/Cleaning/app/Services/CleaningFinancialPenaltySettlementService.php`
 
 Methods:
 
-- `clearDepositComponentsOnRefund(Worker $worker, float $realizedAmount)`
-- `allocateDebtSettlement(Worker $worker, float $settledAmount)`
-- `refreshPenaltyStatus(CleaningFinancialPenalty $penalty)`
+```php
+clearDepositPenaltiesOnFullRefund(Worker $worker): void
+clearDebtPenaltiesWhenDebtIsZero(Worker $worker): void
+```
 
-Call it from:
+Call from:
 
-- `AdminCleaningTransactionService::refundFullBalance()`.
-- `DepositService::recordDeposit()` after debt settlement.
-- Any other existing endpoint that settles worker debt directly.
+- `AdminCleaningTransactionService::refundFullBalance()`
+- `DepositService::recordDeposit()` after settlement
+- `DepositService::recordSettlement()` or any direct full-debt settlement flow
 
-## 8. Notifications
+---
 
-Create a dedicated notification, for example:
+## 9. Remove the `commission` Financial Type
 
-`CleaningFinancialPenaltyNotification`
+There must be no public cleaning financial type or dashboard label named `commission` / `عمولة`.
 
-Send it to the penalized worker or customer through the existing database/push notification system.
+### 9.1 Transaction model
 
-Recommended payload:
+Update `CleaningDepositTransaction`:
 
-- Canonical type: `cleaning.financial_penalty.applied`.
-- Booking ID and booking number.
+- Remove `commission` from `PUBLIC_TYPES`.
+- Remove `commission` from `normalizePublicType()`.
+- Remove the `commission` branch from `scopeForPublicType()`.
+- Remove `publicType()` logic that maps automatic administration debt to `commission`.
+- Normalize automatic administration charges as `debt`.
+
+### 9.2 Ledger writes
+
+Update financial services so they do not write transaction type `commission` or `admin_fee`.
+
+- `DepositService::recordAdminFeeDebit()` must write a debt transaction.
+- Keep an internal reference prefix if it is needed for idempotency.
+- Do not expose the reference as a separate public type.
+
+### 9.3 Filament transaction UI
+
+Update:
+
+- `CleaningTransactionForm`
+- `CleaningTransactionsTable`
+- transaction filters, badges, labels, and helper text
+
+Allowed public types:
+
+- `deposit`
+- `debt`
+- `refund`
+
+`settlement` may remain an internal ledger event but must be presented under debt settlement, not as commission.
+
+### 9.4 API resources
+
+Update:
+
+- `CleaningDepositTransactionResource`
+- `WorkerTransactionsController`
+- worker deposit timeline responses
+- any financial summary payloads
+
+Remove or rename user-facing fields such as:
+
+- `totalCommission`
+- `commissionDue`
+- `adminCommissionBalance`
+- commission filters or labels
+
+Use debt/administration-due terminology that matches the actual account behavior.
+
+### 9.5 Data migration
+
+Add a forward migration/backfill that:
+
+- Converts any remaining `commission` or `admin_fee` transaction rows to `debt`.
+- Preserves amounts, references, timestamps, and audit data.
+- Updates MySQL enum definitions if still applicable.
+- Does not recreate the removed booking foreign key.
+
+### 9.6 Regression boundary
+
+Do not remove `admin_margin_amount` from booking pricing or worker assignment pricing in this change. Only remove the financial transaction category/terminology named commission.
+
+---
+
+## 10. Notification
+
+Create:
+
+`App\Notifications\Cleaning\CleaningFinancialPenaltyNotification`
+
+### Recipient
+
+- The user account belonging to `cancelled_by_worker_id`.
+
+### Canonical type
+
+```text
+cleaning.financial_penalty.applied
+```
+
+### Payload
+
 - Penalty ID.
-- Amount and currency.
-- Admin notes/reason.
-- Cancellation actor role.
-- Cancellation timing text.
-- Financial application result for a worker:
-  - Deducted from deposit.
-  - Added to debt.
-  - Split between deposit and debt.
-- `occurredAt`.
+- Booking ID.
+- Booking number.
+- Worker ID.
+- Amount.
+- Currency.
+- Admin notes.
+- Cancellation reason.
+- Cancellation timing.
+- Financial source: deposit or debt.
+- Applied timestamp.
 
-Suggested Arabic notification meaning:
+### Arabic text
 
 ```text
 تم فرض غرامة مالية عليك بقيمة {amount} بسبب إنهاء الطلب رقم {bookingNumber} في وقت متأخر.
 ```
 
-Use separate wording for customer and worker and avoid exposing internal ledger terminology unless useful.
+Use the existing database/push notification infrastructure and send after the financial transaction commits successfully.
 
-## 9. Filament Dashboard Changes
+---
 
-### 9.1 Cancelled booking details
+## 11. Filament Dashboard Changes
 
-Update `CleaningBookingInfolist` with a dedicated cancellation section containing:
+## 11.1 Cancelled booking details
+
+Update `CleaningBookingInfolist` with a dedicated cancellation section:
 
 - Cancellation source.
+- Exact cancellation actor.
 - Cancellation date/time.
 - Cancellation reason/notes.
 - Scheduled start date/time.
-- Cancellation duration before/after the scheduled start.
-- Existing penalties for the booking.
-- Worker cancellation-state snapshot table for multi-worker bookings.
+- Cancellation duration before/after scheduled start.
+- Existing penalty summary.
+- Worker status snapshot table.
 
 Worker snapshot columns:
 
 - Worker name.
 - Status before booking cancellation.
+- Current assignment status.
 - Accepted at.
 - Started travel at.
 - Arrived at.
 - Work started at.
-- Whether this worker was the cancellation actor, if applicable.
+- `نعم/لا` value indicating whether this worker cancelled the booking.
 
-### 9.2 Add penalty action
+## 11.2 Add penalty action
 
-Add a danger-colored action labeled:
+Add a danger-colored action:
 
-`إضافة غرامة مالية`
+```text
+إضافة غرامة مالية
+```
 
 Location:
 
 - Cancelled booking view page header.
-- Optionally the cancelled booking row actions in the booking table.
+- Optionally in the cancelled booking table row actions.
 
 Visibility:
 
-- Only when global booking status is `cancelled`.
-- Only for authorized admins.
+- Booking status is `cancelled`.
+- `cancelled_by_role = worker`.
+- `cancelled_by_worker_id` is present.
+- No existing penalty for this booking.
+- Current admin has permission.
+
+The target worker is read-only and automatically resolved from `cancelled_by_worker_id`.
 
 Modal fields:
 
-- Penalized party type.
-- Worker/customer target.
-- Amount.
+- Read-only worker.
+- Numeric amount.
+- Maximum amount helper showing the booking total.
 - Required notes.
 - Read-only cancellation source.
 - Read-only cancellation timing.
-- Preview of expected worker financial split:
-  - Amount deducted from deposit.
-  - Amount added to debt.
-- Confirmation describing that the action affects the financial account and sends a notification.
+- Read-only predicted source: deposit or debt.
+- Confirmation explaining that the action is permanent and sends a notification.
 
-### 9.3 Dedicated penalties resource/page
+Validation:
+
+- Amount greater than zero.
+- Amount less than or equal to booking total.
+- Notes required.
+- Duplicate server-side validation.
+
+There is no edit, reverse, delete, or void action.
+
+## 11.3 Dedicated penalties resource
 
 Create a Filament resource under the cleaning section:
 
-`الغرامات المالية`
+```text
+الغرامات المالية
+```
 
-Recommended list columns:
+Recommended columns:
 
 - Penalty ID.
-- Booking number with link to the cancelled booking.
-- Penalized party.
+- Booking number linked to booking view.
+- Worker name.
 - Cancellation source.
+- Cancellation timing.
 - Amount.
-- Deposit component.
-- Debt component.
-- Remaining amount.
-- Status.
-- Cancellation duration before/after start.
+- Financial source: `الإيداع` or `الدين`.
+- Status: `نشطة` or `مصفرة`.
 - Applied by.
 - Applied at.
 - Cleared at.
+- Notes.
 
 Filters:
 
-- Penalized party type.
-- Worker/customer.
+- Worker.
+- Financial source.
 - Status.
-- Cancellation source.
-- Financial source: deposit, debt, or split.
 - Applied date range.
-- Cleared/uncleared.
+- Cleared/active.
+- Cancellation timing before/after scheduled start.
 
 Actions:
 
 - View.
 - Open booking.
-- Void/reverse only if a safe reversal rule is implemented and confirmed.
+- Open worker.
 
-### 9.4 Worker statistics card
+No create action from the resource list. Penalties are created only from a cancelled booking to guarantee context and actor validation.
 
-Update the `إحصائيات` section in `CleaningWorkerInfolist` and add:
+## 11.4 Worker statistics card
+
+Update `CleaningWorkerInfolist` in section `إحصائيات`:
 
 - Label: `قيمة الغرامات المالية`.
-- Value: sum of remaining active penalty components for the worker.
+- Value: sum of active penalty amounts.
 - Currency suffix.
-- Link or action to the filtered financial penalties page for that worker.
+- Link to the penalties resource filtered by worker.
 
-Prefer a query scope or summary service to avoid duplicating calculation logic.
+The value becomes zero when the related active penalty records are marked cleared by refund or debt clearance.
 
-### 9.5 Cancelled bookings table
+## 11.5 Cancelled bookings table
 
-Add or update columns:
+Add toggleable columns:
 
 - Cancellation reason.
+- Exact cancellation actor.
 - Cancellation duration before/after scheduled start.
-- Penalty status/value.
+- Penalty amount.
+- Penalty status.
 
-Keep secondary columns toggleable to avoid overcrowding the general booking table.
+Add filters:
 
-## 10. API and Resource Changes
+- Cancelled by customer/worker/admin/system.
+- Has financial penalty.
+- Cancelled before scheduled time.
+- Cancelled after scheduled time.
 
-Additive fields only to avoid breaking Flutter clients.
+---
 
-Recommended booking response additions:
+## 12. API and Resource Changes
+
+All changes must be additive unless removing the invalid `commission` public type/fields.
+
+### Booking resource additions
 
 ```json
 {
+  "cancelledByRole": "worker",
+  "cancelledByWorkerId": 15,
   "cancellationOffsetMinutes": 45,
   "cancellationTimingLabel": "Cancelled 45 minutes before the scheduled start",
   "workerCancellationSnapshots": [],
-  "financialPenalties": []
+  "financialPenalty": {
+    "amount": 25000,
+    "financialSource": "deposit",
+    "status": "active"
+  }
 }
 ```
 
-Only include detailed penalty data for authorized admin/internal contexts unless the mobile apps require it.
+Detailed penalty information may be restricted to admin/internal contexts unless a Flutter screen requires it.
 
-Worker-facing account/statistics responses may add:
+### Worker statistics response
+
+If the worker app consumes this statistic, add:
 
 ```json
 {
@@ -424,88 +670,120 @@ Worker-facing account/statistics responses may add:
 }
 ```
 
-No existing response field should be renamed or removed.
+### Financial transaction API
 
-## 11. Authorization and Audit
+Remove `commission` from:
+
+- Accepted type filters.
+- Returned type names.
+- Labels and translations.
+- Summary keys.
+
+Provide debt-equivalent fields during a compatibility window only if existing Flutter clients still read old commission fields. Mark them deprecated and remove them after client migration.
+
+---
+
+## 13. Authorization and Audit
 
 Add policies/permissions for:
 
 - View financial penalties.
 - Apply financial penalty.
-- Void/reverse penalty.
 
-Audit:
+Do not add permissions for edit/delete/reverse because those operations do not exist.
 
-- Log penalty creation.
-- Log clearing allocations.
-- Log reversal/void actions.
-- Store admin ID and timestamps.
-- Keep the booking cancellation snapshot immutable.
+Audit requirements:
 
-Use database transactions and row locks for every operation that changes worker balances, debts, penalty components, or statuses.
+- Store applying admin ID.
+- Log penalty creation with Spatie Activity Log or the existing audit mechanism.
+- Log automatic clearing event and source.
+- Keep cancellation actor, reason, timing, and assignment snapshots immutable.
+- Use row locks and database transactions for cancellation, penalty application, refund clearing, and debt clearing.
 
-## 12. Migration and Backfill
+---
+
+## 14. Migration and Backfill
 
 ### New migrations
 
 1. Create `cleaning_financial_penalties`.
-2. Add `cancellation_offset_minutes` and optional cancellation actor ID fields to `cleaning_bookings`.
+2. Add cancellation actor/timing fields to `cleaning_bookings`.
 3. Add cancellation snapshot fields to `cleaning_booking_worker_assignments`.
+4. Normalize remaining commission/admin-fee transaction types to debt.
 
-### Backfill existing cancelled bookings
+### Existing cancelled bookings
 
-- Calculate cancellation offsets only where both schedule and `cancelled_at` exist.
+Best-effort backfill:
+
+- Calculate cancellation offset where schedule and `cancelled_at` are available.
 - Preserve null when the scheduled datetime cannot be resolved safely.
-- Copy current assignment status into the snapshot field for historical cancelled bookings, marked as a best-effort backfill.
-- Do not generate financial penalties automatically for old cancellations.
+- Copy current assignment status into `status_before_booking_cancellation` for historical records.
+- Keep `cancelled_by_worker_id` null when the exact actor cannot be proven.
+- Do not generate penalties automatically for historical cancellations.
+- Do not allow the penalty action when the exact cancelling worker is unknown.
 
-## 13. Testing Plan
+---
+
+## 15. Testing Plan
 
 ### Unit tests
 
-- Cancellation offset calculation before, exactly at, and after scheduled start.
-- Worker penalty fully covered by deposit.
-- Worker penalty fully added to debt.
-- Worker penalty split between deposit and debt.
-- Refund clears only deposit-funded penalty components.
-- Deposit settlement clears debt-funded components FIFO.
-- Partial debt settlement leaves a partial active penalty.
-- Full settlement marks a penalty cleared.
-- Invalid worker/customer target rejected.
-- Duplicate active penalty rejected.
+- Cancellation offset before, at, and after scheduled start.
+- Exact worker actor resolution.
+- Multi-worker status snapshot creation.
+- Deposit-backed penalty.
+- Debt-backed penalty.
+- Penalty amount equal to booking total.
+- Penalty amount greater than booking total rejected.
+- Duplicate penalty rejected.
+- Customer-cancelled booking penalty rejected.
+- Non-cancelling worker target rejected.
+- Deposit-backed penalty clears on full refund.
+- Debt-backed penalty clears only when final debt reaches zero.
+- No partial penalty status is produced.
+- Commission public type is no longer returned.
 
 ### Feature tests
 
-- Customer cancellation stores actor metadata and worker snapshots.
-- Worker cancellation stores `cancelled_by_role = worker` in all allowed statuses.
-- Multi-worker statuses are preserved before cancellation.
-- Admin can apply a penalty from a cancelled booking.
-- Admin cannot apply it to an active/completed booking.
-- Notification is queued/sent to the correct target.
-- Dedicated penalties resource filters and links work.
-- Worker statistics card updates after penalty, refund, and deposit settlement.
+- Customer cancellation stores customer actor metadata.
+- Worker cancellation stores role, user ID, and worker ID in every allowed status.
+- Global multi-worker cancellation stores all previous assignment statuses.
+- Admin sees the penalty action only for worker-cancelled bookings.
+- Admin can apply one penalty from the cancelled booking.
+- Admin cannot create a second penalty.
+- Admin cannot penalize an active/completed/customer-cancelled booking.
+- Notification is sent to the cancelling worker.
+- Dedicated resource filters and links work.
+- Statistics card updates after creation and clearing.
 
-### Regression tests
+### Financial regression tests
 
-- Existing deposit/debt/refund behavior remains valid.
-- Existing dispute financial penalties remain valid.
-- Worker financial eligibility still uses the final deposit/debt state.
-- Existing Flutter booking response fields remain unchanged.
-- Existing booking cancellation notifications continue to work.
+- Deposit creation remains correct.
+- Debt creation and settlement remain correct.
+- Full refund remains correct.
+- Worker eligibility is synchronized after penalty.
+- Existing dispute penalties continue to work after commission-type removal.
+- Existing administration-margin charging remains idempotent but appears as debt.
+- Existing transaction endpoints do not expose commission.
 
 ### Filament QA
 
 Test:
 
-- Action visibility.
-- Modal validation and financial preview.
-- Confirmation and duplicate-submit protection.
-- Clear success/error notifications.
-- Search, filters, sort, pagination, empty state, and RTL layout.
-- Permission-based visibility.
-- Large list query performance and eager loading.
+- Action visibility and authorization.
+- Read-only target worker.
+- Amount maximum validation.
+- Required notes.
+- Permanent-action confirmation text.
+- Duplicate-submit protection.
+- Success/error notifications.
+- Resource search, filters, sorting, pagination, empty state, and RTL layout.
+- Booking and worker navigation links.
+- Table query performance and eager loading.
 
-## 14. Expected Main Code Areas
+---
+
+## 16. Expected Main Code Areas
 
 ### New
 
@@ -515,7 +793,7 @@ Test:
 - `Modules/Cleaning/app/Services/CleaningFinancialPenaltySettlementService.php`
 - `app/Notifications/Cleaning/CleaningFinancialPenaltyNotification.php`
 - `app/Filament/Resources/CleaningFinancialPenalties/...`
-- Migrations and tests.
+- Migrations, factories, policies, translations, and tests.
 
 ### Existing to update
 
@@ -528,76 +806,88 @@ Test:
 - `Modules/Cleaning/app/Models/CleaningBooking.php`
 - `Modules/Cleaning/app/Models/CleaningBookingWorkerAssignment.php`
 - `Modules/Cleaning/app/Http/Resources/CleaningBookingResource.php`
+- `app/Models/CleaningDepositTransaction.php`
+- `Modules/Cleaning/app/Http/Resources/CleaningDepositTransactionResource.php`
+- `Modules/Cleaning/app/Services/CleaningFinancialSummaryService.php`
+- `app/Filament/Resources/CleaningWorkerDeposits/Schemas/CleaningTransactionForm.php`
+- `app/Filament/Resources/CleaningWorkerDeposits/Tables/CleaningTransactionsTable.php`
 - `app/Filament/Resources/CleaningBookings/Schemas/CleaningBookingInfolist.php`
 - `app/Filament/Resources/CleaningBookings/Tables/CleaningBookingsTable.php`
 - `app/Filament/Resources/CleaningWorkers/Schemas/CleaningWorkerInfolist.php`
 - Arabic/English translation files.
 
-## 15. Delivery Phases
+---
+
+## 17. Delivery Phases
 
 ### Phase 1 — Cancellation consistency
 
 - Centralize cancellation.
-- Persist actor and timing.
-- Snapshot worker statuses.
-- Add tests.
+- Persist exact actor and cancellation timing.
+- Snapshot worker assignment statuses.
+- Add lifecycle tests.
 
-### Phase 2 — Penalty ledger domain
+### Phase 2 — Remove commission financial type
+
+- Normalize model, services, API resources, filters, and dashboard labels to debt terminology.
+- Add data migration.
+- Preserve administration-margin pricing behavior.
+- Run financial ledger regression tests.
+
+### Phase 3 — Penalty domain and financial charge
 
 - Add penalty model/table.
-- Implement worker penalty application using the existing deposit service.
+- Implement one penalty per worker-cancelled booking.
+- Apply deposit/debt source rules.
 - Add audit and idempotency tests.
 
-### Phase 3 — Settlement lifecycle
+### Phase 4 — Penalty clearing
 
-- Hook penalty clearing into refund and deposit debt settlement.
-- Implement partial/FIFO allocation.
-- Add reconciliation tests.
+- Clear deposit penalties on full refund.
+- Clear debt penalties when debt becomes zero after deposit/settlement.
+- Update statistics calculations.
 
-### Phase 4 — Filament UI
+### Phase 5 — Filament UI
 
-- Add cancelled-booking action and details.
+- Add cancellation audit section.
+- Add penalty action.
 - Add dedicated penalties resource.
 - Add worker statistics card.
-- Add filters and links.
+- Add cancelled-booking columns and filters.
 
-### Phase 5 — Notifications and API additions
+### Phase 6 — Notifications and additive API fields
 
-- Add worker/customer notification.
-- Add additive API fields where required.
+- Add worker notification.
+- Add cancellation and penalty response fields where required.
+- Maintain compatibility for existing Flutter clients.
 
-### Phase 6 — QA and regression
+### Phase 7 — QA and regression
 
-- Run financial ledger tests.
 - Run cleaning lifecycle tests.
+- Run financial ledger tests.
 - Run Filament UI tests.
-- Manually test single-worker and multi-worker cancellation scenarios.
+- Manually test single-worker and multi-worker cancellations.
 
-## 16. Acceptance Criteria
+---
 
-- Every cancelled cleaning booking clearly shows who cancelled it and why.
+## 18. Acceptance Criteria
+
+- Every cancelled cleaning booking shows who cancelled it and why.
+- The exact cancelling worker is stored when a worker cancels.
 - Cancellation timing is shown as before/at/after scheduled start.
-- Every worker's status immediately before cancellation is preserved.
-- Admin can apply a penalty only from a cancelled booking.
-- A worker penalty consumes deposit first and places the remainder on debt.
-- The penalty record remains linked to the booking without restoring the removed booking FK on the ledger table.
-- The penalized party receives a notification.
-- A dedicated penalties page lists and filters all penalties.
-- Worker statistics show the current uncleared penalty value.
-- Deposit-funded penalty components clear on refund.
-- Debt-funded penalty components clear according to actual deposit debt settlement.
-- Multi-worker bookings allow selecting the specific penalized worker.
-- No existing Flutter contract is broken.
-
-## 17. Clarifications Required Before Implementation
-
-1. عند إلغاء العميل للطلب وفرض غرامة عليه: من أي رصيد أو وسيلة مالية يجب تحصيل الغرامة؟ هل يوجد محفظة/رصيد للعميل، أم تُسجل كغرامة غير محصلة فقط؟
-2. هل يسمح النظام بإضافة أكثر من غرامة لنفس الطلب ونفس الشخص، أم غرامة واحدة فقط؟
-3. إذا كانت الغرامة موزعة بين الإيداع والدين، هل تعرض بطاقة الإحصائيات كامل القيمة حتى تتم تصفية الجزأين، أم تعرض فقط الجزء غير المصفر؟
-4. عند إيداع مبلغ أقل من قيمة الغرامات الموجودة على الدين، هل يتم تصفير الغرامات جزئياً حسب المبلغ المدفوع، أم تبقى كاملة حتى تسديدها بالكامل؟
-5. في حال وجود ديون أخرى وعمولات وغرامات على العامل، ما أولوية تسوية الإيداع: الغرامات أولاً، العمولة أولاً، الدين الإداري أولاً، أم حسب الأقدم؟
-6. هل زر الغرامة يظهر فقط عندما يكون الإلغاء متأخراً ضمن مدة محددة، أم يمكن للإدارة فرض الغرامة على أي طلب ملغي؟
-7. هل قيمة الغرامة يحددها المدير يدوياً دائماً، أم تريد إعدادات بقيم تلقائية حسب عدد الدقائق المتبقية قبل موعد العمل؟
-8. إذا ألغى عامل واحد في طلب متعدد العمال ولم يُلغَ الطلب بالكامل، هل تريد السماح بفرض غرامة عليه من نفس الواجهة، أم الميزة تخص الطلبات التي أصبحت حالتها العامة `cancelled` فقط؟
-9. هل يجب السماح بإلغاء/عكس الغرامة بعد إضافتها؟ وإذا نعم، هل يعاد المبلغ إلى الإيداع أو يخفض الدين تلقائياً؟
-10. ما النص النهائي المطلوب للإشعار المرسل للعامل وللعميل؟
+- Every worker's status immediately before global cancellation is preserved.
+- The penalty action is available only for a worker-cancelled booking with a known worker actor.
+- The target worker cannot be changed by the admin.
+- Only one penalty can exist per booking.
+- The admin enters the value manually.
+- The penalty amount cannot exceed the booking total.
+- The penalty record has one source only: deposit or debt.
+- The worker receives the approved Arabic notification.
+- Penalties cannot be edited, reversed, voided, or deleted.
+- A dedicated Filament page lists and filters all penalties.
+- Worker statistics show the sum of active penalties.
+- Deposit penalties reset on full refund.
+- Debt penalties reset when worker debt becomes zero through deposit/settlement.
+- The cleaning financial UI/API no longer exposes a commission transaction type.
+- Administration-margin pricing remains functional and is represented financially as debt.
+- Existing Flutter booking contracts remain compatible.
