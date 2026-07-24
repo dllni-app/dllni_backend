@@ -35,12 +35,19 @@ final class UserCleaningOrderCancelController
         $reason = $request->validated('reason');
 
         $cancelled = in_array($model->status, self::ARRIVAL_CANCEL_STATUSES, true)
-            ? $this->cancelAfterWorkerArrival($model, $reason, $lifecycleNotifications)
+            ? $this->cancelAfterWorkerArrival($model, $reason, $request->user()->id, $lifecycleNotifications)
             : $service->cancel($model, $reason);
 
-        $cancelled->forceFill(['cancelled_by_role' => 'customer'])->save();
+        if ($cancelled->cancelled_by_user_id === null) {
+            $cancelled->forceFill([
+                'cancelled_by_role' => 'customer',
+                'cancelled_by_user_id' => $request->user()->id,
+                'cancelled_by_worker_id' => null,
+            ])->save();
+        }
+
         $cancelled = $cancelled->fresh();
-        $cancelled->load(['worker.user', 'timeWarnings', 'disputes', 'addons', 'billingPolicy']);
+        $cancelled->load(['worker.user', 'workerAssignments.worker.user', 'financialPenalty', 'timeWarnings', 'disputes', 'addons', 'billingPolicy']);
 
         return response()->json([
             'order' => CleaningBookingResource::make($cancelled),
@@ -50,11 +57,12 @@ final class UserCleaningOrderCancelController
     private function cancelAfterWorkerArrival(
         CleaningBooking $booking,
         ?string $reason,
+        int $customerId,
         CleaningLifecycleNotificationService $lifecycleNotifications,
     ): CleaningBooking {
         $fromStatus = (string) ($booking->status?->value ?? $booking->status);
 
-        $updated = DB::transaction(function () use ($booking, $reason): CleaningBooking {
+        $updated = DB::transaction(function () use ($booking, $reason, $customerId): CleaningBooking {
             $booking = CleaningBooking::query()
                 ->whereKey($booking->id)
                 ->lockForUpdate()
@@ -65,6 +73,8 @@ final class UserCleaningOrderCancelController
                 'cancelled_at' => now(),
                 'cancellation_reason' => $reason,
                 'cancelled_by_role' => 'customer',
+                'cancelled_by_user_id' => $customerId,
+                'cancelled_by_worker_id' => null,
             ]);
 
             return $booking->fresh();
