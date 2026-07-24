@@ -37,18 +37,6 @@ final class CleaningBookingInfolist
                                             ->state(fn ($record): string => self::bookingKindLabel($record))
                                             ->badge()
                                             ->color(fn ($record): string => self::bookingKindColor($record)),
-                                        TextEntry::make('cancelled_at')
-                                            ->label('وقت الإلغاء')
-                                            ->formatStateUsing(fn ($state): string => self::dateTime($state))
-                                            ->placeholder('-')
-                                            ->visible(fn ($record): bool => filled($record->cancelled_at)),
-                                        TextEntry::make('cancelled_by_role')
-                                            ->label('مصدر الإلغاء')
-                                            ->badge()
-                                            ->formatStateUsing(fn ($state): string => self::cancellationSourceLabel($state))
-                                            ->color(fn ($state): string => self::cancellationSourceColor($state))
-                                            ->placeholder('-')
-                                            ->visible(fn ($record): bool => filled($record->cancelled_by_role)),
                                         TextEntry::make('property_type')
                                             ->label('نوع العقار')
                                             ->formatStateUsing(fn (?string $state): string => self::propertyTypeLabel($state))
@@ -71,6 +59,80 @@ final class CleaningBookingInfolist
                                             ->formatStateUsing(fn ($state): string => self::time($state)),
                                     ])
                                     ->columns(2),
+                                Section::make('بيانات الإلغاء والغرامة')
+                                    ->description('بيانات ثابتة محفوظة لحظة إلغاء الطلب، بما فيها حالة كل عامل في الطلبات متعددة العمال.')
+                                    ->schema([
+                                        TextEntry::make('cancelled_at')
+                                            ->label('وقت الإلغاء')
+                                            ->formatStateUsing(fn ($state): string => self::dateTime($state))
+                                            ->placeholder('-'),
+                                        TextEntry::make('cancelled_by_role')
+                                            ->label('مصدر الإلغاء')
+                                            ->badge()
+                                            ->formatStateUsing(fn ($state): string => self::cancellationSourceLabel($state))
+                                            ->color(fn ($state): string => self::cancellationSourceColor($state))
+                                            ->placeholder('-'),
+                                        TextEntry::make('cancelledByUser.name')
+                                            ->label('المستخدم الذي نفذ الإلغاء')
+                                            ->placeholder('-'),
+                                        TextEntry::make('cancelledByWorker.first_name')
+                                            ->label('العامل الذي ألغى الطلب')
+                                            ->placeholder('-'),
+                                        TextEntry::make('scheduled_start')
+                                            ->label('موعد بدء العمل')
+                                            ->state(fn ($record): string => self::scheduledStartLabel($record)),
+                                        TextEntry::make('cancellation_offset_minutes')
+                                            ->label('المدة قبل/بعد موعد العمل')
+                                            ->formatStateUsing(fn ($state): string => self::cancellationTimingLabel($state))
+                                            ->badge()
+                                            ->color(fn ($state): string => is_numeric($state) && (int) $state < 0 ? 'danger' : 'warning'),
+                                        TextEntry::make('cancellation_reason')
+                                            ->label('سبب وملاحظات الإلغاء')
+                                            ->placeholder('-')
+                                            ->columnSpanFull(),
+                                        TextEntry::make('financialPenalty.amount')
+                                            ->label('قيمة الغرامة المالية')
+                                            ->formatStateUsing(fn ($state): string => $state === null ? '-' : self::money($state))
+                                            ->badge()
+                                            ->color('danger'),
+                                        TextEntry::make('financialPenalty.financial_source')
+                                            ->label('المصدر المالي')
+                                            ->formatStateUsing(fn (?string $state): string => $state === 'deposit' ? 'الإيداع' : ($state === 'debt' ? 'الدين' : '-'))
+                                            ->badge(),
+                                        TextEntry::make('financialPenalty.status')
+                                            ->label('حالة الغرامة')
+                                            ->formatStateUsing(fn (?string $state): string => $state === 'active' ? 'نشطة' : ($state === 'cleared' ? 'مصفرة' : '-'))
+                                            ->badge()
+                                            ->color(fn (?string $state): string => $state === 'active' ? 'danger' : 'success'),
+                                        TextEntry::make('financialPenalty.notes')
+                                            ->label('ملاحظات الغرامة')
+                                            ->placeholder('-')
+                                            ->columnSpanFull(),
+                                        RepeatableEntry::make('workerAssignments')
+                                            ->label('حالة العاملين عند الإلغاء')
+                                            ->schema([
+                                                TextEntry::make('worker.first_name')->label('العامل')->placeholder('-'),
+                                                TextEntry::make('status_before_booking_cancellation')
+                                                    ->label('الحالة قبل إلغاء الطلب')
+                                                    ->badge()
+                                                    ->formatStateUsing(fn ($state): string => self::workerAssignmentStatusLabel($state))
+                                                    ->color(fn ($state): string => self::workerAssignmentStatusColor($state)),
+                                                TextEntry::make('cancelled_by_this_worker')
+                                                    ->label('هو من ألغى الطلب')
+                                                    ->badge()
+                                                    ->formatStateUsing(fn ($state): string => $state ? 'نعم' : 'لا')
+                                                    ->color(fn ($state): string => $state ? 'danger' : 'gray'),
+                                                TextEntry::make('booking_cancelled_at')->label('وقت إلغاء الطلب')->formatStateUsing(fn ($state): string => self::dateTime($state))->placeholder('-'),
+                                                TextEntry::make('accepted_at')->label('وقت القبول')->formatStateUsing(fn ($state): string => self::dateTime($state))->placeholder('-'),
+                                                TextEntry::make('started_travel_at')->label('بدء التوجه')->formatStateUsing(fn ($state): string => self::dateTime($state))->placeholder('-'),
+                                                TextEntry::make('arrived_at')->label('الوصول')->formatStateUsing(fn ($state): string => self::dateTime($state))->placeholder('-'),
+                                                TextEntry::make('work_started_at')->label('بدء العمل')->formatStateUsing(fn ($state): string => self::dateTime($state))->placeholder('-'),
+                                            ])
+                                            ->columns(4)
+                                            ->columnSpanFull(),
+                                    ])
+                                    ->columns(3)
+                                    ->visible(fn ($record): bool => filled($record->cancelled_at)),
                                 Section::make('تفاصيل المناسبة')
                                     ->schema([
                                         TextEntry::make('property_details.event_type')
@@ -392,6 +454,8 @@ final class CleaningBookingInfolist
         return match ((string) $value) {
             'customer' => 'ألغاه العميل',
             'worker' => 'ألغاه العامل',
+            'admin' => 'ألغته الإدارة',
+            'system' => 'ألغاه النظام',
             default => '-',
         };
     }
@@ -403,8 +467,35 @@ final class CleaningBookingInfolist
         return match ((string) $value) {
             'customer' => 'danger',
             'worker' => 'warning',
+            'admin' => 'info',
             default => 'gray',
         };
+    }
+
+    private static function scheduledStartLabel(mixed $record): string
+    {
+        if ($record->scheduled_date === null || $record->scheduled_time === null) {
+            return '-';
+        }
+
+        return self::date($record->scheduled_date).' '.self::time($record->scheduled_time);
+    }
+
+    private static function cancellationTimingLabel(mixed $value): string
+    {
+        if (! is_numeric($value)) {
+            return '-';
+        }
+
+        $minutes = (int) $value;
+        if ($minutes > 0) {
+            return "قبل موعد العمل بـ {$minutes} دقيقة";
+        }
+        if ($minutes < 0) {
+            return 'بعد موعد العمل بـ '.abs($minutes).' دقيقة';
+        }
+
+        return 'في موعد بدء العمل';
     }
 
     private static function money(mixed $amount): string
