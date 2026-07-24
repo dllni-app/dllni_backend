@@ -10,6 +10,8 @@ use App\Models\Worker;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
+use Modules\Cleaning\Services\AdminCleaningTransactionService;
 use Modules\Cleaning\Services\WorkerDebtService;
 
 final class WorkerFinancialTypeScenarioSeeder extends Seeder
@@ -33,7 +35,7 @@ final class WorkerFinancialTypeScenarioSeeder extends Seeder
             CleaningWorkerDeposit::query()->updateOrCreate(
                 ['worker_id' => $worker->id],
                 [
-                    'current_balance' => 500000,
+                    'current_balance' => 600000,
                     'debt_balance' => 0,
                     'deposited_total' => 500000,
                     'withdrawn_total' => 0,
@@ -67,17 +69,6 @@ final class WorkerFinancialTypeScenarioSeeder extends Seeder
                 notes: 'إيداع نقدي أضيف إلى رصيد العامل.',
                 createdAt: $now->subDays(10),
             );
-
-            $this->createTransaction(
-                worker: $worker,
-                type: 'commission',
-                amount: 100000,
-                balanceBefore: 600000,
-                balanceAfter: 500000,
-                reference: 'seed-ahmad-platform-commission',
-                notes: 'عمولة منصة مخصومة من رصيد الإيداع.',
-                createdAt: $now->subDays(3),
-            );
         });
     }
 
@@ -91,6 +82,10 @@ final class WorkerFinancialTypeScenarioSeeder extends Seeder
         string $notes,
         CarbonImmutable $createdAt,
     ): void {
+        if (! in_array($type, AdminCleaningTransactionService::TYPES, true)) {
+            throw new InvalidArgumentException("Unsupported seeded cleaning transaction type [{$type}].");
+        }
+
         $transaction = CleaningDepositTransaction::query()->create([
             'worker_id' => $worker->id,
             'type' => $type,
