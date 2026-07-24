@@ -78,7 +78,7 @@ it('stores the legacy withdrawal operation as a refund limited to deposit', func
         ->and($transaction->type)->toBe('refund');
 });
 
-it('records automatic commission and consumes deposit before debt', function (): void {
+it('records automatic administration due and consumes deposit before debt', function (): void {
     seedDepositSettings();
     $worker = Worker::factory()->create(['trust_score' => 80]);
     seedWorkerDeposit($worker, 1000);
@@ -94,7 +94,7 @@ it('records automatic commission and consumes deposit before debt', function ():
         ->and((float) $deposit->debt_balance)->toBe(0.0)
         ->and((float) $deposit->withdrawn_total)->toBe(0.0)
         ->and($transaction)->toBeInstanceOf(CleaningDepositTransaction::class)
-        ->and($transaction?->type)->toBe('commission')
+        ->and($transaction?->type)->toBe('debt')
         ->and((float) $transaction?->amount)->toBe(150.0)
         ->and($transaction?->reference)->toStartWith(CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX)
         ->and(Schema::hasColumn('cleaning_deposit_transactions', 'cleaning_booking_id'))->toBeFalse();
@@ -160,7 +160,7 @@ it('exposes explicit deposit debt and capacity values through the worker API', f
         ->assertJsonPath('minimumRequired', 0)
         ->assertJsonPath('allowedDebtLimit', 200)
         ->assertJsonPath('remainingDebtCapacity', 150)
-        ->assertJsonPath('availableCommissionCapacity', 240);
+        ->assertJsonPath('availableAdministrationCapacity', 240);
 });
 
 it('does not apply trust penalty when rejecting before accept', function (): void {
@@ -222,7 +222,7 @@ it('applies trust penalty when rejecting after accept', function (): void {
     ]);
 });
 
-it('charges commission when the customer confirms completion', function (): void {
+it('charges administration due when the customer confirms completion', function (): void {
     seedDepositSettings();
     $worker = Worker::factory()->create(['trust_score' => 80]);
     seedWorkerDeposit($worker, 50);
@@ -251,7 +251,7 @@ it('charges commission when the customer confirms completion', function (): void
 
     $transaction = CleaningDepositTransaction::query()
         ->where('worker_id', $worker->id)
-        ->where('type', 'commission')
+        ->where('type', 'debt')
         ->where('reference', 'like', CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'%')
         ->first();
 
