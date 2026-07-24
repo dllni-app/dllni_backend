@@ -7,7 +7,6 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Throwable;
 
 return new class extends Migration
 {
@@ -27,7 +26,6 @@ return new class extends Migration
 
         DB::table('cleaning_bookings')
             ->whereNotNull('cancelled_at')
-            ->orderBy('id')
             ->eachById(function (object $booking): void {
                 $offset = null;
 
@@ -40,7 +38,7 @@ return new class extends Migration
                         $cancelledAt = Carbon::parse((string) $booking->cancelled_at, config('app.timezone'));
                         $offset = (int) round(($scheduledAt->getTimestamp() - $cancelledAt->getTimestamp()) / 60);
                     }
-                } catch (Throwable) {
+                } catch (\Throwable) {
                     $offset = null;
                 }
 
