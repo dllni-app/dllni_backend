@@ -18,12 +18,6 @@ final class WorkerDebtService
         private readonly DepositService $depositService,
     ) {}
 
-    /**
-     * Records an administration-funded loan as part of the worker's deposit balance.
-     *
-     * This is intentionally different from indebtedness (`debt_balance`). Indebtedness
-     * is created only when platform charges exceed the available deposit balance.
-     */
     public function recordDebt(
         Worker $worker,
         float $amount,
@@ -113,20 +107,21 @@ final class WorkerDebtService
     {
         $worker->loadMissing('deposit');
         $automaticPrefix = CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'%';
+        $legacyAutomaticPrefix = CleaningDepositTransaction::LEGACY_AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'%';
         $adminLoanReference = self::ADMIN_LOAN_REFERENCE.'%';
 
         $totals = CleaningDepositTransaction::query()
             ->where('worker_id', $worker->id)
             ->selectRaw("COALESCE(SUM(CASE WHEN type = 'debt' AND reference LIKE ? THEN amount ELSE 0 END), 0) as manual_debt_total", [$adminLoanReference])
             ->selectRaw("COALESCE(SUM(CASE WHEN type = 'refund' THEN debt_settled_amount ELSE 0 END), 0) as manual_debt_recovered")
-            ->selectRaw("COALESCE(SUM(CASE WHEN type IN ('commission', 'admin_fee') OR (type = 'debt' AND reference LIKE ?) THEN amount ELSE 0 END), 0) as admin_fee_total", [$automaticPrefix])
+            ->selectRaw("COALESCE(SUM(CASE WHEN type IN ('commission', 'admin_fee') OR (type = 'debt' AND (reference LIKE ? OR reference LIKE ?)) THEN amount ELSE 0 END), 0) as administration_due_total", [$automaticPrefix, $legacyAutomaticPrefix])
             ->selectRaw("COALESCE(SUM(CASE WHEN type = 'settlement' THEN amount ELSE 0 END), 0) as settlement_total")
             ->first();
 
         $manualDebtTotal = max(0.0, (float) ($totals?->manual_debt_total ?? 0));
         $manualDebtRecovered = min($manualDebtTotal, max(0.0, (float) ($totals?->manual_debt_recovered ?? 0)));
         $manualDebtDue = max(0.0, $manualDebtTotal - $manualDebtRecovered);
-        $adminFeeTotal = max(0.0, (float) ($totals?->admin_fee_total ?? 0));
+        $administrationDueTotal = max(0.0, (float) ($totals?->administration_due_total ?? 0));
         $totalSettled = max(0.0, (float) ($totals?->settlement_total ?? 0));
         $indebtednessBalance = $this->indebtednessBalance($worker);
 
@@ -135,9 +130,9 @@ final class WorkerDebtService
             'manualDebtSettled' => round($manualDebtRecovered, 2),
             'manualDebtDue' => round($manualDebtDue, 2),
             'adminLoanBalance' => round($manualDebtDue, 2),
-            'adminFeeTotal' => round($adminFeeTotal, 2),
-            'adminFeeSettled' => round(min($adminFeeTotal, $totalSettled), 2),
-            'adminFeeDue' => round($indebtednessBalance, 2),
+            'administrationDueTotal' => round($administrationDueTotal, 2),
+            'administrationDueSettled' => round(min($administrationDueTotal, $totalSettled), 2),
+            'administrationDue' => round($indebtednessBalance, 2),
             'indebtednessBalance' => round($indebtednessBalance, 2),
             'totalSettled' => round($totalSettled, 2),
             'outstandingAdministrationDue' => round($manualDebtDue + $indebtednessBalance, 2),
@@ -152,9 +147,9 @@ final class WorkerDebtService
             'manualDebtSettled' => 0.0,
             'manualDebtDue' => 0.0,
             'adminLoanBalance' => 0.0,
-            'adminFeeTotal' => 0.0,
-            'adminFeeSettled' => 0.0,
-            'adminFeeDue' => 0.0,
+            'administrationDueTotal' => 0.0,
+            'administrationDueSettled' => 0.0,
+            'administrationDue' => 0.0,
             'indebtednessBalance' => 0.0,
             'totalSettled' => 0.0,
             'outstandingAdministrationDue' => 0.0,
