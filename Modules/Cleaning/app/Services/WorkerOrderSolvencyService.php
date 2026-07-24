@@ -18,9 +18,9 @@ final class WorkerOrderSolvencyService
 {
     public const REASON_ELIGIBLE = 'eligible';
 
-    public const REASON_INSUFFICIENT_COMMISSION_CAPACITY = 'insufficient_commission_capacity';
+    public const REASON_INSUFFICIENT_ADMINISTRATION_CAPACITY = 'insufficient_administration_capacity';
 
-    public const REASON_COMMISSION_UNAVAILABLE = 'commission_unavailable';
+    public const REASON_ADMINISTRATION_DUE_UNAVAILABLE = 'administration_due_unavailable';
 
     public function __construct(
         private readonly CleaningPricingCalculator $pricingCalculator,
@@ -33,35 +33,35 @@ final class WorkerOrderSolvencyService
     {
         $worker->loadMissing('deposit');
         $capacity = $this->workerCapacitySummary($worker, (int) $booking->id);
-        $requiredCommission = 0.0;
+        $requiredAdministrationDue = 0.0;
         $workerOffer = null;
         $reasonCode = self::REASON_ELIGIBLE;
-        $message = 'Worker can cover this booking platform commission.';
+        $message = 'Worker can cover this booking administration due.';
 
         try {
             $workerOffer = $this->workerOfferForBooking($worker, $booking);
-            $requiredCommission = (float) $workerOffer['adminMarginAmount'];
+            $requiredAdministrationDue = (float) $workerOffer['adminMarginAmount'];
         } catch (Throwable $exception) {
             report($exception);
-            $reasonCode = self::REASON_COMMISSION_UNAVAILABLE;
-            $message = 'Platform commission cannot be calculated for this worker and booking.';
+            $reasonCode = self::REASON_ADMINISTRATION_DUE_UNAVAILABLE;
+            $message = 'Administration due cannot be calculated for this worker and booking.';
         }
 
         $canReceive = $reasonCode === self::REASON_ELIGIBLE
             && $worker->is_active
             && ! $worker->is_suspended
             && $this->depositService->isWorkerEligibleForDispatch($worker)
-            && (float) $capacity['availableCommissionCapacity'] >= $requiredCommission;
+            && (float) $capacity['availableAdministrationCapacity'] >= $requiredAdministrationDue;
 
         if (! $canReceive && $reasonCode === self::REASON_ELIGIBLE) {
-            $reasonCode = self::REASON_INSUFFICIENT_COMMISSION_CAPACITY;
-            $message = 'The available deposit and remaining debt capacity do not cover this booking platform commission.';
+            $reasonCode = self::REASON_INSUFFICIENT_ADMINISTRATION_CAPACITY;
+            $message = 'The available deposit and remaining debt capacity do not cover this booking administration due.';
         }
 
         return array_merge($capacity, [
             'workerId' => (int) $worker->id,
             'bookingId' => (int) $booking->id,
-            'requiredPlatformCommission' => round($requiredCommission, 2),
+            'requiredAdministrationDue' => round($requiredAdministrationDue, 2),
             'workerOffer' => $workerOffer,
             'canReceiveOrder' => $canReceive,
             'canAcceptBooking' => $canReceive,
@@ -89,14 +89,20 @@ final class WorkerOrderSolvencyService
         }
     }
 
-    public function assertWorkerCanCoverCommission(Worker $worker, CleaningBooking $booking, float $requiredCommission): void
+    public function assertWorkerCanCoverAdministrationDue(Worker $worker, CleaningBooking $booking, float $requiredAmount): void
     {
         CleaningWorkerDeposit::query()->where('worker_id', $worker->id)->lockForUpdate()->first();
         $capacity = $this->workerCapacitySummary($worker->fresh(['deposit']) ?? $worker, (int) $booking->id);
 
-        if ((float) $capacity['availableCommissionCapacity'] < $requiredCommission) {
-            throw new InvalidArgumentException('The available deposit and remaining debt capacity do not cover this booking platform commission.');
+        if ((float) $capacity['availableAdministrationCapacity'] < $requiredAmount) {
+            throw new InvalidArgumentException('The available deposit and remaining debt capacity do not cover this booking administration due.');
         }
+    }
+
+    /** @deprecated Use assertWorkerCanCoverAdministrationDue(). */
+    public function assertWorkerCanCoverCommission(Worker $worker, CleaningBooking $booking, float $requiredCommission): void
+    {
+        $this->assertWorkerCanCoverAdministrationDue($worker, $booking, $requiredCommission);
     }
 
     public function workerCapacitySummary(Worker $worker, ?int $excludeBookingId = null): array
@@ -107,7 +113,7 @@ final class WorkerOrderSolvencyService
         $debtBalance = $this->debtService->indebtednessBalance($worker);
         $allowedDebtLimit = max(0.0, (float) ($limits['maxNegativeBalance'] ?? 0));
         $remainingDebtCapacity = max(0.0, $allowedDebtLimit - $debtBalance);
-        $activeReservedCommission = $this->activeReservedCommission($worker, $excludeBookingId);
+        $activeReservedAdministrationDue = $this->activeReservedAdministrationDue($worker, $excludeBookingId);
 
         return [
             'currentBalance' => round($depositBalance, 2),
@@ -117,20 +123,11 @@ final class WorkerOrderSolvencyService
             'currentDebtAmount' => round($debtBalance, 2),
             'indebtednessBalance' => round($debtBalance, 2),
             'remainingDebtCapacity' => round($remainingDebtCapacity, 2),
-            'activeReservedCommission' => round($activeReservedCommission, 2),
-            'availableCommissionCapacity' => $this->depositService->availableCommissionCapacity($worker, $activeReservedCommission),
+            'activeReservedAdministrationDue' => round($activeReservedAdministrationDue, 2),
+            'availableAdministrationCapacity' => $this->depositService->availableAdministrationCapacity($worker, $activeReservedAdministrationDue),
         ];
     }
 
-    /**
-     * Returns the current worker's financial view of the booking before or after acceptance.
-     *
-     * Before acceptance, service cost is divided by the required worker count and transport
-     * is calculated from the current worker's home location. After acceptance, persisted
-     * assignment amounts are returned so the preview is replaced by the final worker share.
-     *
-     * @return array<string, mixed>
-     */
     public function workerOfferForBooking(
         Worker $worker,
         CleaningBooking $booking,
@@ -203,9 +200,15 @@ final class WorkerOrderSolvencyService
         ];
     }
 
-    public function requiredCommissionForBookingAndWorker(CleaningBooking $booking, Worker $worker, ?array $roomIds = null): float
+    public function requiredAdministrationDueForBookingAndWorker(CleaningBooking $booking, Worker $worker, ?array $roomIds = null): float
     {
         return round((float) $this->workerOfferForBooking($worker, $booking)['adminMarginAmount'], 2);
+    }
+
+    /** @deprecated Use requiredAdministrationDueForBookingAndWorker(). */
+    public function requiredCommissionForBookingAndWorker(CleaningBooking $booking, Worker $worker, ?array $roomIds = null): float
+    {
+        return $this->requiredAdministrationDueForBookingAndWorker($booking, $worker, $roomIds);
     }
 
     private function assignmentForWorker(CleaningBooking $booking, Worker $worker): ?CleaningBookingWorkerAssignment
@@ -242,7 +245,7 @@ final class WorkerOrderSolvencyService
         return round($bookingHours / max(1, (int) ($booking->number_of_workers ?? 1)), 2);
     }
 
-    private function activeReservedCommission(Worker $worker, ?int $excludeBookingId = null): float
+    private function activeReservedAdministrationDue(Worker $worker, ?int $excludeBookingId = null): float
     {
         $query = CleaningBookingWorkerAssignment::query()
             ->join('cleaning_bookings', 'cleaning_bookings.id', '=', 'cleaning_booking_worker_assignments.cleaning_booking_id')
