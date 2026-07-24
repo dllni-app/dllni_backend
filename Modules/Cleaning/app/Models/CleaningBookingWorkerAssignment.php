@@ -20,6 +20,9 @@ final class CleaningBookingWorkerAssignment extends Model
         'cleaning_booking_id',
         'worker_id',
         'status',
+        'status_before_booking_cancellation',
+        'booking_cancelled_at',
+        'cancelled_by_this_worker',
         'accepted_at',
         'started_travel_at',
         'arrived_at',
@@ -55,6 +58,8 @@ final class CleaningBookingWorkerAssignment extends Model
     {
         return [
             'status' => CleaningBookingWorkerAssignmentStatus::class,
+            'booking_cancelled_at' => 'datetime',
+            'cancelled_by_this_worker' => 'boolean',
             'accepted_at' => 'datetime',
             'started_travel_at' => 'datetime',
             'arrived_at' => 'datetime',

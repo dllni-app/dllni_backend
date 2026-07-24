@@ -13,12 +13,12 @@ use App\Models\Worker;
 use App\Notifications\Cleaning\BookingLifecycleNotification;
 use BackedEnum;
 use Carbon\CarbonInterface;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Enums\CleaningAssignmentMode;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
+use Modules\Cleaning\Services\CleaningBookingCancellationService;
 use Modules\Cleaning\Services\DepositService;
 use Modules\User\Services\FemaleWorkerSafetyPolicyService;
 use Throwable;
@@ -44,7 +44,7 @@ final class CleaningBookingObserver
         }
 
         if ($booking->isDirty('status')) {
-            $this->applyCancellationSourceSnapshot($booking);
+            app(CleaningBookingCancellationService::class)->prepareCancellation($booking);
         }
     }
 
@@ -59,6 +59,7 @@ final class CleaningBookingObserver
 
         if ($booking->status !== CleaningBookingStatus::Pending) {
             $this->notifyLifecycleCreated($booking);
+
             return;
         }
 
@@ -91,7 +92,7 @@ final class CleaningBookingObserver
             ]);
 
             if ($booking->status === CleaningBookingStatus::Completed) {
-                $this->chargeAdminCommission($booking);
+                $this->chargeAdministrationDue($booking);
             }
 
             return;
@@ -123,7 +124,6 @@ final class CleaningBookingObserver
         }
 
         $policy = app(FemaleWorkerSafetyPolicyService::class);
-
         $booking->work_environment_beneficiary_presence = (string) ($confirmation['beneficiaryPresence'] ?? '');
         $booking->female_worker_safety_pledge_accepted = (bool) ($confirmation['pledgeAccepted'] ?? false);
         $booking->female_worker_safety_pledge_accepted_at = now();
@@ -149,38 +149,13 @@ final class CleaningBookingObserver
         }
 
         $hotTitle = self::HOT_ORDER_PREFIX.' '.$baseTitle;
-
         $propertyDetails['is_hot_order'] = true;
         $propertyDetails['hot_order_label'] = self::HOT_ORDER_PREFIX;
         $propertyDetails['hot_order_prefix'] = self::HOT_ORDER_PREFIX;
         $propertyDetails['hot_order_title'] = $hotTitle;
         $propertyDetails['order_title'] = $hotTitle;
         $propertyDetails['title'] = $hotTitle;
-
         $booking->property_details = $propertyDetails;
-    }
-
-    private function applyCancellationSourceSnapshot(CleaningBooking $booking): void
-    {
-        $currentStatus = $booking->status instanceof CleaningBookingStatus
-            ? $booking->status
-            : CleaningBookingStatus::tryFrom((string) $booking->status);
-
-        if ($currentStatus !== CleaningBookingStatus::Cancelled || filled($booking->cancelled_by_role)) {
-            return;
-        }
-
-        $fromStatus = $booking->getOriginal('status');
-        $fromStatusValue = $fromStatus instanceof BackedEnum ? $fromStatus->value : (string) $fromStatus;
-
-        if (! in_array($fromStatusValue, [
-            CleaningBookingStatus::AwaitingStartVerification->value,
-            CleaningBookingStatus::AwaitingWorkerStartConfirmation->value,
-        ], true)) {
-            return;
-        }
-
-        $booking->cancelled_by_role = Auth::user()?->worker instanceof Worker ? 'worker' : 'customer';
     }
 
     private function isScheduledForToday(CleaningBooking $booking): bool
@@ -217,12 +192,10 @@ final class CleaningBookingObserver
 
     private function stripHotOrderPrefix(string $title): string
     {
-        $normalized = mb_trim($title);
-
-        return mb_trim(str_replace(self::HOT_ORDER_PREFIX, '', $normalized));
+        return mb_trim(str_replace(self::HOT_ORDER_PREFIX, '', mb_trim($title)));
     }
 
-    private function chargeAdminCommission(CleaningBooking $booking): void
+    private function chargeAdministrationDue(CleaningBooking $booking): void
     {
         try {
             $depositService = app(DepositService::class);
@@ -236,6 +209,7 @@ final class CleaningBookingObserver
                         $depositService->recordAdminFeeDebit($worker, $booking, $amount);
                     }
                 });
+
                 return;
             }
 
@@ -277,51 +251,15 @@ final class CleaningBookingObserver
     private function notifyLifecycleCreated(CleaningBooking $booking): void
     {
         $booking->loadMissing(['customer', 'worker.user']);
-
-        $this->notifyLifecycleRecipient(
-            recipient: $booking->customer,
-            booking: $booking,
-            targetRole: 'customer',
-            canonicalType: 'cleaning.booking.created',
-            action: 'created',
-            fromStatus: null,
-            occurredAt: $booking->created_at?->toIso8601String() ?? now()->toIso8601String(),
-        );
-
-        $this->notifyLifecycleRecipient(
-            recipient: $booking->worker?->user,
-            booking: $booking,
-            targetRole: 'worker',
-            canonicalType: 'cleaning.booking.created',
-            action: 'created',
-            fromStatus: null,
-            occurredAt: $booking->created_at?->toIso8601String() ?? now()->toIso8601String(),
-        );
+        $this->notifyLifecycleRecipient($booking->customer, $booking, 'customer', 'cleaning.booking.created', 'created', null, $booking->created_at?->toIso8601String() ?? now()->toIso8601String());
+        $this->notifyLifecycleRecipient($booking->worker?->user, $booking, 'worker', 'cleaning.booking.created', 'created', null, $booking->created_at?->toIso8601String() ?? now()->toIso8601String());
     }
 
     private function notifyLifecycleUpdated(CleaningBooking $booking, string $fromStatus): void
     {
         $booking->loadMissing(['customer', 'worker.user']);
-
-        $this->notifyLifecycleRecipient(
-            recipient: $booking->customer,
-            booking: $booking,
-            targetRole: 'customer',
-            canonicalType: 'cleaning.booking.updated',
-            action: 'updated',
-            fromStatus: $fromStatus,
-            occurredAt: $booking->updated_at?->toIso8601String() ?? now()->toIso8601String(),
-        );
-
-        $this->notifyLifecycleRecipient(
-            recipient: $booking->worker?->user,
-            booking: $booking,
-            targetRole: 'worker',
-            canonicalType: 'cleaning.booking.updated',
-            action: 'updated',
-            fromStatus: $fromStatus,
-            occurredAt: $booking->updated_at?->toIso8601String() ?? now()->toIso8601String(),
-        );
+        $this->notifyLifecycleRecipient($booking->customer, $booking, 'customer', 'cleaning.booking.updated', 'updated', $fromStatus, $booking->updated_at?->toIso8601String() ?? now()->toIso8601String());
+        $this->notifyLifecycleRecipient($booking->worker?->user, $booking, 'worker', 'cleaning.booking.updated', 'updated', $fromStatus, $booking->updated_at?->toIso8601String() ?? now()->toIso8601String());
     }
 
     private function notifyLifecycleRecipient(

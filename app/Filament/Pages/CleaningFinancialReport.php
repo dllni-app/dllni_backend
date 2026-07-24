@@ -79,8 +79,8 @@ final class CleaningFinancialReport extends Page
                 'tone' => (float) $summary['currentDebtBalance'] > 0 ? 'danger' : 'success',
             ],
             [
-                'label' => app()->isLocale('ar') ? 'رصيد عمولة الإدارة الحالي' : 'Current administration commission',
-                'value' => $this->money((float) $summary['currentAdminCommissionBalance']),
+                'label' => app()->isLocale('ar') ? 'رصيد استحقاقات الإدارة الحالي' : 'Current administration dues',
+                'value' => $this->money((float) $summary['currentAdministrationDueBalance']),
                 'tone' => 'warning',
             ],
             [

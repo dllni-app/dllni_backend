@@ -73,8 +73,8 @@ it('blocks an admin suspended worker from homepage orders, pending order lists, 
         ->assertJsonPath('dispatchEligibility.canReceiveNewRequests', false)
         ->assertJsonPath('dispatchEligibility.canAcceptNewBookings', false)
         ->assertJsonPath('dispatchEligibility.reasonCode', 'worker_suspended')
-        ->assertJsonPath('commissionCapacityEligibility.canReceiveNewRequests', false)
-        ->assertJsonPath('commissionCapacityEligibility.reasonCode', 'worker_suspended');
+        ->assertJsonPath('administrationCapacityEligibility.canReceiveNewRequests', false)
+        ->assertJsonPath('administrationCapacityEligibility.reasonCode', 'worker_suspended');
 
     $listResponse = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
 

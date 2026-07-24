@@ -117,7 +117,7 @@ it('seeds an administration loan as debt while keeping indebtedness separate', f
     expect($snapshot['depositBalance'])->toBe(600000.0)
         ->and($snapshot['adminLoanBalance'])->toBe(100000.0)
         ->and($snapshot['debtBalance'])->toBe(0.0)
-        ->and($snapshot['adminCommissionBalance'])->toBe(0.0);
+        ->and($snapshot['administrationRevenueBalance'])->toBe(0.0);
 });
 
 it('keeps the financial scenarios idempotent when reseeded', function (): void {

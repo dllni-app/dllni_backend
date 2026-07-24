@@ -111,7 +111,7 @@ it('recovers the administration loan first then administration revenue and refun
 
     expect($snapshot['depositBalance'])->toBe(4300.0)
         ->and($snapshot['adminLoanBalance'])->toBe(2000.0)
-        ->and($snapshot['adminCommissionBalance'])->toBe(700.0)
+        ->and($snapshot['administrationRevenueBalance'])->toBe(700.0)
         ->and($snapshot['maxRefundable'])->toBe(2300.0)
         ->and($service->validationMessage($freshWorker, 'refund', 2300))->toBeNull()
         ->and($service->validationMessage($freshWorker, 'refund', 1000))->not->toBeNull();
@@ -128,7 +128,7 @@ it('recovers the administration loan first then administration revenue and refun
         ->and((float) $account->withdrawn_total)->toBe(2300.0)
         ->and((float) $account->admin_revenue_withdrawn_total)->toBe(700.0)
         ->and($after['adminLoanBalance'])->toBe(0.0)
-        ->and($after['adminCommissionBalance'])->toBe(0.0)
+        ->and($after['administrationRevenueBalance'])->toBe(0.0)
         ->and($after['withdrawnAdminRevenueTotal'])->toBe(700.0);
 });
 

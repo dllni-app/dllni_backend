@@ -123,7 +123,7 @@ it('hides pending new requests from ineligible workers in the current worker lis
         ->assertJsonPath('dispatchEligibility.reasonCode', 'deposit_below_allowed_balance');
 });
 
-it('hides and warns about pending new requests when commission capacity is insufficient', function (): void {
+it('hides and warns about pending new requests when administration capacity is insufficient', function (): void {
     seedUxDepositSettings();
     seedUxFinancialSettings();
 
@@ -182,9 +182,9 @@ it('hides and warns about pending new requests when commission capacity is insuf
 
     $homepageResponse->assertOk()
         ->assertJsonPath('dispatchEligibility.canReceiveNewRequests', true)
-        ->assertJsonPath('commissionCapacityEligibility.canReceiveNewRequests', false)
-        ->assertJsonPath('commissionCapacityEligibility.reasonCode', 'insufficient_commission_capacity')
-        ->assertJsonPath('commissionCapacityEligibility.blockedNewOrdersCount', 1)
+        ->assertJsonPath('administrationCapacityEligibility.canReceiveNewRequests', false)
+        ->assertJsonPath('administrationCapacityEligibility.reasonCode', 'insufficient_administration_capacity')
+        ->assertJsonPath('administrationCapacityEligibility.blockedNewOrdersCount', 1)
         ->assertJsonPath('newOrdersCount', 0);
 
     $listResponse = $this->getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
@@ -197,8 +197,8 @@ it('hides and warns about pending new requests when commission capacity is insuf
     $acceptResponse = $this->postJson("/api/v1/cleaning-bookings/{$newBooking->id}/accept");
 
     $acceptResponse->assertUnprocessable()
-        ->assertJsonPath('code', 'WORKER_NOT_ELIGIBLE_FOR_BOOKING_COMMISSION')
-        ->assertJsonPath('errors.workerEligibility.0.reasonCode', 'insufficient_commission_capacity');
+        ->assertJsonPath('code', 'WORKER_NOT_ELIGIBLE_FOR_BOOKING_ADMINISTRATION_DUE')
+        ->assertJsonPath('errors.workerEligibility.0.reasonCode', 'insufficient_administration_capacity');
 });
 
 it('returns a structured business error when an ineligible worker tries to accept a booking', function (): void {
@@ -215,7 +215,7 @@ it('returns a structured business error when an ineligible worker tries to accep
     $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/accept");
 
     $response->assertUnprocessable()
-        ->assertJsonPath('code', 'WORKER_NOT_ELIGIBLE_FOR_BOOKING_COMMISSION')
+        ->assertJsonPath('code', 'WORKER_NOT_ELIGIBLE_FOR_BOOKING_ADMINISTRATION_DUE')
         ->assertJsonPath('errors.workerEligibility.0.reasonCode', 'deposit_below_allowed_balance')
         ->assertJsonPath('dispatchEligibility.canAcceptNewBookings', false);
 });

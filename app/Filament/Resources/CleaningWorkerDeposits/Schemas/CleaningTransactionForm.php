@@ -58,8 +58,8 @@ final class CleaningTransactionForm
                     ]),
                 Section::make(__('cleaning_finance_guidance.form.financial_summary'))
                     ->description(app()->isLocale('ar')
-                        ? 'الدين الإداري يضاف إلى رصيد الإيداع مع بقائه معلّماً كدين، أما المديونية فهي رصيد مستقل ينتج عند تجاوز عمولات المنصة لرصيد الإيداع.'
-                        : 'An administration loan is added to the deposit balance while remaining marked as a loan. Indebtedness is separate and is created only when platform charges exceed the deposit.')
+                        ? 'الدين الإداري يضاف إلى رصيد الإيداع مع بقائه معلّماً كدين، أما المديونية فهي رصيد مستقل ينتج عند تجاوز الاستحقاقات المالية لرصيد الإيداع.'
+                        : 'An administration loan is added to the deposit balance while remaining marked as a loan. Indebtedness is separate and is created when financial dues exceed the deposit.')
                     ->visible(fn (Get $get): bool => self::worker($get('worker_id')) instanceof Worker)
                     ->columns(['default' => 2, 'md' => 3, 'xl' => 6])
                     ->schema([
@@ -68,7 +68,7 @@ final class CleaningTransactionForm
                         self::moneyMetric('debt_balance', 'debtBalance', app()->isLocale('ar') ? 'المديونية الحالية' : 'Current indebtedness'),
                         self::moneyMetric('allowed_debt_limit', 'allowedDebtLimit', app()->isLocale('ar') ? 'حد المديونية' : 'Indebtedness limit'),
                         self::moneyMetric('total_revenue', 'totalRevenue', app()->isLocale('ar') ? 'إجمالي الإيرادات' : 'Total revenue'),
-                        self::moneyMetric('admin_commission_balance', 'adminCommissionBalance', app()->isLocale('ar') ? 'إجمالي عمولة الإدارة' : 'Administration commission balance'),
+                        self::moneyMetric('administration_due_balance', 'administrationRevenueBalance', app()->isLocale('ar') ? 'استحقاقات الإدارة' : 'Administration dues'),
                     ]),
                 Section::make(__('cleaning_finance_guidance.form.transaction_section'))
                     ->description(__('cleaning_finance_guidance.form.transaction_section_description'))
@@ -267,12 +267,12 @@ final class CleaningTransactionForm
 
         $deposit = self::money((float) ($snapshot['grossRefundBalance'] ?? $snapshot['depositBalance'] ?? 0));
         $loan = self::money((float) ($snapshot['adminLoanBalance'] ?? 0));
-        $commission = self::money((float) ($snapshot['adminCommissionBalance'] ?? 0));
+        $administrationDue = self::money((float) ($snapshot['administrationRevenueBalance'] ?? 0));
         $workerRefund = self::money((float) ($snapshot['maxRefundable'] ?? 0));
 
         return app()->isLocale('ar')
-            ? "سيتم إغلاق رصيد الإيداع ({$deposit}) بهذا الترتيب: استرداد الدين الإداري أولاً ({$loan})، ثم تحويل عمولة الإدارة ({$commission}) إلى إيرادات الإدارة المسحوبة، ثم إعادة المبلغ المتبقي للعامل ({$workerRefund})."
-            : "The deposit balance ({$deposit}) will be closed in this order: recover the administration loan first ({$loan}), move administration commission ({$commission}) to withdrawn administration revenue, then refund the remaining amount to the worker ({$workerRefund}).";
+            ? "سيتم إغلاق رصيد الإيداع ({$deposit}) بهذا الترتيب: استرداد الدين الإداري أولاً ({$loan})، ثم تحويل استحقاقات الإدارة ({$administrationDue}) إلى إيرادات الإدارة المسحوبة، ثم إعادة المبلغ المتبقي للعامل ({$workerRefund})."
+            : "The deposit balance ({$deposit}) will be closed in this order: recover the administration loan first ({$loan}), move administration dues ({$administrationDue}) to withdrawn administration revenue, then refund the remaining amount to the worker ({$workerRefund}).";
     }
 
     private static function money(float $amount): string

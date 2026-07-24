@@ -91,7 +91,6 @@ final class CleaningTransactionsTable
     public static function typeLabel(string $type): string
     {
         return match ($type) {
-            'commission' => app()->isLocale('ar') ? 'عمولة المنصة' : 'Platform commission',
             'debt', 'settlement' => __('cleaning_finance.types.debt'),
             'deposit' => __('cleaning_admin.transactions.types.deposit'),
             'refund' => __('cleaning_admin.transactions.types.refund'),
@@ -104,8 +103,15 @@ final class CleaningTransactionsTable
         if ($reference === null || $reference === '') {
             return '—';
         }
-        if (str_starts_with($reference, 'automatic_admin_commission:') || preg_match('/^admin_fee_booking_\d+$/', $reference) === 1) {
-            return __('cleaning_finance.references.automatic_admin_commission');
+        if (
+            str_starts_with($reference, CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX)
+            || str_starts_with($reference, CleaningDepositTransaction::LEGACY_AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX)
+            || preg_match('/^admin_fee_booking_\d+$/', $reference) === 1
+        ) {
+            return app()->isLocale('ar') ? 'استحقاق إدارة تلقائي' : 'Automatic administration due';
+        }
+        if (str_starts_with($reference, 'cleaning_cancellation_penalty:')) {
+            return app()->isLocale('ar') ? 'غرامة إلغاء طلب تنظيف' : 'Cleaning cancellation penalty';
         }
         if ($reference === 'admin_full_account_refund') {
             return app()->isLocale('ar') ? 'إغلاق الحساب المالي بالكامل' : 'Full financial account closure';
@@ -127,7 +133,6 @@ final class CleaningTransactionsTable
     {
         return match ($type) {
             'deposit' => 'success',
-            'commission' => 'info',
             'debt', 'settlement' => 'warning',
             'refund' => 'warning',
             default => 'gray',

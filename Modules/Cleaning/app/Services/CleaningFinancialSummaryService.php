@@ -24,12 +24,17 @@ final class CleaningFinancialSummaryService
             ->selectRaw('COALESCE(SUM(CASE WHEN admin_revenue_withdrawn_total > 0 THEN admin_revenue_withdrawn_total ELSE 0 END), 0) AS withdrawn_admin_revenue')
             ->first();
 
-        $commissionTotal = (float) CleaningDepositTransaction::query()
-            ->where(function (Builder $query): void {
+        $prefix = CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'%';
+        $legacyPrefix = CleaningDepositTransaction::LEGACY_AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'%';
+        $administrationDueTotal = (float) CleaningDepositTransaction::query()
+            ->where(function (Builder $query) use ($prefix, $legacyPrefix): void {
                 $query->whereIn('type', ['commission', 'admin_fee'])
-                    ->orWhere(function (Builder $query): void {
+                    ->orWhere(function (Builder $query) use ($prefix, $legacyPrefix): void {
                         $query->where('type', 'debt')
-                            ->where('reference', 'like', CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'%');
+                            ->where(function (Builder $references) use ($prefix, $legacyPrefix): void {
+                                $references->where('reference', 'like', $prefix)
+                                    ->orWhere('reference', 'like', $legacyPrefix);
+                            });
                     });
             })
             ->sum('amount');
@@ -39,10 +44,10 @@ final class CleaningFinancialSummaryService
         return [
             'currentDepositBalance' => round(max(0.0, (float) ($accountTotals?->current_deposit ?? 0)), 2),
             'currentDebtBalance' => round(max(0.0, (float) ($accountTotals?->current_debt ?? 0)), 2),
-            'currentAdminCommissionBalance' => round(max(0.0, $commissionTotal - $withdrawnAdminRevenue), 2),
+            'currentAdministrationDueBalance' => round(max(0.0, $administrationDueTotal - $withdrawnAdminRevenue), 2),
             'withdrawnAdminRevenue' => round($withdrawnAdminRevenue, 2),
             'totalRevenue' => round($this->totalRevenue(), 2),
-            'reservedActiveCommission' => round($this->reservedActiveCommission(), 2),
+            'reservedActiveAdministrationDue' => round($this->reservedActiveAdministrationDue(), 2),
             'financiallyBlockedWorkers' => Worker::query()
                 ->where('security_deposit_status', 'insufficient_balance')
                 ->count(),
@@ -55,7 +60,7 @@ final class CleaningFinancialSummaryService
             ->sum(DB::raw('COALESCE(service_share_amount, 0) + COALESCE(travel_fee, 0) + COALESCE(admin_margin_amount, 0)'));
     }
 
-    private function reservedActiveCommission(): float
+    private function reservedActiveAdministrationDue(): float
     {
         return (float) CleaningBookingWorkerAssignment::query()
             ->join('cleaning_bookings', 'cleaning_bookings.id', '=', 'cleaning_booking_worker_assignments.cleaning_booking_id')

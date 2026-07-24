@@ -30,9 +30,6 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
     public function __construct(
         private readonly int $cleaningBookingId
     ) {
-        // This job is dispatched from model observers that may run inside
-        // active DB transactions. Delay queue push until commit so the booking
-        // is visible to the worker process.
         $this->afterCommit();
     }
 
@@ -97,8 +94,8 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
 
             $this->createDispatchAlert(
                 $booking,
-                'preferred_worker_insufficient_commission_capacity',
-                'Preferred worker cannot cover the platform commission for this booking.',
+                'preferred_worker_insufficient_administration_capacity',
+                'Preferred worker cannot cover the administration due for this booking.',
                 ['preferredWorkerId' => (int) $booking->preferred_worker_id, 'solvency' => $solvency],
             );
 
@@ -167,7 +164,7 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
             $this->createDispatchAlert(
                 $booking,
                 'no_financially_solvent_workers',
-                'No eligible worker has enough deposit or remaining debt capacity to cover the booking platform commission.',
+                'No eligible worker has enough deposit or remaining debt capacity to cover the booking administration due.',
                 [
                     'financiallyBlockedWorkersCount' => $financiallyBlockedCount,
                     'lastBlockedSolvencyPayload' => $lastBlockedPayload,
@@ -247,9 +244,7 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
         }
     }
 
-    /**
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     private function bookingBroadcastPayload(CleaningBooking $booking): array
     {
         return [
@@ -277,9 +272,7 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
         ];
     }
 
-    /**
-     * @param  array<string, mixed>  $payload
-     */
+    /** @param array<string, mixed> $payload */
     private function createDispatchAlert(CleaningBooking $booking, string $reasonCode, string $message, array $payload = []): void
     {
         SystemAlert::query()->updateOrCreate(

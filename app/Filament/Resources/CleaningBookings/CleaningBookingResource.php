@@ -84,6 +84,21 @@ final class CleaningBookingResource extends Resource
                     ->formatStateUsing(fn (string $state): string => $state === 'open' ? 'يوجد نزاع مفتوح' : 'لا يوجد نزاع مفتوح')
                     ->color(fn (string $state): string => $state === 'open' ? 'danger' : 'gray')
                     ->icon(fn (string $state): string => $state === 'open' ? 'heroicon-o-exclamation-triangle' : 'heroicon-o-check-circle'),
+                TextColumn::make('cancelledByWorker.first_name')
+                    ->label('العامل الذي ألغى')
+                    ->placeholder('-')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('cancellation_offset_minutes')
+                    ->label('توقيت الإلغاء')
+                    ->formatStateUsing(fn ($state): string => self::cancellationTimingLabel($state))
+                    ->placeholder('-')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('financialPenalty.amount')
+                    ->label('الغرامة المالية')
+                    ->formatStateUsing(fn ($state): string => $state === null ? '-' : number_format((float) $state, 0).' '.config('app.currency', 'SYP'))
+                    ->badge()
+                    ->color('danger')
+                    ->toggleable(isToggledHiddenByDefault: true),
             ]);
     }
 
@@ -94,6 +109,9 @@ final class CleaningBookingResource extends Resource
                 'customer',
                 'worker.user',
                 'preferredWorker.user',
+                'cancelledByUser',
+                'cancelledByWorker.user',
+                'financialPenalty',
                 'rooms.assignedWorker.user',
                 'rooms.plannedPreferredWorker.user',
                 'workerAssignments.worker.user',
@@ -150,6 +168,11 @@ final class CleaningBookingResource extends Resource
         ], true);
     }
 
+    public static function canApplyFinancialPenalty(CleaningBooking $record): bool
+    {
+        return self::hasPermission('bookings.update');
+    }
+
     public static function canDelete(Model $record): bool
     {
         return self::hasPermission('bookings.delete');
@@ -167,6 +190,19 @@ final class CleaningBookingResource extends Resource
             'view' => ViewCleaningBooking::route('/{record}'),
             'edit' => EditCleaningBooking::route('/{record}/edit'),
         ];
+    }
+
+    private static function cancellationTimingLabel(mixed $value): string
+    {
+        if (! is_numeric($value)) {
+            return '-';
+        }
+
+        $minutes = (int) $value;
+
+        return $minutes > 0
+            ? "قبل الموعد بـ {$minutes} دقيقة"
+            : ($minutes < 0 ? 'بعد الموعد بـ '.abs($minutes).' دقيقة' : 'في موعد العمل');
     }
 
     private static function hasPermission(string $permission): bool

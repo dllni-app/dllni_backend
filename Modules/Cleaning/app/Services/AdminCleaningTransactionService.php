@@ -23,6 +23,7 @@ final class AdminCleaningTransactionService
         private readonly DepositService $depositService,
         private readonly WorkerDebtService $debtService,
         private readonly WorkerOrderSolvencyService $solvencyService,
+        private readonly CleaningFinancialPenaltySettlementService $penaltySettlementService,
     ) {}
 
     public function findWorker(int $workerId): Worker
@@ -49,11 +50,11 @@ final class AdminCleaningTransactionService
         $currentBalance = max(0.0, (float) ($worker->deposit?->current_balance ?? 0));
         $indebtednessBalance = max(0.0, (float) ($worker->deposit?->debt_balance ?? 0));
         $adminLoanBalance = max(0.0, (float) ($debt['adminLoanBalance'] ?? 0));
-        $activeReservedCommission = (float) ($capacity['activeReservedCommission'] ?? 0);
+        $activeReservedAdministrationDue = (float) ($capacity['activeReservedAdministrationDue'] ?? 0);
         $withdrawnAdminRevenue = max(0.0, (float) ($worker->deposit?->admin_revenue_withdrawn_total ?? 0));
-        $totalCommission = max(0.0, (float) ($financial['totalCommission'] ?? 0));
-        $adminCommissionBalance = max(0.0, $totalCommission - $withdrawnAdminRevenue);
-        $maxRefundable = $indebtednessBalance <= 0 && $activeReservedCommission <= 0
+        $totalAdministrationDue = max(0.0, (float) ($financial['totalAdministrationDue'] ?? 0));
+        $administrationRevenueBalance = max(0.0, $totalAdministrationDue - $withdrawnAdminRevenue);
+        $maxRefundable = $indebtednessBalance <= 0 && $activeReservedAdministrationDue <= 0
             ? max(0.0, $currentBalance - $adminLoanBalance)
             : 0.0;
 
@@ -71,21 +72,20 @@ final class AdminCleaningTransactionService
             'maxNegativeBalance' => round((float) $limits['maxNegativeBalance'], 2),
             'allowedDebtLimit' => round((float) $limits['maxNegativeBalance'], 2),
             'remainingDebtCapacity' => round((float) ($capacity['remainingDebtCapacity'] ?? 0), 2),
-            'activeReservedCommission' => round($activeReservedCommission, 2),
-            'availableCommissionCapacity' => round((float) ($capacity['availableCommissionCapacity'] ?? 0), 2),
+            'activeReservedAdministrationDue' => round($activeReservedAdministrationDue, 2),
+            'availableAdministrationCapacity' => round((float) ($capacity['availableAdministrationCapacity'] ?? 0), 2),
             'maxRefundable' => round($maxRefundable, 2),
             'grossRefundBalance' => round($currentBalance, 2),
             'depositGap' => 0.0,
             'totalRevenue' => round((float) $financial['totalRevenue'], 2),
             'completedJobs' => $this->completedBookingsCount($worker),
-            'totalCommission' => round($totalCommission, 2),
-            'adminCommissionBalance' => round($adminCommissionBalance, 2),
+            'totalAdministrationDue' => round($totalAdministrationDue, 2),
+            'administrationRevenueBalance' => round($administrationRevenueBalance, 2),
             'withdrawnAdminRevenueTotal' => round($withdrawnAdminRevenue, 2),
-            'commissionDue' => round($indebtednessBalance, 2),
+            'administrationDue' => round($indebtednessBalance, 2),
             'totalSettled' => round((float) $debt['totalSettled'], 2),
             'totalRefunded' => round((float) $financial['totalRefunded'], 2),
             'manualDebtDue' => round($adminLoanBalance, 2),
-            'adminFeeDue' => round($indebtednessBalance, 2),
             'outstandingAdministrationDue' => round($adminLoanBalance + $indebtednessBalance, 2),
             'utilizationPercent' => round((float) $financial['utilizationPercent'], 1),
             'status' => (string) $financial['status'],
@@ -220,14 +220,14 @@ final class AdminCleaningTransactionService
 
             $lockedWorker = $worker->fresh(['deposit']) ?? $worker;
             $indebtednessBalance = max(0.0, (float) $account->debt_balance);
-            $activeReservedCommission = (float) ($this->solvencyService->workerCapacitySummary($lockedWorker)['activeReservedCommission'] ?? 0);
+            $activeReservedAdministrationDue = (float) ($this->solvencyService->workerCapacitySummary($lockedWorker)['activeReservedAdministrationDue'] ?? 0);
 
             if ($indebtednessBalance > 0) {
                 throw new InvalidArgumentException(app()->isLocale('ar') ? 'يجب تسوية المديونية كاملة قبل تنفيذ الاسترداد.' : 'The outstanding indebtedness must be settled before the refund.');
             }
 
-            if ($activeReservedCommission > 0) {
-                throw new InvalidArgumentException(app()->isLocale('ar') ? 'لا يمكن تنفيذ الاسترداد مع وجود عمولات محجوزة لطلبات نشطة.' : 'The refund cannot be completed while active orders reserve commission.');
+            if ($activeReservedAdministrationDue > 0) {
+                throw new InvalidArgumentException(app()->isLocale('ar') ? 'لا يمكن تنفيذ الاسترداد مع وجود استحقاقات إدارة محجوزة لطلبات نشطة.' : 'The refund cannot be completed while active orders reserve administration dues.');
             }
 
             $depositBefore = max(0.0, (float) $account->current_balance);
@@ -235,15 +235,15 @@ final class AdminCleaningTransactionService
             $loanRecovered = min($depositBefore, $adminLoanBalance);
             $workerRefund = max(0.0, $depositBefore - $loanRecovered);
             $withdrawnAdminRevenueBefore = max(0.0, (float) ($account->admin_revenue_withdrawn_total ?? 0));
-            $adminCommissionBalance = max(0.0, $this->commissionTotalFor($worker->id) - $withdrawnAdminRevenueBefore);
+            $administrationRevenueBalance = max(0.0, $this->administrationDueTotalFor($worker->id) - $withdrawnAdminRevenueBefore);
 
-            if ($depositBefore <= 0 && $adminCommissionBalance <= 0) {
+            if ($depositBefore <= 0 && $administrationRevenueBalance <= 0) {
                 throw new InvalidArgumentException(__('cleaning_finance_guidance.validation.no_refundable_balance'));
             }
 
             $account->current_balance = 0;
             $account->withdrawn_total = (float) $account->withdrawn_total + $workerRefund;
-            $account->admin_revenue_withdrawn_total = $withdrawnAdminRevenueBefore + $adminCommissionBalance;
+            $account->admin_revenue_withdrawn_total = $withdrawnAdminRevenueBefore + $administrationRevenueBalance;
             $account->save();
 
             $transaction = CleaningDepositTransaction::query()->create([
@@ -252,7 +252,7 @@ final class AdminCleaningTransactionService
                 'type' => 'refund',
                 'amount' => $workerRefund,
                 'debt_settled_amount' => $loanRecovered,
-                'admin_revenue_withdrawn_amount' => $adminCommissionBalance,
+                'admin_revenue_withdrawn_amount' => $administrationRevenueBalance,
                 'balance_before' => $depositBefore,
                 'balance_after' => 0,
                 'debt_balance_before' => 0,
@@ -261,7 +261,9 @@ final class AdminCleaningTransactionService
                 'notes' => $notes,
             ]);
 
-            $this->depositService->syncEligibilityStatus($worker->fresh(['deposit']) ?? $worker);
+            $freshWorker = $worker->fresh(['deposit']) ?? $worker;
+            $this->depositService->syncEligibilityStatus($freshWorker);
+            $this->penaltySettlementService->clearDepositPenaltiesOnFullRefund($freshWorker);
 
             return $transaction;
         });
@@ -285,27 +287,32 @@ final class AdminCleaningTransactionService
             return app()->isLocale('ar') ? 'يجب تسوية المديونية كاملة قبل تنفيذ الاسترداد.' : 'The outstanding indebtedness must be settled before the refund.';
         }
 
-        if ((float) $snapshot['activeReservedCommission'] > 0) {
-            return app()->isLocale('ar') ? 'لا يمكن تنفيذ الاسترداد مع وجود عمولات محجوزة لطلبات نشطة.' : 'The refund cannot be completed while active orders reserve commission.';
+        if ((float) $snapshot['activeReservedAdministrationDue'] > 0) {
+            return app()->isLocale('ar') ? 'لا يمكن تنفيذ الاسترداد مع وجود استحقاقات إدارة محجوزة لطلبات نشطة.' : 'The refund cannot be completed while active orders reserve administration dues.';
         }
 
-        if ((float) $snapshot['depositBalance'] <= 0 && (float) $snapshot['adminCommissionBalance'] <= 0) {
+        if ((float) $snapshot['depositBalance'] <= 0 && (float) $snapshot['administrationRevenueBalance'] <= 0) {
             return __('cleaning_finance_guidance.validation.no_refundable_balance');
         }
 
         return null;
     }
 
-    private function commissionTotalFor(int $workerId): float
+    private function administrationDueTotalFor(int $workerId): float
     {
         $prefix = CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'%';
+        $legacyPrefix = CleaningDepositTransaction::LEGACY_AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'%';
 
         return (float) CleaningDepositTransaction::query()
             ->where('worker_id', $workerId)
-            ->where(function (Builder $query) use ($prefix): void {
+            ->where(function (Builder $query) use ($prefix, $legacyPrefix): void {
                 $query->whereIn('type', ['commission', 'admin_fee'])
-                    ->orWhere(function (Builder $query) use ($prefix): void {
-                        $query->where('type', 'debt')->where('reference', 'like', $prefix);
+                    ->orWhere(function (Builder $query) use ($prefix, $legacyPrefix): void {
+                        $query->where('type', 'debt')
+                            ->where(function (Builder $references) use ($prefix, $legacyPrefix): void {
+                                $references->where('reference', 'like', $prefix)
+                                    ->orWhere('reference', 'like', $legacyPrefix);
+                            });
                     });
             })
             ->sum('amount');

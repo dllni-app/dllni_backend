@@ -25,12 +25,12 @@ use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Http\Requests\CleaningBookingAcceptRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingCancelRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingCompleteRequest;
-use Modules\Cleaning\Http\Requests\CleaningBookingSosRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingLocationRequest;
-use Modules\Cleaning\Http\Requests\CleaningBookingRoomClaimRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingRejectRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingRequest;
 use Modules\Cleaning\Http\Requests\CleaningBookingRequests\CleaningBookingFilterRequest;
+use Modules\Cleaning\Http\Requests\CleaningBookingRoomClaimRequest;
+use Modules\Cleaning\Http\Requests\CleaningBookingSosRequest;
 use Modules\Cleaning\Http\Resources\CleaningBookingResource;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Services\CleaningBookingService;
@@ -54,6 +54,9 @@ final class CleaningBookingController
                 'customer',
                 'worker.user',
                 'preferredWorker.user',
+                'cancelledByUser',
+                'cancelledByWorker.user',
+                'financialPenalty',
                 'rooms.assignedWorker.user',
                 'workerAssignments.worker.user',
                 'addons',
@@ -405,6 +408,9 @@ final class CleaningBookingController
             'customer',
             'worker.user',
             'preferredWorker.user',
+            'cancelledByUser',
+            'cancelledByWorker.user',
+            'financialPenalty',
             'rooms.assignedWorker.user',
             'workerAssignments.worker.user',
             'addons',
@@ -435,16 +441,17 @@ final class CleaningBookingController
 
         $reasonCode = (bool) $eligibility['canAcceptNewBookings'] ? (string) $solvency['reasonCode'] : (string) $eligibility['reasonCode'];
         $message = (bool) $eligibility['canAcceptNewBookings']
-            ? 'Worker balance and allowed negative limit do not cover this booking platform commission.'
+            ? 'Worker balance and allowed debt limit do not cover this booking administration due.'
             : $eligibility['message'];
+        $code = 'WORKER_NOT_ELIGIBLE_FOR_BOOKING_ADMINISTRATION_DUE';
 
         return response()->json([
             'message' => $message,
-            'code' => 'WORKER_NOT_ELIGIBLE_FOR_BOOKING_COMMISSION',
+            'code' => $code,
             'errors' => [
                 'workerEligibility' => [
                     [
-                        'code' => 'WORKER_NOT_ELIGIBLE_FOR_BOOKING_COMMISSION',
+                        'code' => $code,
                         'reasonCode' => $reasonCode,
                         'message' => $message,
                         'dispatchEligibility' => $eligibility,
