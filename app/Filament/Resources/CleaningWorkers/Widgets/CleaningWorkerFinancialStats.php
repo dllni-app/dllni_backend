@@ -41,13 +41,6 @@ final class CleaningWorkerFinancialStats extends StatsOverviewWidget
                 ->description(app()->isLocale('ar') ? 'لا يمكنهم استقبال طلبات جديدة بسبب الحساب المالي' : 'Cannot receive new requests because of finance status')
                 ->icon('heroicon-o-no-symbol')
                 ->color((int) $summary['financiallyBlockedWorkers'] > 0 ? 'danger' : 'success'),
-            Stat::make(
-                app()->isLocale('ar') ? 'العمولات المحجوزة للطلبات النشطة' : 'Reserved active commissions',
-                self::money((float) $summary['reservedActiveCommission']),
-            )
-                ->description(app()->isLocale('ar') ? 'طلبات نشطة لم تُرحّل عمولاتها بعد' : 'Active bookings whose commission has not been charged yet')
-                ->icon('heroicon-o-clock')
-                ->color((float) $summary['reservedActiveCommission'] > 0 ? 'warning' : 'gray'),
         ];
     }
 
