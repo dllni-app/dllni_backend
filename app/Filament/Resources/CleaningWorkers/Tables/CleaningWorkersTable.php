@@ -66,9 +66,9 @@ final class CleaningWorkersTable
                     ->badge()
                     ->color(fn (float $state): string => $state > 0 ? 'success' : 'danger')
                     ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('available_commission_capacity')
+                TextColumn::make('available_administration_capacity')
                     ->label('السعة المالية للطلبات')
-                    ->state(fn (Worker $record): float => self::capacity($record)['availableCommissionCapacity'])
+                    ->state(fn (Worker $record): float => self::capacity($record)['availableAdministrationCapacity'])
                     ->formatStateUsing(fn ($state): string => ArabicDashboardLabels::money($state))
                     ->badge()
                     ->color(fn (float $state): string => $state > 0 ? 'success' : 'danger')
@@ -138,14 +138,14 @@ final class CleaningWorkersTable
                         }),
                         blank: fn (Builder $query): Builder => $query,
                     ),
-                TernaryFilter::make('has_reserved_active_commission')
-                    ->label('العمولات المحجوزة للطلبات النشطة')
+                TernaryFilter::make('has_reserved_active_administration_due')
+                    ->label('استحقاقات الإدارة المحجوزة للطلبات النشطة')
                     ->placeholder('جميع العاملين')
-                    ->trueLabel('لديه عمولات محجوزة')
-                    ->falseLabel('لا توجد عمولات محجوزة')
+                    ->trueLabel('لديه استحقاقات محجوزة')
+                    ->falseLabel('لا توجد استحقاقات محجوزة')
                     ->queries(
-                        true: fn (Builder $query): Builder => self::applyReservedActiveCommissionFilter($query, true),
-                        false: fn (Builder $query): Builder => self::applyReservedActiveCommissionFilter($query, false),
+                        true: fn (Builder $query): Builder => self::applyReservedActiveAdministrationDueFilter($query, true),
+                        false: fn (Builder $query): Builder => self::applyReservedActiveAdministrationDueFilter($query, false),
                         blank: fn (Builder $query): Builder => $query,
                     ),
             ])
@@ -202,9 +202,9 @@ final class CleaningWorkersTable
         });
     }
 
-    private static function applyReservedActiveCommissionFilter(Builder $query, bool $hasReservedCommission): Builder
+    private static function applyReservedActiveAdministrationDueFilter(Builder $query, bool $hasReservedDue): Builder
     {
-        $workerIdsWithReservedCommission = function ($subQuery): void {
+        $workerIdsWithReservedDue = function ($subQuery): void {
             $subQuery
                 ->select('assignments.worker_id')
                 ->from('cleaning_booking_worker_assignments as assignments')
@@ -218,9 +218,9 @@ final class CleaningWorkersTable
                 ->havingRaw('COALESCE(SUM(assignments.admin_margin_amount), 0) > 0');
         };
 
-        return $hasReservedCommission
-            ? $query->whereIn('workers.id', $workerIdsWithReservedCommission)
-            : $query->whereNotIn('workers.id', $workerIdsWithReservedCommission);
+        return $hasReservedDue
+            ? $query->whereIn('workers.id', $workerIdsWithReservedDue)
+            : $query->whereNotIn('workers.id', $workerIdsWithReservedDue);
     }
 
     private static function genderLabel(?string $gender): string
