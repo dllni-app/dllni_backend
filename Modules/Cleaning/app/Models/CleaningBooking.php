@@ -4,22 +4,23 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Models;
 
+use App\Enums\GenderPreference;
 use App\Models\BookingReview;
 use App\Models\BookingStatusLog;
 use App\Models\CancellationPolicy;
+use App\Models\CleaningFinancialPenalty;
 use App\Models\User;
 use App\Models\Worker;
 use App\Models\WorkerCustomerRating;
 use Database\Factories\CleaningBookingFactory;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
-use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
-use App\Enums\GenderPreference;
 use Modules\Cleaning\Enums\CleaningAssignmentMode;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
@@ -88,6 +89,9 @@ final class CleaningBooking extends Model
         'cancelled_at',
         'cancellation_reason',
         'cancelled_by_role',
+        'cancelled_by_user_id',
+        'cancelled_by_worker_id',
+        'cancellation_offset_minutes',
     ];
 
     public function customer(): BelongsTo
@@ -103,6 +107,21 @@ final class CleaningBooking extends Model
     public function preferredWorker(): BelongsTo
     {
         return $this->belongsTo(Worker::class, 'preferred_worker_id');
+    }
+
+    public function cancelledByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by_user_id');
+    }
+
+    public function cancelledByWorker(): BelongsTo
+    {
+        return $this->belongsTo(Worker::class, 'cancelled_by_worker_id');
+    }
+
+    public function financialPenalty(): HasOne
+    {
+        return $this->hasOne(CleaningFinancialPenalty::class, 'cleaning_booking_id');
     }
 
     public function neighborhood(): BelongsTo
@@ -232,6 +251,9 @@ final class CleaningBooking extends Model
             'address_latitude' => 'decimal:8',
             'address_longitude' => 'decimal:8',
             'cancelled_at' => 'datetime',
+            'cancelled_by_user_id' => 'integer',
+            'cancelled_by_worker_id' => 'integer',
+            'cancellation_offset_minutes' => 'integer',
         ];
     }
 
