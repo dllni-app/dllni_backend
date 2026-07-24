@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\CleaningWorkers\Widgets;
 
 use App\Filament\Support\AdminUiFormatter;
+use App\Models\CleaningFinancialPenalty;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 use Modules\Cleaning\Services\CleaningFinancialSummaryService;
@@ -18,6 +19,7 @@ final class CleaningWorkerFinancialStats extends StatsOverviewWidget
     protected function getStats(): array
     {
         $summary = app(CleaningFinancialSummaryService::class)->global();
+        $activePenalties = (float) CleaningFinancialPenalty::query()->active()->sum('amount');
 
         return [
             Stat::make(
@@ -42,12 +44,19 @@ final class CleaningWorkerFinancialStats extends StatsOverviewWidget
                 ->icon('heroicon-o-no-symbol')
                 ->color((int) $summary['financiallyBlockedWorkers'] > 0 ? 'danger' : 'success'),
             Stat::make(
-                app()->isLocale('ar') ? 'العمولات المحجوزة للطلبات النشطة' : 'Reserved active commissions',
-                self::money((float) $summary['reservedActiveCommission']),
+                app()->isLocale('ar') ? 'استحقاقات الإدارة المحجوزة للطلبات النشطة' : 'Reserved active administration dues',
+                self::money((float) $summary['reservedActiveAdministrationDue']),
             )
-                ->description(app()->isLocale('ar') ? 'طلبات نشطة لم تُرحّل عمولاتها بعد' : 'Active bookings whose commission has not been charged yet')
+                ->description(app()->isLocale('ar') ? 'طلبات نشطة لم تُرحّل استحقاقاتها بعد' : 'Active bookings whose administration dues are not charged yet')
                 ->icon('heroicon-o-clock')
-                ->color((float) $summary['reservedActiveCommission'] > 0 ? 'warning' : 'gray'),
+                ->color((float) $summary['reservedActiveAdministrationDue'] > 0 ? 'warning' : 'gray'),
+            Stat::make(
+                app()->isLocale('ar') ? 'الغرامات المالية النشطة' : 'Active financial penalties',
+                self::money($activePenalties),
+            )
+                ->description(app()->isLocale('ar') ? 'إجمالي الغرامات غير المصفرة' : 'Total penalties that have not been cleared')
+                ->icon('heroicon-o-exclamation-circle')
+                ->color($activePenalties > 0 ? 'danger' : 'success'),
         ];
     }
 
