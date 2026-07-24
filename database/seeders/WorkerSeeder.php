@@ -20,6 +20,9 @@ use Carbon\CarbonImmutable;
 use Database\Seeders\Support\SeederMedia;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Schema;
+use InvalidArgumentException;
+use Modules\Cleaning\Services\AdminCleaningTransactionService;
+use Modules\Cleaning\Services\WorkerDebtService;
 
 final class WorkerSeeder extends Seeder
 {
@@ -113,7 +116,10 @@ final class WorkerSeeder extends Seeder
 
             CleaningDepositTransaction::query()
                 ->where('worker_id', $worker->id)
-                ->where('reference', 'like', 'seed-%')
+                ->where(function ($query): void {
+                    $query->where('reference', 'like', 'seed-%')
+                        ->orWhere('reference', 'like', '%:seed-%');
+                })
                 ->delete();
 
             CleaningWorkerDeposit::query()->updateOrCreate(
@@ -184,9 +190,9 @@ final class WorkerSeeder extends Seeder
                 'birthday' => '1993-04-12', 'preferred_work_type' => WorkerPreferredWorkType::Cleaning->value,
                 'average_rating' => 4.9, 'total_completed_jobs' => 18, 'trust_score' => 96,
                 'acceptance_rate' => 94.5, 'cancellation_rate' => 1.2,
-                'deposit_balance' => 725000, 'debt_balance' => 0,
-                'deposited_total' => 1100000, 'withdrawn_total' => 200000,
-                'admin_revenue_withdrawn_total' => 100000,
+                'deposit_balance' => 800000, 'debt_balance' => 0,
+                'deposited_total' => 1100000, 'withdrawn_total' => 300000,
+                'admin_revenue_withdrawn_total' => 0,
                 'trust_reason' => 'سجل حجوزات مكتملة بدون شكاوى خلال آخر شهر.',
                 'deposit_transactions' => self::runaDepositTimeline($now),
             ],
@@ -197,8 +203,8 @@ final class WorkerSeeder extends Seeder
                 'birthday' => '1990-09-03', 'preferred_work_type' => WorkerPreferredWorkType::Events->value,
                 'average_rating' => 4.7, 'total_completed_jobs' => 11, 'trust_score' => 91,
                 'acceptance_rate' => 90.0, 'cancellation_rate' => 2.5,
-                'deposit_balance' => 500000, 'debt_balance' => 0,
-                'deposited_total' => 600000, 'withdrawn_total' => 0,
+                'deposit_balance' => 600000, 'debt_balance' => 0,
+                'deposited_total' => 500000, 'withdrawn_total' => 0,
                 'admin_revenue_withdrawn_total' => 0,
                 'trust_reason' => 'التزام جيد بمواعيد قبول الحجوزات.',
                 'deposit_transactions' => self::ahmadDepositTimeline($now),
@@ -210,8 +216,8 @@ final class WorkerSeeder extends Seeder
                 'birthday' => '1996-01-25', 'preferred_work_type' => WorkerPreferredWorkType::Both->value,
                 'average_rating' => 4.8, 'total_completed_jobs' => 15, 'trust_score' => 94,
                 'acceptance_rate' => 93.0, 'cancellation_rate' => 1.8,
-                'deposit_balance' => 0, 'debt_balance' => 50000,
-                'deposited_total' => 200000, 'withdrawn_total' => 0,
+                'deposit_balance' => 0, 'debt_balance' => 0,
+                'deposited_total' => 200000, 'withdrawn_total' => 200000,
                 'admin_revenue_withdrawn_total' => 0,
                 'trust_reason' => 'تقييمات عملاء مرتفعة وثابتة.',
                 'deposit_transactions' => self::lailaDepositTimeline($now),
@@ -224,10 +230,8 @@ final class WorkerSeeder extends Seeder
     {
         return [
             self::transaction('deposit', 300000, 0, 300000, 0, 0, 'seed-runa-opening-deposit', 'إيداع افتتاحي.', $now->subDays(20)),
-            self::transaction('commission', 100000, 300000, 200000, 0, 0, 'seed-runa-platform-commission-before-close', 'خصم عمولة الإدارة من رصيد الإيداع.', $now->subDays(15)),
-            self::transaction('refund', 200000, 200000, 0, 0, 0, 'seed-runa-full-account-close', 'تصفير الحساب المالي بالكامل وترحيل عمولة الإدارة إلى الإيرادات المسحوبة.', $now->subDays(10), adminRevenueWithdrawnAmount: 100000),
+            self::transaction('refund', 300000, 300000, 0, 0, 0, 'seed-runa-full-account-refund', 'استرداد كامل رصيد الإيداع.', $now->subDays(10)),
             self::transaction('deposit', 800000, 0, 800000, 0, 0, 'seed-runa-new-cycle-deposit', 'إيداع جديد بعد تصفير الحساب السابق.', $now->subDays(5)),
-            self::transaction('commission', 75000, 800000, 725000, 0, 0, 'seed-runa-current-platform-commission', 'عمولة إدارة ضمن دورة الحساب الحالية.', $now->subDay()),
         ];
     }
 
@@ -235,10 +239,18 @@ final class WorkerSeeder extends Seeder
     private static function ahmadDepositTimeline(CarbonImmutable $now): array
     {
         return [
-            self::transaction('deposit', 100000, 0, 100000, 0, 0, 'seed-ahmad-opening-deposit', 'إيداع افتتاحي.', $now->subDays(18)),
-            self::transaction('commission', 150000, 100000, 0, 0, 50000, 'seed-ahmad-platform-commission', 'استهلكت العمولة رصيد الإيداع وأنشأت مديونية للجزء غير المغطى.', $now->subDays(12)),
-            self::transaction('settlement', 50000, 0, 0, 50000, 0, 'seed-ahmad-full-debt-settlement', 'تسوية كامل المديونية.', $now->subDays(8), debtSettledAmount: 50000),
-            self::transaction('deposit', 500000, 0, 500000, 0, 0, 'seed-ahmad-new-deposit', 'إيداع جديد بعد تسوية المديونية.', $now->subDays(3)),
+            self::transaction(
+                'debt',
+                100000,
+                0,
+                100000,
+                0,
+                0,
+                WorkerDebtService::ADMIN_LOAN_REFERENCE.':seed-ahmad-opening-loan',
+                'دين إداري مضاف إلى رصيد الإيداع.',
+                $now->subDays(18),
+            ),
+            self::transaction('deposit', 500000, 100000, 600000, 0, 0, 'seed-ahmad-new-deposit', 'إيداع نقدي أضيف إلى رصيد العامل.', $now->subDays(3)),
         ];
     }
 
@@ -247,7 +259,7 @@ final class WorkerSeeder extends Seeder
     {
         return [
             self::transaction('deposit', 200000, 0, 200000, 0, 0, 'seed-laila-opening-deposit', 'إيداع افتتاحي.', $now->subDays(14)),
-            self::transaction('commission', 250000, 200000, 0, 0, 50000, 'seed-laila-platform-commission', 'استهلكت العمولة الإيداع وأنشأت مديونية حالية.', $now->subDays(4)),
+            self::transaction('refund', 200000, 200000, 0, 0, 0, 'seed-laila-full-account-refund', 'استرداد كامل رصيد الإيداع.', $now->subDays(4)),
         ];
     }
 
@@ -265,6 +277,10 @@ final class WorkerSeeder extends Seeder
         float $debtSettledAmount = 0,
         float $adminRevenueWithdrawnAmount = 0,
     ): array {
+        if (! in_array($type, AdminCleaningTransactionService::TYPES, true)) {
+            throw new InvalidArgumentException("Unsupported seeded cleaning transaction type [{$type}].");
+        }
+
         return [
             'type' => $type,
             'amount' => $amount,
