@@ -74,7 +74,7 @@ final class WorkerHomepageController
                 'isEligibleForNewRequests' => false,
                 'depositSummary' => null,
                 'dispatchEligibility' => null,
-                'commissionCapacityEligibility' => null,
+                'administrationCapacityEligibility' => null,
                 'bookingsWeeklyChart' => $this->emptyBookingsWeeklyChart($weekStart, $dayLabels),
                 'invoicesFourWeeksChart' => $this->emptyInvoicesFourWeeksChart($fourWeekStart),
             ]);
@@ -149,7 +149,7 @@ final class WorkerHomepageController
 
         $newOrderCandidates = $this->newOrdersCandidateQuery($worker, $today)->get();
         $newOrdersCount = 0;
-        $blockedByCommissionCapacityCount = 0;
+        $blockedByAdministrationCapacityCount = 0;
 
         foreach ($newOrderCandidates as $candidate) {
             if ($this->solvencyService->canWorkerReceiveBooking($worker, $candidate)) {
@@ -158,7 +158,7 @@ final class WorkerHomepageController
                 continue;
             }
 
-            $blockedByCommissionCapacityCount++;
+            $blockedByAdministrationCapacityCount++;
         }
 
         $pendingExtensionRequestsCount = CleaningTimeWarning::query()
@@ -230,11 +230,11 @@ final class WorkerHomepageController
         $worker->loadMissing('deposit');
         $depositSummary = $this->depositService->depositStatusPayload($worker);
         $dispatchEligibility = $this->newRequestEligibility($worker, $depositSummary);
-        $commissionCapacityEligibility = $this->commissionCapacityEligibility(
+        $administrationCapacityEligibility = $this->administrationCapacityEligibility(
             $worker,
             $depositSummary,
             $newOrdersCount,
-            $blockedByCommissionCapacityCount,
+            $blockedByAdministrationCapacityCount,
         );
         $canReceiveNewRequests = (bool) $dispatchEligibility['canReceiveNewRequests'];
 
@@ -255,7 +255,7 @@ final class WorkerHomepageController
             'isEligibleForNewRequests' => $canReceiveNewRequests,
             'depositSummary' => $depositSummary,
             'dispatchEligibility' => $dispatchEligibility,
-            'commissionCapacityEligibility' => $commissionCapacityEligibility,
+            'administrationCapacityEligibility' => $administrationCapacityEligibility,
             'amountSummary' => [
                 'period' => 'last_4_weeks',
                 'currency' => 'SYP',
@@ -386,30 +386,30 @@ final class WorkerHomepageController
         ];
     }
 
-    private function commissionCapacityEligibility(object $worker, array $depositSummary, int $availableNewOrdersCount, int $blockedNewOrdersCount): array
+    private function administrationCapacityEligibility(object $worker, array $depositSummary, int $availableNewOrdersCount, int $blockedNewOrdersCount): array
     {
         $capacitySummary = $this->solvencyService->workerCapacitySummary($worker);
         $hasBlockedOrders = $blockedNewOrdersCount > 0;
         $reasonCode = $hasBlockedOrders
-            ? WorkerOrderSolvencyService::REASON_INSUFFICIENT_COMMISSION_CAPACITY
+            ? WorkerOrderSolvencyService::REASON_INSUFFICIENT_ADMINISTRATION_CAPACITY
             : WorkerOrderSolvencyService::REASON_ELIGIBLE;
 
         return [
             'canReceiveNewRequests' => ! $hasBlockedOrders,
             'canAcceptNewBookings' => ! $hasBlockedOrders,
             'reasonCode' => $reasonCode,
-            'message' => $this->commissionCapacityMessage($reasonCode),
+            'message' => $this->administrationCapacityMessage($reasonCode),
             'depositSummary' => array_merge($depositSummary, $capacitySummary),
             'availableNewOrdersCount' => $availableNewOrdersCount,
             'blockedNewOrdersCount' => $blockedNewOrdersCount,
         ];
     }
 
-    private function commissionCapacityMessage(string $reasonCode): string
+    private function administrationCapacityMessage(string $reasonCode): string
     {
         return match ($reasonCode) {
-            WorkerOrderSolvencyService::REASON_INSUFFICIENT_COMMISSION_CAPACITY => 'Your available commission capacity is not enough to receive some new requests. Please recharge your deposit account or wait until reserved commissions are released.',
-            default => 'Your available commission capacity can receive new requests.',
+            WorkerOrderSolvencyService::REASON_INSUFFICIENT_ADMINISTRATION_CAPACITY => 'Your available administration capacity is not enough to receive some new requests. Please recharge your deposit account or wait until reserved administration dues are released.',
+            default => 'Your available administration capacity can receive new requests.',
         };
     }
 
