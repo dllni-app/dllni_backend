@@ -66,7 +66,7 @@ final class CleaningTransactionForm
                         self::moneyMetric('deposit_balance', 'depositBalance', app()->isLocale('ar') ? 'رصيد الإيداع' : 'Deposit balance'),
                         self::moneyMetric('admin_loan_balance', 'adminLoanBalance', app()->isLocale('ar') ? 'الدين الإداري ضمن الإيداع' : 'Administration loan in deposit'),
                         self::moneyMetric('debt_balance', 'debtBalance', app()->isLocale('ar') ? 'المديونية الحالية' : 'Current indebtedness'),
-                        self::moneyMetric('allowed_debt_limit', 'allowedDebtLimit', app()->isLocale('ar') ? 'حد المديونية' : 'Indebtedness limit'),
+                        self::moneyMetric('allowed_debt_limit', 'allowedDebtLimit', app()->isLocale('ar') ? 'حد الدين' : 'Indebtedness limit'),
                         self::moneyMetric('total_revenue', 'totalRevenue', app()->isLocale('ar') ? 'إجمالي الإيرادات' : 'Total revenue'),
                         self::moneyMetric('admin_commission_balance', 'adminCommissionBalance', app()->isLocale('ar') ? 'إجمالي عمولة الإدارة' : 'Administration commission balance'),
                     ]),
