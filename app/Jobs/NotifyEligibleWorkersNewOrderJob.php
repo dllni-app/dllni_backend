@@ -70,10 +70,6 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
                     $query->where('is_active', true);
                 })
                 ->whereNotIn('id', $rejectedWorkerIds)
-                ->when(
-                    $booking->neighborhood_id !== null,
-                    fn ($query) => $query->coversNeighborhood((int) $booking->neighborhood_id),
-                )
                 ->with(['user', 'deposit'])
                 ->first();
 
@@ -81,7 +77,7 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
                 $this->createDispatchAlert(
                     $booking,
                     'preferred_worker_not_eligible',
-                    'Preferred worker is not currently eligible, available, or inside the booking neighborhood.',
+                    'Preferred worker is not currently eligible or available for this booking.',
                     ['preferredWorkerId' => (int) $booking->preferred_worker_id],
                 );
 

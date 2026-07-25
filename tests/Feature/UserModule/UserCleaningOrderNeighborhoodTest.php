@@ -72,7 +72,7 @@ it('stores neighborhood id and name on a customer cleaning order', function (): 
     ]);
 });
 
-it('rejects preferred worker orders when the worker does not cover the selected neighborhood', function (): void {
+it('allows preferred worker orders when the worker does not cover the selected neighborhood', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
@@ -89,7 +89,7 @@ it('rejects preferred worker orders when the worker does not cover the selected 
         'is_active' => true,
     ]);
 
-    $this->postJson('/api/v1/user/cleaning/orders', [
+    $response = $this->postJson('/api/v1/user/cleaning/orders', [
         'propertyType' => 'apartment',
         'propertyDetails' => [
             'address' => 'Aleppo - Bustan al-Pasha',
@@ -107,6 +107,16 @@ it('rejects preferred worker orders when the worker does not cover the selected 
         'preferredWorkerId' => $worker->id,
         'assignmentMode' => 'preferred_worker',
         'termsAccepted' => true,
-    ])->assertUnprocessable()
-        ->assertJsonValidationErrors(['preferredWorkerId']);
+    ]);
+
+    $response->assertCreated()
+        ->assertJsonPath('order.preferredWorkerId', $worker->id)
+        ->assertJsonPath('order.assignmentMode', 'preferred_worker')
+        ->assertJsonPath('order.neighborhoodId', $requestedNeighborhood->id);
+
+    $this->assertDatabaseHas('cleaning_bookings', [
+        'customer_id' => $user->id,
+        'preferred_worker_id' => $worker->id,
+        'neighborhood_id' => $requestedNeighborhood->id,
+    ]);
 });

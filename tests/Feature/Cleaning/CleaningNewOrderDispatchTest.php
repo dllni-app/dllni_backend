@@ -14,6 +14,7 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Events\CleaningBookingCreated;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningNeighborhood;
+use Modules\Cleaning\Services\WorkerDebtService;
 
 it('notifies and broadcasts new cleaning bookings to eligible workers', function (): void {
     Notification::fake();
@@ -88,5 +89,79 @@ it('notifies and broadcasts new cleaning bookings to eligible workers', function
         return $event->cleaningBookingId === (int) $booking->id
             && $event->workerId === (int) $worker->id
             && ($event->booking['status'] ?? null) === CleaningBookingStatus::Pending->value;
+    });
+});
+
+it('dispatches a preferred worker booking outside their zones when funded by an administration loan', function (): void {
+    Notification::fake();
+    Event::fake([CleaningBookingCreated::class]);
+
+    CleaningDepositSetting::query()->create([
+        'minimum_deposit_amount' => 0,
+        'default_max_negative_balance' => 0,
+        'restriction_threshold_percent' => 100,
+        'is_enabled' => true,
+        'trust_reject_after_accept_penalty' => 10,
+        'trust_minimum_for_dispatch' => 0,
+    ]);
+
+    $scheduledAt = now()->addDay()->setTime(15, 0);
+    $dayKey = mb_strtolower($scheduledAt->format('l'));
+    $requestedNeighborhood = CleaningNeighborhood::factory()->create(['name_ar' => 'Requested area']);
+    $coveredNeighborhood = CleaningNeighborhood::factory()->create(['name_ar' => 'Worker area']);
+
+    $workerUser = User::factory()->create(['email' => 'preferred-cleaning-worker@example.com']);
+    $worker = Worker::factory()->create([
+        'user_id' => $workerUser->id,
+        'trust_score' => 100,
+        'home_address' => (string) $coveredNeighborhood->name_ar,
+        'home_latitude' => 36.2000,
+        'home_longitude' => 37.1500,
+        'default_working_hours' => [
+            $dayKey => [
+                'available' => true,
+                'data' => [
+                    ['14:00' => '18:00'],
+                ],
+            ],
+        ],
+    ]);
+    $worker->zones()->create([
+        'neighborhood_id' => $coveredNeighborhood->id,
+        'name' => (string) $coveredNeighborhood->name_ar,
+        'is_active' => true,
+    ]);
+
+    app(WorkerDebtService::class)->recordDebt(
+        $worker,
+        100000,
+        WorkerDebtService::ADMIN_LOAN_REFERENCE,
+        'Administration-funded deposit for dispatch test',
+    );
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => null,
+        'preferred_worker_id' => $worker->id,
+        'assignment_mode' => 'preferred_worker',
+        'status' => CleaningBookingStatus::Pending->value,
+        'gender_preference' => 'any',
+        'neighborhood_id' => $requestedNeighborhood->id,
+        'neighborhood_name' => (string) $requestedNeighborhood->name_ar,
+        'address_latitude' => 36.2100,
+        'address_longitude' => 37.1600,
+        'scheduled_date' => $scheduledAt->toDateString(),
+        'scheduled_time' => $scheduledAt->format('H:i'),
+        'base_price' => 45000,
+        'addons_total' => 0,
+        'total_price' => 45000,
+        'number_of_workers' => 1,
+    ]);
+
+    (new NotifyEligibleWorkersNewOrderJob((int) $booking->id))->handle();
+
+    Notification::assertSentTo($workerUser, NewOrderRequestNotification::class);
+    Event::assertDispatched(CleaningBookingCreated::class, function (CleaningBookingCreated $event) use ($booking, $worker): bool {
+        return $event->cleaningBookingId === (int) $booking->id
+            && $event->workerId === (int) $worker->id;
     });
 });
