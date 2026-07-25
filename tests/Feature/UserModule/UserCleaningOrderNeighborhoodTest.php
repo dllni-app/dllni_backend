@@ -111,12 +111,12 @@ it('allows preferred worker orders when the worker does not cover the selected n
 
     $response->assertCreated()
         ->assertJsonPath('order.preferredWorkerId', $worker->id)
+        ->assertJsonPath('order.assignmentMode', 'preferred_worker')
         ->assertJsonPath('order.neighborhoodId', $requestedNeighborhood->id);
 
     $this->assertDatabaseHas('cleaning_bookings', [
         'customer_id' => $user->id,
         'preferred_worker_id' => $worker->id,
-        'assignment_mode' => 'preferred_worker',
         'neighborhood_id' => $requestedNeighborhood->id,
     ]);
 });
