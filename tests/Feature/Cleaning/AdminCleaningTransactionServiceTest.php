@@ -82,7 +82,7 @@ it('counts completed orders from actual booking records instead of the seeded wo
     expect((int) $worker->fresh()->total_completed_jobs)->toBe(120)->and($snapshot['completedJobs'])->toBe(2);
 });
 
-it('recovers the administration loan first then administration revenue and refunds the remainder to the worker', function (): void {
+it('uses a worker deposit to recover the administration loan before refunding the remainder', function (): void {
     $worker = createCleaningWorkerForAdminTransaction();
     CleaningWorkerDeposit::query()->create([
         'worker_id' => $worker->id,
@@ -109,8 +109,8 @@ it('recovers the administration loan first then administration revenue and refun
     $freshWorker = $worker->fresh(['deposit']);
     $snapshot = $service->snapshot($freshWorker);
 
-    expect($snapshot['depositBalance'])->toBe(4300.0)
-        ->and($snapshot['adminLoanBalance'])->toBe(2000.0)
+    expect($snapshot['depositBalance'])->toBe(2300.0)
+        ->and($snapshot['adminLoanBalance'])->toBe(0.0)
         ->and($snapshot['adminCommissionBalance'])->toBe(700.0)
         ->and($snapshot['maxRefundable'])->toBe(2300.0)
         ->and($service->validationMessage($freshWorker, 'refund', 2300))->toBeNull()
@@ -122,7 +122,7 @@ it('recovers the administration loan first then administration revenue and refun
 
     expect($transaction->type)->toBe('refund')
         ->and((float) $transaction->amount)->toBe(2300.0)
-        ->and((float) $transaction->debt_settled_amount)->toBe(2000.0)
+        ->and((float) $transaction->debt_settled_amount)->toBe(0.0)
         ->and((float) $transaction->admin_revenue_withdrawn_amount)->toBe(700.0)
         ->and((float) $account->current_balance)->toBe(0.0)
         ->and((float) $account->withdrawn_total)->toBe(2300.0)

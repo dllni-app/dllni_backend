@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Services\AdminCleaningTransactionService;
 use Modules\Cleaning\Services\DepositService;
 use Modules\Cleaning\Services\WorkerDebtService;
 
@@ -74,6 +75,70 @@ it('adds an administration loan to deposit without increasing indebtedness', fun
         ->assertJsonPath('hasAdminLoan', true)
         ->assertJsonPath('allowedDebtLimit', 50000)
         ->assertJsonPath('remainingDebtCapacity', 50000);
+});
+
+it('uses worker deposits to repay the administration loan before increasing usable balance', function (): void {
+    $worker = Worker::factory()->create(['trust_score' => 100, 'security_deposit_status' => 'active']);
+
+    CleaningWorkerDeposit::query()->create([
+        'worker_id' => $worker->id,
+        'current_balance' => 0,
+        'debt_balance' => 0,
+        'deposited_total' => 0,
+        'withdrawn_total' => 0,
+        'minimum_required' => 0,
+        'max_negative_balance' => 0,
+        'is_active' => true,
+    ]);
+
+    app(WorkerDebtService::class)->recordDebt(
+        $worker,
+        999998,
+        WorkerDebtService::ADMIN_LOAN_REFERENCE,
+        'Administration-funded balance.',
+    );
+
+    $fundedWorker = $worker->fresh(['deposit']);
+    expect(app(AdminCleaningTransactionService::class)->projectedBalance($fundedWorker, 'deposit', 800000))
+        ->toBe(999998.0);
+
+    $firstDeposit = app(DepositService::class)->recordDeposit(
+        $fundedWorker,
+        800000,
+        'worker_cash_deposit',
+        'Partial administration-loan repayment.',
+    );
+
+    $afterFirstDeposit = $worker->fresh(['deposit']);
+    $firstSummary = app(WorkerDebtService::class)->summary($afterFirstDeposit);
+
+    expect((float) $afterFirstDeposit->deposit->current_balance)->toBe(999998.0)
+        ->and((float) $afterFirstDeposit->deposit->deposited_total)->toBe(800000.0)
+        ->and((float) $firstSummary['adminLoanBalance'])->toBe(199998.0)
+        ->and((float) $firstSummary['manualDebtSettled'])->toBe(800000.0)
+        ->and((float) $firstDeposit->amount)->toBe(800000.0)
+        ->and((float) $firstDeposit->debt_settled_amount)->toBe(800000.0)
+        ->and((float) $firstDeposit->balance_before)->toBe(999998.0)
+        ->and((float) $firstDeposit->balance_after)->toBe(999998.0)
+        ->and($firstDeposit->reference)->toStartWith(CleaningDepositTransaction::ADMIN_LOAN_DEPOSIT_REPAYMENT_REFERENCE_PREFIX);
+
+    $secondDeposit = app(DepositService::class)->recordDeposit(
+        $afterFirstDeposit,
+        300000,
+        'worker_cash_deposit_2',
+        'Complete administration-loan repayment and add the remainder.',
+    );
+
+    $afterSecondDeposit = $worker->fresh(['deposit']);
+    $secondSummary = app(WorkerDebtService::class)->summary($afterSecondDeposit);
+
+    expect((float) $afterSecondDeposit->deposit->current_balance)->toBe(1100000.0)
+        ->and((float) $afterSecondDeposit->deposit->deposited_total)->toBe(1100000.0)
+        ->and((float) $secondSummary['adminLoanBalance'])->toBe(0.0)
+        ->and((float) $secondSummary['manualDebtSettled'])->toBe(999998.0)
+        ->and((float) $secondDeposit->debt_settled_amount)->toBe(199998.0)
+        ->and((float) $secondDeposit->balance_before)->toBe(999998.0)
+        ->and((float) $secondDeposit->balance_after)->toBe(1100000.0);
 });
 
 it('reactivates the financial account and redispatches pending preferred bookings after an administration loan', function (): void {

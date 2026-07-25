@@ -98,8 +98,9 @@ final class AdminCleaningTransactionService
         $snapshot = $this->snapshot($worker);
         $suggestions = [];
 
-        if ($type === 'deposit' && $snapshot['debtBalance'] > 0) {
-            $this->addSuggestion($suggestions, (float) $snapshot['debtBalance'], __('cleaning_finance_guidance.suggestions.full_outstanding_due'));
+        if ($type === 'deposit') {
+            $outstandingDue = (float) $snapshot['debtBalance'] + (float) $snapshot['adminLoanBalance'];
+            $this->addSuggestion($suggestions, $outstandingDue, __('cleaning_finance_guidance.suggestions.full_outstanding_due'));
         }
 
         return $suggestions;
@@ -161,9 +162,10 @@ final class AdminCleaningTransactionService
         $snapshot = $this->snapshot($worker);
         $depositBalance = (float) $snapshot['depositBalance'];
         $debtBalance = (float) $snapshot['debtBalance'];
+        $adminLoanBalance = (float) $snapshot['adminLoanBalance'];
 
         return round(match ($type) {
-            'deposit' => $depositBalance + max(0.0, $amount - $debtBalance),
+            'deposit' => $depositBalance + max(0.0, $amount - $debtBalance - $adminLoanBalance),
             'debt' => $depositBalance + $amount,
             default => $depositBalance,
         }, 2);

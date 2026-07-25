@@ -101,7 +101,7 @@ it('does not seed automatic or legacy transaction types in manual financial scen
         ->not->toContain('adjustment');
 });
 
-it('seeds an administration loan as debt while keeping indebtedness separate', function (): void {
+it('uses a seeded worker deposit to repay the administration loan', function (): void {
     $this->seed([
         WorkerSeeder::class,
         WorkerFinancialTypeScenarioSeeder::class,
@@ -114,8 +114,8 @@ it('seeds an administration loan as debt while keeping indebtedness separate', f
 
     $snapshot = app(AdminCleaningTransactionService::class)->snapshot($worker);
 
-    expect($snapshot['depositBalance'])->toBe(600000.0)
-        ->and($snapshot['adminLoanBalance'])->toBe(100000.0)
+    expect($snapshot['depositBalance'])->toBe(500000.0)
+        ->and($snapshot['adminLoanBalance'])->toBe(0.0)
         ->and($snapshot['debtBalance'])->toBe(0.0)
         ->and($snapshot['adminCommissionBalance'])->toBe(0.0);
 });
