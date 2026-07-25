@@ -46,10 +46,10 @@ final class CleaningBookingsTable
                     ->color(fn ($state): string => self::statusColor($state))
                     ->formatStateUsing(fn ($state): string => self::statusLabel($state)),
                 TextColumn::make('booking_kind')
-                    ->label(self::headerLabel('نوع الحجز', 'يميز بين حجز تنظيف عادي وطلب مساعدة مناسبة.'))
-                    ->getStateUsing(fn (CleaningBooking $record): string => self::bookingKindLabel($record))
+                    ->label(self::headerLabel('نوع الحجز', 'يميز بين تنظيف عادي، تنظيف عميق، وطلب مساعدة مناسبة.'))
+                    ->getStateUsing(fn (CleaningBooking $record): string => $record->dashboardKindLabel())
                     ->badge()
-                    ->color(fn (CleaningBooking $record): string => self::bookingKindColor($record)),
+                    ->color(fn (CleaningBooking $record): string => $record->dashboardKindColor()),
                 TextColumn::make('cancelled_by_role')
                     ->label(self::headerLabel('مصدر الإلغاء', 'يوضح الجهة التي ألغت الحجز.'))
                     ->badge()
@@ -285,21 +285,6 @@ final class CleaningBookingsTable
             ]);
     }
 
-    private static function bookingKindLabel(CleaningBooking $record): string
-    {
-        return self::isEventAssistance($record) ? 'مساعدة مناسبة' : 'تنظيف عادي';
-    }
-
-    private static function bookingKindColor(CleaningBooking $record): string
-    {
-        return self::isEventAssistance($record) ? 'warning' : 'info';
-    }
-
-    private static function isEventAssistance(CleaningBooking $record): bool
-    {
-        return $record->property_type === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE;
-    }
-
     private static function assignedWorkerNames(CleaningBooking $record): array
     {
         $assignments = $record->relationLoaded('workerAssignments')
@@ -323,6 +308,11 @@ final class CleaningBookingsTable
         }
 
         return $names->filter(fn ($name): bool => filled($name))->unique()->values()->all();
+    }
+
+    private static function isEventAssistance(CleaningBooking $record): bool
+    {
+        return $record->isEventAssistanceBooking();
     }
 
     private static function preferredWorkerNames(CleaningBooking $record): array

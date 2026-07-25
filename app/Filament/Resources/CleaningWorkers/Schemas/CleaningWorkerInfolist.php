@@ -86,8 +86,7 @@ final class CleaningWorkerInfolist
                                 ->weight('bold'),
                             TextEntry::make('statistics_average_rating')
                                 ->label('متوسط التقييم')
-                                ->state(fn (Worker $record): string => self::formatDecimal(self::reviewsSummary($record)['average']))
-                                ->suffix(' / 5')
+                                ->state(fn (Worker $record): string => self::formatStars(self::reviewsSummary($record)['average']))
                                 ->icon(Heroicon::OutlinedStar)
                                 ->weight('bold'),
                             TextEntry::make('statistics_trust_score')
@@ -122,8 +121,7 @@ final class CleaningWorkerInfolist
                         ->schema([
                             TextEntry::make('reviews_average')
                                 ->label('متوسط التقييم')
-                                ->state(fn (Worker $record): string => self::formatDecimal(self::reviewsSummary($record)['average']))
-                                ->suffix(' / 5')
+                                ->state(fn (Worker $record): string => self::formatStars(self::reviewsSummary($record)['average']))
                                 ->icon(Heroicon::OutlinedStar)
                                 ->weight('bold'),
                             TextEntry::make('reviews_total')
@@ -156,7 +154,7 @@ final class CleaningWorkerInfolist
                                         ->copyable(),
                                     TextEntry::make('rating')
                                         ->label('التقييم')
-                                        ->suffix(' / 5')
+                                        ->formatStateUsing(fn (mixed $state): string => self::formatStars((float) $state))
                                         ->badge()
                                         ->color(fn (mixed $state): string => self::ratingColor($state)),
                                     TextEntry::make('rating_type')
@@ -479,5 +477,14 @@ final class CleaningWorkerInfolist
     private static function formatDecimal(mixed $value): string
     {
         return number_format((float) ($value ?? 0), 1, '.', ',');
+    }
+
+    private static function formatStars(float $rating): string
+    {
+        $clamped = max(0, min(5, (int) round($rating)));
+        $filled = str_repeat('★', $clamped);
+        $empty = str_repeat('☆', 5 - $clamped);
+
+        return $filled.$empty.' ('.self::formatDecimal($rating).')';
     }
 }

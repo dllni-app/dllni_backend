@@ -55,6 +55,8 @@ final class FinancialSettings extends Page
 
     public float $cleaningDeepMultiplier = CleaningFinancialDefaults::DEEP_CLEANING_MULTIPLIER;
 
+    public float $userCancellationFee = 0.0;
+
     /**
      * @var array<string, array<string, array{pricingUnit: float, regularMinutes: int, deepMinutes: int}>>
      */
@@ -138,6 +140,7 @@ final class FinancialSettings extends Page
             $this->extensionRatePer30Minutes = (float) ($setting->extension_rate_per_30_minutes ?? 0.0);
             $this->cleaningBaseUnitPrice = (float) ($setting->cleaning_base_unit_price ?? CleaningFinancialDefaults::BASE_UNIT_PRICE);
             $this->cleaningDeepMultiplier = (float) ($setting->cleaning_deep_multiplier ?? CleaningFinancialDefaults::DEEP_CLEANING_MULTIPLIER);
+            $this->userCancellationFee = (float) ($setting->user_cancellation_fee ?? 0.0);
         }
 
         $depositSetting = CleaningDepositSetting::query()->first();
@@ -169,6 +172,7 @@ final class FinancialSettings extends Page
             'trustMinimumForDispatch' => ['required', 'integer', 'min:0', 'max:100'],
             'cleaningBaseUnitPrice' => ['required', 'numeric', 'min:0'],
             'cleaningDeepMultiplier' => ['required', 'numeric', 'min:1'],
+            'userCancellationFee' => ['required', 'numeric', 'min:0'],
             'roomPricingSettings' => ['required', 'array'],
             'roomPricingSettings.*' => ['required', 'array'],
             'roomPricingSettings.*.*.pricingUnit' => ['required', 'numeric', 'min:0'],
@@ -203,6 +207,7 @@ final class FinancialSettings extends Page
                 ], $this->extensionRanges),
                 'cleaning_base_unit_price' => $this->cleaningBaseUnitPrice,
                 'cleaning_deep_multiplier' => $this->cleaningDeepMultiplier,
+                'user_cancellation_fee' => $this->userCancellationFee,
                 'cleaning_room_pricing_units' => $roomPricingUnits,
                 'cleaning_room_time_minutes' => $roomTimeMinutes,
             ],

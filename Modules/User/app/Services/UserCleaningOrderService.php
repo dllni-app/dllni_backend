@@ -740,7 +740,21 @@ final class UserCleaningOrderService
             ]
         );
 
+        $this->syncWorkerAverageRating($workerId);
+
         return $review;
+    }
+
+    private function syncWorkerAverageRating(int $workerId): void
+    {
+        $average = WorkerCustomerRating::query()
+            ->where('worker_id', $workerId)
+            ->where('rating_type', WorkerCustomerRatingType::CustomerToWorker->value)
+            ->avg('rating');
+
+        Worker::query()->whereKey($workerId)->update([
+            'average_rating' => $average !== null ? round((float) $average, 2) : 0,
+        ]);
     }
 
     private function normalizedAssignmentMode(mixed $assignmentMode): ?string

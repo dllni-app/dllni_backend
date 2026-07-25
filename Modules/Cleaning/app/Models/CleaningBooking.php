@@ -252,6 +252,36 @@ final class CleaningBooking extends Model
         return CleaningAssignmentMode::OpenCount->value;
     }
 
+    public function dashboardKindLabel(): string
+    {
+        if ($this->isEventAssistanceBooking()) {
+            return 'مساعدة مناسبة';
+        }
+
+        return $this->isDeepCleaningBooking() ? 'تنظيف عميق' : 'تنظيف عادي';
+    }
+
+    public function dashboardKindColor(): string
+    {
+        if ($this->isEventAssistanceBooking()) {
+            return 'warning';
+        }
+
+        return $this->isDeepCleaningBooking() ? 'purple' : 'info';
+    }
+
+    public function isEventAssistanceBooking(): bool
+    {
+        return $this->property_type === 'event_assistance';
+    }
+
+    public function isDeepCleaningBooking(): bool
+    {
+        $details = is_array($this->property_details) ? $this->property_details : [];
+
+        return ($details['cleaning_mode'] ?? null) === 'deep';
+    }
+
     public function acceptedWorkerCount(): int
     {
         $count = 0;

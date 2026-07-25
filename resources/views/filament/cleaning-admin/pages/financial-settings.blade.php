@@ -101,6 +101,20 @@
         </div>
     </x-filament::section>
 
+    <x-filament::section :heading="__('cleaning_admin.financial.sections.user_cancellation')">
+        <div class="grid gap-4 md:grid-cols-2">
+            <label class="flex flex-col gap-1">
+                <span class="text-sm">{{ __('cleaning_admin.financial.fields.user_cancellation_fee') }}</span>
+                <div class="flex items-center gap-2">
+                    <input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="userCancellationFee">
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ __('SYP') }}</span>
+                </div>
+                <span class="text-xs text-gray-500 dark:text-gray-400">{{ __('cleaning_admin.financial.hints.user_cancellation_fee') }}</span>
+                @error('userCancellationFee') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
+            </label>
+        </div>
+    </x-filament::section>
+
     <x-filament::section :heading="__('cleaning_admin.financial.sections.worker_finance')">
         <div class="grid gap-4 md:grid-cols-2">
             <label class="flex flex-col gap-1"><span class="text-sm">{{ __('cleaning_admin.financial.fields.trust_reject_after_accept_penalty') }}</span><input type="number" min="0" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="trustRejectAfterAcceptPenalty"><span class="text-xs text-gray-500 dark:text-gray-400">{{ __('cleaning_admin.financial.hints.trust_reject_after_accept_penalty') }}</span>@error('trustRejectAfterAcceptPenalty') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror</label>

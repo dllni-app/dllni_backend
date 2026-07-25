@@ -105,6 +105,29 @@ it('persists unit and regular and deep time for every app room size', function (
         ->and((int) data_get($setting->cleaning_room_time_minutes, 'bedroom.small.deep'))->toBe(62);
 });
 
+it('persists the user cancellation fee from financial settings', function (): void {
+    CleaningFinancialSetting::query()->create([
+        'default_commission_rate' => 5,
+        'vat_rate' => 10,
+        'travel_markup_type' => 'fixed',
+        'travel_markup_value' => 2000,
+        'travel_per_km' => 100,
+        'travel_distance_start_point' => 'worker_home',
+        'coverage_thresholds' => ['low' => 2, 'ok' => 5],
+        'time_billing_mode' => 'actual',
+        'extension_rate_per_30_minutes' => 0,
+        'cleaning_room_pricing_units' => CleaningFinancialDefaults::roomPricingUnits(),
+        'cleaning_room_time_minutes' => CleaningFinancialDefaults::roomTimeMinutes(),
+    ]);
+
+    Livewire::test(FinancialSettings::class)
+        ->set('userCancellationFee', 17500.25)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect((float) CleaningFinancialSetting::query()->findOrFail(1)->user_cancellation_fee)->toBe(17500.25);
+});
+
 it('rejects incomplete room size settings', function (): void {
     Livewire::test(FinancialSettings::class)
         ->set('roomPricingSettings.bedroom', [])

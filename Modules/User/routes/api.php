@@ -53,6 +53,7 @@ use Modules\User\Http\Controllers\API\UserAddressShowController;
 use Modules\User\Http\Controllers\API\UserAddressStoreController;
 use Modules\User\Http\Controllers\API\UserAddressUpdateController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderCancelController;
+use Modules\User\Http\Controllers\API\UserCleaningCancellationFeeController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderCompletionConfirmController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderCompletionExtendTimeController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderCompletionRejectController;
@@ -237,6 +238,7 @@ Route::prefix('v1/user')->group(function (): void {
         Route::post('favorites/products/{product}', UserProductFavoriteStoreController::class);
         Route::delete('favorites/products/{product}', UserProductFavoriteDestroyController::class);
 
+        Route::get('cleaning/cancellation-fee', UserCleaningCancellationFeeController::class);
         Route::get('cleaning/orders', UserCleaningOrdersController::class);
         Route::post('cleaning/orders', UserCleaningOrderStoreController::class);
         Route::post('cleaning/orders/estimate-size', UserCleaningOrderEstimateSizeController::class);

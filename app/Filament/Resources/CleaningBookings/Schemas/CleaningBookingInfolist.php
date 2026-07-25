@@ -12,6 +12,7 @@ use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
+use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
@@ -34,9 +35,9 @@ final class CleaningBookingInfolist
                                             ->formatStateUsing(fn ($state): string => $state?->label() ?? '-'),
                                         TextEntry::make('booking_kind')
                                             ->label('نوع الحجز')
-                                            ->state(fn ($record): string => self::bookingKindLabel($record))
+                                            ->state(fn ($record): string => $record->dashboardKindLabel())
                                             ->badge()
-                                            ->color(fn ($record): string => self::bookingKindColor($record)),
+                                            ->color(fn ($record): string => $record->dashboardKindColor()),
                                         TextEntry::make('cancelled_at')
                                             ->label('وقت الإلغاء')
                                             ->formatStateUsing(fn ($state): string => self::dateTime($state))
@@ -216,22 +217,6 @@ final class CleaningBookingInfolist
             ]);
     }
 
-    private static function bookingKindLabel(mixed $record): string
-    {
-        return self::isEventAssistance($record) ? 'مساعدة مناسبة' : 'تنظيف عادي';
-    }
-
-    private static function bookingKindColor(mixed $record): string
-    {
-        return self::isEventAssistance($record) ? 'warning' : 'info';
-    }
-
-    private static function isEventAssistance(mixed $record): bool
-    {
-        return $record !== null
-            && $record->property_type === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE;
-    }
-
     private static function preferredWorkerNames(mixed $record): array
     {
         $names = collect();
@@ -256,6 +241,19 @@ final class CleaningBookingInfolist
             ->unique()
             ->values()
             ->all();
+    }
+
+    private static function isEventAssistance(mixed $record): bool
+    {
+        if ($record === null) {
+            return false;
+        }
+
+        if ($record instanceof CleaningBooking) {
+            return $record->isEventAssistanceBooking();
+        }
+
+        return $record->property_type === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE;
     }
 
     private static function roomCoverageLabel(mixed $record): string

@@ -7,6 +7,7 @@ namespace App\Filament\Resources\CleaningWorkers\Tables;
 use App\Filament\Resources\CleaningWorkers\Support\WorkerDepositActions;
 use App\Filament\Resources\Workers\Support\WorkerSuspensionActions;
 use App\Filament\Support\ArabicDashboardLabels;
+use App\Enums\WorkerCustomerRatingType;
 use App\Models\Worker;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
@@ -39,7 +40,28 @@ final class CleaningWorkersTable
                     ->color(fn (?string $state): string => self::genderColor($state))
                     ->sortable(),
                 TextColumn::make('trust_score')->label(__('cleaning_admin.workers.fields.trust_score'))->sortable(),
-                TextColumn::make('average_rating')->label(__('cleaning_admin.workers.fields.average_rating'))->sortable()->toggleable(),
+                TextColumn::make('average_rating')
+                    ->label(__('cleaning_admin.workers.fields.average_rating'))
+                    ->state(function (Worker $record): float {
+                        $record->loadMissing('customerRatings');
+
+                        $ratings = $record->customerRatings
+                            ->filter(fn ($rating): bool => (string) ($rating->rating_type?->value ?? $rating->rating_type) === WorkerCustomerRatingType::CustomerToWorker->value);
+
+                        if ($ratings->isEmpty()) {
+                            return (float) ($record->average_rating ?? 0);
+                        }
+
+                        return round((float) $ratings->avg('rating'), 1);
+                    })
+                    ->formatStateUsing(function (mixed $state): string {
+                        $rating = (float) ($state ?? 0);
+                        $clamped = max(0, min(5, (int) round($rating)));
+
+                        return str_repeat('★', $clamped).str_repeat('☆', 5 - $clamped).' ('.number_format($rating, 1).')';
+                    })
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('total_completed_jobs')->label(__('cleaning_admin.workers.fields.total_completed_jobs'))->sortable()->toggleable(),
                 TextColumn::make('deposit.current_balance')
                     ->label('رصيد الإيداع')

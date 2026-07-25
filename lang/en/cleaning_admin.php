@@ -504,11 +504,13 @@ return [
             'time_billing_policy' => 'Time Billing Policy',
             'coverage_thresholds' => 'Coverage Thresholds',
             'time_extension' => 'Time Extension',
+            'user_cancellation' => 'User cancellation fee',
             'worker_finance' => 'Worker Finance',
         ],
         'fields' => [
             'cleaning_base_unit_price' => 'Base unit price',
             'cleaning_deep_multiplier' => 'Deep cleaning multiplier',
+            'user_cancellation_fee' => 'User order cancellation fee',
             'cleaning_area_margin_multiplier' => 'Area margin multiplier',
             'cleaning_setup_buffer_minutes' => 'Setup buffer minutes',
             'commission_type' => 'Commission type',
@@ -535,6 +537,7 @@ return [
         'hints' => [
             'restriction_threshold_percent' => 'A worker is automatically restricted once the commission owed reaches this share of their deposit.',
             'trust_reject_after_accept_penalty' => 'Number of points deducted from a worker\'s trust score when they reject a booking after having accepted it. A higher value penalizes such rejections more heavily.',
+            'user_cancellation_fee' => 'Fixed amount shown to the user when cancelling a cleaning order. Stored on the booking at cancel time without automatic wallet deduction.',
             'coverage_thresholds' => 'An operational setting that classifies how many workers are available in an area (not a price). Used to decide whether an area\'s coverage is weak or acceptable.',
             'coverage_low' => 'If available workers are at or below around this number, coverage is considered weak.',
             'coverage_ok' => 'Once available workers reach around this number, coverage is considered acceptable.',

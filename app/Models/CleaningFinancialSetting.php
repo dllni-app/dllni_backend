@@ -29,6 +29,7 @@ final class CleaningFinancialSetting extends Model
         'extension_ranges',
         'cleaning_base_unit_price',
         'cleaning_deep_multiplier',
+        'user_cancellation_fee',
         'cleaning_area_margin_multiplier',
         'cleaning_setup_buffer_minutes',
         'cleaning_room_size_ranges',
@@ -47,6 +48,7 @@ final class CleaningFinancialSetting extends Model
             'extension_rate_per_30_minutes' => 'decimal:2',
             'cleaning_base_unit_price' => 'decimal:2',
             'cleaning_deep_multiplier' => 'decimal:2',
+            'user_cancellation_fee' => 'decimal:2',
             'cleaning_area_margin_multiplier' => 'decimal:2',
             'cleaning_setup_buffer_minutes' => 'integer',
             'coverage_thresholds' => 'array',
@@ -55,6 +57,11 @@ final class CleaningFinancialSetting extends Model
             'cleaning_room_pricing_units' => 'array',
             'cleaning_room_time_minutes' => 'array',
         ];
+    }
+
+    public static function currentUserCancellationFee(): float
+    {
+        return max(0.0, (float) (self::query()->value('user_cancellation_fee') ?? 0));
     }
 
     public function getActivitylogOptions(): LogOptions

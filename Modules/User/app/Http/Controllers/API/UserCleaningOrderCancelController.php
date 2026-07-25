@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\User\Http\Controllers\API;
 
+use App\Models\CleaningFinancialSetting;
 use App\Support\Broadcast\BroadcastAfterResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -38,7 +39,10 @@ final class UserCleaningOrderCancelController
             ? $this->cancelAfterWorkerArrival($model, $reason, $lifecycleNotifications)
             : $service->cancel($model, $reason);
 
-        $cancelled->forceFill(['cancelled_by_role' => 'customer'])->save();
+        $cancelled->forceFill([
+            'cancelled_by_role' => 'customer',
+            'cancellation_fee' => CleaningFinancialSetting::currentUserCancellationFee(),
+        ])->save();
         $cancelled = $cancelled->fresh();
         $cancelled->load(['worker.user', 'timeWarnings', 'disputes', 'addons', 'billingPolicy']);
 
