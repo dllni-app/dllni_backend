@@ -2,12 +2,16 @@
 
 declare(strict_types=1);
 
+use App\Jobs\NotifyEligibleWorkersNewOrderJob;
 use App\Models\CleaningDepositSetting;
 use App\Models\CleaningDepositTransaction;
 use App\Models\CleaningWorkerDeposit;
 use App\Models\User;
 use App\Models\Worker;
+use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
+use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Services\DepositService;
 use Modules\Cleaning\Services\WorkerDebtService;
 
@@ -70,6 +74,60 @@ it('adds an administration loan to deposit without increasing indebtedness', fun
         ->assertJsonPath('hasAdminLoan', true)
         ->assertJsonPath('allowedDebtLimit', 50000)
         ->assertJsonPath('remainingDebtCapacity', 50000);
+});
+
+it('reactivates the financial account and redispatches pending preferred bookings after an administration loan', function (): void {
+    $user = User::factory()->create();
+    $worker = Worker::factory()->create([
+        'user_id' => $user->id,
+        'trust_score' => 100,
+        'is_active' => true,
+        'is_suspended' => false,
+        'security_deposit_status' => 'insufficient_balance',
+    ]);
+
+    CleaningWorkerDeposit::query()->create([
+        'worker_id' => $worker->id,
+        'current_balance' => 0,
+        'debt_balance' => 0,
+        'deposited_total' => 800000,
+        'withdrawn_total' => 800000,
+        'minimum_required' => 0,
+        'max_negative_balance' => 0,
+        'is_active' => false,
+    ]);
+
+    CleaningBooking::factory()->create([
+        'worker_id' => null,
+        'preferred_worker_id' => $worker->id,
+        'assignment_mode' => 'preferred_worker',
+        'status' => CleaningBookingStatus::Pending->value,
+        'scheduled_date' => now()->addDay()->toDateString(),
+        'scheduled_time' => '10:00',
+        'base_price' => 60000,
+        'addons_total' => 0,
+        'admin_margin_amount' => 6000,
+        'total_price' => 66000,
+    ]);
+
+    Queue::fake();
+
+    app(WorkerDebtService::class)->recordDebt(
+        $worker,
+        999998,
+        WorkerDebtService::ADMIN_LOAN_REFERENCE,
+        'Restore worker capacity after a full refund.',
+    );
+
+    $fundedWorker = $worker->fresh(['deposit']);
+
+    expect((float) $fundedWorker->deposit->current_balance)->toBe(999998.0)
+        ->and((float) $fundedWorker->deposit->debt_balance)->toBe(0.0)
+        ->and($fundedWorker->deposit->is_active)->toBeTrue()
+        ->and($fundedWorker->security_deposit_status)->toBe('active')
+        ->and(app(DepositService::class)->availableCommissionCapacity($fundedWorker))->toBe(999998.0);
+
+    Queue::assertPushed(NotifyEligibleWorkersNewOrderJob::class, 1);
 });
 
 it('blocks an administration loan while the worker has a deposit balance', function (): void {
