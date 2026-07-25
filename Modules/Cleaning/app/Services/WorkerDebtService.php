@@ -15,7 +15,7 @@ use Modules\Cleaning\Models\CleaningBooking;
 
 final class WorkerDebtService
 {
-    public const ADMIN_LOAN_REFERENCE = 'admin_deposit_loan';
+    public const ADMIN_LOAN_REFERENCE = CleaningDepositTransaction::ADMIN_LOAN_REFERENCE_PREFIX;
 
     public function __construct(
         private readonly DepositService $depositService,
@@ -119,12 +119,13 @@ final class WorkerDebtService
     {
         $worker->loadMissing('deposit');
         $automaticPrefix = CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'%';
-        $adminLoanReference = self::ADMIN_LOAN_REFERENCE.'%';
+        $adminLoanReference = CleaningDepositTransaction::ADMIN_LOAN_REFERENCE_PREFIX.'%';
+        $adminLoanRepaymentReference = CleaningDepositTransaction::ADMIN_LOAN_DEPOSIT_REPAYMENT_REFERENCE_PREFIX.'%';
 
         $totals = CleaningDepositTransaction::query()
             ->where('worker_id', $worker->id)
             ->selectRaw("COALESCE(SUM(CASE WHEN type = 'debt' AND reference LIKE ? THEN amount ELSE 0 END), 0) as manual_debt_total", [$adminLoanReference])
-            ->selectRaw("COALESCE(SUM(CASE WHEN type = 'refund' THEN debt_settled_amount ELSE 0 END), 0) as manual_debt_recovered")
+            ->selectRaw("COALESCE(SUM(CASE WHEN type = 'refund' THEN debt_settled_amount WHEN type = 'deposit' AND reference LIKE ? THEN debt_settled_amount ELSE 0 END), 0) as manual_debt_recovered", [$adminLoanRepaymentReference])
             ->selectRaw("COALESCE(SUM(CASE WHEN type IN ('commission', 'admin_fee') OR (type = 'debt' AND reference LIKE ?) THEN amount ELSE 0 END), 0) as admin_fee_total", [$automaticPrefix])
             ->selectRaw("COALESCE(SUM(CASE WHEN type = 'settlement' THEN amount ELSE 0 END), 0) as settlement_total")
             ->first();
