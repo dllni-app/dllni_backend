@@ -56,6 +56,8 @@ it('returns inactive financial eligibility after the full deposit balance is ref
     $this->getJson('/api/v1/cleaning/worker/account/deposit')
         ->assertOk()
         ->assertJsonPath('status', 'inactive')
+        ->assertJsonPath('isFinancialAccountActive', false)
+        ->assertJsonPath('isActive', false)
         ->assertJsonPath('isEligibleForNewRequests', false);
 
     $this->getJson('/api/v1/cleaning/worker/homepage')
@@ -117,5 +119,7 @@ it('reactivates financial eligibility after a later funding transaction', functi
     $this->getJson('/api/v1/cleaning/worker/account/deposit')
         ->assertOk()
         ->assertJsonPath('status', 'active')
+        ->assertJsonPath('isFinancialAccountActive', true)
+        ->assertJsonPath('isActive', true)
         ->assertJsonPath('isEligibleForNewRequests', true);
 });
