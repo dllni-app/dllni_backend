@@ -54,7 +54,7 @@ final class CleaningWorkersTable
                     ->alignEnd()
                     ->sortable(),
                 TextColumn::make('deposit.max_negative_balance')
-                    ->label('حد المديونية المسموح')
+                    ->label('حد الدين المسموح')
                     ->formatStateUsing(fn ($state): string => ArabicDashboardLabels::money(max(0, (float) ($state ?? 0))))
                     ->placeholder('0.00 ل.س')
                     ->alignEnd()
