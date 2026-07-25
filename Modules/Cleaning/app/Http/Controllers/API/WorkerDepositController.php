@@ -47,6 +47,7 @@ final class WorkerDepositController
         $debtSummary = $this->debtService->summary($worker);
         $capacity = $this->solvencyService->workerCapacitySummary($worker);
         $status = $this->statusService->status($worker);
+        $isFinancialAccountActive = $this->statusService->isFinancialAccountActive($worker);
 
         $indebtedness = (float) $debtSummary['indebtednessBalance'];
         $adminLoan = (float) $debtSummary['adminLoanBalance'];
@@ -69,9 +70,11 @@ final class WorkerDepositController
         $payload['activeReservedCommission'] = $capacity['activeReservedCommission'];
         $payload['availableCommissionCapacity'] = $capacity['availableCommissionCapacity'];
         $payload['status'] = $status;
-        $payload['isEligibleForNewRequests'] = $status === WorkerFinancialAccountStatusService::ACTIVE
+        $payload['isFinancialAccountActive'] = $isFinancialAccountActive;
+        $payload['isActive'] = $isFinancialAccountActive;
+        $payload['isEligibleForNewRequests'] = $isFinancialAccountActive
+            && $status === WorkerFinancialAccountStatusService::ACTIVE
             && (bool) ($payload['isEligibleForNewRequests'] ?? false);
-        unset($payload['isFinancialAccountActive'], $payload['isActive']);
 
         return response()->json($payload);
     }
