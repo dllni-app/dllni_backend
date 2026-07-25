@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Services;
 
+use App\Jobs\NotifyEligibleWorkersNewOrderJob;
 use App\Models\CleaningDepositTransaction;
 use App\Models\CleaningWorkerDeposit;
 use App\Models\Worker;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
+use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Models\CleaningBooking;
 
 final class WorkerDebtService
 {
@@ -71,6 +74,7 @@ final class WorkerDebtService
             }
 
             $account->current_balance = $amount;
+            $account->is_active = true;
             $account->save();
 
             $transaction = CleaningDepositTransaction::query()->create([
@@ -87,7 +91,9 @@ final class WorkerDebtService
                 'notes' => $notes,
             ]);
 
-            $this->depositService->syncEligibilityStatus($worker->fresh(['deposit']) ?? $worker);
+            $fundedWorker = $worker->fresh(['deposit']) ?? $worker;
+            $this->depositService->syncEligibilityStatus($fundedWorker);
+            $this->redispatchPendingPreferredBookings($fundedWorker);
 
             return $transaction;
         });
@@ -185,5 +191,20 @@ final class WorkerDebtService
         $worker->loadMissing('deposit');
 
         return round(max(0.0, (float) ($worker->deposit?->debt_balance ?? 0)), 2);
+    }
+
+    private function redispatchPendingPreferredBookings(Worker $worker): void
+    {
+        if (! $this->depositService->isWorkerEligibleForDispatch($worker)) {
+            return;
+        }
+
+        CleaningBooking::query()
+            ->where('status', CleaningBookingStatus::Pending->value)
+            ->where('preferred_worker_id', $worker->id)
+            ->whereDate('scheduled_date', '>=', now(config('app.timezone'))->toDateString())
+            ->whereDoesntHave('rejections', fn ($query) => $query->where('worker_id', $worker->id))
+            ->pluck('id')
+            ->each(static fn (mixed $bookingId) => NotifyEligibleWorkersNewOrderJob::dispatch((int) $bookingId));
     }
 }
