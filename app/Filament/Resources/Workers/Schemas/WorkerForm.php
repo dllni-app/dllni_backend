@@ -81,7 +81,7 @@ final class WorkerForm
                     ->columns(2)
                     ->schema([
                         TextInput::make('worker_debt_limit')
-                            ->label(app()->isLocale('ar') ? 'حد المديونية للعامل' : 'Worker debt limit')
+                            ->label(app()->isLocale('ar') ? 'حد الدين للعامل' : 'Worker debt limit')
                             ->helperText(app()->isLocale('ar')
                                 ? 'يبقى الحساب المالي نشطاً ما دامت المديونية أقل من أو تساوي هذا الحد.'
                                 : 'The financial account remains active while indebtedness is less than or equal to this limit.')
