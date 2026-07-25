@@ -16,6 +16,10 @@ final class CleaningDepositTransaction extends Model
 
     public const AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX = 'automatic_admin_commission:';
 
+    public const ADMIN_LOAN_REFERENCE_PREFIX = 'admin_deposit_loan';
+
+    public const ADMIN_LOAN_DEPOSIT_REPAYMENT_REFERENCE_PREFIX = 'admin_loan_deposit_repayment:';
+
     /** @var list<string> */
     public const PUBLIC_TYPES = ['deposit', 'debt', 'refund'];
 
@@ -111,6 +115,10 @@ final class CleaningDepositTransaction extends Model
 
     protected static function booted(): void
     {
+        self::creating(function (self $transaction): void {
+            self::settleAdministrationLoanFromDeposit($transaction);
+        });
+
         self::saved(function (self $transaction): void {
             self::syncWorkerAccountTotals((int) $transaction->worker_id);
             self::reconcileFinancialPenalties($transaction);
@@ -133,6 +141,72 @@ final class CleaningDepositTransaction extends Model
             'debt_balance_before' => 'decimal:2',
             'debt_balance_after' => 'decimal:2',
         ];
+    }
+
+    private static function settleAdministrationLoanFromDeposit(self $transaction): void
+    {
+        if ((string) $transaction->type !== 'deposit' || (float) $transaction->amount <= 0) {
+            return;
+        }
+
+        $reference = mb_trim((string) $transaction->reference);
+        if (
+            (float) $transaction->debt_settled_amount > 0
+            || str_starts_with($reference, self::ADMIN_LOAN_DEPOSIT_REPAYMENT_REFERENCE_PREFIX)
+        ) {
+            return;
+        }
+
+        $outstandingLoan = self::outstandingAdministrationLoan((int) $transaction->worker_id);
+        if ($outstandingLoan <= 0) {
+            return;
+        }
+
+        $account = CleaningWorkerDeposit::query()
+            ->where('worker_id', $transaction->worker_id)
+            ->lockForUpdate()
+            ->first();
+
+        if (! $account instanceof CleaningWorkerDeposit) {
+            return;
+        }
+
+        $accountBalance = max(0.0, (float) $account->current_balance);
+        $settled = min((float) $transaction->amount, $outstandingLoan, $accountBalance);
+        if ($settled <= 0) {
+            return;
+        }
+
+        $account->current_balance = round($accountBalance - $settled, 2);
+        $account->saveQuietly();
+
+        $transaction->debt_settled_amount = round($settled, 2);
+        $transaction->balance_after = (float) $account->current_balance;
+        $transaction->reference = self::ADMIN_LOAN_DEPOSIT_REPAYMENT_REFERENCE_PREFIX.($reference !== '' ? $reference : 'worker_deposit');
+    }
+
+    private static function outstandingAdministrationLoan(int $workerId): float
+    {
+        if ($workerId <= 0) {
+            return 0.0;
+        }
+
+        $totals = self::query()
+            ->where('worker_id', $workerId)
+            ->selectRaw(
+                "COALESCE(SUM(CASE WHEN type = 'debt' AND reference LIKE ? THEN amount ELSE 0 END), 0) AS loan_total",
+                [self::ADMIN_LOAN_REFERENCE_PREFIX.'%'],
+            )
+            ->selectRaw(
+                "COALESCE(SUM(CASE WHEN type = 'refund' THEN debt_settled_amount WHEN type = 'deposit' AND reference LIKE ? THEN debt_settled_amount ELSE 0 END), 0) AS loan_recovered",
+                [self::ADMIN_LOAN_DEPOSIT_REPAYMENT_REFERENCE_PREFIX.'%'],
+            )
+            ->first();
+
+        $total = max(0.0, (float) ($totals?->loan_total ?? 0));
+        $recovered = min($total, max(0.0, (float) ($totals?->loan_recovered ?? 0)));
+
+        return round(max(0.0, $total - $recovered), 2);
     }
 
     private static function reconcileFinancialPenalties(self $transaction): void
