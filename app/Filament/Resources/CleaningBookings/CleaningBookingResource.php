@@ -14,11 +14,13 @@ use App\Filament\Resources\CleaningBookings\Schemas\CleaningBookingForm;
 use App\Filament\Resources\CleaningBookings\Schemas\CleaningBookingInfolist;
 use App\Filament\Resources\CleaningBookings\Tables\CleaningBookingsTable;
 use App\Models\SupportCase;
+use App\Models\User;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -71,6 +73,21 @@ final class CleaningBookingResource extends Resource
     public static function table(Table $table): Table
     {
         return CleaningBookingsTable::configure($table)
+            ->pushFilters([
+                SelectFilter::make('customer')
+                    ->label('العميل')
+                    ->relationship(
+                        name: 'customer',
+                        titleAttribute: 'name',
+                        modifyQueryUsing: fn (Builder $query): Builder => $query
+                            ->whereHas('cleaningBookings')
+                            ->orderBy('name'),
+                    )
+                    ->getOptionLabelFromRecordUsing(
+                        fn (User $record): string => sprintf('%s (%s)', $record->name, $record->phone ?: '-'),
+                    )
+                    ->searchable(['name', 'phone']),
+            ])
             ->pushColumns([
                 TextColumn::make('open_dispute_status')
                     ->label('نزاع مفتوح')
