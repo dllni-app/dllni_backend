@@ -54,7 +54,7 @@ final class SystemUsersTable
             ])
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('roles'))
             ->filters([
-                SelectFilter::make('account_type')
+                SelectFilter::make('module_type')
                     ->label('نوع الحساب')
                     ->options([
                         'customer' => 'عميل',
