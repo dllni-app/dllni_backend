@@ -34,7 +34,7 @@ it('filters system users by customer account type', function (): void {
     ]);
 
     Livewire::test(ListSystemUsers::class)
-        ->filterTable('account_type', 'customer')
+        ->filterTable('module_type', 'customer')
         ->assertCanSeeTableRecords([$customer])
         ->assertCanNotSeeTableRecords([$cleaningWorker]);
 });
