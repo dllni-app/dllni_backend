@@ -86,8 +86,8 @@ it('exposes the separate public transaction types in the worker financial timeli
         ->assertJsonPath('minimumRequired', 0)
         ->assertJsonPath('allowedDebtLimit', 50000)
         ->assertJsonPath('status', 'active')
-        ->assertJsonMissingPath('isActive')
-        ->assertJsonMissingPath('isFinancialAccountActive');
+        ->assertJsonPath('isActive', true)
+        ->assertJsonPath('isFinancialAccountActive', true);
 
     $this->getJson('/api/v1/cleaning/worker/account/deposit/transactions?type=deposit')
         ->assertOk()
@@ -142,7 +142,8 @@ it('returns active status while debt remains within the worker-specific limit ev
         ->assertOk()
         ->assertJsonPath('status', 'active')
         ->assertJsonPath('isEligibleForNewRequests', true)
-        ->assertJsonMissingPath('isFinancialAccountActive');
+        ->assertJsonPath('isFinancialAccountActive', true)
+        ->assertJsonPath('isActive', true);
 });
 
 it('returns inactive financial status when debt exceeds the worker-specific limit', function (): void {
@@ -171,7 +172,9 @@ it('returns inactive financial status when debt exceeds the worker-specific limi
     $this->getJson('/api/v1/cleaning/worker/account/deposit')
         ->assertOk()
         ->assertJsonPath('status', 'insufficient_balance')
-        ->assertJsonPath('isEligibleForNewRequests', false);
+        ->assertJsonPath('isEligibleForNewRequests', false)
+        ->assertJsonPath('isFinancialAccountActive', true)
+        ->assertJsonPath('isActive', true);
 });
 
 it('uses the debt label for settlement rows in the Filament transaction table', function (): void {
@@ -254,5 +257,7 @@ it('keeps deposit API cumulative totals equal to the financial ledger', function
         ->assertJsonPath('currentBalance', 250000)
         ->assertJsonPath('depositedTotal', 1500000)
         ->assertJsonPath('withdrawnTotal', 250000)
-        ->assertJsonPath('status', 'active');
+        ->assertJsonPath('status', 'active')
+        ->assertJsonPath('isFinancialAccountActive', true)
+        ->assertJsonPath('isActive', true);
 });
