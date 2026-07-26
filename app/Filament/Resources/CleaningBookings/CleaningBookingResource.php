@@ -19,6 +19,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -71,6 +72,18 @@ final class CleaningBookingResource extends Resource
     public static function table(Table $table): Table
     {
         return CleaningBookingsTable::configure($table)
+            ->pushFilters([
+                SelectFilter::make('customer')
+                    ->label('العميل')
+                    ->relationship(
+                        name: 'customer',
+                        titleAttribute: 'name',
+                        modifyQueryUsing: fn (Builder $query): Builder => $query
+                            ->whereHas('cleaningBookings')
+                            ->orderBy('name'),
+                    )
+                    ->searchable(),
+            ])
             ->pushColumns([
                 TextColumn::make('open_dispute_status')
                     ->label('نزاع مفتوح')
