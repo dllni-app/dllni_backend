@@ -14,6 +14,7 @@ use App\Filament\Resources\CleaningBookings\Schemas\CleaningBookingForm;
 use App\Filament\Resources\CleaningBookings\Schemas\CleaningBookingInfolist;
 use App\Filament\Resources\CleaningBookings\Tables\CleaningBookingsTable;
 use App\Models\SupportCase;
+use App\Models\User;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -82,7 +83,10 @@ final class CleaningBookingResource extends Resource
                             ->whereHas('cleaningBookings')
                             ->orderBy('name'),
                     )
-                    ->searchable(),
+                    ->getOptionLabelFromRecordUsing(
+                        fn (User $record): string => sprintf('%s (%s)', $record->name, $record->phone ?: '-'),
+                    )
+                    ->searchable(['name', 'phone']),
             ])
             ->pushColumns([
                 TextColumn::make('open_dispute_status')
