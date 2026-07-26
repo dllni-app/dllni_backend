@@ -54,14 +54,30 @@ final class SystemUsersTable
             ])
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('roles'))
             ->filters([
-                SelectFilter::make('module_type')
+                SelectFilter::make('account_type')
                     ->label('نوع الحساب')
                     ->options([
+                        'customer' => 'عميل',
                         UserModuleType::CleaningWorker->value => 'عامل تنظيف',
                         UserModuleType::RestaurantSeller->value => 'بائع مطعم',
                         UserModuleType::SupermarketSeller->value => 'بائع سوبرماركت',
                         UserModuleType::DeliveryDriver->value => 'مندوب توصيل',
-                    ]),
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        $accountType = $data['value'] ?? null;
+
+                        if ($accountType === null || $accountType === '') {
+                            return $query;
+                        }
+
+                        if ($accountType === 'customer') {
+                            return $query
+                                ->whereNull('module_type')
+                                ->whereDoesntHave('roles');
+                        }
+
+                        return $query->where('module_type', $accountType);
+                    }),
                 TernaryFilter::make('is_active')
                     ->label('حالة الحساب')
                     ->trueLabel('الحسابات الفعالة')
