@@ -29,6 +29,8 @@ final class CleaningTimeWarning extends Model
         'customer_responded_at',
         'worker_responded_at',
         'additional_minutes',
+        'quoted_base_amount',
+        'quoted_admin_margin_amount',
         'quoted_amount',
         'quoted_currency',
         'price_applied_at',
@@ -54,6 +56,8 @@ final class CleaningTimeWarning extends Model
             'sent_at' => 'datetime',
             'customer_responded_at' => 'datetime',
             'worker_responded_at' => 'datetime',
+            'quoted_base_amount' => 'decimal:2',
+            'quoted_admin_margin_amount' => 'decimal:2',
             'quoted_amount' => 'decimal:2',
             'price_applied_at' => 'datetime',
         ];

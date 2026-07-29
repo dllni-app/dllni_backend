@@ -134,7 +134,7 @@ final class CleaningBookingResource extends JsonResource
             'serviceShareAmount' => is_array($workerOffer) ? (float) ($workerOffer['serviceShareAmount'] ?? 0) : null,
             'addonsTotal' => $addonsTotal,
             'extensionFeeTotal' => (float) ($this->extension_fee_total ?? 0),
-            'extendedTimeRanges' => app(CleaningExtendedTimePricingService::class)->ranges(),
+            'extendedTimeRanges' => app(CleaningExtendedTimePricingService::class)->rangesForBooking($this->resource),
             'travelFee' => $travelFee,
             'deliveryFee' => $travelFee,
             'travelDistanceKm' => $this->travel_distance_km !== null ? (float) $this->travel_distance_km : null,

@@ -650,7 +650,7 @@ final class UserCleaningOrderService
             ]);
         }
 
-        $extensionPricing = $this->extendedTimePricing->quote($additionalMinutes);
+        $extensionPricing = $this->extendedTimePricing->quoteForBooking($booking, $additionalMinutes);
 
         $updated = DB::transaction(function () use ($booking, $additionalMinutes, $extensionPricing): CleaningBooking {
             $booking = CleaningBooking::query()->lockForUpdate()->findOrFail($booking->id);
@@ -670,6 +670,8 @@ final class UserCleaningOrderService
                 'customer_responded_at' => now(),
                 'worker_responded_at' => null,
                 'additional_minutes' => $additionalMinutes,
+                'quoted_base_amount' => $extensionPricing['baseAmount'],
+                'quoted_admin_margin_amount' => $extensionPricing['adminMargin'],
                 'quoted_amount' => $extensionPricing['calculatedExtensionPrice'],
                 'quoted_currency' => $extensionPricing['currency'],
                 'price_applied_at' => null,

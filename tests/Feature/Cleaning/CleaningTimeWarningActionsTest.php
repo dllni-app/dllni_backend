@@ -12,6 +12,7 @@ use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Models\CleaningTimeWarning;
 
 beforeEach(function () {
@@ -68,6 +69,64 @@ it('accepts an extension request', function () {
     expect((float) $booking->extension_fee_total)->toBe(4500.0);
     expect((float) $booking->total_price)->toBe(4600.0);
     expect($warning->fresh()->price_applied_at)->not->toBeNull();
+});
+
+it('applies the extension breakdown to booking and worker accounting once', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-ext-breakdown@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'status' => CleaningBookingStatus::TimeExtensionRequested,
+        'admin_margin_amount' => 1000,
+        'total_price' => 11000,
+        'extension_fee_total' => 0,
+    ]);
+    $assignment = CleaningBookingWorkerAssignment::query()->create([
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $worker->id,
+        'status' => 'time_extension_requested',
+        'service_share_amount' => 10000,
+        'admin_margin_amount' => 1000,
+        'worker_amount' => 10000,
+        'currency' => 'SYP',
+    ]);
+    $warning = CleaningTimeWarning::query()->create([
+        'booking_id' => $booking->id,
+        'booking_type' => 'cleaning_booking',
+        'worker_id' => $worker->id,
+        'customer_response' => 'extend_time',
+        'worker_response' => null,
+        'sent_at' => now(),
+        'additional_minutes' => 30,
+        'quoted_base_amount' => 4500,
+        'quoted_admin_margin_amount' => 500,
+        'quoted_amount' => 5000,
+        'quoted_currency' => 'SYP',
+        'price_applied_at' => null,
+    ]);
+
+    $this->postJson("/api/v1/cleaning-time-warnings/{$warning->id}/accept")
+        ->assertOk()
+        ->assertJsonPath('data.baseAmount', 4500)
+        ->assertJsonPath('data.adminMargin', 500)
+        ->assertJsonPath('data.totalAmount', 5000)
+        ->assertJsonPath('data.additionalAmount', 5000);
+
+    $this->postJson("/api/v1/cleaning-time-warnings/{$warning->id}/accept")
+        ->assertOk();
+
+    $booking->refresh();
+    $assignment->refresh();
+
+    expect((float) $booking->extension_fee_total)->toBe(5000.0)
+        ->and((float) $booking->admin_margin_amount)->toBe(1500.0)
+        ->and((float) $booking->total_price)->toBe(16000.0)
+        ->and((float) $assignment->service_share_amount)->toBe(14500.0)
+        ->and((float) $assignment->admin_margin_amount)->toBe(1500.0)
+        ->and((float) $assignment->worker_amount)->toBe(14500.0);
 });
 
 it('rejects an extension request with message', function () {

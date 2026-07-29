@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Models\CleaningFinancialSetting;
 use Illuminate\Validation\ValidationException;
+use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Services\CleaningExtendedTimePricingService;
 
 beforeEach(function (): void {
@@ -60,4 +61,56 @@ it('returns all fixed cleaning extension ranges from the configured financial se
             'price' => 9000.0,
             'currency' => 'SYP',
         ]);
+});
+
+it('adds the booking effective administration margin to an extension quote', function (): void {
+    $booking = CleaningBooking::factory()->create([
+        'base_price' => 10000,
+        'addons_total' => 0,
+        'admin_margin_amount' => 1000,
+    ]);
+
+    $quote = app(CleaningExtendedTimePricingService::class)
+        ->quoteForBooking($booking, 30);
+
+    expect($quote)->toMatchArray([
+        'baseAmount' => 4500.0,
+        'adminMargin' => 500.0,
+        'totalAmount' => 5000.0,
+        'calculatedExtensionPrice' => 5000.0,
+    ])->and($quote['matchedRange'])->toMatchArray([
+        'price' => 5000.0,
+        'baseAmount' => 4500.0,
+        'adminMargin' => 500.0,
+        'totalAmount' => 5000.0,
+    ]);
+});
+
+it('derives an effective rate from a fixed booking margin snapshot', function (): void {
+    $booking = CleaningBooking::factory()->create([
+        'base_price' => 8000,
+        'addons_total' => 0,
+        'admin_margin_amount' => 2000,
+    ]);
+
+    $quote = app(CleaningExtendedTimePricingService::class)
+        ->quoteForBooking($booking, 30);
+
+    expect($quote['baseAmount'])->toBe(4500.0)
+        ->and($quote['adminMargin'])->toBe(1500.0)
+        ->and($quote['totalAmount'])->toBe(6000.0);
+});
+
+it('uses zero extension margin when the booking service subtotal is zero', function (): void {
+    $booking = CleaningBooking::factory()->create([
+        'base_price' => 0,
+        'addons_total' => 0,
+        'admin_margin_amount' => 1000,
+    ]);
+
+    $quote = app(CleaningExtendedTimePricingService::class)
+        ->quoteForBooking($booking, 30);
+
+    expect($quote['adminMargin'])->toBe(0.0)
+        ->and($quote['totalAmount'])->toBe(4500.0);
 });

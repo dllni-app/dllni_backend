@@ -37,10 +37,16 @@ final class CleaningTimeWarningService
 
             $booking = $this->lockedBooking($warning);
             $quotedAmount = round((float) ($warning->quoted_amount ?? 0), 2);
+            $quotedAdminMargin = round((float) ($warning->quoted_admin_margin_amount ?? 0), 2);
+            $quotedBaseAmount = $warning->quoted_base_amount !== null
+                ? round((float) $warning->quoted_base_amount, 2)
+                : max(0.0, round($quotedAmount - $quotedAdminMargin, 2));
+            $shouldApplyPrice = $warning->price_applied_at === null && $quotedAmount > 0;
 
-            if ($warning->price_applied_at === null && $quotedAmount > 0) {
+            if ($shouldApplyPrice) {
                 $booking->forceFill([
                     'extension_fee_total' => round((float) ($booking->extension_fee_total ?? 0) + $quotedAmount, 2),
+                    'admin_margin_amount' => round((float) ($booking->admin_margin_amount ?? 0) + $quotedAdminMargin, 2),
                     'total_price' => round((float) ($booking->total_price ?? 0) + $quotedAmount, 2),
                 ])->save();
             }
@@ -54,6 +60,14 @@ final class CleaningTimeWarningService
 
             $assignment = $this->warningAssignment($warning, $booking);
             if ($assignment instanceof CleaningBookingWorkerAssignment) {
+                if ($shouldApplyPrice) {
+                    $assignment->forceFill([
+                        'service_share_amount' => round((float) ($assignment->service_share_amount ?? 0) + $quotedBaseAmount, 2),
+                        'admin_margin_amount' => round((float) ($assignment->admin_margin_amount ?? 0) + $quotedAdminMargin, 2),
+                        'worker_amount' => round((float) ($assignment->worker_amount ?? 0) + $quotedBaseAmount, 2),
+                    ]);
+                }
+
                 $assignment->forceFill([
                     'status' => CleaningBookingWorkerAssignmentStatus::InProgress,
                     'work_finished_at' => null,

@@ -21,6 +21,13 @@ Extended time starts after the worker says the cleaning work is finished.
 
 The Flutter apps should treat backend status and API responses as the source of truth. Do not calculate final extension prices locally.
 
+Extension quotes contain an authoritative breakdown:
+
+- `baseAmount`: configured extension service price before administration margin.
+- `adminMargin`: booking-snapshot effective administration margin applied to the extension.
+- `totalAmount`: final customer charge (`baseAmount + adminMargin`).
+- `additionalAmount`: backward-compatible alias for `totalAmount`.
+
 ## Status Values
 
 Relevant cleaning booking statuses:
@@ -90,7 +97,10 @@ Estimate/generate responses include the generated ranges:
       "startMinutes": 16,
       "endMinutes": 30,
       "label": "من 16 إلى 30 دقيقة",
-      "price": 4500,
+      "price": 5000,
+      "baseAmount": 4500,
+      "adminMargin": 500,
+      "totalAmount": 5000,
       "currency": "SYP"
     }
   ]
@@ -163,7 +173,10 @@ Success response shape:
       "price": 4500,
       "currency": "SYP"
     },
-    "calculatedExtensionPrice": 4500,
+    "baseAmount": 4500,
+    "adminMargin": 500,
+    "totalAmount": 5000,
+    "calculatedExtensionPrice": 5000,
     "currency": "SYP"
   }
 }
@@ -212,7 +225,10 @@ Response item:
   "workerRespondedAt": null,
   "additionalMinutes": 30,
   "requestedMinutes": 30,
-  "additionalAmount": 4500,
+  "baseAmount": 4500,
+  "adminMargin": 500,
+  "totalAmount": 5000,
+  "additionalAmount": 5000,
   "currency": "SYP",
   "priceAppliedAt": null,
   "workerRejectMessage": null,
@@ -234,7 +250,10 @@ Use these fields in Flutter:
 | `bookingId` | Booking id. |
 | `workerResponse` | `null` means pending. Non-null means already answered. |
 | `requestedMinutes` | Main field to display requested time. |
-| `additionalAmount` | Quoted extension fee to display. |
+| `baseAmount` | Worker extension earnings before administration margin. |
+| `adminMargin` | Administration margin for this extension. |
+| `totalAmount` | Final amount charged to the customer. |
+| `additionalAmount` | Backward-compatible alias for `totalAmount`. |
 | `currency` | Fee currency. |
 | `priceAppliedAt` | Non-null means accepted price was applied to booking totals. |
 | `workerRejectMessage` | Display reject reason if present. |
@@ -349,7 +368,10 @@ private-cleaning-booking.{bookingId}
   "cleaningBookingId": 123,
   "workerId": 52,
   "requestedMinutes": 30,
-  "additionalAmount": 4500,
+  "baseAmount": 4500,
+  "adminMargin": 500,
+  "totalAmount": 5000,
+  "additionalAmount": 5000,
   "currency": "SYP",
   "version": 1
 }
@@ -445,4 +467,3 @@ Backend source files:
 - `Modules/Cleaning/app/Http/Resources/CleaningTimeWarningResource.php`
 - `Modules/Cleaning/app/Services/CleaningTimeWarningService.php`
 - `Modules/Cleaning/app/Events/ServiceExtensionRequested.php`
-

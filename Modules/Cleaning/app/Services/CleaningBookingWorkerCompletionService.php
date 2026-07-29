@@ -178,7 +178,7 @@ final class CleaningBookingWorkerCompletionService
     public function requestExtension(CleaningBooking $booking, int $additionalMinutes, ?string $customerMessage = null, ?int $workerId = null, ?int $assignmentId = null): array
     {
         $fromStatus = (string) $booking->status->value;
-        $extensionPricing = $this->extendedTimePricing->quote($additionalMinutes);
+        $extensionPricing = $this->extendedTimePricing->quoteForBooking($booking, $additionalMinutes);
         $decisionWorkerId = null;
         $decisionAssignmentId = null;
 
@@ -208,6 +208,8 @@ final class CleaningBookingWorkerCompletionService
                 'customer_responded_at' => now(),
                 'worker_responded_at' => null,
                 'additional_minutes' => $additionalMinutes,
+                'quoted_base_amount' => $extensionPricing['baseAmount'],
+                'quoted_admin_margin_amount' => $extensionPricing['adminMargin'],
                 'quoted_amount' => $extensionPricing['calculatedExtensionPrice'],
                 'quoted_currency' => $extensionPricing['currency'],
                 'price_applied_at' => null,

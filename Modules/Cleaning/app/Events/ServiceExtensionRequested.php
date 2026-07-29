@@ -21,6 +21,9 @@ final class ServiceExtensionRequested implements ShouldBroadcastNow
         public ?int $requestedMinutes,
         public ?float $additionalAmount,
         public ?string $currency,
+        public ?float $baseAmount = null,
+        public ?float $adminMargin = null,
+        public ?float $totalAmount = null,
     ) {}
 
     /**
@@ -54,7 +57,10 @@ final class ServiceExtensionRequested implements ShouldBroadcastNow
             'cleaningBookingId' => $this->cleaningBookingId,
             'workerId' => $this->workerId,
             'requestedMinutes' => $this->requestedMinutes,
-            'additionalAmount' => $this->additionalAmount,
+            'baseAmount' => $this->baseAmount,
+            'adminMargin' => $this->adminMargin,
+            'totalAmount' => $this->totalAmount ?? $this->additionalAmount,
+            'additionalAmount' => $this->additionalAmount ?? $this->totalAmount,
             'currency' => $this->currency,
             'version' => 1,
         ];

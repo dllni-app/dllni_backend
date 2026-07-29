@@ -6,10 +6,15 @@ namespace Modules\Cleaning\Services;
 
 use App\Models\CleaningFinancialSetting;
 use Illuminate\Validation\ValidationException;
+use Modules\Cleaning\Models\CleaningBooking;
 
 final class CleaningExtendedTimePricingService
 {
     private const CURRENCY = 'SYP';
+
+    public function __construct(
+        private readonly CleaningPricingCalculator $pricingCalculator,
+    ) {}
 
     /**
      * Canonical 15-minute block boundaries (used as the fallback shape and to
@@ -65,6 +70,57 @@ final class CleaningExtendedTimePricingService
             'calculatedExtensionPrice' => $price,
             'currency' => self::CURRENCY,
         ];
+    }
+
+    /**
+     * @return array{
+     *     requestedMinutes:int,
+     *     matchedRange:array{id:int,startMinutes:int,endMinutes:int,label:string,price:float,baseAmount:float,adminMargin:float,totalAmount:float,currency:string},
+     *     baseAmount:float,
+     *     adminMargin:float,
+     *     totalAmount:float,
+     *     calculatedExtensionPrice:float,
+     *     currency:string
+     * }
+     */
+    public function quoteForBooking(CleaningBooking $booking, int $minutes): array
+    {
+        $quote = $this->quote($minutes);
+        $baseAmount = (float) $quote['calculatedExtensionPrice'];
+        $adminMargin = $this->extensionAdminMargin($booking, $baseAmount);
+        $totalAmount = round($baseAmount + $adminMargin, 2);
+
+        $quote['matchedRange'] = array_merge($quote['matchedRange'], [
+            'price' => $totalAmount,
+            'baseAmount' => $baseAmount,
+            'adminMargin' => $adminMargin,
+            'totalAmount' => $totalAmount,
+        ]);
+        $quote['baseAmount'] = $baseAmount;
+        $quote['adminMargin'] = $adminMargin;
+        $quote['totalAmount'] = $totalAmount;
+        $quote['calculatedExtensionPrice'] = $totalAmount;
+
+        return $quote;
+    }
+
+    /**
+     * @return array<int, array{id:int,startMinutes:int,endMinutes:int,label:string,price:float,baseAmount:float,adminMargin:float,totalAmount:float,currency:string}>
+     */
+    public function rangesForBooking(CleaningBooking $booking): array
+    {
+        return array_map(function (array $range) use ($booking): array {
+            $baseAmount = (float) $range['price'];
+            $adminMargin = $this->extensionAdminMargin($booking, $baseAmount);
+            $totalAmount = round($baseAmount + $adminMargin, 2);
+
+            return array_merge($range, [
+                'price' => $totalAmount,
+                'baseAmount' => $baseAmount,
+                'adminMargin' => $adminMargin,
+                'totalAmount' => $totalAmount,
+            ]);
+        }, $this->ranges());
     }
 
     /**
@@ -169,5 +225,28 @@ final class CleaningExtendedTimePricingService
     private function label(array $range): string
     {
         return "من {$range['start']} إلى {$range['end']} دقيقة";
+    }
+
+    private function extensionAdminMargin(CleaningBooking $booking, float $baseAmount): float
+    {
+        $serviceSubtotal = round(
+            (float) ($booking->base_price ?? 0) + (float) ($booking->addons_total ?? 0),
+            2,
+        );
+        $appliedExtensionMargin = (float) $booking->timeWarnings()
+            ->whereNotNull('price_applied_at')
+            ->sum('quoted_admin_margin_amount');
+        $bookingAdminMargin = max(
+            0.0,
+            (float) ($booking->admin_margin_amount ?? 0) - $appliedExtensionMargin,
+        );
+
+        if ($serviceSubtotal <= 0.0 || $bookingAdminMargin <= 0.0 || $baseAmount <= 0.0) {
+            return 0.0;
+        }
+
+        $effectiveRate = $bookingAdminMargin / $serviceSubtotal;
+
+        return $this->pricingCalculator->roundMoney($baseAmount * $effectiveRate);
     }
 }
