@@ -228,8 +228,8 @@ final class CleaningTransactionForm
                 ? 'يسدد الإيداع المديونية أولاً. المديونية الحالية: '.self::money((float) $snapshot['debtBalance']).'.'
                 : 'The deposit settles indebtedness first. Current indebtedness: '.self::money((float) $snapshot['debtBalance']).'.',
             'debt' => app()->isLocale('ar')
-                ? 'يضاف الدين الإداري إلى رصيد الإيداع، ولا يمكن إضافته إذا كان للعامل رصيد إيداع أو مديونية قائمة.'
-                : 'The administration loan is added to the deposit balance and cannot be added while a deposit or indebtedness already exists.',
+                ? 'يضاف الدين الإداري إلى رصيد الإيداع، ولا يمكن إضافته إذا كان للعامل رصيد إيداع أو إيرادات في حسابه.'
+                : 'The administration loan is added to the deposit balance and cannot be added while the worker has a deposit balance or revenue in the account.',
             default => __('cleaning_finance_guidance.fields.amount_helper_default'),
         };
     }
