@@ -170,7 +170,7 @@ final class DepositService
 
         $revenue = (float) CleaningBookingWorkerAssignment::query()
             ->where('worker_id', $worker->id)
-            ->sum(DB::raw('COALESCE(service_share_amount,0)+COALESCE(travel_fee,0)+COALESCE(admin_margin_amount,0)'));
+            ->sum(DB::raw('CASE WHEN COALESCE(service_share_amount,0)+COALESCE(travel_fee,0)-COALESCE(admin_margin_amount,0) > 0 THEN COALESCE(service_share_amount,0)+COALESCE(travel_fee,0)-COALESCE(admin_margin_amount,0) ELSE 0 END'));
         $allowedDebt = $this->resolveLimits($worker)['maxNegativeBalance'];
 
         return [

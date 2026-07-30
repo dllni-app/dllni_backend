@@ -143,7 +143,8 @@ final class WorkerOrderSolvencyService
             $serviceShare = (float) $assignment->service_share_amount;
             $travelFee = (float) $assignment->travel_fee;
             $adminMargin = (float) $assignment->admin_margin_amount;
-            $workerAmount = (float) $assignment->worker_amount;
+            $grossWorkerTotal = $this->grossWorkerTotal($serviceShare, $travelFee);
+            $workerAmount = $this->netWorkerAmount($serviceShare, $travelFee, $adminMargin);
 
             return [
                 'id' => (int) $assignment->id,
@@ -159,7 +160,7 @@ final class WorkerOrderSolvencyService
                 'travelFee' => $travelFee,
                 'adminMarginAmount' => $adminMargin,
                 'workerAmount' => $workerAmount,
-                'totalPrice' => round($serviceShare + $travelFee + $adminMargin, 2),
+                'totalPrice' => $grossWorkerTotal,
                 'currency' => (string) ($assignment->currency ?: config('app.currency', 'SYP')),
                 'roomIds' => [],
                 'isPricingFinal' => true,
@@ -181,7 +182,8 @@ final class WorkerOrderSolvencyService
         );
         $travelFee = (float) $pricing['travelFee'];
         $adminMargin = (float) $pricing['adminMargin'];
-        $workerAmount = round($serviceShare + $travelFee, 2);
+        $grossWorkerTotal = $this->grossWorkerTotal($serviceShare, $travelFee);
+        $workerAmount = $this->netWorkerAmount($serviceShare, $travelFee, $adminMargin);
 
         return [
             'id' => null,
@@ -195,7 +197,7 @@ final class WorkerOrderSolvencyService
             'travelFee' => $travelFee,
             'adminMarginAmount' => $adminMargin,
             'workerAmount' => $workerAmount,
-            'totalPrice' => round($workerAmount + $adminMargin, 2),
+            'totalPrice' => $grossWorkerTotal,
             'currency' => (string) config('app.currency', 'SYP'),
             'roomIds' => [],
             'isPricingFinal' => true,
@@ -255,5 +257,15 @@ final class WorkerOrderSolvencyService
         }
 
         return round((float) $query->sum('cleaning_booking_worker_assignments.admin_margin_amount'), 2);
+    }
+
+    private function grossWorkerTotal(float $serviceShare, float $travelFee): float
+    {
+        return round($serviceShare + $travelFee, 2);
+    }
+
+    private function netWorkerAmount(float $serviceShare, float $travelFee, float $adminMargin): float
+    {
+        return max(0.0, round($this->grossWorkerTotal($serviceShare, $travelFee) - $adminMargin, 2));
     }
 }

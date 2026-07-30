@@ -90,7 +90,7 @@ it('applies the extension breakdown to booking and worker accounting once', func
         'status' => 'time_extension_requested',
         'service_share_amount' => 10000,
         'admin_margin_amount' => 1000,
-        'worker_amount' => 10000,
+        'worker_amount' => 9000,
         'currency' => 'SYP',
     ]);
     $warning = CleaningTimeWarning::query()->create([
@@ -124,9 +124,9 @@ it('applies the extension breakdown to booking and worker accounting once', func
     expect((float) $booking->extension_fee_total)->toBe(5000.0)
         ->and((float) $booking->admin_margin_amount)->toBe(1500.0)
         ->and((float) $booking->total_price)->toBe(16000.0)
-        ->and((float) $assignment->service_share_amount)->toBe(14500.0)
+        ->and((float) $assignment->service_share_amount)->toBe(15000.0)
         ->and((float) $assignment->admin_margin_amount)->toBe(1500.0)
-        ->and((float) $assignment->worker_amount)->toBe(14500.0);
+        ->and((float) $assignment->worker_amount)->toBe(13500.0);
 });
 
 it('rejects an extension request with message', function () {

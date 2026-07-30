@@ -740,6 +740,10 @@ it('returns worker homepage with todayEarnings newOrdersCount and pendingExtensi
         'worker_id' => $worker->id,
         'billing_policy_id' => $billingPolicy->id,
         'status' => CleaningBookingStatus::Completed,
+        'base_price' => 200,
+        'addons_total' => 0,
+        'travel_fee' => 0,
+        'admin_margin_amount' => 0,
         'total_price' => 200,
         'scheduled_date' => $today,
     ]);
@@ -802,6 +806,9 @@ it('returns worker homepage chart and amount summary blocks for the owner dashbo
         'billing_policy_id' => $billingPolicy->id,
         'status' => CleaningBookingStatus::Completed,
         'scheduled_date' => $monday->copy()->format('Y-m-d'),
+        'base_price' => 1000,
+        'addons_total' => 0,
+        'travel_fee' => 0,
         'total_price' => 1000,
         'admin_margin_amount' => 200,
     ]);

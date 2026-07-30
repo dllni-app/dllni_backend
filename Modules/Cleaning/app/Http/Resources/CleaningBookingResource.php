@@ -366,6 +366,9 @@ final class CleaningBookingResource extends JsonResource
         $assignmentStatus = $this->assignmentStatusForResponse($assignment);
         $services = $this->finishedSnapshot($assignment->worker_finished_cleaning_services, 'service');
         $rooms = $this->finishedSnapshot($assignment->worker_finished_property_rooms, 'room');
+        $serviceShare = (float) $assignment->service_share_amount;
+        $travelFee = (float) $assignment->travel_fee;
+        $adminMargin = (float) $assignment->admin_margin_amount;
 
         return [
             'id' => $assignment->id,
@@ -386,10 +389,10 @@ final class CleaningBookingResource extends JsonResource
             'roomCount' => (int) $assignment->room_count,
             'roomsWeight' => (float) $assignment->rooms_weight,
             'totalHours' => $this->workerDurationHours(),
-            'serviceShareAmount' => (float) $assignment->service_share_amount,
-            'travelFee' => (float) $assignment->travel_fee,
-            'adminMarginAmount' => (float) $assignment->admin_margin_amount,
-            'workerAmount' => (float) $assignment->worker_amount,
+            'serviceShareAmount' => $serviceShare,
+            'travelFee' => $travelFee,
+            'adminMarginAmount' => $adminMargin,
+            'workerAmount' => $this->netWorkerAmount($serviceShare, $travelFee, $adminMargin),
             'currency' => $assignment->currency,
             'roomIds' => $roomIds,
             'worker' => $worker ? $this->serializeWorker($worker) : null,
@@ -431,6 +434,11 @@ final class CleaningBookingResource extends JsonResource
 
             return null;
         }
+    }
+
+    private function netWorkerAmount(float $serviceShare, float $travelFee, float $adminMargin): float
+    {
+        return max(0.0, round($serviceShare + $travelFee - $adminMargin, 2));
     }
 
     /** @return array<int, CleaningBookingWorkerAssignment> */

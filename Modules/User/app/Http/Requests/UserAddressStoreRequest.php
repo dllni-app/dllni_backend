@@ -6,7 +6,6 @@ namespace Modules\User\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Validator;
 
 final class UserAddressStoreRequest extends FormRequest
 {
@@ -23,41 +22,33 @@ final class UserAddressStoreRequest extends FormRequest
         return [
             'label' => ['required', 'string', 'max:100'],
             'mobile' => ['nullable', 'string', 'max:32'],
-            'city' => ['nullable', 'string', 'max:255'],
+            'city' => ['required', 'string', 'max:255'],
             'neighborhoodId' => [
                 'sometimes',
                 'nullable',
                 'integer',
                 Rule::exists('cleaning_neighborhoods', 'id')->where('is_active', true),
             ],
-            'neighborhood' => ['nullable', 'string', 'max:255'],
+            'neighborhood' => ['required_without:neighborhoodId', 'nullable', 'string', 'max:255'],
             'street' => ['nullable', 'string', 'max:255'],
             'building' => ['nullable', 'string', 'max:255'],
             'floor' => ['nullable', 'string', 'max:50'],
-            'directions' => ['nullable', 'string', 'max:2000'],
+            'directions' => ['required', 'string', 'max:2000'],
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
             'isDefault' => ['sometimes', 'boolean'],
         ];
     }
 
-    public function withValidator(Validator $validator): void
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
     {
-        $validator->after(function (Validator $validator): void {
-            $hasDetail = collect($this->only([
-                'mobile',
-                'city',
-                'neighborhoodId',
-                'neighborhood',
-                'street',
-                'building',
-                'floor',
-                'directions',
-            ]))->filter(fn ($v): bool => $v !== null && $v !== '')->isNotEmpty();
-
-            if (! $hasDetail) {
-                $validator->errors()->add('city', 'Provide at least one address detail (city, neighborhood, street, building, floor, or directions).');
-            }
-        });
+        return [
+            'city.required' => 'يرجى إدخال المدينة.',
+            'neighborhood.required_without' => 'يرجى اختيار الحي.',
+            'directions.required' => 'يرجى إدخال تفاصيل العنوان الأخرى.',
+        ];
     }
 }

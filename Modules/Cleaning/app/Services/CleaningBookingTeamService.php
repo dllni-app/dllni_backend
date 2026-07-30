@@ -392,7 +392,7 @@ final class CleaningBookingTeamService
 
                 $travelFee = (float) $pricing['travelFee'];
                 $adminMargin = (float) $pricing['adminMargin'];
-                $workerAmount = round($serviceShare + $travelFee, 2);
+                $workerAmount = max(0.0, round($serviceShare + $travelFee - $adminMargin, 2));
             }
 
             $assignment->forceFill([

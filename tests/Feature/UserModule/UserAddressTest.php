@@ -38,6 +38,7 @@ it('creates an address and marks first one as default', function (): void {
         'city' => 'حلب',
         'neighborhood' => 'الفرقان',
         'street' => 'شارع الجامعة',
+        'directions' => 'قرب الحديقة',
     ]);
 
     $response->assertCreated();
@@ -50,14 +51,15 @@ it('creates an address and marks first one as default', function (): void {
     ]);
 });
 
-it('rejects create without any location detail', function (): void {
+it('rejects create without required city neighborhood and directions', function (): void {
     Sanctum::actingAs(User::factory()->create());
 
     $response = $this->postJson('/api/v1/user/addresses', [
         'label' => 'المنزل',
     ]);
 
-    $response->assertUnprocessable();
+    $response->assertUnprocessable()
+        ->assertJsonValidationErrors(['city', 'neighborhood', 'directions']);
 });
 
 it('updates an address', function (): void {
@@ -74,6 +76,7 @@ it('updates an address', function (): void {
         'label' => 'New',
         'mobile' => '0930000000',
         'city' => 'Damascus',
+        'neighborhood' => 'Mazzeh',
         'directions' => 'by the pharmacy',
         'isDefault' => true,
     ]);
@@ -82,6 +85,29 @@ it('updates an address', function (): void {
     expect($response->json('address.label'))->toBe('New');
     expect($response->json('address.mobile'))->toBe('0930000000');
     expect($response->json('address.directions'))->toBe('by the pharmacy');
+});
+
+it('rejects full update without required city neighborhood and directions', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $address = UserAddress::factory()->for($user)->create([
+        'label' => 'Old',
+        'city' => 'Damascus',
+        'neighborhood' => 'Mazzeh',
+        'directions' => 'near park',
+    ]);
+
+    $response = $this->putJson("/api/v1/user/addresses/{$address->id}", [
+        'label' => 'New',
+        'city' => '',
+        'neighborhood' => '',
+        'directions' => '',
+        'isDefault' => true,
+    ]);
+
+    $response->assertUnprocessable()
+        ->assertJsonValidationErrors(['city', 'neighborhood', 'directions']);
 });
 
 it('shows a single address', function (): void {
@@ -165,6 +191,8 @@ it('returns not found for another users address', function (): void {
     $this->putJson("/api/v1/user/addresses/{$address->id}", [
         'label' => 'Hacked',
         'city' => 'Z',
+        'neighborhood' => 'N',
+        'directions' => 'D',
     ])->assertNotFound();
 
     $this->deleteJson("/api/v1/user/addresses/{$address->id}")->assertNotFound();
