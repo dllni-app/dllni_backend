@@ -8,6 +8,7 @@ use App\Notifications\Cleaning\BookingLifecycleNotification;
 use Illuminate\Support\Facades\Notification;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Enums\CleaningTimeWarningResponse;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningTimeWarning;
@@ -52,6 +53,11 @@ it('notifies both customer and worker when worker rejects an extension request',
 
     $response->assertOk()
         ->assertJsonPath('data.workerRejectMessage', $message);
+
+    $warning->refresh();
+    expect($warning->worker_response)->toBe(CleaningTimeWarningResponse::CommitCurrentTime)
+        ->and($warning->worker_responded_at)->not->toBeNull()
+        ->and($warning->worker_reject_message)->toBe($message);
 
     Notification::assertSentTo(
         $customer,

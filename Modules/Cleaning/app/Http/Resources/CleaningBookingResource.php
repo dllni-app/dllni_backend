@@ -21,6 +21,40 @@ use Throwable;
 /** @mixin CleaningBooking */
 final class CleaningBookingResource extends JsonResource
 {
+    private const ARABIC_LABELS = [
+        'regular' => 'تنظيف عادي',
+        'deep' => 'تنظيف عميق',
+        'small' => 'صغيرة',
+        'medium' => 'متوسطة',
+        'large' => 'كبيرة',
+        'none' => 'لا يوجد',
+        'bedroom' => 'غرفة نوم',
+        'bed_room' => 'غرفة نوم',
+        'bathroom' => 'حمام',
+        'bath_room' => 'حمام',
+        'toilet' => 'حمام صغير',
+        'kitchen' => 'مطبخ',
+        'living_room' => 'غرفة معيشة',
+        'balcony' => 'شرفة',
+        'hall' => 'صالة',
+        'corridor' => 'ممر',
+        'shed' => 'سقيفة',
+        'apartment' => 'شقة',
+        'flat' => 'شقة',
+        'villa' => 'فيلا',
+        'house' => 'منزل',
+        'home' => 'منزل',
+        'office' => 'مكتب',
+        'studio' => 'استوديو',
+        'outdoor' => 'خارجي',
+        'event_assistance' => 'مساعدة مناسبة',
+        'family_dinner' => 'عشاء عائلي',
+        'birthday' => 'عيد ميلاد',
+        'large_gathering' => 'تجمع كبير',
+        'funeral' => 'عزاء',
+        'other' => 'أخرى',
+    ];
+
     public function toArray(Request $request): array
     {
         $details = is_array($this->property_details) ? $this->property_details : [];
@@ -259,6 +293,9 @@ final class CleaningBookingResource extends JsonResource
         foreach (['living_room_size', 'room_size', 'room_type', 'cleaning_mode', 'event_type', 'venue_type'] as $key) {
             if (array_key_exists($key, $details)) $details[$key.'_label'] = $this->label($details[$key]);
         }
+        foreach (['eventType' => 'eventTypeLabel', 'venueType' => 'venueTypeLabel', 'cleaningMode' => 'cleaningModeLabel'] as $key => $labelKey) {
+            if (array_key_exists($key, $details)) $details[$labelKey] = $this->label($details[$key]);
+        }
         return $details;
     }
 
@@ -288,7 +325,7 @@ final class CleaningBookingResource extends JsonResource
         foreach ($items as $item) {
             if (is_string($item)) {
                 $text = trim($item);
-                if ($text !== '') $out[] = ['name' => $text, 'label' => $text];
+                if ($text !== '') $out[] = ['name' => $text, 'label' => $this->snapshotLabel($text, $type)];
                 continue;
             }
             if (! is_array($item)) continue;
@@ -299,6 +336,9 @@ final class CleaningBookingResource extends JsonResource
                 if (is_string($value) && trim($value) !== '') $payload[$key] = trim($value);
             }
             $payload['label'] ??= $payload['name'] ?? $payload['displayLabel'] ?? $payload['display_label'] ?? $payload['roomTypeLabel'] ?? $payload['room_type_label'] ?? $payload['roomType'] ?? $payload['room_type'] ?? $payload['roomKey'] ?? $payload['room_key'] ?? null;
+            if (isset($payload['label']) && is_string($payload['label'])) {
+                $payload['label'] = $this->snapshotLabel($payload['label'], $type);
+            }
             if ($type === 'service' && ! isset($payload['name']) && isset($payload['label'])) $payload['name'] = $payload['label'];
             $payload = array_filter($payload, static fn (mixed $v): bool => $v !== null && $v !== '');
             if ($payload !== []) $out[] = $payload;
@@ -309,7 +349,14 @@ final class CleaningBookingResource extends JsonResource
     private function serializeWorker(object $worker): array
     {
         $user = $worker->relationLoaded('user') ? $worker->user : null;
-        return ['id' => $worker->id, 'firstName' => $worker->first_name, 'name' => $user?->name, 'phone' => $user?->phone, 'averageRating' => $worker->average_rating !== null ? (float) $worker->average_rating : null, 'totalCompletedJobs' => $worker->total_completed_jobs, 'isVerified' => (bool) $worker->is_verified, 'avatarUrl' => null];
+        $avatarUrl = method_exists($worker, 'getFirstMediaUrl')
+            ? ($worker->getFirstMediaUrl('avatar') ?: null)
+            : null;
+        $avatarUrl ??= $user !== null && method_exists($user, 'getFirstMediaUrl')
+            ? ($user->getFirstMediaUrl('primary-image') ?: null)
+            : null;
+
+        return ['id' => $worker->id, 'firstName' => $worker->first_name, 'name' => $user?->name, 'phone' => $user?->phone, 'averageRating' => $worker->average_rating !== null ? (float) $worker->average_rating : null, 'totalCompletedJobs' => $worker->total_completed_jobs, 'isVerified' => (bool) $worker->is_verified, 'avatarUrl' => $avatarUrl];
     }
 
     private function serializeWorkerAssignment(CleaningBookingWorkerAssignment $assignment): array
@@ -539,7 +586,42 @@ final class CleaningBookingResource extends JsonResource
     private function label(mixed $value): ?string
     {
         if ($value === null) return null;
-        return str_replace('_', ' ', (string) $value);
+        $text = trim((string) $value);
+        if ($text === '') return null;
+
+        $normalized = $this->normalizeLabelKey($text);
+
+        return self::ARABIC_LABELS[$normalized] ?? str_replace('_', ' ', $text);
+    }
+
+    private function snapshotLabel(string $value, string $type): string
+    {
+        $text = trim($value);
+        if ($text === '') return $text;
+        if ($type !== 'room') return $this->label($text) ?? $text;
+
+        if (preg_match('/^([a-z_ ]+)\.(small|medium|large)\.(\d+)$/i', $text, $matches) === 1) {
+            return $this->roomUnitLabel($matches[1], (int) $matches[3], $matches[2]);
+        }
+
+        if (preg_match('/^(bedroom|bathroom|toilet|kitchen|living room|living_room|balcony|hall|corridor|shed)\s+(\d+)\s*-\s*(small|medium|large)$/i', $text, $matches) === 1) {
+            return $this->roomUnitLabel($matches[1], (int) $matches[2], $matches[3]);
+        }
+
+        return $this->label($text) ?? $text;
+    }
+
+    private function roomUnitLabel(string $roomType, int $index, string $roomSize): string
+    {
+        $type = $this->label($roomType) ?? trim($roomType);
+        $size = $this->label($roomSize) ?? trim($roomSize);
+
+        return sprintf('%s %d - %s', $type, $index, $size);
+    }
+
+    private function normalizeLabelKey(string $value): string
+    {
+        return mb_strtolower(str_replace(['-', ' '], '_', trim($value)));
     }
 
     private function workerTimestamp(?CleaningBookingWorkerAssignment $assignment, string $field, mixed $fallback, string $format): ?string

@@ -16,6 +16,8 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
 {
     use ValidatesWorkerRoomAssignments;
 
+    private const INCOMPLETE_ADDRESS_MESSAGE = 'يرجى تحديث العنوان المختار وإضافة الحي والإحداثيات قبل إنشاء الطلب.';
+
     public function authorize(): bool
     {
         return true;
@@ -116,9 +118,7 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
-            if ($this->filled('addressId') && (! $this->filled('addressLatitude') || ! $this->filled('addressLongitude'))) {
-                $validator->errors()->add('addressId', 'Selected address must include latitude and longitude coordinates.');
-            }
+            $this->validateSelectedAddressCompleteness($validator);
 
             $this->validateWorkerRoomAssignments($validator);
         });
@@ -155,6 +155,63 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
     private function isEventAssistanceRequested(): bool
     {
         return mb_strtolower((string) $this->input('propertyType')) === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE;
+    }
+
+    private function validateSelectedAddressCompleteness(Validator $validator): void
+    {
+        if (! $this->filled('addressId')) {
+            return;
+        }
+
+        $address = $this->selectedUserAddress();
+        if (! $address instanceof UserAddress) {
+            return;
+        }
+
+        if (! $this->isCompleteServiceAddress($address)) {
+            $validator->errors()->add('addressId', self::INCOMPLETE_ADDRESS_MESSAGE);
+        }
+    }
+
+    private function selectedUserAddress(): ?UserAddress
+    {
+        $addressId = $this->input('addressId');
+        if (! is_numeric($addressId) || $this->user() === null) {
+            return null;
+        }
+
+        return UserAddress::query()
+            ->whereKey((int) $addressId)
+            ->where('user_id', (int) $this->user()->id)
+            ->first();
+    }
+
+    private function isCompleteServiceAddress(UserAddress $address): bool
+    {
+        $hasAddressText = mb_trim($this->formatUserAddress($address)) !== '';
+        $hasNeighborhood = $address->neighborhood_id !== null
+            || mb_trim((string) $address->neighborhood) !== '';
+        $hasCoordinates = $address->latitude !== null && $address->longitude !== null;
+
+        return $hasAddressText && $hasNeighborhood && $hasCoordinates;
+    }
+
+    private function formatUserAddress(UserAddress $address): string
+    {
+        $parts = array_values(array_filter([
+            $address->city,
+            $address->neighborhood,
+            $address->street,
+            $address->building !== null ? 'Building '.$address->building : null,
+            $address->floor !== null ? 'Floor '.$address->floor : null,
+            $address->directions,
+        ], static fn (mixed $part): bool => is_string($part) && mb_trim($part) !== ''));
+
+        if ($parts !== []) {
+            return mb_substr(implode(' - ', $parts), 0, 500);
+        }
+
+        return mb_substr((string) $address->label, 0, 500);
     }
 
     /**
