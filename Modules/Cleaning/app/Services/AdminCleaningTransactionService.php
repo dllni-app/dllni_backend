@@ -143,6 +143,11 @@ final class AdminCleaningTransactionService
                     ? 'لا يمكن إضافة دين إداري للعامل طالما لديه رصيد إيداع قائم.'
                     : 'An administration loan cannot be added while the worker has an existing deposit balance.';
             }
+            if ((float) $snapshot['totalRevenue'] > 0) {
+                return app()->isLocale('ar')
+                    ? 'لا يمكن إضافة دين إداري للعامل طالما لديه إيرادات في حسابه.'
+                    : 'An administration loan cannot be added while the worker has revenue in the account.';
+            }
             if ((float) $snapshot['debtBalance'] > 0) {
                 return app()->isLocale('ar')
                     ? 'يجب تسوية المديونية الحالية قبل إضافة دين إداري إلى رصيد الإيداع.'

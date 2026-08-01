@@ -17,7 +17,9 @@ final class WorkerFinancialAccountStatusService
 
     public const SUSPENDED = 'suspended';
 
-    private const FULL_ACCOUNT_REFUND_REFERENCE = 'admin_full_account_refund';
+    private const CLOSING_TRANSACTION_TYPES = ['refund', 'withdrawal'];
+
+    private const FUNDING_TRANSACTION_TYPES = ['deposit', 'debt'];
 
     public function status(Worker $worker): string
     {
@@ -64,22 +66,26 @@ final class WorkerFinancialAccountStatusService
             return true;
         }
 
-        $latestFullRefundId = CleaningDepositTransaction::query()
+        $latestClosingTransactionId = CleaningDepositTransaction::query()
             ->where('worker_id', $worker->id)
-            ->whereIn('type', ['refund', 'withdrawal'])
-            ->where('reference', self::FULL_ACCOUNT_REFUND_REFERENCE)
+            ->whereIn('type', self::CLOSING_TRANSACTION_TYPES)
             ->where('balance_after', '<=', 0)
             ->latest('id')
             ->value('id');
 
-        if ($latestFullRefundId === null) {
-            return true;
+        if ($latestClosingTransactionId === null) {
+            $depositedTotal = max(0.0, (float) $account->deposited_total);
+            $withdrawnTotal = max(0.0, (float) $account->withdrawn_total);
+
+            // Compatibility for legacy accounts whose complete withdrawal was
+            // stored only in the cumulative account totals without a transaction.
+            return ! ($depositedTotal > 0 && $withdrawnTotal >= $depositedTotal);
         }
 
         return CleaningDepositTransaction::query()
             ->where('worker_id', $worker->id)
-            ->where('id', '>', (int) $latestFullRefundId)
-            ->whereIn('type', ['deposit', 'debt'])
+            ->where('id', '>', (int) $latestClosingTransactionId)
+            ->whereIn('type', self::FUNDING_TRANSACTION_TYPES)
             ->where('balance_after', '>', 0)
             ->exists();
     }
