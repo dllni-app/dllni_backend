@@ -7,6 +7,7 @@ namespace Modules\Cleaning\Services;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Models\CleaningTimeWarning;
+use Modules\Cleaning\Models\EventBooking;
 
 final class CleaningTimeWarningWorkerNotificationService
 {
@@ -44,14 +45,19 @@ final class CleaningTimeWarningWorkerNotificationService
     ): void {
         $booking = $warning->relationLoaded('booking') ? $warning->booking : $warning->booking()->first();
 
-        if (! $booking instanceof CleaningBooking) {
+        if (! $booking instanceof CleaningBooking && ! $booking instanceof EventBooking) {
             return;
         }
 
-        $assignment = $this->warningAssignment($warning, $booking);
-        $workerId = $warning->worker_id !== null ? (int) $warning->worker_id : $booking->worker_id;
+        $assignment = $booking instanceof CleaningBooking
+            ? $this->warningAssignment($warning, $booking)
+            : null;
+        $workerId = $warning->worker_id !== null
+            ? (int) $warning->worker_id
+            : ($booking instanceof CleaningBooking ? $booking->worker_id : null);
         $assignmentId = $assignment?->id;
         $occurredAt = $warning->worker_responded_at?->toIso8601String() ?? now()->toIso8601String();
+        $bookingType = $booking instanceof EventBooking ? 'event_booking' : 'cleaning_booking';
         $extraData = [
             'warningId' => $warning->id,
             'assignmentId' => $assignmentId,
@@ -59,10 +65,15 @@ final class CleaningTimeWarningWorkerNotificationService
             'message' => $message,
             'workerRejectMessage' => $message,
             'worker_reject_message' => $message,
+            'bookingType' => $bookingType,
+            'booking_type' => $bookingType,
+            'propertyType' => $booking instanceof CleaningBooking ? $booking->property_type : null,
+            'property_type' => $booking instanceof CleaningBooking ? $booking->property_type : null,
         ];
         $templateContext = [
             'warningId' => $warning->id,
             'assignmentId' => $assignmentId,
+            'bookingType' => $bookingType,
         ];
 
         if ($workerId !== null) {
@@ -77,7 +88,7 @@ final class CleaningTimeWarningWorkerNotificationService
                 extraData: $extraData,
                 templateContext: $templateContext,
             );
-        } else {
+        } elseif ($booking instanceof CleaningBooking) {
             $this->lifecycleNotifications->notifyWorker(
                 booking: $booking,
                 canonicalType: $canonicalType,

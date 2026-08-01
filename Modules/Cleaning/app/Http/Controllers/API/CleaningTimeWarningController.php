@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Http\Controllers\API;
 
+use BackedEnum;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Validation\ValidationException;
@@ -15,6 +16,7 @@ use Modules\Cleaning\Http\Requests\CleaningTimeWarningRequests\CleaningTimeWarni
 use Modules\Cleaning\Http\Resources\CleaningTimeWarningResource;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningTimeWarning;
+use Modules\Cleaning\Models\EventBooking;
 use Modules\Cleaning\Services\CleaningTimeWarningService;
 use Modules\Cleaning\Services\CleaningTimeWarningWorkerNotificationService;
 use Throwable;
@@ -35,20 +37,29 @@ final class CleaningTimeWarningController
         $worker = $request->user()?->worker;
 
         if ($worker !== null) {
-            $warnings
-                ->where('booking_type', 'cleaning_booking')
-                ->where(function (Builder $warningQuery) use ($worker): void {
-                    $warningQuery->where('worker_id', $worker->id)
-                        ->orWhereNull('worker_id');
-                })
-                ->whereHasMorph('booking', [CleaningBooking::class], function (Builder $query) use ($worker) {
-                    $query->where('worker_id', $worker->id)
-                        ->orWhereHas('workerAssignments', function (Builder $assignmentQuery) use ($worker) {
-                            $assignmentQuery
-                                ->where('worker_id', $worker->id)
-                                ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
+            $warnings->where(function (Builder $query) use ($worker): void {
+                $query->where(function (Builder $cleaningQuery) use ($worker): void {
+                    $cleaningQuery
+                        ->where('booking_type', 'cleaning_booking')
+                        ->where(function (Builder $warningQuery) use ($worker): void {
+                            $warningQuery->where('worker_id', $worker->id)
+                                ->orWhereNull('worker_id');
+                        })
+                        ->whereHasMorph('booking', [CleaningBooking::class], function (Builder $bookingQuery) use ($worker): void {
+                            $bookingQuery->where('worker_id', $worker->id)
+                                ->orWhereHas('workerAssignments', function (Builder $assignmentQuery) use ($worker): void {
+                                    $assignmentQuery
+                                        ->where('worker_id', $worker->id)
+                                        ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
+                                });
                         });
+                })->orWhere(function (Builder $eventQuery) use ($worker): void {
+                    $eventQuery
+                        ->where('booking_type', 'event_booking')
+                        ->where('worker_id', $worker->id)
+                        ->whereHasMorph('booking', [EventBooking::class]);
                 });
+            });
         }
 
         if ($worker !== null && ! array_key_exists('pending', $filters)) {
@@ -115,6 +126,20 @@ final class CleaningTimeWarningController
             abort(403, 'User must have an associated worker.');
         }
 
+        $booking = $warning->booking;
+
+        if ($warning->booking_type === 'event_booking') {
+            if ($warning->worker_id === null || (int) $warning->worker_id !== (int) $worker->id) {
+                abort(403, 'Extension request is not for your worker assignment.');
+            }
+
+            if (! $booking instanceof EventBooking) {
+                abort(403, 'Extension request is not for your booking.');
+            }
+
+            return;
+        }
+
         if ($warning->booking_type !== 'cleaning_booking') {
             abort(403, 'Extension request is not for a cleaning booking.');
         }
@@ -122,8 +147,6 @@ final class CleaningTimeWarningController
         if ($warning->worker_id !== null && (int) $warning->worker_id !== (int) $worker->id) {
             abort(403, 'Extension request is not for your worker assignment.');
         }
-
-        $booking = $warning->booking;
 
         if (! $booking instanceof CleaningBooking || ! $this->warningBelongsToWorker($booking, $worker->id)) {
             abort(403, 'Extension request is not for your booking.');
@@ -145,9 +168,14 @@ final class CleaningTimeWarningController
     private function warningStatus(CleaningTimeWarning $warning): ?string
     {
         $booking = $warning->booking;
-
-        return $booking instanceof CleaningBooking
-            ? ($booking->status?->value ?? (string) $booking->status)
+        $status = ($booking instanceof CleaningBooking || $booking instanceof EventBooking)
+            ? $booking->status
             : null;
+
+        if ($status instanceof BackedEnum) {
+            return (string) $status->value;
+        }
+
+        return $status !== null ? (string) $status : null;
     }
 }

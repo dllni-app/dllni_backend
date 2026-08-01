@@ -10,11 +10,13 @@ use InvalidArgumentException;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Enums\CleaningTimeWarningResponse;
+use Modules\Cleaning\Enums\EventBookingStatus;
 use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
 use Modules\Cleaning\Events\CompletionDecisionMade;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Models\CleaningTimeWarning;
+use Modules\Cleaning\Models\EventBooking;
 
 final class CleaningTimeWarningService
 {
@@ -35,7 +37,7 @@ final class CleaningTimeWarningService
                 return $warning->fresh(['booking']);
             }
 
-            $booking = $this->lockedBooking($warning);
+            $booking = $this->lockedCleaningBooking($warning);
             $quotedAmount = round((float) ($warning->quoted_amount ?? 0), 2);
             $quotedAdminMargin = round((float) ($warning->quoted_admin_margin_amount ?? 0), 2);
             $quotedBaseAmount = $warning->quoted_base_amount !== null
@@ -115,13 +117,23 @@ final class CleaningTimeWarningService
                 return $warning->fresh(['booking']);
             }
 
-            $booking = $this->lockedBooking($warning);
+            $booking = $this->lockedRejectBooking($warning);
 
             $warning->update([
                 'worker_response' => CleaningTimeWarningResponse::CommitCurrentTime,
                 'worker_responded_at' => now(),
                 'worker_reject_message' => $message,
             ]);
+
+            if ($booking instanceof EventBooking) {
+                if ($booking->status !== EventBookingStatus::Cancelled) {
+                    $booking->forceFill([
+                        'status' => EventBookingStatus::Completed,
+                    ])->save();
+                }
+
+                return $warning->fresh(['booking']);
+            }
 
             $assignment = $this->warningAssignment($warning, $booking);
             if ($assignment instanceof CleaningBookingWorkerAssignment) {
@@ -157,7 +169,7 @@ final class CleaningTimeWarningService
         return $warning;
     }
 
-    private function lockedBooking(CleaningTimeWarning $warning): CleaningBooking
+    private function lockedCleaningBooking(CleaningTimeWarning $warning): CleaningBooking
     {
         $booking = $warning->booking;
 
@@ -166,6 +178,21 @@ final class CleaningTimeWarningService
         }
 
         return CleaningBooking::query()->lockForUpdate()->findOrFail($booking->id);
+    }
+
+    private function lockedRejectBooking(CleaningTimeWarning $warning): CleaningBooking|EventBooking
+    {
+        $booking = $warning->booking;
+
+        if ($booking instanceof CleaningBooking) {
+            return CleaningBooking::query()->lockForUpdate()->findOrFail($booking->id);
+        }
+
+        if ($booking instanceof EventBooking) {
+            return EventBooking::query()->lockForUpdate()->findOrFail($booking->id);
+        }
+
+        throw new InvalidArgumentException('Extension request booking is invalid.');
     }
 
     private function warningAssignment(CleaningTimeWarning $warning, CleaningBooking $booking): ?CleaningBookingWorkerAssignment

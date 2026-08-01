@@ -9,6 +9,7 @@ use App\Models\Worker;
 use App\Notifications\Cleaning\BookingLifecycleNotification;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
+use Modules\Cleaning\Models\EventBooking;
 
 final class CleaningLifecycleNotificationService
 {
@@ -17,7 +18,7 @@ final class CleaningLifecycleNotificationService
      * @param  array<string, scalar|null>  $templateContext
      */
     public function notifyCustomer(
-        CleaningBooking $booking,
+        CleaningBooking|EventBooking $booking,
         string $canonicalType,
         string $action,
         string $actorRole,
@@ -40,7 +41,7 @@ final class CleaningLifecycleNotificationService
             targetRole: 'customer',
             fromStatus: $fromStatus,
             action: $action,
-            deepLinkTarget: $deepLinkTarget ?? 'cleaning_order_details',
+            deepLinkTarget: $deepLinkTarget,
             occurredAt: $occurredAt,
             extraData: $extraData,
             templateContext: $templateContext,
@@ -87,7 +88,7 @@ final class CleaningLifecycleNotificationService
      * @param  array<string, scalar|null>  $templateContext
      */
     public function notifyWorkerById(
-        CleaningBooking $booking,
+        CleaningBooking|EventBooking $booking,
         int $workerId,
         string $canonicalType,
         string $action,
@@ -158,7 +159,7 @@ final class CleaningLifecycleNotificationService
      */
     private function notifyWorkerUser(
         User $workerUser,
-        CleaningBooking $booking,
+        CleaningBooking|EventBooking $booking,
         string $canonicalType,
         string $action,
         string $actorRole,
@@ -175,7 +176,7 @@ final class CleaningLifecycleNotificationService
             targetRole: 'worker',
             fromStatus: $fromStatus,
             action: $action,
-            deepLinkTarget: $deepLinkTarget ?? 'cleaning_booking_details',
+            deepLinkTarget: $deepLinkTarget,
             occurredAt: $occurredAt,
             extraData: $extraData,
             templateContext: $templateContext,
