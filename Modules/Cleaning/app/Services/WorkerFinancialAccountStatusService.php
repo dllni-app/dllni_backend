@@ -34,12 +34,11 @@ final class WorkerFinancialAccountStatusService
         }
 
         $worker->loadMissing('deposit');
-        $debtBalance = max(0.0, (float) ($worker->deposit?->debt_balance ?? 0));
-        $allowedDebtLimit = max(0.0, (float) ($worker->deposit?->max_negative_balance ?? 0));
+        $allowance = app(DepositService::class)->allowanceSummary($worker);
 
-        return $debtBalance <= $allowedDebtLimit
-            ? self::ACTIVE
-            : self::INSUFFICIENT_BALANCE;
+        return (bool) ($allowance['isAllowanceLimitExhausted'] ?? false)
+            ? self::INSUFFICIENT_BALANCE
+            : self::ACTIVE;
     }
 
     public function isActive(Worker $worker): bool

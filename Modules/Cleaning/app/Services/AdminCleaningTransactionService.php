@@ -45,14 +45,15 @@ final class AdminCleaningTransactionService
         $financial = $this->depositService->financialSummary($worker);
         $debt = $this->debtService->summary($worker);
         $capacity = $this->solvencyService->workerCapacitySummary($worker);
+        $allowance = $this->depositService->allowanceSummary($worker);
         $limits = $this->depositService->resolveLimits($worker);
         $currentBalance = max(0.0, (float) ($worker->deposit?->current_balance ?? 0));
         $indebtednessBalance = max(0.0, (float) ($worker->deposit?->debt_balance ?? 0));
         $adminLoanBalance = max(0.0, (float) ($debt['adminLoanBalance'] ?? 0));
         $activeReservedCommission = (float) ($capacity['activeReservedCommission'] ?? 0);
-        $withdrawnAdminRevenue = max(0.0, (float) ($worker->deposit?->admin_revenue_withdrawn_total ?? 0));
+        $withdrawnAdminRevenue = max(0.0, (float) ($allowance['withdrawnAdminRevenueTotal'] ?? 0));
         $totalCommission = max(0.0, (float) ($financial['totalCommission'] ?? 0));
-        $adminCommissionBalance = max(0.0, $totalCommission - $withdrawnAdminRevenue);
+        $adminCommissionBalance = max(0.0, (float) ($allowance['adminCommissionBalance'] ?? 0));
         $maxRefundable = $indebtednessBalance <= 0 && $activeReservedCommission <= 0
             ? max(0.0, $currentBalance - $adminLoanBalance)
             : 0.0;
@@ -71,6 +72,9 @@ final class AdminCleaningTransactionService
             'maxNegativeBalance' => round((float) $limits['maxNegativeBalance'], 2),
             'allowedDebtLimit' => round((float) $limits['maxNegativeBalance'], 2),
             'remainingDebtCapacity' => round((float) ($capacity['remainingDebtCapacity'] ?? 0), 2),
+            'configuredAllowedDebtLimit' => round((float) ($allowance['configuredAllowedDebtLimit'] ?? 0), 2),
+            'remainingAllowanceLimit' => round((float) ($allowance['remainingAllowanceLimit'] ?? 0), 2),
+            'allowanceUsedAmount' => round((float) ($allowance['allowanceUsedAmount'] ?? 0), 2),
             'activeReservedCommission' => round($activeReservedCommission, 2),
             'availableCommissionCapacity' => round((float) ($capacity['availableCommissionCapacity'] ?? 0), 2),
             'maxRefundable' => round($maxRefundable, 2),
@@ -237,7 +241,7 @@ final class AdminCleaningTransactionService
             $loanRecovered = min($depositBefore, $adminLoanBalance);
             $workerRefund = max(0.0, $depositBefore - $loanRecovered);
             $withdrawnAdminRevenueBefore = max(0.0, (float) ($account->admin_revenue_withdrawn_total ?? 0));
-            $adminCommissionBalance = max(0.0, $this->commissionTotalFor($worker->id) - $withdrawnAdminRevenueBefore);
+            $adminCommissionBalance = max(0.0, (float) ($this->depositService->allowanceSummary($lockedWorker)['adminCommissionBalance'] ?? 0));
 
             if ($depositBefore <= 0 && $adminCommissionBalance <= 0) {
                 throw new InvalidArgumentException(__('cleaning_finance_guidance.validation.no_refundable_balance'));
@@ -296,21 +300,6 @@ final class AdminCleaningTransactionService
         }
 
         return null;
-    }
-
-    private function commissionTotalFor(int $workerId): float
-    {
-        $prefix = CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'%';
-
-        return (float) CleaningDepositTransaction::query()
-            ->where('worker_id', $workerId)
-            ->where(function (Builder $query) use ($prefix): void {
-                $query->whereIn('type', ['commission', 'admin_fee'])
-                    ->orWhere(function (Builder $query) use ($prefix): void {
-                        $query->where('type', 'debt')->where('reference', 'like', $prefix);
-                    });
-            })
-            ->sum('amount');
     }
 
     private function completedBookingsCount(Worker $worker): int

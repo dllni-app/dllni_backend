@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use Modules\Cleaning\Data\CleaningBookingData;
+use Modules\Cleaning\Enums\CleaningAssignmentMode;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
@@ -139,19 +140,28 @@ final class CleaningBookingService
     public function reject(CleaningBooking $booking, ?string $reason = null): CleaningBooking
     {
         $fromStatus = (string) $booking->status->value;
+        $worker = $this->currentWorker();
+        $shouldNotifyCustomer = $this->isCustomerVisibleWorkerRejection($booking, $worker);
 
-        $updated = DB::transaction(function () use ($booking, $reason): CleaningBooking {
-            $worker = Auth::user()?->worker;
-            if (! $worker) {
-                throw new InvalidArgumentException('User must have an associated worker.');
-            }
-
+        $updated = DB::transaction(function () use ($booking, $worker, $reason): CleaningBooking {
             return $this->teamService->rejectWorker($booking, $worker, $reason);
         });
 
         NotifyEligibleWorkersNewOrderJob::dispatch($updated->id);
 
         $this->dispatchTrackingUpdate($updated);
+
+        if ($shouldNotifyCustomer) {
+            $this->lifecycleNotifications->notifyCustomer(
+                booking: $updated,
+                canonicalType: 'cleaning.booking.worker_rejected',
+                action: 'worker_rejected',
+                actorRole: 'worker',
+                fromStatus: $fromStatus,
+                occurredAt: $updated->updated_at?->toIso8601String() ?? now()->toIso8601String(),
+                extraData: $this->workerRejectionExtraData($updated, $worker, $reason),
+            );
+        }
 
         if ($updated->status === CleaningBookingStatus::Cancelled) {
             $this->lifecycleNotifications->notifyCustomer(
@@ -855,6 +865,45 @@ final class CleaningBookingService
         }
 
         return $query->first();
+    }
+
+    private function isCustomerVisibleWorkerRejection(CleaningBooking $booking, Worker $worker): bool
+    {
+        $workerId = (int) $worker->id;
+
+        if ($booking->worker_id !== null && (int) $booking->worker_id === $workerId) {
+            return true;
+        }
+
+        if (
+            $booking->resolvedAssignmentMode() === CleaningAssignmentMode::PreferredWorker->value
+            && $booking->preferred_worker_id !== null
+            && (int) $booking->preferred_worker_id === $workerId
+        ) {
+            return true;
+        }
+
+        return $this->activeAssignmentForWorker($booking->id, $workerId) instanceof CleaningBookingWorkerAssignment;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function workerRejectionExtraData(CleaningBooking $booking, Worker $worker, ?string $reason): array
+    {
+        $extraData = [
+            'workerId' => (int) $worker->id,
+            'propertyType' => (string) $booking->property_type,
+            'assignmentMode' => $booking->resolvedAssignmentMode(),
+        ];
+
+        $message = $reason !== null ? mb_trim($reason) : '';
+        if ($message !== '') {
+            $extraData['workerRejectMessage'] = $message;
+            $extraData['worker_reject_message'] = $message;
+        }
+
+        return $extraData;
     }
 
     private function requiredWorkers(CleaningBooking $booking): int

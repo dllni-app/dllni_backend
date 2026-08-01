@@ -22,6 +22,8 @@ final class WorkerOrderSolvencyService
 
     public const REASON_COMMISSION_UNAVAILABLE = 'commission_unavailable';
 
+    public const REASON_ALLOWANCE_LIMIT_EXHAUSTED = 'allowance_limit_exhausted';
+
     public function __construct(
         private readonly CleaningPricingCalculator $pricingCalculator,
         private readonly DepositService $depositService,
@@ -53,7 +55,14 @@ final class WorkerOrderSolvencyService
             && $this->depositService->isWorkerEligibleForDispatch($worker)
             && (float) $capacity['availableCommissionCapacity'] >= $requiredCommission;
 
-        if (! $canReceive && $reasonCode === self::REASON_ELIGIBLE) {
+        if (
+            ! $canReceive
+            && $reasonCode === self::REASON_ELIGIBLE
+            && (bool) ($capacity['isAllowanceLimitExhausted'] ?? false)
+        ) {
+            $reasonCode = self::REASON_ALLOWANCE_LIMIT_EXHAUSTED;
+            $message = 'The worker allowance limit has been exhausted.';
+        } elseif (! $canReceive && $reasonCode === self::REASON_ELIGIBLE) {
             $reasonCode = self::REASON_INSUFFICIENT_COMMISSION_CAPACITY;
             $message = 'The available deposit and remaining debt capacity do not cover this booking platform commission.';
         }
@@ -102,23 +111,29 @@ final class WorkerOrderSolvencyService
     public function workerCapacitySummary(Worker $worker, ?int $excludeBookingId = null): array
     {
         $worker->loadMissing('deposit');
-        $limits = $this->depositService->resolveLimits($worker);
         $depositBalance = max(0.0, (float) ($worker->deposit?->current_balance ?? 0));
         $debtBalance = $this->debtService->indebtednessBalance($worker);
-        $allowedDebtLimit = max(0.0, (float) ($limits['maxNegativeBalance'] ?? 0));
-        $remainingDebtCapacity = max(0.0, $allowedDebtLimit - $debtBalance);
         $activeReservedCommission = $this->activeReservedCommission($worker, $excludeBookingId);
+        $allowance = $this->depositService->allowanceSummary($worker, $activeReservedCommission);
+        $configuredAllowedDebtLimit = max(0.0, (float) ($allowance['configuredAllowedDebtLimit'] ?? 0));
+        $remainingAllowanceLimit = max(0.0, (float) ($allowance['remainingAllowanceLimit'] ?? 0));
 
         return [
             'currentBalance' => round($depositBalance, 2),
             'depositBalance' => round($depositBalance, 2),
-            'allowedDebtLimit' => round($allowedDebtLimit, 2),
-            'maxNegativeBalance' => round($allowedDebtLimit, 2),
+            'allowedDebtLimit' => round($remainingAllowanceLimit, 2),
+            'configuredAllowedDebtLimit' => round($configuredAllowedDebtLimit, 2),
+            'maxNegativeBalance' => round($configuredAllowedDebtLimit, 2),
             'currentDebtAmount' => round($debtBalance, 2),
             'indebtednessBalance' => round($debtBalance, 2),
-            'remainingDebtCapacity' => round($remainingDebtCapacity, 2),
+            'remainingDebtCapacity' => round($remainingAllowanceLimit, 2),
+            'remainingAllowanceLimit' => round($remainingAllowanceLimit, 2),
+            'allowanceUsedAmount' => round((float) ($allowance['allowanceUsedAmount'] ?? 0), 2),
+            'adminCommissionBalance' => round((float) ($allowance['adminCommissionBalance'] ?? 0), 2),
+            'withdrawnAdminRevenueTotal' => round((float) ($allowance['withdrawnAdminRevenueTotal'] ?? 0), 2),
+            'isAllowanceLimitExhausted' => (bool) ($allowance['isAllowanceLimitExhausted'] ?? false),
             'activeReservedCommission' => round($activeReservedCommission, 2),
-            'availableCommissionCapacity' => $this->depositService->availableCommissionCapacity($worker, $activeReservedCommission),
+            'availableCommissionCapacity' => round((float) ($allowance['availableCommissionCapacity'] ?? 0), 2),
         ];
     }
 

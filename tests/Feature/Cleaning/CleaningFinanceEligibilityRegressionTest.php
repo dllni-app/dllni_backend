@@ -84,7 +84,7 @@ it('keeps the worker eligible when at least one new order fits the commission ca
             'deposited_total' => 15000,
             'withdrawn_total' => 0,
             'minimum_required' => 0,
-            'max_negative_balance' => 0,
+            'max_negative_balance' => 15000,
             'is_active' => true,
         ],
     );

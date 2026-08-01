@@ -81,6 +81,10 @@ final class WorkerAccountStatusController
             return 'eligible';
         }
 
+        if ((bool) ($depositSummary['isAllowanceLimitExhausted'] ?? false)) {
+            return 'allowance_limit_exhausted';
+        }
+
         if (($depositSummary['exceedanceAmount'] ?? null) !== null) {
             return 'deposit_below_allowed_balance';
         }
@@ -94,6 +98,7 @@ final class WorkerAccountStatusController
             'eligible' => 'Your account can receive and accept new requests.',
             'worker_inactive' => 'Your account is inactive. Reactivate your account to receive new requests.',
             'worker_suspended' => 'Your account is suspended. Please contact support for more details.',
+            'allowance_limit_exhausted' => 'Your allowance limit has reached zero. Settle the administration margin before receiving new requests.',
             'deposit_below_allowed_balance' => 'Your deposit balance is below the allowed limit. Please recharge your deposit account to receive new requests.',
             'trust_score_too_low' => 'Your trust score is below the minimum required to receive new requests.',
             default => 'Your account cannot receive new requests right now.',

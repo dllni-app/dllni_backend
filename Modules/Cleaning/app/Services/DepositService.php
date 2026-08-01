@@ -159,33 +159,32 @@ final class DepositService
         $account = $worker->deposit;
         $deposit = max(0.0, (float) ($account?->current_balance ?? 0));
         $debt = max(0.0, (float) ($account?->debt_balance ?? 0));
-        $prefix = CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'%';
-
+        $commission = $this->commissionFinancialSummary($worker);
+        $allowance = $this->allowanceSummary($worker);
         $totals = CleaningDepositTransaction::query()
             ->where('worker_id', $worker->id)
-            ->selectRaw("COALESCE(SUM(CASE WHEN type IN ('commission','admin_fee') OR (type='debt' AND reference LIKE ?) THEN amount ELSE 0 END),0) commission_total", [$prefix])
-            ->selectRaw("COALESCE(SUM(CASE WHEN type='settlement' THEN amount ELSE 0 END),0) settlement_total")
             ->selectRaw("COALESCE(SUM(CASE WHEN type IN ('refund','withdrawal') THEN ABS(amount) WHEN type='adjustment' AND amount<0 THEN ABS(amount) ELSE 0 END),0) refund_total")
             ->first();
 
         $revenue = (float) CleaningBookingWorkerAssignment::query()
             ->where('worker_id', $worker->id)
             ->sum(DB::raw('CASE WHEN COALESCE(service_share_amount,0)+COALESCE(travel_fee,0)-COALESCE(admin_margin_amount,0) > 0 THEN COALESCE(service_share_amount,0)+COALESCE(travel_fee,0)-COALESCE(admin_margin_amount,0) ELSE 0 END'));
-        $allowedDebt = $this->resolveLimits($worker)['maxNegativeBalance'];
+        $configuredAllowance = (float) $allowance['configuredAllowedDebtLimit'];
+        $usedAllowance = (float) $allowance['allowanceUsedAmount'];
 
         return [
             'currentDeposit' => round($deposit, 2),
             'depositedTotal' => round((float) ($account?->deposited_total ?? 0), 2),
             'completedJobs' => (int) ($worker->total_completed_jobs ?? 0),
             'totalRevenue' => round($revenue, 2),
-            'totalCommission' => round((float) ($totals?->commission_total ?? 0), 2),
+            'totalCommission' => round((float) $commission['totalCommission'], 2),
             'commissionDue' => round($debt, 2),
-            'totalSettled' => round((float) ($totals?->settlement_total ?? 0), 2),
+            'totalSettled' => round((float) $commission['totalSettled'], 2),
             'totalRefunded' => round((float) ($totals?->refund_total ?? $account?->withdrawn_total ?? 0), 2),
             'remainingBalance' => round($deposit, 2),
             'debtBalance' => round($debt, 2),
             'restrictionThresholdPercent' => 100.0,
-            'utilizationPercent' => $allowedDebt > 0 ? round(min(100, $debt / $allowedDebt * 100), 1) : ($debt > 0 ? 100.0 : 0.0),
+            'utilizationPercent' => $configuredAllowance > 0 ? round(min(100, $usedAllowance / $configuredAllowance * 100), 1) : ($usedAllowance > 0 ? 100.0 : 0.0),
             'status' => $this->resolveAccountStatus($worker),
         ];
     }
@@ -199,14 +198,26 @@ final class DepositService
             return 'suspended';
         }
 
-        return $this->calculateExceedance($worker) !== null ? 'restricted' : 'active';
+        return $this->isAllowanceLimitExhausted($worker) || $this->calculateExceedance($worker) !== null
+            ? 'restricted'
+            : 'active';
     }
 
     public function calculateExceedance(Worker $worker): ?float
     {
+        $allowance = $this->allowanceSummary($worker);
+        $used = (float) $allowance['allowanceUsedAmount'];
+        $allowed = (float) $allowance['configuredAllowedDebtLimit'];
+
+        return $used > $allowed ? round($used - $allowed, 2) : null;
+    }
+
+    public function calculateDebtExceedance(Worker $worker): ?float
+    {
         $worker->loadMissing('deposit');
-        $debt = max(0.0, (float) ($worker->deposit?->debt_balance ?? 0));
-        $allowed = $this->resolveLimits($worker)['maxNegativeBalance'];
+
+        $debt = (float) ($worker->deposit?->debt_balance ?? 0);
+        $allowed = max(0.0, (float) ($worker->deposit?->max_negative_balance ?? 0));
 
         return $debt > $allowed ? round($debt - $allowed, 2) : null;
     }
@@ -228,7 +239,9 @@ final class DepositService
             return false;
         }
 
-        return $this->passesTrustFloor($worker) && $this->calculateExceedance($worker) === null;
+        return $this->passesTrustFloor($worker)
+            && ! $this->isAllowanceLimitExhausted($worker)
+            && $this->calculateExceedance($worker) === null;
     }
 
     public function isWorkerEligibleToStartWork(Worker $worker): bool
@@ -237,7 +250,8 @@ final class DepositService
             return false;
         }
 
-        return $this->passesTrustFloor($worker) && $this->calculateExceedance($worker) === null;
+        return $this->passesTrustFloor($worker)
+            && $this->calculateDebtExceedance($worker) === null;
     }
 
     public function canWithdraw(Worker $worker, float $amount): bool
@@ -254,17 +268,63 @@ final class DepositService
     {
         $worker->loadMissing('deposit');
         $deposit = max(0.0, (float) ($worker->deposit?->current_balance ?? 0));
-        $debt = max(0.0, (float) ($worker->deposit?->debt_balance ?? 0));
-        $remainingDebt = max(0.0, $this->resolveLimits($worker)['maxNegativeBalance'] - $debt);
+        $allowance = $this->allowanceSummary($worker);
+        $remainingAllowance = (float) $allowance['remainingAllowanceLimit'];
 
-        return round(max(0.0, $deposit + $remainingDebt - max(0.0, $reservedCommission)), 2);
+        if ($remainingAllowance <= 0) {
+            return 0.0;
+        }
+
+        return round(max(0.0, $deposit + $remainingAllowance - max(0.0, $reservedCommission)), 2);
+    }
+
+    /** @return array<string, float|bool> */
+    public function allowanceSummary(Worker $worker, float $reservedCommission = 0): array
+    {
+        $worker->loadMissing('deposit');
+
+        $configuredAllowance = round((float) $this->resolveLimits($worker)['maxNegativeBalance'], 2);
+        $debt = round(max(0.0, (float) ($worker->deposit?->debt_balance ?? 0)), 2);
+        $commission = $this->commissionFinancialSummary($worker);
+        $adminCommissionBalance = round((float) $commission['adminCommissionBalance'], 2);
+        $used = round(max($debt, $adminCommissionBalance), 2);
+        $remaining = round(max(0.0, $configuredAllowance - $used), 2);
+        $reserved = round(max(0.0, $reservedCommission), 2);
+        $availableAllowance = round(max(0.0, $remaining - $reserved), 2);
+        $deposit = max(0.0, (float) ($worker->deposit?->current_balance ?? 0));
+        $availableCommission = $remaining > 0
+            ? round(max(0.0, $deposit + $remaining - $reserved), 2)
+            : 0.0;
+
+        return [
+            'configuredAllowedDebtLimit' => $configuredAllowance,
+            'maxNegativeBalance' => $configuredAllowance,
+            'adminCommissionBalance' => $adminCommissionBalance,
+            'withdrawnAdminRevenueTotal' => round((float) $commission['withdrawnAdminRevenueTotal'], 2),
+            'settledAdminRevenueTotal' => round((float) $commission['settledAdminRevenueTotal'], 2),
+            'allowanceUsedAmount' => $used,
+            'remainingAllowanceLimit' => $remaining,
+            'remainingDebtCapacity' => $remaining,
+            'availableAllowanceCapacity' => $availableAllowance,
+            'availableCommissionCapacity' => $availableCommission,
+            'isAllowanceLimitExhausted' => $remaining <= 0,
+        ];
+    }
+
+    public function isAllowanceLimitExhausted(Worker $worker): bool
+    {
+        return (bool) $this->allowanceSummary($worker)['isAllowanceLimitExhausted'];
     }
 
     public function syncEligibilityStatus(Worker $worker): void
     {
-        $status = $worker->is_suspended
-            ? 'suspended'
-            : ($this->calculateExceedance($worker) === null ? 'active' : 'insufficient_balance');
+        if ($worker->is_suspended) {
+            $status = 'suspended';
+        } elseif ($this->isAllowanceLimitExhausted($worker) || $this->calculateExceedance($worker) !== null) {
+            $status = 'insufficient_balance';
+        } else {
+            $status = 'active';
+        }
 
         $worker->update(['security_deposit_status' => $status]);
     }
@@ -292,7 +352,9 @@ final class DepositService
         $account = $worker->deposit;
         $deposit = max(0.0, (float) ($account?->current_balance ?? 0));
         $debt = max(0.0, (float) ($account?->debt_balance ?? 0));
-        $allowed = $this->resolveLimits($worker)['maxNegativeBalance'];
+        $allowance = $this->allowanceSummary($worker);
+        $configuredAllowed = (float) $allowance['configuredAllowedDebtLimit'];
+        $remainingAllowed = (float) $allowance['remainingAllowanceLimit'];
 
         return [
             'workerId' => $worker->id,
@@ -303,12 +365,19 @@ final class DepositService
             'depositedTotal' => round((float) ($account?->deposited_total ?? 0), 2),
             'withdrawnTotal' => round((float) ($account?->withdrawn_total ?? 0), 2),
             'minimumRequired' => 0.0,
-            'allowedDebtLimit' => round($allowed, 2),
-            'maxNegativeBalance' => round($allowed, 2),
-            'remainingDebtCapacity' => round(max(0.0, $allowed - $debt), 2),
+            'allowedDebtLimit' => round($remainingAllowed, 2),
+            'configuredAllowedDebtLimit' => round($configuredAllowed, 2),
+            'maxNegativeBalance' => round($configuredAllowed, 2),
+            'remainingDebtCapacity' => round($remainingAllowed, 2),
+            'remainingAllowanceLimit' => round($remainingAllowed, 2),
+            'allowanceUsedAmount' => round((float) $allowance['allowanceUsedAmount'], 2),
+            'adminCommissionBalance' => round((float) $allowance['adminCommissionBalance'], 2),
+            'withdrawnAdminRevenueTotal' => round((float) $allowance['withdrawnAdminRevenueTotal'], 2),
+            'isAllowanceLimitExhausted' => (bool) $allowance['isAllowanceLimitExhausted'],
             'availableCommissionCapacity' => $this->availableCommissionCapacity($worker),
             'status' => $this->resolveAccountStatus($worker),
             'exceedanceAmount' => $this->calculateExceedance($worker),
+            'debtExceedanceAmount' => $this->calculateDebtExceedance($worker),
             'isEligibleForNewRequests' => $this->isWorkerEligibleForNewRequests($worker),
             'createdAt' => $account?->created_at?->toIso8601String(),
             'updatedAt' => $account?->updated_at?->toIso8601String(),
@@ -362,6 +431,33 @@ final class DepositService
             'reference' => $reference,
             'notes' => $notes,
         ]);
+    }
+
+    /** @return array<string, float> */
+    private function commissionFinancialSummary(Worker $worker): array
+    {
+        $worker->loadMissing('deposit');
+        $prefix = CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'%';
+
+        $totals = CleaningDepositTransaction::query()
+            ->where('worker_id', $worker->id)
+            ->selectRaw("COALESCE(SUM(CASE WHEN type IN ('commission','admin_fee') OR (type='debt' AND reference LIKE ?) THEN amount ELSE 0 END),0) commission_total", [$prefix])
+            ->selectRaw("COALESCE(SUM(CASE WHEN type='settlement' THEN amount ELSE 0 END),0) settlement_total")
+            ->first();
+
+        $totalCommission = max(0.0, (float) ($totals?->commission_total ?? 0));
+        $settledTotal = max(0.0, (float) ($totals?->settlement_total ?? 0));
+        $withdrawnAdminRevenue = max(0.0, (float) ($worker->deposit?->admin_revenue_withdrawn_total ?? 0));
+        $settledAdminRevenue = min($totalCommission, $settledTotal);
+        $closedAdminRevenue = min($totalCommission, $settledAdminRevenue + $withdrawnAdminRevenue);
+
+        return [
+            'totalCommission' => round($totalCommission, 2),
+            'totalSettled' => round($settledTotal, 2),
+            'settledAdminRevenueTotal' => round($settledAdminRevenue, 2),
+            'withdrawnAdminRevenueTotal' => round($withdrawnAdminRevenue, 2),
+            'adminCommissionBalance' => round(max(0.0, $totalCommission - $closedAdminRevenue), 2),
+        ];
     }
 
     private function accountForUpdate(Worker $worker): CleaningWorkerDeposit

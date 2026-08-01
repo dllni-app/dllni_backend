@@ -97,8 +97,12 @@ final class WorkerHomepageEligibilityController
                 $eligibility['canAcceptNewBookings'] = $canReceiveNewRequests;
 
                 if (! $accountEligible) {
-                    $eligibility['reasonCode'] = WorkerOrderSolvencyService::REASON_INSUFFICIENT_COMMISSION_CAPACITY;
-                    $eligibility['message'] = 'Your worker debt exceeds the allowed limit. Settle the excess debt before receiving new requests.';
+                    $eligibility['reasonCode'] = is_string($accountReasonCode)
+                        ? $accountReasonCode
+                        : WorkerOrderSolvencyService::REASON_INSUFFICIENT_COMMISSION_CAPACITY;
+                    $eligibility['message'] = is_array($dispatchEligibility) && is_string($dispatchEligibility['message'] ?? null)
+                        ? $dispatchEligibility['message']
+                        : 'Your worker account cannot receive new orders right now.';
                 } elseif ($canReceiveNewRequests) {
                     $eligibility['reasonCode'] = WorkerOrderSolvencyService::REASON_ELIGIBLE;
                     $eligibility['message'] = 'Your available commission capacity can receive new requests.';

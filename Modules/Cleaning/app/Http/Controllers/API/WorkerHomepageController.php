@@ -456,6 +456,10 @@ final class WorkerHomepageController
             return 'eligible';
         }
 
+        if ((bool) ($depositSummary['isAllowanceLimitExhausted'] ?? false)) {
+            return 'allowance_limit_exhausted';
+        }
+
         if (($depositSummary['exceedanceAmount'] ?? null) !== null) {
             return 'deposit_below_allowed_balance';
         }
@@ -469,6 +473,7 @@ final class WorkerHomepageController
             'eligible' => 'Account can receive and accept new requests.',
             'worker_inactive' => 'Account is inactive.',
             'worker_suspended' => 'Account status prevents new requests.',
+            'allowance_limit_exhausted' => 'Allowance limit has reached zero.',
             'deposit_below_allowed_balance' => 'Deposit balance is below the allowed limit.',
             'trust_score_too_low' => 'Trust score is below the required minimum.',
             default => 'Account cannot receive new requests right now.',

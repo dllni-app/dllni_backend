@@ -132,6 +132,17 @@ it('dispatches a preferred worker booking outside their zones when funded by an 
         'is_active' => true,
     ]);
 
+    CleaningWorkerDeposit::query()->create([
+        'worker_id' => $worker->id,
+        'current_balance' => 0,
+        'debt_balance' => 0,
+        'deposited_total' => 0,
+        'withdrawn_total' => 0,
+        'minimum_required' => 0,
+        'max_negative_balance' => 100000,
+        'is_active' => true,
+    ]);
+
     app(WorkerDebtService::class)->recordDebt(
         $worker,
         100000,

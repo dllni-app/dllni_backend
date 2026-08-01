@@ -123,6 +123,23 @@ return [
                 ],
             ],
         ],
+        'cleaning.booking.worker_rejected' => [
+            'legacy_type' => 'worker_rejected',
+            'module' => 'cleaning',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'رفض العامل الطلب',
+                    'body' => 'رفض مقدم الخدمة الطلب رقم :booking_number.',
+                ],
+                'en' => [
+                    'title' => 'Worker rejected order',
+                    'body' => 'The service provider rejected booking :booking_number.',
+                ],
+            ],
+        ],
         'cleaning.booking.worker_started_travel' => [
             'legacy_type' => 'worker_started_travel',
             'module' => 'cleaning',

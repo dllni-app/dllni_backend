@@ -10,6 +10,7 @@ use App\Models\Worker;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Services\DepositService;
 
 function seedUxDepositSettings(array $overrides = []): CleaningDepositSetting
 {
@@ -83,7 +84,7 @@ it('exposes structured dispatch eligibility on worker account status', function 
         ->assertJsonPath('isEligibleForNewRequests', false)
         ->assertJsonPath('dispatchEligibility.canReceiveNewRequests', false)
         ->assertJsonPath('dispatchEligibility.canAcceptNewBookings', false)
-        ->assertJsonPath('dispatchEligibility.reasonCode', 'deposit_below_allowed_balance');
+        ->assertJsonPath('dispatchEligibility.reasonCode', 'allowance_limit_exhausted');
 });
 
 it('sets homepage new orders count to zero for ineligible workers', function (): void {
@@ -102,7 +103,7 @@ it('sets homepage new orders count to zero for ineligible workers', function ():
     $response->assertOk()
         ->assertJsonPath('newOrdersCount', 0)
         ->assertJsonPath('isEligibleForNewRequests', false)
-        ->assertJsonPath('dispatchEligibility.reasonCode', 'deposit_below_allowed_balance');
+        ->assertJsonPath('dispatchEligibility.reasonCode', 'allowance_limit_exhausted');
 });
 
 it('hides pending new requests from ineligible workers in the current worker list', function (): void {
@@ -120,7 +121,7 @@ it('hides pending new requests from ineligible workers in the current worker lis
 
     $response->assertOk()
         ->assertJsonCount(0, 'data')
-        ->assertJsonPath('dispatchEligibility.reasonCode', 'deposit_below_allowed_balance');
+        ->assertJsonPath('dispatchEligibility.reasonCode', 'allowance_limit_exhausted');
 });
 
 it('hides and warns about pending new requests when commission capacity is insufficient', function (): void {
@@ -137,7 +138,7 @@ it('hides and warns about pending new requests when commission capacity is insuf
         'home_latitude' => 36.20,
         'home_longitude' => 37.15,
     ]);
-    seedUxWorkerDeposit($worker, balance: 1000, debtBalance: 0, maxNegativeBalance: 0);
+    seedUxWorkerDeposit($worker, balance: 1000, debtBalance: 0, maxNegativeBalance: 1000);
 
     $acceptedBooking = CleaningBooking::factory()->create([
         'status' => CleaningBookingStatus::Pending->value,
@@ -216,6 +217,83 @@ it('returns a structured business error when an ineligible worker tries to accep
 
     $response->assertUnprocessable()
         ->assertJsonPath('code', 'WORKER_NOT_ELIGIBLE_FOR_BOOKING_COMMISSION')
-        ->assertJsonPath('errors.workerEligibility.0.reasonCode', 'deposit_below_allowed_balance')
+        ->assertJsonPath('errors.workerEligibility.0.reasonCode', 'allowance_limit_exhausted')
         ->assertJsonPath('dispatchEligibility.canAcceptNewBookings', false);
+});
+
+it('blocks new requests and acceptance when the worker allowance limit is zero', function (): void {
+    seedUxDepositSettings();
+
+    $user = User::factory()->create();
+    $worker = Worker::factory()->create([
+        'user_id' => $user->id,
+        'trust_score' => 80,
+        'is_active' => true,
+        'is_suspended' => false,
+    ]);
+    seedUxWorkerDeposit($worker, balance: 1000000, debtBalance: 0, maxNegativeBalance: 0);
+
+    $booking = CleaningBooking::factory()->create([
+        'status' => CleaningBookingStatus::Pending->value,
+        'worker_id' => null,
+        'scheduled_date' => now()->toDateString(),
+        'scheduled_time' => now()->addHour()->format('H:i'),
+        'gender_preference' => 'any',
+    ]);
+
+    Sanctum::actingAs($user);
+
+    $this->getJson('/api/v1/cleaning/worker/homepage')
+        ->assertOk()
+        ->assertJsonPath('newOrdersCount', 0)
+        ->assertJsonPath('isEligibleForNewRequests', false)
+        ->assertJsonPath('dispatchEligibility.reasonCode', 'allowance_limit_exhausted');
+
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/accept")
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.workerEligibility.0.reasonCode', 'allowance_limit_exhausted')
+        ->assertJsonPath('dispatchEligibility.canAcceptNewBookings', false);
+});
+
+it('keeps already assigned work startable when only the allowance limit is exhausted', function (): void {
+    seedUxDepositSettings();
+
+    $user = User::factory()->create();
+    $worker = Worker::factory()->create([
+        'user_id' => $user->id,
+        'trust_score' => 80,
+        'is_active' => true,
+        'is_suspended' => false,
+    ]);
+    seedUxWorkerDeposit($worker, balance: 1000000, debtBalance: 0, maxNegativeBalance: 1000000);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'status' => CleaningBookingStatus::Completed->value,
+    ]);
+    app(DepositService::class)->recordAdminFeeDebit($worker, $booking, 1000000);
+
+    CleaningBooking::factory()->create([
+        'status' => CleaningBookingStatus::Pending->value,
+        'worker_id' => null,
+        'scheduled_date' => now()->toDateString(),
+        'scheduled_time' => now()->addHour()->format('H:i'),
+        'gender_preference' => 'any',
+    ]);
+
+    Sanctum::actingAs($user);
+
+    $this->getJson('/api/v1/cleaning/worker/homepage')
+        ->assertOk()
+        ->assertJsonPath('newOrdersCount', 0)
+        ->assertJsonPath('isEligibleForNewRequests', false)
+        ->assertJsonPath('dispatchEligibility.reasonCode', 'allowance_limit_exhausted');
+
+    $this->getJson('/api/v1/cleaning/worker/account/status')
+        ->assertOk()
+        ->assertJsonPath('dispatchEligibility.canReceiveNewRequests', false)
+        ->assertJsonPath('dispatchEligibility.canAcceptNewBookings', false)
+        ->assertJsonPath('dispatchEligibility.reasonCode', 'allowance_limit_exhausted')
+        ->assertJsonPath('dispatchEligibility.canStartAssignedWork', true)
+        ->assertJsonPath('dispatchEligibility.startWorkReasonCode', 'eligible');
 });

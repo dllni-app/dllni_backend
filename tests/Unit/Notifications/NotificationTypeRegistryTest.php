@@ -5,12 +5,13 @@ declare(strict_types=1);
 use App\Notifications\Core\NotificationPayloadBuilder;
 use App\Notifications\Core\NotificationTypeRegistry;
 
-it('builds configured cleaning time extension response notifications', function (
+it('builds configured cleaning notifications', function (
     string $canonicalType,
     string $legacyType,
     string $title,
     string $body,
 ): void {
+    $registry = app(NotificationTypeRegistry::class);
     $payload = app(NotificationPayloadBuilder::class)->makeDatabasePayload(
         canonicalType: $canonicalType,
         templateContext: ['booking_number' => 'CL-100'],
@@ -26,8 +27,15 @@ it('builds configured cleaning time extension response notifications', function 
         ->and($payload['title'])->toBe($title)
         ->and($payload['body'])->toBe($body);
 
-    expect(app(NotificationTypeRegistry::class)->canonicalFromLegacy($legacyType))->toBe($canonicalType);
+    expect($registry->canonicalFromLegacy($legacyType))->toBe($canonicalType)
+        ->and($registry->definition($canonicalType)['channels'])->toBe(['database', 'push']);
 })->with([
+    'worker rejected' => [
+        'cleaning.booking.worker_rejected',
+        'worker_rejected',
+        'Worker rejected order',
+        'The service provider rejected booking CL-100.',
+    ],
     'accepted' => [
         'cleaning.booking.time_extension_accepted',
         'time_extension_accepted',

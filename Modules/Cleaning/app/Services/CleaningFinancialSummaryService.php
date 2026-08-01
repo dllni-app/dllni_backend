@@ -33,13 +33,17 @@ final class CleaningFinancialSummaryService
                     });
             })
             ->sum('amount');
+        $settlementTotal = (float) CleaningDepositTransaction::query()
+            ->where('type', 'settlement')
+            ->sum('amount');
 
         $withdrawnAdminRevenue = max(0.0, (float) ($accountTotals?->withdrawn_admin_revenue ?? 0));
+        $closedAdminRevenue = min($commissionTotal, $withdrawnAdminRevenue + max(0.0, $settlementTotal));
 
         return [
             'currentDepositBalance' => round(max(0.0, (float) ($accountTotals?->current_deposit ?? 0)), 2),
             'currentDebtBalance' => round(max(0.0, (float) ($accountTotals?->current_debt ?? 0)), 2),
-            'currentAdminCommissionBalance' => round(max(0.0, $commissionTotal - $withdrawnAdminRevenue), 2),
+            'currentAdminCommissionBalance' => round(max(0.0, $commissionTotal - $closedAdminRevenue), 2),
             'withdrawnAdminRevenue' => round($withdrawnAdminRevenue, 2),
             'totalRevenue' => round($this->totalRevenue(), 2),
             'reservedActiveCommission' => round($this->reservedActiveCommission(), 2),

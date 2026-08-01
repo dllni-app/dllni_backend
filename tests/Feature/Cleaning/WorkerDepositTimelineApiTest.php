@@ -45,7 +45,7 @@ it('exposes the separate public transaction types in the worker financial timeli
             'deposited_total' => 1000000,
             'withdrawn_total' => 0,
             'minimum_required' => 0,
-            'max_negative_balance' => 50000,
+            'max_negative_balance' => 1000000,
             'is_active' => true,
         ],
     );
@@ -84,7 +84,11 @@ it('exposes the separate public transaction types in the worker financial timeli
         ->assertJsonPath('depositedTotal', 1000000)
         ->assertJsonPath('withdrawnTotal', 0)
         ->assertJsonPath('minimumRequired', 0)
-        ->assertJsonPath('allowedDebtLimit', 50000)
+        ->assertJsonPath('allowedDebtLimit', 827500)
+        ->assertJsonPath('remainingAllowanceLimit', 827500)
+        ->assertJsonPath('configuredAllowedDebtLimit', 1000000)
+        ->assertJsonPath('maxNegativeBalance', 1000000)
+        ->assertJsonPath('allowanceUsedAmount', 172500)
         ->assertJsonPath('status', 'active')
         ->assertJsonPath('isActive', true)
         ->assertJsonPath('isFinancialAccountActive', true);
@@ -115,7 +119,7 @@ it('exposes the separate public transaction types in the worker financial timeli
         ->assertJsonPath('meta.filters.appliedType', 'refund');
 });
 
-it('returns active status while debt remains within the worker-specific limit even without a deposit', function (): void {
+it('returns active status while allowance remains above zero even without a deposit', function (): void {
     seedTimelineDepositSettings();
 
     $user = User::factory()->create(['phone' => '+963944100003']);
@@ -128,7 +132,7 @@ it('returns active status while debt remains within the worker-specific limit ev
     CleaningWorkerDeposit::query()->create([
         'worker_id' => $worker->id,
         'current_balance' => 0,
-        'debt_balance' => 100,
+        'debt_balance' => 99,
         'deposited_total' => 0,
         'withdrawn_total' => 0,
         'minimum_required' => 0,

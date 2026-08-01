@@ -158,7 +158,7 @@ it('reactivates the financial account and redispatches pending preferred booking
         'deposited_total' => 800000,
         'withdrawn_total' => 800000,
         'minimum_required' => 0,
-        'max_negative_balance' => 0,
+        'max_negative_balance' => 999998,
         'is_active' => false,
     ]);
 
@@ -190,7 +190,7 @@ it('reactivates the financial account and redispatches pending preferred booking
         ->and((float) $fundedWorker->deposit->debt_balance)->toBe(0.0)
         ->and($fundedWorker->deposit->is_active)->toBeTrue()
         ->and($fundedWorker->security_deposit_status)->toBe('active')
-        ->and(app(DepositService::class)->availableCommissionCapacity($fundedWorker))->toBe(999998.0);
+        ->and(app(DepositService::class)->availableCommissionCapacity($fundedWorker))->toBe(1999996.0);
 
     Queue::assertPushed(NotifyEligibleWorkersNewOrderJob::class, 1);
 });

@@ -23,9 +23,9 @@ function createFinancialAccount(Worker $worker, float $debt, float $limit): Clea
     ]);
 }
 
-it('keeps a worker financially active while debt is within the individual limit', function (): void {
+it('keeps a worker financially active while allowance remains above zero', function (): void {
     $worker = Worker::factory()->create(['trust_score' => 100]);
-    createFinancialAccount($worker, debt: 100, limit: 100);
+    createFinancialAccount($worker, debt: 99, limit: 100);
 
     $freshWorker = $worker->fresh(['deposit']);
 
@@ -34,9 +34,9 @@ it('keeps a worker financially active while debt is within the individual limit'
         ->and(app(DepositService::class)->isWorkerEligibleForNewRequests($freshWorker))->toBeTrue();
 });
 
-it('makes a worker financially inactive only after debt exceeds the individual limit', function (): void {
+it('makes a worker financially inactive when debt reaches the individual limit', function (): void {
     $worker = Worker::factory()->create(['trust_score' => 100, 'security_deposit_status' => 'active']);
-    createFinancialAccount($worker, debt: 101, limit: 100);
+    createFinancialAccount($worker, debt: 100, limit: 100);
 
     $service = app(DepositService::class);
     $freshWorker = $worker->fresh(['deposit']);
@@ -71,7 +71,7 @@ it('does not fall back to a removed global limit when the worker has no financia
 
     expect(app(DepositService::class)->resolveLimits($worker)['maxNegativeBalance'])->toBe(0.0)
         ->and(app(WorkerFinancialAccountStatusService::class)->status($worker))
-        ->toBe(WorkerFinancialAccountStatusService::ACTIVE);
+        ->toBe(WorkerFinancialAccountStatusService::INSUFFICIENT_BALANCE);
 });
 
 it('keeps the legacy settings API response contract without applying global values', function (): void {

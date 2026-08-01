@@ -63,7 +63,7 @@ it('hides pending cleaning requests that overlap a confirmed worker booking from
         'deposited_total' => 100000,
         'withdrawn_total' => 0,
         'minimum_required' => 0,
-        'max_negative_balance' => 0,
+        'max_negative_balance' => 100000,
     ]);
 
     Sanctum::actingAs($workerUser);
@@ -141,7 +141,7 @@ it('uses estimated hours when total hours are unavailable while checking overlap
         'deposited_total' => 100000,
         'withdrawn_total' => 0,
         'minimum_required' => 0,
-        'max_negative_balance' => 0,
+        'max_negative_balance' => 100000,
     ]);
 
     Sanctum::actingAs($workerUser);
