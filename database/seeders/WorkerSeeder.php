@@ -21,7 +21,6 @@ use Database\Seeders\Support\SeederMedia;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Schema;
 use InvalidArgumentException;
-use Modules\Cleaning\Services\AdminCleaningTransactionService;
 use Modules\Cleaning\Services\WorkerDebtService;
 
 final class WorkerSeeder extends Seeder
@@ -277,7 +276,7 @@ final class WorkerSeeder extends Seeder
         float $debtSettledAmount = 0,
         float $adminRevenueWithdrawnAmount = 0,
     ): array {
-        if (! in_array($type, AdminCleaningTransactionService::TYPES, true)) {
+        if (! in_array($type, CleaningDepositTransaction::PUBLIC_TYPES, true)) {
             throw new InvalidArgumentException("Unsupported seeded cleaning transaction type [{$type}].");
         }
 

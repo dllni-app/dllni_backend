@@ -18,11 +18,11 @@ it('seeds continuous financial scenarios using only add-transaction types', func
     $types = CleaningDepositTransaction::query()
         ->where('reference', 'like', '%seed-%')
         ->distinct()
-        ->orderBy('type')
         ->pluck('type')
         ->all();
 
-    $expectedTypes = AdminCleaningTransactionService::TYPES;
+    $expectedTypes = CleaningDepositTransaction::PUBLIC_TYPES;
+    sort($types);
     sort($expectedTypes);
 
     expect($types)->toBe($expectedTypes)
@@ -67,7 +67,7 @@ it('seeds continuous financial scenarios using only add-transaction types', func
         }
 
         foreach ($transactions as $transaction) {
-            expect((string) $transaction->type)->toBeIn(AdminCleaningTransactionService::TYPES)
+            expect((string) $transaction->type)->toBeIn(CleaningDepositTransaction::PUBLIC_TYPES)
                 ->and($transaction->notes)->not->toBeEmpty();
 
             if ($transaction->type === 'refund') {

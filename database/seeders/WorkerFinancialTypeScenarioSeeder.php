@@ -11,7 +11,6 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
-use Modules\Cleaning\Services\AdminCleaningTransactionService;
 use Modules\Cleaning\Services\WorkerDebtService;
 
 final class WorkerFinancialTypeScenarioSeeder extends Seeder
@@ -82,7 +81,7 @@ final class WorkerFinancialTypeScenarioSeeder extends Seeder
         string $notes,
         CarbonImmutable $createdAt,
     ): void {
-        if (! in_array($type, AdminCleaningTransactionService::TYPES, true)) {
+        if (! in_array($type, CleaningDepositTransaction::PUBLIC_TYPES, true)) {
             throw new InvalidArgumentException("Unsupported seeded cleaning transaction type [{$type}].");
         }
 
