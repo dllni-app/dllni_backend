@@ -7,6 +7,7 @@ namespace Modules\Cleaning\Http\Controllers\API;
 use App\Models\Worker;
 use App\Support\Broadcast\BroadcastAfterResponse;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -20,6 +21,7 @@ use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingRoom;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Services\CleaningBookingService;
+use Modules\User\Services\UserCleaningOrderEstimationService;
 use Throwable;
 
 final class CleaningBookingCompleteController
@@ -299,6 +301,16 @@ final class CleaningBookingCompleteController
     {
         $services = [];
 
+        if ($this->isEventAssistanceBooking($booking)) {
+            $details = is_array($booking->property_details) ? $booking->property_details : [];
+            $name = Arr::get($details, 'custom_service') ?? Arr::get($details, 'customService');
+            $label = is_string($name) && mb_trim($name) !== ''
+                ? mb_trim($name)
+                : 'مساعدة مناسبة';
+
+            return [['id' => null, 'name' => $label, 'label' => $label, 'sort' => 0]];
+        }
+
         if (is_array($booking->cleaning_services)) {
             foreach ($booking->cleaning_services as $index => $service) {
                 $name = is_string($service) ? trim($service) : '';
@@ -321,6 +333,10 @@ final class CleaningBookingCompleteController
     /** @return array<int, array<string, mixed>> */
     private function inferFinishedRooms(CleaningBooking $booking): array
     {
+        if ($this->isEventAssistanceBooking($booking)) {
+            return [];
+        }
+
         return $booking->rooms
             ->map(static fn (CleaningBookingRoom $room): array => [
                 'id' => $room->id,
@@ -335,6 +351,10 @@ final class CleaningBookingCompleteController
     /** @return array<int, array<string, mixed>> */
     private function inferFinishedRoomsForWorker(CleaningBooking $booking, int $workerId): array
     {
+        if ($this->isEventAssistanceBooking($booking)) {
+            return [];
+        }
+
         $rooms = $booking->rooms->where('assigned_worker_id', $workerId);
 
         if ($rooms->isEmpty()) {
@@ -350,5 +370,10 @@ final class CleaningBookingCompleteController
             ])
             ->values()
             ->all();
+    }
+
+    private function isEventAssistanceBooking(CleaningBooking $booking): bool
+    {
+        return (string) $booking->property_type === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE;
     }
 }

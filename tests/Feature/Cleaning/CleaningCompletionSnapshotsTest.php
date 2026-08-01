@@ -12,6 +12,7 @@ use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
 use Modules\Cleaning\Events\CleaningOrderAwaitingCustomerCompletion;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingRoom;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 
 beforeEach(function (): void {
@@ -146,4 +147,70 @@ it('does not reuse booking snapshots for an empty assignment in a multi-worker o
     expect($assignment->worker_finished_cleaning_services)->toBe([])
         ->and($assignment->worker_finished_property_rooms)->toBe([])
         ->and($firstWorker->id)->not->toBe($secondWorker->id);
+});
+
+it('uses event assistance details instead of inferred room snapshots when completing without snapshots', function (): void {
+    Event::fake([
+        CleaningBookingTrackingUpdated::class,
+        CleaningOrderAwaitingCustomerCompletion::class,
+    ]);
+
+    $customer = User::factory()->create(['email' => 'event-completion-customer@example.com']);
+    $workerUser = User::factory()->create(['email' => 'event-completion-worker@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+
+    $booking = CleaningBooking::factory()->create([
+        'customer_id' => $customer->id,
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'number_of_workers' => 1,
+        'status' => CleaningBookingStatus::InProgress,
+        'work_started_at' => now()->subHour(),
+        'property_type' => 'event_assistance',
+        'property_details' => [
+            'event_type' => 'funeral',
+            'guest_count' => 80,
+            'venue_type' => 'house',
+            'custom_service' => 'تجهيز ركن القهوة والضيافة',
+            'special_requirement' => 'تنظيف مستمر أثناء العزاء',
+            'hours' => 4,
+        ],
+        'cleaning_services' => [],
+    ]);
+
+    CleaningBookingRoom::query()->create([
+        'cleaning_booking_id' => $booking->id,
+        'room_key' => 'living_room.medium.1',
+        'room_type' => 'living_room',
+        'room_size' => 'medium',
+        'display_label' => 'Living Room 1 - Medium',
+        'weight' => 1.5,
+        'planned_worker_slot' => 1,
+        'assigned_worker_id' => $worker->id,
+    ]);
+
+    Sanctum::actingAs($workerUser);
+
+    $completionResponse = $this->postJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/complete",
+        ['completionMessage' => 'تم إنجاز جميع المهام المطلوبة.'],
+    );
+
+    $completionResponse
+        ->assertOk()
+        ->assertJsonPath('data.status', CleaningBookingStatus::AwaitingCustomerCompletion->value)
+        ->assertJsonPath('data.completionRequests.0.finishedCleaningServices.0.name', 'تجهيز ركن القهوة والضيافة')
+        ->assertJsonCount(0, 'data.completionRequests.0.finishedPropertyRooms');
+
+    $booking->refresh();
+
+    expect($booking->worker_finished_cleaning_services)->toHaveCount(1)
+        ->and($booking->worker_finished_property_rooms)->toBe([]);
+
+    Sanctum::actingAs($customer);
+
+    $this->getJson("/api/v1/user/cleaning/orders/{$booking->id}")
+        ->assertOk()
+        ->assertJsonPath('data.completionRequests.0.finishedCleaningServices.0.name', 'تجهيز ركن القهوة والضيافة')
+        ->assertJsonCount(0, 'data.completionRequests.0.finishedPropertyRooms');
 });
