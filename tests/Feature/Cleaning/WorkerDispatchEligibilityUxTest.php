@@ -10,7 +10,6 @@ use App\Models\Worker;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
-use Modules\Cleaning\Services\DepositService;
 
 function seedUxDepositSettings(array $overrides = []): CleaningDepositSetting
 {
@@ -19,6 +18,7 @@ function seedUxDepositSettings(array $overrides = []): CleaningDepositSetting
         array_merge([
             'minimum_deposit_amount' => 0,
             'restriction_threshold_percent' => 100,
+            'allowance_warning_threshold_percent' => 10,
             'trust_reject_after_accept_penalty' => 10,
             'trust_minimum_for_dispatch' => 50,
         ], $overrides),
@@ -231,7 +231,7 @@ it('blocks new requests and acceptance when the worker allowance limit is zero',
         'is_active' => true,
         'is_suspended' => false,
     ]);
-    seedUxWorkerDeposit($worker, balance: 1000000, debtBalance: 0, maxNegativeBalance: 0);
+    seedUxWorkerDeposit($worker, balance: 0, debtBalance: 0, maxNegativeBalance: 0);
 
     $booking = CleaningBooking::factory()->create([
         'status' => CleaningBookingStatus::Pending->value,
@@ -265,13 +265,7 @@ it('keeps already assigned work startable when only the allowance limit is exhau
         'is_active' => true,
         'is_suspended' => false,
     ]);
-    seedUxWorkerDeposit($worker, balance: 1000000, debtBalance: 0, maxNegativeBalance: 1000000);
-
-    $booking = CleaningBooking::factory()->create([
-        'worker_id' => $worker->id,
-        'status' => CleaningBookingStatus::Completed->value,
-    ]);
-    app(DepositService::class)->recordAdminFeeDebit($worker, $booking, 1000000);
+    seedUxWorkerDeposit($worker, balance: 0, debtBalance: 1000000, maxNegativeBalance: 1000000);
 
     CleaningBooking::factory()->create([
         'status' => CleaningBookingStatus::Pending->value,

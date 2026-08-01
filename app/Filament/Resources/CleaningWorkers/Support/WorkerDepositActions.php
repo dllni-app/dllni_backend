@@ -22,7 +22,7 @@ final class WorkerDepositActions
         return [
             ActionGroup::make([
                 self::deposit(),
-                self::debt(),
+                self::allowanceLimit(),
                 self::settleFullDebt(),
                 self::refund(),
                 self::reactivate(),
@@ -51,21 +51,40 @@ final class WorkerDepositActions
             });
     }
 
-    private static function debt(): Action
+    private static function allowanceLimit(): Action
     {
-        return Action::make('recordDebt')
-            ->label(__('cleaning_finance.debt.label'))
-            ->icon('heroicon-o-plus-circle')
-            ->color('warning')
-            ->modalDescription(app()->isLocale('ar')
-                ? 'تخصم المديونية من رصيد الإيداع أولاً، ولا يظهر دين فعلي إلا بعد نفاد الإيداع.'
-                : 'The charge consumes the deposit first. Actual debt is created only after the deposit reaches zero.')
+        return Action::make('updateAllowanceLimit')
+            ->label(app()->isLocale('ar') ? 'تعديل حد السماح' : 'Update allowance limit')
+            ->icon('heroicon-o-adjustments-horizontal')
+            ->color('primary')
+            ->modalDescription(function (Worker $record): string {
+                $snapshot = app(AdminCleaningTransactionService::class)->snapshot($record);
+                if ((float) ($snapshot['depositBalance'] ?? 0) > 0) {
+                    return app()->isLocale('ar')
+                        ? 'لا يمكن منح حد سماح للعامل طالما لديه رصيد إيداع. يتم استخدام الإيداع أولاً لتغطية هامش الإدارة.'
+                        : 'The allowance limit cannot be changed while the worker has a deposit balance. The deposit is used first to cover administration margin.';
+                }
+
+                $minimum = (float) ($snapshot['debtBalance'] ?? 0) + (float) ($snapshot['activeReservedCommission'] ?? 0);
+
+                return app()->isLocale('ar')
+                    ? 'حد السماح يحدد قدرة العامل على استقبال الطلبات عند عدم وجود إيداع. لا يمكن أن يكون أقل من المديونية والعمولات المحجوزة الحالية: '.number_format($minimum, 2).' '.config('app.currency', 'SYP').'.'
+                    : 'The allowance limit controls worker capacity only when there is no deposit. It cannot be lower than current indebtedness and reserved commissions: '.number_format($minimum, 2).' '.config('app.currency', 'SYP').'.';
+            })
             ->requiresConfirmation()
-            ->form(self::amountForm(__('cleaning_finance.fields.positive_amount_hint'), notesRequired: true))
+            ->form([
+                TextInput::make('amount')
+                    ->label(app()->isLocale('ar') ? 'حد السماح الجديد' : 'New allowance limit')
+                    ->numeric()
+                    ->minValue(0)
+                    ->step(0.01)
+                    ->default(fn (Worker $record): float => (float) (app(AdminCleaningTransactionService::class)->snapshot($record)['configuredAllowedDebtLimit'] ?? 0))
+                    ->required(),
+            ])
             ->action(function (Worker $record, array $data): void {
                 self::run(
-                    fn () => app(AdminCleaningTransactionService::class)->create($record, 'debt', (float) $data['amount'], self::composeNotes($data), auth()->id()),
-                    __('cleaning_finance.debt.success'),
+                    fn () => app(AdminCleaningTransactionService::class)->updateAllowanceLimit($record, (float) $data['amount']),
+                    app()->isLocale('ar') ? 'تم تحديث حد السماح.' : 'Allowance limit updated.',
                 );
             });
     }
@@ -76,11 +95,11 @@ final class WorkerDepositActions
             ->label(app()->isLocale('ar') ? 'تصفير المديونية' : 'Settle full debt')
             ->icon('heroicon-o-check-circle')
             ->color('primary')
-            ->visible(fn (Worker $record): bool => (float) (app(AdminCleaningTransactionService::class)->snapshot($record)['outstandingAdministrationDue'] ?? 0) > 0)
+            ->visible(fn (Worker $record): bool => (float) (app(AdminCleaningTransactionService::class)->snapshot($record)['debtBalance'] ?? 0) > 0)
             ->requiresConfirmation()
             ->modalHeading(app()->isLocale('ar') ? 'تسوية كامل المديونية' : 'Settle the full debt')
             ->modalDescription(function (Worker $record): string {
-                $amount = (float) (app(AdminCleaningTransactionService::class)->snapshot($record)['outstandingAdministrationDue'] ?? 0);
+                $amount = (float) (app(AdminCleaningTransactionService::class)->snapshot($record)['debtBalance'] ?? 0);
 
                 return app()->isLocale('ar')
                     ? 'سيقوم النظام بتسجيل تسوية بقيمة '.number_format($amount, 2).' '.config('app.currency', 'SYP').' وتصفير المديونية.'

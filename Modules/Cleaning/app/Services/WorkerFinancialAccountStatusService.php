@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Services;
 
-use App\Models\CleaningDepositTransaction;
 use App\Models\Worker;
 
 final class WorkerFinancialAccountStatusService
@@ -16,10 +15,6 @@ final class WorkerFinancialAccountStatusService
     public const INSUFFICIENT_BALANCE = 'insufficient_balance';
 
     public const SUSPENDED = 'suspended';
-
-    private const CLOSING_TRANSACTION_TYPES = ['refund', 'withdrawal'];
-
-    private const FUNDING_TRANSACTION_TYPES = ['deposit', 'debt'];
 
     public function status(Worker $worker): string
     {
@@ -35,12 +30,12 @@ final class WorkerFinancialAccountStatusService
             return self::INACTIVE;
         }
 
-        $worker->loadMissing('deposit');
-        $allowance = app(DepositService::class)->allowanceSummary($worker);
-
-        return (bool) ($allowance['isAllowanceLimitExhausted'] ?? false)
-            ? self::INSUFFICIENT_BALANCE
-            : self::ACTIVE;
+        return match (app(DepositService::class)->resolveAccountStatus($worker)) {
+            'active' => self::ACTIVE,
+            'inactive' => self::INACTIVE,
+            'suspended' => self::SUSPENDED,
+            default => self::INSUFFICIENT_BALANCE,
+        };
     }
 
     public function isActive(Worker $worker): bool
@@ -50,43 +45,10 @@ final class WorkerFinancialAccountStatusService
 
     /**
      * A full financial-account refund closes the insurance/deposit account.
-     * A later funding transaction reopens it, even when subsequent commissions
-     * consume the available balance back to zero.
+     * A later funding transaction or allowance-limit update reopens it.
      */
     public function isFinancialAccountActive(Worker $worker): bool
     {
-        $worker->loadMissing('deposit');
-        $account = $worker->deposit;
-
-        if ($account === null) {
-            return true;
-        }
-
-        if ((float) $account->current_balance > 0) {
-            return true;
-        }
-
-        $latestClosingTransactionId = CleaningDepositTransaction::query()
-            ->where('worker_id', $worker->id)
-            ->whereIn('type', self::CLOSING_TRANSACTION_TYPES)
-            ->where('balance_after', '<=', 0)
-            ->latest('id')
-            ->value('id');
-
-        if ($latestClosingTransactionId === null) {
-            $depositedTotal = max(0.0, (float) $account->deposited_total);
-            $withdrawnTotal = max(0.0, (float) $account->withdrawn_total);
-
-            // Compatibility for legacy accounts whose complete withdrawal was
-            // stored only in the cumulative account totals without a transaction.
-            return ! ($depositedTotal > 0 && $withdrawnTotal >= $depositedTotal);
-        }
-
-        return CleaningDepositTransaction::query()
-            ->where('worker_id', $worker->id)
-            ->where('id', '>', (int) $latestClosingTransactionId)
-            ->whereIn('type', self::FUNDING_TRANSACTION_TYPES)
-            ->where('balance_after', '>', 0)
-            ->exists();
+        return app(DepositService::class)->isFinancialAccountActive($worker);
     }
 }

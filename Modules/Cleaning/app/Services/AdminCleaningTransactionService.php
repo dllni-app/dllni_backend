@@ -17,7 +17,7 @@ use Modules\Cleaning\Models\CleaningBooking;
 
 final class AdminCleaningTransactionService
 {
-    public const TYPES = ['deposit', 'debt', 'refund'];
+    public const TYPES = ['deposit', 'refund'];
 
     public function __construct(
         private readonly DepositService $depositService,
@@ -68,15 +68,18 @@ final class AdminCleaningTransactionService
             'indebtednessBalance' => round($indebtednessBalance, 2),
             'depositedTotal' => round((float) ($worker->deposit?->deposited_total ?? 0), 2),
             'withdrawnTotal' => round((float) ($worker->deposit?->withdrawn_total ?? 0), 2),
-            'minimumRequired' => 0.0,
+            'minimumRequired' => round((float) $limits['minimumRequired'], 2),
             'maxNegativeBalance' => round((float) $limits['maxNegativeBalance'], 2),
-            'allowedDebtLimit' => round((float) $limits['maxNegativeBalance'], 2),
+            'allowedDebtLimit' => round((float) ($allowance['remainingAllowanceLimit'] ?? 0), 2),
             'remainingDebtCapacity' => round((float) ($capacity['remainingDebtCapacity'] ?? 0), 2),
             'configuredAllowedDebtLimit' => round((float) ($allowance['configuredAllowedDebtLimit'] ?? 0), 2),
             'remainingAllowanceLimit' => round((float) ($allowance['remainingAllowanceLimit'] ?? 0), 2),
             'allowanceUsedAmount' => round((float) ($allowance['allowanceUsedAmount'] ?? 0), 2),
             'activeReservedCommission' => round($activeReservedCommission, 2),
             'availableCommissionCapacity' => round((float) ($capacity['availableCommissionCapacity'] ?? 0), 2),
+            'allowanceWarningThresholdPercent' => round((float) ($allowance['allowanceWarningThresholdPercent'] ?? 10), 2),
+            'isUsingDepositBalance' => (bool) ($allowance['isUsingDepositBalance'] ?? false),
+            'isAllowanceNearLimit' => (bool) ($allowance['isAllowanceNearLimit'] ?? false),
             'maxRefundable' => round($maxRefundable, 2),
             'grossRefundBalance' => round($currentBalance, 2),
             'depositGap' => 0.0,
@@ -97,6 +100,66 @@ final class AdminCleaningTransactionService
         ];
     }
 
+    public function updateAllowanceLimit(Worker $worker, float $limit): CleaningWorkerDeposit
+    {
+        if ($limit < 0) {
+            throw new InvalidArgumentException(app()->isLocale('ar') ? 'يجب أن يكون حد السماح صفراً أو أكبر.' : 'The allowance limit must be zero or greater.');
+        }
+
+        return DB::transaction(function () use ($worker, $limit): CleaningWorkerDeposit {
+            CleaningWorkerDeposit::query()->firstOrCreate(
+                ['worker_id' => $worker->id],
+                [
+                    'current_balance' => 0,
+                    'debt_balance' => 0,
+                    'deposited_total' => 0,
+                    'withdrawn_total' => 0,
+                    'admin_revenue_withdrawn_total' => 0,
+                    'minimum_required' => 0,
+                    'max_negative_balance' => 0,
+                    'is_active' => true,
+                ],
+            );
+
+            $account = CleaningWorkerDeposit::query()
+                ->where('worker_id', $worker->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $currentDeposit = max(0.0, (float) $account->current_balance);
+            $currentLimit = max(0.0, (float) ($account->max_negative_balance ?? 0));
+            if ($currentDeposit > 0 && abs($limit - $currentLimit) > 0.009) {
+                throw new InvalidArgumentException(app()->isLocale('ar')
+                    ? 'لا يمكن منح حد سماح للعامل طالما لديه رصيد إيداع.'
+                    : 'An allowance limit cannot be changed while the worker has a deposit balance.');
+            }
+
+            $lockedWorker = $worker->fresh(['deposit']) ?? $worker;
+            $snapshot = $this->snapshot($lockedWorker);
+            $minimumAllowed = round(
+                (float) ($snapshot['debtBalance'] ?? 0)
+                + (float) ($snapshot['activeReservedCommission'] ?? 0),
+                2,
+            );
+
+            if ($limit + 0.009 < $minimumAllowed) {
+                throw new InvalidArgumentException(app()->isLocale('ar')
+                    ? 'لا يمكن أن يكون حد السماح أقل من المديونية الحالية والعمولات المحجوزة.'
+                    : 'The allowance limit cannot be lower than current indebtedness and reserved commissions.');
+            }
+
+            $account->forceFill([
+                'minimum_required' => 0,
+                'max_negative_balance' => round($limit, 2),
+                'is_active' => true,
+            ])->save();
+
+            $this->depositService->syncEligibilityStatus($worker->fresh(['deposit']) ?? $worker);
+
+            return $account;
+        });
+    }
+
     public function suggestedAmounts(Worker $worker, string $type): array
     {
         $snapshot = $this->snapshot($worker);
@@ -112,6 +175,12 @@ final class AdminCleaningTransactionService
 
     public function validationMessage(Worker $worker, string $type, float $amount): ?string
     {
+        if ($type === 'debt') {
+            return app()->isLocale('ar')
+                ? 'لم يعد إنشاء دين إداري مدعوماً. استخدم تعديل حد السماح للعامل بدلاً من ذلك.'
+                : 'Administration loans are no longer supported. Update the worker allowance limit instead.';
+        }
+
         if (! in_array($type, self::TYPES, true)) {
             return __('cleaning_finance_guidance.validation.type_required');
         }
@@ -136,25 +205,6 @@ final class AdminCleaningTransactionService
             return __('cleaning_finance_guidance.validation.amount_positive');
         }
 
-        if ($type === 'debt') {
-            $snapshot = $this->snapshot($worker);
-            if ((float) $snapshot['depositBalance'] > 0) {
-                return app()->isLocale('ar')
-                    ? 'لا يمكن إضافة دين إداري للعامل طالما لديه رصيد إيداع قائم.'
-                    : 'An administration loan cannot be added while the worker has an existing deposit balance.';
-            }
-            if ((float) $snapshot['totalRevenue'] > 0) {
-                return app()->isLocale('ar')
-                    ? 'لا يمكن إضافة دين إداري للعامل طالما لديه إيرادات في حسابه.'
-                    : 'An administration loan cannot be added while the worker has revenue in the account.';
-            }
-            if ((float) $snapshot['debtBalance'] > 0) {
-                return app()->isLocale('ar')
-                    ? 'يجب تسوية المديونية الحالية قبل إضافة دين إداري إلى رصيد الإيداع.'
-                    : 'The current indebtedness must be settled before adding an administration loan to the deposit balance.';
-            }
-        }
-
         return null;
     }
 
@@ -175,7 +225,6 @@ final class AdminCleaningTransactionService
 
         return round(match ($type) {
             'deposit' => $depositBalance + max(0.0, $amount - $debtBalance - $adminLoanBalance),
-            'debt' => $depositBalance + $amount,
             default => $depositBalance,
         }, 2);
     }
@@ -191,13 +240,8 @@ final class AdminCleaningTransactionService
             throw new InvalidArgumentException($validationMessage);
         }
 
-        if ($type === 'debt' && mb_trim((string) $notes) === '') {
-            throw new InvalidArgumentException(app()->isLocale('ar') ? 'الملاحظات مطلوبة عند إضافة دين إداري.' : 'Notes are required when adding an administration loan.');
-        }
-
         return match ($type) {
             'deposit' => $this->depositService->recordDeposit($worker, $amount, 'admin_manual_deposit', $notes, $createdByAdminId),
-            'debt' => $this->debtService->recordDebt($worker, $amount, WorkerDebtService::ADMIN_LOAN_REFERENCE, $notes, $createdByAdminId),
             default => throw new InvalidArgumentException(__('cleaning_finance_guidance.validation.type_required')),
         };
     }
@@ -255,6 +299,7 @@ final class AdminCleaningTransactionService
             $account->current_balance = 0;
             $account->withdrawn_total = (float) $account->withdrawn_total + $workerRefund;
             $account->admin_revenue_withdrawn_total = $withdrawnAdminRevenueBefore + $adminCommissionBalance;
+            $account->is_active = false;
             $account->save();
 
             $transaction = CleaningDepositTransaction::query()->create([

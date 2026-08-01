@@ -35,13 +35,15 @@ final class CreateCleaningWorker extends CreateRecord
             ->modalIconColor('warning')
             ->modalHeading(app()->isLocale('ar') ? 'إضافة العامل بدون سعة مالية؟' : 'Create worker without financial capacity?')
             ->modalDescription(app()->isLocale('ar')
-                ? 'لم يتم تسجيل إيداع وحد المديونية للعامل يساوي صفراً، لذلك لن تتوفر له سعة مالية لقبول الطلبات ذات العمولة. هل أنت متأكد؟'
-                : 'No deposit was recorded and the worker debt limit is zero, so there will be no financial capacity for bookings with commission. Are you sure?')
+                ? 'لم يتم تسجيل إيداع وحد السماح للعامل يساوي صفراً، لذلك لن تتوفر له سعة مالية لقبول الطلبات ذات العمولة. هل أنت متأكد؟'
+                : 'No deposit was recorded and the worker allowance limit is zero, so there will be no financial capacity for bookings with commission. Are you sure?')
             ->modalSubmitActionLabel(app()->isLocale('ar') ? 'إضافة العامل على أي حال' : 'Create worker anyway');
     }
 
     protected function handleRecordCreation(array $data): Model
     {
+        $this->validateInitialFinancialConfiguration();
+
         return DB::transaction(function () use ($data): Model {
             $worker = $this->createWorkerRecord($data);
             $type = $this->initialFinancialTransactionType();
@@ -112,15 +114,29 @@ final class CreateCleaningWorker extends CreateRecord
             return null;
         }
 
-        if (! is_string($type) || ! in_array($type, ['deposit', 'debt'], true)) {
+        if (! is_string($type) || $type !== 'deposit') {
             throw ValidationException::withMessages([
                 'data.initial_financial_transaction_type' => app()->isLocale('ar')
-                    ? 'اختر إيداعاً أو ديناً إدارياً.'
-                    : 'Select either a deposit or an administration loan.',
+                    ? 'لم يعد إنشاء دين إداري مدعوماً. اختر إيداعاً فقط أو استخدم حد السماح للعامل.'
+                    : 'Administration loans are no longer supported. Select a deposit only or use the worker allowance limit.',
             ]);
         }
 
         return $type;
+    }
+
+    private function validateInitialFinancialConfiguration(): void
+    {
+        $hasDeposit = $this->initialFinancialTransactionType() === 'deposit';
+        $allowanceLimit = (float) ($this->data['worker_debt_limit'] ?? 0);
+
+        if ($hasDeposit && $allowanceLimit > 0) {
+            throw ValidationException::withMessages([
+                'data.worker_debt_limit' => app()->isLocale('ar')
+                    ? 'لا يمكن منح حد سماح للعامل طالما لديه رصيد إيداع.'
+                    : 'An allowance limit cannot be granted while the worker has a deposit balance.',
+            ]);
+        }
     }
 
     private function initialFinancialTransactionNotes(): ?string

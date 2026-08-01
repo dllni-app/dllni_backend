@@ -35,6 +35,7 @@ final class WorkerOrderSolvencyService
     {
         $worker->loadMissing('deposit');
         $capacity = $this->workerCapacitySummary($worker, (int) $booking->id);
+        $financialStatus = $this->depositService->depositStatusPayload($worker);
         $requiredCommission = 0.0;
         $workerOffer = null;
         $reasonCode = self::REASON_ELIGIBLE;
@@ -52,10 +53,24 @@ final class WorkerOrderSolvencyService
         $canReceive = $reasonCode === self::REASON_ELIGIBLE
             && $worker->is_active
             && ! $worker->is_suspended
-            && $this->depositService->isWorkerEligibleForDispatch($worker)
+            && (bool) ($financialStatus['isEligibleForNewRequests'] ?? false)
             && (float) $capacity['availableCommissionCapacity'] >= $requiredCommission;
 
         if (
+            ! $canReceive
+            && $reasonCode === self::REASON_ELIGIBLE
+            && ($financialStatus['financialWarningCode'] ?? null) === 'deposit_below_minimum'
+        ) {
+            $reasonCode = 'deposit_required_before_start';
+            $message = (string) ($financialStatus['financialWarningMessage'] ?? 'The worker deposit balance is below the minimum required amount.');
+        } elseif (
+            ! $canReceive
+            && $reasonCode === self::REASON_ELIGIBLE
+            && ($financialStatus['financialWarningCode'] ?? null) === 'allowance_limit_exhausted'
+        ) {
+            $reasonCode = self::REASON_ALLOWANCE_LIMIT_EXHAUSTED;
+            $message = (string) ($financialStatus['financialWarningMessage'] ?? 'The worker allowance limit has been exhausted.');
+        } elseif (
             ! $canReceive
             && $reasonCode === self::REASON_ELIGIBLE
             && (bool) ($capacity['isAllowanceLimitExhausted'] ?? false)
@@ -64,7 +79,7 @@ final class WorkerOrderSolvencyService
             $message = 'The worker allowance limit has been exhausted.';
         } elseif (! $canReceive && $reasonCode === self::REASON_ELIGIBLE) {
             $reasonCode = self::REASON_INSUFFICIENT_COMMISSION_CAPACITY;
-            $message = 'The available deposit and remaining debt capacity do not cover this booking platform commission.';
+            $message = 'The available deposit or remaining allowance does not cover this booking platform commission.';
         }
 
         return array_merge($capacity, [
@@ -104,7 +119,7 @@ final class WorkerOrderSolvencyService
         $capacity = $this->workerCapacitySummary($worker->fresh(['deposit']) ?? $worker, (int) $booking->id);
 
         if ((float) $capacity['availableCommissionCapacity'] < $requiredCommission) {
-            throw new InvalidArgumentException('The available deposit and remaining debt capacity do not cover this booking platform commission.');
+            throw new InvalidArgumentException('The available deposit or remaining allowance does not cover this booking platform commission.');
         }
     }
 
@@ -132,6 +147,9 @@ final class WorkerOrderSolvencyService
             'adminCommissionBalance' => round((float) ($allowance['adminCommissionBalance'] ?? 0), 2),
             'withdrawnAdminRevenueTotal' => round((float) ($allowance['withdrawnAdminRevenueTotal'] ?? 0), 2),
             'isAllowanceLimitExhausted' => (bool) ($allowance['isAllowanceLimitExhausted'] ?? false),
+            'allowanceWarningThresholdPercent' => round((float) ($allowance['allowanceWarningThresholdPercent'] ?? 10), 2),
+            'isUsingDepositBalance' => (bool) ($allowance['isUsingDepositBalance'] ?? false),
+            'isAllowanceNearLimit' => (bool) ($allowance['isAllowanceNearLimit'] ?? false),
             'activeReservedCommission' => round($activeReservedCommission, 2),
             'availableCommissionCapacity' => round((float) ($allowance['availableCommissionCapacity'] ?? 0), 2),
         ];

@@ -40,6 +40,14 @@ final class CreateCleaningWorkerDeposit extends CreateRecord
         $service = app(AdminCleaningTransactionService::class);
         $type = (string) ($data['type'] ?? '');
 
+        if (! in_array($type, ['deposit', 'refund'], true)) {
+            throw ValidationException::withMessages([
+                'data.type' => app()->isLocale('ar')
+                    ? 'لم يعد إنشاء دين إداري مدعوماً. استخدم تعديل حد السماح للعامل بدلاً من ذلك.'
+                    : 'Administration loans are no longer supported. Update the worker allowance limit instead.',
+            ]);
+        }
+
         try {
             $worker = $service->findWorker((int) ($data['worker_id'] ?? 0));
             $notes = isset($data['notes']) && mb_trim((string) $data['notes']) !== ''

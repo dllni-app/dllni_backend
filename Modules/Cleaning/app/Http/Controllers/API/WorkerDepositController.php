@@ -50,6 +50,7 @@ final class WorkerDepositController
         $indebtedness = (float) ($financial['debtBalance'] ?? 0);
         $adminLoan = (float) ($financial['adminLoanBalance'] ?? 0);
         $totalRevenue = (float) ($financial['totalRevenue'] ?? 0);
+        $totalCommission = (float) ($financial['totalCommission'] ?? 0);
         $adminCommissionBalance = (float) ($financial['adminCommissionBalance'] ?? 0);
 
         // Use the exact financial snapshot used by the Filament transaction form so
@@ -76,9 +77,9 @@ final class WorkerDepositController
             'availableCommissionCapacity' => (float) ($financial['availableCommissionCapacity'] ?? 0),
             'totalRevenue' => $totalRevenue,
             'completedJobs' => (int) ($financial['completedJobs'] ?? 0),
-            'totalCommission' => (float) ($financial['totalCommission'] ?? 0),
+            'totalCommission' => $totalCommission,
             'adminCommissionBalance' => $adminCommissionBalance,
-            'grossInvoicesAmount' => round($totalRevenue + $adminCommissionBalance, 2),
+            'grossInvoicesAmount' => round($totalRevenue + $totalCommission, 2),
             'status' => $status,
             'isFinancialAccountActive' => $isFinancialAccountActive,
             'isActive' => $isFinancialAccountActive,

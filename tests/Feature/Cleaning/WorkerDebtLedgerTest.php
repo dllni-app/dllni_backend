@@ -24,6 +24,7 @@ beforeEach(function (): void {
             'default_max_negative_balance' => 50000,
             'restriction_threshold_percent' => 100,
             'is_enabled' => true,
+            'allowance_warning_threshold_percent' => 10,
             'trust_reject_after_accept_penalty' => 10,
             'trust_minimum_for_dispatch' => 0,
         ],
@@ -190,7 +191,7 @@ it('reactivates the financial account and redispatches pending preferred booking
         ->and((float) $fundedWorker->deposit->debt_balance)->toBe(0.0)
         ->and($fundedWorker->deposit->is_active)->toBeTrue()
         ->and($fundedWorker->security_deposit_status)->toBe('active')
-        ->and(app(DepositService::class)->availableCommissionCapacity($fundedWorker))->toBe(1999996.0);
+        ->and(app(DepositService::class)->availableCommissionCapacity($fundedWorker))->toBe(999998.0);
 
     Queue::assertPushed(NotifyEligibleWorkersNewOrderJob::class, 1);
 });

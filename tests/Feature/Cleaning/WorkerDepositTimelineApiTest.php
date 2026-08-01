@@ -17,6 +17,7 @@ function seedTimelineDepositSettings(): CleaningDepositSetting
         [
             'minimum_deposit_amount' => 0,
             'restriction_threshold_percent' => 100,
+            'allowance_warning_threshold_percent' => 10,
             'trust_reject_after_accept_penalty' => 10,
             'trust_minimum_for_dispatch' => 0,
         ],
@@ -84,11 +85,11 @@ it('exposes the separate public transaction types in the worker financial timeli
         ->assertJsonPath('depositedTotal', 1000000)
         ->assertJsonPath('withdrawnTotal', 0)
         ->assertJsonPath('minimumRequired', 0)
-        ->assertJsonPath('allowedDebtLimit', 827500)
-        ->assertJsonPath('remainingAllowanceLimit', 827500)
+        ->assertJsonPath('allowedDebtLimit', 1000000)
+        ->assertJsonPath('remainingAllowanceLimit', 1000000)
         ->assertJsonPath('configuredAllowedDebtLimit', 1000000)
         ->assertJsonPath('maxNegativeBalance', 1000000)
-        ->assertJsonPath('allowanceUsedAmount', 172500)
+        ->assertJsonPath('allowanceUsedAmount', 0)
         ->assertJsonPath('status', 'active')
         ->assertJsonPath('isActive', true)
         ->assertJsonPath('isFinancialAccountActive', true);
@@ -137,7 +138,7 @@ it('returns active status while allowance remains above zero even without a depo
         'withdrawn_total' => 0,
         'minimum_required' => 0,
         'max_negative_balance' => 100,
-        'is_active' => false,
+        'is_active' => true,
     ]);
 
     Sanctum::actingAs($user);
@@ -162,9 +163,9 @@ it('returns inactive financial status when debt exceeds the worker-specific limi
 
     CleaningWorkerDeposit::query()->create([
         'worker_id' => $worker->id,
-        'current_balance' => 500,
+        'current_balance' => 0,
         'debt_balance' => 101,
-        'deposited_total' => 500,
+        'deposited_total' => 0,
         'withdrawn_total' => 0,
         'minimum_required' => 0,
         'max_negative_balance' => 100,

@@ -46,7 +46,6 @@ final class CleaningTransactionForm
                             ->placeholder(__('cleaning_finance_guidance.placeholders.type'))
                             ->options([
                                 'deposit' => __('cleaning_admin.transactions.types.deposit'),
-                                'debt' => __('cleaning_finance.types.debt'),
                                 'refund' => __('cleaning_admin.transactions.types.refund'),
                             ])
                             ->required()
@@ -58,15 +57,15 @@ final class CleaningTransactionForm
                     ]),
                 Section::make(__('cleaning_finance_guidance.form.financial_summary'))
                     ->description(app()->isLocale('ar')
-                        ? 'الدين الإداري يضاف إلى رصيد الإيداع مع بقائه معلّماً كدين، أما المديونية فهي رصيد مستقل ينتج عند تجاوز عمولات المنصة لرصيد الإيداع.'
-                        : 'An administration loan is added to the deposit balance while remaining marked as a loan. Indebtedness is separate and is created only when platform charges exceed the deposit.')
+                        ? 'الإيداع رصيد حقيقي للعامل. حد السماح يظهر كقدرة عمل بديلة فقط عند عدم وجود إيداع، ولا يضاف إلى رصيد الإيداع.'
+                        : 'The deposit is the worker real balance. The allowance limit is only fallback capacity when there is no deposit, and is not added to the deposit balance.')
                     ->visible(fn (Get $get): bool => self::worker($get('worker_id')) instanceof Worker)
                     ->columns(['default' => 2, 'md' => 3, 'xl' => 6])
                     ->schema([
                         self::moneyMetric('deposit_balance', 'depositBalance', app()->isLocale('ar') ? 'رصيد الإيداع' : 'Deposit balance'),
                         self::moneyMetric('admin_loan_balance', 'adminLoanBalance', app()->isLocale('ar') ? 'الدين الإداري ضمن الإيداع' : 'Administration loan in deposit'),
                         self::moneyMetric('debt_balance', 'debtBalance', app()->isLocale('ar') ? 'المديونية الحالية' : 'Current indebtedness'),
-                        self::moneyMetric('allowed_debt_limit', 'allowedDebtLimit', app()->isLocale('ar') ? 'حد الدين' : 'Indebtedness limit'),
+                        self::moneyMetric('allowed_debt_limit', 'allowedDebtLimit', app()->isLocale('ar') ? 'حد السماح المتبقي' : 'Remaining allowance limit'),
                         self::moneyMetric('total_revenue', 'totalRevenue', app()->isLocale('ar') ? 'إجمالي الإيرادات' : 'Total revenue'),
                         self::moneyMetric('admin_commission_balance', 'adminCommissionBalance', app()->isLocale('ar') ? 'إجمالي عمولة الإدارة' : 'Administration commission balance'),
                     ]),
@@ -109,10 +108,6 @@ final class CleaningTransactionForm
                         Textarea::make('notes')
                             ->label(__('cleaning_admin.transactions.fields.notes'))
                             ->placeholder(__('cleaning_finance_guidance.placeholders.notes'))
-                            ->required(fn (Get $get): bool => $get('type') === 'debt')
-                            ->helperText(fn (Get $get): ?string => $get('type') === 'debt'
-                                ? (app()->isLocale('ar') ? 'سبب الدين الإداري مطلوب، وسيظهر المبلغ داخل رصيد الإيداع مع تنبيه بأنه دين.' : 'A reason is required. The amount will appear in the deposit balance with an administration-loan warning.')
-                                : null)
                             ->rows(4)
                             ->maxLength(1000)
                             ->columnSpanFull(),
@@ -227,9 +222,6 @@ final class CleaningTransactionForm
             'deposit' => app()->isLocale('ar')
                 ? 'يسدد الإيداع المديونية أولاً. المديونية الحالية: '.self::money((float) $snapshot['debtBalance']).'.'
                 : 'The deposit settles indebtedness first. Current indebtedness: '.self::money((float) $snapshot['debtBalance']).'.',
-            'debt' => app()->isLocale('ar')
-                ? 'يضاف الدين الإداري إلى رصيد الإيداع، ولا يمكن إضافته إذا كان للعامل رصيد إيداع أو إيرادات في حسابه.'
-                : 'The administration loan is added to the deposit balance and cannot be added while the worker has a deposit balance or revenue in the account.',
             default => __('cleaning_finance_guidance.fields.amount_helper_default'),
         };
     }

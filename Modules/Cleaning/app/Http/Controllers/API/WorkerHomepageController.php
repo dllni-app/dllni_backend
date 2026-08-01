@@ -437,7 +437,7 @@ final class WorkerHomepageController
     private function commissionCapacityMessage(string $reasonCode): string
     {
         return match ($reasonCode) {
-            WorkerOrderSolvencyService::REASON_INSUFFICIENT_COMMISSION_CAPACITY => 'Your available commission capacity is not enough to receive some new requests. Please recharge your deposit account or wait until reserved commissions are released.',
+            WorkerOrderSolvencyService::REASON_INSUFFICIENT_COMMISSION_CAPACITY => 'Your available commission capacity is not enough to receive some new requests. Please recharge your deposit account, settle the outstanding amount, or wait until reserved commissions are released.',
             default => 'Your available commission capacity can receive new requests.',
         };
     }
@@ -464,6 +464,12 @@ final class WorkerHomepageController
             return 'deposit_below_allowed_balance';
         }
 
+        $currentBalance = (float) ($depositSummary['currentBalance'] ?? 0);
+        $minimumRequired = (float) ($depositSummary['minimumRequired'] ?? 0);
+        if ($currentBalance > 0 && $minimumRequired > 0 && $currentBalance < $minimumRequired) {
+            return 'deposit_required_before_start';
+        }
+
         return 'trust_score_too_low';
     }
 
@@ -474,7 +480,8 @@ final class WorkerHomepageController
             'worker_inactive' => 'Account is inactive.',
             'worker_suspended' => 'Account status prevents new requests.',
             'allowance_limit_exhausted' => 'Allowance limit has reached zero.',
-            'deposit_below_allowed_balance' => 'Deposit balance is below the allowed limit.',
+            'deposit_below_allowed_balance' => 'Indebtedness exceeds the worker allowance limit.',
+            'deposit_required_before_start' => 'Deposit balance is below the minimum required amount.',
             'trust_score_too_low' => 'Trust score is below the required minimum.',
             default => 'Account cannot receive new requests right now.',
         };

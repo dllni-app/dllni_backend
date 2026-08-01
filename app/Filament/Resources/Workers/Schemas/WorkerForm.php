@@ -76,15 +76,15 @@ final class WorkerForm
                     ]),
                 Section::make(app()->isLocale('ar') ? 'الإعدادات المالية للعامل' : 'Worker financial settings')
                     ->description(app()->isLocale('ar')
-                        ? 'يطبق حد المديونية على هذا العامل فقط، ولا يوجد حد افتراضي عام.'
-                        : 'The debt limit applies only to this worker. There is no global default limit.')
+                        ? 'حد السماح يحدد قدرة العامل على استقبال الطلبات عند عدم وجود إيداع فقط، ولا يضاف إلى رصيد الإيداع.'
+                        : 'The allowance limit controls booking capacity only when there is no deposit, and is not added to the deposit balance.')
                     ->columns(2)
                     ->schema([
                         TextInput::make('worker_debt_limit')
-                            ->label(app()->isLocale('ar') ? 'حد الدين للعامل' : 'Worker debt limit')
+                            ->label(app()->isLocale('ar') ? 'حد السماح للعامل' : 'Worker allowance limit')
                             ->helperText(app()->isLocale('ar')
-                                ? 'يبقى الحساب المالي نشطاً ما دامت المديونية أقل من أو تساوي هذا الحد.'
-                                : 'The financial account remains active while indebtedness is less than or equal to this limit.')
+                                ? 'يستخدم فقط عندما يكون رصيد الإيداع صفراً. لا يمكن تعديله طالما لدى العامل رصيد إيداع موجب.'
+                                : 'Used only when the deposit balance is zero. It cannot be changed while the worker has a positive deposit balance.')
                             ->numeric()
                             ->minValue(0)
                             ->step(0.01)
@@ -106,8 +106,8 @@ final class WorkerForm
                     ]),
                 Section::make(app()->isLocale('ar') ? 'المعاملة المالية الأولية' : 'Initial financial transaction')
                     ->description(app()->isLocale('ar')
-                        ? 'يمكن تسجيل إيداع أو دين إداري مباشرة عند إنشاء العامل. الدين الإداري يضاف إلى رصيد الإيداع مع بقائه معلّماً كدين.'
-                        : 'Optionally record a deposit or administration loan while creating the worker. An administration loan is added to the deposit balance and remains marked as a loan.')
+                        ? 'يمكن تسجيل إيداع أولي فقط. إذا أردت السماح للعامل بالعمل دون إيداع استخدم حد السماح أعلاه.'
+                        : 'Only an initial deposit can be recorded. To let the worker operate without a deposit, use the allowance limit above.')
                     ->columns(2)
                     ->visible(fn (string $operation): bool => $operation === 'create')
                     ->schema([
@@ -116,7 +116,6 @@ final class WorkerForm
                             ->placeholder(app()->isLocale('ar') ? 'بدون معاملة مالية' : 'No financial transaction')
                             ->options([
                                 'deposit' => __('cleaning_admin.workers.finance.deposit.label'),
-                                'debt' => __('cleaning_finance.debt.label'),
                             ])
                             ->native(false)
                             ->live()
@@ -130,12 +129,6 @@ final class WorkerForm
                             ->dehydrated(false),
                         Textarea::make('initial_financial_transaction_notes')
                             ->label(__('cleaning_admin.workers.finance.fields.notes'))
-                            ->helperText(fn (Get $get): ?string => $get('initial_financial_transaction_type') === 'debt'
-                                ? (app()->isLocale('ar')
-                                    ? 'سبب الدين الإداري مطلوب، وسيظهر المبلغ داخل رصيد الإيداع مع تنبيه بأنه دين.'
-                                    : 'A reason is required. The amount appears in the deposit balance with an administration-loan warning.')
-                                : null)
-                            ->required(fn (Get $get): bool => $get('initial_financial_transaction_type') === 'debt')
                             ->visible(fn (Get $get): bool => filled($get('initial_financial_transaction_type')))
                             ->rows(3)
                             ->maxLength(1000)
@@ -145,11 +138,11 @@ final class WorkerForm
                             ->label(app()->isLocale('ar') ? 'تنبيه' : 'Warning')
                             ->content(fn (Get $get): string => (float) ($get('worker_debt_limit') ?? 0) > 0
                                 ? (app()->isLocale('ar')
-                                    ? 'سيبدأ رصيد الإيداع بصفر، ويمكن للعامل العمل ضمن حد المديونية الفردي المحدد له.'
-                                    : 'The deposit balance starts at zero, and the worker may operate within the configured individual debt limit.')
+                                    ? 'سيبدأ رصيد الإيداع بصفر، ويمكن للعامل العمل ضمن حد السماح الفردي المحدد له.'
+                                    : 'The deposit balance starts at zero, and the worker may operate within the configured individual allowance limit.')
                                 : (app()->isLocale('ar')
-                                    ? 'بدون إيداع ومع حد مديونية يساوي صفراً، لن تتوفر سعة مالية لقبول طلبات ذات عمولة.'
-                                    : 'Without a deposit and with a zero debt limit, there is no financial capacity for bookings with commission.'))
+                                    ? 'بدون إيداع ومع حد سماح يساوي صفراً، لن تتوفر سعة مالية لقبول طلبات ذات عمولة.'
+                                    : 'Without a deposit and with a zero allowance limit, there is no financial capacity for bookings with commission.'))
                             ->visible(fn (Get $get): bool => blank($get('initial_financial_transaction_type')))
                             ->extraAttributes([
                                 'class' => 'rounded-xl border border-warning-300 bg-warning-50 p-4 dark:border-warning-700 dark:bg-warning-950',

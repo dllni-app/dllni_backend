@@ -51,6 +51,10 @@ final class FinancialSettings extends Page
 
     public int $trustMinimumForDispatch = 0;
 
+    public float $minimumDepositAmount = 0.0;
+
+    public float $allowanceWarningThresholdPercent = 10.0;
+
     public float $cleaningBaseUnitPrice = CleaningFinancialDefaults::BASE_UNIT_PRICE;
 
     public float $cleaningDeepMultiplier = CleaningFinancialDefaults::DEEP_CLEANING_MULTIPLIER;
@@ -145,6 +149,8 @@ final class FinancialSettings extends Page
 
         $depositSetting = CleaningDepositSetting::query()->first();
         if ($depositSetting) {
+            $this->minimumDepositAmount = (float) ($depositSetting->minimum_deposit_amount ?? 0);
+            $this->allowanceWarningThresholdPercent = (float) ($depositSetting->allowance_warning_threshold_percent ?? 10);
             $this->trustRejectAfterAcceptPenalty = (int) $depositSetting->trust_reject_after_accept_penalty;
             $this->trustMinimumForDispatch = (int) $depositSetting->trust_minimum_for_dispatch;
         }
@@ -168,6 +174,8 @@ final class FinancialSettings extends Page
             'extensionRatePer30Minutes' => ['required', 'numeric', 'min:0'],
             'extensionRanges' => ['array'],
             'extensionRanges.*.price' => ['required', 'numeric', 'min:0'],
+            'minimumDepositAmount' => ['required', 'numeric', 'min:0'],
+            'allowanceWarningThresholdPercent' => ['required', 'numeric', 'min:0', 'max:100'],
             'trustRejectAfterAcceptPenalty' => ['required', 'integer', 'min:0'],
             'trustMinimumForDispatch' => ['required', 'integer', 'min:0', 'max:100'],
             'cleaningBaseUnitPrice' => ['required', 'numeric', 'min:0'],
@@ -216,8 +224,9 @@ final class FinancialSettings extends Page
         CleaningDepositSetting::query()->updateOrCreate(
             ['id' => CleaningDepositSetting::query()->orderBy('id')->value('id') ?? 1],
             [
-                'minimum_deposit_amount' => 0,
+                'minimum_deposit_amount' => $this->minimumDepositAmount,
                 'restriction_threshold_percent' => 100,
+                'allowance_warning_threshold_percent' => $this->allowanceWarningThresholdPercent,
                 'trust_reject_after_accept_penalty' => $this->trustRejectAfterAcceptPenalty,
                 'trust_minimum_for_dispatch' => $this->trustMinimumForDispatch,
             ],

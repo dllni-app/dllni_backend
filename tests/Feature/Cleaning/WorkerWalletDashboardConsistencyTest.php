@@ -22,6 +22,7 @@ beforeEach(function (): void {
             'minimum_deposit_amount' => 0,
             'default_max_negative_balance' => 50000,
             'restriction_threshold_percent' => 100,
+            'allowance_warning_threshold_percent' => 10,
             'is_enabled' => true,
             'trust_reject_after_accept_penalty' => 10,
             'trust_minimum_for_dispatch' => 0,
@@ -92,7 +93,7 @@ it('returns the same worker financial values used by the Filament dashboard', fu
         ->assertJsonPath('totalCommission', $expected['totalCommission'])
         ->assertJsonPath('adminCommissionBalance', $expected['adminCommissionBalance'])
         ->assertJsonPath('grossInvoicesAmount', round(
-            (float) $expected['totalRevenue'] + (float) $expected['adminCommissionBalance'],
+            (float) $expected['totalRevenue'] + (float) $expected['totalCommission'],
             2,
         ));
 });

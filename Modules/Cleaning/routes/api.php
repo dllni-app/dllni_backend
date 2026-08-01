@@ -84,6 +84,7 @@ Route::prefix('v1')->group(function () {
             Route::put('settings', [DepositManagementController::class, 'updateSettings']);
             Route::post('{worker}/deposit', [DepositManagementController::class, 'recordDeposit']);
             Route::post('{worker}/debt', [DepositManagementController::class, 'recordDebt']);
+            Route::put('{worker}/allowance-limit', [DepositManagementController::class, 'updateAllowanceLimit']);
             Route::post('{worker}/settle-full-debt', [DepositManagementController::class, 'settleFullDebt']);
             Route::post('{worker}/refund', [DepositManagementController::class, 'recordRefund']);
             Route::post('{worker}/withdraw', [DepositManagementController::class, 'recordWithdrawal']);

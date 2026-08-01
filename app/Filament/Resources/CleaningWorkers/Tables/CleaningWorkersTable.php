@@ -8,6 +8,7 @@ use App\Filament\Resources\CleaningWorkers\Support\WorkerDepositActions;
 use App\Filament\Resources\Workers\Support\WorkerSuspensionActions;
 use App\Filament\Support\ArabicDashboardLabels;
 use App\Enums\WorkerCustomerRatingType;
+use App\Models\CleaningDepositSetting;
 use App\Models\Worker;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
@@ -76,13 +77,13 @@ final class CleaningWorkersTable
                     ->alignEnd()
                     ->sortable(),
                 TextColumn::make('deposit.max_negative_balance')
-                    ->label('حد الدين المسموح')
+                    ->label('حد السماح للعامل')
                     ->formatStateUsing(fn ($state): string => ArabicDashboardLabels::money(max(0, (float) ($state ?? 0))))
                     ->placeholder('0.00 ل.س')
                     ->alignEnd()
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('remaining_debt_capacity')
-                    ->label('سعة المديونية المتبقية')
+                    ->label('حد السماح المتبقي')
                     ->state(fn (Worker $record): float => self::capacity($record)['remainingDebtCapacity'])
                     ->formatStateUsing(fn ($state): string => ArabicDashboardLabels::money($state))
                     ->badge()
@@ -194,17 +195,15 @@ final class CleaningWorkersTable
             WorkerFinancialAccountStatusService::ACTIVE => $query
                 ->where('is_active', true)
                 ->where('is_suspended', false)
-                ->where(function (Builder $financialQuery): void {
-                    $financialQuery
-                        ->whereDoesntHave('deposit')
-                        ->orWhereHas('deposit', fn (Builder $deposit): Builder => $deposit
-                            ->whereRaw('COALESCE(debt_balance, 0) <= COALESCE(max_negative_balance, 0)'));
-                }),
+                ->whereHas('deposit', fn (Builder $deposit): Builder => self::applyDepositCapacityFilter($deposit, true)),
             WorkerFinancialAccountStatusService::INSUFFICIENT_BALANCE => $query
                 ->where('is_active', true)
                 ->where('is_suspended', false)
-                ->whereHas('deposit', fn (Builder $deposit): Builder => $deposit
-                    ->whereRaw('COALESCE(debt_balance, 0) > COALESCE(max_negative_balance, 0)')),
+                ->where(function (Builder $financialQuery): void {
+                    $financialQuery
+                        ->whereDoesntHave('deposit')
+                        ->orWhereHas('deposit', fn (Builder $deposit): Builder => self::applyDepositCapacityFilter($deposit, false));
+                }),
             default => $query,
         };
     }
@@ -212,15 +211,53 @@ final class CleaningWorkersTable
     private static function applyFinancialBlockFilter(Builder $query, bool $blocked): Builder
     {
         if ($blocked) {
-            return $query->whereHas('deposit', fn (Builder $deposit): Builder => $deposit
-                ->whereRaw('COALESCE(debt_balance, 0) > COALESCE(max_negative_balance, 0)'));
+            return $query->where(function (Builder $financialQuery): void {
+                $financialQuery
+                    ->whereDoesntHave('deposit')
+                    ->orWhereHas('deposit', fn (Builder $deposit): Builder => self::applyDepositCapacityFilter($deposit, false));
+            });
         }
 
-        return $query->where(function (Builder $financialQuery): void {
-            $financialQuery
-                ->whereDoesntHave('deposit')
-                ->orWhereHas('deposit', fn (Builder $deposit): Builder => $deposit
-                    ->whereRaw('COALESCE(debt_balance, 0) <= COALESCE(max_negative_balance, 0)'));
+        return $query->whereHas('deposit', fn (Builder $deposit): Builder => self::applyDepositCapacityFilter($deposit, true));
+    }
+
+    private static function applyDepositCapacityFilter(Builder $deposit, bool $hasCapacity): Builder
+    {
+        $minimumRequired = max(0.0, (float) (CleaningDepositSetting::query()->value('minimum_deposit_amount') ?? 0));
+
+        if ($hasCapacity) {
+            return $deposit
+                ->where('is_active', true)
+                ->where(function (Builder $capacity) use ($minimumRequired): void {
+                    $capacity
+                        ->where(function (Builder $depositBalance) use ($minimumRequired): void {
+                            $depositBalance->whereRaw('COALESCE(current_balance, 0) > 0');
+
+                            if ($minimumRequired > 0) {
+                                $depositBalance->whereRaw('COALESCE(current_balance, 0) >= ?', [$minimumRequired]);
+                            }
+                        })
+                        ->orWhere(function (Builder $allowance) use ($minimumRequired): void {
+                            $allowance
+                                ->whereRaw('COALESCE(current_balance, 0) <= 0')
+                                ->whereRaw('COALESCE(debt_balance, 0) < COALESCE(max_negative_balance, 0)');
+                        });
+                });
+        }
+
+        return $deposit->where(function (Builder $capacity) use ($minimumRequired): void {
+            $capacity
+                ->where('is_active', false)
+                ->orWhere(function (Builder $depositBalance) use ($minimumRequired): void {
+                    $depositBalance
+                        ->whereRaw('COALESCE(current_balance, 0) > 0')
+                        ->whereRaw('COALESCE(current_balance, 0) < ?', [$minimumRequired]);
+                })
+                ->orWhere(function (Builder $allowance): void {
+                    $allowance
+                        ->whereRaw('COALESCE(current_balance, 0) <= 0')
+                        ->whereRaw('COALESCE(debt_balance, 0) >= COALESCE(max_negative_balance, 0)');
+                });
         });
     }
 

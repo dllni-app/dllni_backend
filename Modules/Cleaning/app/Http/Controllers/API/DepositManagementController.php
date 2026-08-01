@@ -41,18 +41,35 @@ final class DepositManagementController
 
     public function recordDebt(Request $request, Worker $worker): JsonResponse
     {
+        return response()->json([
+            'message' => app()->isLocale('ar')
+                ? 'لم يعد إنشاء دين إداري مدعوماً. استخدم تعديل حد السماح للعامل بدلاً من ذلك.'
+                : 'Administration loans are no longer supported. Update the worker allowance limit instead.',
+        ], Response::HTTP_BAD_REQUEST);
+    }
+
+    public function updateAllowanceLimit(Request $request, Worker $worker): JsonResponse
+    {
         $validated = $request->validate([
-            'amount' => 'required|numeric|min:0.01',
-            'notes' => 'required|string|max:1000',
+            'amount' => 'required|numeric|min:0',
         ]);
 
-        return $this->runTransaction(fn () => $this->transactionService->create(
-            worker: $worker,
-            type: 'debt',
-            amount: (float) $validated['amount'],
-            notes: $validated['notes'],
-            createdByAdminId: auth()->id(),
-        ), 'Debt recorded successfully');
+        try {
+            $account = $this->transactionService->updateAllowanceLimit($worker, (float) $validated['amount']);
+            $summary = $this->transactionService->snapshot($worker->fresh(['deposit']) ?? $worker);
+
+            return response()->json([
+                'message' => app()->isLocale('ar') ? 'تم تحديث حد السماح بنجاح.' : 'Allowance limit updated successfully.',
+                'account' => [
+                    ...$summary,
+                    'workerId' => $account->worker_id,
+                    'configuredAllowedDebtLimit' => (float) $account->max_negative_balance,
+                    'maxNegativeBalance' => (float) $account->max_negative_balance,
+                ],
+            ]);
+        } catch (Exception $exception) {
+            return response()->json(['message' => $exception->getMessage()], Response::HTTP_BAD_REQUEST);
+        }
     }
 
     public function settleFullDebt(Request $request, Worker $worker): JsonResponse
@@ -110,6 +127,7 @@ final class DepositManagementController
             'default_max_negative_balance' => 'nullable|numeric|min:0',
             'minimum_deposit_amount' => 'nullable|numeric|min:0',
             'restriction_threshold_percent' => 'nullable|numeric|min:0|max:100',
+            'allowance_warning_threshold_percent' => 'nullable|numeric|min:0|max:100',
             'trust_reject_after_accept_penalty' => 'nullable|integer|min:0',
             'trust_minimum_for_dispatch' => 'nullable|integer|min:0|max:100',
             'is_enabled' => 'nullable|boolean',
@@ -117,8 +135,9 @@ final class DepositManagementController
 
         $settings = $this->resolveSettings();
         $settings->update(array_filter([
-            'minimum_deposit_amount' => 0,
+            'minimum_deposit_amount' => $validated['minimum_deposit_amount'] ?? null,
             'restriction_threshold_percent' => 100,
+            'allowance_warning_threshold_percent' => $validated['allowance_warning_threshold_percent'] ?? null,
             'trust_reject_after_accept_penalty' => $validated['trust_reject_after_accept_penalty'] ?? null,
             'trust_minimum_for_dispatch' => $validated['trust_minimum_for_dispatch'] ?? null,
         ], static fn ($value) => $value !== null));
@@ -163,6 +182,7 @@ final class DepositManagementController
         return CleaningDepositSetting::query()->firstOrCreate([], [
             'minimum_deposit_amount' => 0,
             'restriction_threshold_percent' => 100,
+            'allowance_warning_threshold_percent' => 10,
             'trust_reject_after_accept_penalty' => (int) config('cleaning.trust.reject_after_accept_penalty', 10),
             'trust_minimum_for_dispatch' => 0,
         ]);
@@ -171,10 +191,11 @@ final class DepositManagementController
     private function settingsPayload(CleaningDepositSetting $settings): array
     {
         return [
-            'minimumDepositAmount' => 0.0,
+            'minimumDepositAmount' => (float) ($settings->minimum_deposit_amount ?? 0),
             'allowedDebtLimit' => 0.0,
             'defaultMaxNegativeBalance' => 0.0,
             'restrictionThresholdPercent' => 100.0,
+            'allowanceWarningThresholdPercent' => (float) ($settings->allowance_warning_threshold_percent ?? 10),
             'trustRejectAfterAcceptPenalty' => (int) $settings->trust_reject_after_accept_penalty,
             'trustMinimumForDispatch' => (int) $settings->trust_minimum_for_dispatch,
             'isEnabled' => true,

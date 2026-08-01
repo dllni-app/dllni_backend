@@ -11,6 +11,8 @@ use App\Models\Worker;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
+use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use RuntimeException;
@@ -25,6 +27,7 @@ final class DepositService
             $account = $this->accountForUpdate($worker);
             $this->normalizeAccount($account);
 
+            $account->is_active = true;
             $account->deposited_total = (float) $account->deposited_total + $amount;
             $settled = min($amount, (float) $account->debt_balance);
             $last = null;
@@ -142,9 +145,17 @@ final class DepositService
     public function resolveLimits(Worker $worker): array
     {
         $worker->loadMissing('deposit');
+        $settings = $this->settings();
         $allowedDebt = (float) ($worker->deposit?->max_negative_balance ?? 0);
+        $minimumRequired = max(0.0, (float) ($settings->minimum_deposit_amount ?? 0));
+        $warningThreshold = max(0.0, min(100.0, (float) ($settings->allowance_warning_threshold_percent ?? 10)));
 
-        return ['minimumRequired' => 0.0, 'maxNegativeBalance' => max(0.0, $allowedDebt), 'restrictionThresholdPercent' => 100.0];
+        return [
+            'minimumRequired' => round($minimumRequired, 2),
+            'maxNegativeBalance' => max(0.0, $allowedDebt),
+            'restrictionThresholdPercent' => 100.0,
+            'allowanceWarningThresholdPercent' => round($warningThreshold, 2),
+        ];
     }
 
     /** @deprecated Negative deposit balances are no longer used. */
@@ -167,8 +178,11 @@ final class DepositService
             ->first();
 
         $revenue = (float) CleaningBookingWorkerAssignment::query()
-            ->where('worker_id', $worker->id)
-            ->sum(DB::raw('CASE WHEN COALESCE(service_share_amount,0)+COALESCE(travel_fee,0)-COALESCE(admin_margin_amount,0) > 0 THEN COALESCE(service_share_amount,0)+COALESCE(travel_fee,0)-COALESCE(admin_margin_amount,0) ELSE 0 END'));
+            ->join('cleaning_bookings', 'cleaning_bookings.id', '=', 'cleaning_booking_worker_assignments.cleaning_booking_id')
+            ->where('cleaning_booking_worker_assignments.worker_id', $worker->id)
+            ->where('cleaning_bookings.status', CleaningBookingStatus::Completed->value)
+            ->whereIn('cleaning_booking_worker_assignments.status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
+            ->sum(DB::raw('CASE WHEN COALESCE(cleaning_booking_worker_assignments.service_share_amount,0)+COALESCE(cleaning_booking_worker_assignments.travel_fee,0)-COALESCE(cleaning_booking_worker_assignments.admin_margin_amount,0) > 0 THEN COALESCE(cleaning_booking_worker_assignments.service_share_amount,0)+COALESCE(cleaning_booking_worker_assignments.travel_fee,0)-COALESCE(cleaning_booking_worker_assignments.admin_margin_amount,0) ELSE 0 END'));
         $configuredAllowance = (float) $allowance['configuredAllowedDebtLimit'];
         $usedAllowance = (float) $allowance['allowanceUsedAmount'];
 
@@ -198,8 +212,14 @@ final class DepositService
             return 'suspended';
         }
 
-        return $this->isAllowanceLimitExhausted($worker) || $this->calculateExceedance($worker) !== null
-            ? 'restricted'
+        if (! $this->isFinancialAccountActive($worker)) {
+            return 'inactive';
+        }
+
+        return ! $this->passesDepositMinimumWhenUsingDeposit($worker)
+            || $this->isAllowanceLimitExhausted($worker)
+            || $this->calculateExceedance($worker) !== null
+            ? 'insufficient_balance'
             : 'active';
     }
 
@@ -240,6 +260,8 @@ final class DepositService
         }
 
         return $this->passesTrustFloor($worker)
+            && $this->isFinancialAccountActive($worker)
+            && $this->passesDepositMinimumWhenUsingDeposit($worker)
             && ! $this->isAllowanceLimitExhausted($worker)
             && $this->calculateExceedance($worker) === null;
     }
@@ -251,6 +273,8 @@ final class DepositService
         }
 
         return $this->passesTrustFloor($worker)
+            && $this->isFinancialAccountActive($worker)
+            && $this->passesDepositMinimumWhenUsingDeposit($worker)
             && $this->calculateDebtExceedance($worker) === null;
     }
 
@@ -266,16 +290,7 @@ final class DepositService
 
     public function availableCommissionCapacity(Worker $worker, float $reservedCommission = 0): float
     {
-        $worker->loadMissing('deposit');
-        $deposit = max(0.0, (float) ($worker->deposit?->current_balance ?? 0));
-        $allowance = $this->allowanceSummary($worker);
-        $remainingAllowance = (float) $allowance['remainingAllowanceLimit'];
-
-        if ($remainingAllowance <= 0) {
-            return 0.0;
-        }
-
-        return round(max(0.0, $deposit + $remainingAllowance - max(0.0, $reservedCommission)), 2);
+        return round((float) $this->allowanceSummary($worker, $reservedCommission)['availableCommissionCapacity'], 2);
     }
 
     /** @return array<string, float|bool> */
@@ -283,18 +298,28 @@ final class DepositService
     {
         $worker->loadMissing('deposit');
 
-        $configuredAllowance = round((float) $this->resolveLimits($worker)['maxNegativeBalance'], 2);
+        $limits = $this->resolveLimits($worker);
+        $configuredAllowance = round((float) $limits['maxNegativeBalance'], 2);
         $debt = round(max(0.0, (float) ($worker->deposit?->debt_balance ?? 0)), 2);
         $commission = $this->commissionFinancialSummary($worker);
         $adminCommissionBalance = round((float) $commission['adminCommissionBalance'], 2);
-        $used = round(max($debt, $adminCommissionBalance), 2);
+        $used = $debt;
         $remaining = round(max(0.0, $configuredAllowance - $used), 2);
         $reserved = round(max(0.0, $reservedCommission), 2);
         $availableAllowance = round(max(0.0, $remaining - $reserved), 2);
         $deposit = max(0.0, (float) ($worker->deposit?->current_balance ?? 0));
-        $availableCommission = $remaining > 0
-            ? round(max(0.0, $deposit + $remaining - $reserved), 2)
+        $usesDepositBalance = $deposit > 0;
+        $availableFunding = $usesDepositBalance ? $deposit : $remaining;
+        $availableCommission = round(max(0.0, $availableFunding - $reserved), 2);
+        $warningThreshold = round((float) ($limits['allowanceWarningThresholdPercent'] ?? 10), 2);
+        $warningAmount = $configuredAllowance > 0
+            ? round($configuredAllowance * $warningThreshold / 100, 2)
             : 0.0;
+        $isAllowanceExhausted = ! $usesDepositBalance && $remaining <= 0;
+        $isAllowanceNearLimit = ! $usesDepositBalance
+            && ! $isAllowanceExhausted
+            && $configuredAllowance > 0
+            && $remaining <= $warningAmount;
 
         return [
             'configuredAllowedDebtLimit' => $configuredAllowance,
@@ -307,7 +332,11 @@ final class DepositService
             'remainingDebtCapacity' => $remaining,
             'availableAllowanceCapacity' => $availableAllowance,
             'availableCommissionCapacity' => $availableCommission,
-            'isAllowanceLimitExhausted' => $remaining <= 0,
+            'allowanceWarningThresholdPercent' => $warningThreshold,
+            'allowanceWarningThresholdAmount' => $warningAmount,
+            'isUsingDepositBalance' => $usesDepositBalance,
+            'isAllowanceLimitExhausted' => $isAllowanceExhausted,
+            'isAllowanceNearLimit' => $isAllowanceNearLimit,
         ];
     }
 
@@ -318,15 +347,61 @@ final class DepositService
 
     public function syncEligibilityStatus(Worker $worker): void
     {
-        if ($worker->is_suspended) {
-            $status = 'suspended';
-        } elseif ($this->isAllowanceLimitExhausted($worker) || $this->calculateExceedance($worker) !== null) {
-            $status = 'insufficient_balance';
-        } else {
-            $status = 'active';
+        $status = $this->resolveAccountStatus($worker);
+
+        $worker->update([
+            'security_deposit_status' => $status === 'inactive' ? 'insufficient_balance' : $status,
+        ]);
+    }
+
+    public function isFinancialAccountActive(Worker $worker): bool
+    {
+        $worker->loadMissing('deposit');
+        $account = $worker->deposit;
+
+        if ($account === null) {
+            return true;
         }
 
-        $worker->update(['security_deposit_status' => $status]);
+        if (! (bool) ($account->is_active ?? true)) {
+            return false;
+        }
+
+        if ((float) $account->current_balance > 0) {
+            return true;
+        }
+
+        $latestClosingTransaction = CleaningDepositTransaction::query()
+            ->where('worker_id', $worker->id)
+            ->whereIn('type', ['refund', 'withdrawal'])
+            ->where('balance_after', '<=', 0)
+            ->latest('id')
+            ->first(['id', 'created_at']);
+
+        if ($latestClosingTransaction === null) {
+            $depositedTotal = max(0.0, (float) $account->deposited_total);
+            $withdrawnTotal = max(0.0, (float) $account->withdrawn_total);
+
+            return ! ($depositedTotal > 0 && $withdrawnTotal >= $depositedTotal);
+        }
+
+        $allowanceLimit = max(0.0, (float) ($account->max_negative_balance ?? 0));
+        $indebtedness = max(0.0, (float) ($account->debt_balance ?? 0));
+        if (
+            $allowanceLimit > $indebtedness
+            && $account->updated_at !== null
+            && $latestClosingTransaction->created_at !== null
+            && $account->updated_at->gt($latestClosingTransaction->created_at)
+        ) {
+            return true;
+        }
+
+        return CleaningDepositTransaction::query()
+            ->where('worker_id', $worker->id)
+            ->where('id', '>', (int) $latestClosingTransaction->id)
+            ->whereIn('type', ['deposit', 'debt'])
+            ->where('balance_after', '>', 0)
+            ->exists();
     }
 
     /** @deprecated Use syncEligibilityStatus(). */
@@ -355,6 +430,8 @@ final class DepositService
         $allowance = $this->allowanceSummary($worker);
         $configuredAllowed = (float) $allowance['configuredAllowedDebtLimit'];
         $remainingAllowed = (float) $allowance['remainingAllowanceLimit'];
+        $minimumRequired = (float) $this->resolveLimits($worker)['minimumRequired'];
+        $warningCode = $this->financialWarningCode($deposit, $minimumRequired, $allowance);
 
         return [
             'workerId' => $worker->id,
@@ -364,7 +441,7 @@ final class DepositService
             'debtAmount' => round($debt, 2),
             'depositedTotal' => round((float) ($account?->deposited_total ?? 0), 2),
             'withdrawnTotal' => round((float) ($account?->withdrawn_total ?? 0), 2),
-            'minimumRequired' => 0.0,
+            'minimumRequired' => round($minimumRequired, 2),
             'allowedDebtLimit' => round($remainingAllowed, 2),
             'configuredAllowedDebtLimit' => round($configuredAllowed, 2),
             'maxNegativeBalance' => round($configuredAllowed, 2),
@@ -373,11 +450,16 @@ final class DepositService
             'allowanceUsedAmount' => round((float) $allowance['allowanceUsedAmount'], 2),
             'adminCommissionBalance' => round((float) $allowance['adminCommissionBalance'], 2),
             'withdrawnAdminRevenueTotal' => round((float) $allowance['withdrawnAdminRevenueTotal'], 2),
+            'allowanceWarningThresholdPercent' => round((float) $allowance['allowanceWarningThresholdPercent'], 2),
+            'isUsingDepositBalance' => (bool) $allowance['isUsingDepositBalance'],
             'isAllowanceLimitExhausted' => (bool) $allowance['isAllowanceLimitExhausted'],
+            'isAllowanceNearLimit' => (bool) $allowance['isAllowanceNearLimit'],
             'availableCommissionCapacity' => $this->availableCommissionCapacity($worker),
             'status' => $this->resolveAccountStatus($worker),
             'exceedanceAmount' => $this->calculateExceedance($worker),
             'debtExceedanceAmount' => $this->calculateDebtExceedance($worker),
+            'financialWarningCode' => $warningCode,
+            'financialWarningMessage' => $this->financialWarningMessage($warningCode, $minimumRequired),
             'isEligibleForNewRequests' => $this->isWorkerEligibleForNewRequests($worker),
             'createdAt' => $account?->created_at?->toIso8601String(),
             'updatedAt' => $account?->updated_at?->toIso8601String(),
@@ -506,11 +588,56 @@ final class DepositService
         return (int) $worker->trust_score >= (int) $this->settings()->trust_minimum_for_dispatch;
     }
 
+    private function passesDepositMinimumWhenUsingDeposit(Worker $worker): bool
+    {
+        $worker->loadMissing('deposit');
+
+        $deposit = max(0.0, (float) ($worker->deposit?->current_balance ?? 0));
+        $minimumRequired = (float) $this->resolveLimits($worker)['minimumRequired'];
+
+        return $deposit <= 0 || $minimumRequired <= 0 || $deposit >= $minimumRequired;
+    }
+
+    /** @param array<string, mixed> $allowance */
+    private function financialWarningCode(float $deposit, float $minimumRequired, array $allowance): ?string
+    {
+        if ($deposit > 0 && $minimumRequired > 0 && $deposit < $minimumRequired) {
+            return 'deposit_below_minimum';
+        }
+
+        if ((bool) ($allowance['isAllowanceLimitExhausted'] ?? false)) {
+            return 'allowance_limit_exhausted';
+        }
+
+        if ((bool) ($allowance['isAllowanceNearLimit'] ?? false)) {
+            return 'allowance_near_limit';
+        }
+
+        return null;
+    }
+
+    private function financialWarningMessage(?string $warningCode, float $minimumRequired): ?string
+    {
+        return match ($warningCode) {
+            'deposit_below_minimum' => app()->isLocale('ar')
+                ? 'رصيد الإيداع أقل من الحد الأدنى المطلوب. يرجى إيداع '.number_format($minimumRequired, 2).' '.config('app.currency', 'SYP').' لتفعيل استقبال الطلبات.'
+                : 'The deposit balance is below the minimum required amount. Add '.number_format($minimumRequired, 2).' '.config('app.currency', 'SYP').' to receive new requests.',
+            'allowance_limit_exhausted' => app()->isLocale('ar')
+                ? 'وصل حد السماح إلى الصفر. يرجى دفع المبلغ المستحق للإدارة لاستقبال طلبات جديدة.'
+                : 'The allowance limit has reached zero. Pay the outstanding administration amount to receive new requests.',
+            'allowance_near_limit' => app()->isLocale('ar')
+                ? 'أوشك حد السماح على النفاد. يرجى دفع المبلغ المستحق للإدارة لتجنب إيقاف استقبال الطلبات.'
+                : 'The allowance limit is almost exhausted. Pay the outstanding administration amount to avoid being blocked from new requests.',
+            default => null,
+        };
+    }
+
     private function settings(): CleaningDepositSetting
     {
         $defaults = [
             'minimum_deposit_amount' => 0,
             'restriction_threshold_percent' => 100,
+            'allowance_warning_threshold_percent' => 10,
             'trust_reject_after_accept_penalty' => (int) config('cleaning.trust.reject_after_accept_penalty', 10),
             'trust_minimum_for_dispatch' => 0,
         ];

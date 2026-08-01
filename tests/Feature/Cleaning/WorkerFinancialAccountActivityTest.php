@@ -17,6 +17,7 @@ function createFinancialAccount(Worker $worker, float $debt, float $limit): Clea
         'debt_balance' => $debt,
         'deposited_total' => 0,
         'withdrawn_total' => 0,
+        'admin_revenue_withdrawn_total' => 0,
         'minimum_required' => 0,
         'max_negative_balance' => $limit,
         'is_active' => true,
@@ -66,6 +67,18 @@ it('uses each worker debt limit independently', function (): void {
         ->and($depositService->isWorkerEligibleForNewRequests($highLimitWorker->fresh(['deposit'])))->toBeTrue();
 });
 
+it('returns an early warning when the remaining allowance reaches ten percent', function (): void {
+    $worker = Worker::factory()->create(['trust_score' => 100]);
+    createFinancialAccount($worker, debt: 90, limit: 100);
+
+    $payload = app(DepositService::class)->depositStatusPayload($worker->fresh(['deposit']));
+
+    expect($payload['isEligibleForNewRequests'])->toBeTrue()
+        ->and($payload['isAllowanceNearLimit'])->toBeTrue()
+        ->and($payload['allowanceWarningThresholdPercent'])->toBe(10.0)
+        ->and($payload['financialWarningCode'])->toBe('allowance_near_limit');
+});
+
 it('does not fall back to a removed global limit when the worker has no financial account yet', function (): void {
     $worker = Worker::factory()->create(['trust_score' => 100]);
 
@@ -81,6 +94,7 @@ it('keeps the legacy settings API response contract without applying global valu
         'allowed_debt_limit' => 999999,
         'default_max_negative_balance' => 999999,
         'is_enabled' => false,
+        'allowance_warning_threshold_percent' => 15,
         'trust_reject_after_accept_penalty' => 12,
         'trust_minimum_for_dispatch' => 60,
     ])
@@ -88,6 +102,7 @@ it('keeps the legacy settings API response contract without applying global valu
         ->assertJsonPath('allowedDebtLimit', 0)
         ->assertJsonPath('defaultMaxNegativeBalance', 0)
         ->assertJsonPath('isEnabled', true)
+        ->assertJsonPath('allowanceWarningThresholdPercent', 15)
         ->assertJsonPath('trustRejectAfterAcceptPenalty', 12)
         ->assertJsonPath('trustMinimumForDispatch', 60);
 
@@ -98,6 +113,7 @@ it('keeps the legacy settings API response contract without applying global valu
             'allowedDebtLimit',
             'defaultMaxNegativeBalance',
             'restrictionThresholdPercent',
+            'allowanceWarningThresholdPercent',
             'trustRejectAfterAcceptPenalty',
             'trustMinimumForDispatch',
             'isEnabled',

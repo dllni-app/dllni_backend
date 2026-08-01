@@ -26,6 +26,7 @@ function seedDepositSettings(array $overrides = []): CleaningDepositSetting
     $defaults = [
         'minimum_deposit_amount' => 0,
         'restriction_threshold_percent' => 100,
+        'allowance_warning_threshold_percent' => 10,
         'trust_reject_after_accept_penalty' => 10,
         'trust_minimum_for_dispatch' => 50,
     ];
@@ -119,10 +120,10 @@ it('marks worker ineligible when the allowance is exhausted by administration ma
         ->and((float) $worker->deposit->debt_balance)->toBe(150.0)
         ->and($service->isWorkerEligibleForNewRequests($worker))->toBeFalse()
         ->and($worker->security_deposit_status)->toBe('insufficient_balance')
-        ->and($service->calculateExceedance($worker))->toBe(100.0);
+        ->and($service->calculateExceedance($worker))->toBe(50.0);
 });
 
-it('deducts completed administration margin from the displayed allowance limit', function (): void {
+it('deducts completed administration margin from the deposit without reducing allowance while deposit exists', function (): void {
     seedDepositSettings();
     $user = User::factory()->create();
     $worker = Worker::factory()->create(['user_id' => $user->id, 'trust_score' => 80]);
@@ -137,11 +138,12 @@ it('deducts completed administration margin from the displayed allowance limit',
 
     $this->getJson('/api/v1/cleaning/worker/account/deposit')
         ->assertOk()
-        ->assertJsonPath('allowedDebtLimit', 985000)
-        ->assertJsonPath('remainingAllowanceLimit', 985000)
+        ->assertJsonPath('currentBalance', 985000)
+        ->assertJsonPath('allowedDebtLimit', 1000000)
+        ->assertJsonPath('remainingAllowanceLimit', 1000000)
         ->assertJsonPath('configuredAllowedDebtLimit', 1000000)
         ->assertJsonPath('maxNegativeBalance', 1000000)
-        ->assertJsonPath('allowanceUsedAmount', 15000)
+        ->assertJsonPath('allowanceUsedAmount', 0)
         ->assertJsonPath('adminCommissionBalance', 15000)
         ->assertJsonPath('isEligibleForNewRequests', true);
 });
@@ -181,12 +183,14 @@ it('exposes explicit deposit debt and capacity values through the worker API', f
         ->assertJsonPath('depositBalance', 90)
         ->assertJsonPath('currentBalance', 90)
         ->assertJsonPath('debtBalance', 50)
-        ->assertJsonPath('minimumRequired', 0)
+        ->assertJsonPath('minimumRequired', 1000)
         ->assertJsonPath('allowedDebtLimit', 150)
         ->assertJsonPath('configuredAllowedDebtLimit', 200)
         ->assertJsonPath('remainingDebtCapacity', 150)
         ->assertJsonPath('remainingAllowanceLimit', 150)
-        ->assertJsonPath('availableCommissionCapacity', 240);
+        ->assertJsonPath('availableCommissionCapacity', 90)
+        ->assertJsonPath('isEligibleForNewRequests', false)
+        ->assertJsonPath('financialWarningCode', 'deposit_below_minimum');
 });
 
 it('does not apply trust penalty when rejecting before accept', function (): void {
@@ -344,11 +348,11 @@ it('excludes workers whose debt exceeds their individual limit from new-order no
     }
 });
 
-it('allows start travel without requiring a minimum deposit', function (): void {
+it('allows start travel with an allowance without requiring a deposit minimum', function (): void {
     seedDepositSettings(['minimum_deposit_amount' => 5000]);
     $workerUser = User::factory()->create();
     $worker = Worker::factory()->create(['user_id' => $workerUser->id, 'trust_score' => 80]);
-    seedWorkerDeposit($worker, 100, 0);
+    seedWorkerDeposit($worker, 0, 5000);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([

@@ -21,13 +21,14 @@ beforeEach(function (): void {
             'default_max_negative_balance' => 50000,
             'restriction_threshold_percent' => 100,
             'is_enabled' => true,
+            'allowance_warning_threshold_percent' => 10,
             'trust_reject_after_accept_penalty' => 10,
             'trust_minimum_for_dispatch' => 0,
         ],
     );
 });
 
-it('blocks an administration loan when the worker account has revenue', function (): void {
+it('blocks administration loan creation from the dashboard service', function (): void {
     $user = User::factory()->create(['module_type' => UserModuleType::CleaningWorker]);
     $worker = Worker::factory()->create([
         'user_id' => $user->id,

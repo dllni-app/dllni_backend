@@ -14,7 +14,6 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Events\CleaningBookingCreated;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningNeighborhood;
-use Modules\Cleaning\Services\WorkerDebtService;
 
 it('notifies and broadcasts new cleaning bookings to eligible workers', function (): void {
     Notification::fake();
@@ -24,6 +23,7 @@ it('notifies and broadcasts new cleaning bookings to eligible workers', function
         'minimum_deposit_amount' => 0,
         'default_max_negative_balance' => 100000,
         'restriction_threshold_percent' => 80,
+        'allowance_warning_threshold_percent' => 10,
         'is_enabled' => true,
         'trust_reject_after_accept_penalty' => 10,
         'trust_minimum_for_dispatch' => 0,
@@ -92,7 +92,7 @@ it('notifies and broadcasts new cleaning bookings to eligible workers', function
     });
 });
 
-it('dispatches a preferred worker booking outside their zones when funded by an administration loan', function (): void {
+it('dispatches a preferred worker booking outside their zones when covered by an allowance limit', function (): void {
     Notification::fake();
     Event::fake([CleaningBookingCreated::class]);
 
@@ -100,6 +100,7 @@ it('dispatches a preferred worker booking outside their zones when funded by an 
         'minimum_deposit_amount' => 0,
         'default_max_negative_balance' => 0,
         'restriction_threshold_percent' => 100,
+        'allowance_warning_threshold_percent' => 10,
         'is_enabled' => true,
         'trust_reject_after_accept_penalty' => 10,
         'trust_minimum_for_dispatch' => 0,
@@ -142,13 +143,6 @@ it('dispatches a preferred worker booking outside their zones when funded by an 
         'max_negative_balance' => 100000,
         'is_active' => true,
     ]);
-
-    app(WorkerDebtService::class)->recordDebt(
-        $worker,
-        100000,
-        WorkerDebtService::ADMIN_LOAN_REFERENCE,
-        'Administration-funded deposit for dispatch test',
-    );
 
     $booking = CleaningBooking::factory()->create([
         'worker_id' => null,
