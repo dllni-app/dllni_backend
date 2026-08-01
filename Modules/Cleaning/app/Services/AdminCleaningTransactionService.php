@@ -17,7 +17,7 @@ use Modules\Cleaning\Models\CleaningBooking;
 
 final class AdminCleaningTransactionService
 {
-    public const TYPES = ['deposit', 'refund'];
+    public const TYPES = ['deposit', 'refund', 'allowance_limit_update'];
 
     public function __construct(
         private readonly DepositService $depositService,
@@ -102,10 +102,6 @@ final class AdminCleaningTransactionService
 
     public function updateAllowanceLimit(Worker $worker, float $limit): CleaningWorkerDeposit
     {
-        if ($limit < 0) {
-            throw new InvalidArgumentException(app()->isLocale('ar') ? 'يجب أن يكون حد السماح صفراً أو أكبر.' : 'The allowance limit must be zero or greater.');
-        }
-
         return DB::transaction(function () use ($worker, $limit): CleaningWorkerDeposit {
             CleaningWorkerDeposit::query()->firstOrCreate(
                 ['worker_id' => $worker->id],
@@ -126,26 +122,10 @@ final class AdminCleaningTransactionService
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $currentDeposit = max(0.0, (float) $account->current_balance);
-            $currentLimit = max(0.0, (float) ($account->max_negative_balance ?? 0));
-            if ($currentDeposit > 0 && abs($limit - $currentLimit) > 0.009) {
-                throw new InvalidArgumentException(app()->isLocale('ar')
-                    ? 'لا يمكن منح حد سماح للعامل طالما لديه رصيد إيداع.'
-                    : 'An allowance limit cannot be changed while the worker has a deposit balance.');
-            }
-
             $lockedWorker = $worker->fresh(['deposit']) ?? $worker;
-            $snapshot = $this->snapshot($lockedWorker);
-            $minimumAllowed = round(
-                (float) ($snapshot['debtBalance'] ?? 0)
-                + (float) ($snapshot['activeReservedCommission'] ?? 0),
-                2,
-            );
-
-            if ($limit + 0.009 < $minimumAllowed) {
-                throw new InvalidArgumentException(app()->isLocale('ar')
-                    ? 'لا يمكن أن يكون حد السماح أقل من المديونية الحالية والعمولات المحجوزة.'
-                    : 'The allowance limit cannot be lower than current indebtedness and reserved commissions.');
+            $validationMessage = $this->allowanceLimitValidationMessage($lockedWorker, $limit, false);
+            if ($validationMessage !== null) {
+                throw new InvalidArgumentException($validationMessage);
             }
 
             $account->forceFill([
@@ -157,6 +137,66 @@ final class AdminCleaningTransactionService
             $this->depositService->syncEligibilityStatus($worker->fresh(['deposit']) ?? $worker);
 
             return $account;
+        });
+    }
+
+    public function recordAllowanceLimitUpdate(Worker $worker, float $limit, ?string $notes, ?int $createdByAdminId): CleaningDepositTransaction
+    {
+        return DB::transaction(function () use ($worker, $limit, $notes, $createdByAdminId): CleaningDepositTransaction {
+            CleaningWorkerDeposit::query()->firstOrCreate(
+                ['worker_id' => $worker->id],
+                [
+                    'current_balance' => 0,
+                    'debt_balance' => 0,
+                    'deposited_total' => 0,
+                    'withdrawn_total' => 0,
+                    'admin_revenue_withdrawn_total' => 0,
+                    'minimum_required' => 0,
+                    'max_negative_balance' => 0,
+                    'is_active' => true,
+                ],
+            );
+
+            $account = CleaningWorkerDeposit::query()
+                ->where('worker_id', $worker->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $lockedWorker = $worker->fresh(['deposit']) ?? $worker;
+            $validationMessage = $this->allowanceLimitValidationMessage($lockedWorker, $limit, true);
+            if ($validationMessage !== null) {
+                throw new InvalidArgumentException($validationMessage);
+            }
+
+            $depositBalance = max(0.0, (float) $account->current_balance);
+            $debtBalance = max(0.0, (float) $account->debt_balance);
+            $previousLimit = max(0.0, (float) ($account->max_negative_balance ?? 0));
+            $newLimit = round($limit, 2);
+
+            $account->forceFill([
+                'minimum_required' => 0,
+                'max_negative_balance' => $newLimit,
+                'is_active' => true,
+            ])->save();
+
+            $transaction = CleaningDepositTransaction::query()->create([
+                'worker_id' => $worker->id,
+                'created_by_admin_id' => $createdByAdminId,
+                'type' => 'allowance_limit_update',
+                'amount' => $newLimit,
+                'debt_settled_amount' => 0,
+                'admin_revenue_withdrawn_amount' => 0,
+                'balance_before' => $depositBalance,
+                'balance_after' => $depositBalance,
+                'debt_balance_before' => $debtBalance,
+                'debt_balance_after' => $debtBalance,
+                'reference' => CleaningDepositTransaction::ALLOWANCE_LIMIT_UPDATE_REFERENCE_PREFIX.$worker->id.':'.now()->format('YmdHis'),
+                'notes' => $this->allowanceLimitAuditNotes($previousLimit, $newLimit, $notes),
+            ]);
+
+            $this->depositService->syncEligibilityStatus($worker->fresh(['deposit']) ?? $worker);
+
+            return $transaction;
         });
     }
 
@@ -179,6 +219,10 @@ final class AdminCleaningTransactionService
             return app()->isLocale('ar')
                 ? 'لم يعد إنشاء دين إداري مدعوماً. استخدم تعديل حد السماح للعامل بدلاً من ذلك.'
                 : 'Administration loans are no longer supported. Update the worker allowance limit instead.';
+        }
+
+        if ($type === 'allowance_limit_update') {
+            return $this->allowanceLimitValidationMessage($worker, $amount, true);
         }
 
         if (! in_array($type, self::TYPES, true)) {
@@ -225,6 +269,7 @@ final class AdminCleaningTransactionService
 
         return round(match ($type) {
             'deposit' => $depositBalance + max(0.0, $amount - $debtBalance - $adminLoanBalance),
+            'allowance_limit_update' => $depositBalance,
             default => $depositBalance,
         }, 2);
     }
@@ -242,6 +287,7 @@ final class AdminCleaningTransactionService
 
         return match ($type) {
             'deposit' => $this->depositService->recordDeposit($worker, $amount, 'admin_manual_deposit', $notes, $createdByAdminId),
+            'allowance_limit_update' => $this->recordAllowanceLimitUpdate($worker, $amount, $notes, $createdByAdminId),
             default => throw new InvalidArgumentException(__('cleaning_finance_guidance.validation.type_required')),
         };
     }
@@ -373,6 +419,48 @@ final class AdminCleaningTransactionService
 
         $key = number_format($amount, 2, '.', '');
         $suggestions[$key] = $label.' — '.$this->money($amount);
+    }
+
+    private function allowanceLimitValidationMessage(Worker $worker, float $limit, bool $blockAnyPositiveDeposit): ?string
+    {
+        if ($limit < 0) {
+            return app()->isLocale('ar') ? 'يجب أن يكون حد السماح صفراً أو أكبر.' : 'The allowance limit must be zero or greater.';
+        }
+
+        $worker->loadMissing('deposit');
+        $currentDeposit = max(0.0, (float) ($worker->deposit?->current_balance ?? 0));
+        $currentLimit = max(0.0, (float) ($worker->deposit?->max_negative_balance ?? 0));
+        if ($currentDeposit > 0 && ($blockAnyPositiveDeposit || abs($limit - $currentLimit) > 0.009)) {
+            return app()->isLocale('ar')
+                ? 'لا يمكن منح حد سماح للعامل طالما لديه رصيد إيداع.'
+                : 'An allowance limit cannot be changed while the worker has a deposit balance.';
+        }
+
+        $snapshot = $this->snapshot($worker);
+        $minimumAllowed = round(
+            (float) ($snapshot['debtBalance'] ?? 0)
+            + (float) ($snapshot['activeReservedCommission'] ?? 0),
+            2,
+        );
+
+        if ($limit + 0.009 < $minimumAllowed) {
+            return app()->isLocale('ar')
+                ? 'لا يمكن أن يكون حد السماح أقل من المديونية الحالية والعمولات المحجوزة.'
+                : 'The allowance limit cannot be lower than current indebtedness and reserved commissions.';
+        }
+
+        return null;
+    }
+
+    private function allowanceLimitAuditNotes(float $previousLimit, float $newLimit, ?string $notes): string
+    {
+        $summary = app()->isLocale('ar')
+            ? 'تعديل حد السماح من '.$this->money($previousLimit).' إلى '.$this->money($newLimit)
+            : 'Allowance limit changed from '.$this->money($previousLimit).' to '.$this->money($newLimit);
+
+        $notes = $notes !== null ? mb_trim($notes) : '';
+
+        return $notes === '' ? $summary : $summary.' - '.$notes;
     }
 
     private function money(float $amount): string

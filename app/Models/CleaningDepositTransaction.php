@@ -20,8 +20,10 @@ final class CleaningDepositTransaction extends Model
 
     public const ADMIN_LOAN_DEPOSIT_REPAYMENT_REFERENCE_PREFIX = 'admin_loan_deposit_repayment:';
 
+    public const ALLOWANCE_LIMIT_UPDATE_REFERENCE_PREFIX = 'allowance_limit_update:';
+
     /** @var list<string> */
-    public const PUBLIC_TYPES = ['deposit', 'debt', 'refund'];
+    public const PUBLIC_TYPES = ['deposit', 'debt', 'refund', 'allowance_limit'];
 
     protected $fillable = [
         'worker_id',
@@ -41,10 +43,11 @@ final class CleaningDepositTransaction extends Model
     public static function normalizePublicType(string $type, float $amount = 0): string
     {
         return match ($type) {
+            'allowance_limit_update' => 'allowance_limit',
             'admin_fee', 'commission', 'settlement' => 'debt',
             'withdrawal' => 'refund',
             'adjustment' => $amount < 0 ? 'refund' : 'deposit',
-            'deposit', 'debt', 'refund' => $type,
+            'deposit', 'debt', 'refund', 'allowance_limit' => $type,
             default => $type,
         };
     }
@@ -78,6 +81,7 @@ final class CleaningDepositTransaction extends Model
             'admin_fee',
             'withdrawal',
             'adjustment',
+            'allowance_limit_update',
         ]);
     }
 
@@ -99,6 +103,7 @@ final class CleaningDepositTransaction extends Model
                         $query->where('type', 'adjustment')->where('amount', '<', 0);
                     });
             }),
+            'allowance_limit' => $query->where('type', 'allowance_limit_update'),
             default => $query->whereRaw('1 = 0'),
         };
     }

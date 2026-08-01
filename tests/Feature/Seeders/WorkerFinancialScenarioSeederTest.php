@@ -21,7 +21,7 @@ it('seeds continuous financial scenarios using only add-transaction types', func
         ->pluck('type')
         ->all();
 
-    $expectedTypes = CleaningDepositTransaction::PUBLIC_TYPES;
+    $expectedTypes = ['debt', 'deposit', 'refund'];
     sort($types);
     sort($expectedTypes);
 

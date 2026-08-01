@@ -40,7 +40,7 @@ final class CreateCleaningWorkerDeposit extends CreateRecord
         $service = app(AdminCleaningTransactionService::class);
         $type = (string) ($data['type'] ?? '');
 
-        if (! in_array($type, ['deposit', 'refund'], true)) {
+        if (! in_array($type, ['deposit', 'refund', 'allowance_limit_update'], true)) {
             throw ValidationException::withMessages([
                 'data.type' => app()->isLocale('ar')
                     ? 'لم يعد إنشاء دين إداري مدعوماً. استخدم تعديل حد السماح للعامل بدلاً من ذلك.'
@@ -57,6 +57,15 @@ final class CreateCleaningWorkerDeposit extends CreateRecord
             if ($type === 'refund') {
                 return $service->refundFullBalance(
                     worker: $worker,
+                    notes: $notes,
+                    createdByAdminId: auth()->id(),
+                );
+            }
+
+            if ($type === 'allowance_limit_update') {
+                return $service->recordAllowanceLimitUpdate(
+                    worker: $worker,
+                    limit: (float) ($data['amount'] ?? 0),
                     notes: $notes,
                     createdByAdminId: auth()->id(),
                 );

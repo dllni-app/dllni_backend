@@ -46,6 +46,7 @@ final class CleaningTransactionForm
                             ->placeholder(__('cleaning_finance_guidance.placeholders.type'))
                             ->options([
                                 'deposit' => __('cleaning_admin.transactions.types.deposit'),
+                                'allowance_limit_update' => app()->isLocale('ar') ? 'حد سماح' : 'Allowance limit',
                                 'refund' => __('cleaning_admin.transactions.types.refund'),
                             ])
                             ->required()
@@ -89,7 +90,7 @@ final class CleaningTransactionForm
                             ->label(__('cleaning_admin.transactions.fields.amount'))
                             ->placeholder(__('cleaning_finance_guidance.placeholders.amount'))
                             ->numeric()
-                            ->minValue(0.01)
+                            ->minValue(fn (Get $get): float => $get('type') === 'allowance_limit_update' ? 0.0 : 0.01)
                             ->required(fn (Get $get): bool => $get('type') !== 'refund')
                             ->visible(fn (Get $get): bool => $get('type') !== 'refund')
                             ->live(debounce: 400)
@@ -222,6 +223,9 @@ final class CleaningTransactionForm
             'deposit' => app()->isLocale('ar')
                 ? 'يسدد الإيداع المديونية أولاً. المديونية الحالية: '.self::money((float) $snapshot['debtBalance']).'.'
                 : 'The deposit settles indebtedness first. Current indebtedness: '.self::money((float) $snapshot['debtBalance']).'.',
+            'allowance_limit_update' => app()->isLocale('ar')
+                ? 'أدخل قيمة حد السماح الجديدة كاملة. لا تضيف هذه العملية أي مبلغ إلى رصيد الإيداع.'
+                : 'Enter the full new allowance limit. This does not add any amount to the deposit balance.',
             default => __('cleaning_finance_guidance.fields.amount_helper_default'),
         };
     }
@@ -235,7 +239,9 @@ final class CleaningTransactionForm
         if (! is_string($type) || $type === '') {
             return __('cleaning_finance_guidance.validation.select_type_first');
         }
-        if (! is_numeric($amount) || (float) $amount <= 0) {
+
+        $allowsZeroAmount = $type === 'allowance_limit_update';
+        if (! is_numeric($amount) || ($allowsZeroAmount ? (float) $amount < 0 : (float) $amount <= 0)) {
             return __('cleaning_finance_guidance.validation.enter_amount_first');
         }
 
@@ -243,6 +249,12 @@ final class CleaningTransactionForm
         $message = $service->validationMessage($worker, $type, (float) $amount);
         if ($message !== null) {
             return __('cleaning_finance_guidance.validation.invalid_prefix', ['message' => $message]);
+        }
+
+        if ($type === 'allowance_limit_update') {
+            return app()->isLocale('ar')
+                ? 'سيتم تحديث حد السماح إلى '.self::money((float) $amount).' بدون تغيير رصيد الإيداع.'
+                : 'The allowance limit will be updated to '.self::money((float) $amount).' without changing the deposit balance.';
         }
 
         return __('cleaning_finance_guidance.validation.valid_with_balance', [

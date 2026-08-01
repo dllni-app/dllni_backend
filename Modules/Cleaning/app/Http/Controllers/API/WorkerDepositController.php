@@ -22,6 +22,8 @@ final class WorkerDepositController
         'admin_fee' => 'commission',
         'debt' => 'debt',
         'settlement' => 'settlement',
+        'allowance_limit' => 'allowance_limit',
+        'allowance_limit_update' => 'allowance_limit',
         'refund' => 'refund',
         'withdrawal' => 'refund',
         'withdraw' => 'refund',

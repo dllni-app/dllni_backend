@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Enums\UserModuleType;
+use App\Models\CleaningDepositTransaction;
 use App\Models\CleaningDepositSetting;
 use App\Models\CleaningWorkerDeposit;
 use App\Models\User;
@@ -60,6 +61,44 @@ it('returns allowance indebtedness and capacity values for the dashboard without
         ->and($snapshot['maxRefundable'])->toBe(0.0);
 });
 
+it('records allowance limit updates as audit-only financial transactions', function (): void {
+    $worker = createCleaningWorkerForAdminTransaction();
+    CleaningWorkerDeposit::query()->create([
+        'worker_id' => $worker->id,
+        'current_balance' => 0,
+        'debt_balance' => 0,
+        'deposited_total' => 0,
+        'withdrawn_total' => 0,
+        'admin_revenue_withdrawn_total' => 0,
+        'minimum_required' => 0,
+        'max_negative_balance' => 5000,
+        'is_active' => true,
+    ]);
+
+    $transaction = app(AdminCleaningTransactionService::class)->recordAllowanceLimitUpdate(
+        worker: $worker->fresh(['deposit']),
+        limit: 12000,
+        notes: 'Temporary admin approval.',
+        createdByAdminId: null,
+    );
+
+    $account = $worker->fresh('deposit')->deposit;
+
+    expect($transaction->type)->toBe('allowance_limit_update')
+        ->and($transaction->publicType())->toBe('allowance_limit')
+        ->and((float) $transaction->amount)->toBe(12000.0)
+        ->and((float) $transaction->balance_before)->toBe(0.0)
+        ->and((float) $transaction->balance_after)->toBe(0.0)
+        ->and((float) $transaction->debt_balance_before)->toBe(0.0)
+        ->and((float) $transaction->debt_balance_after)->toBe(0.0)
+        ->and($transaction->reference)->toStartWith(CleaningDepositTransaction::ALLOWANCE_LIMIT_UPDATE_REFERENCE_PREFIX)
+        ->and((float) $account->max_negative_balance)->toBe(12000.0)
+        ->and((float) $account->current_balance)->toBe(0.0)
+        ->and((float) $account->debt_balance)->toBe(0.0)
+        ->and((float) $account->deposited_total)->toBe(0.0)
+        ->and((float) $account->withdrawn_total)->toBe(0.0);
+});
+
 it('counts completed orders from actual booking records instead of the seeded worker counter', function (): void {
     $worker = createCleaningWorkerForAdminTransaction();
     $worker->forceFill(['total_completed_jobs' => 120])->save();
@@ -102,6 +141,23 @@ it('prevents changing the allowance limit while the worker has a deposit balance
     app(AdminCleaningTransactionService::class)->updateAllowanceLimit($worker->fresh(['deposit']), 500);
 })->throws(InvalidArgumentException::class);
 
+it('prevents recording an allowance limit transaction while the worker has a deposit balance', function (): void {
+    $worker = createCleaningWorkerForAdminTransaction();
+    CleaningWorkerDeposit::query()->create([
+        'worker_id' => $worker->id,
+        'current_balance' => 1000,
+        'debt_balance' => 0,
+        'deposited_total' => 1000,
+        'withdrawn_total' => 0,
+        'admin_revenue_withdrawn_total' => 0,
+        'minimum_required' => 0,
+        'max_negative_balance' => 500,
+        'is_active' => true,
+    ]);
+
+    app(AdminCleaningTransactionService::class)->recordAllowanceLimitUpdate($worker->fresh(['deposit']), 500, null, null);
+})->throws(InvalidArgumentException::class);
+
 it('prevents lowering the allowance limit below current indebtedness', function (): void {
     $worker = createCleaningWorkerForAdminTransaction();
     CleaningWorkerDeposit::query()->create([
@@ -117,6 +173,23 @@ it('prevents lowering the allowance limit below current indebtedness', function 
     ]);
 
     app(AdminCleaningTransactionService::class)->updateAllowanceLimit($worker->fresh(['deposit']), 500);
+})->throws(InvalidArgumentException::class);
+
+it('prevents recording an allowance limit below current indebtedness', function (): void {
+    $worker = createCleaningWorkerForAdminTransaction();
+    CleaningWorkerDeposit::query()->create([
+        'worker_id' => $worker->id,
+        'current_balance' => 0,
+        'debt_balance' => 800,
+        'deposited_total' => 0,
+        'withdrawn_total' => 0,
+        'admin_revenue_withdrawn_total' => 0,
+        'minimum_required' => 0,
+        'max_negative_balance' => 1000,
+        'is_active' => true,
+    ]);
+
+    app(AdminCleaningTransactionService::class)->recordAllowanceLimitUpdate($worker->fresh(['deposit']), 500, null, null);
 })->throws(InvalidArgumentException::class);
 
 it('keeps legacy administration loan records readable and recovers them before refunding the remainder', function (): void {
