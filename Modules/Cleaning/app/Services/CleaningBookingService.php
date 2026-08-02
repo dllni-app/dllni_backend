@@ -156,28 +156,14 @@ final class CleaningBookingService
             ? CleaningBookingObserver::withoutLifecycleUpdateNotificationsFor((int) $booking->id, $rejectBooking)
             : $rejectBooking();
 
-        $convertedToOpen = false;
         if ($isPreferredWorkerRejection) {
-            $convertedToOpen = $this->preferredWorkerFallbackService->convertToOpenIfEligible($updated);
-            if ($convertedToOpen) {
-                $fresh = $updated->fresh([
-                    'customer',
-                    'worker.user',
-                    'preferredWorker.user',
-                    'rooms.assignedWorker.user',
-                    'workerAssignments.worker.user',
-                    'addons',
-                    'billingPolicy',
-                    'timeWarnings',
-                    'disputes',
-                ]);
-                if ($fresh instanceof CleaningBooking) {
-                    $updated = $fresh;
-                }
-            }
+            $updated = CleaningBookingObserver::withoutLifecycleUpdateNotificationsFor(
+                (int) $booking->id,
+                fn (): CleaningBooking => $this->markPreferredWorkerRejectionDecisionPending($updated, $worker)
+            );
         }
 
-        if (! $convertedToOpen) {
+        if (! $isPreferredWorkerRejection) {
             NotifyEligibleWorkersNewOrderJob::dispatch($updated->id);
         }
 
@@ -186,14 +172,19 @@ final class CleaningBookingService
         if ($shouldNotifyCustomer) {
             $this->lifecycleNotifications->notifyCustomer(
                 booking: $updated,
-                canonicalType: $convertedToOpen
-                    ? 'cleaning.booking.preferred_worker_rejected'
+                canonicalType: $isPreferredWorkerRejection
+                    ? 'cleaning.booking.preferred_worker_rejected_decision_required'
                     : 'cleaning.booking.worker_rejected',
-                action: $convertedToOpen ? 'preferred_worker_rejected' : 'worker_rejected',
+                action: $isPreferredWorkerRejection ? 'preferred_worker_rejection_decision_required' : 'worker_rejected',
                 actorRole: 'worker',
                 fromStatus: $fromStatus,
-                occurredAt: $updated->updated_at?->toIso8601String() ?? now()->toIso8601String(),
-                extraData: $this->workerRejectionExtraData($updated, $worker, $reason, $convertedToOpen),
+                occurredAt: $updated->preferred_worker_rejected_at?->toIso8601String() ?? $updated->updated_at?->toIso8601String() ?? now()->toIso8601String(),
+                extraData: $this->workerRejectionExtraData(
+                    $updated,
+                    $worker,
+                    $reason,
+                    requiresDecision: $isPreferredWorkerRejection,
+                ),
             );
         }
 
@@ -934,7 +925,8 @@ final class CleaningBookingService
         CleaningBooking $booking,
         Worker $worker,
         ?string $reason,
-        bool $convertedToOpen = false
+        bool $convertedToOpen = false,
+        bool $requiresDecision = false,
     ): array
     {
         $extraData = [
@@ -948,6 +940,17 @@ final class CleaningBookingService
             $extraData['converted_to_open'] = true;
         }
 
+        if ($requiresDecision) {
+            $extraData['requiresDecision'] = true;
+            $extraData['requires_decision'] = true;
+            $extraData['decisionStatus'] = CleaningBooking::PREFERRED_WORKER_REJECTION_DECISION_PENDING;
+            $extraData['decision_status'] = CleaningBooking::PREFERRED_WORKER_REJECTION_DECISION_PENDING;
+            $extraData['preferredWorkerRejectionDecisionStatus'] = CleaningBooking::PREFERRED_WORKER_REJECTION_DECISION_PENDING;
+            $extraData['preferred_worker_rejection_decision_status'] = CleaningBooking::PREFERRED_WORKER_REJECTION_DECISION_PENDING;
+            $extraData['preferredWorkerRejectedAt'] = $booking->preferred_worker_rejected_at?->toIso8601String();
+            $extraData['preferred_worker_rejected_at'] = $booking->preferred_worker_rejected_at?->toIso8601String();
+        }
+
         $message = $reason !== null ? mb_trim($reason) : '';
         if ($message !== '') {
             $extraData['workerRejectMessage'] = $message;
@@ -955,6 +958,30 @@ final class CleaningBookingService
         }
 
         return $extraData;
+    }
+
+    private function markPreferredWorkerRejectionDecisionPending(CleaningBooking $booking, Worker $worker): CleaningBooking
+    {
+        return DB::transaction(function () use ($booking, $worker): CleaningBooking {
+            $booking = $this->lockBooking($booking);
+
+            if ($booking->status !== CleaningBookingStatus::Pending) {
+                throw new InvalidArgumentException('Booking cannot wait for customer decision in current status.');
+            }
+
+            if (! $this->isPreferredWorkerRejection($booking, $worker)) {
+                throw new InvalidArgumentException('Booking is not waiting on this preferred worker.');
+            }
+
+            $booking->forceFill([
+                'preferred_worker_rejection_worker_id' => (int) $worker->id,
+                'preferred_worker_rejected_at' => now(),
+                'preferred_worker_rejection_decision_status' => CleaningBooking::PREFERRED_WORKER_REJECTION_DECISION_PENDING,
+                'preferred_worker_rejection_decided_at' => null,
+            ])->save();
+
+            return $this->freshBooking($booking);
+        });
     }
 
     private function requiredWorkers(CleaningBooking $booking): int

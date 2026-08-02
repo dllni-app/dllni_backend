@@ -110,7 +110,7 @@ it('sends worker-confirmed canonical notification to customer when a worker acce
     expect($notification->data['message'])->toBeString();
 });
 
-it('converts preferred-worker booking to open-count and notifies customer when preferred worker rejects a cleaning booking', function (): void {
+it('marks preferred-worker booking as decision-required and notifies customer when preferred worker rejects a cleaning booking', function (): void {
     $customer = User::factory()->create();
     $workerUser = User::factory()->create();
     $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
@@ -146,23 +146,30 @@ it('converts preferred-worker booking to open-count and notifies customer when p
     ])
         ->assertOk()
         ->assertJsonPath('data.status', CleaningBookingStatus::Pending->value)
-        ->assertJsonPath('data.assignmentMode', CleaningAssignmentMode::OpenCount->value)
-        ->assertJsonPath('data.preferredWorkerId', null)
-        ->assertJsonPath('data.convertedFromPreferredWorker', true)
-        ->assertJsonPath('data.converted_from_preferred_worker', true);
+        ->assertJsonPath('data.assignmentMode', CleaningAssignmentMode::PreferredWorker->value)
+        ->assertJsonPath('data.preferredWorkerId', $worker->id)
+        ->assertJsonPath('data.convertedFromPreferredWorker', false)
+        ->assertJsonPath('data.converted_from_preferred_worker', false)
+        ->assertJsonPath('data.requiresPreferredWorkerRejectionDecision', true)
+        ->assertJsonPath('data.requires_preferred_worker_rejection_decision', true)
+        ->assertJsonPath('data.preferredWorkerRejectionDecisionStatus', CleaningBooking::PREFERRED_WORKER_REJECTION_DECISION_PENDING);
 
     $booking->refresh();
 
     expect($booking->status)->toBe(CleaningBookingStatus::Pending)
-        ->and($booking->resolvedAssignmentMode())->toBe(CleaningAssignmentMode::OpenCount->value)
-        ->and($booking->preferred_worker_id)->toBeNull()
-        ->and($booking->converted_from_preferred_worker)->toBeTrue()
-        ->and($booking->converted_from_preferred_worker_at)->not->toBeNull();
+        ->and($booking->resolvedAssignmentMode())->toBe(CleaningAssignmentMode::PreferredWorker->value)
+        ->and($booking->preferred_worker_id)->toBe($worker->id)
+        ->and($booking->converted_from_preferred_worker)->toBeFalse()
+        ->and($booking->converted_from_preferred_worker_at)->toBeNull()
+        ->and($booking->requiresPreferredWorkerRejectionDecision())->toBeTrue()
+        ->and($booking->preferred_worker_rejection_worker_id)->toBe($worker->id)
+        ->and($booking->preferred_worker_rejected_at)->not->toBeNull()
+        ->and($booking->preferred_worker_rejection_decided_at)->toBeNull();
 
     $this->assertDatabaseHas('cleaning_booking_rooms', [
         'cleaning_booking_id' => $booking->id,
         'room_key' => 'bedroom_1',
-        'planned_preferred_worker_id' => null,
+        'planned_preferred_worker_id' => $worker->id,
     ]);
 
     $this->assertDatabaseHas('cleaning_booking_worker_rejections', [
@@ -172,34 +179,35 @@ it('converts preferred-worker booking to open-count and notifies customer when p
     ]);
 
     $notification = $customer->fresh()->notifications
-        ->first(fn ($item): bool => ($item->data['canonical_type'] ?? null) === 'cleaning.booking.preferred_worker_rejected');
+        ->first(fn ($item): bool => ($item->data['canonical_type'] ?? null) === 'cleaning.booking.preferred_worker_rejected_decision_required');
 
     expect($notification)->not->toBeNull();
-    expect($notification->data['type'])->toBe('preferred_worker_rejected');
+    expect($notification->data['type'])->toBe('preferred_worker_rejection_decision_required');
     expect($notification->data['module'])->toBe('cleaning');
     expect($notification->data['bookingId'])->toBe($booking->id);
     expect($notification->data['orderId'])->toBe($booking->id);
     expect($notification->data['workerId'])->toBe($worker->id);
     expect($notification->data['propertyType'])->toBe('apartment');
-    expect($notification->data['assignmentMode'])->toBe(CleaningAssignmentMode::OpenCount->value);
-    expect($notification->data['convertedToOpen'])->toBeTrue();
-    expect($notification->data['converted_to_open'])->toBeTrue();
+    expect($notification->data['assignmentMode'])->toBe(CleaningAssignmentMode::PreferredWorker->value);
+    expect($notification->data['requiresDecision'])->toBeTrue();
+    expect($notification->data['requires_decision'])->toBeTrue();
+    expect($notification->data['decisionStatus'])->toBe(CleaningBooking::PREFERRED_WORKER_REJECTION_DECISION_PENDING);
     expect($notification->data['status'])->toBe(CleaningBookingStatus::Pending->value);
-    expect($notification->data['action'])->toBe('preferred_worker_rejected');
+    expect($notification->data['action'])->toBe('preferred_worker_rejection_decision_required');
     expect($notification->data['workerRejectMessage'])->toBe('Schedule conflict');
     expect($notification->data['worker_reject_message'])->toBe('Schedule conflict');
     expect($notification->data['deep_link_target'])->toBe('cleaning_order_details');
     expect($notification->data['deepLinkTarget'])->toBe('cleaning_order_details');
-    expect($notification->data['canonicalType'])->toBe('cleaning.booking.preferred_worker_rejected');
+    expect($notification->data['canonicalType'])->toBe('cleaning.booking.preferred_worker_rejected_decision_required');
     expect($notification->data['args'])->toBeJson();
     expect(json_decode((string) $notification->data['args'], true))->toMatchArray([
         'route' => 'cleaning_order_details',
         'bookingId' => $booking->id,
         'orderId' => $booking->id,
-        'action' => 'preferred_worker_rejected',
+        'action' => 'preferred_worker_rejection_decision_required',
         'status' => CleaningBookingStatus::Pending->value,
-        'assignmentMode' => CleaningAssignmentMode::OpenCount->value,
-        'convertedToOpen' => true,
+        'assignmentMode' => CleaningAssignmentMode::PreferredWorker->value,
+        'requiresDecision' => true,
     ]);
     expect($notification->data['title'])->toBeString();
     expect($notification->data['message'])->toBeString();
@@ -208,7 +216,7 @@ it('converts preferred-worker booking to open-count and notifies customer when p
     ))->toBeFalse();
 });
 
-it('sends preferred-worker-rejected canonical notification to customer when preferred worker rejects an event assistance booking', function (): void {
+it('sends preferred-worker decision-required notification to customer when preferred worker rejects an event assistance booking', function (): void {
     $customer = User::factory()->create();
     $workerUser = User::factory()->create();
     $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
@@ -236,23 +244,23 @@ it('sends preferred-worker-rejected canonical notification to customer when pref
 
     $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/reject")
         ->assertOk()
-        ->assertJsonPath('data.assignmentMode', CleaningAssignmentMode::OpenCount->value)
-        ->assertJsonPath('data.convertedFromPreferredWorker', true);
+        ->assertJsonPath('data.assignmentMode', CleaningAssignmentMode::PreferredWorker->value)
+        ->assertJsonPath('data.requiresPreferredWorkerRejectionDecision', true);
 
     $notification = $customer->fresh()->notifications
-        ->first(fn ($item): bool => ($item->data['canonical_type'] ?? null) === 'cleaning.booking.preferred_worker_rejected');
+        ->first(fn ($item): bool => ($item->data['canonical_type'] ?? null) === 'cleaning.booking.preferred_worker_rejected_decision_required');
 
     expect($notification)->not->toBeNull();
-    expect($notification->data['type'])->toBe('preferred_worker_rejected');
+    expect($notification->data['type'])->toBe('preferred_worker_rejection_decision_required');
     expect($notification->data['bookingId'])->toBe($booking->id);
     expect($notification->data['orderId'])->toBe($booking->id);
     expect($notification->data['workerId'])->toBe($worker->id);
     expect($notification->data['propertyType'])->toBe('event_assistance');
-    expect($notification->data['assignmentMode'])->toBe(CleaningAssignmentMode::OpenCount->value);
-    expect($notification->data['convertedToOpen'])->toBeTrue();
-    expect($notification->data['action'])->toBe('preferred_worker_rejected');
+    expect($notification->data['assignmentMode'])->toBe(CleaningAssignmentMode::PreferredWorker->value);
+    expect($notification->data['requiresDecision'])->toBeTrue();
+    expect($notification->data['action'])->toBe('preferred_worker_rejection_decision_required');
     expect($notification->data['deep_link_target'])->toBe('cleaning_order_details');
-    expect($notification->data['canonicalType'])->toBe('cleaning.booking.preferred_worker_rejected');
+    expect($notification->data['canonicalType'])->toBe('cleaning.booking.preferred_worker_rejected_decision_required');
 });
 
 it('does not notify customer when an unassigned open-count worker rejects a public pending booking', function (): void {

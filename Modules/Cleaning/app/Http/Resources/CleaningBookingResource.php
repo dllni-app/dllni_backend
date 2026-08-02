@@ -101,6 +101,7 @@ final class CleaningBookingResource extends JsonResource
         $isPricingFinal = is_array($workerOffer)
             ? (bool) ($workerOffer['isPricingFinal'] ?? true)
             : (bool) $this->is_pricing_final;
+        $requiresPreferredWorkerDecision = $this->requiresPreferredWorkerRejectionDecision();
 
         return [
             'id' => $this->id,
@@ -113,6 +114,16 @@ final class CleaningBookingResource extends JsonResource
             'converted_from_preferred_worker' => (bool) ($this->converted_from_preferred_worker ?? false),
             'convertedFromPreferredWorkerAt' => $this->converted_from_preferred_worker_at?->toIso8601String(),
             'converted_from_preferred_worker_at' => $this->converted_from_preferred_worker_at?->toIso8601String(),
+            'requiresPreferredWorkerRejectionDecision' => $requiresPreferredWorkerDecision,
+            'requires_preferred_worker_rejection_decision' => $requiresPreferredWorkerDecision,
+            'preferredWorkerRejectionDecisionStatus' => $this->preferred_worker_rejection_decision_status,
+            'preferred_worker_rejection_decision_status' => $this->preferred_worker_rejection_decision_status,
+            'preferredWorkerRejectedAt' => $this->preferred_worker_rejected_at?->toIso8601String(),
+            'preferred_worker_rejected_at' => $this->preferred_worker_rejected_at?->toIso8601String(),
+            'preferredWorkerRejectionWorkerId' => $this->preferred_worker_rejection_worker_id,
+            'preferred_worker_rejection_worker_id' => $this->preferred_worker_rejection_worker_id,
+            'preferredWorkerRejectionDecidedAt' => $this->preferred_worker_rejection_decided_at?->toIso8601String(),
+            'preferred_worker_rejection_decided_at' => $this->preferred_worker_rejection_decided_at?->toIso8601String(),
             'numberOfWorkers' => (int) ($this->number_of_workers ?? 1),
             'workerAcceptance' => $team,
             'workerLifecycleSummary' => $workerLifecycleSummary,

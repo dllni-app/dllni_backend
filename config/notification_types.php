@@ -157,6 +157,23 @@ return [
                 ],
             ],
         ],
+        'cleaning.booking.preferred_worker_rejected_decision_required' => [
+            'legacy_type' => 'preferred_worker_rejection_decision_required',
+            'module' => 'cleaning',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'Ø±ÙØ¶ Ø§Ù„Ø¹Ø§Ù…Ù„ Ø§Ù„Ù…Ø®ØµØµ Ø§Ù„Ø·Ù„Ø¨',
+                    'body' => 'Ø±ÙØ¶ Ø§Ù„Ø¹Ø§Ù…Ù„ Ø§Ù„Ù…Ø®ØµØµ Ø§Ù„Ø·Ù„Ø¨. Ø§ÙØªØ­ Ø§Ù„ØªØ·Ø¨ÙŠÙ‚ Ù„ØªØ­ÙˆÙŠÙ„Ù‡ Ø¥Ù„Ù‰ Ø·Ù„Ø¨ Ø¹Ø§Ù… Ø£Ùˆ Ø¥Ù„ØºØ§Ø¦Ù‡ Ø¨Ø¯ÙˆÙ† Ø±Ø³ÙˆÙ….',
+                ],
+                'en' => [
+                    'title' => 'Preferred worker declined',
+                    'body' => 'The preferred worker declined the order. Open the app to make it a public request or cancel it without fees.',
+                ],
+            ],
+        ],
         'cleaning.booking.worker_started_travel' => [
             'legacy_type' => 'worker_started_travel',
             'module' => 'cleaning',

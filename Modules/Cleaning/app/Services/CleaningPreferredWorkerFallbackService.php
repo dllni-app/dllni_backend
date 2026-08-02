@@ -59,6 +59,10 @@ final class CleaningPreferredWorkerFallbackService
             return false;
         }
 
+        if ((string) ($booking->preferred_worker_rejection_decision_status ?? '') === CleaningBooking::PREFERRED_WORKER_REJECTION_DECISION_PENDING) {
+            return false;
+        }
+
         if ($booking->isTeamFulfilled()) {
             return false;
         }

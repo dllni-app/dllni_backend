@@ -57,6 +57,7 @@ use Modules\User\Http\Controllers\API\UserCleaningCancellationFeeController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderCompletionConfirmController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderCompletionExtendTimeController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderCompletionRejectController;
+use Modules\User\Http\Controllers\API\UserCleaningPreferredWorkerRejectionDecisionController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderReviewController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderEstimatePriceController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderEstimateSizeController;
@@ -242,12 +243,14 @@ Route::prefix('v1/user')->group(function (): void {
         Route::get('cleaning/orders', UserCleaningOrdersController::class);
         Route::post('cleaning/orders', UserCleaningOrderStoreController::class);
         Route::post('cleaning/orders/estimate-size', UserCleaningOrderEstimateSizeController::class);
+        Route::get('cleaning/preferred-worker-rejection/decisions/pending', [UserCleaningPreferredWorkerRejectionDecisionController::class, 'pending']);
         Route::get('cleaning/orders/previous-workers', UserCleaningPreviousWorkersController::class);
         Route::post('cleaning/orders/estimate-price', UserCleaningOrderEstimatePriceController::class);
         Route::get('cleaning/orders/{order}', UserCleaningOrderShowController::class);
         Route::patch('cleaning/orders/{order}', UserCleaningOrderUpdateController::class);
         Route::patch('cleaning/orders/{order}/room-assignments', UserCleaningOrderRoomAssignmentsController::class);
         Route::post('cleaning/orders/{order}/cancel', UserCleaningOrderCancelController::class);
+        Route::post('cleaning/orders/{order}/preferred-worker-rejection/decision', [UserCleaningPreferredWorkerRejectionDecisionController::class, 'decide']);
         Route::post('cleaning/orders/{order}/sos', UserCleaningOrderSosController::class);
         Route::post('cleaning/orders/{order}/start-verification/confirm', UserCleaningOrderStartVerificationConfirmController::class)
             ->middleware('throttle:cleaning-start-verification');

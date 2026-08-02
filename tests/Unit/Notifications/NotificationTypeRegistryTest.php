@@ -42,6 +42,12 @@ it('builds configured cleaning notifications', function (
         'Preferred worker declined',
         'The preferred worker declined the order. We changed it to a public request and are looking for another worker.',
     ],
+    'preferred worker rejection decision required' => [
+        'cleaning.booking.preferred_worker_rejected_decision_required',
+        'preferred_worker_rejection_decision_required',
+        'Preferred worker declined',
+        'The preferred worker declined the order. Open the app to make it a public request or cancel it without fees.',
+    ],
     'accepted' => [
         'cleaning.booking.time_extension_accepted',
         'time_extension_accepted',

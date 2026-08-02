@@ -37,6 +37,12 @@ final class CleaningBooking extends Model
     use CleaningBookingFilterQuery;
     use HasFactory;
 
+    public const PREFERRED_WORKER_REJECTION_DECISION_PENDING = 'pending';
+
+    public const PREFERRED_WORKER_REJECTION_DECISION_CONVERTED_TO_OPEN = 'converted_to_open';
+
+    public const PREFERRED_WORKER_REJECTION_DECISION_CANCELLED = 'cancelled';
+
     protected $fillable = [
         'customer_id',
         'worker_id',
@@ -44,6 +50,10 @@ final class CleaningBooking extends Model
         'assignment_mode',
         'converted_from_preferred_worker',
         'converted_from_preferred_worker_at',
+        'preferred_worker_rejection_decision_status',
+        'preferred_worker_rejected_at',
+        'preferred_worker_rejection_worker_id',
+        'preferred_worker_rejection_decided_at',
         'number_of_workers',
         'gender_preference',
         'work_environment_beneficiary_presence',
@@ -204,6 +214,9 @@ final class CleaningBooking extends Model
             'assignment_mode' => CleaningAssignmentMode::class,
             'converted_from_preferred_worker' => 'boolean',
             'converted_from_preferred_worker_at' => 'datetime',
+            'preferred_worker_rejection_worker_id' => 'integer',
+            'preferred_worker_rejected_at' => 'datetime',
+            'preferred_worker_rejection_decided_at' => 'datetime',
             'gender_preference' => GenderPreference::class,
             'number_of_workers' => 'integer',
             'neighborhood_id' => 'integer',
@@ -254,6 +267,16 @@ final class CleaningBooking extends Model
         }
 
         return CleaningAssignmentMode::OpenCount->value;
+    }
+
+    public function requiresPreferredWorkerRejectionDecision(): bool
+    {
+        $status = $this->status instanceof CleaningBookingStatus
+            ? $this->status->value
+            : (string) $this->status;
+
+        return $status === CleaningBookingStatus::Pending->value
+            && (string) ($this->preferred_worker_rejection_decision_status ?? '') === self::PREFERRED_WORKER_REJECTION_DECISION_PENDING;
     }
 
     public function dashboardKindLabel(): string
