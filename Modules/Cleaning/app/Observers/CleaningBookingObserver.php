@@ -27,6 +27,25 @@ final class CleaningBookingObserver
 {
     private const HOT_ORDER_PREFIX = '[🚨 طلب ساخن - تنفيذ فوري عاجل]';
 
+    /** @var array<int, int> */
+    private static array $lifecycleUpdateNotificationSuppressions = [];
+
+    public static function withoutLifecycleUpdateNotificationsFor(int $bookingId, callable $callback): mixed
+    {
+        $currentCount = self::$lifecycleUpdateNotificationSuppressions[$bookingId] ?? 0;
+        self::$lifecycleUpdateNotificationSuppressions[$bookingId] = $currentCount + 1;
+
+        try {
+            return $callback();
+        } finally {
+            self::$lifecycleUpdateNotificationSuppressions[$bookingId]--;
+
+            if (self::$lifecycleUpdateNotificationSuppressions[$bookingId] <= 0) {
+                unset(self::$lifecycleUpdateNotificationSuppressions[$bookingId]);
+            }
+        }
+    }
+
     public function creating(CleaningBooking $booking): void
     {
         $this->applyWorkEnvironmentSnapshot($booking);
@@ -97,7 +116,40 @@ final class CleaningBookingObserver
             return;
         }
 
+        if ($this->isLifecycleUpdateNotificationSuppressed($booking)) {
+            return;
+        }
+
+        if ($this->isPreferredWorkerFallbackConversionUpdate($booking, $changes)) {
+            return;
+        }
+
         $this->notifyLifecycleUpdated($booking, $fromStatusValue);
+    }
+
+    /**
+     * @param  array<string, mixed>  $changes
+     */
+    private function isPreferredWorkerFallbackConversionUpdate(CleaningBooking $booking, array $changes): bool
+    {
+        $allowedKeys = [
+            'assignment_mode',
+            'preferred_worker_id',
+            'converted_from_preferred_worker',
+            'converted_from_preferred_worker_at',
+        ];
+
+        if (array_diff(array_keys($changes), $allowedKeys) !== []) {
+            return false;
+        }
+
+        return (bool) ($booking->converted_from_preferred_worker ?? false)
+            && $booking->resolvedAssignmentMode() === CleaningAssignmentMode::OpenCount->value;
+    }
+
+    private function isLifecycleUpdateNotificationSuppressed(CleaningBooking $booking): bool
+    {
+        return (self::$lifecycleUpdateNotificationSuppressions[(int) $booking->id] ?? 0) > 0;
     }
 
     private function applyWorkEnvironmentSnapshot(CleaningBooking $booking): void

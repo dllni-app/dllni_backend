@@ -31,6 +31,7 @@ Route::get('/reset-password/{token}', function (string $token, Illuminate\Http\R
 })->name('password.reset');
 
 Route::view('/legal/user-app', 'user-app')->name('legal.user-app');
+Route::view('/legal/user-app/terms', 'user-app-terms')->name('legal.user-app.terms');
 Route::view('/legal/merchant-app', 'merchant-app')->name('legal.merchant-app');
 Route::view('/legal/delivery-app', 'delivery-app')->name('legal.delivery-app');
 Route::view('/legal/cleaning-worker-app', 'cleaning-worker-app')->name('legal.cleaning-worker-app');

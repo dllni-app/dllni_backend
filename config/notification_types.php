@@ -140,6 +140,23 @@ return [
                 ],
             ],
         ],
+        'cleaning.booking.preferred_worker_rejected' => [
+            'legacy_type' => 'preferred_worker_rejected',
+            'module' => 'cleaning',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'رفض العامل المخصص الطلب',
+                    'body' => 'رفض العامل المخصص الطلب، وتم تحويله إلى طلب عام. نبحث الآن عن عامل بديل.',
+                ],
+                'en' => [
+                    'title' => 'Preferred worker declined',
+                    'body' => 'The preferred worker declined the order. We changed it to a public request and are looking for another worker.',
+                ],
+            ],
+        ],
         'cleaning.booking.worker_started_travel' => [
             'legacy_type' => 'worker_started_travel',
             'module' => 'cleaning',

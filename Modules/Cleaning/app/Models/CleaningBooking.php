@@ -42,6 +42,8 @@ final class CleaningBooking extends Model
         'worker_id',
         'preferred_worker_id',
         'assignment_mode',
+        'converted_from_preferred_worker',
+        'converted_from_preferred_worker_at',
         'number_of_workers',
         'gender_preference',
         'work_environment_beneficiary_presence',
@@ -200,6 +202,8 @@ final class CleaningBooking extends Model
         return [
             'status' => CleaningBookingStatus::class,
             'assignment_mode' => CleaningAssignmentMode::class,
+            'converted_from_preferred_worker' => 'boolean',
+            'converted_from_preferred_worker_at' => 'datetime',
             'gender_preference' => GenderPreference::class,
             'number_of_workers' => 'integer',
             'neighborhood_id' => 'integer',

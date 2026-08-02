@@ -87,3 +87,34 @@ it('shows accepted pending multi-worker bookings in the current worker orders fi
         ->not->toContain($newUnacceptedBooking->id)
         ->not->toContain($otherWorkerBooking->id);
 });
+
+it('does not show converted preferred-worker booking again to the worker who rejected it', function (): void {
+    $workerUser = User::factory()->create(['email' => 'preferred-reject-filter-worker@example.com']);
+    $worker = Worker::factory()->create([
+        'user_id' => $workerUser->id,
+        'trust_score' => 80,
+    ]);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => null,
+        'preferred_worker_id' => $worker->id,
+        'assignment_mode' => CleaningAssignmentMode::PreferredWorker->value,
+        'number_of_workers' => 1,
+        'status' => CleaningBookingStatus::Pending->value,
+        'gender_preference' => 'any',
+    ]);
+
+    Sanctum::actingAs($workerUser);
+
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/reject")
+        ->assertOk()
+        ->assertJsonPath('data.assignmentMode', CleaningAssignmentMode::OpenCount->value)
+        ->assertJsonPath('data.convertedFromPreferredWorker', true);
+
+    $response = getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending');
+
+    $response->assertOk();
+
+    expect(collect($response->json('data'))->pluck('id'))
+        ->not->toContain($booking->id);
+});

@@ -30,6 +30,7 @@ use Modules\Cleaning\Events\WorkerArrived;
 use Modules\Cleaning\Events\WorkerLocationUpdated;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
+use Modules\Cleaning\Observers\CleaningBookingObserver;
 
 final class CleaningBookingService
 {
@@ -48,6 +49,7 @@ final class CleaningBookingService
         private readonly CleaningBookingTeamService $teamService,
         private readonly WorkerTrustService $workerTrustService,
         private readonly DepositService $depositService,
+        private readonly CleaningPreferredWorkerFallbackService $preferredWorkerFallbackService,
     ) {}
 
     public function store(CleaningBookingData $data): CleaningBooking
@@ -142,24 +144,56 @@ final class CleaningBookingService
         $fromStatus = (string) $booking->status->value;
         $worker = $this->currentWorker();
         $shouldNotifyCustomer = $this->isCustomerVisibleWorkerRejection($booking, $worker);
+        $isPreferredWorkerRejection = $this->isPreferredWorkerRejection($booking, $worker);
 
-        $updated = DB::transaction(function () use ($booking, $worker, $reason): CleaningBooking {
-            return $this->teamService->rejectWorker($booking, $worker, $reason);
-        });
+        $rejectBooking = function () use ($booking, $worker, $reason): CleaningBooking {
+            return DB::transaction(function () use ($booking, $worker, $reason): CleaningBooking {
+                return $this->teamService->rejectWorker($booking, $worker, $reason);
+            });
+        };
 
-        NotifyEligibleWorkersNewOrderJob::dispatch($updated->id);
+        $updated = $isPreferredWorkerRejection
+            ? CleaningBookingObserver::withoutLifecycleUpdateNotificationsFor((int) $booking->id, $rejectBooking)
+            : $rejectBooking();
+
+        $convertedToOpen = false;
+        if ($isPreferredWorkerRejection) {
+            $convertedToOpen = $this->preferredWorkerFallbackService->convertToOpenIfEligible($updated);
+            if ($convertedToOpen) {
+                $fresh = $updated->fresh([
+                    'customer',
+                    'worker.user',
+                    'preferredWorker.user',
+                    'rooms.assignedWorker.user',
+                    'workerAssignments.worker.user',
+                    'addons',
+                    'billingPolicy',
+                    'timeWarnings',
+                    'disputes',
+                ]);
+                if ($fresh instanceof CleaningBooking) {
+                    $updated = $fresh;
+                }
+            }
+        }
+
+        if (! $convertedToOpen) {
+            NotifyEligibleWorkersNewOrderJob::dispatch($updated->id);
+        }
 
         $this->dispatchTrackingUpdate($updated);
 
         if ($shouldNotifyCustomer) {
             $this->lifecycleNotifications->notifyCustomer(
                 booking: $updated,
-                canonicalType: 'cleaning.booking.worker_rejected',
-                action: 'worker_rejected',
+                canonicalType: $convertedToOpen
+                    ? 'cleaning.booking.preferred_worker_rejected'
+                    : 'cleaning.booking.worker_rejected',
+                action: $convertedToOpen ? 'preferred_worker_rejected' : 'worker_rejected',
                 actorRole: 'worker',
                 fromStatus: $fromStatus,
                 occurredAt: $updated->updated_at?->toIso8601String() ?? now()->toIso8601String(),
-                extraData: $this->workerRejectionExtraData($updated, $worker, $reason),
+                extraData: $this->workerRejectionExtraData($updated, $worker, $reason, $convertedToOpen),
             );
         }
 
@@ -886,16 +920,33 @@ final class CleaningBookingService
         return $this->activeAssignmentForWorker($booking->id, $workerId) instanceof CleaningBookingWorkerAssignment;
     }
 
+    private function isPreferredWorkerRejection(CleaningBooking $booking, Worker $worker): bool
+    {
+        return $booking->resolvedAssignmentMode() === CleaningAssignmentMode::PreferredWorker->value
+            && $booking->preferred_worker_id !== null
+            && (int) $booking->preferred_worker_id === (int) $worker->id;
+    }
+
     /**
      * @return array<string, mixed>
      */
-    private function workerRejectionExtraData(CleaningBooking $booking, Worker $worker, ?string $reason): array
+    private function workerRejectionExtraData(
+        CleaningBooking $booking,
+        Worker $worker,
+        ?string $reason,
+        bool $convertedToOpen = false
+    ): array
     {
         $extraData = [
             'workerId' => (int) $worker->id,
             'propertyType' => (string) $booking->property_type,
             'assignmentMode' => $booking->resolvedAssignmentMode(),
         ];
+
+        if ($convertedToOpen) {
+            $extraData['convertedToOpen'] = true;
+            $extraData['converted_to_open'] = true;
+        }
 
         $message = $reason !== null ? mb_trim($reason) : '';
         if ($message !== '') {

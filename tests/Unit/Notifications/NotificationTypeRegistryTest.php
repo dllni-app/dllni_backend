@@ -36,6 +36,12 @@ it('builds configured cleaning notifications', function (
         'Worker rejected order',
         'The service provider rejected booking CL-100.',
     ],
+    'preferred worker rejected' => [
+        'cleaning.booking.preferred_worker_rejected',
+        'preferred_worker_rejected',
+        'Preferred worker declined',
+        'The preferred worker declined the order. We changed it to a public request and are looking for another worker.',
+    ],
     'accepted' => [
         'cleaning.booking.time_extension_accepted',
         'time_extension_accepted',
