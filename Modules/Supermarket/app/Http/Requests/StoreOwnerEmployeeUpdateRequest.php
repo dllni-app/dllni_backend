@@ -17,12 +17,32 @@ final class StoreOwnerEmployeeUpdateRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $input = $this->all();
+        $payload = [];
 
         if (! array_key_exists('permissionIds', $input) && array_key_exists('permissionIds[]', $input)) {
-            $this->merge([
-                'permissionIds' => $input['permissionIds[]'],
-            ]);
+            $payload['permissionIds'] = $input['permissionIds[]'];
         }
+
+        $syncPermissionsInput = $this->input(
+            'syncPermissions',
+            $this->input('sync_permissions')
+        );
+        $syncPermissions = $syncPermissionsInput === null
+            ? null
+            : filter_var($syncPermissionsInput, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+
+        if ($syncPermissions !== null) {
+            $payload['syncPermissions'] = $syncPermissions;
+        }
+
+        $hasPermissionIds = array_key_exists('permissionIds', $input)
+            || array_key_exists('permissionIds[]', $input);
+
+        if ($syncPermissions === true && ! $hasPermissionIds) {
+            $payload['permissionIds'] = [];
+        }
+
+        $this->merge($payload);
     }
 
     public function rules(): array
@@ -39,6 +59,7 @@ final class StoreOwnerEmployeeUpdateRequest extends FormRequest
                     static fn ($query) => $query->where('group', 'supermarket_owner')
                 ),
             ],
+            'syncPermissions' => 'sometimes|boolean',
             'isActive' => 'sometimes|boolean',
         ];
     }
