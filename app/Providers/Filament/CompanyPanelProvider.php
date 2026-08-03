@@ -30,6 +30,7 @@ final class CompanyPanelProvider extends PanelProvider
             ->id('company')
             ->path('company')
             ->login()
+            ->spa()
             ->font(AlnadhaTheme::FONT)
             ->colors(AlnadhaTheme::colors());
 
