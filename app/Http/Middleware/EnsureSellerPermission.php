@@ -32,7 +32,11 @@ final class EnsureSellerPermission
             return $next($request);
         }
 
-        if ($permissions === [] || ! $user->hasAnyPermission($permissions)) {
+        $grantedPermissions = $user->getAllPermissions()->pluck('name');
+        $hasPermission = $permissions !== []
+            && $grantedPermissions->intersect($permissions)->isNotEmpty();
+
+        if (! $hasPermission) {
             throw new AuthorizationException('You do not have permission to perform this action.');
         }
 
