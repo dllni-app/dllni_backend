@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Providers\Filament;
 
 use App\Http\Middleware\SetCleaningAdminLocale;
+use App\Support\Filament\AlnadhaTheme;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
@@ -32,10 +33,12 @@ final class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
-            ->login();
+            ->login()
+            ->font(AlnadhaTheme::FONT)
+            ->colors(AlnadhaTheme::colors());
 
         if ($hasViteAssets) {
-            $panel->viteTheme('resources/css/filament/cleaning-admin/theme.css');
+            $panel->viteTheme('resources/css/filament/alnadha/theme.css');
         }
 
         return $panel
