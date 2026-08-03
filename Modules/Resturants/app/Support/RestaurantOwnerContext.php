@@ -51,7 +51,17 @@ final class RestaurantOwnerContext
         }
 
         $owner = $this->owner();
-        $restaurant = $owner->restaurants()->first();
+        $restaurant = $owner->restaurants()->orderBy('id')->first();
+
+        if (! $restaurant) {
+            $restaurant = RestaurantStaff::query()
+                ->where('user_id', $owner->id)
+                ->where('is_active', true)
+                ->with('restaurant')
+                ->orderBy('id')
+                ->first()
+                ?->restaurant;
+        }
 
         if (! $restaurant) {
             throw new AuthorizationException('No restaurant found for this owner.');
