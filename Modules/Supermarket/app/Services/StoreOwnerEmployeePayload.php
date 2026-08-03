@@ -10,7 +10,9 @@ final class StoreOwnerEmployeePayload
 {
     public static function make(SmStoreStaff $staff): array
     {
-        $permissions = $staff->user?->permissions ?? collect();
+        $permissions = ($staff->user?->permissions ?? collect())
+            ->where('group', 'supermarket_owner')
+            ->values();
 
         return [
             'id' => $staff->id,
