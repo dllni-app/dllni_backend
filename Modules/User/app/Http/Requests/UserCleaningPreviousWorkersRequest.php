@@ -33,6 +33,7 @@ final class UserCleaningPreviousWorkersRequest extends FormRequest
             ],
             'scheduledDate' => ['sometimes', 'nullable', 'date'],
             'scheduledTime' => ['sometimes', 'nullable', 'date_format:H:i'],
+            'durationHours' => ['sometimes', 'nullable', 'numeric', 'gt:0', 'max:168'],
             'neighborhoodId' => [
                 'sometimes',
                 'nullable',
