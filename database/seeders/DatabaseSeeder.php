@@ -6,6 +6,7 @@ namespace Database\Seeders;
 
 use App\Models\User;
 use Database\Seeders\Permissions\RestaurantOwnerEmployeePermissionsSeeder;
+use Database\Seeders\Permissions\SupermarketOwnerEmployeePermissionsSeeder;
 use Illuminate\Database\Seeder;
 use Modules\Cleaning\Database\Seeders\AleppoNeighborhoodSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningBannerSeeder;
@@ -66,6 +67,7 @@ final class DatabaseSeeder extends Seeder
             MandoubDeliveryTestUserSeeder::class,
             MandoubPrimaryOfferScenarioSeeder::class,
             RestaurantOwnerEmployeePermissionsSeeder::class,
+            SupermarketOwnerEmployeePermissionsSeeder::class,
             TeamRoleTemplatesSeeder::class,
             AdminUserSeeder::class,
             CleaningWorkersSeeder::class,
