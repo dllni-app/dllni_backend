@@ -159,6 +159,76 @@ it('applies optional schedule and neighborhood filters to previous workers', fun
         ->not->toContain($unavailableWorker->id);
 });
 
+it('excludes a previous worker whose accepted booking overlaps the requested interval', function (): void {
+    seedPreviousWorkerEligibilitySettings();
+
+    $customer = User::factory()->create();
+    Sanctum::actingAs($customer);
+
+    $scheduledDate = now()->addDay();
+    $dayKey = mb_strtolower($scheduledDate->format('l'));
+    $workingHours = [
+        $dayKey => ['available' => true, 'data' => [['08:00' => '18:00']]],
+    ];
+
+    $conflictingWorker = Worker::factory()->create([
+        'trust_score' => 80,
+        'default_working_hours' => $workingHours,
+    ]);
+    $availableWorker = Worker::factory()->create([
+        'trust_score' => 80,
+        'default_working_hours' => $workingHours,
+    ]);
+
+    foreach ([$conflictingWorker, $availableWorker] as $worker) {
+        seedPreviousWorkerDeposit($worker);
+        createCompletedCleaningAssignment($customer, $worker);
+    }
+
+    $acceptedBooking = CleaningBooking::factory()->create([
+        'customer_id' => User::factory()->create()->id,
+        'worker_id' => null,
+        'preferred_worker_id' => null,
+        'assignment_mode' => 'open_count',
+        'number_of_workers' => 1,
+        'status' => CleaningBookingStatus::WorkerAssigned,
+        'scheduled_date' => $scheduledDate->toDateString(),
+        'scheduled_time' => '10:00',
+        'estimated_hours' => 2,
+        'total_hours' => 2,
+    ]);
+
+    CleaningBookingWorkerAssignment::query()->create([
+        'cleaning_booking_id' => $acceptedBooking->id,
+        'worker_id' => $conflictingWorker->id,
+        'status' => CleaningBookingWorkerAssignmentStatus::Accepted->value,
+        'accepted_at' => now(),
+        'room_count' => 1,
+        'rooms_weight' => 1,
+        'service_share_amount' => 100,
+        'travel_fee' => 0,
+        'admin_margin_amount' => 0,
+        'worker_amount' => 100,
+        'currency' => 'SYP',
+    ]);
+
+    $query = http_build_query([
+        'propertyType' => 'house',
+        'scheduledDate' => $scheduledDate->toDateString(),
+        'scheduledTime' => '11:00',
+        'durationHours' => 1,
+    ]);
+
+    $response = $this->getJson('/api/v1/user/cleaning/orders/previous-workers?'.$query);
+
+    $response->assertOk();
+    $workerIds = collect($response->json('workers'))->pluck('workerId')->all();
+
+    expect($workerIds)
+        ->toContain($availableWorker->id)
+        ->not->toContain($conflictingWorker->id);
+});
+
 it('rejects a preferred worker that can no longer receive new requests', function (): void {
     seedPreviousWorkerEligibilitySettings();
 
