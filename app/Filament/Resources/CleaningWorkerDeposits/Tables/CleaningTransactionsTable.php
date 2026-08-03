@@ -7,7 +7,6 @@ namespace App\Filament\Resources\CleaningWorkerDeposits\Tables;
 use App\Enums\UserModuleType;
 use App\Filament\Support\AdminUiFormatter;
 use App\Models\CleaningDepositTransaction;
-use App\Models\Worker;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Tables\Columns\TextColumn;
@@ -52,8 +51,18 @@ final class CleaningTransactionsTable
                 TextColumn::make('notes')->label(__('cleaning_admin.transactions.fields.notes'))->limit(40)->placeholder('—')->toggleable(),
                 TextColumn::make('createdByAdmin.name')->label(__('cleaning_admin.transactions.fields.created_by'))->placeholder('—')->toggleable(),
             ])
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['worker', 'createdByAdmin']))
             ->filters([
-                SelectFilter::make('worker_id')->label(__('cleaning_admin.transactions.fields.worker'))->options(fn (): array => self::workerOptions())->searchable()->preload(),
+                SelectFilter::make('worker_id')
+                    ->label(__('cleaning_admin.transactions.fields.worker'))
+                    ->relationship(
+                        'worker',
+                        'first_name',
+                        fn (Builder $query): Builder => $query
+                            ->whereHas('user', fn (Builder $userQuery): Builder => $userQuery->where('module_type', UserModuleType::CleaningWorker))
+                            ->orderBy('first_name'),
+                    )
+                    ->searchable(),
                 SelectFilter::make('type')
                     ->label(__('cleaning_admin.transactions.fields.type'))
                     ->options(self::typeOptions())
@@ -161,15 +170,5 @@ final class CleaningTransactionsTable
     private static function money(mixed $value): string
     {
         return AdminUiFormatter::formatCurrency((float) ($value ?? 0), 0);
-    }
-
-    private static function workerOptions(): array
-    {
-        return Worker::query()
-            ->whereHas('user', fn (Builder $query): Builder => $query->where('module_type', UserModuleType::CleaningWorker))
-            ->orderBy('first_name')
-            ->get(['id', 'first_name'])
-            ->mapWithKeys(fn (Worker $worker): array => [$worker->id => ($worker->first_name ?: '#'.$worker->id).' (#'.$worker->id.')'])
-            ->all();
     }
 }
