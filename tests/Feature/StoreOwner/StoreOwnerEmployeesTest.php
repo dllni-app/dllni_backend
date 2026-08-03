@@ -173,3 +173,24 @@ it('forbids managing employees from another owner store', function (): void {
         'name' => 'Should Fail',
     ])->assertForbidden();
 });
+
+it('resolves an active employee store and enforces grouped route permissions', function (): void {
+    $employee = User::factory()->create([
+        'module_type' => UserModuleType::SupermarketSeller->value,
+    ]);
+
+    SmStoreStaff::query()->create([
+        'store_id' => $this->store->id,
+        'user_id' => $employee->id,
+        'is_active' => true,
+    ]);
+
+    $employee->syncPermissions(
+        Permission::query()->where('name', 'so.orders')->pluck('id')->all()
+    );
+
+    Sanctum::actingAs($employee);
+
+    $this->getJson('/api/v1/sm-orders')->assertOk();
+    $this->getJson('/api/v1/store-owner/products')->assertForbidden();
+});
