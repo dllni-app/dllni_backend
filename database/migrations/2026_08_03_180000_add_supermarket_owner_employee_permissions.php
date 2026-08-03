@@ -12,6 +12,8 @@ return new class extends Migration
     {
         $guardName = config('auth.defaults.guard');
         $now = now();
+        $supermarketStaffUserIds = DB::table('sm_store_staff')
+            ->pluck('user_id');
 
         $definitions = [
             'so.products' => [
@@ -78,12 +80,13 @@ return new class extends Migration
                 })
                 ->pluck('id');
 
-            if ($legacyPermissionIds->isEmpty()) {
+            if ($legacyPermissionIds->isEmpty() || $supermarketStaffUserIds->isEmpty()) {
                 continue;
             }
 
             $modelIds = DB::table('model_has_permissions')
                 ->where('model_type', User::class)
+                ->whereIn('model_id', $supermarketStaffUserIds)
                 ->whereIn('permission_id', $legacyPermissionIds)
                 ->distinct()
                 ->pluck('model_id');
