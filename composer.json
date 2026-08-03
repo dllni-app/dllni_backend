@@ -31,7 +31,6 @@
         "laravel/boost": "^2.4.6",
         "laravel/pail": "^1.2.6",
         "laravel/pint": "^1.29.1",
-        "laravel/telescope": "^5.20.0",
         "mockery/mockery": "^1.6.12",
         "nunomaduro/collision": "^8.9.4",
         "pestphp/pest": ">=4.6.3",
@@ -56,10 +55,10 @@
             "Modules\\Delivery\\Database\\Seeders\\": "Modules/Delivery/database/seeders/",
             "Modules\\User\\": "Modules/User/app/",
             "Modules\\User\\Database\\Seeders\\": "Modules/User/database/seeders/"
-            },
-            "classmap": [
-                "Modules/User/app/"
-            ]
+        },
+        "classmap": [
+            "Modules/User/app/"
+        ]
     },
     "autoload-dev": {
         "psr-4": {
@@ -101,6 +100,14 @@
             "composer bump",
             "npx npm-check-updates -u"
         ],
+        "optimize:production": [
+            "@php artisan optimize",
+            "@php artisan filament:optimize"
+        ],
+        "optimize:clear": [
+            "@php artisan filament:optimize-clear",
+            "@php artisan optimize:clear"
+        ],
         "lint": [
             "rector",
             "pint --parallel",
@@ -123,7 +130,9 @@
     },
     "extra": {
         "laravel": {
-            "dont-discover": []
+            "dont-discover": [
+                "laravel/telescope"
+            ]
         }
     },
     "config": {
