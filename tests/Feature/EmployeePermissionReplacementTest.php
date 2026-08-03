@@ -40,7 +40,7 @@ it('replaces and clears restaurant employee permissions when requested', functio
         'restaurant_role_id' => null,
         'is_active' => true,
     ]);
-    $employee->syncPermissions([$menuPermission, $ordersPermission]);
+    $employee->syncPermissions([$menuPermission->id, $ordersPermission->id]);
 
     $replaceResponse = $this->patchJson(
         "/api/v1/restaurant-owner/employees/{$employee->id}",
@@ -91,7 +91,7 @@ it('replaces and clears supermarket employee permissions when requested', functi
         'user_id' => $employee->id,
         'is_active' => true,
     ]);
-    $employee->syncPermissions([$productsPermission, $ordersPermission]);
+    $employee->syncPermissions([$productsPermission->id, $ordersPermission->id]);
 
     $replaceResponse = $this->patchJson(
         "/api/v1/store-owner/employees/{$staff->id}",
