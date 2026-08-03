@@ -85,7 +85,7 @@ final class HomepageBannerForm
                             ->label(app()->isLocale('ar') ? 'يبدأ الظهور في' : 'Starts At'),
                         DateTimePicker::make('ends_at')
                             ->label(app()->isLocale('ar') ? 'ينتهي الظهور في' : 'Ends At')
-                            ->rules(['nullable', 'date', 'after_or_equal:starts_at'])
+                            ->afterOrEqual('starts_at')
                             ->validationMessages([
                                 'after_or_equal' => app()->isLocale('ar')
                                     ? 'يجب أن يكون وقت نهاية الظهور بعد وقت البداية أو مساوياً له.'
