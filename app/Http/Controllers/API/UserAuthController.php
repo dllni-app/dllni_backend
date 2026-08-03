@@ -9,6 +9,7 @@ use App\Http\Requests\Auth\UserLoginRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Services\RestaurantSellerAuthExtras;
+use App\Services\SupermarketSellerAuthExtras;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -56,6 +57,11 @@ final class UserAuthController
         if ($user->module_type === UserModuleType::RestaurantSeller) {
             $payload['role'] = RestaurantSellerAuthExtras::rolePayload($user);
             $payload['permissions'] = RestaurantSellerAuthExtras::permissionsPayload($user);
+        }
+
+        if ($user->module_type === UserModuleType::SupermarketSeller) {
+            $payload['role'] = SupermarketSellerAuthExtras::rolePayload($user);
+            $payload['permissions'] = SupermarketSellerAuthExtras::permissionsPayload($user);
         }
 
         return response()->json($payload);
