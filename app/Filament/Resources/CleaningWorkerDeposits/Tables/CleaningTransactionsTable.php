@@ -93,7 +93,7 @@ final class CleaningTransactionsTable
         return match ($type) {
             'commission' => app()->isLocale('ar') ? 'عمولة المنصة' : 'Platform commission',
             'allowance_limit' => app()->isLocale('ar') ? 'حد سماح' : 'Allowance limit',
-            'debt', 'settlement' => __('cleaning_finance.types.debt'),
+            'debt', 'settlement' => app()->isLocale('ar') ? 'حد السماح' : __('cleaning_finance.types.debt'),
             'deposit' => __('cleaning_admin.transactions.types.deposit'),
             'refund' => __('cleaning_admin.transactions.types.refund'),
             default => $type,
