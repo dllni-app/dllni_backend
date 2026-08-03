@@ -14,6 +14,7 @@ use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Services\DepositService;
+use Modules\Cleaning\Services\WorkerBookingScheduleConflictService;
 use Modules\User\Http\Requests\UserCleaningPreviousWorkersRequest;
 use Throwable;
 
@@ -21,6 +22,7 @@ final class UserCleaningPreviousWorkersController
 {
     public function __construct(
         private readonly DepositService $depositService,
+        private readonly WorkerBookingScheduleConflictService $scheduleConflictService,
     ) {}
 
     public function __invoke(UserCleaningPreviousWorkersRequest $request): JsonResponse
@@ -33,6 +35,10 @@ final class UserCleaningPreviousWorkersController
         $scheduledAt = $this->scheduledAt(
             $validated['scheduledDate'] ?? null,
             $validated['scheduledTime'] ?? null,
+        );
+        $scheduleCandidate = $this->scheduleCandidate(
+            $scheduledAt,
+            $validated['durationHours'] ?? null,
         );
 
         $assignmentHistory = CleaningBookingWorkerAssignment::query()
@@ -98,6 +104,7 @@ final class UserCleaningPreviousWorkersController
                 $worker,
                 $propertyType,
                 $scheduledAt,
+                $scheduleCandidate,
                 $neighborhoodId,
             ))
             ->keyBy('id');
@@ -133,8 +140,13 @@ final class UserCleaningPreviousWorkersController
         ]);
     }
 
-    private function isWorkerEligible(Worker $worker, mixed $propertyType, ?Carbon $scheduledAt, ?int $neighborhoodId): bool
-    {
+    private function isWorkerEligible(
+        Worker $worker,
+        mixed $propertyType,
+        ?Carbon $scheduledAt,
+        ?CleaningBooking $scheduleCandidate,
+        ?int $neighborhoodId,
+    ): bool {
         if (! $this->depositService->isWorkerEligibleForDispatch($worker)) {
             return false;
         }
@@ -148,6 +160,10 @@ final class UserCleaningPreviousWorkersController
         }
 
         if ($scheduledAt !== null && ! $worker->isAvailableAt($scheduledAt)) {
+            return false;
+        }
+
+        if ($scheduleCandidate !== null && $this->scheduleConflictService->hasConflict($worker, $scheduleCandidate)) {
             return false;
         }
 
@@ -165,5 +181,21 @@ final class UserCleaningPreviousWorkersController
         } catch (Throwable) {
             return null;
         }
+    }
+
+    private function scheduleCandidate(?Carbon $scheduledAt, mixed $durationHours): ?CleaningBooking
+    {
+        if ($scheduledAt === null) {
+            return null;
+        }
+
+        $duration = is_numeric($durationHours) ? (float) $durationHours : 1.0;
+
+        return new CleaningBooking([
+            'scheduled_date' => $scheduledAt->toDateString(),
+            'scheduled_time' => $scheduledAt->format('H:i'),
+            'estimated_hours' => max($duration, 1.0),
+            'total_hours' => max($duration, 1.0),
+        ]);
     }
 }
