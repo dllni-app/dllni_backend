@@ -24,31 +24,31 @@ final class CleaningBannerResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-photo';
 
-    protected static ?int $navigationSort = 14;
+    protected static ?int $navigationSort = 23;
 
     public static function getNavigationGroup(): ?string
     {
-        return __('restaurant_admin.general_sections');
+        return __('cleaning_admin.nav_groups.operations');
     }
 
     public static function getNavigationLabel(): string
     {
-        return 'بانرات الصفحة الرئيسية';
+        return __('cleaning_admin.cleaning_banners.nav_label');
     }
 
     public static function getNavigationTooltip(): ?string
     {
-        return 'إدارة البنرات المعروضة في الصفحة الرئيسية لتطبيق المستخدم.';
+        return __('cleaning_admin.cleaning_banners.tooltip');
     }
 
     public static function getModelLabel(): string
     {
-        return 'بانر الصفحة الرئيسية';
+        return __('cleaning_admin.cleaning_banners.model');
     }
 
     public static function getPluralModelLabel(): string
     {
-        return 'بانرات الصفحة الرئيسية';
+        return __('cleaning_admin.cleaning_banners.plural');
     }
 
     public static function form(Schema $schema): Schema
