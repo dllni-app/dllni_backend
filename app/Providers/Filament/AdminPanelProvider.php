@@ -50,6 +50,8 @@ final class AdminPanelProvider extends PanelProvider
                 PanelsRenderHook::HEAD_START,
                 fn (): HtmlString => $this->forceLatinDigitsScript(),
             )
+            ->databaseNotifications()
+            ->databaseNotificationsPolling(null)
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
