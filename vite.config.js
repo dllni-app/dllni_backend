@@ -7,7 +7,7 @@ export default defineConfig({
         laravel({
             input: [
                 'resources/css/app.css',
-                'resources/css/filament/cleaning-admin/theme.css',
+                'resources/css/filament/alnadha/theme.css',
                 'resources/js/app.js',
             ],
             refresh: true,
