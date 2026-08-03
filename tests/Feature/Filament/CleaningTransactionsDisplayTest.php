@@ -63,10 +63,12 @@ it('exports allowance limit updates as standalone audit rows', function (): void
         ->and(array_values($rows[0]))->toContain(25000);
 });
 
-it('labels allowance limit updates in arabic', function (): void {
+it('labels allowance-limit-related types in arabic', function (): void {
     app()->setLocale('ar');
 
     expect(CleaningTransactionsTable::typeLabel('allowance_limit'))->toBe('حد سماح')
+        ->and(CleaningTransactionsTable::typeLabel('debt'))->toBe('حد السماح')
+        ->and(CleaningTransactionsTable::typeLabel('settlement'))->toBe('حد السماح')
         ->and(CleaningTransactionsTable::typeColor('allowance_limit'))->toBe('info');
 });
 
