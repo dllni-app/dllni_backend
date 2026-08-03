@@ -8,5 +8,4 @@ return [
     App\Providers\FilamentCompatibilityServiceProvider::class,
     App\Providers\Filament\AdminPanelProvider::class,
     App\Providers\Filament\CompanyPanelProvider::class,
-    App\Providers\TelescopeServiceProvider::class,
 ];
