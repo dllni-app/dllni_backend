@@ -34,6 +34,7 @@ final class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
+            ->spa()
             ->font(AlnadhaTheme::FONT)
             ->colors(AlnadhaTheme::colors());
 
@@ -49,8 +50,6 @@ final class AdminPanelProvider extends PanelProvider
                 PanelsRenderHook::HEAD_START,
                 fn (): HtmlString => $this->forceLatinDigitsScript(),
             )
-            ->databaseNotifications()
-            ->databaseNotificationsPolling('15s')
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
