@@ -47,17 +47,24 @@ final class RestaurantOwnerEmployeePermissionsSeeder extends Seeder
         ];
 
         foreach ($definitions as $definition) {
-            Permission::updateOrCreate(
-                [
-                    'name' => $definition['name'],
-                    'guard_name' => $guardName,
-                ],
-                [
-                    'slug' => $definition['slug'],
-                    'description' => $definition['description'],
-                    'group' => 'restaurant_owner',
-                ]
-            );
+            $permission = Permission::query()
+                ->where('slug', $definition['slug'])
+                ->first();
+
+            $permission ??= Permission::query()
+                ->where('name', $definition['name'])
+                ->where('guard_name', $guardName)
+                ->first();
+
+            $permission ??= new Permission();
+
+            $permission->forceFill([
+                'guard_name' => $guardName,
+                'name' => $definition['name'],
+                'slug' => $definition['slug'],
+                'description' => $definition['description'],
+                'group' => 'restaurant_owner',
+            ])->save();
         }
     }
 }
