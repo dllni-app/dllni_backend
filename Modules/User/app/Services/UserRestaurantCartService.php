@@ -536,6 +536,16 @@ final class UserRestaurantCartService
             'merchant' => [
                 'id' => $restaurant?->id,
                 'name' => $restaurant?->name,
+                'address' => $restaurant?->address,
+                'city' => $restaurant?->city,
+                'district' => $restaurant?->district,
+                'locationDetails' => $restaurant?->location_details,
+                'latitude' => $restaurant?->latitude !== null
+                    ? (float) $restaurant->latitude
+                    : null,
+                'longitude' => $restaurant?->longitude !== null
+                    ? (float) $restaurant->longitude
+                    : null,
                 'primaryImageUrl' => $restaurant !== null
                     ? ($restaurant->getFirstMediaUrl('primary-image') ?: null)
                     : null,
