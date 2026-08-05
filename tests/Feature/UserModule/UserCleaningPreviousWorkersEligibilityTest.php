@@ -12,7 +12,6 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
-use Modules\Cleaning\Models\CleaningNeighborhood;
 
 function seedPreviousWorkerEligibilitySettings(array $overrides = []): CleaningDepositSetting
 {
@@ -93,7 +92,7 @@ it('returns previous workers from team assignments only when they remain dispatc
         createCompletedCleaningAssignment($customer, $worker);
     }
 
-    $response = $this->getJson('/api/v1/user/cleaning/orders/previous-workers?propertyType=house');
+    $response = $this->getJson('/api/v1/user/cleaning/orders/previous-workers');
 
     $response->assertOk();
     $workerIds = collect($response->json('workers'))->pluck('workerId')->all();
@@ -105,13 +104,12 @@ it('returns previous workers from team assignments only when they remain dispatc
         ->not->toContain($inactiveAccountWorker->id);
 });
 
-it('applies optional schedule and neighborhood filters to previous workers', function (): void {
+it('ignores property type and neighborhood parameters while applying the optional schedule filter', function (): void {
     seedPreviousWorkerEligibilitySettings();
 
     $customer = User::factory()->create();
     Sanctum::actingAs($customer);
 
-    $neighborhood = CleaningNeighborhood::factory()->create();
     $dayKey = mb_strtolower(now()->format('l'));
 
     $availableWorker = Worker::factory()->create([
@@ -119,11 +117,6 @@ it('applies optional schedule and neighborhood filters to previous workers', fun
         'default_working_hours' => [
             $dayKey => ['available' => true, 'data' => [['09:00' => '18:00']]],
         ],
-    ]);
-    $availableWorker->zones()->create([
-        'name' => 'Covered area',
-        'is_active' => true,
-        'neighborhood_id' => $neighborhood->id,
     ]);
     seedPreviousWorkerDeposit($availableWorker);
 
@@ -133,21 +126,16 @@ it('applies optional schedule and neighborhood filters to previous workers', fun
             $dayKey => ['available' => true, 'data' => [['06:00' => '08:00']]],
         ],
     ]);
-    $unavailableWorker->zones()->create([
-        'name' => 'Covered area 2',
-        'is_active' => true,
-        'neighborhood_id' => $neighborhood->id,
-    ]);
     seedPreviousWorkerDeposit($unavailableWorker);
 
     createCompletedCleaningAssignment($customer, $availableWorker);
     createCompletedCleaningAssignment($customer, $unavailableWorker);
 
     $query = http_build_query([
-        'propertyType' => 'house',
+        'propertyType' => 'unsupported-property-type',
         'scheduledDate' => now()->toDateString(),
         'scheduledTime' => '12:00',
-        'neighborhoodId' => $neighborhood->id,
+        'neighborhoodId' => 'not-a-neighborhood-id',
     ]);
 
     $response = $this->getJson('/api/v1/user/cleaning/orders/previous-workers?'.$query);
@@ -213,7 +201,6 @@ it('excludes a previous worker whose accepted booking overlaps the requested int
     ]);
 
     $query = http_build_query([
-        'propertyType' => 'house',
         'scheduledDate' => $scheduledDate->toDateString(),
         'scheduledTime' => '11:00',
         'durationHours' => 1,
