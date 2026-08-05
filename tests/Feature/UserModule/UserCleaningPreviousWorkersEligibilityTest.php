@@ -2,14 +2,17 @@
 
 declare(strict_types=1);
 
+use App\Models\CancellationPolicy;
 use App\Models\CleaningDepositSetting;
 use App\Models\CleaningWorkerDeposit;
 use App\Models\User;
 use App\Models\Worker;
 use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\Sanctum;
+use Modules\Cleaning\Enums\CleaningBillingMode;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
+use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 
@@ -40,6 +43,29 @@ function seedPreviousWorkerDeposit(Worker $worker, float $balance = 100000): voi
             'minimum_required' => 0,
             'max_negative_balance' => 50000,
             'is_active' => true,
+        ],
+    );
+}
+
+function seedPreviousWorkerOrderPolicies(): void
+{
+    CancellationPolicy::query()->firstOrCreate(
+        ['module' => 'cleaning', 'name' => 'Previous worker flow cancellation policy'],
+        [
+            'description' => 'Previous worker endpoint flow test policy',
+            'rules' => ['free_until_hours' => 24],
+            'is_active' => true,
+            'is_default' => true,
+        ],
+    );
+
+    CleaningBillingPolicy::query()->firstOrCreate(
+        ['name' => 'Previous worker flow billing policy'],
+        [
+            'billing_mode' => CleaningBillingMode::FullBookedTime->value,
+            'rules' => ['charge_full_booked_hours' => true],
+            'is_active' => true,
+            'is_default' => true,
         ],
     );
 }
@@ -106,54 +132,102 @@ it('returns previous workers from team assignments only when they remain dispatc
 
 it('returns a worker after the customer confirms that worker while the team booking remains active', function (): void {
     seedPreviousWorkerEligibilitySettings();
+    seedPreviousWorkerOrderPolicies();
 
     $customer = User::factory()->create();
-    $worker = Worker::factory()->create(['trust_score' => 80]);
-    $otherWorker = Worker::factory()->create(['trust_score' => 80]);
-    seedPreviousWorkerDeposit($worker);
-
-    $booking = CleaningBooking::factory()->create([
-        'customer_id' => $customer->id,
-        'worker_id' => null,
-        'preferred_worker_id' => null,
-        'assignment_mode' => 'open_count',
-        'number_of_workers' => 2,
-        'status' => CleaningBookingStatus::InProgress->value,
+    $scheduledDate = now()->addDay();
+    $nextBookingDate = now()->addDays(2);
+    $workingHours = [
+        mb_strtolower($scheduledDate->format('l')) => ['available' => true, 'data' => [['08:00' => '18:00']]],
+        mb_strtolower($nextBookingDate->format('l')) => ['available' => true, 'data' => [['08:00' => '18:00']]],
+    ];
+    $worker = Worker::factory()->create([
+        'trust_score' => 80,
+        'home_address' => 'Worker Home',
+        'home_latitude' => 36.1795,
+        'home_longitude' => 37.1082,
+        'default_working_hours' => $workingHours,
     ]);
-
-    $assignment = CleaningBookingWorkerAssignment::query()->create([
-        'cleaning_booking_id' => $booking->id,
-        'worker_id' => $worker->id,
-        'status' => CleaningBookingWorkerAssignmentStatus::InProgress->value,
-        'accepted_at' => now()->subHour(),
-        'work_started_at' => now()->subMinutes(30),
-        'room_count' => 1,
-        'rooms_weight' => 1,
-        'service_share_amount' => 100,
-        'travel_fee' => 0,
-        'admin_margin_amount' => 0,
-        'worker_amount' => 100,
-        'currency' => 'SYP',
+    $otherWorker = Worker::factory()->create([
+        'trust_score' => 80,
+        'home_address' => 'Other Worker Home',
+        'home_latitude' => 36.1800,
+        'home_longitude' => 37.1090,
+        'default_working_hours' => $workingHours,
     ]);
+    seedPreviousWorkerDeposit($worker, 1000000);
+    seedPreviousWorkerDeposit($otherWorker, 1000000);
 
-    CleaningBookingWorkerAssignment::query()->create([
-        'cleaning_booking_id' => $booking->id,
-        'worker_id' => $otherWorker->id,
-        'status' => CleaningBookingWorkerAssignmentStatus::InProgress->value,
-        'accepted_at' => now()->subHour(),
-        'work_started_at' => now()->subMinutes(30),
-        'room_count' => 1,
-        'rooms_weight' => 1,
-        'service_share_amount' => 100,
-        'travel_fee' => 0,
-        'admin_margin_amount' => 0,
-        'worker_amount' => 100,
-        'currency' => 'SYP',
-    ]);
+    Sanctum::actingAs($customer);
+
+    $createResponse = $this->postJson('/api/v1/user/cleaning/orders', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'address' => 'Aleppo - Al Hamdaniyah',
+            'location_name' => 'Home',
+            'rooms' => 4,
+            'bedrooms' => 2,
+            'bathrooms' => 2,
+            'living_room_size' => 'medium',
+        ],
+        'scheduledDate' => $scheduledDate->toDateString(),
+        'scheduledTime' => '11:00',
+        'addressLatitude' => 36.1795,
+        'addressLongitude' => 37.1082,
+        'genderPreference' => 'any',
+        'assignmentMode' => 'open_count',
+        'numberOfWorkers' => 2,
+        'termsAccepted' => true,
+    ])
+        ->assertCreated()
+        ->assertJsonPath('order.status', CleaningBookingStatus::Pending->value)
+        ->assertJsonPath('order.numberOfWorkers', 2);
+
+    $bookingId = (int) $createResponse->json('order.id');
 
     Sanctum::actingAs(User::query()->findOrFail($worker->user_id));
 
-    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/complete", [
+    $this->postJson("/api/v1/cleaning-bookings/{$bookingId}/accept")
+        ->assertOk()
+        ->assertJsonPath('data.worker_order_status', CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value);
+
+    Sanctum::actingAs(User::query()->findOrFail($otherWorker->user_id));
+
+    $this->postJson("/api/v1/cleaning-bookings/{$bookingId}/accept")
+        ->assertOk()
+        ->assertJsonPath('data.order_status', CleaningBookingStatus::WorkerAssigned->value);
+
+    Sanctum::actingAs(User::query()->findOrFail($worker->user_id));
+
+    $this->postJson("/api/v1/cleaning-bookings/{$bookingId}/start-travel")->assertOk();
+    $this->postJson("/api/v1/cleaning-bookings/{$bookingId}/arrive")->assertOk();
+    $workerSecurityCode = $this->getJson("/api/v1/cleaning-bookings/{$bookingId}/security-code")
+        ->assertOk()
+        ->json('data.securityCode');
+
+    Sanctum::actingAs(User::query()->findOrFail($otherWorker->user_id));
+
+    $this->postJson("/api/v1/cleaning-bookings/{$bookingId}/start-travel")->assertOk();
+    $this->postJson("/api/v1/cleaning-bookings/{$bookingId}/arrive")->assertOk();
+    $otherWorkerSecurityCode = $this->getJson("/api/v1/cleaning-bookings/{$bookingId}/security-code")
+        ->assertOk()
+        ->json('data.securityCode');
+
+    expect($workerSecurityCode)->not->toBe($otherWorkerSecurityCode);
+
+    Sanctum::actingAs($customer);
+
+    $this->postJson("/api/v1/user/cleaning/orders/{$bookingId}/start-verification/confirm", [
+        'code' => $workerSecurityCode,
+    ])->assertOk();
+
+    Sanctum::actingAs(User::query()->findOrFail($worker->user_id));
+
+    $this->postJson("/api/v1/cleaning-bookings/{$bookingId}/start-work")
+        ->assertOk()
+        ->assertJsonPath('data.worker_order_status', CleaningBookingWorkerAssignmentStatus::InProgress->value);
+
+    $this->postJson("/api/v1/cleaning-bookings/{$bookingId}/complete", [
         'completionMessage' => 'The assigned work is complete.',
     ])
         ->assertOk()
@@ -161,15 +235,46 @@ it('returns a worker after the customer confirms that worker while the team book
 
     Sanctum::actingAs($customer);
 
-    $this->postJson("/api/v1/user/cleaning/orders/{$booking->id}/completion/confirm", [
-        'assignmentId' => $assignment->id,
+    $this->postJson("/api/v1/user/cleaning/orders/{$bookingId}/start-verification/confirm", [
+        'code' => $otherWorkerSecurityCode,
+    ])->assertOk();
+
+    Sanctum::actingAs(User::query()->findOrFail($otherWorker->user_id));
+
+    $this->postJson("/api/v1/cleaning-bookings/{$bookingId}/start-work")
+        ->assertOk()
+        ->assertJsonPath('data.worker_order_status', CleaningBookingWorkerAssignmentStatus::InProgress->value);
+
+    Sanctum::actingAs($customer);
+
+    $this->postJson("/api/v1/user/cleaning/orders/{$bookingId}/completion/confirm", [
+        'workerId' => $worker->id,
     ])
         ->assertOk()
         ->assertJsonPath('data.order_status', CleaningBookingStatus::InProgress->value);
 
-    $this->getJson('/api/v1/user/cleaning/orders/previous-workers')
-        ->assertOk()
-        ->assertJsonPath('workers.0.workerId', $worker->id);
+    $this->assertDatabaseHas('cleaning_booking_worker_assignments', [
+        'cleaning_booking_id' => $bookingId,
+        'worker_id' => $worker->id,
+        'status' => CleaningBookingWorkerAssignmentStatus::Completed->value,
+    ]);
+    $this->assertDatabaseHas('cleaning_booking_worker_assignments', [
+        'cleaning_booking_id' => $bookingId,
+        'worker_id' => $otherWorker->id,
+        'status' => CleaningBookingWorkerAssignmentStatus::InProgress->value,
+    ]);
+
+    $query = http_build_query([
+        'scheduledDate' => $nextBookingDate->toDateString(),
+        'scheduledTime' => '11:00',
+        'durationHours' => 3,
+    ]);
+
+    $previousWorkersResponse = $this->getJson('/api/v1/user/cleaning/orders/previous-workers?'.$query)
+        ->assertOk();
+
+    expect(collect($previousWorkersResponse->json('workers'))->pluck('workerId'))
+        ->toContain($worker->id);
 });
 
 it('ignores property type and neighborhood parameters while applying the optional schedule filter', function (): void {
