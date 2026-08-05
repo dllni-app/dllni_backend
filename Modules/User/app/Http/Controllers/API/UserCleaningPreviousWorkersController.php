@@ -29,9 +29,7 @@ final class UserCleaningPreviousWorkersController
     {
         $userId = Auth::id();
         $validated = $request->validated();
-        $propertyType = $validated['propertyType'] ?? null;
         $genderPreference = $validated['genderPreference'] ?? null;
-        $neighborhoodId = isset($validated['neighborhoodId']) ? (int) $validated['neighborhoodId'] : null;
         $scheduledAt = $this->scheduledAt(
             $validated['scheduledDate'] ?? null,
             $validated['scheduledTime'] ?? null,
@@ -81,7 +79,7 @@ final class UserCleaningPreviousWorkersController
             ->values();
 
         $workers = Worker::query()
-            ->with(['user', 'deposit', 'zones'])
+            ->with(['user', 'deposit'])
             ->withCount('customerRatings')
             ->whereIn('id', $history->pluck('worker_id')->all())
             ->where('is_active', true)
@@ -95,17 +93,11 @@ final class UserCleaningPreviousWorkersController
                 is_string($genderPreference) && $genderPreference !== 'any',
                 fn ($query) => $query->where('gender', $genderPreference),
             )
-            ->when(
-                $neighborhoodId !== null,
-                fn ($query) => $query->coversNeighborhood($neighborhoodId),
-            )
             ->get()
             ->filter(fn (Worker $worker): bool => $this->isWorkerEligible(
                 $worker,
-                $propertyType,
                 $scheduledAt,
                 $scheduleCandidate,
-                $neighborhoodId,
             ))
             ->keyBy('id');
 
@@ -142,20 +134,10 @@ final class UserCleaningPreviousWorkersController
 
     private function isWorkerEligible(
         Worker $worker,
-        mixed $propertyType,
         ?Carbon $scheduledAt,
         ?CleaningBooking $scheduleCandidate,
-        ?int $neighborhoodId,
     ): bool {
         if (! $this->depositService->isWorkerEligibleForDispatch($worker)) {
-            return false;
-        }
-
-        if (is_string($propertyType) && $propertyType !== '' && ! ($worker->preferred_work_type?->matchesPropertyType($propertyType) ?? true)) {
-            return false;
-        }
-
-        if ($neighborhoodId !== null && ! $worker->hasActiveCoverageForNeighborhood($neighborhoodId)) {
             return false;
         }
 
