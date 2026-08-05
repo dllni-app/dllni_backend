@@ -104,6 +104,41 @@ it('returns previous workers from team assignments only when they remain dispatc
         ->not->toContain($inactiveAccountWorker->id);
 });
 
+it('returns a worker whose completed assignment has not yet synchronized the booking status', function (): void {
+    seedPreviousWorkerEligibilitySettings();
+
+    $customer = User::factory()->create();
+    Sanctum::actingAs($customer);
+
+    $worker = Worker::factory()->create(['trust_score' => 80]);
+    seedPreviousWorkerDeposit($worker);
+
+    $booking = CleaningBooking::factory()->create([
+        'customer_id' => $customer->id,
+        'worker_id' => $worker->id,
+        'status' => CleaningBookingStatus::InProgress->value,
+    ]);
+
+    CleaningBookingWorkerAssignment::query()->create([
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $worker->id,
+        'status' => CleaningBookingWorkerAssignmentStatus::Completed->value,
+        'accepted_at' => now()->subHour(),
+        'work_finished_at' => now(),
+        'room_count' => 1,
+        'rooms_weight' => 1,
+        'service_share_amount' => 100,
+        'travel_fee' => 0,
+        'admin_margin_amount' => 0,
+        'worker_amount' => 100,
+        'currency' => 'SYP',
+    ]);
+
+    $this->getJson('/api/v1/user/cleaning/orders/previous-workers')
+        ->assertOk()
+        ->assertJsonPath('workers.0.workerId', $worker->id);
+});
+
 it('ignores property type and neighborhood parameters while applying the optional schedule filter', function (): void {
     seedPreviousWorkerEligibilitySettings();
 

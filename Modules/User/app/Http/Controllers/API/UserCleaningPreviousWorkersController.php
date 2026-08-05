@@ -42,7 +42,11 @@ final class UserCleaningPreviousWorkersController
         $assignmentHistory = CleaningBookingWorkerAssignment::query()
             ->join('cleaning_bookings', 'cleaning_booking_worker_assignments.cleaning_booking_id', '=', 'cleaning_bookings.id')
             ->where('cleaning_bookings.customer_id', $userId)
-            ->where('cleaning_bookings.status', CleaningBookingStatus::Completed->value)
+            ->where(function ($query): void {
+                $query
+                    ->where('cleaning_bookings.status', CleaningBookingStatus::Completed->value)
+                    ->orWhere('cleaning_booking_worker_assignments.status', CleaningBookingWorkerAssignmentStatus::Completed->value);
+            })
             ->whereIn('cleaning_booking_worker_assignments.status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
             ->whereNotNull('cleaning_booking_worker_assignments.worker_id')
             ->select([
