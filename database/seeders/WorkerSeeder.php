@@ -331,9 +331,13 @@ final class WorkerSeeder extends Seeder
     private static function defaultWorkingHours(): array
     {
         return [
-            'monday' => ['09:00', '18:00'], 'tuesday' => ['09:00', '18:00'],
-            'wednesday' => ['09:00', '18:00'], 'thursday' => ['09:00', '18:00'],
-            'friday' => ['09:00', '18:00'], 'saturday' => ['10:00', '16:00'],
+            'sunday' => ['available' => false, 'data' => []],
+            'monday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
+            'tuesday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
+            'wednesday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
+            'thursday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
+            'friday' => ['available' => true, 'data' => [['09:00' => '18:00']]],
+            'saturday' => ['available' => true, 'data' => [['10:00' => '16:00']]],
         ];
     }
 }

@@ -4,10 +4,24 @@ declare(strict_types=1);
 
 use App\Models\CleaningDepositTransaction;
 use App\Models\Worker;
+use Carbon\Carbon;
 use Database\Seeders\WorkerFinancialTypeScenarioSeeder;
 use Database\Seeders\WorkerSeeder;
 use Illuminate\Support\Facades\Schema;
 use Modules\Cleaning\Services\AdminCleaningTransactionService;
+
+it('seeds workers with normalized working hours that are usable for availability checks', function (): void {
+    $this->seed(WorkerSeeder::class);
+
+    $worker = Worker::query()
+        ->whereHas('user', fn ($query) => $query->where('email', 'worker1@dllni.sy'))
+        ->firstOrFail();
+
+    expect($worker->getNormalizedDefaultWorkingHours()['tuesday'])
+        ->toBe(['available' => true, 'data' => [['09:00' => '18:00']]])
+        ->and($worker->isAvailableAt(Carbon::parse('2026-08-11 11:00', config('app.timezone'))))
+        ->toBeTrue();
+});
 
 it('seeds continuous financial scenarios using only add-transaction types', function (): void {
     $this->seed([
