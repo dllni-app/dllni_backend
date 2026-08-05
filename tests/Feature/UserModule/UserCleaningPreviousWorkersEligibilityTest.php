@@ -104,27 +104,29 @@ it('returns previous workers from team assignments only when they remain dispatc
         ->not->toContain($inactiveAccountWorker->id);
 });
 
-it('returns a worker whose completed assignment has not yet synchronized the booking status', function (): void {
+it('returns a worker after the customer confirms that worker while the team booking remains active', function (): void {
     seedPreviousWorkerEligibilitySettings();
 
     $customer = User::factory()->create();
-    Sanctum::actingAs($customer);
-
     $worker = Worker::factory()->create(['trust_score' => 80]);
+    $otherWorker = Worker::factory()->create(['trust_score' => 80]);
     seedPreviousWorkerDeposit($worker);
 
     $booking = CleaningBooking::factory()->create([
         'customer_id' => $customer->id,
-        'worker_id' => $worker->id,
+        'worker_id' => null,
+        'preferred_worker_id' => null,
+        'assignment_mode' => 'open_count',
+        'number_of_workers' => 2,
         'status' => CleaningBookingStatus::InProgress->value,
     ]);
 
-    CleaningBookingWorkerAssignment::query()->create([
+    $assignment = CleaningBookingWorkerAssignment::query()->create([
         'cleaning_booking_id' => $booking->id,
         'worker_id' => $worker->id,
-        'status' => CleaningBookingWorkerAssignmentStatus::Completed->value,
+        'status' => CleaningBookingWorkerAssignmentStatus::InProgress->value,
         'accepted_at' => now()->subHour(),
-        'work_finished_at' => now(),
+        'work_started_at' => now()->subMinutes(30),
         'room_count' => 1,
         'rooms_weight' => 1,
         'service_share_amount' => 100,
@@ -133,6 +135,37 @@ it('returns a worker whose completed assignment has not yet synchronized the boo
         'worker_amount' => 100,
         'currency' => 'SYP',
     ]);
+
+    CleaningBookingWorkerAssignment::query()->create([
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $otherWorker->id,
+        'status' => CleaningBookingWorkerAssignmentStatus::InProgress->value,
+        'accepted_at' => now()->subHour(),
+        'work_started_at' => now()->subMinutes(30),
+        'room_count' => 1,
+        'rooms_weight' => 1,
+        'service_share_amount' => 100,
+        'travel_fee' => 0,
+        'admin_margin_amount' => 0,
+        'worker_amount' => 100,
+        'currency' => 'SYP',
+    ]);
+
+    Sanctum::actingAs(User::query()->findOrFail($worker->user_id));
+
+    $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/complete", [
+        'completionMessage' => 'The assigned work is complete.',
+    ])
+        ->assertOk()
+        ->assertJsonPath('data.worker_order_status', CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion->value);
+
+    Sanctum::actingAs($customer);
+
+    $this->postJson("/api/v1/user/cleaning/orders/{$booking->id}/completion/confirm", [
+        'assignmentId' => $assignment->id,
+    ])
+        ->assertOk()
+        ->assertJsonPath('data.order_status', CleaningBookingStatus::InProgress->value);
 
     $this->getJson('/api/v1/user/cleaning/orders/previous-workers')
         ->assertOk()
