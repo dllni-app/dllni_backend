@@ -145,10 +145,6 @@ final class UserCleaningPreviousWorkersController
             return false;
         }
 
-        if ($scheduledAt !== null && ! $worker->isAvailableAt($scheduledAt)) {
-            return false;
-        }
-
         if ($scheduleCandidate !== null && $this->scheduleConflictService->hasConflict($worker, $scheduleCandidate)) {
             return false;
         }
