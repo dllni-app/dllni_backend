@@ -67,7 +67,10 @@ final class NotificationTemplateResolver
         if ($default === 'ar') {
             $arabicTemplate = $this->arabicFallbackTemplate($canonicalType);
 
-            if ($arabicTemplate !== null && ! isset($templates['ar'])) {
+            if ($arabicTemplate !== null && (
+                ! isset($templates['ar'])
+                || $canonicalType === 'cleaning.booking.preferred_worker_rejected_decision_required'
+            )) {
                 return $arabicTemplate;
             }
         }
@@ -90,6 +93,10 @@ final class NotificationTemplateResolver
             'cleaning.booking.worker_confirmed' => [
                 'title' => 'تم تأكيد العامل',
                 'body' => 'أكد العامل حجز التنظيف رقم :booking_number.',
+            ],
+            'cleaning.booking.preferred_worker_rejected_decision_required' => [
+                'title' => 'رفض العامل المخصص الطلب',
+                'body' => 'رفض العامل المخصص الطلب. افتح التطبيق لتحويله إلى طلب عام أو إلغائه بدون رسوم.',
             ],
             'cleaning.booking.worker_started_travel' => [
                 'title' => 'العامل في الطريق',
