@@ -69,7 +69,10 @@ final class NotificationTemplateResolver
 
             if ($arabicTemplate !== null && (
                 ! isset($templates['ar'])
-                || $canonicalType === 'cleaning.booking.preferred_worker_rejected_decision_required'
+                || (
+                    $resolvedLocale === 'ar'
+                    && $canonicalType === 'cleaning.booking.preferred_worker_rejected_decision_required'
+                )
             )) {
                 return $arabicTemplate;
             }
