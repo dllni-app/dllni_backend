@@ -49,7 +49,7 @@ final class SmOrderResource extends JsonResource
             'totalAmount' => $this->total_amount,
             'cancellationFeeAmount' => $this->cancellation_fee_amount,
             'cancellationPolicySnapshot' => $this->cancellation_policy_snapshot,
-            'specialInstructions' => $this->special_instructions,
+            'specialInstructions' => self::cleanUtf8Text($this->special_instructions),
             'cancelledAt' => $this->cancelled_at?->toDateTimeString(),
             'cancellationReason' => $this->cancellation_reason,
             'deliverySummary' => $deliverySummary,
@@ -178,5 +178,37 @@ final class SmOrderResource extends JsonResource
     private static function minutesText(?int $minutes): ?string
     {
         return $minutes === null ? null : $minutes.' دقيقة';
+    }
+
+    private static function cleanUtf8Text(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $value = trim($value);
+        if ($value === '') {
+            return null;
+        }
+
+        // U+FFFD means the original bytes have already been lost. Do not send
+        // replacement-character garbage to clients; they can show their normal
+        // "no notes" fallback instead.
+        if (str_contains($value, "\u{FFFD}") || ! mb_check_encoding($value, 'UTF-8')) {
+            return null;
+        }
+
+        // Repair the common case where UTF-8 Arabic bytes were decoded once as
+        // Latin-1/Windows-1252 (for example: "Ø§Ù„...").
+        if (preg_match('/[ØÙ]/u', $value) === 1) {
+            $repaired = mb_convert_encoding($value, 'ISO-8859-1', 'UTF-8');
+            if (mb_check_encoding($repaired, 'UTF-8')) {
+                $value = $repaired;
+            }
+        }
+
+        $value = trim($value);
+
+        return $value === '' ? null : $value;
     }
 }
