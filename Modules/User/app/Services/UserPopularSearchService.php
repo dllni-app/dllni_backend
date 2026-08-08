@@ -8,8 +8,8 @@ use Illuminate\Support\Facades\DB;
 
 final class UserPopularSearchService
 {
-    public const string RESTAURANT = 'restaurant';
-    public const string SUPERMARKET = 'supermarket';
+    public const RESTAURANT = 'restaurant';
+    public const SUPERMARKET = 'supermarket';
 
     /**
      * @return list<string>
