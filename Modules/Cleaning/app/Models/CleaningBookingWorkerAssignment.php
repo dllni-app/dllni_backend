@@ -68,10 +68,10 @@ final class CleaningBookingWorkerAssignment extends Model
             'worker_finished_property_rooms' => 'array',
             'room_count' => 'integer',
             'rooms_weight' => 'decimal:2',
-            'service_share_amount' => 'decimal:2',
-            'travel_fee' => 'decimal:2',
-            'admin_margin_amount' => 'decimal:2',
-            'worker_amount' => 'decimal:2',
+            'service_share_amount' => 'integer',
+            'travel_fee' => 'integer',
+            'admin_margin_amount' => 'integer',
+            'worker_amount' => 'integer',
         ];
     }
 
