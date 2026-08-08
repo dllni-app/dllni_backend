@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Models\CleaningFinancialSetting;
 use Modules\Cleaning\Database\Seeders\CleaningFinancialSettingsSeeder;
 use Modules\Cleaning\Services\CleaningExtendedTimePricingService;
+use Modules\Cleaning\Support\CleaningFinancialDefaults;
 
 beforeEach(function (): void {
     $this->seed(CleaningFinancialSettingsSeeder::class);
@@ -15,7 +16,9 @@ it('seeds cleaning financial settings with the event hourly rate and new SYP pri
 
     expect($setting)->not->toBeNull();
     expect((float) $setting->extension_rate_per_30_minutes)->toBe(200.0);
-    expect((float) $setting->travel_per_km)->toBe(7500.0);
+    expect((float) $setting->travel_per_km)->toBe(10.0);
+    expect((float) $setting->cleaning_base_unit_price)->toBe(50.0);
+    expect(CleaningFinancialDefaults::BASE_UNIT_PRICE)->toBe(50.0);
     expect((float) $setting->default_commission_rate)->toBe(10.0);
 });
 

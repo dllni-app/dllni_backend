@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Supermarket\Database\Seeders;
 
+use Database\Seeders\SyrianPoundSeedPriceNormalizer;
 use Illuminate\Database\Seeder;
 
 final class SupermarketDatabaseSeeder extends Seeder
@@ -20,6 +21,7 @@ final class SupermarketDatabaseSeeder extends Seeder
             SmCouponSeeder::class,
             SmCommissionRuleSeeder::class,
             SmOrderSeeder::class,
+            SyrianPoundSeedPriceNormalizer::class,
         ]);
     }
 }

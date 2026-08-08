@@ -2,30 +2,32 @@
 
 declare(strict_types=1);
 
-namespace Database\Seeders;
-
-use App\Support\SyrianPoundPrice;
-use Illuminate\Database\Seeder;
+use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
-final class SyrianPoundSeedPriceNormalizer extends Seeder
+return new class extends Migration
 {
-    public function run(): void
+    /** @var array<int, float> */
+    private const PRICE_POINTS = [10.0, 25.0, 50.0, 100.0, 200.0, 500.0];
+
+    public function up(): void
     {
-        // Cleaning catalog/configuration prices.
         $this->normalizeColumns('cleaning_services', ['price']);
         $this->normalizeColumns('service_pricing', ['base_price', 'price_per_sqm']);
         $this->normalizeFixedServiceAddons();
         $this->normalizeColumns('travel_cost_configs', ['cost_per_km', 'fixed_fee']);
         $this->normalizeCleaningFinancialSettings();
 
-        // Supermarket customer-facing product prices.
         $this->normalizeProductTable('sm_products');
-
-        // Restaurant customer-facing menu prices and paid modifiers.
         $this->normalizeProductTable('products');
         $this->normalizeColumns('modifiers', ['price']);
+    }
+
+    public function down(): void
+    {
+        // Currency conversion is intentionally irreversible because the original
+        // merchant/catalog values cannot be reconstructed after normalization.
     }
 
     /** @param array<int, string> $columns */
@@ -35,29 +37,25 @@ final class SyrianPoundSeedPriceNormalizer extends Seeder
             return;
         }
 
-        $existingColumns = array_values(array_filter(
+        $columns = array_values(array_filter(
             $columns,
             static fn (string $column): bool => Schema::hasColumn($table, $column),
         ));
 
-        if ($existingColumns === []) {
+        if ($columns === []) {
             return;
         }
 
         DB::table($table)
-            ->select(array_merge(['id'], $existingColumns))
+            ->select(array_merge(['id'], $columns))
             ->orderBy('id')
-            ->chunkById(100, function ($rows) use ($table, $existingColumns): void {
+            ->chunkById(100, function ($rows) use ($table, $columns): void {
                 foreach ($rows as $row) {
                     $updates = [];
-
-                    foreach ($existingColumns as $column) {
-                        $amount = $row->{$column} ?? null;
-                        if ($amount === null) {
-                            continue;
+                    foreach ($columns as $column) {
+                        if ($row->{$column} !== null) {
+                            $updates[$column] = $this->normalizeAmount($row->{$column});
                         }
-
-                        $updates[$column] = SyrianPoundPrice::normalize($amount);
                     }
 
                     if ($updates !== []) {
@@ -73,26 +71,21 @@ final class SyrianPoundSeedPriceNormalizer extends Seeder
             return;
         }
 
-        $hasDiscountedPrice = Schema::hasColumn($table, 'discounted_price');
+        $hasDiscount = Schema::hasColumn($table, 'discounted_price');
         $columns = ['id', 'price'];
-        if ($hasDiscountedPrice) {
+        if ($hasDiscount) {
             $columns[] = 'discounted_price';
         }
 
         DB::table($table)
             ->select($columns)
             ->orderBy('id')
-            ->chunkById(100, function ($rows) use ($table, $hasDiscountedPrice): void {
+            ->chunkById(100, function ($rows) use ($table, $hasDiscount): void {
                 foreach ($rows as $row) {
-                    $updates = [
-                        'price' => SyrianPoundPrice::normalize($row->price),
-                    ];
+                    $updates = ['price' => $this->normalizeAmount($row->price)];
 
-                    if ($hasDiscountedPrice && $row->discounted_price !== null) {
-                        $updates['discounted_price'] = SyrianPoundPrice::normalizeDiscount(
-                            $row->discounted_price,
-                            $row->price,
-                        );
+                    if ($hasDiscount && $row->discounted_price !== null) {
+                        $updates['discounted_price'] = $this->normalizeDiscount($row->discounted_price, $row->price);
                     }
 
                     DB::table($table)->where('id', $row->id)->update($updates);
@@ -102,11 +95,7 @@ final class SyrianPoundSeedPriceNormalizer extends Seeder
 
     private function normalizeFixedServiceAddons(): void
     {
-        if (
-            ! Schema::hasTable('service_addons')
-            || ! Schema::hasColumn('service_addons', 'id')
-            || ! Schema::hasColumn('service_addons', 'price_value')
-        ) {
+        if (! Schema::hasTable('service_addons') || ! Schema::hasColumn('service_addons', 'price_value')) {
             return;
         }
 
@@ -115,13 +104,12 @@ final class SyrianPoundSeedPriceNormalizer extends Seeder
             $query->where('pricing_type', 'fixed');
         }
 
-        $query
-            ->select(['id', 'price_value'])
+        $query->select(['id', 'price_value'])
             ->orderBy('id')
             ->chunkById(100, function ($rows): void {
                 foreach ($rows as $row) {
                     DB::table('service_addons')->where('id', $row->id)->update([
-                        'price_value' => SyrianPoundPrice::normalize($row->price_value),
+                        'price_value' => $this->normalizeAmount($row->price_value),
                     ]);
                 }
             }, 'id');
@@ -159,7 +147,7 @@ final class SyrianPoundSeedPriceNormalizer extends Seeder
 
                     foreach (['cleaning_base_unit_price', 'travel_per_km', 'extension_rate_per_30_minutes', 'user_cancellation_fee'] as $column) {
                         if (property_exists($row, $column) && $row->{$column} !== null) {
-                            $updates[$column] = SyrianPoundPrice::normalize($row->{$column});
+                            $updates[$column] = $this->normalizeAmount($row->{$column});
                         }
                     }
 
@@ -168,7 +156,7 @@ final class SyrianPoundSeedPriceNormalizer extends Seeder
                         && $row->commission_fixed_amount !== null
                         && (! property_exists($row, 'commission_type') || $row->commission_type === 'fixed')
                     ) {
-                        $updates['commission_fixed_amount'] = SyrianPoundPrice::normalize($row->commission_fixed_amount);
+                        $updates['commission_fixed_amount'] = $this->normalizeAmount($row->commission_fixed_amount);
                     }
 
                     if (
@@ -176,13 +164,22 @@ final class SyrianPoundSeedPriceNormalizer extends Seeder
                         && $row->travel_markup_value !== null
                         && (! property_exists($row, 'travel_markup_type') || $row->travel_markup_type === 'fixed')
                     ) {
-                        $updates['travel_markup_value'] = SyrianPoundPrice::normalize($row->travel_markup_value);
+                        $updates['travel_markup_value'] = $this->normalizeAmount($row->travel_markup_value);
                     }
 
                     if (property_exists($row, 'extension_ranges') && $row->extension_ranges !== null) {
-                        $normalizedRanges = $this->normalizeExtensionRanges($row->extension_ranges);
-                        if ($normalizedRanges !== null) {
-                            $updates['extension_ranges'] = json_encode($normalizedRanges, JSON_THROW_ON_ERROR);
+                        $ranges = is_string($row->extension_ranges)
+                            ? json_decode($row->extension_ranges, true)
+                            : $row->extension_ranges;
+
+                        if (is_array($ranges)) {
+                            foreach ($ranges as &$range) {
+                                if (is_array($range) && array_key_exists('price', $range)) {
+                                    $range['price'] = $this->normalizeAmount($range['price']);
+                                }
+                            }
+                            unset($range);
+                            $updates['extension_ranges'] = json_encode($ranges, JSON_THROW_ON_ERROR);
                         }
                     }
 
@@ -193,21 +190,62 @@ final class SyrianPoundSeedPriceNormalizer extends Seeder
             }, 'id');
     }
 
-    /** @return array<int, array<string, mixed>>|null */
-    private function normalizeExtensionRanges(mixed $value): ?array
+    private function normalizeAmount(mixed $amount): float
     {
-        $ranges = is_string($value) ? json_decode($value, true) : $value;
-        if (! is_array($ranges)) {
-            return null;
+        $value = $this->convertedValue($amount);
+        if ($value <= 0.0) {
+            return 0.0;
         }
 
-        foreach ($ranges as &$range) {
-            if (is_array($range) && array_key_exists('price', $range)) {
-                $range['price'] = SyrianPoundPrice::normalize($range['price']);
+        foreach (self::PRICE_POINTS as $pricePoint) {
+            if ($value <= $pricePoint) {
+                return $pricePoint;
             }
         }
-        unset($range);
 
-        return $ranges;
+        return 500.0;
     }
-}
+
+    private function normalizeDiscount(mixed $discountedAmount, mixed $regularAmount): float
+    {
+        $discounted = $this->convertedValue($discountedAmount);
+        if ($discounted <= 0.0) {
+            return 0.0;
+        }
+
+        $regular = $this->normalizeAmount($regularAmount);
+        $normalizedDiscount = 10.0;
+
+        foreach (self::PRICE_POINTS as $pricePoint) {
+            if ($pricePoint > $discounted) {
+                break;
+            }
+            $normalizedDiscount = $pricePoint;
+        }
+
+        if ((float) $discountedAmount < (float) $regularAmount && $normalizedDiscount >= $regular) {
+            $previous = null;
+            foreach (self::PRICE_POINTS as $pricePoint) {
+                if ($pricePoint >= $regular) {
+                    break;
+                }
+                $previous = $pricePoint;
+            }
+
+            return $previous ?? $regular;
+        }
+
+        return min($normalizedDiscount, $regular);
+    }
+
+    private function convertedValue(mixed $amount): float
+    {
+        if (! is_numeric($amount)) {
+            return 0.0;
+        }
+
+        $value = max(0.0, (float) $amount);
+
+        return $value >= 1000.0 ? $value / 1000.0 : $value;
+    }
+};

@@ -17,7 +17,7 @@ final class CleaningFinancialSettingsSeeder extends Seeder
      */
     private const EXTENSION_RATE_PER_30_MINUTES = 200.00;
 
-    private const TRAVEL_PER_KM = 7500.00;
+    private const TRAVEL_PER_KM = 10.00;
 
     /**
      * Prices after adopting the new Syrian currency denominations.
