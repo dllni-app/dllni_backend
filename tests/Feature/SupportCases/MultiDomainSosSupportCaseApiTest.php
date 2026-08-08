@@ -36,8 +36,8 @@ it('creates restaurant SOS through the unified support case flow', function (): 
         ->assertJsonPath('data.booking.id', $order->id)
         ->assertJsonPath('data.status', 'new');
 
-    expect(SupportCase::query()->where('booking_type', 'restaurant_order')->where('booking_id', $order->id)->count())->toBe(1)
-        ->and(SystemAlert::query()->where('booking_type', 'restaurant_order')->where('booking_id', $order->id)->count())->toBe(1);
+    expect(SupportCase::query()->where('booking_type', Order::class)->where('booking_id', $order->id)->count())->toBe(1)
+        ->and(SystemAlert::query()->where('booking_type', Order::class)->where('booking_id', $order->id)->count())->toBe(1);
 });
 
 it('keeps supermarket SOS bound to the supermarket order even when ids collide', function (): void {
@@ -72,7 +72,7 @@ it('keeps supermarket SOS bound to the supermarket order even when ids collide',
         ->assertJsonPath('data.booking.id', $supermarketOrder->id);
 
     $case = SupportCase::query()->latest('id')->firstOrFail();
-    expect($case->booking_type)->toBe('supermarket_order')
+    expect($case->booking_type)->toBe(SmOrder::class)
         ->and($case->booking)->toBeInstanceOf(SmOrder::class);
 });
 
@@ -131,7 +131,7 @@ it('prevents duplicate active SOS for the same reporter and order', function ():
     $first->assertCreated();
     $second->assertCreated()->assertJsonPath('data.id', $first->json('data.id'));
 
-    expect(SupportCase::query()->where('booking_type', 'restaurant_order')->where('booking_id', $order->id)->count())->toBe(1);
+    expect(SupportCase::query()->where('booking_type', Order::class)->where('booking_id', $order->id)->count())->toBe(1);
 });
 
 it('rejects SOS for terminal orders and users that do not own the order', function (): void {
