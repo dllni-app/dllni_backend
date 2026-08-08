@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Resources;
 
 use App\Models\SupportCase;
+use App\Support\SupportCaseBookingPresentation;
 use BackedEnum;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -26,7 +27,7 @@ final class SupportCaseResource extends JsonResource
             'kind' => $this->kind?->value ?? $this->kind,
             'priority' => $this->priority?->value ?? $this->priority,
             'bookingId' => $this->booking_id,
-            'bookingType' => $this->booking_type,
+            'bookingType' => SupportCaseBookingPresentation::normalizeType((string) $this->booking_type),
             'reporterId' => $this->reporter_id,
             'reporterRole' => $this->reporter_role?->value ?? $this->reporter_role,
             'category' => $this->category,
