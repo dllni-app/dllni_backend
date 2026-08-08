@@ -6,19 +6,19 @@ namespace App\Support;
 
 final class SyrianPoundPrice
 {
-    /** @var array<int, float> */
-    public const PRICE_POINTS = [10.0, 25.0, 50.0, 100.0, 200.0, 500.0];
+    /** @var array<int, int> */
+    public const PRICE_POINTS = [10, 25, 50, 100, 200, 500];
 
-    private const LEGACY_SCALE_THRESHOLD = 1000.0;
+    private const LEGACY_SCALE_THRESHOLD = 1000;
 
-    private const LEGACY_SCALE_DIVISOR = 1000.0;
+    private const LEGACY_SCALE_DIVISOR = 1000;
 
-    public static function normalize(float|int|string|null $amount): float
+    public static function normalize(float|int|string|null $amount): int
     {
         $value = self::convertedValue($amount);
 
         if ($value <= 0.0) {
-            return 0.0;
+            return 0;
         }
 
         foreach (self::PRICE_POINTS as $pricePoint) {
@@ -27,20 +27,20 @@ final class SyrianPoundPrice
             }
         }
 
-        return 500.0;
+        return 500;
     }
 
     public static function normalizeDiscount(
         float|int|string|null $discountedAmount,
         float|int|string|null $regularAmount,
-    ): ?float {
+    ): ?int {
         if ($discountedAmount === null || $discountedAmount === '') {
             return null;
         }
 
         $discounted = self::convertedValue($discountedAmount);
         if ($discounted <= 0.0) {
-            return 0.0;
+            return 0;
         }
 
         $regular = self::normalize($regularAmount);
@@ -68,7 +68,7 @@ final class SyrianPoundPrice
         return $value;
     }
 
-    private static function floorPricePoint(float $value): float
+    private static function floorPricePoint(float $value): int
     {
         $selected = self::PRICE_POINTS[0];
 
@@ -83,7 +83,7 @@ final class SyrianPoundPrice
         return $selected;
     }
 
-    private static function previousPricePoint(float $pricePoint): ?float
+    private static function previousPricePoint(int $pricePoint): ?int
     {
         $previous = null;
 
