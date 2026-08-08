@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Models;
 
+use App\Models\Worker;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
-use App\Models\Worker;
 use Modules\Cleaning\Enums\CleaningTimeWarningResponse;
 use Modules\Cleaning\Observers\CleaningTimeWarningObserver;
 use Modules\Cleaning\Traits\FilterQueries\CleaningTimeWarningFilterQuery;
@@ -56,9 +56,9 @@ final class CleaningTimeWarning extends Model
             'sent_at' => 'datetime',
             'customer_responded_at' => 'datetime',
             'worker_responded_at' => 'datetime',
-            'quoted_base_amount' => 'decimal:2',
-            'quoted_admin_margin_amount' => 'decimal:2',
-            'quoted_amount' => 'decimal:2',
+            'quoted_base_amount' => 'integer',
+            'quoted_admin_margin_amount' => 'integer',
+            'quoted_amount' => 'integer',
             'price_applied_at' => 'datetime',
         ];
     }
