@@ -10,6 +10,7 @@ use App\Filament\Resources\SupportCases\Pages\ViewSupportCase;
 use App\Filament\Resources\SupportCases\Schemas\SupportCaseInfolist;
 use App\Filament\Resources\SupportCases\Tables\SupportCasesTable;
 use App\Models\SupportCase;
+use App\Support\SupportCaseBookingPresentation;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -18,7 +19,6 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
-use Modules\Cleaning\Models\CleaningBooking;
 
 final class SupportCaseResource extends Resource
 {
@@ -30,7 +30,7 @@ final class SupportCaseResource extends Resource
 
     public static function getNavigationGroup(): ?string
     {
-        return __('cleaning_admin.nav_groups.operations');
+        return 'العمليات والدعم';
     }
 
     public static function getNavigationLabel(): string
@@ -40,7 +40,7 @@ final class SupportCaseResource extends Resource
 
     public static function getNavigationTooltip(): ?string
     {
-        return 'واجهة موحدة لبلاغات الطوارئ وشكاوى العملاء والنزاعات المرتبطة بحجوزات التنظيف.';
+        return 'واجهة موحدة لبلاغات الطوارئ والدعم المرتبطة بالتنظيف والمطاعم والسوبرماركت والتوصيل.';
     }
 
     public static function getNavigationBadge(): ?string
@@ -83,9 +83,7 @@ final class SupportCaseResource extends Resource
             ->with([
                 'reporter',
                 'booking' => function (MorphTo $morphTo): void {
-                    $morphTo->morphWith([
-                        CleaningBooking::class => ['customer', 'worker.user'],
-                    ]);
+                    $morphTo->morphWith(SupportCaseBookingPresentation::morphRelations());
                 },
             ]);
     }

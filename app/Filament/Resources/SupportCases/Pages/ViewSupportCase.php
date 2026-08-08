@@ -12,13 +12,13 @@ use App\Filament\Resources\SupportCases\SupportCaseResource;
 use App\Models\SupportCase;
 use App\Models\User;
 use App\Services\SupportCaseService;
+use App\Support\SupportCaseBookingPresentation;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
-use Modules\Cleaning\Models\CleaningBooking;
 
 final class ViewSupportCase extends ViewRecord
 {
@@ -172,9 +172,7 @@ final class ViewSupportCase extends ViewRecord
             'resolvedBy',
             'media',
             'booking' => function (MorphTo $morphTo): void {
-                $morphTo->morphWith([
-                    CleaningBooking::class => ['customer', 'worker.user'],
-                ]);
+                $morphTo->morphWith(SupportCaseBookingPresentation::morphRelations());
             },
         ]);
     }

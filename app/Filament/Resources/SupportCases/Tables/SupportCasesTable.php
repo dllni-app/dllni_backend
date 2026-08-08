@@ -10,11 +10,14 @@ use App\Enums\SupportCaseKind;
 use App\Enums\SupportCasePriority;
 use App\Enums\SupportCaseStatus;
 use App\Models\SupportCase;
+use App\Support\SupportCaseBookingPresentation;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\Select;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
-use Modules\Cleaning\Models\CleaningBooking;
+use Illuminate\Database\Eloquent\Builder;
 
 final class SupportCasesTable
 {
@@ -28,6 +31,11 @@ final class SupportCasesTable
                     ->searchable()
                     ->sortable()
                     ->copyable(),
+                TextColumn::make('service_type')
+                    ->label('القسم')
+                    ->badge()
+                    ->getStateUsing(fn (SupportCase $record): string => SupportCaseBookingPresentation::typeLabel($record))
+                    ->color('info'),
                 TextColumn::make('kind')
                     ->label('النوع')
                     ->badge()
@@ -46,12 +54,10 @@ final class SupportCasesTable
                     ->label('مصدر البلاغ')
                     ->badge()
                     ->formatStateUsing(fn ($state): string => $state?->label() ?? (string) $state),
-                TextColumn::make('booking_number')
-                    ->label('رقم الحجز')
-                    ->getStateUsing(fn (SupportCase $record): string => $record->booking?->booking_number ?? '-')
-                    ->searchable(query: function ($query, string $search) {
-                        return $query->whereHasMorph('booking', [CleaningBooking::class], fn ($bookingQuery) => $bookingQuery->where('booking_number', 'like', "%{$search}%"));
-                    }),
+                TextColumn::make('booking_reference')
+                    ->label('رقم الطلب / الحجز')
+                    ->getStateUsing(fn (SupportCase $record): string => SupportCaseBookingPresentation::reference($record))
+                    ->searchable(query: fn ($query, string $search) => SupportCaseBookingPresentation::applyReferenceSearch($query, $search)),
                 TextColumn::make('reporter.name')
                     ->label('المبلّغ')
                     ->placeholder('-')
@@ -61,8 +67,8 @@ final class SupportCasesTable
                     ->placeholder('-')
                     ->copyable(),
                 TextColumn::make('other_party_phone')
-                    ->label('هاتف الطرف الآخر')
-                    ->getStateUsing(fn (SupportCase $record): ?string => self::otherPartyPhone($record))
+                    ->label('هاتف الطرف المرتبط')
+                    ->getStateUsing(fn (SupportCase $record): ?string => SupportCaseBookingPresentation::counterpartPhone($record))
                     ->placeholder('-')
                     ->copyable(),
                 TextColumn::make('category')
@@ -88,6 +94,24 @@ final class SupportCasesTable
                     ->sortable(),
             ])
             ->filters([
+                Filter::make('service_type')
+                    ->label('القسم')
+                    ->form([
+                        Select::make('value')
+                            ->label('القسم')
+                            ->options(SupportCaseBookingPresentation::typeOptions()),
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        $type = $data['value'] ?? null;
+
+                        return $query->when(
+                            filled($type),
+                            fn (Builder $query): Builder => $query->where(
+                                'booking_type',
+                                SupportCaseBookingPresentation::storedType((string) $type),
+                            ),
+                        );
+                    }),
                 SelectFilter::make('kind')
                     ->label('نوع البلاغ')
                     ->options(collect(SupportCaseKind::cases())->mapWithKeys(fn ($case) => [$case->value => $case->label()])->all()),
@@ -115,19 +139,5 @@ final class SupportCasesTable
         }
 
         return DisputeCategory::tryFrom($category)?->label() ?? $category;
-    }
-
-    private static function otherPartyPhone(SupportCase $record): ?string
-    {
-        $booking = $record->booking;
-        if (! $booking instanceof CleaningBooking) {
-            return null;
-        }
-
-        $reporterRole = $record->reporter_role?->value ?? $record->reporter_role;
-
-        return $reporterRole === 'worker'
-            ? $booking->customer?->phone
-            : $booking->worker?->user?->phone;
     }
 }
