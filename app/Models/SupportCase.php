@@ -17,8 +17,6 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\EventBooking;
 use Modules\Delivery\Models\DeliveryOrder;
-use Modules\Resturants\Models\Order;
-use Modules\Supermarket\Models\SmOrder;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 
@@ -93,8 +91,6 @@ final class SupportCase extends Model implements HasMedia
             set: static fn (mixed $value): mixed => match ($value) {
                 CleaningBooking::class => 'cleaning_booking',
                 EventBooking::class => 'event_booking',
-                Order::class => 'restaurant_order',
-                SmOrder::class => 'supermarket_order',
                 DeliveryOrder::class => 'delivery_order',
                 default => $value,
             },
