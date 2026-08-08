@@ -9,16 +9,25 @@ use Illuminate\Support\Facades\DB;
 use Modules\Resturants\Models\CartItem;
 use Modules\User\Http\Requests\UserRestaurantProductsSearchRequest;
 use Modules\User\Http\Resources\UserRestaurantProductWithOffersResource;
+use Modules\User\Services\UserPopularSearchService;
 use Modules\User\Services\UserRestaurantProductsSearchService;
 
 final class UserRestaurantProductsSearchController
 {
     public function __construct(
         private UserRestaurantProductsSearchService $service,
+        private readonly UserPopularSearchService $popularSearches,
     ) {}
 
     public function __invoke(UserRestaurantProductsSearchRequest $request): JsonResponse
     {
+        if ($request->getPage() === 1) {
+            $this->popularSearches->record(
+                UserPopularSearchService::RESTAURANT,
+                $request->getText(),
+            );
+        }
+
         $products = $this->service->search($request);
 
         $user = $request->user('sanctum');
