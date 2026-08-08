@@ -15,22 +15,22 @@ final class CleaningFinancialSettingsSeeder extends Seeder
      * The event hourly rate is this value × 2, so 200 => 400 SYP/hour/worker.
      * Time-extension prices themselves are read from EXTENSION_RANGES.
      */
-    private const EXTENSION_RATE_PER_30_MINUTES = 200.00;
+    private const EXTENSION_RATE_PER_30_MINUTES = 200;
 
-    private const TRAVEL_PER_KM = 10.00;
+    private const TRAVEL_PER_KM = 10;
 
     /**
      * Prices after adopting the new Syrian currency denominations.
      *
-     * @var array<int, array{start:int, end:int, price:float}>
+     * @var array<int, array{start:int, end:int, price:int}>
      */
     private const EXTENSION_RANGES = [
-        ['start' => 0, 'end' => 15, 'price' => 10.00],
-        ['start' => 16, 'end' => 30, 'price' => 25.00],
-        ['start' => 31, 'end' => 45, 'price' => 50.00],
-        ['start' => 46, 'end' => 60, 'price' => 100.00],
-        ['start' => 61, 'end' => 75, 'price' => 200.00],
-        ['start' => 76, 'end' => 90, 'price' => 500.00],
+        ['start' => 0, 'end' => 15, 'price' => 10],
+        ['start' => 16, 'end' => 30, 'price' => 25],
+        ['start' => 31, 'end' => 45, 'price' => 50],
+        ['start' => 46, 'end' => 60, 'price' => 100],
+        ['start' => 61, 'end' => 75, 'price' => 200],
+        ['start' => 76, 'end' => 90, 'price' => 500],
     ];
 
     public function run(): void
@@ -48,7 +48,7 @@ final class CleaningFinancialSettingsSeeder extends Seeder
                 'commission_fixed_amount' => null,
                 'vat_rate' => 0.00,
                 'travel_markup_type' => 'fixed',
-                'travel_markup_value' => 0.00,
+                'travel_markup_value' => 0,
                 'travel_per_km' => self::TRAVEL_PER_KM,
                 'travel_distance_start_point' => 'worker_'.'home',
                 'coverage_thresholds' => [
