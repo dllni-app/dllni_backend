@@ -151,3 +151,35 @@ it('matches English text case-insensitively', function (): void {
 
     expect($ids)->toContain($coffee->id);
 });
+
+it('matches common English accent variants', function (): void {
+    $store = SmStore::factory()->create([
+        'is_active' => true,
+        'suspension_until' => null,
+    ]);
+
+    $cafe = SmProductFactory::new()->create([
+        'store_id' => $store->id,
+        'name' => 'Café Coffee',
+        'is_available' => true,
+    ]);
+
+    Http::fake([
+        'https://dallelni.karriya.ai/products/search' => Http::response([
+            'query' => 'cafe',
+            'results' => [
+                [
+                    'product_id' => $cafe->id,
+                    'score' => 0.84,
+                ],
+            ],
+        ]),
+    ]);
+
+    $response = $this->getJson('/api/v1/user/supermarket/products/search?search=cafe');
+
+    $response->assertOk();
+    $ids = collect($response->json('data'))->pluck('id')->all();
+
+    expect($ids)->toContain($cafe->id);
+});
