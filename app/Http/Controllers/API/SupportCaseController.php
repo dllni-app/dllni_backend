@@ -46,7 +46,7 @@ final class SupportCaseController
         }
 
         if (filled(request('bookingType'))) {
-            $query->where('booking_type', request('bookingType'));
+            $query->where('booking_type', $this->storedBookingType((string) request('bookingType')));
         }
 
         return SupportCaseResource::collection(
@@ -178,5 +178,14 @@ final class SupportCaseController
             SmOrder::class => ['customer', 'store'],
             DeliveryOrder::class => ['createdBy', 'driver.user', 'company'],
         ]);
+    }
+
+    private function storedBookingType(string $bookingType): string
+    {
+        return match ($bookingType) {
+            'restaurant_order' => Order::class,
+            'supermarket_order' => SmOrder::class,
+            default => $bookingType,
+        };
     }
 }
