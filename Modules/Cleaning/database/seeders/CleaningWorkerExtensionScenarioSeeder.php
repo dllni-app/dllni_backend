@@ -54,20 +54,20 @@ final class CleaningWorkerExtensionScenarioSeeder extends Seeder
     private function workerRows(): array
     {
         return [
-            ['email' => 'cleaning.worker@dllni.sy', 'prefix' => 'CLN-AR-W1', 'minutes' => 30, 'quote' => 3500, 'property_type' => 'apartment'],
-            ['email' => 'cleaning.worker2@dllni.sy', 'prefix' => 'CLN-AR-W2', 'minutes' => 45, 'quote' => 5000, 'property_type' => 'apartment'],
-            ['email' => 'cleaning.worker3@dllni.sy', 'prefix' => 'CLN-AR-W3', 'minutes' => 60, 'quote' => 6500, 'property_type' => 'office'],
+            ['email' => 'cleaning.worker@dllni.sy', 'prefix' => 'CLN-AR-W1', 'minutes' => 30, 'quote' => 25, 'property_type' => 'apartment'],
+            ['email' => 'cleaning.worker2@dllni.sy', 'prefix' => 'CLN-AR-W2', 'minutes' => 45, 'quote' => 50, 'property_type' => 'apartment'],
+            ['email' => 'cleaning.worker3@dllni.sy', 'prefix' => 'CLN-AR-W3', 'minutes' => 60, 'quote' => 100, 'property_type' => 'office'],
         ];
     }
 
     private function seedRows(Worker $worker, User $customer, CleaningBillingPolicy $billingPolicy, ?CancellationPolicy $policy, array $row, CarbonInterface $date): void
     {
         $cases = [
-            ['suffix' => 'EXT', 'status' => CleaningBookingStatus::TimeExtensionRequested, 'day' => 0, 'time' => '10:00', 'price' => 120, 'pending_warning' => true],
-            ['suffix' => 'INPROG', 'status' => CleaningBookingStatus::InProgress, 'day' => 1, 'time' => '12:00', 'price' => 95],
-            ['suffix' => 'ASSIGNED', 'status' => CleaningBookingStatus::WorkerAssigned, 'day' => 2, 'time' => '14:00', 'price' => 110],
-            ['suffix' => 'COMPLETED', 'status' => CleaningBookingStatus::Completed, 'day' => -1, 'time' => '09:00', 'price' => 130],
-            ['suffix' => 'PENDING', 'status' => CleaningBookingStatus::Pending, 'day' => 3, 'time' => '16:00', 'price' => 80, 'assigned' => false],
+            ['suffix' => 'EXT', 'status' => CleaningBookingStatus::TimeExtensionRequested, 'day' => 0, 'time' => '10:00', 'price' => 100, 'pending_warning' => true],
+            ['suffix' => 'INPROG', 'status' => CleaningBookingStatus::InProgress, 'day' => 1, 'time' => '12:00', 'price' => 100],
+            ['suffix' => 'ASSIGNED', 'status' => CleaningBookingStatus::WorkerAssigned, 'day' => 2, 'time' => '14:00', 'price' => 200],
+            ['suffix' => 'COMPLETED', 'status' => CleaningBookingStatus::Completed, 'day' => -1, 'time' => '09:00', 'price' => 200],
+            ['suffix' => 'PENDING', 'status' => CleaningBookingStatus::Pending, 'day' => 3, 'time' => '16:00', 'price' => 50, 'assigned' => false],
         ];
 
         foreach ($cases as $case) {
@@ -84,7 +84,7 @@ final class CleaningWorkerExtensionScenarioSeeder extends Seeder
         $status = $case['status'];
         $assigned = $case['assigned'] ?? true;
         $basePrice = (float) $case['price'];
-        $travelFee = 10;
+        $travelFee = 10.00;
         $isOffice = $row['property_type'] === 'office';
 
         return CleaningBooking::updateOrCreate(
