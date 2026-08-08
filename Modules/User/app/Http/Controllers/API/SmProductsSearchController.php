@@ -12,6 +12,7 @@ use Modules\Supermarket\Http\Resources\SmProductResource;
 use Modules\Supermarket\Models\SmProduct;
 use Modules\Supermarket\Services\SmSemanticProductSearchService;
 use Modules\User\Http\Requests\DiscoverSupermarketProductsRequest;
+use Modules\User\Services\UserPopularSearchService;
 
 final class SmProductsSearchController
 {
@@ -19,11 +20,19 @@ final class SmProductsSearchController
 
     public function __construct(
         private readonly SmSemanticProductSearchService $semanticSearchService,
+        private readonly UserPopularSearchService $popularSearches,
     ) {}
 
     public function __invoke(DiscoverSupermarketProductsRequest $request): AnonymousResourceCollection
     {
         $query = $this->resolveSemanticQuery($request);
+
+        if ($query !== null && $request->integer('page', 1) === 1) {
+            $this->popularSearches->record(
+                UserPopularSearchService::SUPERMARKET,
+                $query,
+            );
+        }
 
         if ($query !== null) {
             $semanticPaginator = $this->semanticSearch($request, $query);

@@ -10,9 +10,14 @@ use Illuminate\Support\Str;
 use Modules\Resturants\Http\Resources\RestaurantResource;
 use Modules\Resturants\Models\Restaurant;
 use Modules\User\Http\Requests\DiscoverRestaurantsRequest;
+use Modules\User\Services\UserPopularSearchService;
 
 final class DiscoverRestaurantsController
 {
+    public function __construct(
+        private readonly UserPopularSearchService $popularSearches,
+    ) {}
+
     public function __invoke(DiscoverRestaurantsRequest $request): AnonymousResourceCollection
     {
         $now = CarbonImmutable::now();
@@ -22,6 +27,13 @@ final class DiscoverRestaurantsController
 
         $search = $request->validated('search');
         if (is_string($search) && $search !== '') {
+            if ($request->integer('page', 1) === 1) {
+                $this->popularSearches->record(
+                    UserPopularSearchService::RESTAURANT,
+                    $search,
+                );
+            }
+
             $escaped = addcslashes($search, '%_\\');
 
             $query->where(fn ($q) => $q
