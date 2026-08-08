@@ -131,6 +131,9 @@ final class CleaningWorkerRealDataSeeder extends Seeder
 
             $bookingNumber = 'CLN-REAL-' . str_pad((string) ($idx + 1), 4, '0', STR_PAD_LEFT);
             if (! CleaningBooking::where('booking_number', $bookingNumber)->exists()) {
+                $basePrice = 100.00;
+                $travelFee = 10.00;
+
                 CleaningBooking::create([
                     'customer_id' => $customer->id,
                     'worker_id' => $worker->id,
@@ -152,11 +155,11 @@ final class CleaningWorkerRealDataSeeder extends Seeder
                     'scheduled_date' => now()->addDays($idx + 1),
                     'scheduled_time' => '10:00',
                     'total_hours' => 3,
-                    'base_price' => 60,
+                    'base_price' => $basePrice,
                     'addons_total' => 0,
-                    'travel_fee' => 10,
+                    'travel_fee' => $travelFee,
                     'cancellation_fee' => 0,
-                    'total_price' => 70,
+                    'total_price' => $basePrice + $travelFee,
                     'terms_accepted' => true,
                     'address_latitude' => 36.2127,
                     'address_longitude' => 37.1456,
@@ -165,4 +168,3 @@ final class CleaningWorkerRealDataSeeder extends Seeder
         }
     }
 }
-
