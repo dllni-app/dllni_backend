@@ -199,11 +199,17 @@ final class SmOrderResource extends JsonResource
         }
 
         // Repair the common case where UTF-8 Arabic bytes were decoded once as
-        // Latin-1/Windows-1252 (for example: "Ø§Ù„...").
+        // Windows-1252/Latin-1 (for example: "Ø§Ù„...").
         if (preg_match('/[ØÙ]/u', $value) === 1) {
-            $repaired = mb_convert_encoding($value, 'ISO-8859-1', 'UTF-8');
-            if (mb_check_encoding($repaired, 'UTF-8')) {
-                $value = $repaired;
+            foreach (['Windows-1252', 'ISO-8859-1'] as $encoding) {
+                $repaired = mb_convert_encoding($value, $encoding, 'UTF-8');
+                if (
+                    mb_check_encoding($repaired, 'UTF-8')
+                    && preg_match('/[\x{0600}-\x{06FF}]/u', $repaired) === 1
+                ) {
+                    $value = $repaired;
+                    break;
+                }
             }
         }
 
