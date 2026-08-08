@@ -10,6 +10,8 @@ use DevKandil\NotiFire\FcmMessage;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Facades\Lang;
+use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\EventBooking;
 
@@ -72,7 +74,7 @@ final class BookingLifecycleNotification extends Notification implements ShouldQ
     {
         return array_merge([
             'booking_number' => (string) $this->booking->booking_number,
-            'status' => $this->statusValue(),
+            'status' => $this->localizedStatusValue(),
             'from_status' => $this->fromStatus,
             'action' => $this->action,
             'actor_role' => $this->actorRole,
@@ -114,6 +116,26 @@ final class BookingLifecycleNotification extends Notification implements ShouldQ
         }
 
         return (string) $status;
+    }
+
+    private function localizedStatusValue(): string
+    {
+        $statusValue = $this->statusValue();
+        $status = CleaningBookingStatus::tryFrom($statusValue);
+
+        if (! $status instanceof CleaningBookingStatus) {
+            return $statusValue;
+        }
+
+        if ($status === CleaningBookingStatus::UnderDispute) {
+            return 'قيد النزاع';
+        }
+
+        $translationKey = 'cleaning_admin.enums.cleaning_booking_status.'.$statusValue;
+
+        return Lang::has($translationKey, 'ar')
+            ? Lang::get($translationKey, [], 'ar')
+            : $statusValue;
     }
 
     private function bookingType(): string
