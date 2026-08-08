@@ -17,12 +17,17 @@ use App\Models\SupportCaseEvent;
 use App\Models\SupportCaseMessage;
 use App\Models\SystemAlert;
 use App\Models\User;
+use BackedEnum;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Delivery\Models\DeliveryOrder;
+use Modules\Resturants\Models\Order;
+use Modules\Supermarket\Models\SmOrder;
 
 final class SupportCaseService
 {
@@ -32,12 +37,23 @@ final class SupportCaseService
      */
     public function create(User $reporter, array $data, array $attachments = []): SupportCase
     {
-        $booking = CleaningBooking::query()->findOrFail((int) $data['bookingId']);
+        $booking = $this->resolveBooking(
+            bookingType: (string) ($data['bookingType'] ?? 'cleaning_booking'),
+            bookingId: (int) $data['bookingId'],
+        );
         $reporterRole = $this->resolveReporterRole($reporter, $booking);
         $kind = SupportCaseKind::from((string) $data['kind']);
 
-        if ($kind === SupportCaseKind::Complaint && $reporterRole !== SupportCaseReporterRole::Customer) {
-            abort(403, 'Only the booking customer can create a complaint.');
+        if ($kind === SupportCaseKind::Complaint) {
+            if (! $booking instanceof CleaningBooking) {
+                throw ValidationException::withMessages([
+                    'kind' => ['Complaints are currently supported only for cleaning bookings.'],
+                ]);
+            }
+
+            if ($reporterRole !== SupportCaseReporterRole::Customer) {
+                abort(403, 'Only the booking customer can create a complaint.');
+            }
         }
 
         $this->validateBookingState($booking, $kind);
@@ -58,9 +74,8 @@ final class SupportCaseService
         }
 
         $supportCase = DB::transaction(function () use ($reporter, $reporterRole, $booking, $kind, $data, $clientRequestId): SupportCase {
-            $previousStatus = $booking->status instanceof CleaningBookingStatus
-                ? $booking->status->value
-                : (string) $booking->status;
+            $previousStatus = $this->statusValue($booking);
+            $bookingType = $booking->getMorphClass();
 
             $supportCase = SupportCase::query()->create([
                 'case_number' => $this->generateCaseNumber($kind),
@@ -68,8 +83,8 @@ final class SupportCaseService
                 'priority' => $kind === SupportCaseKind::Emergency
                     ? SupportCasePriority::Critical
                     : SupportCasePriority::Normal,
-                'booking_id' => $booking->id,
-                'booking_type' => CleaningBooking::class,
+                'booking_id' => $booking->getKey(),
+                'booking_type' => $bookingType,
                 'reporter_id' => $reporter->id,
                 'reporter_role' => $reporterRole,
                 'category' => $kind === SupportCaseKind::Emergency
@@ -83,6 +98,7 @@ final class SupportCaseService
                 'client_request_id' => $clientRequestId,
                 'context' => [
                     'booking_status_before_dispute' => $previousStatus,
+                    'booking_type' => $bookingType,
                 ],
             ]);
 
@@ -94,16 +110,17 @@ final class SupportCaseService
                 'metadata' => [
                     'kind' => $kind->value,
                     'reporter_role' => $reporterRole->value,
+                    'booking_type' => $bookingType,
                 ],
             ]);
 
-            if ($kind === SupportCaseKind::Complaint) {
+            if ($kind === SupportCaseKind::Complaint && $booking instanceof CleaningBooking) {
                 $booking->update(['status' => CleaningBookingStatus::UnderDispute]);
             }
 
             SystemAlert::query()->create([
-                'booking_id' => $booking->id,
-                'booking_type' => CleaningBooking::class,
+                'booking_id' => $booking->getKey(),
+                'booking_type' => $bookingType,
                 'alert_type' => $kind === SupportCaseKind::Emergency
                     ? AlertType::SOSTriggered
                     : AlertType::CleaningBookingDispute,
@@ -118,7 +135,8 @@ final class SupportCaseService
                     'kind' => $kind->value,
                     'reporter_id' => $reporter->id,
                     'reporter_role' => $reporterRole->value,
-                    'booking_id' => $booking->id,
+                    'booking_id' => $booking->getKey(),
+                    'booking_type' => $bookingType,
                     'category' => $supportCase->category,
                     'message' => $supportCase->description,
                     'latitude' => $supportCase->latitude,
@@ -268,58 +286,79 @@ final class SupportCaseService
 
         $booking = $supportCase->booking;
 
-        if ($booking instanceof CleaningBooking) {
+        if ($booking instanceof Model) {
             return $this->resolveReporterRole($user, $booking);
         }
 
         abort(403, 'You cannot access this support case.');
     }
 
-    private function resolveReporterRole(User $reporter, CleaningBooking $booking): SupportCaseReporterRole
+    private function resolveReporterRole(User $reporter, Model $booking): SupportCaseReporterRole
     {
-        if ((int) $booking->customer_id === (int) $reporter->id) {
+        if ($booking instanceof CleaningBooking) {
+            if ((int) $booking->customer_id === (int) $reporter->id) {
+                return SupportCaseReporterRole::Customer;
+            }
+
+            $workerId = $reporter->worker?->id;
+            $isAssignedWorker = $workerId !== null && (
+                (int) $booking->worker_id === (int) $workerId
+                || $booking->workerAssignments()->where('worker_id', $workerId)->exists()
+            );
+
+            if ($isAssignedWorker) {
+                return SupportCaseReporterRole::Worker;
+            }
+        }
+
+        if ($booking instanceof Order && (int) $booking->user_id === (int) $reporter->id) {
             return SupportCaseReporterRole::Customer;
         }
 
-        $workerId = $reporter->worker?->id;
-        $isAssignedWorker = $workerId !== null && (
-            (int) $booking->worker_id === (int) $workerId
-            || $booking->workerAssignments()->where('worker_id', $workerId)->exists()
-        );
+        if ($booking instanceof SmOrder && (int) $booking->customer_id === (int) $reporter->id) {
+            return SupportCaseReporterRole::Customer;
+        }
 
-        if ($isAssignedWorker) {
-            return SupportCaseReporterRole::Worker;
+        if ($booking instanceof DeliveryOrder && (int) $booking->created_by_user_id === (int) $reporter->id) {
+            return SupportCaseReporterRole::Customer;
         }
 
         if ($reporter->hasAnyRole(['admin', 'Super Admin'])) {
             return SupportCaseReporterRole::Admin;
         }
 
-        abort(403, 'You are not a participant in this booking.');
+        abort(403, 'You are not a participant in this order or booking.');
     }
 
-    private function validateBookingState(CleaningBooking $booking, SupportCaseKind $kind): void
+    private function validateBookingState(Model $booking, SupportCaseKind $kind): void
     {
-        $status = $booking->status instanceof CleaningBookingStatus
-            ? $booking->status
-            : CleaningBookingStatus::tryFrom((string) $booking->status);
-
-        if ($status === CleaningBookingStatus::Cancelled) {
-            throw ValidationException::withMessages([
-                'bookingId' => ['Cannot create a support case for a cancelled booking.'],
-            ]);
+        if ($kind === SupportCaseKind::Complaint && ! $booking instanceof CleaningBooking) {
+            return;
         }
 
-        if ($kind === SupportCaseKind::Emergency && $status === CleaningBookingStatus::Completed) {
+        $status = $this->statusValue($booking);
+
+        $terminalStatuses = match (true) {
+            $booking instanceof CleaningBooking => [
+                CleaningBookingStatus::Cancelled->value,
+                ...($kind === SupportCaseKind::Emergency ? [CleaningBookingStatus::Completed->value] : []),
+            ],
+            $booking instanceof Order,
+            $booking instanceof SmOrder => ['completed', 'cancelled'],
+            $booking instanceof DeliveryOrder => ['delivered', 'completed', 'rejected', 'stopped', 'cancelled'],
+            default => [],
+        };
+
+        if (in_array($status, $terminalStatuses, true)) {
             throw ValidationException::withMessages([
-                'bookingId' => ['Cannot create an emergency case for a completed booking.'],
+                'bookingId' => ['Cannot create an emergency support case for a completed, cancelled, or otherwise terminal order.'],
             ]);
         }
     }
 
     private function findExistingRequest(
         User $reporter,
-        CleaningBooking $booking,
+        Model $booking,
         SupportCaseKind $kind,
         ?string $clientRequestId,
     ): ?SupportCase {
@@ -341,11 +380,35 @@ final class SupportCaseService
         return SupportCase::query()
             ->where('kind', SupportCaseKind::Emergency->value)
             ->where('reporter_id', $reporter->id)
-            ->where('booking_id', $booking->id)
-            ->where('booking_type', CleaningBooking::class)
+            ->where('booking_id', $booking->getKey())
+            ->where('booking_type', $booking->getMorphClass())
             ->whereIn('status', SupportCaseStatus::activeValues())
             ->latest('id')
             ->first();
+    }
+
+    private function resolveBooking(string $bookingType, int $bookingId): Model
+    {
+        return match ($bookingType) {
+            'cleaning_booking' => CleaningBooking::query()->findOrFail($bookingId),
+            'restaurant_order' => Order::query()->findOrFail($bookingId),
+            'supermarket_order' => SmOrder::query()->findOrFail($bookingId),
+            'delivery_order' => DeliveryOrder::query()->findOrFail($bookingId),
+            default => throw ValidationException::withMessages([
+                'bookingType' => ['Unsupported booking type.'],
+            ]),
+        };
+    }
+
+    private function statusValue(Model $booking): string
+    {
+        $status = $booking->getAttribute('status');
+
+        if ($status instanceof BackedEnum) {
+            return (string) $status->value;
+        }
+
+        return (string) $status;
     }
 
     private function generateCaseNumber(SupportCaseKind $kind): string
