@@ -15,22 +15,22 @@ final class TravelCostConfigSeeder extends Seeder
             [
                 'name' => 'المنطقة المحلية',
                 'max_km' => 10,
-                'cost_per_km' => 10.00,
-                'fixed_fee' => 10.00,
+                'cost_per_km' => 10,
+                'fixed_fee' => 10,
                 'is_active' => true,
             ],
             [
                 'name' => 'المنطقة الممتدة',
                 'max_km' => 25,
-                'cost_per_km' => 10.00,
-                'fixed_fee' => 10.00,
+                'cost_per_km' => 10,
+                'fixed_fee' => 10,
                 'is_active' => true,
             ],
             [
                 'name' => 'المنطقة الخارجية',
                 'max_km' => 50,
-                'cost_per_km' => 10.00,
-                'fixed_fee' => 25.00,
+                'cost_per_km' => 10,
+                'fixed_fee' => 25,
                 'is_active' => true,
             ],
         ];
