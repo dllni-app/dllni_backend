@@ -46,12 +46,8 @@ final class SmProductSimilarSearchController
                     ->whereNull('suspension_until')
                     ->orWhere('suspension_until', '<=', $now)));
 
-        if ($isCompareRequest) {
-            if ($selectedProduct->master_product_id === null) {
-                $productsQuery->whereRaw('1 = 0');
-            } else {
-                $productsQuery->where('master_product_id', $selectedProduct->master_product_id);
-            }
+        if ($isCompareRequest && $selectedProduct->master_product_id !== null) {
+            $productsQuery->where('master_product_id', $selectedProduct->master_product_id);
         } else {
             $searchTerm = SearchTermEscaper::escape($selectedProduct->name ?? '');
             $productsQuery->whereRaw("name LIKE ? ESCAPE '!'", ["%{$searchTerm}%"]);
