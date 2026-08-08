@@ -72,7 +72,6 @@
             @else
                 <label class="flex flex-col gap-1"><span class="text-sm">{{ __('cleaning_admin.financial.fields.commission_fixed_amount') }}</span><input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="commissionFixedAmount">@error('commissionFixedAmount') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror</label>
             @endif
-            <label class="flex flex-col gap-1 md:col-span-2"><span class="text-sm">{{ __('cleaning_admin.financial.fields.vat_rate') }}</span><input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="vatRate">@error('vatRate') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror</label>
         </div>
     </x-filament::section>
 
