@@ -24,21 +24,21 @@ final class ServiceAddonSeeder extends Seeder
                 'name' => 'داخل الفرن',
                 'slug' => 'inside-oven',
                 'pricing_type' => AddonPricingType::Fixed->value,
-                'price_value' => 20.00,
+                'price_value' => 25.00,
                 'is_active' => true,
             ],
             [
                 'name' => 'تنظيف النوافذ',
                 'slug' => 'window-cleaning',
                 'pricing_type' => AddonPricingType::Fixed->value,
-                'price_value' => 15.00,
+                'price_value' => 25.00,
                 'is_active' => true,
             ],
             [
                 'name' => 'غسيل وكي',
                 'slug' => 'laundry-ironing',
                 'pricing_type' => AddonPricingType::Fixed->value,
-                'price_value' => 35.00,
+                'price_value' => 50.00,
                 'is_active' => true,
             ],
             [
@@ -52,13 +52,13 @@ final class ServiceAddonSeeder extends Seeder
                 'name' => 'داخل الخزائن',
                 'slug' => 'inside-cabinets',
                 'pricing_type' => AddonPricingType::Fixed->value,
-                'price_value' => 30.00,
+                'price_value' => 50.00,
                 'is_active' => true,
             ],
         ];
 
         foreach ($addons as $addon) {
-            ServiceAddon::firstOrCreate(
+            ServiceAddon::updateOrCreate(
                 ['slug' => $addon['slug']],
                 $addon
             );
