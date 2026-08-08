@@ -47,7 +47,7 @@ final class CleaningService extends Model
     {
         return [
             'category' => ServiceCategory::class,
-            'price' => 'decimal:2',
+            'price' => 'integer',
             'is_active' => 'boolean',
         ];
     }
