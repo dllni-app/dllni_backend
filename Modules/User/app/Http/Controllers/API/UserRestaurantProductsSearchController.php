@@ -25,6 +25,7 @@ final class UserRestaurantProductsSearchController
             $this->popularSearches->record(
                 UserPopularSearchService::RESTAURANT,
                 $request->getText(),
+                UserPopularSearchService::PRODUCTS,
             );
         }
 
