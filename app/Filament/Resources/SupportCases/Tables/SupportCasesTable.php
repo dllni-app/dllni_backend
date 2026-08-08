@@ -12,9 +12,12 @@ use App\Enums\SupportCaseStatus;
 use App\Models\SupportCase;
 use App\Support\SupportCaseBookingPresentation;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\Select;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 final class SupportCasesTable
 {
@@ -91,9 +94,24 @@ final class SupportCasesTable
                     ->sortable(),
             ])
             ->filters([
-                SelectFilter::make('booking_type')
+                Filter::make('service_type')
                     ->label('القسم')
-                    ->options(SupportCaseBookingPresentation::typeOptions()),
+                    ->form([
+                        Select::make('value')
+                            ->label('القسم')
+                            ->options(SupportCaseBookingPresentation::typeOptions()),
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        $type = $data['value'] ?? null;
+
+                        return $query->when(
+                            filled($type),
+                            fn (Builder $query): Builder => $query->where(
+                                'booking_type',
+                                SupportCaseBookingPresentation::storedType((string) $type),
+                            ),
+                        );
+                    }),
                 SelectFilter::make('kind')
                     ->label('نوع البلاغ')
                     ->options(collect(SupportCaseKind::cases())->mapWithKeys(fn ($case) => [$case->value => $case->label()])->all()),
