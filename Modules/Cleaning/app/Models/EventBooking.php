@@ -117,9 +117,9 @@ final class EventBooking extends Model
             'event_type' => EventType::class,
             'scheduled_date' => 'date',
             'total_hours' => 'decimal:2',
-            'base_price' => 'decimal:2',
-            'travel_fee' => 'decimal:2',
-            'total_price' => 'decimal:2',
+            'base_price' => 'integer',
+            'travel_fee' => 'integer',
+            'total_price' => 'integer',
             'terms_accepted' => 'boolean',
             'cancelled_at' => 'datetime',
         ];
