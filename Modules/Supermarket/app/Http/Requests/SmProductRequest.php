@@ -26,7 +26,9 @@ final class SmProductRequest extends FormRequest
         return [
             'storeId' => 'sometimes|required|integer|exists:sm_stores,id',
             'categoryId' => 'nullable|integer|exists:sm_categories,id',
-            'masterProductId' => 'nullable|integer|exists:master_products,id',
+            'masterProductId' => $this->isMethod('post')
+                ? 'required|integer|exists:master_products,id'
+                : 'sometimes|required|integer|exists:master_products,id',
             'name' => 'sometimes|required|string|max:255',
             'barcode' => 'nullable|string|max:255',
             'sourceType' => 'sometimes|required|string|in:barcode_scan,catalog_search,manual,template,bulk_import',
