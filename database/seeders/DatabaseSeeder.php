@@ -47,6 +47,8 @@ final class DatabaseSeeder extends Seeder
                     AiDevelopmentDataSeeder::class,
                 ]);
             }
+
+            $this->call(CleaningDemoBookingPriceNormalizer::class);
         }
 
         $this->call(SyrianPoundSeedPriceNormalizer::class);
