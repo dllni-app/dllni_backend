@@ -170,6 +170,7 @@ final class SmProductsSearchController
     /**
      * Keep semantic recall, but reject unrelated vector matches unless there is
      * a strong semantic score or an exact/fuzzy lexical signal in the product.
+     * Supports both Arabic and English spelling errors.
      *
      * @param  Collection<int, SmProduct>  $items
      */
@@ -190,7 +191,7 @@ final class SmProductsSearchController
                     return true;
                 }
 
-                $searchableText = $this->normalizeArabicText(
+                $searchableText = $this->normalizeSearchText(
                     implode(' ', array_filter([
                         (string) $product->name,
                         (string) ($product->description ?? ''),
@@ -221,7 +222,7 @@ final class SmProductsSearchController
      */
     private function extractSearchTokens(string $query): array
     {
-        $normalized = $this->normalizeArabicText($query);
+        $normalized = $this->normalizeSearchText($query);
         $parts = preg_split('/\s+/u', $normalized) ?: [];
 
         $tokens = [];
@@ -237,7 +238,7 @@ final class SmProductsSearchController
         return array_values(array_unique($tokens));
     }
 
-    private function normalizeArabicText(string $text): string
+    private function normalizeSearchText(string $text): string
     {
         $text = mb_strtolower($text);
         $text = str_replace('ـ', '', $text);
