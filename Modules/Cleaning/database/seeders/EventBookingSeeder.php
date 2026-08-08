@@ -20,7 +20,7 @@ final class EventBookingSeeder extends Seeder
         $customer = User::firstOrCreate(
             ['email' => 'event.customer@dllni.sy'],
             [
-                'name' => 'ع�.�S�" ا�"�.�?اسبات',
+                'name' => 'عميل المناسبات',
                 'password' => bcrypt('password'),
                 'email_verified_at' => now(),
             ]
@@ -45,10 +45,13 @@ final class EventBookingSeeder extends Seeder
             EventBookingStatus::Pending->value,
         ];
 
+        $basePrices = [100.00, 200.00, 500.00];
+        $travelFees = [10.00, 25.00, 50.00];
+
         for ($i = 0; $i < 3; $i++) {
             $scheduledDate = now()->addDays($i + 7);
-            $basePrice = fake()->randomFloat(2, 100, 250);
-            $travelFee = fake()->randomFloat(2, 10, 25);
+            $basePrice = $basePrices[$i];
+            $travelFee = $travelFees[$i];
             $totalPrice = $basePrice + $travelFee;
 
             $bookingNumber = 'EVT-'.mb_strtoupper(Str::random(6)).'-'.$i;
