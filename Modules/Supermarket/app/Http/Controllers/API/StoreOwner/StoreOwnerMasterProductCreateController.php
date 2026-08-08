@@ -26,6 +26,15 @@ final class StoreOwnerMasterProductCreateController
             store: $store
         );
 
+        // Catalog imports are drafts. They must stay hidden from customers until
+        // the seller completes the required product details in the owner app.
+        foreach ($createdProducts as $product) {
+            $product->forceFill([
+                'discounted_price' => null,
+                'is_available' => false,
+            ])->save();
+        }
+
         return SmProductResource::collection($createdProducts)
             ->response()
             ->setStatusCode(Response::HTTP_CREATED);
