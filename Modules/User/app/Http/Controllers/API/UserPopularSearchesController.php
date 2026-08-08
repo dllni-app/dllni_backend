@@ -23,15 +23,22 @@ final class UserPopularSearchesController
                 'string',
                 Rule::in($this->popularSearches->sections()),
             ],
+            'filter' => [
+                'sometimes',
+                'string',
+                Rule::in($this->popularSearches->filters()),
+            ],
             'limit' => ['sometimes', 'integer', 'min:1', 'max:20'],
         ]);
 
         $section = (string) $validated['section'];
+        $filter = isset($validated['filter']) ? (string) $validated['filter'] : null;
         $limit = isset($validated['limit']) ? (int) $validated['limit'] : 6;
 
         return response()->json([
             'section' => $section,
-            'data' => $this->popularSearches->popular($section, $limit),
+            'filter' => $filter,
+            'data' => $this->popularSearches->popular($section, $filter, $limit),
         ]);
     }
 }
