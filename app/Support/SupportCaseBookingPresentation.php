@@ -54,6 +54,15 @@ final class SupportCaseBookingPresentation
         };
     }
 
+    public static function storedType(string $type): string
+    {
+        return match ($type) {
+            'restaurant_order' => Order::class,
+            'supermarket_order' => SmOrder::class,
+            default => $type,
+        };
+    }
+
     public static function reference(SupportCase $record): string
     {
         $booking = $record->booking;
