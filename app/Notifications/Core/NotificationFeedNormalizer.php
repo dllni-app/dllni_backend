@@ -11,6 +11,7 @@ final class NotificationFeedNormalizer
 {
     public function __construct(
         private readonly NotificationTypeRegistry $registry,
+        private readonly NotificationTemplateResolver $templateResolver,
     ) {}
 
     /**
@@ -54,6 +55,13 @@ final class NotificationFeedNormalizer
         $body = (string) ($data['body'] ?? '');
         $message = (string) ($data['message'] ?? $body);
         $normalizedData = $this->extractData($data);
+
+        if ($canonicalType === 'cleaning.booking.preferred_worker_rejected_decision_required') {
+            $resolvedCopy = $this->templateResolver->resolve($canonicalType, [], 'ar');
+            $title = $resolvedCopy['title'];
+            $body = $resolvedCopy['body'];
+            $message = $resolvedCopy['body'];
+        }
 
         return [
             'type' => $legacyType,
