@@ -38,7 +38,20 @@ final class SupportCaseBookingPresentation
 
     public static function typeLabel(SupportCase $record): string
     {
-        return self::typeOptions()[$record->booking_type] ?? $record->booking_type;
+        $type = self::normalizeType((string) $record->booking_type);
+
+        return self::typeOptions()[$type] ?? $type;
+    }
+
+    public static function normalizeType(string $type): string
+    {
+        return match ($type) {
+            CleaningBooking::class => 'cleaning_booking',
+            Order::class => 'restaurant_order',
+            SmOrder::class => 'supermarket_order',
+            DeliveryOrder::class => 'delivery_order',
+            default => $type,
+        };
     }
 
     public static function reference(SupportCase $record): string
