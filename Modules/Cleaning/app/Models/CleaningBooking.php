@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Models;
 
+use App\Enums\GenderPreference;
 use App\Models\BookingReview;
 use App\Models\BookingStatusLog;
 use App\Models\CancellationPolicy;
@@ -19,7 +20,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
-use App\Enums\GenderPreference;
 use Modules\Cleaning\Enums\CleaningAssignmentMode;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
@@ -228,15 +228,15 @@ final class CleaningBooking extends Model
             'estimated_hours' => 'decimal:2',
             'scheduled_date' => 'date',
             'total_hours' => 'decimal:2',
-            'base_price' => 'decimal:2',
-            'addons_total' => 'decimal:2',
-            'extension_fee_total' => 'decimal:2',
-            'travel_fee' => 'decimal:2',
+            'base_price' => 'integer',
+            'addons_total' => 'integer',
+            'extension_fee_total' => 'integer',
+            'travel_fee' => 'integer',
             'travel_distance_km' => 'decimal:3',
-            'admin_margin_amount' => 'decimal:2',
+            'admin_margin_amount' => 'integer',
             'is_pricing_final' => 'boolean',
-            'cancellation_fee' => 'decimal:2',
-            'total_price' => 'decimal:2',
+            'cancellation_fee' => 'integer',
+            'total_price' => 'integer',
             'terms_accepted' => 'boolean',
             'female_worker_safety_pledge_accepted' => 'boolean',
             'female_worker_safety_pledge_accepted_at' => 'datetime',
