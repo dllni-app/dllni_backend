@@ -63,36 +63,51 @@ final class CleaningBookingActionNotificationRuleEngine
         $rules = [];
         $minutesUntilStart = (int) floor($now->diffInMinutes($scheduledAt, false));
 
-        if ($this->within($now, $scheduledAt->subMinutes(60), $scheduledAt->subMinutes(30))) {
-            if ($customer instanceof User && $assignments->isNotEmpty()) {
-                $rules[] = $this->customerRule(
+        foreach ([60 => 30, 30 => 15, 15 => 0] as $reminderMinutes => $nextReminderMinutes) {
+            $windowStart = $scheduledAt->subMinutes($reminderMinutes);
+            $windowEnd = $nextReminderMinutes > 0
+                ? $scheduledAt->subMinutes($nextReminderMinutes)
+                : $scheduledAt;
+
+            if (! $this->within($now, $windowStart, $windowEnd)) {
+                continue;
+            }
+
+            $occurrenceKey = "upcoming_start_{$reminderMinutes}_minutes";
+
+            if ($customer instanceof User) {
+                $rule = $this->customerRule(
                     recipient: $customer,
                     canonicalType: 'cleaning.booking.customer_upcoming_start_reminder',
                     action: 'prepare_for_booking',
                     requiredAction: 'prepare_for_booking',
                     reminderKind: 'reminder',
                     severity: 'normal',
-                    dueAt: $scheduledAt->subMinutes(60),
+                    dueAt: $windowStart,
                     deadlineAt: $scheduledAt,
                     scheduledAt: $scheduledAt,
                     minutesUntilStart: $minutesUntilStart,
                 );
+                $rule['occurrenceKey'] = $occurrenceKey;
+                $rules[] = $rule;
             }
 
             foreach ($assignments as $assignment) {
                 if ($assignment->worker?->user instanceof User) {
-                    $rules[] = $this->workerRule(
+                    $rule = $this->workerRule(
                         assignment: $assignment,
                         canonicalType: 'cleaning.booking.worker_upcoming_start_reminder',
                         action: 'prepare_for_booking',
                         requiredAction: 'prepare_for_booking',
                         reminderKind: 'reminder',
                         severity: 'normal',
-                        dueAt: $scheduledAt->subMinutes(60),
+                        dueAt: $windowStart,
                         deadlineAt: $scheduledAt,
                         scheduledAt: $scheduledAt,
                         minutesUntilStart: $minutesUntilStart,
                     );
+                    $rule['occurrenceKey'] = $occurrenceKey;
+                    $rules[] = $rule;
                 }
             }
         }

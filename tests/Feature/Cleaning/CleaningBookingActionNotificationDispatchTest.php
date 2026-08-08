@@ -28,6 +28,48 @@ afterEach(function (): void {
     Carbon::setTestNow();
 });
 
+it('sends upcoming booking reminders to the customer and worker at 60, 30, and 15 minutes', function (): void {
+    $scheduledAt = Carbon::parse('2026-07-12 15:00:00', config('app.timezone'));
+    $now = $scheduledAt->copy()->subMinutes(60);
+    Carbon::setTestNow($now);
+
+    $customer = User::factory()->create();
+    $workerUser = User::factory()->create();
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $booking = CleaningBooking::factory()->create([
+        'customer_id' => $customer->id,
+        'worker_id' => $worker->id,
+        'number_of_workers' => 1,
+        'status' => CleaningBookingStatus::WorkerAssigned->value,
+        'scheduled_date' => '2026-07-12',
+        'scheduled_time' => '15:00',
+    ]);
+    $booking->workerAssignments()->create([
+        'worker_id' => $worker->id,
+        'status' => CleaningBookingWorkerAssignmentStatus::Accepted->value,
+        'accepted_at' => $now->copy()->subHour(),
+        'started_travel_at' => $now->copy()->subMinutes(5),
+    ]);
+
+    Notification::fake();
+
+    $service = app(CleaningBookingActionNotificationService::class);
+
+    expect($service->dispatchDue($scheduledAt->copy()->subMinutes(60)))->toBe(2)
+        ->and($service->dispatchDue($scheduledAt->copy()->subMinutes(30)))->toBe(2)
+        ->and($service->dispatchDue($scheduledAt->copy()->subMinutes(15)))->toBe(2)
+        ->and($service->dispatchDue($scheduledAt->copy()->subMinutes(15)))->toBe(0)
+        ->and(CleaningNotificationDispatch::query()
+            ->where('canonical_type', 'cleaning.booking.customer_upcoming_start_reminder')
+            ->count())->toBe(3)
+        ->and(CleaningNotificationDispatch::query()
+            ->where('canonical_type', 'cleaning.booking.worker_upcoming_start_reminder')
+            ->count())->toBe(3);
+
+    Notification::assertSentToTimes($customer, BookingLifecycleNotification::class, 3);
+    Notification::assertSentToTimes($workerUser, BookingLifecycleNotification::class, 3);
+});
+
 it('sends the worker travel reminder once for an assigned booking', function (): void {
     $now = Carbon::parse('2026-07-12 14:30:00', config('app.timezone'));
     Carbon::setTestNow($now);
@@ -53,10 +95,10 @@ it('sends the worker travel reminder once for an assigned booking', function ():
 
     $service = app(CleaningBookingActionNotificationService::class);
 
-    expect($service->dispatchDue($now))->toBe(1)
+    expect($service->dispatchDue($now))->toBe(3)
         ->and($service->dispatchDue($now))->toBe(0)
-        ->and(CleaningNotificationDispatch::query()->count())->toBe(1)
-        ->and(CleaningNotificationDispatch::query()->value('status'))->toBe('sent');
+        ->and(CleaningNotificationDispatch::query()->count())->toBe(3)
+        ->and(CleaningNotificationDispatch::query()->where('status', 'sent')->count())->toBe(3);
 
     Notification::assertSentTo(
         $workerUser,
@@ -102,9 +144,17 @@ it('warns only the worker assignment that has not started travelling', function 
 
     Notification::fake();
 
-    expect(app(CleaningBookingActionNotificationService::class)->dispatchDue($now))->toBe(1);
+    expect(app(CleaningBookingActionNotificationService::class)->dispatchDue($now))->toBe(4);
 
-    Notification::assertNotSentTo($startedUser, BookingLifecycleNotification::class);
+    Notification::assertSentTo(
+        $startedUser,
+        BookingLifecycleNotification::class,
+        function (BookingLifecycleNotification $notification): bool {
+            $property = new ReflectionProperty($notification, 'canonicalType');
+
+            return $property->getValue($notification) === 'cleaning.booking.worker_upcoming_start_reminder';
+        },
+    );
     Notification::assertSentTo(
         $missingUser,
         BookingLifecycleNotification::class,

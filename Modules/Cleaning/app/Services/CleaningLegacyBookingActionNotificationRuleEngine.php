@@ -37,9 +37,20 @@ final class CleaningLegacyBookingActionNotificationRuleEngine
         $minutesUntilStart = (int) floor($now->diffInMinutes($scheduledAt, false));
         $rules = [];
 
-        if ($this->within($now, $scheduledAt->subMinutes(60), $scheduledAt->subMinutes(30))) {
+        foreach ([60 => 30, 30 => 15, 15 => 0] as $reminderMinutes => $nextReminderMinutes) {
+            $windowStart = $scheduledAt->subMinutes($reminderMinutes);
+            $windowEnd = $nextReminderMinutes > 0
+                ? $scheduledAt->subMinutes($nextReminderMinutes)
+                : $scheduledAt;
+
+            if (! $this->within($now, $windowStart, $windowEnd)) {
+                continue;
+            }
+
+            $occurrenceKey = "upcoming_start_{$reminderMinutes}_minutes";
+
             if ($customer instanceof User) {
-                $rules[] = $this->rule(
+                $rule = $this->rule(
                     recipient: $customer,
                     targetRole: 'customer',
                     canonicalType: 'cleaning.booking.customer_upcoming_start_reminder',
@@ -47,14 +58,16 @@ final class CleaningLegacyBookingActionNotificationRuleEngine
                     requiredAction: 'prepare_for_booking',
                     reminderKind: 'reminder',
                     severity: 'normal',
-                    dueAt: $scheduledAt->subMinutes(60),
+                    dueAt: $windowStart,
                     deadlineAt: $scheduledAt,
                     scheduledAt: $scheduledAt,
                     minutesUntilStart: $minutesUntilStart,
                 );
+                $rule['occurrenceKey'] = $occurrenceKey;
+                $rules[] = $rule;
             }
 
-            $rules[] = $this->rule(
+            $rule = $this->rule(
                 recipient: $workerUser,
                 targetRole: 'worker',
                 canonicalType: 'cleaning.booking.worker_upcoming_start_reminder',
@@ -62,11 +75,13 @@ final class CleaningLegacyBookingActionNotificationRuleEngine
                 requiredAction: 'prepare_for_booking',
                 reminderKind: 'reminder',
                 severity: 'normal',
-                dueAt: $scheduledAt->subMinutes(60),
+                dueAt: $windowStart,
                 deadlineAt: $scheduledAt,
                 scheduledAt: $scheduledAt,
                 minutesUntilStart: $minutesUntilStart,
             );
+            $rule['occurrenceKey'] = $occurrenceKey;
+            $rules[] = $rule;
         }
 
         if ($booking->started_travel_at === null) {
