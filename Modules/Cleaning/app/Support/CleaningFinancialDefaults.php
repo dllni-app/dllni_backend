@@ -17,7 +17,7 @@ final class CleaningFinancialDefaults
     public const APP_ROOM_TYPES = ['bedroom', 'bathroom', 'kitchen', 'living_room', 'balcony', 'corridor', 'shed'];
 
     public const ROOM_SIZES = ['small', 'medium', 'large'];
-    public const BASE_UNIT_PRICE = 50.00;
+    public const BASE_UNIT_PRICE = 50;
     public const DEEP_CLEANING_MULTIPLIER = 4.00;
     public const AREA_MARGIN_MULTIPLIER = 1.18;
     public const SETUP_BUFFER_MINUTES = 22;
