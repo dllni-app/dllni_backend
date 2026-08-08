@@ -31,6 +31,7 @@ final class DiscoverRestaurantsController
                 $this->popularSearches->record(
                     UserPopularSearchService::RESTAURANT,
                     $search,
+                    UserPopularSearchService::MERCHANTS,
                 );
             }
 
