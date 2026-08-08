@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Resources;
 
 use App\Models\SupportCase;
+use BackedEnum;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Modules\Cleaning\Models\CleaningBooking;
@@ -89,7 +90,7 @@ final class SupportCaseResource extends JsonResource
                 'id' => $booking->id,
                 'bookingNumber' => $booking->booking_number,
                 'orderNumber' => $booking->booking_number,
-                'status' => $booking->status?->value ?? $booking->status,
+                'status' => self::statusValue($booking->status),
                 'customer' => $booking->relationLoaded('customer') && $booking->customer ? [
                     'id' => $booking->customer->id,
                     'name' => $booking->customer->name,
@@ -108,7 +109,7 @@ final class SupportCaseResource extends JsonResource
                 'type' => 'restaurant_order',
                 'id' => $booking->id,
                 'orderNumber' => $booking->order_number,
-                'status' => $booking->status?->value ?? $booking->status,
+                'status' => self::statusValue($booking->status),
                 'customer' => $booking->relationLoaded('customer') && $booking->customer ? [
                     'id' => $booking->customer->id,
                     'name' => $booking->customer->name,
@@ -127,7 +128,7 @@ final class SupportCaseResource extends JsonResource
                 'type' => 'supermarket_order',
                 'id' => $booking->id,
                 'orderNumber' => $booking->order_number,
-                'status' => $booking->status?->value ?? $booking->status,
+                'status' => self::statusValue($booking->status),
                 'customer' => $booking->relationLoaded('customer') && $booking->customer ? [
                     'id' => $booking->customer->id,
                     'name' => $booking->customer->name,
@@ -146,7 +147,7 @@ final class SupportCaseResource extends JsonResource
                 'type' => 'delivery_order',
                 'id' => $booking->id,
                 'orderNumber' => $booking->order_number,
-                'status' => $booking->status?->value ?? $booking->status,
+                'status' => self::statusValue($booking->status),
                 'customer' => $booking->relationLoaded('createdBy') && $booking->createdBy ? [
                     'id' => $booking->createdBy->id,
                     'name' => $booking->createdBy->name,
@@ -170,5 +171,10 @@ final class SupportCaseResource extends JsonResource
         }
 
         return null;
+    }
+
+    private static function statusValue(mixed $status): string
+    {
+        return $status instanceof BackedEnum ? (string) $status->value : (string) $status;
     }
 }
