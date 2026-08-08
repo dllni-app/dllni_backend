@@ -43,10 +43,13 @@ final class CleaningBookingSeeder extends Seeder
             CleaningBookingStatus::Pending->value,
         ];
 
+        $basePrices = [50.00, 100.00, 100.00, 200.00, 200.00];
+        $travelFees = [10.00, 10.00, 25.00, 25.00, 50.00];
+
         for ($i = 0; $i < 5; $i++) {
             $scheduledDate = now()->addDays($i);
-            $basePrice = 55 + ($i * 8);
-            $travelFee = 8 + ($i * 2);
+            $basePrice = $basePrices[$i];
+            $travelFee = $travelFees[$i];
             $totalPrice = $basePrice + $travelFee;
 
             $bookingNumber = 'CLN-'.mb_strtoupper(Str::random(6)).'-'.$i;
