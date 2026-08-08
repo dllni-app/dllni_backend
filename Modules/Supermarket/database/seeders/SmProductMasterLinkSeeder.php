@@ -9,6 +9,7 @@ use App\Models\MasterProduct;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Seeder;
 use Modules\Supermarket\Models\SmProduct;
+use RuntimeException;
 
 final class SmProductMasterLinkSeeder extends Seeder
 {
@@ -32,6 +33,10 @@ final class SmProductMasterLinkSeeder extends Seeder
                     ])->save();
                 }
             });
+
+        if (SmProduct::query()->whereNull('master_product_id')->exists()) {
+            throw new RuntimeException('Every seeded supermarket product must be linked to a master product.');
+        }
     }
 
     /**
