@@ -16,6 +16,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Delivery\Models\DeliveryOrder;
+use Modules\Resturants\Models\Order;
+use Modules\Supermarket\Models\SmOrder;
 
 final class SupportCaseController
 {
@@ -29,11 +32,7 @@ final class SupportCaseController
         $query = $this->authorizedQuery($user)
             ->with([
                 'reporter',
-                'booking' => function (MorphTo $morphTo): void {
-                    $morphTo->morphWith([
-                        CleaningBooking::class => ['customer', 'worker.user'],
-                    ]);
-                },
+                'booking' => fn (MorphTo $morphTo): MorphTo => $this->withBookingRelations($morphTo),
             ])
             ->withCount('messages')
             ->latest('id');
@@ -44,6 +43,10 @@ final class SupportCaseController
 
         if (filled(request('status'))) {
             $query->where('status', request('status'));
+        }
+
+        if (filled(request('bookingType'))) {
+            $query->where('booking_type', request('bookingType'));
         }
 
         return SupportCaseResource::collection(
@@ -111,13 +114,35 @@ final class SupportCaseController
             $scope->where('reporter_id', $user->id)
                 ->orWhereHasMorph(
                     'booking',
-                    [CleaningBooking::class],
-                    function (Builder $bookingQuery) use ($user, $workerId): void {
-                        $bookingQuery->where('customer_id', $user->id);
+                    [CleaningBooking::class, Order::class, SmOrder::class, DeliveryOrder::class],
+                    function (Builder $bookingQuery, string $type) use ($user, $workerId): void {
+                        if ($type === CleaningBooking::class) {
+                            $bookingQuery->where(function (Builder $cleaningQuery) use ($user, $workerId): void {
+                                $cleaningQuery->where('customer_id', $user->id);
 
-                        if ($workerId !== null) {
-                            $bookingQuery->orWhere('worker_id', $workerId)
-                                ->orWhereHas('workerAssignments', fn (Builder $assignmentQuery): Builder => $assignmentQuery->where('worker_id', $workerId));
+                                if ($workerId !== null) {
+                                    $cleaningQuery->orWhere('worker_id', $workerId)
+                                        ->orWhereHas('workerAssignments', fn (Builder $assignmentQuery): Builder => $assignmentQuery->where('worker_id', $workerId));
+                                }
+                            });
+
+                            return;
+                        }
+
+                        if ($type === Order::class) {
+                            $bookingQuery->where('user_id', $user->id);
+
+                            return;
+                        }
+
+                        if ($type === SmOrder::class) {
+                            $bookingQuery->where('customer_id', $user->id);
+
+                            return;
+                        }
+
+                        if ($type === DeliveryOrder::class) {
+                            $bookingQuery->where('created_by_user_id', $user->id);
                         }
                     },
                 );
@@ -141,11 +166,17 @@ final class SupportCaseController
             'messages.media',
             'events.actor',
             'media',
-            'booking' => function (MorphTo $morphTo): void {
-                $morphTo->morphWith([
-                    CleaningBooking::class => ['customer', 'worker.user'],
-                ]);
-            },
+            'booking' => fn (MorphTo $morphTo): MorphTo => $this->withBookingRelations($morphTo),
+        ]);
+    }
+
+    private function withBookingRelations(MorphTo $morphTo): MorphTo
+    {
+        return $morphTo->morphWith([
+            CleaningBooking::class => ['customer', 'worker.user'],
+            Order::class => ['customer', 'restaurant'],
+            SmOrder::class => ['customer', 'store'],
+            DeliveryOrder::class => ['createdBy', 'driver.user', 'company'],
         ]);
     }
 }
