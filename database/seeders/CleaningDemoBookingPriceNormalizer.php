@@ -45,7 +45,7 @@ final class CleaningDemoBookingPriceNormalizer extends Seeder
             ->chunkById(100, function ($rows) use ($table, $componentColumns, $hasTotalPrice): void {
                 foreach ($rows as $row) {
                     $updates = [];
-                    $normalizedTotal = 0.0;
+                    $normalizedTotal = 0;
 
                     foreach ($componentColumns as $column) {
                         $value = $row->{$column} ?? null;
@@ -54,7 +54,7 @@ final class CleaningDemoBookingPriceNormalizer extends Seeder
                         }
 
                         $normalized = (float) $value <= 0.0
-                            ? 0.0
+                            ? 0
                             : SyrianPoundPrice::normalize($value);
 
                         $updates[$column] = $normalized;
@@ -62,7 +62,7 @@ final class CleaningDemoBookingPriceNormalizer extends Seeder
                     }
 
                     if ($hasTotalPrice) {
-                        $updates['total_price'] = round($normalizedTotal, 2);
+                        $updates['total_price'] = $normalizedTotal;
                     }
 
                     if ($updates !== []) {
@@ -94,7 +94,7 @@ final class CleaningDemoBookingPriceNormalizer extends Seeder
 
                     DB::table($table)->where('id', $row->id)->update([
                         'quoted_amount' => $value <= 0.0
-                            ? 0.0
+                            ? 0
                             : SyrianPoundPrice::normalize($value),
                     ]);
                 }
