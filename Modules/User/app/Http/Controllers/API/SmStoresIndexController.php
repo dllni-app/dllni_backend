@@ -31,6 +31,7 @@ final class SmStoresIndexController
             $this->popularSearches->record(
                 UserPopularSearchService::SUPERMARKET,
                 $query,
+                UserPopularSearchService::MERCHANTS,
             );
         }
 
