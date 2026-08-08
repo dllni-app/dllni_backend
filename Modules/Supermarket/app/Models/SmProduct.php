@@ -100,8 +100,8 @@ final class SmProduct extends Model implements HasMedia
     protected function casts(): array
     {
         return [
-            'price' => 'decimal:2',
-            'discounted_price' => 'decimal:2',
+            'price' => 'integer',
+            'discounted_price' => 'integer',
             'source_type' => SmProductSource::class,
             'expires_at' => 'datetime',
             'is_available' => 'boolean',
