@@ -13,7 +13,7 @@ use Modules\Cleaning\Support\CleaningFinancialDefaults;
 
 final class UserCleaningOrderEstimationService
 {
-    public const ALGORITHM_VERSION = '2026-07-20-room-unit-time-v2';
+    public const ALGORITHM_VERSION = '2026-08-08-event-worker-hour-v3';
     public const EVENT_ASSISTANCE_PROPERTY_TYPE = 'event_assistance';
     public const CLEANING_MODES = ['regular', 'deep'];
     public const PROPERTY_TYPES = ['apartment', 'villa', 'house', 'office', 'studio', self::EVENT_ASSISTANCE_PROPERTY_TYPE];
@@ -180,7 +180,12 @@ final class UserCleaningOrderEstimationService
         if ($this->isEventAssistanceType($input['propertyType'])) {
             $hourlyRate = $this->eventOrderHourlyRate();
             $eventHours = max(1.0, $this->roundToHalfHour((float) ($input['propertyDetails']['hours'] ?? 1.0)));
-            $basePrice = $this->pricingCalculator->roundMoney($hourlyRate * $eventHours);
+            $eventGuestCount = max(0, (int) ($input['propertyDetails']['guest_count'] ?? 0));
+            $eventWorkerCount = max(
+                1,
+                (int) ($input['propertyDetails']['worker_count'] ?? $this->suggestedEventTeamSize($eventGuestCount)),
+            );
+            $basePrice = $this->pricingCalculator->roundMoney($hourlyRate * $eventHours * $eventWorkerCount);
             $lines = [];
             $addonsTotal = 0.0;
             $estimation = $this->estimate($input['propertyType'], $input['propertyDetails']);
@@ -231,6 +236,7 @@ final class UserCleaningOrderEstimationService
             ] : null,
             'eventHourlyRate' => $hourlyRate ?? null,
             'eventHours' => $eventHours ?? null,
+            'eventWorkerCount' => $eventWorkerCount ?? null,
             'recommendation' => $estimation['recommendation'] ?? null,
         ];
     }
@@ -320,6 +326,10 @@ final class UserCleaningOrderEstimationService
         $hours = is_numeric(Arr::get($propertyDetails, 'hours'))
             ? $this->roundToHalfHour((float) Arr::get($propertyDetails, 'hours'))
             : 1.0;
+        $workerCountValue = Arr::get($propertyDetails, 'workerCount', Arr::get($propertyDetails, 'worker_count'));
+        $workerCount = is_numeric($workerCountValue)
+            ? max(1, min(20, (int) $workerCountValue))
+            : null;
 
         return array_filter([
             'address' => $this->nullableTrim($propertyDetails, 'address'),
@@ -329,6 +339,7 @@ final class UserCleaningOrderEstimationService
             'venue_type' => $venueType,
             'custom_service' => $customService !== '' ? $customService : null,
             'hours' => max(1.0, min(24.0, $hours)),
+            'worker_count' => $workerCount,
             'special_requirement' => $this->nullableTrim($propertyDetails, 'specialRequirement'),
             'notes' => $this->nullableTrim($propertyDetails, 'notes'),
         ], static fn (mixed $value): bool => $value !== null);
@@ -412,6 +423,7 @@ final class UserCleaningOrderEstimationService
 
     private function eventOrderHourlyRate(): float
     {
+        // Backward-compatible storage: the dashboard saves half of the per-worker hourly rate here.
         $rate = (float) (CleaningFinancialSetting::query()->value('extension_rate_per_30_minutes') ?? 0);
         if ($rate <= 0) {
             throw new InvalidArgumentException('Event assistance hourly rate is not configured.');

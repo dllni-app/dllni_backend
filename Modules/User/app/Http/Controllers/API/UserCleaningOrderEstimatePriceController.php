@@ -30,9 +30,24 @@ final class UserCleaningOrderEstimatePriceController
                 (array) $validated['propertyDetails'],
                 isset($validated['serviceIds']) ? (array) $validated['serviceIds'] : null,
             );
+
+            $assignmentMode = $this->resolveAssignmentMode(
+                $validated['assignmentMode'] ?? null,
+                $validated['preferredWorkerId'] ?? null,
+                $validated['numberOfWorkers'] ?? null,
+            );
+            $requiredWorkers = $assignmentMode === 'preferred_worker'
+                ? 1
+                : max(1, (int) ($validated['numberOfWorkers'] ?? $estimation['recommendation']['suggestedTeamSize'] ?? 1));
+
+            $pricingPropertyDetails = (array) $validated['propertyDetails'];
+            if ($service->isEventAssistanceType((string) $validated['propertyType'])) {
+                $pricingPropertyDetails['workerCount'] = $requiredWorkers;
+            }
+
             $pricing = $service->price(
                 (string) $validated['propertyType'],
-                (array) $validated['propertyDetails'],
+                $pricingPropertyDetails,
                 $addressLatitude,
                 $addressLongitude,
                 $validated['preferredWorkerId'] ?? null,
@@ -44,14 +59,6 @@ final class UserCleaningOrderEstimatePriceController
             ]);
         }
 
-        $assignmentMode = $this->resolveAssignmentMode(
-            $validated['assignmentMode'] ?? null,
-            $validated['preferredWorkerId'] ?? null,
-            $validated['numberOfWorkers'] ?? null,
-        );
-        $requiredWorkers = $assignmentMode === 'preferred_worker'
-            ? 1
-            : max(1, (int) ($validated['numberOfWorkers'] ?? $estimation['recommendation']['suggestedTeamSize'] ?? 1));
         $workerRoomAssignments = null;
 
         if (

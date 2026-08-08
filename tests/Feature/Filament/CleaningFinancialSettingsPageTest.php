@@ -40,6 +40,7 @@ it('removes global worker finance controls and persists only shared trust settin
 
     $this->get(FinancialSettings::getUrl([], isAbsolute: false))
         ->assertSuccessful()
+        ->assertSee('سعر الساعة للعامل الواحد')
         ->assertDontSee('الدين الإداري يضاف إلى رصيد الإيداع')
         ->assertDontSee('تفعيل قواعد مالية العاملين')
         ->assertDontSee('حد المديونية الافتراضي');
@@ -57,7 +58,7 @@ it('removes global worker finance controls and persists only shared trust settin
         ->set('timeBillingMode', 'actual')
         ->set('minBillableMinutes', 30)
         ->set('timeWarningMinutesBeforeEnd', 10)
-        ->set('extensionRatePer30Minutes', 4500.50)
+        ->set('eventAssistanceHourlyRatePerWorker', 400)
         ->set('trustRejectAfterAcceptPenalty', 12)
         ->set('trustMinimumForDispatch', 60)
         ->call('save')
@@ -65,7 +66,7 @@ it('removes global worker finance controls and persists only shared trust settin
 
     $this->assertDatabaseHas('cleaning_financial_settings', [
         'id' => 1,
-        'extension_rate_per_30_minutes' => 4500.50,
+        'extension_rate_per_30_minutes' => 200,
     ]);
 
     $this->assertDatabaseHas('cleaning_deposit_settings', [

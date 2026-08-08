@@ -132,7 +132,7 @@ it('returns provisional pricing when preferred worker is not selected', function
     expect($pricing['totalPrice'])->toBe(1000.0);
 });
 
-it('computes event assistance estimate and hourly pricing', function (): void {
+it('computes event assistance pricing per worker per hour', function (): void {
     CleaningFinancialSetting::query()->updateOrCreate(
         ['id' => 1],
         ['extension_rate_per_30_minutes' => 150]
@@ -163,10 +163,11 @@ it('computes event assistance estimate and hourly pricing', function (): void {
 
     expect($estimation['recommendation']['suggestedTeamSize'])->toBe(5);
     expect($estimation['estimatedHours'])->toBe(4.0);
-    expect($pricing['basePrice'])->toBe(2000.0);
-    expect($pricing['totalPrice'])->toBe(2000.0);
+    expect($pricing['basePrice'])->toBe(10000.0);
+    expect($pricing['totalPrice'])->toBe(10000.0);
     expect($pricing['eventHourlyRate'])->toBe(500.0);
     expect($pricing['eventHours'])->toBe(4.0);
+    expect($pricing['eventWorkerCount'])->toBe(5);
     expect($pricing['serviceLines'])->toHaveCount(0);
 });
 

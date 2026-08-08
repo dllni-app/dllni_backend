@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Modules\Cleaning\Http\Resources\CleaningBookingResource;
 use Modules\User\Http\Requests\UserCleaningOrderStoreRequest;
+use Modules\User\Services\UserCleaningOrderEstimationService;
 use Modules\User\Services\UserCleaningOrderService;
 
 final class UserCleaningOrderStoreController
@@ -24,9 +25,10 @@ final class UserCleaningOrderStoreController
         Validator::make(['couponCode' => $couponCode], [
             'couponCode' => ['nullable', 'string', 'max:50'],
         ])->validate();
+        $validated = $this->withEventWorkerCount($request->validated());
 
-        $order = DB::transaction(function () use ($request, $service, $platformCoupons, $couponCode) {
-            $order = $service->store($request->user(), $request->validated());
+        $order = DB::transaction(function () use ($request, $service, $platformCoupons, $couponCode, $validated) {
+            $order = $service->store($request->user(), $validated);
 
             if (is_string($couponCode) && trim($couponCode) !== '') {
                 $subtotal = round((float) $order->base_price + (float) $order->addons_total, 2);
@@ -75,5 +77,30 @@ final class UserCleaningOrderStoreController
         ]);
 
         return response()->json(['order' => CleaningBookingResource::make($order)], 201);
+    }
+
+    /** @param array<string, mixed> $validated */
+    private function withEventWorkerCount(array $validated): array
+    {
+        if (mb_strtolower((string) ($validated['propertyType'] ?? '')) !== UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE) {
+            return $validated;
+        }
+
+        $propertyDetails = (array) ($validated['propertyDetails'] ?? []);
+
+        if (array_key_exists('numberOfWorkers', $validated) && is_numeric($validated['numberOfWorkers'])) {
+            $propertyDetails['workerCount'] = max(1, (int) $validated['numberOfWorkers']);
+        } else {
+            $assignmentMode = mb_strtolower((string) ($validated['assignmentMode'] ?? ''));
+            $preferredWorkerId = $validated['preferredWorkerId'] ?? null;
+
+            if ($assignmentMode !== 'open_count' && is_numeric($preferredWorkerId) && (int) $preferredWorkerId > 0) {
+                $propertyDetails['workerCount'] = 1;
+            }
+        }
+
+        $validated['propertyDetails'] = $propertyDetails;
+
+        return $validated;
     }
 }

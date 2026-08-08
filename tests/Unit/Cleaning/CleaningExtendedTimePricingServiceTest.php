@@ -15,7 +15,15 @@ beforeEach(function (): void {
             'vat_rate' => 0,
             'travel_markup_type' => 'fixed',
             'travel_markup_value' => 0,
-            'extension_rate_per_30_minutes' => 4500,
+            'extension_rate_per_30_minutes' => 200,
+            'extension_ranges' => [
+                ['start' => 0, 'end' => 15, 'price' => 10],
+                ['start' => 16, 'end' => 30, 'price' => 25],
+                ['start' => 31, 'end' => 45, 'price' => 50],
+                ['start' => 46, 'end' => 60, 'price' => 100],
+                ['start' => 61, 'end' => 75, 'price' => 200],
+                ['start' => 76, 'end' => 90, 'price' => 500],
+            ],
         ],
     );
 });
@@ -38,12 +46,12 @@ it('returns the configured price for each fixed cleaning extension minute range'
         ])
         ->and($quote['calculatedExtensionPrice'])->toBe($price);
 })->with([
-    '0-15 minutes' => [0, 0, 15, 2250.0],
-    '16-30 minutes' => [16, 16, 30, 4500.0],
-    '31-45 minutes' => [31, 31, 45, 6750.0],
-    '46-60 minutes' => [46, 46, 60, 9000.0],
-    '61-75 minutes' => [61, 61, 75, 11250.0],
-    '76-90 minutes' => [90, 76, 90, 13500.0],
+    '0-15 minutes' => [0, 0, 15, 10.0],
+    '16-30 minutes' => [16, 16, 30, 25.0],
+    '31-45 minutes' => [31, 31, 45, 50.0],
+    '46-60 minutes' => [46, 46, 60, 100.0],
+    '61-75 minutes' => [61, 61, 75, 200.0],
+    '76-90 minutes' => [90, 76, 90, 500.0],
 ]);
 
 it('fails validation when cleaning extension minutes exceed 90', function (): void {
@@ -58,7 +66,7 @@ it('returns all fixed cleaning extension ranges from the configured financial se
             'startMinutes' => 46,
             'endMinutes' => 60,
             'label' => 'من 46 إلى 60 دقيقة',
-            'price' => 9000.0,
+            'price' => 100.0,
             'currency' => 'SYP',
         ]);
 });
@@ -74,15 +82,15 @@ it('adds the booking effective administration margin to an extension quote', fun
         ->quoteForBooking($booking, 30);
 
     expect($quote)->toMatchArray([
-        'baseAmount' => 4500.0,
-        'adminMargin' => 500.0,
-        'totalAmount' => 5000.0,
-        'calculatedExtensionPrice' => 5000.0,
+        'baseAmount' => 25.0,
+        'adminMargin' => 2.5,
+        'totalAmount' => 27.5,
+        'calculatedExtensionPrice' => 27.5,
     ])->and($quote['matchedRange'])->toMatchArray([
-        'price' => 5000.0,
-        'baseAmount' => 4500.0,
-        'adminMargin' => 500.0,
-        'totalAmount' => 5000.0,
+        'price' => 27.5,
+        'baseAmount' => 25.0,
+        'adminMargin' => 2.5,
+        'totalAmount' => 27.5,
     ]);
 });
 
@@ -96,9 +104,9 @@ it('derives an effective rate from a fixed booking margin snapshot', function ()
     $quote = app(CleaningExtendedTimePricingService::class)
         ->quoteForBooking($booking, 30);
 
-    expect($quote['baseAmount'])->toBe(4500.0)
-        ->and($quote['adminMargin'])->toBe(1500.0)
-        ->and($quote['totalAmount'])->toBe(6000.0);
+    expect($quote['baseAmount'])->toBe(25.0)
+        ->and($quote['adminMargin'])->toBe(6.25)
+        ->and($quote['totalAmount'])->toBe(31.25);
 });
 
 it('uses zero extension margin when the booking service subtotal is zero', function (): void {
@@ -112,5 +120,5 @@ it('uses zero extension margin when the booking service subtotal is zero', funct
         ->quoteForBooking($booking, 30);
 
     expect($quote['adminMargin'])->toBe(0.0)
-        ->and($quote['totalAmount'])->toBe(4500.0);
+        ->and($quote['totalAmount'])->toBe(25.0);
 });

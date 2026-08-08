@@ -91,6 +91,25 @@
         </div>
     </x-filament::section>
 
+    <x-filament::section :heading="app()->isLocale('ar') ? 'تسعير المناسبات' : 'Event assistance pricing'">
+        <p class="mb-4 text-sm text-gray-500 dark:text-gray-400">
+            {{ app()->isLocale('ar')
+                ? 'حدد سعر الساعة للعامل الواحد في طلبات المناسبات. يحسب السعر الأساسي بضرب هذا السعر في عدد الساعات وعدد العاملين.'
+                : 'Set the hourly rate per worker for event assistance. Base price is this rate multiplied by booked hours and worker count.' }}
+        </p>
+        <div class="grid gap-4 md:grid-cols-2">
+            <label class="flex flex-col gap-1">
+                <span class="text-sm">{{ app()->isLocale('ar') ? 'سعر الساعة للعامل الواحد' : 'Hourly rate per worker' }}</span>
+                <div class="flex items-center gap-2">
+                    <input type="number" min="0.01" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="eventAssistanceHourlyRatePerWorker">
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ __('SYP') }}</span>
+                </div>
+                <span class="text-xs text-gray-500 dark:text-gray-400">{{ app()->isLocale('ar') ? 'القيمة الافتراضية 400 ل.س لكل عامل عن كل ساعة.' : 'Default: 400 SYP for each worker per booked hour.' }}</span>
+                @error('eventAssistanceHourlyRatePerWorker') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
+            </label>
+        </div>
+    </x-filament::section>
+
     <x-filament::section :heading="__('cleaning_admin.financial.sections.time_extension')">
         <p class="mb-4 text-sm text-gray-500 dark:text-gray-400">{{ __('cleaning_admin.financial.hints.time_extension') }}</p>
         <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

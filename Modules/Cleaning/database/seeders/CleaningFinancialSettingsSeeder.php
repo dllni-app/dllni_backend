@@ -10,23 +10,27 @@ use Modules\Cleaning\Support\CleaningFinancialDefaults;
 
 final class CleaningFinancialSettingsSeeder extends Seeder
 {
-    private const EXTENSION_RATE_PER_30_MINUTES = 4500.00;
+    /**
+     * Kept for backward compatibility with the existing event-assistance API.
+     * The event hourly rate is this value × 2, so 200 => 400 SYP/hour/worker.
+     * Time-extension prices themselves are read from EXTENSION_RANGES.
+     */
+    private const EXTENSION_RATE_PER_30_MINUTES = 200.00;
+
     private const TRAVEL_PER_KM = 7500.00;
 
     /**
-     * Per-range extension prices (15-minute blocks up to 90 minutes). Defaults
-     * mirror the historical derivation (rate / 30 × end-minute) so existing
-     * quotes stay identical; admins can now edit each block's price.
+     * Prices after adopting the new Syrian currency denominations.
      *
      * @var array<int, array{start:int, end:int, price:float}>
      */
     private const EXTENSION_RANGES = [
-        ['start' => 0, 'end' => 15, 'price' => 2250.00],
-        ['start' => 16, 'end' => 30, 'price' => 4500.00],
-        ['start' => 31, 'end' => 45, 'price' => 6750.00],
-        ['start' => 46, 'end' => 60, 'price' => 9000.00],
-        ['start' => 61, 'end' => 75, 'price' => 11250.00],
-        ['start' => 76, 'end' => 90, 'price' => 13500.00],
+        ['start' => 0, 'end' => 15, 'price' => 10.00],
+        ['start' => 16, 'end' => 30, 'price' => 25.00],
+        ['start' => 31, 'end' => 45, 'price' => 50.00],
+        ['start' => 46, 'end' => 60, 'price' => 100.00],
+        ['start' => 61, 'end' => 75, 'price' => 200.00],
+        ['start' => 76, 'end' => 90, 'price' => 500.00],
     ];
 
     public function run(): void

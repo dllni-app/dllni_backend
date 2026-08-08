@@ -47,6 +47,8 @@ final class FinancialSettings extends Page
 
     public float $extensionRatePer30Minutes = 0.0;
 
+    public float $eventAssistanceHourlyRatePerWorker = 400.0;
+
     public int $trustRejectAfterAcceptPenalty = 10;
 
     public int $trustMinimumForDispatch = 0;
@@ -142,6 +144,9 @@ final class FinancialSettings extends Page
             $this->minBillableMinutes = $setting->min_billable_minutes !== null ? (int) $setting->min_billable_minutes : null;
             $this->timeWarningMinutesBeforeEnd = $setting->time_warning_minutes_before_end !== null ? (int) $setting->time_warning_minutes_before_end : null;
             $this->extensionRatePer30Minutes = (float) ($setting->extension_rate_per_30_minutes ?? 0.0);
+            $this->eventAssistanceHourlyRatePerWorker = $this->extensionRatePer30Minutes > 0
+                ? round($this->extensionRatePer30Minutes * 2, 2)
+                : 400.0;
             $this->cleaningBaseUnitPrice = (float) ($setting->cleaning_base_unit_price ?? CleaningFinancialDefaults::BASE_UNIT_PRICE);
             $this->cleaningDeepMultiplier = (float) ($setting->cleaning_deep_multiplier ?? CleaningFinancialDefaults::DEEP_CLEANING_MULTIPLIER);
             $this->userCancellationFee = (float) ($setting->user_cancellation_fee ?? 0.0);
@@ -172,6 +177,7 @@ final class FinancialSettings extends Page
             'minBillableMinutes' => ['nullable', 'integer', 'min:0'],
             'timeWarningMinutesBeforeEnd' => ['nullable', 'integer', 'min:0'],
             'extensionRatePer30Minutes' => ['required', 'numeric', 'min:0'],
+            'eventAssistanceHourlyRatePerWorker' => ['required', 'numeric', 'min:0.01'],
             'extensionRanges' => ['array'],
             'extensionRanges.*.price' => ['required', 'numeric', 'min:0'],
             'minimumDepositAmount' => ['required', 'numeric', 'min:0'],
@@ -189,6 +195,7 @@ final class FinancialSettings extends Page
         ]);
 
         $this->assertRoomPricingSettingsShape();
+        $this->extensionRatePer30Minutes = round($this->eventAssistanceHourlyRatePerWorker / 2, 2);
 
         [$roomPricingUnits, $roomTimeMinutes] = $this->roomPricingPayloads();
 
