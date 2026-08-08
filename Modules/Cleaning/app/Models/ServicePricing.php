@@ -31,8 +31,8 @@ final class ServicePricing extends Model
     public function casts(): array
     {
         return [
-            'base_price' => 'decimal:2',
-            'price_per_sqm' => 'decimal:2',
+            'base_price' => 'integer',
+            'price_per_sqm' => 'integer',
             'min_hours' => 'decimal:2',
         ];
     }
