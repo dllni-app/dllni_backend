@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\DB;
+use Modules\User\Services\UserPopularSearchService;
 
 it('returns popular searches scoped by requested section', function (): void {
     $now = now();
@@ -108,6 +109,36 @@ it('filters popular searches by products or merchants', function (): void {
             'filter' => 'merchants',
             'data' => ['سوق الخير', 'حليب'],
         ]);
+});
+
+it('records product and merchant search counts independently', function (): void {
+    $service = app(UserPopularSearchService::class);
+
+    $service->record(
+        UserPopularSearchService::SUPERMARKET,
+        'حليب',
+        UserPopularSearchService::PRODUCTS,
+    );
+    $service->record(
+        UserPopularSearchService::SUPERMARKET,
+        'حليب',
+        UserPopularSearchService::PRODUCTS,
+    );
+    $service->record(
+        UserPopularSearchService::SUPERMARKET,
+        'حليب',
+        UserPopularSearchService::MERCHANTS,
+    );
+
+    $row = DB::table('user_search_terms')
+        ->where('section', 'supermarket')
+        ->where('normalized_query', 'حليب')
+        ->first();
+
+    expect($row)->not->toBeNull()
+        ->and((int) $row->searches_count)->toBe(3)
+        ->and((int) $row->product_searches_count)->toBe(2)
+        ->and((int) $row->merchant_searches_count)->toBe(1);
 });
 
 it('rejects unsupported popular search sections', function (): void {
