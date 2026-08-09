@@ -5,9 +5,14 @@ declare(strict_types=1);
 namespace App\Http\Resources;
 
 use App\Models\SupportCase;
+use App\Support\SupportCaseBookingPresentation;
+use BackedEnum;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Delivery\Models\DeliveryOrder;
+use Modules\Resturants\Models\Order;
+use Modules\Supermarket\Models\SmOrder;
 
 /** @mixin SupportCase */
 final class SupportCaseResource extends JsonResource
@@ -22,7 +27,7 @@ final class SupportCaseResource extends JsonResource
             'kind' => $this->kind?->value ?? $this->kind,
             'priority' => $this->priority?->value ?? $this->priority,
             'bookingId' => $this->booking_id,
-            'bookingType' => $this->booking_type,
+            'bookingType' => SupportCaseBookingPresentation::normalizeType((string) $this->booking_type),
             'reporterId' => $this->reporter_id,
             'reporterRole' => $this->reporter_role?->value ?? $this->reporter_role,
             'category' => $this->category,
@@ -41,27 +46,7 @@ final class SupportCaseResource extends JsonResource
                 'name' => $this->reporter->name,
                 'phone' => $this->reporter->phone,
             ] : null),
-            'booking' => $this->whenLoaded('booking', function () use ($booking): ?array {
-                if (! $booking instanceof CleaningBooking) {
-                    return null;
-                }
-
-                return [
-                    'id' => $booking->id,
-                    'bookingNumber' => $booking->booking_number,
-                    'status' => $booking->status?->value ?? $booking->status,
-                    'customer' => $booking->relationLoaded('customer') && $booking->customer ? [
-                        'id' => $booking->customer->id,
-                        'name' => $booking->customer->name,
-                        'phone' => $booking->customer->phone,
-                    ] : null,
-                    'worker' => $booking->relationLoaded('worker') && $booking->worker ? [
-                        'id' => $booking->worker->id,
-                        'name' => $booking->worker->user?->name ?: $booking->worker->first_name,
-                        'phone' => $booking->worker->relationLoaded('user') ? $booking->worker->user?->phone : null,
-                    ] : null,
-                ];
-            }),
+            'booking' => $this->whenLoaded('booking', fn (): ?array => self::bookingPayload($booking)),
             'attachments' => $this->getMedia('attachments')->map(fn ($media): array => [
                 'id' => $media->id,
                 'name' => $media->file_name,
@@ -96,5 +81,101 @@ final class SupportCaseResource extends JsonResource
             'createdAt' => $this->created_at?->toISOString(),
             'updatedAt' => $this->updated_at?->toISOString(),
         ];
+    }
+
+    private static function bookingPayload(mixed $booking): ?array
+    {
+        if ($booking instanceof CleaningBooking) {
+            return [
+                'type' => 'cleaning_booking',
+                'id' => $booking->id,
+                'bookingNumber' => $booking->booking_number,
+                'orderNumber' => $booking->booking_number,
+                'status' => self::statusValue($booking->status),
+                'customer' => $booking->relationLoaded('customer') && $booking->customer ? [
+                    'id' => $booking->customer->id,
+                    'name' => $booking->customer->name,
+                    'phone' => $booking->customer->phone,
+                ] : null,
+                'worker' => $booking->relationLoaded('worker') && $booking->worker ? [
+                    'id' => $booking->worker->id,
+                    'name' => $booking->worker->user?->name ?: $booking->worker->first_name,
+                    'phone' => $booking->worker->relationLoaded('user') ? $booking->worker->user?->phone : null,
+                ] : null,
+            ];
+        }
+
+        if ($booking instanceof Order) {
+            return [
+                'type' => 'restaurant_order',
+                'id' => $booking->id,
+                'orderNumber' => $booking->order_number,
+                'status' => self::statusValue($booking->status),
+                'customer' => $booking->relationLoaded('customer') && $booking->customer ? [
+                    'id' => $booking->customer->id,
+                    'name' => $booking->customer->name,
+                    'phone' => $booking->customer->phone,
+                ] : null,
+                'merchant' => $booking->relationLoaded('restaurant') && $booking->restaurant ? [
+                    'id' => $booking->restaurant->id,
+                    'name' => $booking->restaurant->name,
+                    'phone' => $booking->restaurant->phone,
+                ] : null,
+            ];
+        }
+
+        if ($booking instanceof SmOrder) {
+            return [
+                'type' => 'supermarket_order',
+                'id' => $booking->id,
+                'orderNumber' => $booking->order_number,
+                'status' => self::statusValue($booking->status),
+                'customer' => $booking->relationLoaded('customer') && $booking->customer ? [
+                    'id' => $booking->customer->id,
+                    'name' => $booking->customer->name,
+                    'phone' => $booking->customer->phone,
+                ] : null,
+                'merchant' => $booking->relationLoaded('store') && $booking->store ? [
+                    'id' => $booking->store->id,
+                    'name' => $booking->store->name,
+                    'phone' => $booking->store->phone,
+                ] : null,
+            ];
+        }
+
+        if ($booking instanceof DeliveryOrder) {
+            return [
+                'type' => 'delivery_order',
+                'id' => $booking->id,
+                'orderNumber' => $booking->order_number,
+                'status' => self::statusValue($booking->status),
+                'customer' => $booking->relationLoaded('createdBy') && $booking->createdBy ? [
+                    'id' => $booking->createdBy->id,
+                    'name' => $booking->createdBy->name,
+                    'phone' => $booking->createdBy->phone,
+                ] : [
+                    'id' => $booking->created_by_user_id,
+                    'name' => $booking->customer_name,
+                    'phone' => $booking->customer_phone,
+                ],
+                'driver' => $booking->relationLoaded('driver') && $booking->driver?->exists ? [
+                    'id' => $booking->driver->id,
+                    'name' => $booking->driver->user?->name ?: $booking->driver->first_name,
+                    'phone' => $booking->driver->user?->phone ?: $booking->driver->phone,
+                ] : null,
+                'company' => $booking->relationLoaded('company') && $booking->company ? [
+                    'id' => $booking->company->id,
+                    'name' => $booking->company->name,
+                    'phone' => $booking->company->phone,
+                ] : null,
+            ];
+        }
+
+        return null;
+    }
+
+    private static function statusValue(mixed $status): string
+    {
+        return $status instanceof BackedEnum ? (string) $status->value : (string) $status;
     }
 }

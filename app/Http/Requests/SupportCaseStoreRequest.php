@@ -21,8 +21,17 @@ final class SupportCaseStoreRequest extends FormRequest
     {
         return [
             'kind' => ['required', Rule::enum(SupportCaseKind::class)],
-            'bookingId' => ['required', 'integer', 'exists:cleaning_bookings,id'],
-            'bookingType' => ['nullable', 'string', Rule::in(['cleaning_booking'])],
+            'bookingId' => ['required', 'integer', 'min:1'],
+            'bookingType' => [
+                'required',
+                'string',
+                Rule::in([
+                    'cleaning_booking',
+                    'restaurant_order',
+                    'supermarket_order',
+                    'delivery_order',
+                ]),
+            ],
             'category' => [
                 Rule::requiredIf(fn (): bool => $this->input('kind') === SupportCaseKind::Complaint->value),
                 'nullable',
@@ -34,8 +43,8 @@ final class SupportCaseStoreRequest extends FormRequest
                 Rule::enum(EmergencyType::class),
             ],
             'description' => ['required', 'string', 'min:3', 'max:1000'],
-            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
-            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'latitude' => ['nullable', 'required_with:longitude', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'required_with:latitude', 'numeric', 'between:-180,180'],
             'clientRequestId' => ['nullable', 'string', 'max:100'],
             'attachments' => ['nullable', 'array', 'max:4'],
             'attachments.*' => ['file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
@@ -45,6 +54,7 @@ final class SupportCaseStoreRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $merge = [
+            // Backwards compatibility for already-released cleaning clients.
             'bookingType' => $this->input('bookingType', 'cleaning_booking'),
         ];
 

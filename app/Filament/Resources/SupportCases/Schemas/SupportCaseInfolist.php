@@ -8,6 +8,7 @@ use App\Enums\DisputeCategory;
 use App\Enums\EmergencyType;
 use App\Enums\SupportCaseKind;
 use App\Models\SupportCase;
+use App\Support\SupportCaseBookingPresentation;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
@@ -22,6 +23,10 @@ final class SupportCaseInfolist
             Section::make('بيانات البلاغ')
                 ->schema([
                     TextEntry::make('case_number')->label('رقم البلاغ')->copyable(),
+                    TextEntry::make('service_type')
+                        ->label('القسم')
+                        ->badge()
+                        ->state(fn (SupportCase $record): string => SupportCaseBookingPresentation::typeLabel($record)),
                     TextEntry::make('kind')->label('النوع')->badge()->formatStateUsing(fn ($state) => $state?->label()),
                     TextEntry::make('priority')->label('الأولوية')->badge()->formatStateUsing(fn ($state) => $state?->label()),
                     TextEntry::make('status')->label('الحالة')->badge()->formatStateUsing(fn ($state) => $state?->label()),
@@ -33,14 +38,37 @@ final class SupportCaseInfolist
                 ])
                 ->columns(4),
 
-            Section::make('الحجز والأطراف')
+            Section::make('الطلب والأطراف')
                 ->schema([
-                    TextEntry::make('booking.booking_number')->label('رقم الحجز')->placeholder('-')->copyable(),
-                    TextEntry::make('booking.status')->label('حالة الحجز')->badge()->formatStateUsing(fn ($state) => $state?->label() ?? (string) $state),
-                    TextEntry::make('booking.customer.name')->label('العميل')->placeholder('-'),
-                    TextEntry::make('booking.customer.phone')->label('رقم هاتف العميل')->placeholder('-')->copyable(),
-                    TextEntry::make('booking.worker.first_name')->label('العامل')->placeholder('-'),
-                    TextEntry::make('booking.worker.user.phone')->label('رقم هاتف العامل')->placeholder('-')->copyable(),
+                    TextEntry::make('booking_reference')
+                        ->label('رقم الطلب / الحجز')
+                        ->state(fn (SupportCase $record): string => SupportCaseBookingPresentation::reference($record))
+                        ->copyable(),
+                    TextEntry::make('booking_status')
+                        ->label('حالة الطلب / الحجز')
+                        ->badge()
+                        ->state(fn (SupportCase $record): string => SupportCaseBookingPresentation::status($record)),
+                    TextEntry::make('customer_name')
+                        ->label('العميل')
+                        ->state(fn (SupportCase $record): ?string => SupportCaseBookingPresentation::customerName($record))
+                        ->placeholder('-'),
+                    TextEntry::make('customer_phone')
+                        ->label('رقم هاتف العميل')
+                        ->state(fn (SupportCase $record): ?string => SupportCaseBookingPresentation::customerPhone($record))
+                        ->placeholder('-')
+                        ->copyable(),
+                    TextEntry::make('counterpart_type')
+                        ->label('نوع الطرف المرتبط')
+                        ->state(fn (SupportCase $record): string => SupportCaseBookingPresentation::counterpartLabel($record)),
+                    TextEntry::make('counterpart_name')
+                        ->label('الطرف المرتبط')
+                        ->state(fn (SupportCase $record): ?string => SupportCaseBookingPresentation::counterpartName($record))
+                        ->placeholder('-'),
+                    TextEntry::make('counterpart_phone')
+                        ->label('رقم هاتف الطرف المرتبط')
+                        ->state(fn (SupportCase $record): ?string => SupportCaseBookingPresentation::counterpartPhone($record))
+                        ->placeholder('-')
+                        ->copyable(),
                 ])
                 ->columns(3),
 
