@@ -19,6 +19,7 @@ final class UserRestaurantProductsWithOffersController
     {
         $products = $this->service->paginateProductsWithActiveOffers(
             restaurantId: $request->getRestaurantId(),
+            offerId: $request->getOfferId(),
             perPage: $request->getPerPage(),
         );
 
