@@ -18,6 +18,8 @@ final class SmProductsSearchController
 {
     private const float SEMANTIC_STRONG_SCORE_THRESHOLD = 0.9;
 
+    private const int LOCAL_FUZZY_MAX_CANDIDATES = 500;
+
     public function __construct(
         private readonly SmSemanticProductSearchService $semanticSearchService,
         private readonly UserPopularSearchService $popularSearches,
@@ -57,7 +59,7 @@ final class SmProductsSearchController
                 ->where(fn ($q) => $q
                     ->whereNull('suspension_until')
                     ->orWhere('suspension_until', '<=', $now)))
-            ->with(['media', 'store']);
+            ->with(['media', 'store', 'masterProduct.media']);
 
         $search = $request->validated('search');
         if ((! is_string($search) || $search === '') && is_string($resolvedQuery) && $resolvedQuery !== '') {
@@ -126,7 +128,7 @@ final class SmProductsSearchController
         $results = $this->semanticSearchService->search($payload);
 
         if ($results === null || $results === []) {
-            return null;
+            return $this->localFuzzySearch($request, $query);
         }
 
         $ids = array_values(array_unique(array_map(static fn (array $row): int => (int) $row['id'], $results)));
@@ -140,7 +142,7 @@ final class SmProductsSearchController
                 ->where(fn ($q) => $q
                     ->whereNull('suspension_until')
                     ->orWhere('suspension_until', '<=', $now)))
-            ->with(['media', 'store'])
+            ->with(['media', 'store', 'masterProduct.media'])
             ->get()
             ->keyBy('id');
 
@@ -161,10 +163,117 @@ final class SmProductsSearchController
 
         $filtered = $this->filterSemanticResultsByTextSignal($ordered, $query);
         if ($filtered->isEmpty()) {
+            return $this->localFuzzySearch($request, $query);
+        }
+
+        return $this->paginateCollection($filtered, $perPage, $page, $request->query());
+    }
+
+    private function localFuzzySearch(DiscoverSupermarketProductsRequest $request, string $query): ?LengthAwarePaginator
+    {
+        $tokens = $this->extractSearchTokens($query);
+        if ($tokens === []) {
+            return null;
+        }
+
+        $perPage = $request->integer('perPage', 20);
+        $page = max(1, $request->integer('page', 1));
+        $now = CarbonImmutable::now();
+
+        $productsQuery = SmProduct::query()
+            ->where('is_available', true)
+            ->whereHas('store', fn ($storeQuery) => $storeQuery
+                ->where('is_active', true)
+                ->where(fn ($q) => $q
+                    ->whereNull('suspension_until')
+                    ->orWhere('suspension_until', '<=', $now)));
+
+        $storeId = $request->input('store_id', $request->input('filter.storeId'));
+        if (is_numeric($storeId)) {
+            $productsQuery->where('store_id', (int) $storeId);
+        }
+
+        $categoryId = $request->input('category_id', $request->input('filter.categoryId'));
+        if (is_numeric($categoryId)) {
+            $productsQuery->where('category_id', (int) $categoryId);
+        }
+
+        $priceMin = $request->input('price_min');
+        if (is_numeric($priceMin)) {
+            $productsQuery->where('price', '>=', (float) $priceMin);
+        }
+
+        $priceMax = $request->input('price_max');
+        if (is_numeric($priceMax)) {
+            $productsQuery->where('price', '<=', (float) $priceMax);
+        }
+
+        $patterns = $this->buildFuzzySqlPatterns($tokens);
+        if ($patterns === []) {
+            return null;
+        }
+
+        $productsQuery->where(function ($candidateQuery) use ($patterns): void {
+            foreach ($patterns as $pattern) {
+                $candidateQuery
+                    ->orWhere('name', 'like', $pattern)
+                    ->orWhere('description', 'like', $pattern)
+                    ->orWhere('barcode', 'like', $pattern);
+            }
+        });
+
+        $candidateLimit = min(
+            self::LOCAL_FUZZY_MAX_CANDIDATES,
+            max(100, $perPage * $page * 10),
+        );
+
+        $candidates = $productsQuery
+            ->with(['media', 'store', 'masterProduct.media'])
+            ->limit($candidateLimit)
+            ->get();
+
+        if ($candidates->isEmpty()) {
+            return null;
+        }
+
+        $filtered = $this->filterSemanticResultsByTextSignal($candidates, $query);
+        if ($filtered->isEmpty()) {
             return null;
         }
 
         return $this->paginateCollection($filtered, $perPage, $page, $request->query());
+    }
+
+    /**
+     * @param  list<string>  $tokens
+     * @return list<string>
+     */
+    private function buildFuzzySqlPatterns(array $tokens): array
+    {
+        $patterns = [];
+
+        foreach ($tokens as $token) {
+            $patterns[] = '%'.$token.'%';
+            $chars = preg_split('//u', $token, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            $length = count($chars);
+
+            for ($index = 0; $index < $length; $index++) {
+                $prefix = implode('', array_slice($chars, 0, $index));
+                $suffix = implode('', array_slice($chars, $index + 1));
+
+                if ($prefix !== '' || $suffix !== '') {
+                    $patterns[] = '%'.$prefix.'%'.$suffix.'%';
+                }
+            }
+
+            for ($index = 1; $index < $length; $index++) {
+                $prefix = implode('', array_slice($chars, 0, $index));
+                $suffix = implode('', array_slice($chars, $index));
+                $patterns[] = '%'.$prefix.'%'.$suffix.'%';
+            }
+        }
+
+        return array_values(array_unique($patterns));
     }
 
     /**
