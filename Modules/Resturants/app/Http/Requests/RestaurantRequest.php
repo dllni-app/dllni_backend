@@ -50,7 +50,10 @@ final class RestaurantRequest extends FormRequest
             'facebookPageName' => 'nullable|string|max:100',
             'averageRating' => 'nullable|numeric|min:0|max:5',
             'totalReviews' => 'nullable|integer|min:0',
-            'estimatedPreparationTime' => 'nullable|integer|min:0',
+            // Legacy single-value input is still accepted and normalized to the max bound.
+            'estimatedPreparationTime' => 'nullable|integer|min:1',
+            'estimatedPreparationTimeMin' => 'nullable|integer|min:1',
+            'estimatedPreparationTimeMax' => 'nullable|integer|min:1|gte:estimatedPreparationTimeMin',
             'minimumOrderAmount' => 'nullable|numeric|min:0',
             'priceRange' => 'nullable|string|in:low,medium,high,premium',
             'reputationScore' => 'nullable|integer|min:0|max:100',
@@ -70,12 +73,28 @@ final class RestaurantRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        $legacyPreparationTime = $this->input('estimatedPreparationTime');
+        $preparationTimeMin = $this->input('estimatedPreparationTimeMin');
+        $preparationTimeMax = $this->input('estimatedPreparationTimeMax');
+
+        if ($preparationTimeMax === null && is_numeric($legacyPreparationTime)) {
+            $preparationTimeMax = (int) $legacyPreparationTime;
+        }
+
+        if ($preparationTimeMin === null && is_numeric($preparationTimeMax)) {
+            $preparationTimeMin = max(1, (int) $preparationTimeMax - 10);
+        }
+
         $this->merge([
             'whatsappNumber' => $this->input('whatsappNumber', $this->input('whatsapp')),
             'facebookPageName' => $this->input('facebookPageName', $this->input('face')),
             'instagramUsername' => $this->input('instagramUsername', $this->input('instagram')),
             'latitude' => $this->input('latitude', $this->input('lat')),
             'longitude' => $this->input('longitude', $this->input('long')),
+            'estimatedPreparationTimeMin' => $preparationTimeMin,
+            'estimatedPreparationTimeMax' => $preparationTimeMax,
+            // Keep the legacy DB/API field synchronized with the range upper bound.
+            'estimatedPreparationTime' => $preparationTimeMax,
         ]);
 
         if ($this->hasFile('image') && ! $this->hasFile('primaryImage')) {
