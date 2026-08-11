@@ -16,6 +16,8 @@ final class SupermarketDatabaseSeeder extends Seeder
             SmStoreHoursSeeder::class,
             SmCategorySeeder::class,
             SmProductSeeder::class,
+            SmProductMasterLinkSeeder::class,
+            SmComparisonTestDataSeeder::class,
             SmOfferSeeder::class,
             SmCouponSeeder::class,
             SmCommissionRuleSeeder::class,
