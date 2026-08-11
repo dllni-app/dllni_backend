@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\User\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 final class DiscoverRestaurantsRequest extends FormRequest
 {
@@ -26,8 +27,23 @@ final class DiscoverRestaurantsRequest extends FormRequest
             'filter.openNow' => ['sometimes', 'boolean'],
             'filter.hasOffers' => ['sometimes', 'boolean'],
             'filter.preparationTimeMin' => ['sometimes', 'integer', 'min:1'],
-            'filter.preparationTimeMax' => ['sometimes', 'integer', 'min:1', 'gte:filter.preparationTimeMin'],
+            'filter.preparationTimeMax' => ['sometimes', 'integer', 'min:1'],
             'sort' => ['sometimes', 'string', 'in:rating,nearest,fastest'],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            $min = $this->input('filter.preparationTimeMin');
+            $max = $this->input('filter.preparationTimeMax');
+
+            if (is_numeric($min) && is_numeric($max) && (int) $max < (int) $min) {
+                $validator->errors()->add(
+                    'filter.preparationTimeMax',
+                    'The maximum preparation time must be greater than or equal to the minimum preparation time.'
+                );
+            }
+        });
     }
 }
