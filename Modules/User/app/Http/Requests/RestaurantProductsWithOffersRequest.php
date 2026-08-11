@@ -17,6 +17,7 @@ final class RestaurantProductsWithOffersRequest extends FormRequest
     {
         return [
             'restaurant_id' => 'nullable|integer|exists:restaurants,id',
+            'offer_id' => 'nullable|integer|exists:offers,id',
             'per_page' => 'nullable|integer|between:1,100',
         ];
     }
@@ -31,5 +32,12 @@ final class RestaurantProductsWithOffersRequest extends FormRequest
         $restaurantId = $this->input('restaurant_id');
 
         return $restaurantId === null ? null : (int) $restaurantId;
+    }
+
+    public function getOfferId(): ?int
+    {
+        $offerId = $this->input('offer_id');
+
+        return $offerId === null ? null : (int) $offerId;
     }
 }
