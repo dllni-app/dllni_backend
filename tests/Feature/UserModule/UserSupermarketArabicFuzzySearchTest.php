@@ -55,6 +55,41 @@ it('keeps a close Arabic typo match returned by semantic search', function (): v
     expect($ids)->not->toContain($juice->id);
 });
 
+it('finds a close Arabic typo locally when semantic search returns no results', function (): void {
+    $store = SmStore::factory()->create([
+        'is_active' => true,
+        'suspension_until' => null,
+    ]);
+
+    $lentils = SmProductFactory::new()->create([
+        'store_id' => $store->id,
+        'name' => 'عدس أحمر',
+        'description' => 'عدس أحمر حب',
+        'is_available' => true,
+    ]);
+
+    $juice = SmProductFactory::new()->create([
+        'store_id' => $store->id,
+        'name' => 'عصير برتقال',
+        'is_available' => true,
+    ]);
+
+    Http::fake([
+        'https://dallelni.karriya.ai/products/search' => Http::response([
+            'query' => 'عدش',
+            'results' => [],
+        ]),
+    ]);
+
+    $response = $this->getJson('/api/v1/user/supermarket/products/search?search='.urlencode('عدش'));
+
+    $response->assertOk();
+    $ids = collect($response->json('data'))->pluck('id')->all();
+
+    expect($ids)->toContain($lentils->id);
+    expect($ids)->not->toContain($juice->id);
+});
+
 it('normalizes common Arabic character variants before validating semantic results', function (): void {
     $store = SmStore::factory()->create([
         'is_active' => true,
