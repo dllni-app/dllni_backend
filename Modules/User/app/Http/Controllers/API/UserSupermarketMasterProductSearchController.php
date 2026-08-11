@@ -15,20 +15,27 @@ final class UserSupermarketMasterProductSearchController
     public function __invoke(UserSupermarketMasterProductSearchRequest $request): AnonymousResourceCollection
     {
         $validated = $request->validated();
-        $index = mb_trim((string) $validated['index']);
+        $index = mb_trim((string) ($validated['index'] ?? ''));
         $perPage = (int) ($validated['perPage'] ?? 20);
-        $escapedIndex = SearchTermEscaper::escape($index);
 
         $masterProducts = MasterProduct::query()
             ->with('media')
-            ->where('is_active', true)
-            ->where(function ($query) use ($escapedIndex): void {
-                $query->whereRaw("name LIKE ? ESCAPE '!'", ["{$escapedIndex}%"]);
-            })
-            ->orderByRaw("CASE WHEN name LIKE ? ESCAPE '!' THEN 0 ELSE 1 END", ["{$escapedIndex}%"])
+            ->where('is_active', true);
+
+        if ($index !== '') {
+            $escapedIndex = SearchTermEscaper::escape($index);
+
+            $masterProducts
+                ->where(function ($query) use ($escapedIndex): void {
+                    $query->whereRaw("name LIKE ? ESCAPE '!'", ["{$escapedIndex}%"]);
+                })
+                ->orderByRaw("CASE WHEN name LIKE ? ESCAPE '!' THEN 0 ELSE 1 END", ["{$escapedIndex}%"]);
+        }
+
+        $masterProducts
             ->orderBy('name')
             ->paginate($perPage);
 
-        return MasterProductResource::collection($masterProducts);
+        return MasterProductResource::collection($masterProducts->paginate($perPage));
     }
 }
