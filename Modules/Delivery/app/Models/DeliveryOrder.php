@@ -12,6 +12,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Modules\Resturants\Models\Order as RestaurantOrder;
+use Modules\Supermarket\Models\SmOrder;
 
 final class DeliveryOrder extends Model
 {
@@ -43,7 +45,35 @@ final class DeliveryOrder extends Model
 
     public function scopeOwnedByUser(Builder $query, int $userId): Builder
     {
-        return $query->where('created_by_user_id', $userId);
+        return $query->where(function (Builder $ownedQuery) use ($userId): void {
+            $ownedQuery->where('created_by_user_id', $userId)
+                ->orWhere(function (Builder $legacyQuery) use ($userId): void {
+                    $legacyQuery->whereNull('created_by_user_id')
+                        ->where(function (Builder $sourceQuery) use ($userId): void {
+                            $sourceQuery
+                                ->where(function (Builder $restaurantQuery) use ($userId): void {
+                                    $restaurantQuery
+                                        ->where('source_type', 'restaurant_order')
+                                        ->whereIn(
+                                            'source_id',
+                                            RestaurantOrder::query()
+                                                ->select('id')
+                                                ->where('user_id', $userId),
+                                        );
+                                })
+                                ->orWhere(function (Builder $supermarketQuery) use ($userId): void {
+                                    $supermarketQuery
+                                        ->where('source_type', 'supermarket_order')
+                                        ->whereIn(
+                                            'source_id',
+                                            SmOrder::query()
+                                                ->select('id')
+                                                ->where('customer_id', $userId),
+                                        );
+                                });
+                        });
+                });
+        });
     }
 
     public function assignmentAttempts(): HasMany
