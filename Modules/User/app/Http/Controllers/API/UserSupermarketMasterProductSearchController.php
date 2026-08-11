@@ -32,10 +32,10 @@ final class UserSupermarketMasterProductSearchController
                 ->orderByRaw("CASE WHEN name LIKE ? ESCAPE '!' THEN 0 ELSE 1 END", ["{$escapedIndex}%"]);
         }
 
-        $masterProducts
+        $masterProducts = $masterProducts
             ->orderBy('name')
             ->paginate($perPage);
 
-        return MasterProductResource::collection($masterProducts->paginate($perPage));
+        return MasterProductResource::collection($masterProducts);
     }
 }
