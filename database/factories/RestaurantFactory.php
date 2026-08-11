@@ -21,6 +21,8 @@ final class RestaurantFactory extends Factory
     {
         $name = fake()->company().' Restaurant';
         $slug = Str::slug($name).'-'.fake()->unique()->randomNumber(4);
+        $preparationTimeMin = fake()->numberBetween(10, 30);
+        $preparationTimeMax = fake()->numberBetween($preparationTimeMin + 5, $preparationTimeMin + 20);
 
         return [
             'user_id' => User::factory(),
@@ -34,7 +36,10 @@ final class RestaurantFactory extends Factory
             'email' => fake()->companyEmail(),
             'average_rating' => fake()->randomFloat(2, 0, 5),
             'total_reviews' => fake()->numberBetween(0, 500),
-            'estimated_preparation_time' => fake()->numberBetween(10, 45),
+            // Keep legacy field synchronized with the upper bound.
+            'estimated_preparation_time' => $preparationTimeMax,
+            'estimated_preparation_time_min' => $preparationTimeMin,
+            'estimated_preparation_time_max' => $preparationTimeMax,
             'minimum_order_amount' => fake()->randomFloat(2, 0, 50),
             'price_range' => fake()->randomElement(PriceRange::class)->value,
             'reputation_score' => fake()->numberBetween(0, 100),
