@@ -23,6 +23,20 @@ Route::get('/', function (): Response {
     $content = view('welcome')->render();
     $footer = view('partials.landing-copyright')->render();
 
+    $iosComingSoonButton = <<<HTML
+                        <span
+                            class="store-button"
+                            aria-disabled="true"
+                            title="تحميل تطبيق iOS سيكون متاحاً قريباً"
+                            style="cursor: not-allowed; opacity: 0.68; box-shadow: none;"
+                        >
+                            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                <path d="M16.37 12.64c.02 2.2 1.93 2.93 1.95 2.94-.02.05-.3 1.04-1 2.06-.6.88-1.23 1.76-2.22 1.78-.97.02-1.28-.57-2.39-.57-1.1 0-1.45.55-2.37.59-.95.04-1.67-.95-2.28-1.82-1.24-1.8-2.19-5.08-.92-7.29a3.54 3.54 0 0 1 3.03-1.85c.94-.02 1.84.64 2.4.64.57 0 1.64-.79 2.76-.67.47.02 1.79.19 2.63 1.43-.07.04-1.58.92-1.57 2.76ZM14.6 7.27c.5-.6.83-1.44.74-2.27-.72.03-1.6.48-2.12 1.08-.46.53-.87 1.38-.76 2.2.81.07 1.64-.41 2.14-1.01Z"/>
+                            </svg>
+                            <span class="store-button__text"><small>قريباً على</small>App Store</span>
+                        </span>
+HTML;
+
     $directDownloadButton = <<<HTML
                         <a class="store-button" href="{$directDownloadUrl}" aria-label="تحميل التطبيق مباشرة">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
@@ -34,7 +48,7 @@ HTML;
 
     $content = preg_replace(
         '/<a class="store-button" href="#" aria-label="تحميل التطبيق من App Store">.*?<\/a>/s',
-        $directDownloadButton,
+        $iosComingSoonButton."\n".$directDownloadButton,
         $content,
         1,
     ) ?? $content;
@@ -48,7 +62,7 @@ HTML;
         ],
         [
             'href="'.$googlePlayUrl.'" target="_blank" rel="noopener noreferrer" aria-label="تحميل التطبيق من Google Play"',
-            '<a class="store-button" href="'.$directDownloadUrl.'">تحميل مباشر</a>',
+            '<span class="store-button" aria-disabled="true" title="تحميل تطبيق iOS سيكون متاحاً قريباً" style="cursor: not-allowed; opacity: 0.68; box-shadow: none;">App Store — قريباً</span><a class="store-button" href="'.$directDownloadUrl.'">تحميل مباشر</a>',
             '<a class="store-button store-button--secondary" href="'.$googlePlayUrl.'" target="_blank" rel="noopener noreferrer">Google Play</a>',
             'تواصل مع الإدارة عبر واتساب',
         ],

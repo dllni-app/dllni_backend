@@ -17,6 +17,9 @@ final class LandingPageLinksTest extends TestCase
             ->assertSee('https://alnadha.net/v1/apps/download?appType=user_app', false)
             ->assertSee('https://wa.me/963948388930', false)
             ->assertSee('تحميل مباشر', false)
+            ->assertSee('قريباً على', false)
+            ->assertSee('App Store', false)
+            ->assertSee('aria-disabled="true"', false)
             ->assertSee('تواصل مع الإدارة عبر واتساب', false)
             ->assertDontSee('href="mailto:', false);
     }
