@@ -52,7 +52,7 @@ final class UserRestaurantDetailsController
             ->where('is_available', true)
             ->orderByDesc('is_featured')
             ->orderByDesc('created_at')
-            ->with(['media', 'category'])
+            ->with(['media', 'category', 'offers'])
             ->limit(10)
             ->get();
 
@@ -60,7 +60,7 @@ final class UserRestaurantDetailsController
             ->orderBy('sort_order')
             ->with(['products' => fn($q) => $q
                 ->where('is_available', true)
-                ->with('media')
+                ->with(['media', 'offers'])
                 ->orderByDesc('is_featured')
                 ->orderBy('name')])
             ->get();
