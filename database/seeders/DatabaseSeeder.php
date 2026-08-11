@@ -65,7 +65,7 @@ final class DatabaseSeeder extends Seeder
     }
 
     /**
-     * Demo data is opt-in and disabled by default in every environment.
+     * Demo data is enabled only outside the production environment.
      *
      * @return array<int, class-string>
      */
@@ -98,6 +98,6 @@ final class DatabaseSeeder extends Seeder
 
     private function shouldSeedDemoData(): bool
     {
-        return filter_var((string) env('SEED_DEMO_DATA', false), FILTER_VALIDATE_BOOL);
+        return config('app.env') !== 'production';
     }
 }
