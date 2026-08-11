@@ -16,7 +16,7 @@ final class UserSupermarketMasterProductSearchRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'index' => ['required', 'string', 'min:1', 'max:255', 'regex:/.*\\S.*/'],
+            'index' => ['sometimes', 'nullable', 'string', 'max:255', 'regex:/.*\\S.*/'],
             'perPage' => ['sometimes', 'integer', 'min:1', 'max:50'],
             'page' => ['sometimes', 'integer', 'min:1'],
         ];
