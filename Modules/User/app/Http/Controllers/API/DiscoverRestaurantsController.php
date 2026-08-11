@@ -53,11 +53,29 @@ final class DiscoverRestaurantsController
                     ->where('close_time', '>=', $time));
         }
 
+        $preparationTimeMin = $request->validated('filter.preparationTimeMin');
+        if (is_numeric($preparationTimeMin)) {
+            $query->whereRaw(
+                'COALESCE(estimated_preparation_time_min, GREATEST(1, estimated_preparation_time - 10)) >= ?',
+                [(int) $preparationTimeMin],
+            );
+        }
+
+        $preparationTimeMax = $request->validated('filter.preparationTimeMax');
+        if (is_numeric($preparationTimeMax)) {
+            $query->whereRaw(
+                'COALESCE(estimated_preparation_time_max, estimated_preparation_time) <= ?',
+                [(int) $preparationTimeMax],
+            );
+        }
+
         $sort = $request->validated('sort') ?? 'rating';
 
         match ($sort) {
             'nearest' => $this->applyNearestSort($query, $request),
-            'fastest' => $query->orderBy('estimated_preparation_time'),
+            'fastest' => $query
+                ->orderByRaw('COALESCE(estimated_preparation_time_max, estimated_preparation_time) ASC')
+                ->orderByRaw('COALESCE(estimated_preparation_time_min, GREATEST(1, estimated_preparation_time - 10)) ASC'),
             default => $query->orderByDesc('average_rating')->orderByDesc('is_featured'),
         };
 
