@@ -16,6 +16,16 @@ final class RestaurantResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $legacyPreparationTime = $this->estimated_preparation_time !== null
+            ? (int) $this->estimated_preparation_time
+            : null;
+        $preparationTimeMax = $this->estimated_preparation_time_max !== null
+            ? (int) $this->estimated_preparation_time_max
+            : $legacyPreparationTime;
+        $preparationTimeMin = $this->estimated_preparation_time_min !== null
+            ? (int) $this->estimated_preparation_time_min
+            : ($preparationTimeMax !== null ? max(1, $preparationTimeMax - 10) : null);
+
         return [
             'id' => $this->id,
             'userId' => $this->user_id,
@@ -38,7 +48,14 @@ final class RestaurantResource extends JsonResource
             'face' => $this->facebook_page_name,
             'averageRating' => $this->average_rating ? (float) $this->average_rating : null,
             'totalReviews' => $this->total_reviews,
-            'estimatedPreparationTime' => $this->estimated_preparation_time,
+            // Legacy field remains as the upper bound for backwards compatibility.
+            'estimatedPreparationTime' => $preparationTimeMax,
+            'estimatedPreparationTimeMin' => $preparationTimeMin,
+            'estimatedPreparationTimeMax' => $preparationTimeMax,
+            'preparationTimeRange' => [
+                'min' => $preparationTimeMin,
+                'max' => $preparationTimeMax,
+            ],
             'minimumOrderAmount' => $this->minimum_order_amount ? (float) $this->minimum_order_amount : null,
             'priceRange' => $this->price_range?->value ?? $this->price_range,
             'reputationScore' => $this->reputation_score,
