@@ -38,6 +38,8 @@ final class RestaurantData extends Data
         public ?float $averageRating,
         public ?int $totalReviews,
         public ?int $estimatedPreparationTime,
+        public ?int $estimatedPreparationTimeMin,
+        public ?int $estimatedPreparationTimeMax,
         public ?float $minimumOrderAmount,
         public ?string $priceRange,
         public ?int $reputationScore,
