@@ -16,8 +16,56 @@ Route::prefix('v1/apps')->group(function (): void {
 });
 
 Route::get('/', function (): Response {
+    $googlePlayUrl = 'https://play.google.com/store/apps/details?id=com.alnadha.app&pcampaignid=web_share';
+    $directDownloadUrl = 'https://alnadha.net/v1/apps/download?appType=user_app';
+    $whatsappNumber = '963948388930';
+
     $content = view('welcome')->render();
     $footer = view('partials.landing-copyright')->render();
+
+    $directDownloadButton = <<<HTML
+                        <a class="store-button" href="{$directDownloadUrl}" aria-label="تحميل التطبيق مباشرة">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                                <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/>
+                            </svg>
+                            <span class="store-button__text"><small>تحميل</small>مباشر</span>
+                        </a>
+HTML;
+
+    $content = preg_replace(
+        '/<a class="store-button" href="#" aria-label="تحميل التطبيق من App Store">.*?<\/a>/s',
+        $directDownloadButton,
+        $content,
+        1,
+    ) ?? $content;
+
+    $content = str_replace(
+        [
+            'href="#" aria-label="تحميل التطبيق من Google Play"',
+            '<a class="store-button" href="#">App Store</a>',
+            '<a class="store-button store-button--secondary" href="#">Google Play</a>',
+            'تواصل مع الإدارة',
+        ],
+        [
+            'href="'.$googlePlayUrl.'" target="_blank" rel="noopener noreferrer" aria-label="تحميل التطبيق من Google Play"',
+            '<a class="store-button" href="'.$directDownloadUrl.'">تحميل مباشر</a>',
+            '<a class="store-button store-button--secondary" href="'.$googlePlayUrl.'" target="_blank" rel="noopener noreferrer">Google Play</a>',
+            'تواصل مع الإدارة عبر واتساب',
+        ],
+        $content,
+    );
+
+    $content = preg_replace_callback(
+        '/href="mailto:[^"]+\?subject=([^"]+)"/',
+        static function (array $matches) use ($whatsappNumber): string {
+            return sprintf(
+                'href="https://wa.me/%s?text=%s" target="_blank" rel="noopener noreferrer"',
+                $whatsappNumber,
+                $matches[1],
+            );
+        },
+        $content,
+    ) ?? $content;
 
     return response(str_replace(
         "    </main>\n</div>",
