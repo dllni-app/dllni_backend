@@ -11,24 +11,17 @@ final class AdminUserSeeder extends Seeder
 {
     public function run(): void
     {
-        $admins = [
-            ['name' => 'مدير', 'email' => 'admin@admin.com'],
-            ['name' => 'مدير النظام', 'email' => 'admin@dllni.sy'],
-        ];
+        $admin = User::updateOrCreate(
+            ['email' => 'admin@admin.com'],
+            [
+                'name' => 'مدير',
+                'password' => bcrypt('StrongP@ssword123!'),
+                'email_verified_at' => now(),
+            ]
+        );
 
-        foreach ($admins as $adminData) {
-            $admin = User::updateOrCreate(
-                ['email' => $adminData['email']],
-                [
-                    'name' => $adminData['name'],
-                    'password' => bcrypt('password'),
-                    'email_verified_at' => now(),
-                ]
-            );
-
-            if (! $admin->hasRole('admin')) {
-                $admin->assignRole('admin');
-            }
+        if (! $admin->hasRole('admin')) {
+            $admin->assignRole('admin');
         }
     }
 }
