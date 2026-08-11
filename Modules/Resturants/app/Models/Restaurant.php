@@ -216,6 +216,34 @@ final class Restaurant extends Model implements HasMedia
         });
     }
 
+    protected static function booted(): void
+    {
+        static::saving(function (Restaurant $restaurant): void {
+            $legacy = $restaurant->estimated_preparation_time;
+            $min = $restaurant->estimated_preparation_time_min;
+            $max = $restaurant->estimated_preparation_time_max;
+
+            if ($restaurant->isDirty('estimated_preparation_time_max')) {
+                $restaurant->estimated_preparation_time = $max;
+                $legacy = $max;
+            } elseif ($restaurant->isDirty('estimated_preparation_time') && $legacy !== null) {
+                $restaurant->estimated_preparation_time_max = (int) $legacy;
+                $max = (int) $legacy;
+            }
+
+            if ($restaurant->isDirty('estimated_preparation_time') &&
+                ! $restaurant->isDirty('estimated_preparation_time_min') &&
+                $legacy !== null) {
+                $restaurant->estimated_preparation_time_min = max(1, (int) $legacy - 10);
+                $min = $restaurant->estimated_preparation_time_min;
+            }
+
+            if ($max !== null && $min === null) {
+                $restaurant->estimated_preparation_time_min = max(1, (int) $max - 10);
+            }
+        });
+    }
+
     protected static function newFactory(): RestaurantFactory
     {
         return RestaurantFactory::new();
