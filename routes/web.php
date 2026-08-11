@@ -18,6 +18,7 @@ Route::prefix('v1/apps')->group(function (): void {
 Route::get('/', function (): Response {
     $googlePlayUrl = 'https://play.google.com/store/apps/details?id=com.alnadha.app&pcampaignid=web_share';
     $directDownloadUrl = 'https://alnadha.net/v1/apps/download?appType=user_app';
+    $cleaningWorkerDownloadUrl = 'https://alnadha.net/v1/apps/download?appType=cleaning_worker_app';
     $whatsappNumber = '963948388930';
 
     $content = view('welcome')->render();
@@ -58,16 +59,69 @@ HTML;
             'href="#" aria-label="تحميل التطبيق من Google Play"',
             '<a class="store-button" href="#">App Store</a>',
             '<a class="store-button store-button--secondary" href="#">Google Play</a>',
-            'تواصل مع الإدارة',
         ],
         [
             'href="'.$googlePlayUrl.'" target="_blank" rel="noopener noreferrer" aria-label="تحميل التطبيق من Google Play"',
             '<span class="store-button" aria-disabled="true" title="تحميل تطبيق iOS سيكون متاحاً قريباً" style="cursor: not-allowed; opacity: 0.68; box-shadow: none;">App Store — قريباً</span><a class="store-button" href="'.$directDownloadUrl.'">تحميل مباشر</a>',
             '<a class="store-button store-button--secondary" href="'.$googlePlayUrl.'" target="_blank" rel="noopener noreferrer">Google Play</a>',
-            'تواصل مع الإدارة عبر واتساب',
         ],
         $content,
     );
+
+    $replacePartnerAction = static function (string $html, string $cardClass, string $replacement): string {
+        $pattern = '/(<article class="'.preg_quote($cardClass, '/').'">.*?)(<a href="mailto:[^"]+">.*?<\/a>)(.*?<\/article>)/s';
+
+        return preg_replace_callback(
+            $pattern,
+            static fn (array $matches): string => $matches[1].$replacement.$matches[3],
+            $html,
+            1,
+        ) ?? $html;
+    };
+
+    $cleaningWorkerAction = <<<HTML
+                        <a href="{$cleaningWorkerDownloadUrl}" aria-label="تحميل تطبيق عامل التنظيف">
+                            تحميل تطبيق العامل
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/>
+                            </svg>
+                        </a>
+HTML;
+
+    $partnerComingSoonAction = static function (string $title): string {
+        return <<<HTML
+                        <span
+                            aria-disabled="true"
+                            title="{$title}"
+                            style="display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 13px; font-weight: 800; cursor: not-allowed; opacity: 0.72;"
+                        >
+                            التطبيق قريباً
+                        </span>
+HTML;
+    };
+
+    $content = $replacePartnerAction(
+        $content,
+        'partner-card partner-card--cleaning reveal',
+        $cleaningWorkerAction,
+    );
+    $content = $replacePartnerAction(
+        $content,
+        'partner-card partner-card--market reveal',
+        $partnerComingSoonAction('تطبيق أصحاب السوبرماركت سيكون متاحاً قريباً'),
+    );
+    $content = $replacePartnerAction(
+        $content,
+        'partner-card partner-card--restaurant reveal',
+        $partnerComingSoonAction('تطبيق أصحاب المطاعم سيكون متاحاً قريباً'),
+    );
+    $content = $replacePartnerAction(
+        $content,
+        'partner-card reveal',
+        $partnerComingSoonAction('تطبيق مقدمي خدمات التوصيل سيكون متاحاً قريباً'),
+    );
+
+    $content = str_replace('تواصل مع الإدارة', 'تواصل مع الإدارة عبر واتساب', $content);
 
     $content = preg_replace_callback(
         '/href="mailto:[^"]+\?subject=([^"]+)"/',
