@@ -53,10 +53,13 @@ final class DiscoverRestaurantsController
                     ->where('close_time', '>=', $time));
         }
 
+        $resolvedPreparationMin = 'COALESCE(estimated_preparation_time_min, CASE WHEN estimated_preparation_time - 10 < 1 THEN 1 ELSE estimated_preparation_time - 10 END)';
+        $resolvedPreparationMax = 'COALESCE(estimated_preparation_time_max, estimated_preparation_time)';
+
         $preparationTimeMin = $request->validated('filter.preparationTimeMin');
         if (is_numeric($preparationTimeMin)) {
             $query->whereRaw(
-                'COALESCE(estimated_preparation_time_min, GREATEST(1, estimated_preparation_time - 10)) >= ?',
+                "{$resolvedPreparationMin} >= ?",
                 [(int) $preparationTimeMin],
             );
         }
@@ -64,7 +67,7 @@ final class DiscoverRestaurantsController
         $preparationTimeMax = $request->validated('filter.preparationTimeMax');
         if (is_numeric($preparationTimeMax)) {
             $query->whereRaw(
-                'COALESCE(estimated_preparation_time_max, estimated_preparation_time) <= ?',
+                "{$resolvedPreparationMax} <= ?",
                 [(int) $preparationTimeMax],
             );
         }
@@ -74,8 +77,8 @@ final class DiscoverRestaurantsController
         match ($sort) {
             'nearest' => $this->applyNearestSort($query, $request),
             'fastest' => $query
-                ->orderByRaw('COALESCE(estimated_preparation_time_max, estimated_preparation_time) ASC')
-                ->orderByRaw('COALESCE(estimated_preparation_time_min, GREATEST(1, estimated_preparation_time - 10)) ASC'),
+                ->orderByRaw("{$resolvedPreparationMax} ASC")
+                ->orderByRaw("{$resolvedPreparationMin} ASC"),
             default => $query->orderByDesc('average_rating')->orderByDesc('is_featured'),
         };
 
