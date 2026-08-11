@@ -23,7 +23,9 @@ return new class extends Migration
         DB::table('restaurants')
             ->whereNotNull('estimated_preparation_time')
             ->update([
-                'estimated_preparation_time_min' => DB::raw('GREATEST(1, estimated_preparation_time - 10)'),
+                'estimated_preparation_time_min' => DB::raw(
+                    'CASE WHEN estimated_preparation_time - 10 < 1 THEN 1 ELSE estimated_preparation_time - 10 END'
+                ),
                 'estimated_preparation_time_max' => DB::raw('estimated_preparation_time'),
             ]);
     }
