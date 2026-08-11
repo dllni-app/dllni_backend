@@ -16,6 +16,7 @@ final class UserRestaurantCheckoutPipelineService
 {
     public function __construct(
         private readonly RestaurantCheckoutService $checkoutService,
+        private readonly UserRestaurantCartService $cartService,
     ) {}
 
     /**
@@ -29,6 +30,8 @@ final class UserRestaurantCheckoutPipelineService
         ?string $couponCode,
         ?string $note,
     ): array {
+        $this->cartService->synchronizeUserCartPrices($userId);
+
         $cart = Cart::query()
             ->where('user_id', $userId)
             ->with(['items.product'])
@@ -82,6 +85,8 @@ final class UserRestaurantCheckoutPipelineService
         ?string $couponCode,
         ?string $note,
     ): Order {
+        $this->cartService->synchronizeUserCartPrices($userId);
+
         $order = $this->checkoutService->checkoutAll(
             userId: $userId,
             orderType: $fulfillmentType,
