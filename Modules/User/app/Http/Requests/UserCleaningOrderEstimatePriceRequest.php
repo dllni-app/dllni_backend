@@ -4,19 +4,64 @@ declare(strict_types=1);
 
 namespace Modules\User\Http\Requests;
 
+use App\Enums\GenderPreference;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 use Modules\User\Http\Requests\Concerns\ValidatesWorkerRoomAssignments;
+use Modules\User\Models\UserAddress;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrderEstimatePriceRequest extends FormRequest
 {
     use ValidatesWorkerRoomAssignments;
 
+    private const INCOMPLETE_ADDRESS_MESSAGE = 'يرجى تحديث العنوان المختار وإضافة الحي والإحداثيات قبل إنشاء الطلب.';
+
     public function authorize(): bool
     {
         return true;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $merge = [];
+
+        $preferredWorkerIds = $this->normalizePreferredWorkerIds(
+            $this->input('preferredWorkerIds', $this->input('preferredWorkerId'))
+        );
+
+        if ($preferredWorkerIds !== [] || $this->has('preferredWorkerIds')) {
+            $merge['preferredWorkerIds'] = $preferredWorkerIds;
+            $merge['preferredWorkerId'] = $preferredWorkerIds[0] ?? null;
+
+            if (count($preferredWorkerIds) > 1) {
+                if (! $this->filled('numberOfWorkers')) {
+                    $merge['numberOfWorkers'] = count($preferredWorkerIds);
+                }
+
+                if (! $this->filled('assignmentMode')) {
+                    $merge['assignmentMode'] = 'open_count';
+                }
+            }
+        }
+
+        $addressId = $this->input('addressId');
+        if (is_numeric($addressId) && $this->user() !== null) {
+            $address = UserAddress::query()
+                ->whereKey((int) $addressId)
+                ->where('user_id', (int) $this->user()->id)
+                ->first();
+
+            if ($address instanceof UserAddress) {
+                $merge['addressLatitude'] = $address->latitude !== null ? (float) $address->latitude : null;
+                $merge['addressLongitude'] = $address->longitude !== null ? (float) $address->longitude : null;
+            }
+        }
+
+        if ($merge !== []) {
+            $this->merge($merge);
+        }
     }
 
     /**
@@ -32,16 +77,21 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             'propertyDetails.bedrooms' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.rooms' => ['nullable', 'integer', 'min:0', 'max:30'],
             'propertyDetails.bathrooms' => ['nullable', 'integer', 'min:0', 'max:20'],
+            'propertyDetails.toilets' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.kitchens' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.balconies' => ['nullable', 'integer', 'min:0', 'max:20'],
+            'propertyDetails.sheds' => ['nullable', 'integer', 'min:0', 'max:20'],
             'propertyDetails.living_room_size' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::LIVING_ROOM_SIZES)],
             'propertyDetails.cleaning_mode' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::CLEANING_MODES)],
-            'propertyDetails.room_size_breakdown' => ['nullable', 'array:bedroom,bathroom,kitchen,living_room,balcony'],
+            'propertyDetails.room_size_breakdown' => ['nullable', 'array:bedroom,bathroom,toilet,kitchen,living_room,balcony,corridor,shed'],
             'propertyDetails.room_size_breakdown.bedroom' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.bathroom' => ['sometimes', 'array:small,medium,large'],
+            'propertyDetails.room_size_breakdown.toilet' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.kitchen' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.living_room' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.balcony' => ['sometimes', 'array:small,medium,large'],
+            'propertyDetails.room_size_breakdown.corridor' => ['sometimes', 'array:small,medium,large'],
+            'propertyDetails.room_size_breakdown.shed' => ['sometimes', 'array:small,medium,large'],
             'propertyDetails.room_size_breakdown.*.small' => ['sometimes', 'integer', 'min:0'],
             'propertyDetails.room_size_breakdown.*.medium' => ['sometimes', 'integer', 'min:0'],
             'propertyDetails.room_size_breakdown.*.large' => ['sometimes', 'integer', 'min:0'],
@@ -52,11 +102,15 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             'propertyDetails.hours' => [Rule::requiredIf($isEventAssistance), Rule::prohibitedIf(! $isEventAssistance), 'numeric', 'min:1', 'max:24'],
             'serviceIds' => $isEventAssistance ? ['prohibited'] : ['sometimes', 'array', 'min:1'],
             'serviceIds.*' => $isEventAssistance ? ['prohibited'] : ['integer', 'distinct', 'exists:cleaning_services,id'],
+            'addressId' => ['nullable', 'integer', Rule::exists('user_addresses', 'id')->where('user_id', (int) ($this->user()?->id ?? 0))],
             'addressLatitude' => ['nullable', 'numeric', 'between:-90,90'],
             'addressLongitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'preferredWorkerIds' => ['nullable', 'array', 'max:20'],
+            'preferredWorkerIds.*' => ['integer', 'distinct', Rule::exists('workers', 'id')],
             'preferredWorkerId' => ['nullable', 'exists:workers,id'],
             'assignmentMode' => ['nullable', 'string', Rule::in(['preferred_worker', 'open_count'])],
             'numberOfWorkers' => ['nullable', 'integer', 'min:1', 'max:20'],
+            'genderPreference' => ['nullable', 'string', Rule::in(array_column(GenderPreference::cases(), 'value'))],
             ...$this->workerRoomAssignmentRules(),
         ];
     }
@@ -64,42 +118,100 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
-            $assignmentMode = $this->normalizedAssignmentMode();
-            $preferredWorkerId = $this->input('preferredWorkerId');
-            $numberOfWorkers = $this->input('numberOfWorkers');
-
-            if ($assignmentMode === 'preferred_worker' && is_numeric($preferredWorkerId) && (int) $preferredWorkerId > 0) {
-                if ($numberOfWorkers !== null && (int) $numberOfWorkers !== 1) {
-                    $validator->errors()->add('numberOfWorkers', 'Preferred worker mode only allows one worker.');
-                }
-            }
-
-            if ($assignmentMode === 'open_count' && $preferredWorkerId !== null) {
-                $validator->errors()->add('preferredWorkerId', 'Preferred worker cannot be used with open count mode.');
-            }
-
-            if ($assignmentMode === null && $preferredWorkerId !== null && $numberOfWorkers !== null && (int) $numberOfWorkers !== 1) {
-                $validator->errors()->add('numberOfWorkers', 'Legacy preferred worker requests only support one worker.');
-            }
+            $this->validateSelectedAddressCompleteness($validator);
 
             $this->validateWorkerRoomAssignments($validator);
         });
     }
 
-    private function normalizedAssignmentMode(): ?string
+    /**
+     * @return array<int, int>
+     */
+    private function normalizePreferredWorkerIds(mixed $value): array
     {
-        $assignmentMode = $this->input('assignmentMode');
-
-        if (! is_string($assignmentMode) || mb_trim($assignmentMode) === '') {
-            return null;
+        if ($value === null || $value === '') {
+            return [];
         }
 
-        return mb_strtolower(mb_trim($assignmentMode));
+        $values = is_array($value) ? $value : [$value];
+        $ids = [];
+
+        foreach ($values as $item) {
+            if (! is_numeric($item)) {
+                continue;
+            }
+
+            $id = (int) $item;
+            if ($id <= 0 || in_array($id, $ids, true)) {
+                continue;
+            }
+
+            $ids[] = $id;
+        }
+
+        return $ids;
     }
 
     private function isEventAssistanceRequested(): bool
     {
         return mb_strtolower((string) $this->input('propertyType')) === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE;
+    }
+
+    private function validateSelectedAddressCompleteness(Validator $validator): void
+    {
+        if (! $this->filled('addressId')) {
+            return;
+        }
+
+        $address = $this->selectedUserAddress();
+        if (! $address instanceof UserAddress) {
+            return;
+        }
+
+        if (! $this->isCompleteServiceAddress($address)) {
+            $validator->errors()->add('addressId', self::INCOMPLETE_ADDRESS_MESSAGE);
+        }
+    }
+
+    private function selectedUserAddress(): ?UserAddress
+    {
+        $addressId = $this->input('addressId');
+        if (! is_numeric($addressId) || $this->user() === null) {
+            return null;
+        }
+
+        return UserAddress::query()
+            ->whereKey((int) $addressId)
+            ->where('user_id', (int) $this->user()->id)
+            ->first();
+    }
+
+    private function isCompleteServiceAddress(UserAddress $address): bool
+    {
+        $hasAddressText = mb_trim($this->formatUserAddress($address)) !== '';
+        $hasNeighborhood = $address->neighborhood_id !== null
+            || mb_trim((string) $address->neighborhood) !== '';
+        $hasCoordinates = $address->latitude !== null && $address->longitude !== null;
+
+        return $hasAddressText && $hasNeighborhood && $hasCoordinates;
+    }
+
+    private function formatUserAddress(UserAddress $address): string
+    {
+        $parts = array_values(array_filter([
+            $address->city,
+            $address->neighborhood,
+            $address->street,
+            $address->building !== null ? 'Building '.$address->building : null,
+            $address->floor !== null ? 'Floor '.$address->floor : null,
+            $address->directions,
+        ], static fn (mixed $part): bool => is_string($part) && mb_trim($part) !== ''));
+
+        if ($parts !== []) {
+            return mb_substr(implode(' - ', $parts), 0, 500);
+        }
+
+        return mb_substr((string) $address->label, 0, 500);
     }
 
     /**

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\SosAlerts;
 
+use App\Enums\SOSStatus;
 use App\Filament\Resources\SosAlerts\Pages\ListSosAlerts;
 use App\Filament\Resources\SosAlerts\Pages\ViewSosAlert;
 use App\Filament\Resources\SosAlerts\Schemas\SosAlertInfolist;
@@ -16,14 +17,20 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Modules\Cleaning\Models\CleaningBooking;
 
 final class SosAlertResource extends Resource
 {
     protected static ?string $model = SosAlert::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBellAlert;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedExclamationTriangle;
 
-    protected static ?int $navigationSort = 6;
+    protected static ?int $navigationSort = 5;
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
 
     public static function getNavigationGroup(): ?string
     {
@@ -32,17 +39,41 @@ final class SosAlertResource extends Resource
 
     public static function getNavigationLabel(): string
     {
-        return 'SOS Alerts';
+        return 'بلاغات الطوارئ (SOS)';
+    }
+
+    public static function getNavigationTooltip(): ?string
+    {
+        return 'متابعة بلاغات الطوارئ المرسلة من العملاء وعمال التنظيف.';
+    }
+
+    public static function getNavigationBadge(): ?string
+    {
+        $count = SosAlert::query()
+            ->whereIn('booking_type', ['cleaning_booking', CleaningBooking::class])
+            ->whereIn('status', [
+                SOSStatus::Pending->value,
+                SOSStatus::Triggered->value,
+                SOSStatus::Acknowledged->value,
+            ])
+            ->count();
+
+        return $count > 0 ? (string) $count : null;
+    }
+
+    public static function getNavigationBadgeColor(): string|array|null
+    {
+        return 'danger';
     }
 
     public static function getModelLabel(): string
     {
-        return 'SOS Alert';
+        return 'بلاغ طوارئ';
     }
 
     public static function getPluralModelLabel(): string
     {
-        return 'SOS Alerts';
+        return 'بلاغات الطوارئ';
     }
 
     public static function form(Schema $schema): Schema
@@ -87,12 +118,14 @@ final class SosAlertResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with([
-            'user',
-            'order',
-            'acknowledgedBy',
-            'resolvedBy',
-        ]);
+        return parent::getEloquentQuery()
+            ->whereIn('booking_type', ['cleaning_booking', CleaningBooking::class])
+            ->with([
+                'user',
+                'booking',
+                'acknowledgedBy',
+                'resolvedBy',
+            ]);
     }
 
     public static function getRelations(): array

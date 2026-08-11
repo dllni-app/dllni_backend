@@ -42,6 +42,8 @@ final class CleaningBookingFactory extends Factory
                 'kitchens' => fake()->numberBetween(1, 2),
                 'living_room_size' => fake()->randomElement(['small', 'medium', 'large']),
             ],
+            'neighborhood_id' => null,
+            'neighborhood_name' => null,
             'estimated_sqm' => fake()->randomFloat(2, 50, 300),
             'estimated_hours' => fake()->randomFloat(1, 2, 8),
             'scheduled_date' => $scheduledDate,

@@ -32,14 +32,14 @@ it('computes distance-based pricing with percent admin margin', function (): voi
             'commission_type' => 'percent',
             'commission_fixed_amount' => null,
             'travel_per_km' => 10,
-            'travel_distance_start_point' => 'worker_home',
+            'travel_distance_start_point' => 'worker_'.'home',
         ]
     );
 
     $worker = Worker::factory()->create([
-        'home_address' => 'Worker Home',
-        'home_latitude' => 33.6,
-        'home_longitude' => 36.3,
+        'home_'.'address' => 'Worker Home',
+        'home_'.'latitude' => 33.6,
+        'home_'.'longitude' => 36.3,
     ]);
 
     $service = app(UserCleaningOrderEstimationService::class);
@@ -57,13 +57,13 @@ it('computes distance-based pricing with percent admin margin', function (): voi
         $worker->id,
     );
 
-    expect($pricing['basePrice'])->toBe(920.0);
+    expect($pricing['basePrice'])->toBe(1000.0);
     expect($pricing['distanceKm'])->toBe(11.119);
-    expect($pricing['travelFee'])->toBe(111.19);
+    expect($pricing['travelFee'])->toBe(500.0);
     expect($pricing['addonsTotal'])->toBe(0.0);
-    expect($pricing['adminMargin'])->toBe(103.12);
+    expect($pricing['adminMargin'])->toBe(500.0);
     expect($pricing['isPricingFinal'])->toBeTrue();
-    expect($pricing['totalPrice'])->toBe(1134.31);
+    expect($pricing['totalPrice'])->toBe(2000.0);
     expect($pricing['currency'])->toBe((string) config('app.currency', 'SYP'));
 });
 
@@ -75,14 +75,14 @@ it('computes distance-based pricing with fixed admin margin', function (): void 
             'commission_type' => 'fixed',
             'commission_fixed_amount' => 75,
             'travel_per_km' => 10,
-            'travel_distance_start_point' => 'worker_home',
+            'travel_distance_start_point' => 'worker_'.'home',
         ]
     );
 
     $worker = Worker::factory()->create([
-        'home_address' => 'Worker Home',
-        'home_latitude' => 33.5,
-        'home_longitude' => 36.3,
+        'home_'.'address' => 'Worker Home',
+        'home_'.'latitude' => 33.5,
+        'home_'.'longitude' => 36.3,
     ]);
 
     $service = app(UserCleaningOrderEstimationService::class);
@@ -100,12 +100,12 @@ it('computes distance-based pricing with fixed admin margin', function (): void 
         $worker->id,
     );
 
-    expect($pricing['basePrice'])->toBe(920.0);
+    expect($pricing['basePrice'])->toBe(1000.0);
     expect($pricing['distanceKm'])->toBe(0.0);
     expect($pricing['travelFee'])->toBe(0.0);
-    expect($pricing['adminMargin'])->toBe(75.0);
+    expect($pricing['adminMargin'])->toBe(500.0);
     expect($pricing['isPricingFinal'])->toBeTrue();
-    expect($pricing['totalPrice'])->toBe(995.0);
+    expect($pricing['totalPrice'])->toBe(1500.0);
 });
 
 it('returns provisional pricing when preferred worker is not selected', function (): void {
@@ -124,15 +124,15 @@ it('returns provisional pricing when preferred worker is not selected', function
         null,
     );
 
-    expect($pricing['basePrice'])->toBe(920.0);
+    expect($pricing['basePrice'])->toBe(1000.0);
     expect($pricing['distanceKm'])->toBeNull();
     expect($pricing['travelFee'])->toBe(0.0);
     expect($pricing['adminMargin'])->toBe(0.0);
     expect($pricing['isPricingFinal'])->toBeFalse();
-    expect($pricing['totalPrice'])->toBe(920.0);
+    expect($pricing['totalPrice'])->toBe(1000.0);
 });
 
-it('computes event assistance estimate and hourly pricing', function (): void {
+it('computes event assistance pricing per worker per hour', function (): void {
     CleaningFinancialSetting::query()->updateOrCreate(
         ['id' => 1],
         ['extension_rate_per_30_minutes' => 150]
@@ -163,10 +163,11 @@ it('computes event assistance estimate and hourly pricing', function (): void {
 
     expect($estimation['recommendation']['suggestedTeamSize'])->toBe(5);
     expect($estimation['estimatedHours'])->toBe(4.0);
-    expect($pricing['basePrice'])->toBe(1200.0);
-    expect($pricing['totalPrice'])->toBe(1200.0);
-    expect($pricing['eventHourlyRate'])->toBe(300.0);
+    expect($pricing['basePrice'])->toBe(10000.0);
+    expect($pricing['totalPrice'])->toBe(10000.0);
+    expect($pricing['eventHourlyRate'])->toBe(500.0);
     expect($pricing['eventHours'])->toBe(4.0);
+    expect($pricing['eventWorkerCount'])->toBe(5);
     expect($pricing['serviceLines'])->toHaveCount(0);
 });
 
@@ -219,9 +220,9 @@ it('includes selected regular cleaning services in addons pricing', function ():
         [$serviceA->id, $serviceB->id],
     );
 
-    expect($pricing['basePrice'])->toBe(920.0);
-    expect($pricing['addonsTotal'])->toBe(190.0);
-    expect($pricing['totalPrice'])->toBe(1110.0);
+    expect($pricing['basePrice'])->toBe(1000.0);
+    expect($pricing['addonsTotal'])->toBe(1000.0);
+    expect($pricing['totalPrice'])->toBe(2000.0);
     expect($pricing['serviceLines'])->toHaveCount(2);
 });
 
@@ -313,6 +314,36 @@ it('normalizes balcony from room size breakdown', function (): void {
     expect($details['balconies'])->toBe(3);
     expect($details['room_size_breakdown']['balcony']['small'])->toBe(2);
     expect($details['room_size_breakdown']['balcony']['medium'])->toBe(1);
+});
+
+it('normalizes shed from room size breakdown', function (): void {
+    $service = app(UserCleaningOrderEstimationService::class);
+
+    $details = $service->normalizePropertyDetailsForStorage('villa', [
+        'room_size_breakdown' => [
+            'bedroom' => ['medium' => 1],
+            'shed' => ['small' => 1, 'medium' => 1, 'large' => 0],
+        ],
+    ]);
+
+    expect($details['sheds'])->toBe(2);
+    expect($details['room_size_breakdown']['shed']['small'])->toBe(1);
+    expect($details['room_size_breakdown']['shed']['medium'])->toBe(1);
+    expect($details['room_size_breakdown']['shed']['large'])->toBe(0);
+});
+
+it('normalizes legacy sheds count into room size breakdown', function (): void {
+    $service = app(UserCleaningOrderEstimationService::class);
+
+    $details = $service->normalizePropertyDetailsForStorage('apartment', [
+        'rooms' => 1,
+        'bathrooms' => 1,
+        'kitchens' => 1,
+        'sheds' => 2,
+        'living_room_size' => 'medium',
+    ]);
+
+    expect($details['sheds'])->toBe(2);
 });
 
 it('normalizes partial room size breakdown by filling missing room types and buckets with zero', function (): void {

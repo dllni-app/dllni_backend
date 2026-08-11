@@ -21,7 +21,7 @@ final class ListCleaningServices extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return __('cleaning_admin.pages.cleaning_services.list');
+        return null;
     }
 
     protected function getHeaderWidgets(): array

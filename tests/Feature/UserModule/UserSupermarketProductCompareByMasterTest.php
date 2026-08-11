@@ -8,7 +8,7 @@ use Database\Factories\SmProductFactory;
 use Modules\Supermarket\Database\Seeders\SmProductMasterLinkSeeder;
 use Modules\Supermarket\Models\SmStore;
 
-it('compares supermarket products by master product across other active stores', function (): void {
+it('compares supermarket products by master product across active stores', function (): void {
     $masterProduct = MasterProductFactory::new()->create([
         'name' => 'Fresh Milk',
     ]);
@@ -65,15 +65,6 @@ it('compares supermarket products by master product across other active stores',
         'name' => 'Premium Milk Listing',
         'price' => 20,
         'discounted_price' => null,
-        'is_available' => true,
-    ]);
-
-    SmProductFactory::new()->create([
-        'store_id' => $selectedStore->id,
-        'category_id' => $selectedCategory->id,
-        'master_product_id' => $masterProduct->id,
-        'name' => 'Duplicate Listing In Same Store',
-        'price' => 1,
         'is_available' => true,
     ]);
 

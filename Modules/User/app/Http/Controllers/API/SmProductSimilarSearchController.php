@@ -47,9 +47,7 @@ final class SmProductSimilarSearchController
                     ->orWhere('suspension_until', '<=', $now)));
 
         if ($isCompareRequest && $selectedProduct->master_product_id !== null) {
-            $productsQuery
-                ->where('master_product_id', $selectedProduct->master_product_id)
-                ->where('store_id', '!=', $selectedProduct->store_id);
+            $productsQuery->where('master_product_id', $selectedProduct->master_product_id);
         } else {
             $searchTerm = SearchTermEscaper::escape($selectedProduct->name ?? '');
             $productsQuery->whereRaw("name LIKE ? ESCAPE '!'", ["%{$searchTerm}%"]);

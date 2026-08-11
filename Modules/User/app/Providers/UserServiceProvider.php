@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Modules\User\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Modules\Cleaning\Models\CleaningBooking;
+use Modules\User\Observers\CleaningBookingPreferredWorkerEligibilityObserver;
 use Modules\User\Services\SmsOtp\NullSmsOtpProvider;
 use Modules\User\Services\SmsOtp\SmsOtpProvider;
 use Nwidart\Modules\Traits\PathNamespace;
@@ -21,6 +23,8 @@ final class UserServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        CleaningBooking::observe(CleaningBookingPreferredWorkerEligibilityObserver::class);
+
         $this->registerCommands();
         $this->registerCommandSchedules();
         $this->registerTranslations();

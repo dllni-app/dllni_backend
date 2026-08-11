@@ -32,8 +32,8 @@ final class BookingAddon extends Model
     {
         return [
             'quantity' => 'decimal:2',
-            'unit_price' => 'decimal:2',
-            'total_price' => 'decimal:2',
+            'unit_price' => 'integer',
+            'total_price' => 'integer',
         ];
     }
 }

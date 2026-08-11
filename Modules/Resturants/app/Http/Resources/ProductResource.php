@@ -6,7 +6,6 @@ namespace Modules\Resturants\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Modules\Resturants\Enums\DiscountType;
 use Modules\Resturants\Models\Product;
 
 /**
@@ -17,8 +16,6 @@ final class ProductResource extends JsonResource
     public function toArray(Request $request): array
     {
         $attrs = $this->getAttributes();
-        $price = $this->price !== null ? (float) $this->price : null;
-        $discountedPrice = $this->resolveDiscountedPrice($price);
 
         return [
             'id' => $this->id,
@@ -26,9 +23,10 @@ final class ProductResource extends JsonResource
             'categoryId' => $this->category_id,
             'name' => $this->name,
             'description' => $this->description,
-            'price' => $price,
-            'discountedPrice' => $discountedPrice,
+            'price' => $this->price ? (float) $this->price : null,
+            'discountedPrice' => $this->discounted_price ? (float) $this->discounted_price : null,
             'isFavorite' => (bool) ($attrs['isFavoritedByUser'] ?? false),
+            'cartQuantity' => (int) ($attrs['cartQuantity'] ?? 0),
             'isAvailable' => $this->is_available,
             'isAvailableNow' => $this->isAvailableNow(),
             'availabilityMode' => $this->availabilityMode(),
@@ -53,48 +51,5 @@ final class ProductResource extends JsonResource
             'createdAt' => $this->created_at->toDateTimeString(),
             'updatedAt' => $this->updated_at->toDateTimeString(),
         ];
-    }
-
-    private function resolveDiscountedPrice(?float $price): ?float
-    {
-        if ($price === null) {
-            return null;
-        }
-
-        $storedDiscountedPrice = $this->discounted_price !== null
-            ? (float) $this->discounted_price
-            : null;
-
-        if ($storedDiscountedPrice !== null && $storedDiscountedPrice < $price) {
-            return $storedDiscountedPrice;
-        }
-
-        if (! $this->relationLoaded('offers')) {
-            return null;
-        }
-
-        $offer = $this->offers
-            ->first(fn ($offer) => $offer->is_active && (
-                $offer->ends_at === null || $offer->ends_at->isFuture()
-            ));
-
-        if ($offer === null || $offer->discount_value === null) {
-            return null;
-        }
-
-        $discountValue = (float) $offer->discount_value;
-        if ($discountValue <= 0) {
-            return null;
-        }
-
-        $discountedPrice = match ($offer->discount_type) {
-            DiscountType::Percentage => $price * (1 - (min($discountValue, 100) / 100)),
-            DiscountType::FixedAmount => $price - $discountValue,
-            default => $price,
-        };
-
-        $discountedPrice = max(0, round($discountedPrice, 2));
-
-        return $discountedPrice < $price ? $discountedPrice : null;
     }
 }

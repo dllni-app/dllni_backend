@@ -9,7 +9,7 @@ use Modules\Resturants\Models\CartItem;
 use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
 
-it('returns total products count across all merchants in the user restaurant cart', function (): void {
+it('returns total cart item count across all merchants in the user restaurant cart', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
@@ -53,7 +53,7 @@ it('returns total products count across all merchants in the user restaurant car
     $response = $this->getJson('/api/v1/user/restaurants/cart/products-count');
 
     $response->assertSuccessful()->assertJson([
-        'productsCount' => 5,
+        'productsCount' => 2,
     ]);
 });
 

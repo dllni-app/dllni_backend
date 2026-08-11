@@ -24,7 +24,19 @@ it('returns seller restaurant details with categories and products', function ()
             'id',
             'name',
             'cuisineTypes',
-            'operatingHours',
+            'operatingHours' => [
+                '*' => [
+                    'id',
+                    'dayOfWeek',
+                    'openTime',
+                    'closeTime',
+                    'isClosed',
+                    'day_of_week',
+                    'open_time',
+                    'close_time',
+                    'is_closed',
+                ],
+            ],
             'imageUrl',
             'images',
         ],
@@ -41,6 +53,12 @@ it('returns seller restaurant details with categories and products', function ()
     expect($data['restaurant']['name'])->toBe('Seller Restaurant');
     expect($data['restaurant']['cuisineTypes'])->toBeArray()->not->toBeEmpty();
     expect($data['restaurant']['operatingHours'])->toBeArray()->not->toBeEmpty();
+
+    $firstOperatingHour = $data['restaurant']['operatingHours'][0];
+    expect($firstOperatingHour['dayOfWeek'])->toBe($firstOperatingHour['day_of_week']);
+    expect($firstOperatingHour['openTime'])->toBe($firstOperatingHour['open_time']);
+    expect($firstOperatingHour['closeTime'])->toBe($firstOperatingHour['close_time']);
+    expect($firstOperatingHour['isClosed'])->toBe($firstOperatingHour['is_closed']);
 
     // Assert - has categories and products
     expect($data['categories'])->toBeArray()->not->toBeEmpty();

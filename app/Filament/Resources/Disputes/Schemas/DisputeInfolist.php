@@ -27,13 +27,41 @@ final class DisputeInfolist
                         TextEntry::make('worker_earnings_frozen')->label(__('cleaning_admin.disputes.fields.worker_earnings_frozen'))->formatStateUsing($yesNo),
                     ])
                     ->columns(2),
+                Section::make(__('dispute_finance.section'))
+                    ->schema([
+                        TextEntry::make('financialPenaltyWorker.user.name')
+                            ->label(__('dispute_finance.fields.worker'))
+                            ->placeholder('-'),
+                        TextEntry::make('financial_penalty_amount')
+                            ->label(__('dispute_finance.fields.amount'))
+                            ->formatStateUsing(fn ($state): string => number_format((float) $state, 2).' '.config('app.currency', 'SYP')),
+                        TextEntry::make('financial_penalty_notes')
+                            ->label(__('dispute_finance.fields.notes'))
+                            ->placeholder('-')
+                            ->columnSpanFull(),
+                        TextEntry::make('financialPenaltyTransaction.reference')
+                            ->label(__('dispute_finance.fields.transaction_reference'))
+                            ->placeholder('-')
+                            ->copyable(),
+                        TextEntry::make('financialPenaltyAppliedBy.name')
+                            ->label(__('dispute_finance.fields.applied_by'))
+                            ->placeholder('-'),
+                        TextEntry::make('financial_penalty_applied_at')
+                            ->label(__('dispute_finance.fields.applied_at'))
+                            ->dateTime('Y-m-d H:i')
+                            ->placeholder('-'),
+                    ])
+                    ->columns(2)
+                    ->visible(fn ($record): bool => $record->financial_penalty_transaction_id !== null),
                 Section::make(__('cleaning_admin.disputes.sections.booking'))
                     ->schema([
                         TextEntry::make('booking.booking_number')->label(__('cleaning_admin.disputes.fields.booking_number'))->placeholder('-'),
                         TextEntry::make('booking.customer.name')->label(__('cleaning_admin.disputes.fields.customer'))->placeholder('-'),
+                        TextEntry::make('booking.customer.phone')->label('رقم هاتف العميل')->placeholder('-')->copyable(),
                         TextEntry::make('booking.worker.first_name')->label(__('cleaning_admin.disputes.fields.worker'))->placeholder('-'),
+                        TextEntry::make('booking.worker.user.phone')->label('رقم هاتف العامل')->placeholder('-')->copyable(),
                     ])
-                    ->columns(3)
+                    ->columns(2)
                     ->visible(fn ($record) => $record->booking),
                 Section::make(__('cleaning_admin.disputes.sections.messages'))
                     ->schema([

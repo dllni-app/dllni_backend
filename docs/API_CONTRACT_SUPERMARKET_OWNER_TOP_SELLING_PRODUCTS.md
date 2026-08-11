@@ -58,7 +58,12 @@ Validation source: `StoreOwnerDashboardPerformanceRequest`.
       "productId": 101,
       "name": "Family Box",
       "quantity": 68,
-      "revenue": 8850
+      "revenue": 8850,
+      "imageUrl": "https://example.com/storage/101/product.jpg",
+      "primaryImage": "https://example.com/storage/101/product.jpg",
+      "imageUrls": [
+        "https://example.com/storage/101/product.jpg"
+      ]
     }
   ],
   "offersImpact": {
@@ -101,6 +106,9 @@ Validation source: `StoreOwnerDashboardPerformanceRequest`.
 - `name`: product name.
 - `quantity`: total quantity sold in selected range.
 - `revenue`: total revenue from this product in selected range.
+- `imageUrl`: resolved primary product image URL, nullable.
+- `primaryImage`: alias of `imageUrl` for compatibility with existing product responses.
+- `imageUrls`: resolved product image URLs. Store-product media is preferred; when it is missing, master-product media is used as fallback.
 
 ### `offersImpact`
 - `ordersUsedOffers`: عدد الطلبات التي استخدمت عروض فعليًا.

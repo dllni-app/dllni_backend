@@ -36,12 +36,21 @@ final class CleaningBookingSosRequest extends FormRequest
     {
         $merge = [];
 
+        if (! $this->has('emergency_type') && $this->has('emergencyType')) {
+            $merge['emergency_type'] = $this->input('emergencyType');
+        }
+
+        if (! $this->has('client_request_id') && $this->has('clientRequestId')) {
+            $merge['client_request_id'] = $this->input('clientRequestId');
+        }
+
         if ($this->has('message') && is_string($this->input('message'))) {
             $merge['message'] = trim((string) $this->input('message'));
         }
 
-        if ($this->has('client_request_id') && is_string($this->input('client_request_id'))) {
-            $merge['client_request_id'] = trim((string) $this->input('client_request_id'));
+        $requestId = $merge['client_request_id'] ?? $this->input('client_request_id');
+        if (is_string($requestId)) {
+            $merge['client_request_id'] = trim($requestId);
         }
 
         if ($merge !== []) {

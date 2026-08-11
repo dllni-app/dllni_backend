@@ -34,7 +34,7 @@ final class SmOfferProduct extends Model
     protected function casts(): array
     {
         return [
-            'offer_price' => 'decimal:2',
+            'offer_price' => 'integer',
         ];
     }
 }

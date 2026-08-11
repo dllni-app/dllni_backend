@@ -6,6 +6,7 @@ use App\Enums\UserModuleType;
 use App\Models\User;
 use Database\Factories\SmStoreFactory;
 use Database\Seeders\DashboardPermissionsSeeder;
+use Database\Seeders\Permissions\SupermarketOwnerEmployeePermissionsSeeder;
 use Illuminate\Http\UploadedFile;
 use Laravel\Sanctum\Sanctum;
 use Modules\Supermarket\Models\SmStoreStaff;
@@ -13,6 +14,7 @@ use Spatie\Permission\Models\Permission;
 
 beforeEach(function (): void {
     $this->seed(DashboardPermissionsSeeder::class);
+    $this->seed(SupermarketOwnerEmployeePermissionsSeeder::class);
 
     $this->owner = User::factory()->create([
         'module_type' => UserModuleType::SupermarketSeller->value,
@@ -32,22 +34,28 @@ it('returns supermarket owner employee permission catalog', function (): void {
     $response->assertJsonStructure([
         'data' => [
             'permissions' => [
-                ['id', 'name', 'slug', 'group'],
+                ['id', 'name', 'slug', 'description', 'group'],
             ],
         ],
     ]);
 
-    $permissionNames = collect($response->json('data.permissions'))->pluck('name');
+    $permissions = collect($response->json('data.permissions'));
 
-    expect($permissionNames)->toContain('products.view');
-    expect($permissionNames)->toContain('orders.view');
-    expect($permissionNames)->toContain('reports.view');
-    expect($permissionNames)->not->toContain('system_alerts.view');
+    expect($permissions)->toHaveCount(6);
+    expect($permissions->pluck('name')->sort()->values()->all())->toBe([
+        'so.offers_coupons',
+        'so.orders',
+        'so.products',
+        'so.staff_register',
+        'so.store_hours',
+        'so.warehouse',
+    ]);
+    expect($permissions->pluck('group')->unique()->values()->all())->toBe(['supermarket_owner']);
 });
 
 it('creates employee and syncs selected permissions', function (): void {
     $permissionIds = Permission::query()
-        ->whereIn('name', ['products.view', 'orders.view', 'inventory.update'])
+        ->whereIn('name', ['so.products', 'so.orders', 'so.warehouse'])
         ->pluck('id')
         ->all();
 
@@ -57,7 +65,7 @@ it('creates employee and syncs selected permissions', function (): void {
         'name' => 'Store Employee',
         'email' => 'store.employee@example.com',
         'phone' => '+963955000111',
-        'permissionIds' => $permissionIds,
+        'permissionIds[]' => $permissionIds,
         'isActive' => true,
         'profileImage' => $profileImage,
     ], ['Accept' => 'application/json']);
@@ -66,11 +74,15 @@ it('creates employee and syncs selected permissions', function (): void {
     $response->assertJsonPath('data.user.email', 'store.employee@example.com');
     $response->assertJsonPath('data.isActive', true);
 
+    expect(collect($response->json('data.permissionIds'))->sort()->values()->all())
+        ->toBe(collect($permissionIds)->sort()->values()->all());
+    expect($response->json('data.permissions'))->toBeArray();
+
     $employeeUser = User::query()->where('email', 'store.employee@example.com')->firstOrFail();
 
     expect($employeeUser->module_type)->toBe(UserModuleType::SupermarketSeller);
-    expect($employeeUser->getPermissionNames()->all())->toContain('products.view');
-    expect($employeeUser->getPermissionNames()->all())->toContain('orders.view');
+    expect($employeeUser->getPermissionNames()->all())->toContain('so.products');
+    expect($employeeUser->getPermissionNames()->all())->toContain('so.orders');
     expect($employeeUser->getFirstMediaUrl('primary-image'))->not->toBe('');
     expect($response->json('data.user.profileImageUrl'))->not->toBeNull();
 
@@ -100,11 +112,11 @@ it('updates employee profile and permissions', function (): void {
     ]);
 
     $employee->syncPermissions(
-        Permission::query()->where('name', 'products.view')->pluck('id')->all()
+        Permission::query()->where('name', 'so.products')->pluck('id')->all()
     );
 
     $updatedPermissionIds = Permission::query()
-        ->whereIn('name', ['orders.view', 'offers.view'])
+        ->whereIn('name', ['so.orders', 'so.offers_coupons'])
         ->pluck('id')
         ->all();
 
@@ -112,18 +124,21 @@ it('updates employee profile and permissions', function (): void {
 
     $response = $this->patch("/api/v1/store-owner/employees/{$staff->id}", [
         'name' => 'Updated Employee',
-        'permissionIds' => $updatedPermissionIds,
+        'permissionIds[]' => $updatedPermissionIds,
         'profileImage' => $updatedProfileImage,
     ], ['Accept' => 'application/json']);
 
     $response->assertOk();
     $response->assertJsonPath('data.user.name', 'Updated Employee');
 
+    expect(collect($response->json('data.permissionIds'))->sort()->values()->all())
+        ->toBe(collect($updatedPermissionIds)->sort()->values()->all());
+
     $employee->refresh();
 
-    expect($employee->getPermissionNames()->all())->toContain('orders.view');
-    expect($employee->getPermissionNames()->all())->toContain('offers.view');
-    expect($employee->getPermissionNames()->all())->not->toContain('products.view');
+    expect($employee->getPermissionNames()->all())->toContain('so.orders');
+    expect($employee->getPermissionNames()->all())->toContain('so.offers_coupons');
+    expect($employee->getPermissionNames()->all())->not->toContain('so.products');
     expect($employee->getFirstMediaUrl('primary-image'))->not->toBe('');
     expect($response->json('data.user.profileImageUrl'))->not->toBeNull();
 
@@ -157,4 +172,25 @@ it('forbids managing employees from another owner store', function (): void {
     $this->patchJson("/api/v1/store-owner/employees/{$otherStaff->id}", [
         'name' => 'Should Fail',
     ])->assertForbidden();
+});
+
+it('resolves an active employee store and enforces grouped route permissions', function (): void {
+    $employee = User::factory()->create([
+        'module_type' => UserModuleType::SupermarketSeller->value,
+    ]);
+
+    SmStoreStaff::query()->create([
+        'store_id' => $this->store->id,
+        'user_id' => $employee->id,
+        'is_active' => true,
+    ]);
+
+    $employee->syncPermissions(
+        Permission::query()->where('name', 'so.orders')->pluck('id')->all()
+    );
+
+    Sanctum::actingAs($employee);
+
+    $this->getJson('/api/v1/sm-orders')->assertOk();
+    $this->getJson('/api/v1/store-owner/products')->assertForbidden();
 });

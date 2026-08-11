@@ -39,7 +39,7 @@ final class CleaningOverview extends Page
 
     protected static ?int $navigationSort = 1;
 
-    protected static bool $shouldRegisterNavigation = true;
+    protected static bool $shouldRegisterNavigation = false;
 
     public static function getNavigationGroup(): ?string
     {

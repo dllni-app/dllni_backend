@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Models\User;
 use App\Models\Worker;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Laravel\Sanctum\Sanctum;
@@ -85,6 +86,7 @@ it('returns 422 when accept from non-pending status', function () {
         'worker_id' => $worker->id,
         'billing_policy_id' => $this->billingPolicy->id,
         'status' => CleaningBookingStatus::WorkerAssigned,
+        'arrived_at' => now()->subMinute(),
         'scheduled_date' => now()->format('Y-m-d'),
         'scheduled_time' => now()->addHour()->format('H:i'),
     ]);
@@ -134,6 +136,7 @@ it('rejects a cleaning booking', function () {
         'worker_id' => $worker->id,
         'billing_policy_id' => $this->billingPolicy->id,
         'status' => CleaningBookingStatus::WorkerAssigned,
+        'arrived_at' => now()->subMinute(),
         'scheduled_date' => now()->format('Y-m-d'),
         'scheduled_time' => now()->addHour()->format('H:i'),
     ]);
@@ -291,6 +294,7 @@ it('deducts trust score when worker cancels a confirmed cleaning booking', funct
         'worker_id' => $worker->id,
         'billing_policy_id' => $this->billingPolicy->id,
         'status' => CleaningBookingStatus::WorkerAssigned,
+        'arrived_at' => now()->subMinute(),
     ]);
 
     $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/cancel", [
@@ -501,6 +505,7 @@ it('starts work for a cleaning booking (worker_assigned → in_progress)', funct
         'worker_id' => $worker->id,
         'billing_policy_id' => $this->billingPolicy->id,
         'status' => CleaningBookingStatus::WorkerAssigned,
+        'arrived_at' => now()->subMinute(),
     ]);
 
     $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/start-work");
@@ -584,6 +589,7 @@ it('returns security code for assigned booking', function () {
         'worker_id' => $worker->id,
         'billing_policy_id' => $this->billingPolicy->id,
         'status' => CleaningBookingStatus::WorkerAssigned,
+        'arrived_at' => now()->subMinute(),
     ]);
 
     $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/security-code");
@@ -611,6 +617,7 @@ it('returns a valid security code on a second request', function () {
         'worker_id' => $worker->id,
         'billing_policy_id' => $this->billingPolicy->id,
         'status' => CleaningBookingStatus::WorkerAssigned,
+        'arrived_at' => now()->subMinute(),
     ]);
 
     $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/security-code");
@@ -618,6 +625,39 @@ it('returns a valid security code on a second request', function () {
     $response->assertOk();
     expect($response->json('data.securityCode'))->toMatch('/^\d{4}$/');
     expect($response->json('data.expiresAt'))->not->toBeNull();
+});
+
+it('issues a security code from the current worker assignment rather than the aggregate booking status', function () {
+    $workerUser = User::factory()->create(['email' => 'worker-security-assignment@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'status' => CleaningBookingStatus::InProgress,
+        'number_of_workers' => 2,
+    ]);
+    DB::table('cleaning_booking_worker_assignments')->insert([
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $worker->id,
+        'status' => CleaningBookingWorkerAssignmentStatus::AwaitingStartVerification->value,
+        'accepted_at' => now()->subHour(),
+        'arrived_at' => now()->subMinute(),
+        'room_count' => 0,
+        'rooms_weight' => 0,
+        'service_share_amount' => 0,
+        'travel_fee' => 0,
+        'admin_margin_amount' => 0,
+        'worker_amount' => 0,
+        'currency' => (string) config('app.currency', 'SYP'),
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/security-code")
+        ->assertOk()
+        ->assertJsonPath('data.securityCode', fn (string $code): bool => mb_strlen($code) === 4);
 });
 
 it('returns 422 for security code when booking is pending', function () {
@@ -747,4 +787,32 @@ it('returns 422 when arrive before start travel', function () {
     $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/arrive");
 
     $response->assertUnprocessable();
+});
+
+it('hides active work timer after worker completes the booking', function () {
+    Carbon::setTestNow(Carbon::parse('2026-06-21 12:00:00'));
+
+    Event::fake([CleaningBookingTrackingUpdated::class, CleaningOrderAwaitingCustomerCompletion::class]);
+
+    $workerUser = User::factory()->create(['email' => 'worker-complete-timer@example.com']);
+    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    Sanctum::actingAs($workerUser);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'billing_policy_id' => $this->billingPolicy->id,
+        'status' => CleaningBookingStatus::InProgress,
+        'work_started_at' => now()->subHours(3),
+        'total_hours' => 2,
+    ]);
+
+    $response = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/complete");
+
+    $response->assertOk();
+    expect($response->json('data.status'))->toBe('awaiting_customer_completion');
+    expect($response->json('data.shouldShowWorkTimer'))->toBeFalse();
+    expect($response->json('data.isWorkOverdue'))->toBeFalse();
+    expect($response->json('data.expectedFinishAt'))->not->toBeNull();
+
+    Carbon::setTestNow();
 });

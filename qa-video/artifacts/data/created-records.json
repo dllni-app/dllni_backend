@@ -1,0 +1,19 @@
+[
+  {
+    "module": "Service Add-ons",
+    "name": "QA-VIDEO-20260712190001 Add-on",
+    "id": "8",
+    "url": "https://alnadha.net/admin/service-addons/8",
+    "createdAt": "2026-07-12T19:00:27.886Z",
+    "fields": {
+      "name": "QA-VIDEO-20260712190001 Add-on",
+      "slug": "qa-video-20260712190001-addon",
+      "pricingType": "fixed",
+      "price": 10,
+      "active": true
+    },
+    "modified": true,
+    "deleted": true,
+    "cleanupResult": "deleted"
+  }
+]

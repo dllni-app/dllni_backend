@@ -26,6 +26,12 @@ final class AuthController
             ]);
         }
 
+        if (! $user->is_active) {
+            throw ValidationException::withMessages([
+                'email' => ['تم إلغاء تفعيل هذا الحساب. يرجى التواصل مع الدعم.'],
+            ]);
+        }
+
         $fcmToken = $request->validated('fcmToken');
         if (is_string($fcmToken) && $fcmToken !== '') {
             $user->forceFill([

@@ -24,7 +24,7 @@ final class Modifier extends Model
     protected function casts(): array
     {
         return [
-            'price' => 'decimal:2',
+            'price' => 'integer',
             'sort_order' => 'integer',
         ];
     }

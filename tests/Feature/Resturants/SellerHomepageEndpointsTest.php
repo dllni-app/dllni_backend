@@ -106,7 +106,7 @@ it('lists orders in preparation with filter status preparing', function () {
     expect($response->json('data'))->toHaveCount(2);
 });
 
-it('returns 422 when order accept is called without preparation time', function () {
+it('accepts an order when preparation time is unknown', function () {
     $restaurant = Restaurant::factory()->create();
     $customer = User::factory()->create(['email' => 'accept-validation@example.com']);
     $order = Order::factory()->create([
@@ -117,8 +117,9 @@ it('returns 422 when order accept is called without preparation time', function 
 
     $response = $this->postJson('/api/v1/orders/'.$order->id.'/accept', []);
 
-    $response->assertUnprocessable();
-    $response->assertJsonValidationErrors(['preparationTimeMinutes']);
+    $response->assertOk();
+    $response->assertJsonPath('data.status', OrderStatus::Accepted->value);
+    $response->assertJsonPath('data.estimatedPreparationMinutes', null);
 });
 
 it('accepts a pending order with preparation time and optional fields', function () {

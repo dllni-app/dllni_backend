@@ -30,12 +30,12 @@ final class RestaurantOwnerResource extends Resource
 
     public static function getNavigationGroup(): ?string
     {
-        return 'Restaurant Management';
+        return 'قسم المطاعم';
     }
 
     public static function getNavigationLabel(): string
     {
-        return 'Restaurant Owners';
+        return 'مالكو المطاعم';
     }
 
     public static function form(Schema $schema): Schema
@@ -68,4 +68,3 @@ final class RestaurantOwnerResource extends Resource
         ];
     }
 }
-

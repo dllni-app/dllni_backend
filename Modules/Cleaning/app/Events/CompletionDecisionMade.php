@@ -20,6 +20,8 @@ final class CompletionDecisionMade implements ShouldBroadcastNow
         public string $decision,
         public ?string $message,
         public string $decidedAt,
+        public ?string $status = null,
+        public ?int $warningId = null,
     ) {}
 
     /**
@@ -50,11 +52,17 @@ final class CompletionDecisionMade implements ShouldBroadcastNow
     {
         return [
             'cleaningBookingId' => $this->cleaningBookingId,
+            'bookingId' => $this->cleaningBookingId,
+            'booking_id' => $this->cleaningBookingId,
             'workerId' => $this->workerId,
             'decision' => $this->decision,
             'message' => $this->message,
+            'status' => $this->status,
+            'orderStatus' => $this->status,
+            'warningId' => $this->warningId,
+            'warning_id' => $this->warningId,
             'decidedAt' => $this->decidedAt,
-            'version' => 1,
+            'version' => 2,
         ];
     }
 }

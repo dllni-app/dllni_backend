@@ -10,6 +10,8 @@ use App\Models\User;
 use App\Models\Worker;
 use App\Services\Notifications\CachedFcmService;
 use App\Services\Notifications\CachedFirebaseMessagingClient;
+use DevKandil\NotiFire\Contracts\FcmServiceInterface;
+use DevKandil\NotiFire\FcmService;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
@@ -18,10 +20,9 @@ use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
-use DevKandil\NotiFire\Contracts\FcmServiceInterface;
-use DevKandil\NotiFire\FcmService;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Observers\CleaningBookingCancellationAuditObserver;
 use Modules\Delivery\Models\DeliveryCompany;
 use Modules\Delivery\Models\DeliveryDriver;
 use Modules\Delivery\Models\DeliveryOrder;
@@ -67,25 +68,11 @@ final class AppServiceProvider extends ServiceProvider
         $this->app->singleton(CachedFirebaseMessagingClient::class);
         $this->app->bind(FcmService::class, CachedFcmService::class);
         $this->app->bind(FcmServiceInterface::class, CachedFcmService::class);
-
-        // override default language path so our root lang/ directory is used
-        // (instead of resources/lang).  This must happen before the translator
-        // loads any files, so register() is the right spot.
         $this->app->useLangPath(base_path('lang'));
-
-        if ($this->app->environment('local') && class_exists(\Laravel\Telescope\TelescopeServiceProvider::class)) {
-
-            $this->app->register(\Laravel\Telescope\TelescopeServiceProvider::class);
-
-            $this->app->register(TelescopeServiceProvider::class);
-        }
     }
 
     public function boot(): void
     {
-        // our language files live at the repository root instead of the default
-        // resources/lang directory.  Tell Laravel to use that path so keys like
-        // "cleaning_admin.overview.title" resolve properly.
         $this->app->useLangPath(base_path('lang'));
 
         RateLimiter::for('cleaning-start-verification', function (Request $request): Limit {
@@ -94,6 +81,8 @@ final class AppServiceProvider extends ServiceProvider
 
             return Limit::perMinute(5)->by($userId.'|'.$orderId);
         });
+
+        CleaningBooking::observe(CleaningBookingCancellationAuditObserver::class);
 
         $this->bootModelsDefaults();
         $this->bootMorphMap();
@@ -207,6 +196,10 @@ final class AppServiceProvider extends ServiceProvider
             'delivery_company' => DeliveryCompany::class,
             'delivery_driver' => DeliveryDriver::class,
             'delivery_order' => DeliveryOrder::class,
+            'cleaning_worker_deposit' => \App\Models\CleaningWorkerDeposit::class,
+            'cleaning_deposit_transaction' => \App\Models\CleaningDepositTransaction::class,
+            'cleaning_deposit_setting' => \App\Models\CleaningDepositSetting::class,
+            'cleaning_financial_setting' => \App\Models\CleaningFinancialSetting::class,
         ]);
     }
 

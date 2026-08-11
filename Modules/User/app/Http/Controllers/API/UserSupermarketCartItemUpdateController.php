@@ -14,11 +14,12 @@ final class UserSupermarketCartItemUpdateController
         private readonly UserSupermarketCartService $carts,
     ) {}
 
-    public function __invoke(UserSupermarketCartItemUpdateRequest $request, int $itemId): JsonResponse
+    public function __invoke(UserSupermarketCartItemUpdateRequest $request, int $cartId, int $itemId): JsonResponse
     {
         return response()->json([
             'data' => $this->carts->updateItem(
                 userId: (int) $request->user()->id,
+                cartId: $cartId,
                 itemId: $itemId,
                 quantity: (int) $request->integer('quantity'),
             ),

@@ -12,10 +12,16 @@ final class CreateUser extends CreateRecord
 {
     protected static string $resource = UserResource::class;
 
+    public function getTitle(): string
+    {
+        return 'إضافة مدير نظام';
+    }
+
     public function afterCreate(): void
     {
         $roleId = $this->form->getState()['role_id'] ?? null;
         $role = $roleId ? Role::find($roleId) : null;
+
         if ($role) {
             $this->record->assignRole($role->name);
         }

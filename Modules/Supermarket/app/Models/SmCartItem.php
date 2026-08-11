@@ -34,7 +34,7 @@ final class SmCartItem extends Model
     protected function casts(): array
     {
         return [
-            'unit_price' => 'decimal:2',
+            'unit_price' => 'integer',
         ];
     }
 }

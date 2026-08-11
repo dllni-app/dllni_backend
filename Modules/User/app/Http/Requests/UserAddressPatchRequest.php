@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\User\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 use Modules\User\Models\UserAddress;
 
@@ -24,6 +25,12 @@ final class UserAddressPatchRequest extends FormRequest
             'label' => ['sometimes', 'string', 'max:100'],
             'mobile' => ['sometimes', 'nullable', 'string', 'max:32'],
             'city' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'neighborhoodId' => [
+                'sometimes',
+                'nullable',
+                'integer',
+                Rule::exists('cleaning_neighborhoods', 'id')->where('is_active', true),
+            ],
             'neighborhood' => ['sometimes', 'nullable', 'string', 'max:255'],
             'street' => ['sometimes', 'nullable', 'string', 'max:255'],
             'building' => ['sometimes', 'nullable', 'string', 'max:255'],
@@ -54,6 +61,7 @@ final class UserAddressPatchRequest extends FormRequest
             $future = [
                 'mobile' => array_key_exists('mobile', $validated) ? $validated['mobile'] : $address->mobile,
                 'city' => array_key_exists('city', $validated) ? $validated['city'] : $address->city,
+                'neighborhoodId' => array_key_exists('neighborhoodId', $validated) ? $validated['neighborhoodId'] : $address->neighborhood_id,
                 'neighborhood' => array_key_exists('neighborhood', $validated) ? $validated['neighborhood'] : $address->neighborhood,
                 'street' => array_key_exists('street', $validated) ? $validated['street'] : $address->street,
                 'building' => array_key_exists('building', $validated) ? $validated['building'] : $address->building,

@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace Modules\Delivery\Providers;
 
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\ServiceProvider;
+use Modules\Delivery\Console\Commands\BackfillMerchantDeliveryStateCommand;
+use Modules\Resturants\Models\Order;
+use Modules\Supermarket\Models\SmOrder;
 use Nwidart\Modules\Traits\PathNamespace;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -25,6 +29,7 @@ final class DeliveryServiceProvider extends ServiceProvider
         $this->registerTranslations();
         $this->registerConfig();
         $this->registerViews();
+        $this->registerSourceMorphMap();
         $this->loadMigrationsFrom(module_path($this->name, 'database/migrations'));
     }
 
@@ -72,7 +77,12 @@ final class DeliveryServiceProvider extends ServiceProvider
         return [];
     }
 
-    protected function registerCommands(): void {}
+    protected function registerCommands(): void
+    {
+        $this->commands([
+            BackfillMerchantDeliveryStateCommand::class,
+        ]);
+    }
 
     protected function registerCommandSchedules(): void {}
 
@@ -105,6 +115,14 @@ final class DeliveryServiceProvider extends ServiceProvider
                 $this->mergeConfigFrom($file->getPathname(), $key);
             }
         }
+    }
+
+    private function registerSourceMorphMap(): void
+    {
+        Relation::morphMap([
+            'restaurant_order' => Order::class,
+            'supermarket_order' => SmOrder::class,
+        ], merge: true);
     }
 
     private function getPublishableViewPaths(): array

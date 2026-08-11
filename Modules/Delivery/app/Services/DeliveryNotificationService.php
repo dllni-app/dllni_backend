@@ -173,6 +173,16 @@ final class DeliveryNotificationService
         $this->notifyCompanyUsers($order->company, 'delivery.order.accepted', $context, $extraData);
     }
 
+    public function notifyMerchantPreparationUpdated(DeliveryOrder $order): void
+    {
+        $this->notifyAssignedDriver($order, 'delivery.order.merchant_preparation_updated');
+    }
+
+    public function notifyMerchantReady(DeliveryOrder $order): void
+    {
+        $this->notifyAssignedDriver($order, 'delivery.order.merchant_ready');
+    }
+
     public function notifyOrderStopped(DeliveryOrder $order, string $reason): void
     {
         $order->loadMissing(['company.owner', 'company.staff.user']);
@@ -189,6 +199,26 @@ final class DeliveryNotificationService
         ];
 
         $this->notifyCompanyUsers($order->company, 'delivery.order.stopped', $context, $extraData);
+    }
+
+    private function notifyAssignedDriver(DeliveryOrder $order, string $canonicalType): void
+    {
+        $order->loadMissing('driver.user');
+        $driverUser = $order->driver?->user;
+
+        if (! $driverUser instanceof User) {
+            return;
+        }
+
+        $driverUser->notify(new DeliveryCanonicalNotification(
+            canonicalType: $canonicalType,
+            templateContext: ['order_number' => $order->order_number],
+            extraData: [
+                'orderId' => $order->id,
+                'orderNumber' => $order->order_number,
+                'deepLinkTarget' => 'delivery_order_details',
+            ],
+        ));
     }
 
     public function notifyDisputeOpened(DeliveryOrder $order, \App\Models\Dispute $dispute): void

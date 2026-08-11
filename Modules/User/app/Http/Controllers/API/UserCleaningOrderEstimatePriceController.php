@@ -10,6 +10,8 @@ use InvalidArgumentException;
 use Modules\Cleaning\Services\CleaningExtendedTimePricingService;
 use Modules\Cleaning\Support\WorkerRoomAssignmentPlanner;
 use Modules\User\Http\Requests\UserCleaningOrderEstimatePriceRequest;
+use Modules\User\Models\UserAddress;
+use Modules\User\Services\FemaleWorkerSafetyPolicyService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrderEstimatePriceController
@@ -20,6 +22,7 @@ final class UserCleaningOrderEstimatePriceController
         CleaningExtendedTimePricingService $extendedTimePricing,
     ): JsonResponse {
         $validated = $request->validated();
+        [$addressLatitude, $addressLongitude] = $this->resolveAddressCoordinates($validated, (int) $request->user()->id);
 
         try {
             $estimation = $service->estimate(
@@ -27,11 +30,26 @@ final class UserCleaningOrderEstimatePriceController
                 (array) $validated['propertyDetails'],
                 isset($validated['serviceIds']) ? (array) $validated['serviceIds'] : null,
             );
+
+            $assignmentMode = $this->resolveAssignmentMode(
+                $validated['assignmentMode'] ?? null,
+                $validated['preferredWorkerId'] ?? null,
+                $validated['numberOfWorkers'] ?? null,
+            );
+            $requiredWorkers = $assignmentMode === 'preferred_worker'
+                ? 1
+                : max(1, (int) ($validated['numberOfWorkers'] ?? $estimation['recommendation']['suggestedTeamSize'] ?? 1));
+
+            $pricingPropertyDetails = (array) $validated['propertyDetails'];
+            if ($service->isEventAssistanceType((string) $validated['propertyType'])) {
+                $pricingPropertyDetails['workerCount'] = $requiredWorkers;
+            }
+
             $pricing = $service->price(
                 (string) $validated['propertyType'],
-                (array) $validated['propertyDetails'],
-                $validated['addressLatitude'] ?? null,
-                $validated['addressLongitude'] ?? null,
+                $pricingPropertyDetails,
+                $addressLatitude,
+                $addressLongitude,
                 $validated['preferredWorkerId'] ?? null,
                 isset($validated['serviceIds']) ? (array) $validated['serviceIds'] : null,
             );
@@ -41,14 +59,6 @@ final class UserCleaningOrderEstimatePriceController
             ]);
         }
 
-        $assignmentMode = $this->resolveAssignmentMode(
-            $validated['assignmentMode'] ?? null,
-            $validated['preferredWorkerId'] ?? null,
-            $validated['numberOfWorkers'] ?? null,
-        );
-        $requiredWorkers = $assignmentMode === 'preferred_worker'
-            ? 1
-            : max(1, (int) ($validated['numberOfWorkers'] ?? $estimation['recommendation']['suggestedTeamSize'] ?? 1));
         $workerRoomAssignments = null;
 
         if (
@@ -89,21 +99,84 @@ final class UserCleaningOrderEstimatePriceController
             ],
             'recommendation' => $estimation['recommendation'] ?? null,
             'workerRoomAssignments' => $workerRoomAssignments,
+            'workEnvironmentConfirmation' => $this->workEnvironmentConfirmationPayload($validated),
             'extendedTimeRanges' => $extendedTimePricing->ranges(),
             'algorithmVersion' => $service->algorithmVersion(),
         ]);
     }
 
-    private function resolveAssignmentMode(mixed $assignmentMode, mixed $preferredWorkerId, mixed $numberOfWorkers): string
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array{0: mixed, 1: mixed}
+     */
+    private function resolveAddressCoordinates(array $validated, int $userId): array
     {
-        if (is_string($assignmentMode) && mb_trim($assignmentMode) !== '') {
-            return mb_strtolower(mb_trim($assignmentMode));
+        $addressId = $validated['addressId'] ?? null;
+        if (is_numeric($addressId)) {
+            $address = UserAddress::query()
+                ->whereKey((int) $addressId)
+                ->where('user_id', $userId)
+                ->first();
+
+            if (! $address instanceof UserAddress) {
+                throw ValidationException::withMessages([
+                    'addressId' => ['Selected address is invalid.'],
+                ]);
+            }
+
+            return [$address->latitude, $address->longitude];
         }
 
-        if (is_numeric($preferredWorkerId) && (int) $preferredWorkerId > 0 && ((int) ($numberOfWorkers ?? 1)) <= 1) {
+        return [
+            $validated['addressLatitude'] ?? null,
+            $validated['addressLongitude'] ?? null,
+        ];
+    }
+
+    private function resolveAssignmentMode(mixed $assignmentMode, mixed $preferredWorkerId, mixed $numberOfWorkers): string
+    {
+        $normalizedMode = is_string($assignmentMode) && mb_trim($assignmentMode) !== ''
+            ? mb_strtolower(mb_trim($assignmentMode))
+            : null;
+        $requestedWorkers = max(1, (int) ($numberOfWorkers ?? 1));
+        $hasPreferredWorker = is_numeric($preferredWorkerId) && (int) $preferredWorkerId > 0;
+
+        if ($normalizedMode === 'open_count') {
+            return 'open_count';
+        }
+
+        if ($hasPreferredWorker && $requestedWorkers <= 1) {
             return 'preferred_worker';
         }
 
+        if ($normalizedMode === 'preferred_worker') {
+            return 'open_count';
+        }
+
+        if ($normalizedMode !== null) {
+            return $normalizedMode;
+        }
+
         return 'open_count';
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    private function workEnvironmentConfirmationPayload(array $validated): array
+    {
+        $genderPreference = mb_strtolower((string) ($validated['genderPreference'] ?? 'any'));
+
+        if ($genderPreference !== 'female') {
+            return [
+                'required' => false,
+            ];
+        }
+
+        return [
+            'required' => true,
+            ...app(FemaleWorkerSafetyPolicyService::class)->policyPayload(),
+        ];
     }
 }

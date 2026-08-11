@@ -5,12 +5,24 @@ declare(strict_types=1);
 namespace Modules\Supermarket\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 final class StoreOwnerEmployeeStoreRequest extends FormRequest
 {
     public function authorize(): bool
     {
         return true;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $input = $this->all();
+
+        if (! array_key_exists('permissionIds', $input) && array_key_exists('permissionIds[]', $input)) {
+            $this->merge([
+                'permissionIds' => $input['permissionIds[]'],
+            ]);
+        }
     }
 
     public function rules(): array
@@ -21,7 +33,12 @@ final class StoreOwnerEmployeeStoreRequest extends FormRequest
             'phone' => 'nullable|string|max:30',
             'profileImage' => 'sometimes|file|image|mimes:jpeg,jpg,png,webp|max:5120',
             'permissionIds' => 'sometimes|array',
-            'permissionIds.*' => 'integer|exists:permissions,id',
+            'permissionIds.*' => [
+                'integer',
+                Rule::exists('permissions', 'id')->where(
+                    static fn ($query) => $query->where('group', 'supermarket_owner')
+                ),
+            ],
             'isActive' => 'sometimes|boolean',
         ];
     }

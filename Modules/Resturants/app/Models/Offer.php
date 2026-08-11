@@ -68,16 +68,19 @@ final class Offer extends Model
 
     public function listingBadgeText(): ?string
     {
-        $discountType = $this->discount_type;
+        if ($this->discount_value === null) {
+            return null;
+        }
 
-        return match ($discountType) {
-            DiscountType::Percentage => $this->discount_value !== null
-                ? mb_rtrim(mb_rtrim(number_format((float) $this->discount_value, 2, '.', ''), '0'), '.').'%'
-                : null,
-            DiscountType::FixedAmount => $this->discount_value !== null
-                ? mb_rtrim(mb_rtrim(number_format((float) $this->discount_value, 2, '.', ''), '0'), '.')
-                : null,
-            null => null,
+        $value = (float) $this->discount_value;
+        $formattedValue = mb_rtrim(mb_rtrim(number_format($value, 2, '.', ''), '0'), '.');
+        $discountType = $this->discount_type;
+        $discountTypeValue = $discountType instanceof DiscountType ? $discountType->value : (string) $discountType;
+
+        return match ($discountTypeValue) {
+            DiscountType::Percentage->value, 'percent', 'percentage_discount' => $formattedValue.'%',
+            DiscountType::FixedAmount->value, 'fixed', 'amount', 'fixed_discount' => $formattedValue,
+            default => $formattedValue,
         };
     }
 

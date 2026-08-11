@@ -127,9 +127,43 @@ final class WorkerStatisticsController
             : null;
 
         if ($assignment instanceof CleaningBookingWorkerAssignment) {
-            return (float) $assignment->worker_amount;
+            return $this->assignmentNetAmount($assignment);
+        }
+
+        return max(0.0, round($this->bookingGrossAmount($booking, $workerId) - (float) ($booking->admin_margin_amount ?? 0), 2));
+    }
+
+    private function bookingGrossAmount(CleaningBooking $booking, int $workerId): float
+    {
+        $assignment = $booking->relationLoaded('workerAssignments')
+            ? $booking->workerAssignments->firstWhere('worker_id', $workerId)
+            : null;
+
+        if ($assignment instanceof CleaningBookingWorkerAssignment) {
+            return $this->assignmentGrossAmount($assignment);
+        }
+
+        $gross = round(
+            (float) ($booking->base_price ?? 0)
+            + (float) ($booking->addons_total ?? 0)
+            + (float) ($booking->travel_fee ?? 0),
+            2,
+        );
+
+        if ($gross > 0.0) {
+            return $gross;
         }
 
         return max(0.0, round((float) ($booking->total_price ?? 0) - (float) ($booking->admin_margin_amount ?? 0), 2));
+    }
+
+    private function assignmentGrossAmount(CleaningBookingWorkerAssignment $assignment): float
+    {
+        return round((float) $assignment->service_share_amount + (float) $assignment->travel_fee, 2);
+    }
+
+    private function assignmentNetAmount(CleaningBookingWorkerAssignment $assignment): float
+    {
+        return max(0.0, round($this->assignmentGrossAmount($assignment) - (float) $assignment->admin_margin_amount, 2));
     }
 }

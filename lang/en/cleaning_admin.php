@@ -69,6 +69,12 @@ return [
             'pending_events' => 'Pending events',
             'pending_events_hint' => 'Event-assistance bookings that still need attention.',
         ],
+        'empty' => [
+            'booking_statuses' => 'No booking data.',
+            'alert_types' => 'No alerts in this period.',
+            'alert_lifecycle' => 'No alerts currently.',
+            'all_clear' => 'All clear, nothing needs action.',
+        ],
     ],
 
     'workers' => [
@@ -179,6 +185,39 @@ return [
             'suspended' => 'Suspended',
             'average_rating' => 'Average rating',
         ],
+        'finance' => [
+            'group' => 'Financial actions',
+            'error' => 'The operation could not be completed',
+            'fields' => [
+                'amount' => 'Amount',
+                'signed_amount' => 'Amount (positive to credit, negative to debit)',
+                'date' => 'Date',
+                'notes' => 'Notes',
+            ],
+            'hints' => [
+                'signed_amount' => 'Use a positive value to increase the balance and a negative value to decrease it.',
+            ],
+            'deposit' => [
+                'label' => 'Record deposit',
+                'success' => 'Deposit recorded successfully',
+            ],
+            'settlement' => [
+                'label' => 'Record settlement',
+                'success' => 'Settlement recorded successfully',
+            ],
+            'refund' => [
+                'label' => 'Record refund',
+                'success' => 'Refund recorded successfully',
+            ],
+            'adjustment' => [
+                'label' => 'Manual adjustment',
+                'success' => 'Adjustment recorded successfully',
+            ],
+            'reactivate' => [
+                'label' => 'Reactivate account',
+                'success' => 'Account reactivated',
+            ],
+        ],
     ],
 
     'disputes' => [
@@ -276,6 +315,37 @@ return [
 
     'event_bookings' => [
         'nav_label' => 'Event Bookings',
+        'sections' => [
+            'booking' => 'Booking details',
+            'schedule' => 'Schedule',
+            'pricing' => 'Pricing',
+            'policies' => 'Policies',
+            'services' => 'Related services',
+        ],
+        'fields' => [
+            'booking_number' => 'Booking number',
+            'status' => 'Status',
+            'event_type' => 'Event type',
+            'customer' => 'Customer',
+            'guest_count_min' => 'Minimum guests',
+            'guest_count_max' => 'Maximum guests',
+            'gender_preference' => 'Gender preference',
+            'suggested_team_size' => 'Suggested team size',
+            'scheduled_date' => 'Date',
+            'scheduled_time' => 'Time',
+            'total_hours' => 'Booked hours',
+            'terms_accepted' => 'Terms accepted',
+            'cancelled_at' => 'Cancelled at',
+            'base_price' => 'Base price',
+            'travel_fee' => 'Travel fee',
+            'total_price' => 'Total price',
+            'cancellation_policy' => 'Cancellation policy',
+            'billing_policy' => 'Billing policy',
+            'service' => 'Service',
+            'quantity' => 'Quantity',
+            'unit_price' => 'Unit price',
+            'service_total_price' => 'Service total',
+        ],
         'tooltip' => 'View and manage event bookings: booking #, customer, event type, date and time, status, team size, total price.',
         'tooltip_full' => 'View and manage event bookings: family dinner, birthday, large gathering, funeral; guest range, team size, status and price.',
     ],
@@ -339,6 +409,10 @@ return [
             'fixed' => 'Fixed price',
             'percentage' => 'Percentage',
         ],
+        'validation' => [
+            'min_price' => 'The price must be zero or greater.',
+            'decimal_price' => 'The price may have up to two decimal places.',
+        ],
     ],
 
     'cleaning_banners' => [
@@ -374,6 +448,43 @@ return [
         ],
     ],
 
+    'cleaning_neighborhoods' => [
+        'nav_label' => 'Neighborhoods',
+        'model' => 'Neighborhood',
+        'plural' => 'Neighborhoods',
+        'tooltip' => 'Manage the controlled Aleppo neighborhoods used for work areas, addresses, and dispatch.',
+        'sections' => [
+            'identity' => 'Neighborhood identity',
+            'map' => 'Map metadata',
+        ],
+        'fields' => [
+            'name_ar' => 'Arabic name',
+            'name_en' => 'English name',
+            'city_name' => 'City',
+            'aliases' => 'Aliases',
+            'sort_order' => 'Sort order',
+            'center_latitude' => 'Center latitude',
+            'center_longitude' => 'Center longitude',
+            'is_active' => 'Active',
+            'workers_count' => 'Workers',
+            'coverage_level' => 'Coverage',
+        ],
+        'coverage' => [
+            'high' => 'High coverage',
+            'low' => 'Low coverage',
+        ],
+        'filters' => [
+            'is_active' => 'Active',
+        ],
+        'actions' => [
+            'create' => 'Add neighborhood',
+            'activate' => 'Activate',
+            'deactivate' => 'Deactivate',
+            'activate_selected' => 'Activate selected',
+            'deactivate_selected' => 'Deactivate selected',
+        ],
+    ],
+
     'travel_cost_configs' => [
         'nav_label' => 'Travel Cost Rules',
         'tooltip' => 'Travel cost calculation rules: per km rate, minimum travel fee, distance start point (worker location / home address / system auto).',
@@ -385,14 +496,23 @@ return [
         'tooltip' => 'Base pricing, add-ons, commission, travel costs, distance start point, time billing policy and minimum billable minutes.',
         'subheading' => 'Manage base pricing, add-ons, commission, travel costs, distance calculation start point, time billing policy and minimum billable minutes.',
         'saved' => 'Financial settings saved',
+        'pricing_algorithm_description' => 'Manage the room/unit pricing algorithm used by the user cleaning order estimate and create APIs.',
         'sections' => [
+            'pricing_algorithm' => 'Cleaning price algorithm',
             'revenue_model' => 'Revenue Model',
             'travel_costs' => 'Travel Costs',
             'time_billing_policy' => 'Time Billing Policy',
             'coverage_thresholds' => 'Coverage Thresholds',
+            'time_extension' => 'Time Extension',
+            'user_cancellation' => 'User cancellation fee',
             'worker_finance' => 'Worker Finance',
         ],
         'fields' => [
+            'cleaning_base_unit_price' => 'Base unit price',
+            'cleaning_deep_multiplier' => 'Deep cleaning multiplier',
+            'user_cancellation_fee' => 'User order cancellation fee',
+            'cleaning_area_margin_multiplier' => 'Area margin multiplier',
+            'cleaning_setup_buffer_minutes' => 'Setup buffer minutes',
             'commission_type' => 'Commission type',
             'default_commission_rate' => 'Default commission rate (%)',
             'commission_fixed_amount' => 'Fixed commission amount',
@@ -409,9 +529,22 @@ return [
             'coverage_ok' => 'Normal coverage threshold',
             'minimum_deposit_amount' => 'Minimum deposit to start work',
             'default_max_negative_balance' => 'Default max negative balance',
+            'restriction_threshold_percent' => 'Worker restriction threshold (% of deposit)',
             'trust_reject_after_accept_penalty' => 'Reject-after-accept trust penalty',
             'trust_minimum_for_dispatch' => 'Minimum trust score for dispatch',
             'worker_finance_enabled' => 'Enable worker finance rules',
+        ],
+        'hints' => [
+            'restriction_threshold_percent' => 'A worker is automatically restricted once the commission owed reaches this share of their deposit.',
+            'trust_reject_after_accept_penalty' => 'Number of points deducted from a worker\'s trust score when they reject a booking after having accepted it. A higher value penalizes such rejections more heavily.',
+            'user_cancellation_fee' => 'Fixed amount shown to the user when cancelling a cleaning order. Stored on the booking at cancel time without automatic wallet deduction.',
+            'coverage_thresholds' => 'An operational setting that classifies how many workers are available in an area (not a price). Used to decide whether an area\'s coverage is weak or acceptable.',
+            'coverage_low' => 'If available workers are at or below around this number, coverage is considered weak.',
+            'coverage_ok' => 'Once available workers reach around this number, coverage is considered acceptable.',
+            'time_extension' => 'Set the time-extension price for each block (every 15 minutes). The price is charged based on the block the extra minutes fall into.',
+        ],
+        'extension' => [
+            'range_label' => 'From :start to :end minutes',
         ],
         'options' => [
             'commission_percent' => 'Percentage',
@@ -429,6 +562,72 @@ return [
         ],
         'actions' => [
             'save' => 'Save settings',
+        ],
+    ],
+
+    'transactions' => [
+        'nav_label' => 'Transactions',
+        'model' => 'Transaction',
+        'plural' => 'Transactions',
+        'fields' => [
+            'id' => 'ID',
+            'worker' => 'Worker',
+            'type' => 'Type',
+            'amount' => 'Amount',
+            'balance_before' => 'Balance before',
+            'balance_after' => 'Balance after',
+            'date' => 'Date',
+            'notes' => 'Notes',
+            'reference' => 'Reference',
+            'created_by' => 'Created by',
+        ],
+        'filters' => [
+            'from' => 'From',
+            'to' => 'To',
+        ],
+        'types' => [
+            'deposit' => 'Deposit',
+            'settlement' => 'Settlement',
+            'refund' => 'Refund',
+            'withdrawal' => 'Refund (legacy)',
+            'admin_fee' => 'Admin commission',
+            'adjustment' => 'Adjustment',
+        ],
+        'actions' => [
+            'export' => 'Export',
+            'create' => 'Add transaction',
+            'create_success' => 'Transaction added successfully',
+            'error' => 'The operation could not be completed',
+        ],
+        'hints' => [
+            'adjustment_amount' => 'Use a positive value to credit the balance and a negative value to debit it.',
+        ],
+        'references' => [
+            'admin_deposit' => 'Admin deposit',
+            'admin_settlement' => 'Debt settlement',
+            'admin_refund' => 'Admin refund',
+            'admin_adjustment' => 'Manual adjustment',
+            'admin_fee_booking' => 'Admin fee — booking #:id',
+        ],
+    ],
+
+    'sos_notification' => [
+        'title' => 'New SOS alert',
+        'body' => 'A user submitted an SOS request that needs immediate attention.',
+        'view' => 'View alert',
+    ],
+
+    'report' => [
+        'nav_label' => 'Financial report',
+        'title' => 'Financial report',
+        'subtitle' => 'A complete overview of deposits, commissions, settlements and worker status.',
+        'metrics' => [
+            'deposits_held' => 'Total deposits held',
+            'outstanding_commissions' => 'Total outstanding commissions',
+            'settlements_received' => 'Total settlements received',
+            'deposit_refunds' => 'Total deposit refunds',
+            'active_workers' => 'Active workers',
+            'restricted_workers' => 'Restricted workers',
         ],
     ],
 
@@ -563,7 +762,7 @@ return [
         'pricing' => [
             'final' => 'Final',
             'provisional' => 'Provisional',
-            'formula' => 'Base :base + add-ons :addons + travel :travel + cancellation :cancellation = total :total',
+            'formula' => 'Base :base + add-ons :addons + travel :travel + cancellation :cancellation + admin fee :admin = total :total',
             'worker_payout_formula' => 'Worker payout: share :share + travel :travel + admin :admin = :total',
             'worker_payout_formula_legacy' => 'Legacy payout: total :total - admin :admin = worker :worker',
         ],
@@ -590,32 +789,44 @@ return [
             'description' => 'Manage base pricing, add-ons, commission, travel costs, distance start point, time billing policy and minimum billable minutes.',
         ],
         'geographic_coverage' => [
+            'manage_neighborhoods' => 'Manage neighborhoods',
             'title' => 'Geographic Coverage',
-            'description' => 'View demand vs worker coverage by geographic area to identify service gaps (low/good/high) and worker count per zone.',
-            'search_placeholder' => 'Search by zone name...',
+            'description' => 'Neighborhoods with their worker count and coverage level.',
+            'search_placeholder' => 'Search by neighborhood name...',
             'table_title' => 'Coverage Table',
-            'chart_title' => 'Demand vs Workers',
             'empty' => 'No coverage data found for the current filters.',
             'summary' => [
-                'workers_count' => 'Workers in displayed zones',
-                'high_pressure_count' => 'High-pressure zones',
-                'regions_count' => 'Displayed zones',
+                'neighborhoods_count' => 'Displayed neighborhoods',
+                'workers_count' => 'Active covered workers',
+                'pending_bookings_count' => 'Pending bookings',
+                'active_bookings_count' => 'Assigned / in-progress',
+                'uncovered_count' => 'Uncovered neighborhoods',
             ],
             'columns' => [
-                'zone' => 'Zone',
-                'demand_count' => 'Demand count',
+                'neighborhood' => 'Neighborhood',
+                'pending_bookings_count' => 'Pending bookings',
+                'active_bookings_count' => 'Assigned / in-progress',
                 'workers_count' => 'Workers count',
                 'coverage_ratio' => 'Coverage ratio',
             ],
             'levels' => [
+                'uncovered' => 'Uncovered',
                 'high' => 'High pressure',
                 'ok' => 'Balanced',
                 'low' => 'Low pressure',
             ],
-            'legends' => [
-                'demand' => 'Demand',
-                'workers' => 'Workers',
+            'legacy_unmapped_title' => 'Unmapped Legacy Zones',
+            'legacy_unmapped_description' => 'These work-area rows still rely on free-text names and should be mapped to a neighborhood.',
+            'legacy_warning' => ':count legacy zone names still need review.',
+            'legacy_empty' => 'No legacy zones are waiting for mapping.',
+            'legacy_columns' => [
+                'name' => 'Legacy zone name',
+                'zones_count' => 'Zone rows',
+                'workers_count' => 'Workers',
             ],
+        ],
+        'cleaning_neighborhoods' => [
+            'list' => 'Manage the seeded Aleppo neighborhoods used by worker coverage, customer addresses, and dispatch rules.',
         ],
         'cleaning_bookings' => [
             'list' => 'View and manage all cleaning bookings: booking #, customer, worker, date and time, status, total price, assign worker or cancel.',
@@ -810,6 +1021,9 @@ return [
             'property_damage' => 'Property damage',
             'unprofessional' => 'Unprofessional conduct',
             'billing_issue' => 'Billing issue',
+            'customer_terms_violation' => 'Customer terms violation',
+            'financial_or_verbal_dispute' => 'Financial or verbal dispute',
+            'force_majeure' => 'Force majeure',
             'other' => 'Other',
         ],
         'dispute_resolution' => [

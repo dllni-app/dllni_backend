@@ -34,12 +34,22 @@ final class UserResource extends Resource
 
     public static function getNavigationLabel(): string
     {
-        return __('restaurant_admin.team.admin_users');
+        return 'مدراء النظام';
     }
 
     public static function getNavigationTooltip(): ?string
     {
-        return __('restaurant_admin.team.description');
+        return 'إدارة حسابات مدراء النظام والأدوار المعيّنة لهم.';
+    }
+
+    public static function getModelLabel(): string
+    {
+        return 'مدير نظام';
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return 'مدراء النظام';
     }
 
     public static function form(Schema $schema): Schema

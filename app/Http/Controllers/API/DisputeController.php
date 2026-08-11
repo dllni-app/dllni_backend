@@ -5,18 +5,22 @@ declare(strict_types=1);
 namespace App\Http\Controllers\API;
 
 use App\Data\DisputeData;
+use App\Enums\DisputeStatus;
 use App\Http\Requests\DisputeMessageStoreRequest;
 use App\Http\Requests\DisputeRequest;
 use App\Http\Requests\DisputeRequests\DisputeFilterRequest;
 use App\Http\Resources\DisputeResource;
 use App\Models\Dispute;
 use App\Models\DisputeMessage;
+use App\Models\User;
 use App\Services\DisputeService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use Modules\Cleaning\Models\CleaningBooking;
+use Spatie\QueryBuilder\QueryBuilder;
 use Throwable;
 
 final class DisputeController
@@ -27,8 +31,11 @@ final class DisputeController
 
     public function index(DisputeFilterRequest $request): AnonymousResourceCollection
     {
-        $disputes = Dispute::getQuery()
-            ->with(['booking'])
+        /** @var User $user */
+        $user = $request->user();
+
+        $disputes = $this->authorizedQuery($user)
+            ->with(['booking', 'messages.sender'])
             ->paginate($request->get('perPage', 10));
 
         return DisputeResource::collection($disputes);
@@ -37,26 +44,44 @@ final class DisputeController
     /** @throws Throwable */
     public function store(DisputeRequest $request): DisputeResource
     {
-        $dispute = $this->disputeService->store(DisputeData::from($request->validated()));
+        /** @var User $user */
+        $user = $request->user();
+        $data = $request->validated();
 
-        return DisputeResource::make($dispute->load(['booking', 'messages']));
+        if (! $this->isAdmin($user)) {
+            abort_unless($data['bookingType'] === 'cleaning_booking', Response::HTTP_FORBIDDEN);
+
+            $booking = CleaningBooking::query()->findOrFail((int) $data['bookingId']);
+            abort_unless((int) $booking->customer_id === (int) $user->id, Response::HTTP_FORBIDDEN);
+        }
+
+        $data['ticketNumber'] ??= 'DSP-'.now()->format('Ymd').'-'.Str::upper(Str::random(6));
+        $data['status'] ??= DisputeStatus::Open->value;
+
+        $dispute = $this->disputeService->store(DisputeData::from($data));
+
+        return DisputeResource::make($dispute->load(['booking', 'messages.sender']));
     }
 
     public function show(Dispute $dispute): DisputeResource
     {
-        $dispute->load(['booking', 'messages']);
+        /** @var User $user */
+        $user = request()->user();
+        $this->ensureCanAccess($user, $dispute);
 
-        return DisputeResource::make($dispute);
+        return DisputeResource::make($dispute->load(['booking', 'messages.sender']));
     }
 
     public function storeMessage(DisputeMessageStoreRequest $request, Dispute $dispute): JsonResponse
     {
-        $this->ensureWorkerCanReply($dispute);
+        /** @var User $user */
+        $user = $request->user();
+        $senderType = $this->participantRole($user, $dispute);
 
-        DisputeMessage::create([
+        DisputeMessage::query()->create([
             'dispute_id' => $dispute->id,
-            'sender_id' => $request->user()->id,
-            'sender_type' => 'worker',
+            'sender_id' => $user->id,
+            'sender_type' => $senderType,
             'body' => $request->validated('message'),
         ]);
 
@@ -68,34 +93,90 @@ final class DisputeController
     /** @throws Throwable */
     public function update(DisputeRequest $request, Dispute $dispute): DisputeResource
     {
+        /** @var User $user */
+        $user = $request->user();
+        abort_unless($this->isAdmin($user), Response::HTTP_FORBIDDEN);
+
         $updated = $this->disputeService->update(DisputeData::from($request->validated()), $dispute);
 
-        return DisputeResource::make($updated->load(['booking', 'messages']));
+        return DisputeResource::make($updated->load(['booking', 'messages.sender']));
     }
 
     public function destroy(Dispute $dispute): Response
     {
+        /** @var User $user */
+        $user = request()->user();
+        abort_unless($this->isAdmin($user), Response::HTTP_FORBIDDEN);
+
         $dispute->delete();
 
         return response()->noContent();
     }
 
-    private function ensureWorkerCanReply(Dispute $dispute): void
+    private function authorizedQuery(User $user): QueryBuilder
     {
-        $workerId = Auth::user()?->worker?->id;
+        $query = Dispute::getQuery();
 
-        if (! $workerId) {
-            abort(Response::HTTP_FORBIDDEN, 'User must have an associated worker.');
+        if ($this->isAdmin($user)) {
+            return $query;
         }
 
-        if ($dispute->booking_type !== 'cleaning_booking') {
-            abort(Response::HTTP_FORBIDDEN, 'Worker can only reply to cleaning booking disputes.');
+        $workerId = $user->worker?->id;
+
+        return $query->whereHasMorph(
+            'booking',
+            [CleaningBooking::class],
+            function (Builder $bookingQuery) use ($user, $workerId): void {
+                $bookingQuery->where('customer_id', $user->id);
+
+                if ($workerId !== null) {
+                    $bookingQuery->orWhere('worker_id', $workerId)
+                        ->orWhereHas(
+                            'workerAssignments',
+                            fn (Builder $assignmentQuery): Builder => $assignmentQuery->where('worker_id', $workerId),
+                        );
+                }
+            },
+        );
+    }
+
+    private function ensureCanAccess(User $user, Dispute $dispute): void
+    {
+        abort_unless(
+            $this->authorizedQuery($user)->whereKey($dispute->getKey())->exists(),
+            Response::HTTP_FORBIDDEN,
+            'You cannot access this dispute.',
+        );
+    }
+
+    private function participantRole(User $user, Dispute $dispute): string
+    {
+        if ($this->isAdmin($user)) {
+            return 'admin';
         }
 
         $booking = $dispute->booking;
-
-        if (! $booking instanceof CleaningBooking || $booking->worker_id !== $workerId) {
-            abort(Response::HTTP_FORBIDDEN, 'Dispute is not assigned to the authenticated worker.');
+        if (! $booking instanceof CleaningBooking) {
+            abort(Response::HTTP_FORBIDDEN, 'You cannot reply to this dispute.');
         }
+
+        if ((int) $booking->customer_id === (int) $user->id) {
+            return 'customer';
+        }
+
+        $workerId = $user->worker?->id;
+        $isWorker = $workerId !== null && (
+            (int) $booking->worker_id === (int) $workerId
+            || $booking->workerAssignments()->where('worker_id', $workerId)->exists()
+        );
+
+        abort_unless($isWorker, Response::HTTP_FORBIDDEN, 'You cannot reply to this dispute.');
+
+        return 'worker';
+    }
+
+    private function isAdmin(User $user): bool
+    {
+        return $user->hasAnyRole(['admin', 'Super Admin']);
     }
 }

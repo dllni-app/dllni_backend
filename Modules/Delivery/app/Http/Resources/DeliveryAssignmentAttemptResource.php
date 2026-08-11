@@ -16,6 +16,8 @@ final class DeliveryAssignmentAttemptResource extends JsonResource
             'orderId' => $this->order_id,
             'driverId' => $this->driver_id,
             'attemptNo' => $this->attempt_no,
+            'dispatchWave' => $this->dispatch_wave,
+            'candidateTier' => $this->candidate_tier,
             'status' => $this->status,
             'distanceToPickupKm' => $this->distance_to_pickup_km,
             'offeredAt' => $this->offered_at?->toIso8601String(),

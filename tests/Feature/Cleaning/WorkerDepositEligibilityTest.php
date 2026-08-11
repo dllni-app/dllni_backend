@@ -12,6 +12,7 @@ use App\Models\WorkerTrustLog;
 use App\Notifications\Cleaning\NewOrderRequestNotification;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
@@ -22,65 +23,63 @@ use Modules\User\Services\UserCleaningOrderService;
 
 function seedDepositSettings(array $overrides = []): CleaningDepositSetting
 {
+    $defaults = [
+        'minimum_deposit_amount' => 0,
+        'restriction_threshold_percent' => 100,
+        'allowance_warning_threshold_percent' => 10,
+        'trust_reject_after_accept_penalty' => 10,
+        'trust_minimum_for_dispatch' => 50,
+    ];
+
     return CleaningDepositSetting::query()->updateOrCreate(
         ['id' => CleaningDepositSetting::query()->orderBy('id')->value('id') ?? 1],
-        array_merge([
-            'minimum_deposit_amount' => 1000,
-            'default_max_negative_balance' => 200,
-            'is_enabled' => true,
-            'trust_reject_after_accept_penalty' => 10,
-            'trust_minimum_for_dispatch' => 50,
-        ], $overrides),
+        array_merge($defaults, array_intersect_key($overrides, $defaults)),
     );
 }
 
-function seedWorkerDeposit(Worker $worker, float $balance, ?float $minimumRequired = null, ?float $maxNegativeBalance = null): CleaningWorkerDeposit
+function seedWorkerDeposit(Worker $worker, float $depositBalance, ?float $allowedDebtLimit = null, float $debtBalance = 0): CleaningWorkerDeposit
 {
-    $settings = CleaningDepositSetting::query()->firstOrCreate([], [
-        'minimum_deposit_amount' => 1000,
-        'default_max_negative_balance' => 200,
-        'is_enabled' => true,
-        'trust_reject_after_accept_penalty' => 10,
-        'trust_minimum_for_dispatch' => 50,
-    ]);
-
     return CleaningWorkerDeposit::query()->updateOrCreate(
         ['worker_id' => $worker->id],
         [
-            'current_balance' => $balance,
-            'deposited_total' => max($balance, 0),
+            'current_balance' => max(0, $depositBalance),
+            'debt_balance' => max(0, $debtBalance),
+            'deposited_total' => max($depositBalance, 0),
             'withdrawn_total' => 0,
-            'minimum_required' => $minimumRequired ?? $settings->minimum_deposit_amount,
-            'max_negative_balance' => $maxNegativeBalance ?? $settings->default_max_negative_balance,
+            'minimum_required' => 0,
+            'max_negative_balance' => max(0, $allowedDebtLimit ?? 200),
         ],
     );
 }
 
-it('records admin deposit and increases balance and deposited total', function (): void {
+it('records admin deposit and increases the deposit balance and deposited total', function (): void {
     seedDepositSettings();
     $worker = Worker::factory()->create(['trust_score' => 80]);
 
     app(DepositService::class)->recordDeposit($worker, 500, 'REF-001');
 
     $deposit = $worker->fresh()->deposit;
-    expect((float) $deposit->current_balance)->toBe(500.0);
-    expect((float) $deposit->deposited_total)->toBe(500.0);
-    expect((float) $deposit->withdrawn_total)->toBe(0.0);
+    expect((float) $deposit->current_balance)->toBe(500.0)
+        ->and((float) $deposit->debt_balance)->toBe(0.0)
+        ->and((float) $deposit->deposited_total)->toBe(500.0)
+        ->and((float) $deposit->withdrawn_total)->toBe(0.0);
 });
 
-it('records withdrawal and increases withdrawn total without treating it as admin fee', function (): void {
+it('stores the legacy withdrawal operation as a refund limited to deposit', function (): void {
     seedDepositSettings();
     $worker = Worker::factory()->create(['trust_score' => 80]);
     seedWorkerDeposit($worker, 1000);
 
-    app(DepositService::class)->recordWithdrawal($worker, 300, 'WD-001');
+    $transaction = app(DepositService::class)->recordWithdrawal($worker, 300, 'WD-001');
 
     $deposit = $worker->fresh()->deposit;
-    expect((float) $deposit->current_balance)->toBe(700.0);
-    expect((float) $deposit->withdrawn_total)->toBe(300.0);
+    expect((float) $deposit->current_balance)->toBe(700.0)
+        ->and((float) $deposit->debt_balance)->toBe(0.0)
+        ->and((float) $deposit->withdrawn_total)->toBe(300.0)
+        ->and($transaction->type)->toBe('refund');
 });
 
-it('records admin fee debit without changing withdrawn total', function (): void {
+it('records automatic commission and consumes deposit before debt', function (): void {
     seedDepositSettings();
     $worker = Worker::factory()->create(['trust_score' => 80]);
     seedWorkerDeposit($worker, 1000);
@@ -89,23 +88,23 @@ it('records admin fee debit without changing withdrawn total', function (): void
         'status' => CleaningBookingStatus::Completed,
     ]);
 
-    app(DepositService::class)->recordAdminFeeDebit($worker, $booking, 150);
-
+    $transaction = app(DepositService::class)->recordAdminFeeDebit($worker, $booking, 150);
     $deposit = $worker->fresh()->deposit;
-    expect((float) $deposit->current_balance)->toBe(850.0);
-    expect((float) $deposit->withdrawn_total)->toBe(0.0);
-    $this->assertDatabaseHas('cleaning_deposit_transactions', [
-        'worker_id' => $worker->id,
-        'type' => 'admin_fee',
-        'cleaning_booking_id' => $booking->id,
-        'amount' => 150,
-    ]);
+
+    expect((float) $deposit->current_balance)->toBe(850.0)
+        ->and((float) $deposit->debt_balance)->toBe(0.0)
+        ->and((float) $deposit->withdrawn_total)->toBe(0.0)
+        ->and($transaction)->toBeInstanceOf(CleaningDepositTransaction::class)
+        ->and($transaction?->type)->toBe('commission')
+        ->and((float) $transaction?->amount)->toBe(150.0)
+        ->and($transaction?->reference)->toStartWith(CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX)
+        ->and(Schema::hasColumn('cleaning_deposit_transactions', 'cleaning_booking_id'))->toBeFalse();
 });
 
-it('marks worker ineligible when balance crosses below configured floor', function (): void {
-    seedDepositSettings(['default_max_negative_balance' => 100]);
+it('marks worker ineligible when the allowance is exhausted by administration margin', function (): void {
+    seedDepositSettings();
     $worker = Worker::factory()->create(['trust_score' => 80, 'security_deposit_status' => 'active']);
-    seedWorkerDeposit($worker, 50);
+    seedWorkerDeposit($worker, 50, 100);
 
     $service = app(DepositService::class);
     expect($service->isWorkerEligibleForNewRequests($worker))->toBeTrue();
@@ -117,15 +116,42 @@ it('marks worker ineligible when balance crosses below configured floor', functi
     $service->recordAdminFeeDebit($worker, $booking, 200);
 
     $worker->refresh()->load('deposit');
-    expect($service->isWorkerEligibleForNewRequests($worker))->toBeFalse();
-    expect($worker->security_deposit_status)->toBe('insufficient_balance');
-    expect($service->calculateExceedance($worker))->toBe(50.0);
+    expect((float) $worker->deposit->current_balance)->toBe(0.0)
+        ->and((float) $worker->deposit->debt_balance)->toBe(150.0)
+        ->and($service->isWorkerEligibleForNewRequests($worker))->toBeFalse()
+        ->and($worker->security_deposit_status)->toBe('insufficient_balance')
+        ->and($service->calculateExceedance($worker))->toBe(50.0);
 });
 
-it('keeps concurrent balance mutations consistent', function (): void {
-    seedDepositSettings(['default_max_negative_balance' => 1000]);
+it('deducts completed administration margin from the deposit without reducing allowance while deposit exists', function (): void {
+    seedDepositSettings();
+    $user = User::factory()->create();
+    $worker = Worker::factory()->create(['user_id' => $user->id, 'trust_score' => 80]);
+    seedWorkerDeposit($worker, 1000000, 1000000);
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'status' => CleaningBookingStatus::Completed,
+    ]);
+
+    app(DepositService::class)->recordAdminFeeDebit($worker, $booking, 15000);
+    Sanctum::actingAs($user);
+
+    $this->getJson('/api/v1/cleaning/worker/account/deposit')
+        ->assertOk()
+        ->assertJsonPath('currentBalance', 985000)
+        ->assertJsonPath('allowedDebtLimit', 1000000)
+        ->assertJsonPath('remainingAllowanceLimit', 1000000)
+        ->assertJsonPath('configuredAllowedDebtLimit', 1000000)
+        ->assertJsonPath('maxNegativeBalance', 1000000)
+        ->assertJsonPath('allowanceUsedAmount', 0)
+        ->assertJsonPath('adminCommissionBalance', 15000)
+        ->assertJsonPath('isEligibleForNewRequests', true);
+});
+
+it('keeps sequential deposit and refund balance mutations consistent', function (): void {
+    seedDepositSettings();
     $worker = Worker::factory()->create(['trust_score' => 80]);
-    seedWorkerDeposit($worker, 0);
+    seedWorkerDeposit($worker, 0, 1000);
     $service = app(DepositService::class);
 
     $service->recordDeposit($worker, 100, 'A');
@@ -137,25 +163,34 @@ it('keeps concurrent balance mutations consistent', function (): void {
         ->orderBy('id')
         ->get();
 
-    expect($transactions)->toHaveCount(3);
-    expect((float) $transactions[0]->balance_after)->toBe((float) $transactions[1]->balance_before);
-    expect((float) $transactions[1]->balance_after)->toBe((float) $transactions[2]->balance_before);
-    expect((float) $worker->fresh()->deposit->current_balance)->toBe(120.0);
+    expect($transactions)->toHaveCount(3)
+        ->and((float) $transactions[0]->balance_after)->toBe((float) $transactions[1]->balance_before)
+        ->and((float) $transactions[1]->balance_after)->toBe((float) $transactions[2]->balance_before)
+        ->and((float) $worker->fresh()->deposit->current_balance)->toBe(120.0)
+        ->and((float) $worker->fresh()->deposit->debt_balance)->toBe(0.0);
 });
 
-it('exposes deposit status via worker API with max negative balance', function (): void {
-    seedDepositSettings(['minimum_deposit_amount' => 1000, 'default_max_negative_balance' => 200]);
+it('exposes explicit deposit debt and capacity values through the worker API', function (): void {
+    seedDepositSettings(['minimum_deposit_amount' => 1000]);
     $user = User::factory()->create();
     $worker = Worker::factory()->create(['user_id' => $user->id, 'trust_score' => 80]);
-    seedWorkerDeposit($worker, 900);
+    seedWorkerDeposit($worker, 90, 200, 50);
     Sanctum::actingAs($user);
 
     $response = $this->getJson('/api/v1/cleaning/worker/account/deposit');
 
-    $response->assertOk();
-    expect((float) $response->json('maxNegativeBalance'))->toBe(200.0);
-    expect((float) $response->json('minimumRequired'))->toBe(1000.0);
-    expect((float) $response->json('currentBalance'))->toBe(900.0);
+    $response->assertOk()
+        ->assertJsonPath('depositBalance', 90)
+        ->assertJsonPath('currentBalance', 90)
+        ->assertJsonPath('debtBalance', 50)
+        ->assertJsonPath('minimumRequired', 1000)
+        ->assertJsonPath('allowedDebtLimit', 150)
+        ->assertJsonPath('configuredAllowedDebtLimit', 200)
+        ->assertJsonPath('remainingDebtCapacity', 150)
+        ->assertJsonPath('remainingAllowanceLimit', 150)
+        ->assertJsonPath('availableCommissionCapacity', 90)
+        ->assertJsonPath('isEligibleForNewRequests', false)
+        ->assertJsonPath('financialWarningCode', 'deposit_below_minimum');
 });
 
 it('does not apply trust penalty when rejecting before accept', function (): void {
@@ -217,10 +252,10 @@ it('applies trust penalty when rejecting after accept', function (): void {
     ]);
 });
 
-it('debits admin fee when customer confirms completion', function (): void {
+it('charges commission when the customer confirms completion', function (): void {
     seedDepositSettings();
     $worker = Worker::factory()->create(['trust_score' => 80]);
-    seedWorkerDeposit($worker, 5000);
+    seedWorkerDeposit($worker, 50);
 
     $booking = CleaningBooking::factory()->create([
         'worker_id' => $worker->id,
@@ -244,21 +279,25 @@ it('debits admin fee when customer confirms completion', function (): void {
 
     app(UserCleaningOrderService::class)->confirmCompletion($booking);
 
-    $this->assertDatabaseHas('cleaning_deposit_transactions', [
-        'worker_id' => $worker->id,
-        'type' => 'admin_fee',
-        'cleaning_booking_id' => $booking->id,
-        'amount' => 100,
-    ]);
-    expect((float) $worker->fresh()->deposit->current_balance)->toBe(4900.0);
+    $transaction = CleaningDepositTransaction::query()
+        ->where('worker_id', $worker->id)
+        ->where('type', 'commission')
+        ->where('reference', 'like', CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'%')
+        ->first();
+
+    expect($transaction)->toBeInstanceOf(CleaningDepositTransaction::class)
+        ->and((float) $transaction?->amount)->toBe(100.0)
+        ->and($transaction?->reference)->toStartWith(CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX)
+        ->and((float) $worker->fresh()->deposit->current_balance)->toBe(0.0)
+        ->and((float) $worker->fresh()->deposit->debt_balance)->toBe(50.0);
 });
 
-it('excludes ineligible workers from dispatch notifications', function (): void {
+it('excludes workers whose debt exceeds their individual limit from new-order notifications', function (): void {
     Carbon::setTestNow(Carbon::parse('2026-06-16 12:00:00'));
     Notification::fake();
 
     try {
-        seedDepositSettings(['trust_minimum_for_dispatch' => 50, 'default_max_negative_balance' => 0, 'is_enabled' => true]);
+        seedDepositSettings(['trust_minimum_for_dispatch' => 50]);
         $bookingDate = Carbon::now()->toDateString();
         $dayKey = mb_strtolower(Carbon::now()->format('l'));
 
@@ -266,24 +305,29 @@ it('excludes ineligible workers from dispatch notifications', function (): void 
         $ineligibleWorker = Worker::factory()->create([
             'user_id' => $ineligibleUser->id,
             'trust_score' => 80,
+            'home_address' => 'Aleppo',
+            'home_latitude' => 36.2000,
+            'home_longitude' => 37.1500,
             'default_working_hours' => [
                 $dayKey => ['available' => true, 'data' => [['09:00' => '18:00']]],
             ],
         ]);
         $ineligibleWorker->zones()->create(['name' => 'Zone X', 'is_active' => true]);
-        seedWorkerDeposit($ineligibleWorker, -10, 0);
-        $ineligibleWorker->deposit()->update(['max_negative_balance' => 0]);
+        seedWorkerDeposit($ineligibleWorker, 0, 0, 1);
 
         $eligibleUser = User::factory()->create(['email' => 'eligible-deposit@example.com']);
         $eligibleWorker = Worker::factory()->create([
             'user_id' => $eligibleUser->id,
             'trust_score' => 80,
+            'home_address' => 'Aleppo',
+            'home_latitude' => 36.2000,
+            'home_longitude' => 37.1500,
             'default_working_hours' => [
                 $dayKey => ['available' => true, 'data' => [['09:00' => '18:00']]],
             ],
         ]);
         $eligibleWorker->zones()->create(['name' => 'Zone Y', 'is_active' => true]);
-        seedWorkerDeposit($eligibleWorker, 5000);
+        seedWorkerDeposit($eligibleWorker, 5000000, 0);
 
         $booking = CleaningBooking::factory()->create([
             'worker_id' => null,
@@ -291,6 +335,8 @@ it('excludes ineligible workers from dispatch notifications', function (): void 
             'gender_preference' => 'any',
             'scheduled_date' => $bookingDate,
             'scheduled_time' => '15:00',
+            'address_latitude' => 36.2000,
+            'address_longitude' => 37.1500,
         ]);
 
         (new NotifyEligibleWorkersNewOrderJob($booking->id))->handle();
@@ -302,11 +348,11 @@ it('excludes ineligible workers from dispatch notifications', function (): void 
     }
 });
 
-it('blocks start travel when worker does not meet deposit requirements', function (): void {
+it('allows start travel with an allowance without requiring a deposit minimum', function (): void {
     seedDepositSettings(['minimum_deposit_amount' => 5000]);
     $workerUser = User::factory()->create();
     $worker = Worker::factory()->create(['user_id' => $workerUser->id, 'trust_score' => 80]);
-    seedWorkerDeposit($worker, 100);
+    seedWorkerDeposit($worker, 0, 5000);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -317,5 +363,7 @@ it('blocks start travel when worker does not meet deposit requirements', functio
     ]);
 
     $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/start-travel")
-        ->assertUnprocessable();
+        ->assertOk();
+
+    expect($booking->fresh()->started_travel_at)->not->toBeNull();
 });

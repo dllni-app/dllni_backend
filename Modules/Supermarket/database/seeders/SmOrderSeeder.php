@@ -132,7 +132,7 @@ final class SmOrderSeeder extends Seeder
                         'discount_amount' => 0,
                         'service_fee' => $serviceFee,
                         'total_amount' => $totalAmount,
-                        'special_instructions' => $i % 4 === 0 ? '�Sرج�? تج�?�Sز ا�"ط�"ب بد�^�? أ�f�Sاس ب�"است�S�f' : null,
+                        'special_instructions' => $i % 4 === 0 ? 'أرجو تجهيز الطلب بدون أكياس بلاستيك' : null,
                         'cancelled_at' => $cancelledAt,
                         'cancellation_reason' => $cancellationReason,
                     ]

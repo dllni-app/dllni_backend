@@ -120,6 +120,81 @@ it('requires authentication to mark all notifications as read', function (): voi
         ->assertUnauthorized();
 });
 
+it('deletes a notification', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $databaseType = 'Illuminate\\Notifications\\DatabaseNotification';
+
+    $notification = $user->notifications()->create([
+        'id' => (string) Str::uuid(),
+        'type' => $databaseType,
+        'data' => ['title' => 'Unread A', 'body' => ''],
+        'read_at' => null,
+    ]);
+
+    $this->deleteJson("/api/v1/user/notifications/{$notification->id}")
+        ->assertNoContent();
+
+    expect($user->fresh()->notifications()->where('id', $notification->id)->exists())->toBeFalse();
+});
+
+it('does not delete another users notification', function (): void {
+    $owner = User::factory()->create();
+    $other = User::factory()->create();
+    Sanctum::actingAs($other);
+
+    $databaseType = 'Illuminate\\Notifications\\DatabaseNotification';
+
+    $notification = $owner->notifications()->create([
+        'id' => (string) Str::uuid(),
+        'type' => $databaseType,
+        'data' => ['title' => 'Owned', 'body' => ''],
+        'read_at' => null,
+    ]);
+
+    $this->deleteJson("/api/v1/user/notifications/{$notification->id}")
+        ->assertNotFound();
+
+    expect($owner->fresh()->notifications()->where('id', $notification->id)->exists())->toBeTrue();
+});
+
+it('requires authentication to delete a notification', function (): void {
+    $this->deleteJson('/api/v1/user/notifications/'.Str::uuid())
+        ->assertUnauthorized();
+});
+
+it('deletes all notifications', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $databaseType = 'Illuminate\\Notifications\\DatabaseNotification';
+
+    $user->notifications()->create([
+        'id' => (string) Str::uuid(),
+        'type' => $databaseType,
+        'data' => ['title' => 'Unread A', 'body' => ''],
+        'read_at' => null,
+    ]);
+    $user->notifications()->create([
+        'id' => (string) Str::uuid(),
+        'type' => $databaseType,
+        'data' => ['title' => 'Read B', 'body' => ''],
+        'read_at' => now(),
+    ]);
+
+    $this->deleteJson('/api/v1/user/notifications/all')
+        ->assertNoContent();
+
+    expect($user->fresh()->notifications()->count())->toBe(0);
+    expect($user->fresh()->unreadNotifications()->count())->toBe(0);
+});
+
+it('requires authentication to delete all notifications', function (): void {
+    $this->deleteJson('/api/v1/user/notifications/all')
+        ->assertUnauthorized();
+});
+
 it('requires authentication', function (): void {
     $this->getJson('/api/v1/user/notifications')->assertUnauthorized();
 });

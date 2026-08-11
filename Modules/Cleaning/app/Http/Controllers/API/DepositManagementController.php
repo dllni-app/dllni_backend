@@ -5,129 +5,141 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Http\Controllers\API;
 
 use App\Models\CleaningDepositSetting;
+use App\Models\CleaningDepositTransaction;
 use App\Models\Worker;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Modules\Cleaning\Http\Resources\CleaningDepositTransactionResource;
+use Modules\Cleaning\Services\AdminCleaningTransactionService;
 use Modules\Cleaning\Services\DepositService;
 
 final class DepositManagementController
 {
     public function __construct(
-        private readonly DepositService $depositService
+        private readonly DepositService $depositService,
+        private readonly AdminCleaningTransactionService $transactionService,
     ) {}
 
     public function recordDeposit(Request $request, Worker $worker): JsonResponse
     {
         $validated = $request->validate([
             'amount' => 'required|numeric|min:0.01',
-            'reference' => 'required|string|max:255',
+            'reference' => 'nullable|string|max:255',
             'notes' => 'nullable|string|max:1000',
         ]);
 
+        return $this->runTransaction(fn () => $this->depositService->recordDeposit(
+            $worker,
+            (float) $validated['amount'],
+            $validated['reference'] ?? 'admin_api_deposit',
+            $validated['notes'] ?? null,
+            auth()->id(),
+        ), 'Deposit recorded successfully');
+    }
+
+    public function recordDebt(Request $request, Worker $worker): JsonResponse
+    {
+        return response()->json([
+            'message' => app()->isLocale('ar')
+                ? 'لم يعد إنشاء دين إداري مدعوماً. استخدم تعديل حد السماح للعامل بدلاً من ذلك.'
+                : 'Administration loans are no longer supported. Update the worker allowance limit instead.',
+        ], Response::HTTP_BAD_REQUEST);
+    }
+
+    public function updateAllowanceLimit(Request $request, Worker $worker): JsonResponse
+    {
+        $validated = $request->validate([
+            'amount' => 'required|numeric|min:0',
+        ]);
+
         try {
-            $transaction = $this->depositService->recordDeposit(
-                $worker,
-                (float) $validated['amount'],
-                $validated['reference'],
-                $validated['notes'] ?? null,
-                auth()->id(),
-            );
+            $account = $this->transactionService->updateAllowanceLimit($worker, (float) $validated['amount']);
+            $summary = $this->transactionService->snapshot($worker->fresh(['deposit']) ?? $worker);
 
             return response()->json([
-                'message' => 'Deposit recorded successfully',
-                'transaction' => CleaningDepositTransactionResource::make($transaction),
-            ], Response::HTTP_CREATED);
-        } catch (Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage(),
-            ], Response::HTTP_BAD_REQUEST);
+                'message' => app()->isLocale('ar') ? 'تم تحديث حد السماح بنجاح.' : 'Allowance limit updated successfully.',
+                'account' => [
+                    ...$summary,
+                    'workerId' => $account->worker_id,
+                    'configuredAllowedDebtLimit' => (float) $account->max_negative_balance,
+                    'maxNegativeBalance' => (float) $account->max_negative_balance,
+                ],
+            ]);
+        } catch (Exception $exception) {
+            return response()->json(['message' => $exception->getMessage()], Response::HTTP_BAD_REQUEST);
         }
     }
 
+    public function settleFullDebt(Request $request, Worker $worker): JsonResponse
+    {
+        $validated = $request->validate(['notes' => 'nullable|string|max:1000']);
+
+        return $this->runTransaction(fn () => $this->transactionService->settleFullDebt(
+            worker: $worker,
+            notes: $validated['notes'] ?? null,
+            createdByAdminId: auth()->id(),
+        ), 'Debt settled successfully');
+    }
+
+    /** @deprecated Use recordRefund(). */
     public function recordWithdrawal(Request $request, Worker $worker): JsonResponse
     {
+        return $this->recordRefund($request, $worker);
+    }
+
+    public function recordRefund(Request $request, Worker $worker): JsonResponse
+    {
         $validated = $request->validate([
-            'amount' => 'required|numeric|min:0.01',
-            'reference' => 'required|string|max:255',
+            'amount' => 'nullable|numeric|min:0.01',
+            'reference' => 'nullable|string|max:255',
             'notes' => 'nullable|string|max:1000',
         ]);
 
-        try {
-            $transaction = $this->depositService->recordWithdrawal(
-                $worker,
-                (float) $validated['amount'],
-                $validated['reference'],
-                $validated['notes'] ?? null,
-                auth()->id(),
-            );
-
-            return response()->json([
-                'message' => 'Withdrawal recorded successfully',
-                'transaction' => CleaningDepositTransactionResource::make($transaction),
-            ], Response::HTTP_CREATED);
-        } catch (Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage(),
-            ], Response::HTTP_BAD_REQUEST);
-        }
+        return $this->runTransaction(fn () => $this->transactionService->refundFullBalance(
+            worker: $worker,
+            notes: $validated['notes'] ?? null,
+            createdByAdminId: auth()->id(),
+        ), 'Full financial account refund recorded successfully');
     }
 
     public function getWorkerTransactions(Request $request, Worker $worker): JsonResponse
     {
-        $perPage = (int) $request->integer('perPage', 20);
-        if ($perPage < 1 || $perPage > 100) {
-            $perPage = 20;
-        }
+        return $this->transactionsResponse($request, $worker);
+    }
 
-        $type = $request->get('type');
-
-        $query = \App\Models\CleaningDepositTransaction::where('worker_id', $worker->id);
-
-        if ($type && in_array($type, ['deposit', 'withdrawal', 'admin_fee'], true)) {
-            $query->where('type', $type);
-        }
-
-        $transactions = $query->orderByDesc('created_at')->paginate($perPage);
-
-        return response()->json([
-            'data' => CleaningDepositTransactionResource::collection($transactions)->collection,
-            'meta' => [
-                'currentPage' => $transactions->currentPage(),
-                'lastPage' => $transactions->lastPage(),
-                'perPage' => $transactions->perPage(),
-                'total' => $transactions->total(),
-            ],
-        ]);
+    public function getTransactions(Request $request, Worker $worker): JsonResponse
+    {
+        return $this->transactionsResponse($request, $worker);
     }
 
     public function getSettings(): JsonResponse
     {
-        $settings = $this->resolveSettings();
-
-        return response()->json($this->settingsPayload($settings));
+        return response()->json($this->settingsPayload($this->resolveSettings()));
     }
 
     public function updateSettings(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'minimum_deposit_amount' => 'nullable|numeric|min:0',
+            // Kept as accepted no-op fields for backward compatibility with existing clients.
+            'allowed_debt_limit' => 'nullable|numeric|min:0',
             'default_max_negative_balance' => 'nullable|numeric|min:0',
+            'minimum_deposit_amount' => 'nullable|numeric|min:0',
+            'restriction_threshold_percent' => 'nullable|numeric|min:0|max:100',
+            'allowance_warning_threshold_percent' => 'nullable|numeric|min:0|max:100',
             'trust_reject_after_accept_penalty' => 'nullable|integer|min:0',
             'trust_minimum_for_dispatch' => 'nullable|integer|min:0|max:100',
             'is_enabled' => 'nullable|boolean',
         ]);
 
         $settings = $this->resolveSettings();
-
         $settings->update(array_filter([
             'minimum_deposit_amount' => $validated['minimum_deposit_amount'] ?? null,
-            'default_max_negative_balance' => $validated['default_max_negative_balance'] ?? null,
+            'restriction_threshold_percent' => 100,
+            'allowance_warning_threshold_percent' => $validated['allowance_warning_threshold_percent'] ?? null,
             'trust_reject_after_accept_penalty' => $validated['trust_reject_after_accept_penalty'] ?? null,
             'trust_minimum_for_dispatch' => $validated['trust_minimum_for_dispatch'] ?? null,
-            'is_enabled' => $validated['is_enabled'] ?? null,
         ], static fn ($value) => $value !== null));
 
         $this->depositService->syncAllWorkerDepositStatuses();
@@ -138,28 +150,69 @@ final class DepositManagementController
         ]);
     }
 
+    private function transactionsResponse(Request $request, Worker $worker): JsonResponse
+    {
+        $perPage = (int) $request->integer('perPage', 20);
+        if ($perPage < 1 || $perPage > 100) {
+            $perPage = 20;
+        }
+
+        $type = $request->string('type')->toString();
+        $transactions = CleaningDepositTransaction::query()
+            ->where('worker_id', $worker->id)
+            ->publiclyVisible()
+            ->when(in_array($type, CleaningDepositTransaction::PUBLIC_TYPES, true), fn ($query) => $query->forPublicType($type))
+            ->orderByDesc('created_at')
+            ->paginate($perPage);
+
+        return response()->json([
+            'data' => CleaningDepositTransactionResource::collection($transactions)->collection,
+            'meta' => [
+                'currentPage' => $transactions->currentPage(),
+                'lastPage' => $transactions->lastPage(),
+                'perPage' => $transactions->perPage(),
+                'total' => $transactions->total(),
+                'filters' => ['type' => in_array($type, CleaningDepositTransaction::PUBLIC_TYPES, true) ? $type : null],
+            ],
+        ]);
+    }
+
     private function resolveSettings(): CleaningDepositSetting
     {
         return CleaningDepositSetting::query()->firstOrCreate([], [
             'minimum_deposit_amount' => 0,
-            'default_max_negative_balance' => 0,
-            'is_enabled' => true,
+            'restriction_threshold_percent' => 100,
+            'allowance_warning_threshold_percent' => 10,
             'trust_reject_after_accept_penalty' => (int) config('cleaning.trust.reject_after_accept_penalty', 10),
             'trust_minimum_for_dispatch' => 0,
         ]);
     }
 
-    /**
-     * @return array<string, bool|float|int>
-     */
     private function settingsPayload(CleaningDepositSetting $settings): array
     {
         return [
-            'minimumDepositAmount' => (float) $settings->minimum_deposit_amount,
-            'defaultMaxNegativeBalance' => (float) $settings->default_max_negative_balance,
+            'minimumDepositAmount' => (float) ($settings->minimum_deposit_amount ?? 0),
+            'allowedDebtLimit' => 0.0,
+            'defaultMaxNegativeBalance' => 0.0,
+            'restrictionThresholdPercent' => 100.0,
+            'allowanceWarningThresholdPercent' => (float) ($settings->allowance_warning_threshold_percent ?? 10),
             'trustRejectAfterAcceptPenalty' => (int) $settings->trust_reject_after_accept_penalty,
             'trustMinimumForDispatch' => (int) $settings->trust_minimum_for_dispatch,
-            'isEnabled' => (bool) $settings->is_enabled,
+            'isEnabled' => true,
         ];
+    }
+
+    private function runTransaction(callable $callback, string $message): JsonResponse
+    {
+        try {
+            $transaction = $callback();
+
+            return response()->json([
+                'message' => $message,
+                'transaction' => CleaningDepositTransactionResource::make($transaction),
+            ], Response::HTTP_CREATED);
+        } catch (Exception $exception) {
+            return response()->json(['message' => $exception->getMessage()], Response::HTTP_BAD_REQUEST);
+        }
     }
 }

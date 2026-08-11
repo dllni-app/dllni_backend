@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Modules\Delivery\Models\DeliveryOrder;
 use Modules\Delivery\Support\DeliveryPresentation;
+use Modules\Delivery\Support\MerchantPreparationPayload;
 
 final class DeliveryOrderResource extends JsonResource
 {
@@ -29,8 +30,11 @@ final class DeliveryOrderResource extends JsonResource
             ]),
             'driverId' => $this->driver_id,
             'driver' => DeliveryDriverResource::make($this->whenLoaded('driver')),
+            'sourceType' => $this->source_type,
+            'sourceId' => $this->source_id,
             'status' => $this->status,
             'statusLabelAr' => DeliveryPresentation::statusLabelAr((string) $this->status),
+            'merchantPreparation' => MerchantPreparationPayload::forOrder($order),
             'customerName' => $this->customer_name,
             'customerPhone' => $this->customer_phone,
             'customerNotes' => $this->customer_notes,

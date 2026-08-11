@@ -26,9 +26,14 @@ final class SystemAlertResource extends Resource
 
     protected static ?int $navigationSort = 5;
 
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
+
     public static function getNavigationGroup(): ?string
     {
-        return __('cleaning_admin.nav_groups.operations');
+        return __('restaurant_admin.general_sections');
     }
 
     public static function getNavigationLabel(): string

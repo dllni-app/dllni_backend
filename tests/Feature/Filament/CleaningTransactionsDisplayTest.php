@@ -1,0 +1,109 @@
+<?php
+
+declare(strict_types=1);
+
+use App\Filament\Resources\CleaningWorkerDeposits\Tables\CleaningTransactionsTable;
+use App\Filament\Support\AdminUiFormatter;
+use App\Models\CleaningDepositTransaction;
+use App\Models\Worker;
+
+it('exposes the supported public financial transaction types', function (): void {
+    app()->setLocale('en');
+
+    expect(array_keys(CleaningTransactionsTable::typeOptions()))->toBe([
+        'deposit',
+        'debt',
+        'refund',
+        'allowance_limit',
+    ]);
+});
+
+it('maps internal references and legacy types to public financial labels', function (): void {
+    app()->setLocale('en');
+
+    expect(CleaningTransactionsTable::referenceLabel('admin_deposit'))->toBe('Admin deposit')
+        ->and(CleaningTransactionsTable::referenceLabel('admin_settlement'))->toBe('Debt settlement')
+        ->and(CleaningTransactionsTable::referenceLabel('admin_refund'))->toBe('Admin refund')
+        ->and(CleaningTransactionsTable::referenceLabel('automatic_admin_commission:opaque-hash'))->toBe('Automatically recorded administration debt')
+        ->and(CleaningTransactionsTable::referenceLabel('admin_fee_booking_42'))->toBe('Automatically recorded administration debt')
+        ->and(CleaningTransactionsTable::referenceLabel('allowance_limit_update:1:20260801120000'))->toBe('Allowance limit update')
+        ->and(CleaningTransactionsTable::referenceLabel(null))->toBe('—')
+        ->and(CleaningTransactionsTable::referenceLabel('some_unknown_ref'))->toBe('some_unknown_ref')
+        ->and(CleaningDepositTransaction::normalizePublicType('allowance_limit_update'))->toBe('allowance_limit')
+        ->and(CleaningDepositTransaction::normalizePublicType('admin_fee'))->toBe('debt')
+        ->and(CleaningDepositTransaction::normalizePublicType('settlement'))->toBe('debt')
+        ->and(CleaningDepositTransaction::normalizePublicType('withdrawal'))->toBe('refund')
+        ->and(CleaningDepositTransaction::normalizePublicType('adjustment', 100))->toBe('deposit')
+        ->and(CleaningDepositTransaction::normalizePublicType('adjustment', -100))->toBe('refund');
+});
+
+it('exports allowance limit updates as standalone audit rows', function (): void {
+    app()->setLocale('en');
+
+    $worker = Worker::factory()->create(['first_name' => 'Allowance Worker']);
+
+    CleaningDepositTransaction::query()->create([
+        'worker_id' => $worker->id,
+        'type' => 'allowance_limit_update',
+        'amount' => 25000,
+        'balance_before' => 0,
+        'balance_after' => 0,
+        'debt_balance_before' => 0,
+        'debt_balance_after' => 0,
+        'reference' => CleaningDepositTransaction::ALLOWANCE_LIMIT_UPDATE_REFERENCE_PREFIX.'test',
+    ]);
+
+    $rows = CleaningTransactionsTable::exportRows(
+        CleaningDepositTransaction::query()->where('worker_id', $worker->id),
+    );
+
+    expect($rows)->toHaveCount(1)
+        ->and(array_values($rows[0]))->toContain('Allowance Worker')
+        ->and(array_values($rows[0]))->toContain('Allowance limit')
+        ->and(array_values($rows[0]))->toContain(25000);
+});
+
+it('labels allowance-limit-related types in arabic', function (): void {
+    app()->setLocale('ar');
+
+    expect(CleaningTransactionsTable::typeLabel('allowance_limit'))->toBe('حد سماح')
+        ->and(CleaningTransactionsTable::typeLabel('debt'))->toBe('حد السماح')
+        ->and(CleaningTransactionsTable::typeLabel('settlement'))->toBe('حد السماح')
+        ->and(CleaningTransactionsTable::typeColor('allowance_limit'))->toBe('info');
+});
+
+it('formats currency and numbers with latin digits regardless of locale', function (): void {
+    app()->setLocale('ar');
+
+    expect(AdminUiFormatter::formatNumber(12345.6, 1))->toBe('12,345.6')
+        ->and(AdminUiFormatter::formatCurrency(50000))->toContain('50,000.00')
+        ->and(AdminUiFormatter::formatCurrency(50000))->not->toMatch('/[\x{0660}-\x{0669}]/u');
+});
+
+it('exports only filtered transactions without exposing internal references', function (): void {
+    app()->setLocale('en');
+
+    $includedWorker = Worker::factory()->create(['first_name' => 'Included Worker']);
+    $excludedWorker = Worker::factory()->create(['first_name' => 'Excluded Worker']);
+
+    foreach ([$includedWorker, $excludedWorker] as $worker) {
+        CleaningDepositTransaction::query()->create([
+            'worker_id' => $worker->id,
+            'type' => 'debt',
+            'amount' => 100,
+            'balance_before' => 1000,
+            'balance_after' => 900,
+            'reference' => CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.'test-'.$worker->id,
+        ]);
+    }
+
+    $rows = CleaningTransactionsTable::exportRows(
+        CleaningDepositTransaction::query()->where('worker_id', $includedWorker->id),
+    );
+
+    expect($rows)->toHaveCount(1)
+        ->and(array_values($rows[0]))->toContain('Included Worker')
+        ->and(array_values($rows[0]))->toContain(CleaningTransactionsTable::typeLabel('debt'))
+        ->and($rows[0])->not->toHaveKey('Booking')
+        ->and($rows[0])->not->toHaveKey('Reference');
+});

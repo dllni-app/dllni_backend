@@ -23,6 +23,7 @@ final class InventoryItemResource extends JsonResource
             'quantity' => (float) $this->quantity,
             'minimumLimit' => (float) $this->minimum_limit,
             'unitCost' => (float) $this->unit_cost,
+            'productIds' => $this->whenLoaded('products', fn () => $this->products->pluck('id')->values()->all()),
             'restaurant' => $this->whenLoaded('restaurant', fn () => [
                 'id' => $this->restaurant->id,
                 'name' => $this->restaurant->name,

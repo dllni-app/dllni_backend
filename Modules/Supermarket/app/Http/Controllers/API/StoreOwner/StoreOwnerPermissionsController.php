@@ -12,24 +12,7 @@ final class StoreOwnerPermissionsController
     public function __invoke(): JsonResponse
     {
         $permissions = Permission::query()
-            ->where(function ($query): void {
-                $prefixes = [
-                    'products.',
-                    'orders.',
-                    'inventory.',
-                    'staff.',
-                    'stores.',
-                    'offers.',
-                    'coupons.',
-                ];
-
-                foreach ($prefixes as $prefix) {
-                    $query->orWhere('name', 'like', $prefix.'%');
-                }
-
-                $query->orWhere('name', 'reports.view');
-            })
-            ->orderBy('group')
+            ->where('group', 'supermarket_owner')
             ->orderBy('name')
             ->get()
             ->map(static function (Permission $permission): array {
@@ -37,6 +20,7 @@ final class StoreOwnerPermissionsController
                     'id' => $permission->id,
                     'name' => $permission->name,
                     'slug' => $permission->slug,
+                    'description' => $permission->description,
                     'group' => $permission->group,
                 ];
             })

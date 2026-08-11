@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Resources;
 
+use App\Enums\WorkerCustomerRatingType;
 use App\Models\Worker;
+use App\Models\WorkerCustomerRating;
+use App\Models\WorkerZone;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -27,7 +30,7 @@ final class WorkerResource extends JsonResource
                 fn () => MediaResource::make($this->getFirstMedia('avatar'))
             ),
             'bio' => $this->bio,
-            'averageRating' => (float) $this->average_rating,
+            'averageRating' => $this->resolveCleaningAverageRating(),
             'totalCompletedJobs' => $this->total_completed_jobs,
             'trustScore' => $this->trust_score,
             'acceptanceRate' => (float) $this->acceptance_rate,
@@ -46,11 +49,46 @@ final class WorkerResource extends JsonResource
                 'email' => $this->user->email,
                 'phone' => $this->user->phone,
             ]),
-            'zones' => $this->whenLoaded('zones'),
+            'zones' => $this->whenLoaded('zones', fn () => $this->zones
+                ->map(fn (WorkerZone $zone): array => $this->serializeZone($zone))
+                ->values()
+                ->all()),
             'availability' => $this->whenLoaded('availability'),
             'trustLogs' => $this->whenLoaded('trustLogs'),
-            'createdAt' => $this->created_at->toDateTimeString(),
-            'updatedAt' => $this->updated_at->toDateTimeString(),
+            'createdAt' => $this->created_at?->toDateTimeString(),
+            'updatedAt' => $this->updated_at?->toDateTimeString(),
+        ];
+    }
+
+    private function resolveCleaningAverageRating(): float
+    {
+        $average = WorkerCustomerRating::query()
+            ->where('worker_id', $this->id)
+            ->where('rating_type', WorkerCustomerRatingType::CustomerToWorker->value)
+            ->avg('rating');
+
+        if ($average !== null) {
+            return round((float) $average, 1);
+        }
+
+        return (float) $this->average_rating;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serializeZone(WorkerZone $zone): array
+    {
+        $neighborhood = $zone->relationLoaded('neighborhood') ? $zone->neighborhood : null;
+
+        return [
+            'id' => $zone->id,
+            'neighborhoodId' => $zone->neighborhood_id !== null ? (int) $zone->neighborhood_id : null,
+            'name' => $zone->name,
+            'nameAr' => $neighborhood?->name_ar,
+            'nameEn' => $neighborhood?->name_en,
+            'cityName' => $neighborhood?->city_name,
+            'isActive' => (bool) $zone->is_active,
         ];
     }
 }

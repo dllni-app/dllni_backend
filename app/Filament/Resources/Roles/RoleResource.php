@@ -16,6 +16,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Spatie\Permission\Models\Role;
 
 final class RoleResource extends Resource
@@ -36,6 +37,16 @@ final class RoleResource extends Resource
         return __('restaurant_admin.team.roles');
     }
 
+    public static function getModelLabel(): string
+    {
+        return 'دور';
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return 'الأدوار والصلاحيات';
+    }
+
     public static function getNavigationTooltip(): ?string
     {
         return 'إدارة الأدوار والصلاحيات: قائمة الأدوار (مدير أعلى، مدير عمليات التنظيف، دعم العملاء، محاسب) وتعيين الصلاحيات.';
@@ -54,6 +65,14 @@ final class RoleResource extends Resource
     public static function table(Table $table): Table
     {
         return RolesTable::configure($table);
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->where('guard_name', 'web')
+            ->with('permissions')
+            ->withCount('permissions');
     }
 
     public static function getRelations(): array

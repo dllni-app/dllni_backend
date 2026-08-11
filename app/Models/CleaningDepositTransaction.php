@@ -4,32 +4,65 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Modules\Cleaning\Models\CleaningBooking;
+use Spatie\Activitylog\Models\Concerns\LogsActivity;
+use Spatie\Activitylog\Support\LogOptions;
 
 final class CleaningDepositTransaction extends Model
 {
+    use LogsActivity;
+
+    public const AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX = 'automatic_admin_commission:';
+
+    public const ADMIN_LOAN_REFERENCE_PREFIX = 'admin_deposit_loan';
+
+    public const ADMIN_LOAN_DEPOSIT_REPAYMENT_REFERENCE_PREFIX = 'admin_loan_deposit_repayment:';
+
+    public const ALLOWANCE_LIMIT_UPDATE_REFERENCE_PREFIX = 'allowance_limit_update:';
+
+    /** @var list<string> */
+    public const PUBLIC_TYPES = ['deposit', 'debt', 'refund', 'allowance_limit'];
+
     protected $fillable = [
         'worker_id',
-        'cleaning_booking_id',
         'created_by_admin_id',
         'type',
         'amount',
+        'debt_settled_amount',
+        'admin_revenue_withdrawn_amount',
         'balance_before',
         'balance_after',
+        'debt_balance_before',
+        'debt_balance_after',
         'reference',
         'notes',
     ];
 
+    public static function normalizePublicType(string $type, float $amount = 0): string
+    {
+        return match ($type) {
+            'allowance_limit_update' => 'allowance_limit',
+            'admin_fee', 'commission', 'settlement' => 'debt',
+            'withdrawal' => 'refund',
+            'adjustment' => $amount < 0 ? 'refund' : 'deposit',
+            'deposit', 'debt', 'refund', 'allowance_limit' => $type,
+            default => $type,
+        };
+    }
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logFillable()
+            ->logOnlyDirty()
+            ->dontLogEmptyChanges();
+    }
+
     public function worker(): BelongsTo
     {
         return $this->belongsTo(Worker::class);
-    }
-
-    public function cleaningBooking(): BelongsTo
-    {
-        return $this->belongsTo(CleaningBooking::class);
     }
 
     public function createdByAdmin(): BelongsTo
@@ -37,13 +70,203 @@ final class CleaningDepositTransaction extends Model
         return $this->belongsTo(User::class, 'created_by_admin_id');
     }
 
+    public function scopePubliclyVisible(Builder $query): Builder
+    {
+        return $query->whereIn('type', [
+            'deposit',
+            'commission',
+            'debt',
+            'settlement',
+            'refund',
+            'admin_fee',
+            'withdrawal',
+            'adjustment',
+            'allowance_limit_update',
+        ]);
+    }
+
+    public function scopeForPublicType(Builder $query, string $type): Builder
+    {
+        return match ($type) {
+            'debt' => $query->where(function (Builder $query): void {
+                $query->whereIn('type', ['debt', 'settlement', 'commission', 'admin_fee']);
+            }),
+            'deposit' => $query->where(function (Builder $query): void {
+                $query->where('type', 'deposit')
+                    ->orWhere(function (Builder $query): void {
+                        $query->where('type', 'adjustment')->where('amount', '>=', 0);
+                    });
+            }),
+            'refund' => $query->where(function (Builder $query): void {
+                $query->whereIn('type', ['refund', 'withdrawal'])
+                    ->orWhere(function (Builder $query): void {
+                        $query->where('type', 'adjustment')->where('amount', '<', 0);
+                    });
+            }),
+            'allowance_limit' => $query->where('type', 'allowance_limit_update'),
+            default => $query->whereRaw('1 = 0'),
+        };
+    }
+
+    public function publicType(): string
+    {
+        return self::normalizePublicType((string) $this->type, (float) $this->amount);
+    }
+
+    public function publicAmount(): float
+    {
+        return abs((float) $this->amount);
+    }
+
+    protected static function booted(): void
+    {
+        self::creating(function (self $transaction): void {
+            self::settleAdministrationLoanFromDeposit($transaction);
+        });
+
+        self::saved(function (self $transaction): void {
+            self::syncWorkerAccountTotals((int) $transaction->worker_id);
+            self::reconcileFinancialPenalties($transaction);
+        });
+
+        self::deleted(function (self $transaction): void {
+            self::syncWorkerAccountTotals((int) $transaction->worker_id);
+        });
+    }
+
     protected function casts(): array
     {
         return [
             'type' => 'string',
             'amount' => 'decimal:2',
+            'debt_settled_amount' => 'decimal:2',
+            'admin_revenue_withdrawn_amount' => 'decimal:2',
             'balance_before' => 'decimal:2',
             'balance_after' => 'decimal:2',
+            'debt_balance_before' => 'decimal:2',
+            'debt_balance_after' => 'decimal:2',
         ];
+    }
+
+    private static function settleAdministrationLoanFromDeposit(self $transaction): void
+    {
+        if ((string) $transaction->type !== 'deposit' || (float) $transaction->amount <= 0) {
+            return;
+        }
+
+        $reference = mb_trim((string) $transaction->reference);
+        if (
+            (float) $transaction->debt_settled_amount > 0
+            || str_starts_with($reference, self::ADMIN_LOAN_DEPOSIT_REPAYMENT_REFERENCE_PREFIX)
+        ) {
+            return;
+        }
+
+        $outstandingLoan = self::outstandingAdministrationLoan((int) $transaction->worker_id);
+        if ($outstandingLoan <= 0) {
+            return;
+        }
+
+        $account = CleaningWorkerDeposit::query()
+            ->where('worker_id', $transaction->worker_id)
+            ->lockForUpdate()
+            ->first();
+
+        if (! $account instanceof CleaningWorkerDeposit) {
+            return;
+        }
+
+        $accountBalance = max(0.0, (float) $account->current_balance);
+        $settled = min((float) $transaction->amount, $outstandingLoan, $accountBalance);
+        if ($settled <= 0) {
+            return;
+        }
+
+        $account->current_balance = round($accountBalance - $settled, 2);
+        $account->saveQuietly();
+
+        $transaction->debt_settled_amount = round($settled, 2);
+        $transaction->balance_after = (float) $account->current_balance;
+        $transaction->reference = self::ADMIN_LOAN_DEPOSIT_REPAYMENT_REFERENCE_PREFIX.($reference !== '' ? $reference : 'worker_deposit');
+    }
+
+    private static function outstandingAdministrationLoan(int $workerId): float
+    {
+        if ($workerId <= 0) {
+            return 0.0;
+        }
+
+        $totals = self::query()
+            ->where('worker_id', $workerId)
+            ->selectRaw(
+                "COALESCE(SUM(CASE WHEN type = 'debt' AND reference LIKE ? THEN amount ELSE 0 END), 0) AS loan_total",
+                [self::ADMIN_LOAN_REFERENCE_PREFIX.'%'],
+            )
+            ->selectRaw(
+                "COALESCE(SUM(CASE WHEN type = 'refund' THEN debt_settled_amount WHEN type = 'deposit' AND reference LIKE ? THEN debt_settled_amount ELSE 0 END), 0) AS loan_recovered",
+                [self::ADMIN_LOAN_DEPOSIT_REPAYMENT_REFERENCE_PREFIX.'%'],
+            )
+            ->first();
+
+        $total = max(0.0, (float) ($totals?->loan_total ?? 0));
+        $recovered = min($total, max(0.0, (float) ($totals?->loan_recovered ?? 0)));
+
+        return round(max(0.0, $total - $recovered), 2);
+    }
+
+    private static function reconcileFinancialPenalties(self $transaction): void
+    {
+        $type = (string) $transaction->type;
+        $query = CleaningFinancialPenalty::query()
+            ->where('worker_id', $transaction->worker_id)
+            ->where('status', CleaningFinancialPenalty::STATUS_ACTIVE);
+
+        if (
+            in_array($type, ['refund', 'withdrawal'], true)
+            && (float) $transaction->balance_after <= 0
+            && (float) $transaction->debt_balance_after <= 0
+        ) {
+            (clone $query)
+                ->where('financial_source', CleaningFinancialPenalty::SOURCE_DEPOSIT)
+                ->update([
+                    'status' => CleaningFinancialPenalty::STATUS_CLEARED,
+                    'cleared_at' => now(),
+                    'updated_at' => now(),
+                ]);
+        }
+
+        if (
+            in_array($type, ['deposit', 'settlement'], true)
+            && (float) $transaction->debt_balance_before > 0
+            && (float) $transaction->debt_balance_after <= 0
+        ) {
+            (clone $query)
+                ->where('financial_source', CleaningFinancialPenalty::SOURCE_DEBT)
+                ->update([
+                    'status' => CleaningFinancialPenalty::STATUS_CLEARED,
+                    'cleared_at' => now(),
+                    'updated_at' => now(),
+                ]);
+        }
+    }
+
+    private static function syncWorkerAccountTotals(int $workerId): void
+    {
+        if ($workerId <= 0) {
+            return;
+        }
+
+        $totals = self::query()
+            ->where('worker_id', $workerId)
+            ->selectRaw("COALESCE(SUM(CASE WHEN type IN ('deposit', 'settlement') THEN ABS(amount) WHEN type = 'adjustment' AND amount > 0 THEN amount ELSE 0 END), 0) AS deposited_total")
+            ->selectRaw("COALESCE(SUM(CASE WHEN type IN ('refund', 'withdrawal') THEN ABS(amount) WHEN type = 'adjustment' AND amount < 0 THEN ABS(amount) ELSE 0 END), 0) AS withdrawn_total")
+            ->first();
+
+        CleaningWorkerDeposit::query()
+            ->where('worker_id', $workerId)
+            ->update([
+                'deposited_total' => round(max(0.0, (float) ($totals?->deposited_total ?? 0)), 2),
+                'withdrawn_total' => round(max(0.0, (float) ($totals?->withdrawn_total ?? 0)), 2),
+            ]);
     }
 }

@@ -48,8 +48,8 @@ final class StoreOwnerEmployeeUpdateController
                 $staff->user->update(['module_type' => UserModuleType::SupermarketSeller->value]);
             }
 
-            if (isset($validated['permissionIds']) && $staff->user) {
-                $staff->user->permissions()->sync($validated['permissionIds']);
+            if (array_key_exists('permissionIds', $validated) && $staff->user) {
+                $staff->user->permissions()->sync($validated['permissionIds'] ?? []);
             }
         });
 

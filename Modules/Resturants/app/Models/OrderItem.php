@@ -38,8 +38,8 @@ final class OrderItem extends Model
     {
         return [
             'quantity' => 'integer',
-            'unit_price' => 'decimal:2',
-            'total_price' => 'decimal:2',
+            'unit_price' => 'integer',
+            'total_price' => 'integer',
         ];
     }
 }

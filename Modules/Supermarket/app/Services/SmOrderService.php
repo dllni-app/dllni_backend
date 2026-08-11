@@ -9,6 +9,8 @@ use Exception;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Log;
+use InvalidArgumentException;
+use Modules\Delivery\Services\MerchantOrderDeliveryService;
 use Modules\Supermarket\Data\SmOrderData;
 use Modules\Supermarket\Data\SmOrderRejectStatusData;
 use Modules\Supermarket\Enums\RejectionType;
@@ -16,6 +18,7 @@ use Modules\Supermarket\Enums\SmOrderStatus;
 use Modules\Supermarket\Models\SmOrder;
 use Modules\Supermarket\Models\SmOrderStatusLog;
 use Modules\Supermarket\Models\SmStore;
+use Modules\Supermarket\Notifications\ConsecutiveRejectionsAlertNotification;
 use Modules\Supermarket\Notifications\OrderRejectedNotification;
 use Modules\Supermarket\Notifications\StoreTrustWarningNotification;
 
@@ -34,7 +37,8 @@ final class SmOrderService
     private const CONSECUTIVE_REJECTION_LIMIT = 3;
 
     public function __construct(
-        private readonly SmInventoryService $inventoryService
+        private readonly SmInventoryService $inventoryService,
+        private readonly MerchantOrderDeliveryService $merchantDelivery,
     ) {}
 
     public function store(SmOrderData $data): SmOrder
@@ -55,11 +59,7 @@ final class SmOrderService
         });
     }
 
-    /**
-     * Return hourly order counts for the latest window in hours.
-     *
-     * @return array<int, array{hour:int,ordersCount:int}>
-     */
+    /** @return array<int, array{hour:int,ordersCount:int}> */
     public function getHourlyOrderCounts(int $hours = 5): array
     {
         $currentHour = now()->startOfHour();
@@ -91,15 +91,9 @@ final class SmOrderService
         return $hourlyCounts;
     }
 
-    /**
-     * Return weekly order counts grouped by day and status.
-     * Week starts on Saturday.
-     *
-     * @return array<string, array<string, int>>
-     */
+    /** @return array<string, array<string, int>> */
     public function getWeeklyOrderCountsByStatus(?int $storeId = null): array
     {
-        // Week starts on Saturday
         $startOfWeek = now()->startOfWeek(Carbon::SATURDAY);
         $endOfWeek = $startOfWeek->copy()->addDays(6)->endOfDay();
 
@@ -125,7 +119,6 @@ final class SmOrderService
 
         $statuses = ['pending', 'preparing', 'completed'];
 
-        // Initialize counts for all days and statuses
         $weeklyCounts = [];
         foreach ($daysOfWeek as $day) {
             $weeklyCounts[$day] = [];
@@ -134,7 +127,6 @@ final class SmOrderService
             }
         }
 
-        // Count orders by day and status
         foreach ($orders as $order) {
             $dayOfWeek = $order->created_at->copy()->startOfWeek(Carbon::SATURDAY)->diffInDays($order->created_at->startOfDay());
             $dayName = $daysOfWeek[$dayOfWeek];
@@ -148,46 +140,152 @@ final class SmOrderService
         return $weeklyCounts;
     }
 
-    /**
-     * Accept an order.
-     *
-     * Business Logic:
-     * - Only PENDING orders can be accepted
-     * - Prevents duplicate acceptance
-     * - Records acceptance timestamp
-     * - Automatically deducts stock from products
-     *
-     * @throws Exception if order is not in PENDING status or insufficient stock
-     */
-    public function acceptOrder(SmOrder $order): SmOrder
+    public function acceptOrder(SmOrder $order, ?int $actorUserId = null, ?int $preparationMinutes = null): SmOrder
     {
-        return DB::transaction(function () use ($order): SmOrder {
-            // Validate status transition
+        $accepted = DB::transaction(function () use ($order, $actorUserId, $preparationMinutes): SmOrder {
+            $order = SmOrder::query()->lockForUpdate()->findOrFail($order->id);
+
             if ($order->status !== SmOrderStatus::Pending) {
                 throw new Exception(
                     "Cannot accept order {$order->order_number}. Order must be in PENDING status, currently in {$order->status->value}"
                 );
             }
 
-            // Deduct stock for all items (will throw exception if insufficient stock)
             $this->inventoryService->deductStockForOrder($order);
 
-            // Update order status
+            $acceptedAt = now();
             $order->update([
                 'status' => SmOrderStatus::Accepted,
+                'accepted_at' => $acceptedAt,
+                'estimated_preparation_minutes' => $preparationMinutes,
+                'estimated_ready_at' => $preparationMinutes !== null ? $acceptedAt->copy()->addMinutes($preparationMinutes) : null,
             ]);
+
+            $this->logStatus($order, SmOrderStatus::Pending, SmOrderStatus::Accepted, 'Order accepted by store owner.', $actorUserId);
 
             return $order->refresh();
         });
+
+        $this->merchantDelivery->accepted($accepted);
+
+        return $accepted->refresh();
     }
 
-    /**
-     * Hand order to courier after it is ready (ready_for_pickup → picked_up).
-     *
-     * Idempotent: if already picked_up, returns the order without a new log entry.
-     *
-     * @throws Exception if order is not ready_for_pickup (and not already picked_up)
-     */
+    public function markPreparing(SmOrder $order, ?int $actorUserId): SmOrder
+    {
+        $updated = DB::transaction(function () use ($order, $actorUserId): SmOrder {
+            $order = SmOrder::query()->lockForUpdate()->findOrFail($order->id);
+
+            if ($order->status === SmOrderStatus::Preparing) {
+                return $order->refresh();
+            }
+
+            if ($order->status !== SmOrderStatus::Accepted) {
+                throw new Exception(
+                    "Cannot mark order {$order->order_number} as preparing. Order must be in accepted status, currently in {$order->status->value}"
+                );
+            }
+
+            $order->update([
+                'status' => SmOrderStatus::Preparing,
+            ]);
+
+            $this->logStatus($order, SmOrderStatus::Accepted, SmOrderStatus::Preparing, 'Order preparation started.', $actorUserId);
+
+            return $order->refresh();
+        });
+
+        $this->merchantDelivery->statusUpdated($updated);
+
+        return $updated->refresh();
+    }
+
+    public function markReadyForPickup(SmOrder $order, ?int $actorUserId): SmOrder
+    {
+        $order = DB::transaction(function () use ($order, $actorUserId): SmOrder {
+            $order = SmOrder::query()->lockForUpdate()->findOrFail($order->id);
+
+            if ($order->status === SmOrderStatus::ReadyForPickup) {
+                return $order->refresh();
+            }
+
+            if (! in_array($order->status, [SmOrderStatus::Accepted, SmOrderStatus::Preparing], true)) {
+                throw new Exception(
+                    "Cannot mark order {$order->order_number} as ready for pickup. Order must be accepted or preparing, currently in {$order->status->value}"
+                );
+            }
+
+            $from = $order->status;
+
+            $order->update([
+                'status' => SmOrderStatus::ReadyForPickup,
+                'ready_for_pickup_at' => now(),
+            ]);
+
+            $this->logStatus($order, $from, SmOrderStatus::ReadyForPickup, 'Order is ready for courier pickup.', $actorUserId);
+            return $order->refresh();
+        });
+
+        $this->merchantDelivery->ready($order);
+
+        return $order->refresh();
+    }
+
+    public function updatePreparationEstimate(SmOrder $order, ?int $preparationMinutes): SmOrder
+    {
+        $updated = DB::transaction(function () use ($order, $preparationMinutes): SmOrder {
+            $lockedOrder = SmOrder::query()->lockForUpdate()->findOrFail($order->id);
+            if (! in_array($lockedOrder->status, [SmOrderStatus::Accepted, SmOrderStatus::Preparing], true)) {
+                throw new InvalidArgumentException('Preparation estimates can only be changed while accepted or preparing.');
+            }
+
+            $lockedOrder->forceFill([
+                'estimated_preparation_minutes' => $preparationMinutes,
+                'estimated_ready_at' => $preparationMinutes !== null ? now()->addMinutes($preparationMinutes) : null,
+            ])->save();
+
+            return $lockedOrder->fresh();
+        });
+
+        $this->merchantDelivery->preparationUpdated($updated);
+
+        return $updated->refresh();
+    }
+
+    public function cancelAfterAcceptance(SmOrder $order, string $reason, ?int $actorUserId): SmOrder
+    {
+        $cancelled = DB::transaction(function () use ($order, $reason, $actorUserId): SmOrder {
+            $lockedOrder = SmOrder::query()->lockForUpdate()->findOrFail($order->id);
+
+            if ($lockedOrder->status === SmOrderStatus::Cancelled) {
+                return $lockedOrder->refresh();
+            }
+
+            if (! in_array($lockedOrder->status, [
+                SmOrderStatus::Accepted,
+                SmOrderStatus::Preparing,
+                SmOrderStatus::ReadyForPickup,
+            ], true)) {
+                throw new InvalidArgumentException('Only accepted, preparing, or ready-for-pickup orders can be cancelled by the store.');
+            }
+
+            $from = $lockedOrder->status;
+            $lockedOrder->forceFill([
+                'status' => SmOrderStatus::Cancelled,
+                'cancelled_at' => now(),
+                'cancellation_reason' => $reason,
+            ])->save();
+
+            $this->logStatus($lockedOrder, $from, SmOrderStatus::Cancelled, $reason, $actorUserId);
+
+            return $lockedOrder->refresh();
+        });
+
+        $this->merchantDelivery->cancelled($cancelled, $reason, $actorUserId);
+
+        return $cancelled->refresh();
+    }
+
     public function handOverToCourier(SmOrder $order, ?int $actorUserId): SmOrder
     {
         return DB::transaction(function () use ($order, $actorUserId): SmOrder {
@@ -206,67 +304,38 @@ final class SmOrderService
                 'picked_up_at' => now(),
             ]);
 
-            SmOrderStatusLog::query()->create([
-                'order_id' => $order->id,
-                'from_status' => SmOrderStatus::ReadyForPickup->value,
-                'to_status' => SmOrderStatus::PickedUp->value,
-                'notes' => 'Handed to courier.',
-                'changed_by_user_id' => $actorUserId,
-            ]);
+            $this->logStatus($order, SmOrderStatus::ReadyForPickup, SmOrderStatus::PickedUp, 'Handed to courier.', $actorUserId);
 
             return $order->refresh();
         });
     }
 
-    /**
-     * Reject an order with trust score penalties.
-     *
-     * Business Logic:
-     * - Only PENDING orders can be rejected
-     * - Fake Order rejection: -20 trust score
-     * - Out of Stock rejection: -5 trust score
-     * - Other rejection: no penalty
-     * - After penalty, check trust thresholds:
-     *   - ≤ 80: Send warning notification
-     *   - ≤ 60: Reduce visibility (set is_featured = false)
-     *   - ≤ 40: Suspend account (set suspension_until to future date)
-     * - Track consecutive rejections (3+): trigger system alert
-     *
-     * @throws Exception if order is not in PENDING status
-     */
     public function rejectOrder(SmOrder $order, SmOrderRejectStatusData $data): SmOrder
     {
         return DB::transaction(function () use ($order, $data): SmOrder {
-            // Validate status transition
             if ($order->status !== SmOrderStatus::Pending) {
                 throw new Exception(
                     "Cannot reject order {$order->order_number}. Order must be in PENDING status, currently in {$order->status->value}"
                 );
             }
 
-            // Update order status
             $order->update([
                 'status' => SmOrderStatus::Cancelled,
                 'cancelled_at' => now(),
                 'cancellation_reason' => $data->reason,
             ]);
 
-            // Calculate trust score penalty
             $trustPenalty = $this->calculateTrustPenalty(RejectionType::from($data->rejectionType));
 
-            // Update store trust score if penalty is applicable
             if ($trustPenalty > 0) {
                 $this->updateStoreTrustScore($order->store, $trustPenalty);
             }
 
-            // Check consecutive rejections
             $this->checkConsecutiveRejections($order->store);
 
-            // Send notification to customer (wrapped in try-catch for resilience)
             try {
                 Notification::send($order->customer, new OrderRejectedNotification($order, $data->reason));
             } catch (Exception $e) {
-                // Log but don't throw - notification is secondary to order rejection
                 Log::warning("Failed to send order rejection notification: {$e->getMessage()}");
             }
 
@@ -274,9 +343,6 @@ final class SmOrderService
         });
     }
 
-    /**
-     * Calculate trust score penalty based on rejection type.
-     */
     private function calculateTrustPenalty(RejectionType $type): int
     {
         return match ($type) {
@@ -286,43 +352,30 @@ final class SmOrderService
         };
     }
 
-    /**
-     * Update store trust score and apply threshold-based actions.
-     */
     private function updateStoreTrustScore(SmStore $store, int $penalty): void
     {
-        // Decrease trust score
         $newTrustScore = max(0, $store->trust_score - $penalty);
         $store->update(['trust_score' => $newTrustScore]);
 
-        // Apply threshold-based actions
         if ($newTrustScore <= self::TRUST_SUSPENSION_THRESHOLD) {
-            // Suspend account for 30 days
             $store->update([
                 'suspension_until' => now()->addDays(30),
             ]);
         } elseif ($newTrustScore <= self::TRUST_REDUCTION_THRESHOLD) {
-            // Remove from featured listings
             $store->update(['is_featured' => false]);
         }
 
-        // Always send warning if below threshold (wrapped in try-catch for resilience)
         if ($newTrustScore <= self::TRUST_WARNING_THRESHOLD) {
             try {
                 Notification::send($store->owner, new StoreTrustWarningNotification($store, $newTrustScore));
             } catch (Exception $e) {
-                // Log but don't throw - trust score update is not blocked by notification failure
                 Log::warning("Failed to send store trust warning notification: {$e->getMessage()}");
             }
         }
     }
 
-    /**
-     * Check for consecutive order rejections and trigger alert if threshold exceeded.
-     */
     private function checkConsecutiveRejections(SmStore $store): void
     {
-        // Get recent cancelled orders from this store
         $recentCancelledCount = SmOrder::query()
             ->where('store_id', $store->id)
             ->where('status', SmOrderStatus::Cancelled)
@@ -330,14 +383,23 @@ final class SmOrderService
             ->limit(self::CONSECUTIVE_REJECTION_LIMIT + 1)
             ->count();
 
-        // If 3 or more recent cancellations, trigger alert (wrapped in try-catch for resilience)
         if ($recentCancelledCount >= self::CONSECUTIVE_REJECTION_LIMIT) {
             try {
                 Notification::send($store->owner, new ConsecutiveRejectionsAlertNotification($store, $recentCancelledCount));
             } catch (Exception $e) {
-                // Log but don't throw - alert is secondary to order rejection
-                Log::warning("Failed to send consecutive rejections alert: {$e->getMessage()}");
+                Log::warning("Failed to send consecutive rejection alert: {$e->getMessage()}");
             }
         }
+    }
+
+    private function logStatus(SmOrder $order, ?SmOrderStatus $from, SmOrderStatus $to, ?string $note = null, ?int $actorUserId = null): void
+    {
+        SmOrderStatusLog::query()->create([
+            'order_id' => $order->id,
+            'from_status' => $from?->value,
+            'to_status' => $to->value,
+            'notes' => $note,
+            'changed_by_user_id' => $actorUserId,
+        ]);
     }
 }

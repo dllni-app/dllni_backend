@@ -21,8 +21,13 @@ final class InventoryItemRequest extends FormRequest
             'quantity' => 'required|numeric|min:0',
             'minimumLimit' => 'required|numeric|min:0',
             'unitCost' => 'nullable|numeric|min:0',
+            // Backward-compatible field used by older clients. When `products`
+            // is provided, its quantityUsed values take precedence.
             'productIds' => 'nullable|array',
-            'productIds.*' => 'exists:products,id',
+            'productIds.*' => 'integer|distinct|exists:products,id',
+            'products' => 'nullable|array',
+            'products.*.productId' => 'required|integer|distinct|exists:products,id',
+            'products.*.quantityUsed' => 'required|numeric|gt:0',
         ];
     }
 }

@@ -4,18 +4,27 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningBookings;
 
+use App\Enums\DisputeStatus;
+use App\Enums\SupportCaseKind;
+use App\Enums\SupportCaseStatus;
 use App\Filament\Resources\CleaningBookings\Pages\EditCleaningBooking;
 use App\Filament\Resources\CleaningBookings\Pages\ListCleaningBookings;
 use App\Filament\Resources\CleaningBookings\Pages\ViewCleaningBooking;
 use App\Filament\Resources\CleaningBookings\Schemas\CleaningBookingForm;
 use App\Filament\Resources\CleaningBookings\Schemas\CleaningBookingInfolist;
 use App\Filament\Resources\CleaningBookings\Tables\CleaningBookingsTable;
+use App\Models\SupportCase;
+use App\Models\User;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 
 final class CleaningBookingResource extends Resource
@@ -63,7 +72,64 @@ final class CleaningBookingResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return CleaningBookingsTable::configure($table);
+        return CleaningBookingsTable::configure($table)
+            ->pushFilters([
+                SelectFilter::make('customer')
+                    ->label('العميل')
+                    ->relationship(
+                        name: 'customer',
+                        titleAttribute: 'name',
+                        modifyQueryUsing: fn (Builder $query): Builder => $query
+                            ->whereHas('cleaningBookings')
+                            ->orderBy('name'),
+                    )
+                    ->getOptionLabelFromRecordUsing(
+                        fn (User $record): string => sprintf('%s (%s)', $record->name, $record->phone ?: '-'),
+                    )
+                    ->searchable(['name', 'phone']),
+            ])
+            ->pushColumns([
+                TextColumn::make('open_dispute_status')
+                    ->label('نزاع مفتوح')
+                    ->getStateUsing(function (CleaningBooking $record): string {
+                        $count = (int) ($record->open_disputes_count ?? 0)
+                            + (int) ($record->open_support_cases_count ?? 0);
+
+                        return $count > 0 ? 'open' : 'none';
+                    })
+                    ->badge()
+                    ->formatStateUsing(fn (string $state): string => $state === 'open' ? 'يوجد نزاع مفتوح' : 'لا يوجد نزاع مفتوح')
+                    ->color(fn (string $state): string => $state === 'open' ? 'danger' : 'gray')
+                    ->icon(fn (string $state): string => $state === 'open' ? 'heroicon-o-exclamation-triangle' : 'heroicon-o-check-circle'),
+            ]);
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->with([
+                'customer',
+                'worker.user',
+                'preferredWorker.user',
+                'rooms.assignedWorker.user',
+                'rooms.plannedPreferredWorker.user',
+                'workerAssignments.worker.user',
+                'acceptedWorkerAssignments.worker.user',
+            ])
+            ->withCount([
+                'disputes as open_disputes_count' => fn (Builder $query): Builder => $query->whereIn('status', [
+                    DisputeStatus::Open->value,
+                    DisputeStatus::UnderReview->value,
+                ]),
+            ])
+            ->addSelect([
+                'open_support_cases_count' => SupportCase::query()
+                    ->selectRaw('COUNT(*)')
+                    ->whereColumn('support_cases.booking_id', 'cleaning_bookings.id')
+                    ->where('support_cases.booking_type', CleaningBooking::class)
+                    ->where('support_cases.kind', SupportCaseKind::Complaint->value)
+                    ->whereIn('support_cases.status', SupportCaseStatus::activeValues()),
+            ]);
     }
 
     public static function canViewAny(): bool
@@ -83,7 +149,22 @@ final class CleaningBookingResource extends Resource
 
     public static function canEdit(Model $record): bool
     {
-        return self::hasPermission('bookings.update');
+        if (! self::hasPermission('bookings.update')) {
+            return false;
+        }
+
+        if (! $record instanceof CleaningBooking) {
+            return false;
+        }
+
+        $status = $record->status instanceof CleaningBookingStatus
+            ? $record->status
+            : CleaningBookingStatus::tryFrom((string) $record->status);
+
+        return ! in_array($status, [
+            CleaningBookingStatus::Completed,
+            CleaningBookingStatus::Cancelled,
+        ], true);
     }
 
     public static function canDelete(Model $record): bool

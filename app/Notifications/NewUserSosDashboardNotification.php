@@ -6,6 +6,8 @@ namespace App\Notifications;
 
 use App\Filament\Resources\SosAlerts\SosAlertResource;
 use App\Models\SosAlert;
+use Filament\Actions\Action;
+use Filament\Notifications\Notification as FilamentNotification;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
 
@@ -26,21 +28,24 @@ final class NewUserSosDashboardNotification extends Notification
     }
 
     /**
+     * Build a Filament-formatted database notification so it renders in the
+     * admin notification bell with a clickable action that opens the SOS alert.
+     *
      * @return array<string, mixed>
      */
     public function toDatabase(object $notifiable): array
     {
-        return [
-            'type' => 'user_sos',
-            'title' => 'New SOS Alert',
-            'body' => 'A user submitted an SOS request.',
-            'sos_alert_id' => $this->sos->getKey(),
-            'order_id' => $this->sos->order_id,
-            'user_id' => $this->sos->user_id,
-            'status' => $this->sos->status?->value ?? $this->sos->status,
-            'message' => $this->sos->message,
-            'url' => SosAlertResource::getUrl('view', ['record' => $this->sos]),
-            'created_at' => now()->toISOString(),
-        ];
+        return FilamentNotification::make()
+            ->title(__('cleaning_admin.sos_notification.title'))
+            ->body(__('cleaning_admin.sos_notification.body'))
+            ->icon('heroicon-o-bell-alert')
+            ->danger()
+            ->actions([
+                Action::make('view')
+                    ->label(__('cleaning_admin.sos_notification.view'))
+                    ->url(SosAlertResource::getUrl('view', ['record' => $this->sos]))
+                    ->markAsRead(),
+            ])
+            ->getDatabaseMessage();
     }
 }

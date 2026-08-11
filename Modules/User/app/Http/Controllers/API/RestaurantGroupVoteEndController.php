@@ -31,8 +31,7 @@ final class RestaurantGroupVoteEndController
 
         $payload = $this->service->publicPayload($model, $userId);
 
-        // Broadcast the vote update to all connected users
-        BroadcastAfterResponse::send(new RestaurantGroupVoteUpdated($model, $payload));
+        BroadcastAfterResponse::send(new RestaurantGroupVoteUpdated($model, $this->service->broadcastRefreshPayload($model)));
 
         return response()->json([
             'message' => 'Vote ended.',

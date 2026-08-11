@@ -14,6 +14,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Modules\Cleaning\Models\EventBooking;
 
@@ -55,6 +56,12 @@ final class EventBookingResource extends Resource
     public static function table(Table $table): Table
     {
         return EventBookingsTable::configure($table);
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->with(['customer', 'cancellationPolicy', 'billingPolicy', 'services']);
     }
 
     public static function canViewAny(): bool

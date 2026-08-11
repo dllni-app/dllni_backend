@@ -1,0 +1,109 @@
+:root {
+    --alnadha-primary: #1e2a78;
+    --alnadha-secondary: #6c63ff;
+    --alnadha-restaurants: #ff7a00;
+    --alnadha-cleaning: #42c4b6;
+    --alnadha-primary-soft: rgb(30 42 120 / 0.1);
+    --alnadha-secondary-soft: rgb(108 99 255 / 0.1);
+    --alnadha-cleaning-soft: rgb(66 196 182 / 0.12);
+    --fi-font-family: 'Cairo', sans-serif;
+}
+
+html,
+body,
+button,
+input,
+select,
+textarea {
+    font-family: var(--fi-font-family);
+}
+
+.fi-logo,
+.fi-header-heading,
+.fi-simple-header-heading {
+    color: var(--alnadha-primary);
+}
+
+.fi-sidebar-item.fi-active > .fi-sidebar-item-btn {
+    border-inline-start: 3px solid var(--alnadha-primary);
+    background: var(--alnadha-primary-soft);
+}
+
+.fi-sidebar-item.fi-active .fi-sidebar-item-label,
+.fi-sidebar-item.fi-active .fi-icon {
+    color: var(--alnadha-primary);
+}
+
+.fi-sidebar-item-btn:hover {
+    background: var(--alnadha-secondary-soft);
+}
+
+.fi-topbar nav {
+    border-bottom-color: rgb(30 42 120 / 0.14);
+}
+
+.fi-simple-main {
+    border-top: 4px solid var(--alnadha-primary);
+}
+
+.gc-page-title,
+.gc-panel-title,
+.co-title,
+.co-heading,
+.co-value {
+    color: var(--alnadha-primary);
+}
+
+.gc-stat-icon-blue {
+    background: var(--alnadha-secondary-soft);
+    color: var(--alnadha-secondary);
+}
+
+.gc-chart-legend-swatch-demand,
+.gc-chart-bar-demand {
+    background: var(--alnadha-secondary);
+}
+
+.gc-chart-legend-swatch-workers,
+.gc-chart-bar-workers {
+    background: var(--alnadha-cleaning);
+}
+
+.co-hero::before {
+    background: linear-gradient(180deg, var(--alnadha-cleaning), var(--alnadha-secondary));
+}
+
+.co-badge {
+    border-color: rgb(66 196 182 / 0.4);
+    background: var(--alnadha-cleaning-soft);
+    color: #176f66;
+}
+
+.co-dot {
+    background: var(--alnadha-cleaning);
+    box-shadow: 0 0 0 0 rgb(66 196 182 / 0.7);
+}
+
+.dark .fi-logo,
+.dark .fi-header-heading,
+.dark .fi-simple-header-heading,
+.dark .co-title,
+.dark .co-heading,
+.dark .co-value {
+    color: #d9d7ff;
+}
+
+.dark .fi-sidebar-item.fi-active > .fi-sidebar-item-btn {
+    background: rgb(108 99 255 / 0.16);
+}
+
+.dark .fi-sidebar-item.fi-active .fi-sidebar-item-label,
+.dark .fi-sidebar-item.fi-active .fi-icon {
+    color: #b9b5ff;
+}
+
+.dark .co-badge {
+    border-color: rgb(66 196 182 / 0.42);
+    background: rgb(66 196 182 / 0.16);
+    color: #9ce3dc;
+}

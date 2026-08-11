@@ -6,9 +6,9 @@ namespace Modules\Resturants\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Modules\Delivery\Support\DeliveryPresentation;
 use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Models\Order;
-use Modules\Delivery\Support\DeliveryPresentation;
 
 /**
  * @mixin Order
@@ -29,10 +29,13 @@ final class OrderResource extends JsonResource
     {
         $statusValue = $this->status?->value ?? $this->status;
         $deliverySummary = DeliveryPresentation::merchantSummary($this->resource);
+        $deliveryOrder = $this->relationLoaded('deliveryOrder') ? $this->deliveryOrder : null;
 
         return [
             'id' => $this->id,
+            'deliveryOrderId' => $deliveryOrder?->id,
             'userId' => $this->user_id,
+            'userAddressId' => $this->user_address_id,
             'restaurantId' => $this->restaurant_id,
             'promoCodeId' => $this->promo_code_id,
             'assignedStaffId' => $this->assigned_staff_id,
@@ -56,6 +59,7 @@ final class OrderResource extends JsonResource
             'specialInstructions' => $this->special_instructions,
             'acceptedAt' => $this->accepted_at?->toDateTimeString(),
             'estimatedPreparationMinutes' => $this->estimated_preparation_minutes,
+            'estimatedReadyAt' => $this->estimated_ready_at?->toIso8601String(),
             'kitchenNotes' => $this->kitchen_notes,
             'preparingAt' => $this->preparing_at?->toDateTimeString(),
             'completedAt' => $this->completed_at?->toDateTimeString(),
@@ -65,8 +69,24 @@ final class OrderResource extends JsonResource
             'user' => $this->whenLoaded('user', fn () => [
                 'id' => $this->user->id,
                 'name' => $this->user->name,
+                'phone' => $this->user->phone,
+                'mobile' => $this->user->phone,
                 'email' => $this->user->email,
             ]),
+            'userAddress' => $this->whenLoaded('userAddress', fn () => $this->userAddress ? [
+                'id' => $this->userAddress->id,
+                'label' => $this->userAddress->label,
+                'mobile' => $this->userAddress->mobile,
+                'city' => $this->userAddress->city,
+                'neighborhood' => $this->userAddress->neighborhood,
+                'street' => $this->userAddress->street,
+                'building' => $this->userAddress->building,
+                'floor' => $this->userAddress->floor,
+                'directions' => $this->userAddress->directions,
+                'latitude' => $this->userAddress->latitude !== null ? (float) $this->userAddress->latitude : null,
+                'longitude' => $this->userAddress->longitude !== null ? (float) $this->userAddress->longitude : null,
+                'isDefault' => (bool) $this->userAddress->is_default,
+            ] : null),
             'restaurant' => $this->whenLoaded('restaurant', fn () => [
                 'id' => $this->restaurant->id,
                 'name' => $this->restaurant->name,
@@ -83,6 +103,8 @@ final class OrderResource extends JsonResource
                 'product' => $item->relationLoaded('product') && $item->product ? [
                     'id' => $item->product->id,
                     'name' => $item->product->name,
+                    'primaryImage' => $item->product->getFirstMediaUrl('primary-image'),
+                    'imageUrl' => $item->product->getFirstMediaUrl('primary-image') ?: null,
                 ] : null,
             ])->values()->all()),
             'orderStatusLogs' => $this->whenLoaded('orderStatusLogs'),

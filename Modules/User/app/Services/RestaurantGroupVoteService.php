@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\User\Services;
 
+use App\Models\User;
 use App\Services\DeepLinks\CanonicalDeepLinkGenerator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -58,7 +59,7 @@ final class RestaurantGroupVoteService
         });
     }
 
-    public function castBallot(RestaurantGroupVote $vote, int $userId, int $optionId): RestaurantGroupVoteBallot
+    public function castBallot(RestaurantGroupVote $vote, int $userId, int $optionId): ?RestaurantGroupVoteBallot
     {
         $this->finalizeIfExpired($vote);
         $vote->refresh();
@@ -84,6 +85,17 @@ final class RestaurantGroupVoteService
             throw ValidationException::withMessages([
                 'optionId' => ['Invalid option for this vote.'],
             ]);
+        }
+
+        $existingBallot = RestaurantGroupVoteBallot::query()
+            ->where('vote_id', $vote->id)
+            ->where('user_id', $userId)
+            ->first();
+
+        if ($existingBallot !== null && (int) $existingBallot->option_id === $optionId) {
+            $existingBallot->delete();
+
+            return null;
         }
 
         /** @var RestaurantGroupVoteBallot $ballot */
@@ -212,12 +224,18 @@ final class RestaurantGroupVoteService
     {
         $this->finalizeIfExpired($vote);
         $vote->refresh();
-        $vote->load(['options.product', 'ballots.user', 'ballots.option', 'cuisineType', 'winningOption', 'invites.user']);
+        $vote->load(['creator', 'options.product', 'ballots.user', 'ballots.option', 'cuisineType', 'winningOption', 'invites.user']);
 
         $totalBallots = $vote->ballots->count();
         $countsByOption = $vote->ballots->groupBy('option_id')->map->count();
+        $currentUserBallot = $currentUserId !== null
+            ? $vote->ballots->first(fn (RestaurantGroupVoteBallot $ballot): bool => (int) $ballot->user_id === $currentUserId)
+            : null;
+        $currentUserOptionId = $currentUserBallot?->option_id !== null ? (int) $currentUserBallot->option_id : null;
+        $currentUserOptionAlias = $currentUserOptionId ?? 0;
+        $currentUserVotePayload = $this->currentUserVotePayload($currentUserBallot);
 
-        $optionsPayload = $vote->options->map(function (RestaurantGroupVoteOption $option) use ($countsByOption, $totalBallots): array {
+        $optionsPayload = $vote->options->map(function (RestaurantGroupVoteOption $option) use ($countsByOption, $totalBallots, $currentUserOptionId): array {
             $count = (int) ($countsByOption->get($option->id) ?? 0);
             $percent = $totalBallots > 0 ? round(($count / $totalBallots) * 100, 1) : 0.0;
 
@@ -234,15 +252,19 @@ final class RestaurantGroupVoteService
                 'voteCount' => $count,
                 'percent' => $percent,
                 'unitPrice' => $price,
+                'isSelectedByCurrentUser' => $currentUserOptionId !== null && $currentUserOptionId === (int) $option->id,
             ];
         })->values()->all();
 
-        $votersPayload = $vote->ballots->sortBy('id')->values()->map(function (RestaurantGroupVoteBallot $ballot): array {
+        $votersPayload = $vote->ballots->sortBy('id')->values()->map(function (RestaurantGroupVoteBallot $ballot) use ($currentUserId): array {
+            $isCurrentUser = $currentUserId !== null && (int) $ballot->user_id === $currentUserId;
+
             return [
                 'userId' => $ballot->user_id,
-                'name' => $ballot->user->name,
+                'name' => $this->displayUserName($ballot->user, $isCurrentUser),
                 'optionId' => $ballot->option_id,
-                'optionLabel' => $ballot->option->label,
+                'optionLabel' => $ballot->option?->label,
+                'isCurrentUser' => $isCurrentUser,
             ];
         })->all();
 
@@ -258,10 +280,13 @@ final class RestaurantGroupVoteService
             }
         }
 
-        $invitedUsersPayload = $vote->invites->sortBy('id')->values()->map(function (RestaurantGroupVoteInvite $invite): array {
+        $invitedUsersPayload = $vote->invites->sortBy('id')->values()->map(function (RestaurantGroupVoteInvite $invite) use ($currentUserId): array {
+            $isCurrentUser = $currentUserId !== null && (int) $invite->user_id === $currentUserId;
+
             return [
                 'userId' => $invite->user_id,
-                'name' => $invite->user->name,
+                'name' => $this->displayUserName($invite->user, $isCurrentUser),
+                'isCurrentUser' => $isCurrentUser,
             ];
         })->all();
 
@@ -269,10 +294,7 @@ final class RestaurantGroupVoteService
             ? $vote->invites->contains(fn(RestaurantGroupVoteInvite $invite): bool => $invite->user_id === $currentUserId)
             : false;
 
-        $secondsRemaining = 0;
-        if ($vote->status === RestaurantGroupVoteStatus::Active) {
-            $secondsRemaining = max(0, (int) ($vote->ends_at->getTimestamp() - now()->getTimestamp()));
-        }
+        $secondsRemaining = $this->secondsRemaining($vote);
 
         return [
             'vote' => [
@@ -290,14 +312,43 @@ final class RestaurantGroupVoteService
                 'endsAt' => $vote->ends_at->toIso8601String(),
                 'secondsRemaining' => $secondsRemaining,
                 'creatorUserId' => $vote->user_id,
+                'creator' => $this->creatorPayload($vote->creator, $currentUserId),
                 'isCreator' => $currentUserId !== null && $currentUserId === $vote->user_id,
                 'isInvited' => $isInvited,
+                'currentUserOptionId' => $currentUserOptionId,
+                'myVotedOptionId' => $currentUserOptionAlias,
+                'userVoteOptionId' => $currentUserOptionAlias,
+                'selectedOptionId' => $currentUserOptionAlias,
+                'hasCurrentUserVoted' => $currentUserOptionId !== null,
+                'currentUserVote' => $currentUserVotePayload,
                 'createdAt' => $vote->created_at->toIso8601String(),
             ],
             'options' => $optionsPayload,
             'voters' => $votersPayload,
             'invitedUsers' => $invitedUsersPayload,
             'winner' => $winnerPayload,
+        ];
+    }
+
+    /**
+     * Realtime events are intentionally neutral. Every client must refetch the vote
+     * details with its own token so `currentUserVote` is personalized correctly.
+     *
+     * @return array<string, mixed>
+     */
+    public function broadcastRefreshPayload(RestaurantGroupVote $vote): array
+    {
+        $this->finalizeIfExpired($vote);
+        $vote->refresh();
+
+        return [
+            'vote' => [
+                'id' => (int) $vote->id,
+                'status' => $vote->status->value,
+                'secondsRemaining' => $this->secondsRemaining($vote),
+                'updatedAt' => $vote->updated_at?->toIso8601String(),
+            ],
+            'refreshRequired' => true,
         ];
     }
 
@@ -367,6 +418,73 @@ final class RestaurantGroupVoteService
             'cuisineTypes' => $cuisineTypes,
             'suggestions' => $suggestions,
         ];
+    }
+
+    private function displayUserName(?User $user, bool $isCurrentUser = false): string
+    {
+        $name = is_string($user?->name) ? trim($user->name) : '';
+
+        if ($name !== '') {
+            return $name;
+        }
+
+        if ($isCurrentUser) {
+            return 'أنت';
+        }
+
+        return "\u{0645}\u{0633}\u{062A}\u{062E}\u{062F} \u{0627}\u{0644}\u{062A}\u{0637}\u{0628}\u{064A}\u{0642}";
+    }
+
+    /**
+     * @return array{id:int,name:string,avatarUrl:string|null,isCurrentUser:bool}|null
+     */
+    private function creatorPayload(?User $creator, ?int $currentUserId): ?array
+    {
+        if ($creator === null) {
+            return null;
+        }
+
+        $isCurrentUser = $currentUserId !== null && (int) $creator->id === $currentUserId;
+
+        return [
+            'id' => (int) $creator->id,
+            'name' => $this->displayUserName($creator, $isCurrentUser),
+            'avatarUrl' => null,
+            'isCurrentUser' => $isCurrentUser,
+        ];
+    }
+
+    /**
+     * @return array{hasVoted:bool,optionId:int|null,optionLabel:string|null,ballotId:int|null,votedAt:string|null}
+     */
+    private function currentUserVotePayload(?RestaurantGroupVoteBallot $ballot): array
+    {
+        if ($ballot === null) {
+            return [
+                'hasVoted' => false,
+                'optionId' => null,
+                'optionLabel' => null,
+                'ballotId' => null,
+                'votedAt' => null,
+            ];
+        }
+
+        return [
+            'hasVoted' => true,
+            'optionId' => (int) $ballot->option_id,
+            'optionLabel' => $ballot->option?->label,
+            'ballotId' => (int) $ballot->id,
+            'votedAt' => $ballot->created_at?->toIso8601String(),
+        ];
+    }
+
+    private function secondsRemaining(RestaurantGroupVote $vote): int
+    {
+        if ($vote->status !== RestaurantGroupVoteStatus::Active) {
+            return 0;
+        }
+
+        return max(0, (int) ($vote->ends_at->getTimestamp() - now()->getTimestamp()));
     }
 
     private function applyWinner(RestaurantGroupVote $vote): void

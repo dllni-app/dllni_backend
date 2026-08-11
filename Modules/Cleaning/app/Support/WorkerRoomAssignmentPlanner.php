@@ -8,7 +8,7 @@ use Illuminate\Support\Arr;
 
 final class WorkerRoomAssignmentPlanner
 {
-    public const ROOM_TYPE_ORDER = ['bedroom', 'bathroom', 'kitchen', 'living_room', 'balcony'];
+    public const ROOM_TYPE_ORDER = ['bedroom', 'bathroom', 'kitchen', 'living_room', 'balcony', 'corridor', 'shed'];
 
     public const ROOM_SIZE_ORDER = ['small', 'medium', 'large'];
 
@@ -44,6 +44,12 @@ final class WorkerRoomAssignmentPlanner
                 'derivedRooms' => $derivedRooms,
             ];
         }
+
+        $workerRoomAssignments = self::normalizePreferredWorkerAssignments(
+            $workerRoomAssignments,
+            $assignmentMode,
+            $preferredWorkerId,
+        );
 
         $errors = [];
         $roomMap = [];
@@ -84,17 +90,7 @@ final class WorkerRoomAssignmentPlanner
             if ($assignmentMode === 'open_count' && $slotPreferredWorkerId !== null) {
                 $errors[$preferredWorkerPath][] = 'Open count room assignments cannot target a preferred worker.';
             }
-
-            if ($assignmentMode === 'preferred_worker') {
-                if ($workerSlot !== 1) {
-                    $errors[$slotPath][] = 'Preferred worker mode only supports worker slot 1.';
-                }
-
-                if ($preferredWorkerId === null || $slotPreferredWorkerId !== $preferredWorkerId) {
-                    $errors[$preferredWorkerPath][] = 'The preferred worker must match the top-level preferredWorkerId.';
-                }
-            }
-
+            
             $rooms = $assignment['rooms'] ?? null;
             if (! is_array($rooms)) {
                 $errors[$roomsPath][] = 'The rooms field must be an array.';
@@ -237,7 +233,7 @@ final class WorkerRoomAssignmentPlanner
 
     /**
      * @param  array<int, array{workerSlot:int, preferredWorkerId:?int, rooms:array<int, array{roomKey:string, roomType:string, roomSize:string, weight:float}>, roomsWeight?:float}>  $assignments
-     * @return array<int, array{workerSlot:int, preferredWorkerId:?int, rooms:array<int, array{roomKey:string, roomType:string, roomSize:string}>, roomsWeight:float, estimatedServiceShareAmount:float}>
+     * @return array<int, array{workerSlot:int, preferredWorkerId:?int, rooms:array<int, array{roomKey:string, roomType:string}>, roomsWeight:float, estimatedServiceShareAmount:float}>
      */
     public static function withPricingPreview(array $assignments, float $subtotal): array
     {
@@ -264,6 +260,44 @@ final class WorkerRoomAssignmentPlanner
                 ], $assignment['rooms']),
             ];
         }, $assignments);
+    }
+
+    /**
+     * Flutter may send preferred-worker room assignments as one entry per selected room,
+     * using workerSlot as a room index and preferredWorkerId as null. For backend domain
+     * rules, preferred-worker mode is still one worker, so normalize those entries into
+     * the single supported slot before validation and room planning.
+     *
+     * @param  array<int, array<string, mixed>>  $workerRoomAssignments
+     * @return array<int, array<string, mixed>>
+     */
+    private static function normalizePreferredWorkerAssignments(
+        array $workerRoomAssignments,
+        string $assignmentMode,
+        ?int $preferredWorkerId,
+    ): array {
+        if ($assignmentMode !== 'preferred_worker') {
+            return $workerRoomAssignments;
+        }
+
+        $rooms = [];
+
+        foreach ($workerRoomAssignments as $assignment) {
+            $assignmentRooms = $assignment['rooms'] ?? null;
+            if (! is_array($assignmentRooms)) {
+                return $workerRoomAssignments;
+            }
+
+            foreach ($assignmentRooms as $room) {
+                $rooms[] = $room;
+            }
+        }
+
+        return [[
+            'workerSlot' => 1,
+            'preferredWorkerId' => $preferredWorkerId,
+            'rooms' => $rooms,
+        ]];
     }
 
     private static function normalizeNullableInt(mixed $value): ?int
@@ -355,6 +389,8 @@ final class WorkerRoomAssignmentPlanner
             'kitchen' => ['count' => max(0, (int) Arr::get($propertyDetails, 'kitchens', Arr::get($propertyDetails, 'kitchen_included') ? 1 : 0)), 'size' => 'medium'],
             'living_room' => ['count' => 1, 'size' => mb_strtolower((string) Arr::get($propertyDetails, 'living_room_size', 'medium'))],
             'balcony' => ['count' => max(0, (int) Arr::get($propertyDetails, 'balconies', 0)), 'size' => 'small'],
+            'corridor' => ['count' => max(0, (int) Arr::get($propertyDetails, 'corridors', 0)), 'size' => 'medium'],
+            'shed' => ['count' => max(0, (int) Arr::get($propertyDetails, 'sheds', 0)), 'size' => 'medium'],
             'room' => ['count' => max(0, (int) Arr::get($propertyDetails, 'rooms', 0)), 'size' => 'medium'],
         ];
 
@@ -388,6 +424,8 @@ final class WorkerRoomAssignmentPlanner
             'kitchen' => 'Kitchen',
             'living_room' => 'Living Room',
             'balcony' => 'Balcony',
+            'corridor' => 'Corridor',
+            'shed' => 'Shed',
             default => 'Room',
         };
 
@@ -402,6 +440,8 @@ final class WorkerRoomAssignmentPlanner
             'kitchen' => 1.1,
             'living_room' => 1.2,
             'balcony' => 0.5,
+            'corridor' => 0.6,
+            'shed' => 1.0,
             default => 1.0,
         };
 

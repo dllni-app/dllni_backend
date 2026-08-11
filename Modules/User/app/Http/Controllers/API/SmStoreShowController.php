@@ -11,10 +11,13 @@ use Modules\Resturants\Models\Favorite;
 use Modules\Supermarket\Http\Resources\SmStoreResource;
 use Modules\Supermarket\Models\SmProduct;
 use Modules\Supermarket\Models\SmStore;
+use Modules\User\Services\UserSupermarketCartService;
 
 final class SmStoreShowController
 {
-    private const int PRODUCTS_PER_CATEGORY_PREVIEW = 4;
+    public function __construct(
+        private readonly UserSupermarketCartService $carts,
+    ) {}
 
     public function __invoke(Request $request, int $store): JsonResponse
     {
@@ -29,14 +32,16 @@ final class SmStoreShowController
                 'owner',
                 'highestDiscountOffer',
                 'storeHours',
-                'categories' => fn ($query) => $query
-                    ->where('is_active', true)
-                    ->withCount([
-                        'products as products_count' => fn ($productQuery) => $productQuery
-                            ->where('is_available', true),
-                    ])
-                    ->orderBy('sort_order')
-                    ->orderBy('id'),
+                'categories',
+                'products' => fn ($query) => $query
+                    ->where('is_available', true)
+                    ->latest('id')
+                    ->limit(5)
+                    ->with([
+                        'category',
+                        'media',
+                        'offerProducts.offer',
+                    ]),
                 'offers',
                 'coupons',
                 'orders',
@@ -50,25 +55,7 @@ final class SmStoreShowController
             ])
             ->findOrFail($store);
 
-        // The store details screen renders product sections by category. A single
-        // global product limit can be exhausted by one category, which makes the
-        // other store categories disappear from the UI. Build a small preview for
-        // every active category instead, while keeping the response payload bounded.
-        $products = $model->categories
-            ->flatMap(fn ($category) => $category->products()
-                ->where('is_available', true)
-                ->latest('id')
-                ->limit(self::PRODUCTS_PER_CATEGORY_PREVIEW)
-                ->with([
-                    'category',
-                    'media',
-                    'offerProducts.offer',
-                ])
-                ->get())
-            ->values();
-
-        $model->setRelation('products', $products);
-
+        $cartPayload = null;
         $user = $request->user('sanctum');
         if ($user !== null) {
             $isFavorited = Favorite::query()
@@ -79,6 +66,7 @@ final class SmStoreShowController
 
             $model->setAttribute('isFavoritedByUser', $isFavorited);
 
+            $products = $model->products;
             if ($products->isNotEmpty()) {
                 $favoriteType = $products->first()?->getMorphClass();
 
@@ -86,7 +74,7 @@ final class SmStoreShowController
                     ? Favorite::query()
                         ->where('user_id', $user->id)
                         ->where('favorable_type', $favoriteType)
-                        ->whereIn('favorable_id', $products->pluck('id'))
+                        ->whereIn('favorable_id', $products->modelKeys())
                         ->pluck('favorable_id')
                         ->flip()
                     : collect();
@@ -95,13 +83,18 @@ final class SmStoreShowController
                     $product->setAttribute('isFavoritedByUser', $favoritedProductIds->has($product->id));
                 });
             }
+
+            $cartPayload = $this->carts->showForStore((int) $user->id, (int) $model->id);
+            $model->setAttribute('cartPayload', $cartPayload);
         } else {
             $model->setAttribute('isFavoritedByUser', false);
-            $products->each(fn (SmProduct $product) => $product->setAttribute('isFavoritedByUser', false));
+            $model->setAttribute('cartPayload', null);
+            $model->products->each(fn (SmProduct $product) => $product->setAttribute('isFavoritedByUser', false));
         }
 
         return response()->json([
             'store' => SmStoreResource::make($model),
+            'cart' => $cartPayload,
         ]);
     }
 }

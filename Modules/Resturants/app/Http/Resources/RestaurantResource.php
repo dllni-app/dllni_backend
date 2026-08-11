@@ -16,16 +16,6 @@ final class RestaurantResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $legacyPreparationTime = $this->estimated_preparation_time !== null
-            ? (int) $this->estimated_preparation_time
-            : null;
-        $preparationTimeMax = $this->estimated_preparation_time_max !== null
-            ? (int) $this->estimated_preparation_time_max
-            : $legacyPreparationTime;
-        $preparationTimeMin = $this->estimated_preparation_time_min !== null
-            ? (int) $this->estimated_preparation_time_min
-            : ($preparationTimeMax !== null ? max(1, $preparationTimeMax - 10) : null);
-
         return [
             'id' => $this->id,
             'userId' => $this->user_id,
@@ -48,14 +38,7 @@ final class RestaurantResource extends JsonResource
             'face' => $this->facebook_page_name,
             'averageRating' => $this->average_rating ? (float) $this->average_rating : null,
             'totalReviews' => $this->total_reviews,
-            // Legacy field remains as the upper bound for backwards compatibility.
-            'estimatedPreparationTime' => $preparationTimeMax,
-            'estimatedPreparationTimeMin' => $preparationTimeMin,
-            'estimatedPreparationTimeMax' => $preparationTimeMax,
-            'preparationTimeRange' => [
-                'min' => $preparationTimeMin,
-                'max' => $preparationTimeMax,
-            ],
+            'estimatedPreparationTime' => $this->estimated_preparation_time,
             'minimumOrderAmount' => $this->minimum_order_amount ? (float) $this->minimum_order_amount : null,
             'priceRange' => $this->price_range?->value ?? $this->price_range,
             'reputationScore' => $this->reputation_score,
@@ -90,7 +73,22 @@ final class RestaurantResource extends JsonResource
                 'name' => $ct->name,
                 'slug' => $ct->slug,
             ])),
-            'operatingHours' => $this->whenLoaded('operatingHours'),
+            'operatingHours' => $this->whenLoaded('operatingHours', fn () => $this->operatingHours->map(function ($hour): array {
+                $dayOfWeek = $hour->day_of_week?->value ?? $hour->day_of_week;
+
+                return [
+                    'id' => $hour->id,
+                    'dayOfWeek' => $dayOfWeek,
+                    'openTime' => $hour->open_time,
+                    'closeTime' => $hour->close_time,
+                    'isClosed' => (bool) $hour->is_closed,
+                    // Keep the original aliases for backward compatibility with older clients.
+                    'day_of_week' => $dayOfWeek,
+                    'open_time' => $hour->open_time,
+                    'close_time' => $hour->close_time,
+                    'is_closed' => (bool) $hour->is_closed,
+                ];
+            })->values()),
             'documents' => $this->whenLoaded('documents'),
             'reputationLogs' => $this->whenLoaded('reputationLogs'),
             'penalties' => $this->whenLoaded('penalties'),

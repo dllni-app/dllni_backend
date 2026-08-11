@@ -29,6 +29,21 @@ final class OfferRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        $startsAt = $this->input('startsAt', $this->input('starts_at'));
+        $endsAt = $this->input('endsAt', $this->input('ends_at'));
+
+        if ($this->isMethod('post') && blank($startsAt)) {
+            $startsAt = now()->toDateString();
+        }
+
+        $this->merge([
+            'discountType' => $this->input('discountType', $this->input('discount_type')),
+            'discountValue' => $this->input('discountValue', $this->input('discount_value')),
+            'startsAt' => $startsAt,
+            'endsAt' => $endsAt,
+            'isActive' => $this->input('isActive', $this->input('is_active')),
+        ]);
+
         if ($this->filled('restaurantId')) {
             return;
         }

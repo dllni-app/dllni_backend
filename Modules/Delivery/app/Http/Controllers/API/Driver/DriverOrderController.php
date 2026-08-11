@@ -6,11 +6,13 @@ namespace Modules\Delivery\Http\Controllers\API\Driver;
 
 use Illuminate\Http\JsonResponse;
 use InvalidArgumentException;
+use Modules\Delivery\Exceptions\MerchantNotReadyException;
 use Modules\Delivery\Http\Resources\DeliveryOrderResource;
 use Modules\Delivery\Models\DeliveryDriver;
 use Modules\Delivery\Models\DeliveryOrder;
 use Modules\Delivery\Services\DeliveryOrderService;
 use Modules\Delivery\Services\DriverDispatchService;
+use Modules\Delivery\Support\MerchantPreparationPayload;
 
 final class DriverOrderController
 {
@@ -56,6 +58,14 @@ final class DriverOrderController
 
         try {
             $updated = $this->deliveryOrderService->pickup($order, (int) $driver->id);
+        } catch (MerchantNotReadyException $exception) {
+            $currentOrder = $order->fresh();
+
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'code' => 'merchant_not_ready',
+                'merchantPreparation' => MerchantPreparationPayload::forOrder($currentOrder),
+            ], 409);
         } catch (InvalidArgumentException $exception) {
             return response()->json(['message' => $exception->getMessage()], 422);
         }

@@ -19,7 +19,8 @@ final class RestaurantOwnerOrderShowController
         $context->ensureOwnedOrder($order);
 
         $order->load([
-            'user',
+            'user.addresses',
+            'userAddress',
             'restaurant',
             'orderItems.product',
             'orderStatusLogs',

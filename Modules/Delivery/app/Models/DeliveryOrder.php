@@ -11,6 +11,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Modules\Resturants\Models\Order as RestaurantOrder;
+use Modules\Supermarket\Models\SmOrder;
 
 final class DeliveryOrder extends Model
 {
@@ -18,7 +21,7 @@ final class DeliveryOrder extends Model
 
     protected $table = 'delivery_orders';
 
-    protected $fillable = ['company_id', 'driver_id', 'order_number', 'customer_name', 'customer_phone', 'customer_notes', 'pickup_address', 'pickup_latitude', 'pickup_longitude', 'dropoff_address', 'dropoff_latitude', 'dropoff_longitude', 'distance_km', 'delivery_fee', 'currency', 'status', 'accepted_at', 'started_at', 'picked_up_at', 'delivered_at', 'completed_at', 'stopped_at', 'cancelled_at', 'stop_reason', 'cancel_reason', 'created_by_user_id'];
+    protected $fillable = ['company_id', 'driver_id', 'order_number', 'customer_name', 'customer_phone', 'customer_notes', 'pickup_address', 'pickup_latitude', 'pickup_longitude', 'dropoff_address', 'dropoff_latitude', 'dropoff_longitude', 'distance_km', 'delivery_fee', 'currency', 'status', 'accepted_at', 'started_at', 'picked_up_at', 'delivered_at', 'completed_at', 'stopped_at', 'cancelled_at', 'stop_reason', 'cancel_reason', 'created_by_user_id', 'source_type', 'source_id', 'merchant_status', 'merchant_accepted_at', 'estimated_preparation_minutes', 'estimated_ready_at', 'merchant_ready_at', 'dispatch_wave', 'search_radius_km', 'dispatch_phase'];
 
     public function company(): BelongsTo
     {
@@ -35,9 +38,42 @@ final class DeliveryOrder extends Model
         return $this->belongsTo(\App\Models\User::class, 'created_by_user_id');
     }
 
+    public function source(): MorphTo
+    {
+        return $this->morphTo(__FUNCTION__, 'source_type', 'source_id');
+    }
+
     public function scopeOwnedByUser(Builder $query, int $userId): Builder
     {
-        return $query->where('created_by_user_id', $userId);
+        return $query->where(function (Builder $ownedQuery) use ($userId): void {
+            $ownedQuery->where('created_by_user_id', $userId)
+                ->orWhere(function (Builder $legacyQuery) use ($userId): void {
+                    $legacyQuery->whereNull('created_by_user_id')
+                        ->where(function (Builder $sourceQuery) use ($userId): void {
+                            $sourceQuery
+                                ->where(function (Builder $restaurantQuery) use ($userId): void {
+                                    $restaurantQuery
+                                        ->where('source_type', 'restaurant_order')
+                                        ->whereIn(
+                                            'source_id',
+                                            RestaurantOrder::query()
+                                                ->select('id')
+                                                ->where('user_id', $userId),
+                                        );
+                                })
+                                ->orWhere(function (Builder $supermarketQuery) use ($userId): void {
+                                    $supermarketQuery
+                                        ->where('source_type', 'supermarket_order')
+                                        ->whereIn(
+                                            'source_id',
+                                            SmOrder::query()
+                                                ->select('id')
+                                                ->where('customer_id', $userId),
+                                        );
+                                });
+                        });
+                });
+        });
     }
 
     public function assignmentAttempts(): HasMany
@@ -67,6 +103,6 @@ final class DeliveryOrder extends Model
 
     protected function casts(): array
     {
-        return ['pickup_latitude' => 'decimal:8', 'pickup_longitude' => 'decimal:8', 'dropoff_latitude' => 'decimal:8', 'dropoff_longitude' => 'decimal:8', 'distance_km' => 'decimal:2', 'delivery_fee' => 'decimal:2', 'accepted_at' => 'datetime', 'started_at' => 'datetime', 'picked_up_at' => 'datetime', 'delivered_at' => 'datetime', 'completed_at' => 'datetime', 'stopped_at' => 'datetime', 'cancelled_at' => 'datetime'];
+        return ['pickup_latitude' => 'decimal:8', 'pickup_longitude' => 'decimal:8', 'dropoff_latitude' => 'decimal:8', 'dropoff_longitude' => 'decimal:8', 'distance_km' => 'decimal:2', 'delivery_fee' => 'decimal:2', 'accepted_at' => 'datetime', 'started_at' => 'datetime', 'picked_up_at' => 'datetime', 'delivered_at' => 'datetime', 'completed_at' => 'datetime', 'stopped_at' => 'datetime', 'cancelled_at' => 'datetime', 'merchant_accepted_at' => 'datetime', 'estimated_ready_at' => 'datetime', 'merchant_ready_at' => 'datetime', 'dispatch_wave' => 'integer', 'search_radius_km' => 'decimal:3'];
     }
 }

@@ -147,6 +147,8 @@ final class GeographicCoverageTestSeeder extends Seeder
 
         for ($i = 1; $i <= $count; $i++) {
             $bookingNumber = sprintf('GEO-ALEPPO-ACTIVE-%s-%03d', strtoupper($propertyType), $i);
+            $basePrice = 100.00;
+            $travelFee = 10.00;
 
             CleaningBooking::updateOrCreate(
                 ['booking_number' => $bookingNumber],
@@ -164,11 +166,11 @@ final class GeographicCoverageTestSeeder extends Seeder
                     'scheduled_date' => now()->addDays($i % 6)->toDateString(),
                     'scheduled_time' => '10:00',
                     'total_hours' => 3,
-                    'base_price' => 70,
+                    'base_price' => $basePrice,
                     'addons_total' => 0,
-                    'travel_fee' => 10,
+                    'travel_fee' => $travelFee,
                     'cancellation_fee' => 0,
-                    'total_price' => 80,
+                    'total_price' => $basePrice + $travelFee,
                     'terms_accepted' => true,
                 ]
             );
@@ -187,6 +189,9 @@ final class GeographicCoverageTestSeeder extends Seeder
 
         for ($i = 1; $i <= $count; $i++) {
             $bookingNumber = sprintf('GEO-ALEPPO-HIST-%s-%03d', strtoupper($propertyType), $i);
+            $basePrice = 100.00;
+            $addonsTotal = 10.00;
+            $travelFee = 25.00;
 
             CleaningBooking::updateOrCreate(
                 ['booking_number' => $bookingNumber],
@@ -204,11 +209,11 @@ final class GeographicCoverageTestSeeder extends Seeder
                     'scheduled_date' => now()->subDays(7 + $i)->toDateString(),
                     'scheduled_time' => '12:00',
                     'total_hours' => 4,
-                    'base_price' => 85,
-                    'addons_total' => 10,
-                    'travel_fee' => 12,
+                    'base_price' => $basePrice,
+                    'addons_total' => $addonsTotal,
+                    'travel_fee' => $travelFee,
                     'cancellation_fee' => 0,
-                    'total_price' => 107,
+                    'total_price' => $basePrice + $addonsTotal + $travelFee,
                     'terms_accepted' => true,
                 ]
             );
@@ -235,4 +240,3 @@ final class GeographicCoverageTestSeeder extends Seeder
         }
     }
 }
-

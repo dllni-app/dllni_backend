@@ -14,6 +14,7 @@ final class WorkerDispatchEligibilityService
     public const REASON_TRUST_SCORE_TOO_LOW = 'trust_score_too_low';
     public const REASON_DEPOSIT_BELOW_ALLOWED_BALANCE = 'deposit_below_allowed_balance';
     public const REASON_DEPOSIT_REQUIRED_BEFORE_START = 'deposit_required_before_start';
+    public const REASON_ALLOWANCE_LIMIT_EXHAUSTED = 'allowance_limit_exhausted';
 
     public function __construct(
         private readonly DepositService $depositService,
@@ -76,8 +77,18 @@ final class WorkerDispatchEligibilityService
             return self::REASON_ELIGIBLE;
         }
 
+        if ((bool) ($depositSummary['isAllowanceLimitExhausted'] ?? false)) {
+            return self::REASON_ALLOWANCE_LIMIT_EXHAUSTED;
+        }
+
         if (($depositSummary['exceedanceAmount'] ?? null) !== null) {
             return self::REASON_DEPOSIT_BELOW_ALLOWED_BALANCE;
+        }
+
+        $currentBalance = (float) ($depositSummary['currentBalance'] ?? 0);
+        $minimumRequired = (float) ($depositSummary['minimumRequired'] ?? 0);
+        if ($currentBalance > 0 && $minimumRequired > 0 && $currentBalance < $minimumRequired) {
+            return self::REASON_DEPOSIT_REQUIRED_BEFORE_START;
         }
 
         return self::REASON_TRUST_SCORE_TOO_LOW;
@@ -96,14 +107,14 @@ final class WorkerDispatchEligibilityService
             return self::REASON_WORKER_SUSPENDED;
         }
 
-        if (($depositSummary['exceedanceAmount'] ?? null) !== null) {
+        if (($depositSummary['debtExceedanceAmount'] ?? null) !== null) {
             return self::REASON_DEPOSIT_BELOW_ALLOWED_BALANCE;
         }
 
         $currentBalance = (float) ($depositSummary['currentBalance'] ?? 0);
         $minimumRequired = (float) ($depositSummary['minimumRequired'] ?? 0);
 
-        if ($minimumRequired > 0 && $currentBalance < $minimumRequired) {
+        if ($currentBalance > 0 && $minimumRequired > 0 && $currentBalance < $minimumRequired) {
             return self::REASON_DEPOSIT_REQUIRED_BEFORE_START;
         }
 
@@ -115,10 +126,11 @@ final class WorkerDispatchEligibilityService
         return match ($reasonCode) {
             self::REASON_ELIGIBLE => 'Account ready for new requests',
             self::REASON_WORKER_INACTIVE => 'Account is inactive',
-            self::REASON_WORKER_SUSPENDED => 'Account is suspended',
+            self::REASON_WORKER_SUSPENDED => 'Worker stopped by admin',
             self::REASON_TRUST_SCORE_TOO_LOW => 'Trust score is too low',
-            self::REASON_DEPOSIT_BELOW_ALLOWED_BALANCE => 'Deposit balance is below the allowed limit',
+            self::REASON_DEPOSIT_BELOW_ALLOWED_BALANCE => 'Worker allowance limit exceeded',
             self::REASON_DEPOSIT_REQUIRED_BEFORE_START => 'Deposit balance is below the required amount',
+            self::REASON_ALLOWANCE_LIMIT_EXHAUSTED => 'Allowance limit exhausted',
             default => 'Account cannot receive new requests',
         };
     }
@@ -131,16 +143,17 @@ final class WorkerDispatchEligibilityService
         return match ($reasonCode) {
             self::REASON_ELIGIBLE => 'Your account can receive and accept new requests.',
             self::REASON_WORKER_INACTIVE => 'Your account is inactive. Reactivate your account to receive new requests.',
-            self::REASON_WORKER_SUSPENDED => 'Your account is suspended. Please contact support for more details.',
+            self::REASON_WORKER_SUSPENDED => 'Your worker account was stopped by the admin. You will not receive new orders until the admin removes the suspension.',
             self::REASON_TRUST_SCORE_TOO_LOW => 'Your trust score is below the minimum required to receive new requests.',
             self::REASON_DEPOSIT_BELOW_ALLOWED_BALANCE => sprintf(
-                'Your deposit balance is below the allowed limit by %s. Please recharge your deposit account to receive new requests.',
+                'Your indebtedness exceeds your worker allowance limit by %s. Settle the excess amount before receiving new requests.',
                 number_format((float) ($depositSummary['exceedanceAmount'] ?? 0), 2, '.', '')
             ),
             self::REASON_DEPOSIT_REQUIRED_BEFORE_START => sprintf(
-                'Your deposit balance must be at least %s before starting assigned work.',
+                'Your deposit balance must be at least %s before receiving new requests.',
                 number_format((float) ($depositSummary['minimumRequired'] ?? 0), 2, '.', '')
             ),
+            self::REASON_ALLOWANCE_LIMIT_EXHAUSTED => 'Your allowance limit has reached zero. Settle the administration margin before receiving new requests.',
             default => 'Your account cannot receive new requests right now.',
         };
     }
@@ -155,10 +168,11 @@ final class WorkerDispatchEligibilityService
                 'type' => 'open_account_status',
                 'label' => 'Reactivate account',
             ],
+            self::REASON_ALLOWANCE_LIMIT_EXHAUSTED,
             self::REASON_DEPOSIT_BELOW_ALLOWED_BALANCE,
             self::REASON_DEPOSIT_REQUIRED_BEFORE_START => [
                 'type' => 'open_deposit',
-                'label' => 'View deposit account',
+                'label' => 'View financial account',
             ],
             self::REASON_WORKER_SUSPENDED,
             self::REASON_TRUST_SCORE_TOO_LOW => [

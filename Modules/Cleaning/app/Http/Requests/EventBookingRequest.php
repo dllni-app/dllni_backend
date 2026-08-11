@@ -15,6 +15,8 @@ final class EventBookingRequest extends FormRequest
 
     public function rules(): array
     {
+        $today = now(config('app.timezone'))->toDateString();
+
         return [
             'customerId' => 'required|exists:users,id',
             'cancellationPolicyId' => 'nullable|exists:cancellation_policies,id',
@@ -26,7 +28,7 @@ final class EventBookingRequest extends FormRequest
             'guestCountMax' => 'nullable|integer|min:0',
             'genderPreference' => 'nullable|string|max:255',
             'suggestedTeamSize' => 'nullable|integer|min:0',
-            'scheduledDate' => 'nullable|date',
+            'scheduledDate' => 'nullable|date|after_or_equal:'.$today,
             'scheduledTime' => 'nullable|string|max:255',
             'totalHours' => 'nullable|numeric',
             'basePrice' => 'nullable|numeric',

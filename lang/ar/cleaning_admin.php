@@ -88,6 +88,12 @@ return [
             'bookings' => 'الحجوزات',
             'alerts' => 'التنبيهات',
         ],
+        'empty' => [
+            'booking_statuses' => 'لا توجد بيانات للحجوزات.',
+            'alert_types' => 'لا توجد تنبيهات في هذه الفترة.',
+            'alert_lifecycle' => 'لا توجد تنبيهات حالياً.',
+            'all_clear' => 'الكل واضح، لا توجد عناصر تحتاج إجراء.',
+        ],
     ],
 
     'workers' => [
@@ -128,7 +134,7 @@ return [
             'security_deposit_status' => 'حالة التأمين',
             'average_rating' => 'متوسط التقييم',
             'total_completed_jobs' => 'المهام المنجزة',
-                        'gross_revenue' => 'إجمالي الإيرادات',
+            'gross_revenue' => 'إجمالي الإيرادات',
             'worker_net_earnings' => 'صافي مستحقات العامل',
             'admin_margin_total' => 'هامش الإدارة',
             'completed_jobs_count' => 'عدد المهام المكتملة',
@@ -189,6 +195,39 @@ return [
             'active' => 'العاملون النشطون',
             'suspended' => 'الموقوفون',
             'average_rating' => 'متوسط التقييم',
+        ],
+        'finance' => [
+            'group' => 'الإجراءات المالية',
+            'error' => 'تعذّر تنفيذ العملية',
+            'fields' => [
+                'amount' => 'المبلغ',
+                'signed_amount' => 'المبلغ (موجب للإضافة، سالب للخصم)',
+                'date' => 'التاريخ',
+                'notes' => 'ملاحظات',
+            ],
+            'hints' => [
+                'signed_amount' => 'استخدم قيمة موجبة لزيادة الرصيد وقيمة سالبة لخصمه.',
+            ],
+            'deposit' => [
+                'label' => 'تسجيل إيداع',
+                'success' => 'تم تسجيل الإيداع بنجاح',
+            ],
+            'settlement' => [
+                'label' => 'تسجيل تسوية',
+                'success' => 'تم تسجيل التسوية بنجاح',
+            ],
+            'refund' => [
+                'label' => 'تسجيل استرداد',
+                'success' => 'تم تسجيل الاسترداد بنجاح',
+            ],
+            'adjustment' => [
+                'label' => 'تعديل يدوي',
+                'success' => 'تم تسجيل التعديل بنجاح',
+            ],
+            'reactivate' => [
+                'label' => 'إعادة تفعيل الحساب',
+                'success' => 'تمت إعادة تفعيل الحساب',
+            ],
         ],
     ],
 
@@ -300,14 +339,36 @@ return [
 
     'event_bookings' => [
         'nav_label' => 'حجوزات المناسبات',
+        'sections' => [
+            'booking' => 'بيانات الحجز',
+            'schedule' => 'الجدول الزمني',
+            'pricing' => 'التسعير',
+            'policies' => 'السياسات',
+            'services' => 'الخدمات المرتبطة',
+        ],
         'fields' => [
             'booking_number' => 'رقم الحجز',
             'status' => 'الحالة',
             'event_type' => 'نوع المناسبة',
             'customer' => 'العميل',
+            'guest_count_min' => 'الحد الأدنى للضيوف',
+            'guest_count_max' => 'الحد الأقصى للضيوف',
+            'gender_preference' => 'تفضيل الجنس',
+            'suggested_team_size' => 'حجم الفريق المقترح',
             'scheduled_date' => 'التاريخ',
             'scheduled_time' => 'الوقت',
+            'total_hours' => 'عدد الساعات',
+            'terms_accepted' => 'تمت الموافقة على الشروط',
+            'cancelled_at' => 'وقت الإلغاء',
+            'base_price' => 'السعر الأساسي',
+            'travel_fee' => 'رسوم التنقل',
             'total_price' => 'الإجمالي',
+            'cancellation_policy' => 'سياسة الإلغاء',
+            'billing_policy' => 'سياسة الفوترة',
+            'service' => 'الخدمة',
+            'quantity' => 'الكمية',
+            'unit_price' => 'سعر الوحدة',
+            'service_total_price' => 'إجمالي الخدمة',
         ],
         'filters' => [
             'has_dispute' => 'يحتوي على نزاع',
@@ -357,7 +418,7 @@ return [
         'tooltip' => 'إدارة الإضافات الاختيارية: الاسم، الوصف، نوع التسعير (ثابت أو نسبة من تكلفة الخدمة).',
         'fields' => [
             'name' => 'الاسم',
-            'slug' => 'المعرف',
+            'slug' => 'عنوان الرابط',
             'pricing_type' => 'نوع التسعير',
             'price_value' => 'السعر',
             'is_active' => 'نشط',
@@ -374,6 +435,10 @@ return [
             'active' => 'الإضافات النشطة',
             'fixed' => 'سعر ثابت',
             'percentage' => 'نسبة مئوية',
+        ],
+        'validation' => [
+            'min_price' => 'يجب أن يكون السعر صفراً أو أكبر.',
+            'decimal_price' => 'يسمح السعر بمنزلتين عشريتين كحد أقصى.',
         ],
     ],
 
@@ -410,6 +475,43 @@ return [
         ],
     ],
 
+    'cleaning_neighborhoods' => [
+        'nav_label' => 'الأحياء',
+        'model' => 'حي',
+        'plural' => 'الأحياء',
+        'tooltip' => 'إدارة أحياء حلب المعتمدة المستخدمة في مناطق العمل والعناوين وآلية الإرسال.',
+        'sections' => [
+            'identity' => 'بيانات الحي',
+            'map' => 'بيانات الخريطة',
+        ],
+        'fields' => [
+            'name_ar' => 'الاسم بالعربية',
+            'name_en' => 'الاسم بالإنجليزية',
+            'city_name' => 'المدينة',
+            'aliases' => 'الأسماء البديلة',
+            'sort_order' => 'ترتيب العرض',
+            'center_latitude' => 'خط العرض التقريبي',
+            'center_longitude' => 'خط الطول التقريبي',
+            'is_active' => 'نشط',
+            'workers_count' => 'عدد العاملين',
+            'coverage_level' => 'التغطية',
+        ],
+        'coverage' => [
+            'high' => 'تغطية عالية',
+            'low' => 'تغطية منخفضة',
+        ],
+        'filters' => [
+            'is_active' => 'نشط',
+        ],
+        'actions' => [
+            'create' => 'إضافة حي',
+            'activate' => 'تفعيل',
+            'deactivate' => 'تعطيل',
+            'activate_selected' => 'تفعيل المحدد',
+            'deactivate_selected' => 'تعطيل المحدد',
+        ],
+    ],
+
     'travel_cost_configs' => [
         'nav_label' => 'قواعد تكلفة التنقل',
         'tooltip' => 'قواعد حساب تكلفة التنقل: سعر الكيلومتر، الحد الأدنى، نقطة بدء المسافة (موقع العامل / عنوان المنزل / تلقائي من النظام).',
@@ -421,14 +523,23 @@ return [
         'tooltip' => 'التسعير الأساسي، الإضافات، العمولة، تكاليف التنقل، نقطة بدء المسافة، سياسة فوترة الوقت والحد الأدنى للدقائق القابلة للفوترة.',
         'subheading' => 'إدارة التسعير الأساسي، الإضافات، العمولة، تكاليف التنقل، نقطة حساب المسافة، سياسة فوترة الوقت والحد الأدنى للدقائق.',
         'saved' => 'تم حفظ الإعدادات المالية',
+        'pricing_algorithm_description' => 'إدارة خوارزمية تسعير الغرف/الوحدات المستخدمة في تقدير طلبات التنظيف وإنشائها عبر واجهات المستخدم.',
         'sections' => [
+            'pricing_algorithm' => 'خوارزمية تسعير التنظيف',
             'revenue_model' => 'نموذج الإيراد',
             'travel_costs' => 'تكاليف التنقل',
             'time_billing_policy' => 'سياسة فوترة الوقت',
             'coverage_thresholds' => 'عتبات التغطية',
+            'time_extension' => 'تمديد الوقت',
+            'user_cancellation' => 'غرامة إلغاء المستخدم',
             'worker_finance' => 'مالية العاملين',
         ],
         'fields' => [
+            'cleaning_base_unit_price' => 'سعر الوحدة الأساسي',
+            'cleaning_deep_multiplier' => 'معامل التنظيف العميق',
+            'user_cancellation_fee' => 'غرامة إلغاء الطلب من قبل المستخدم',
+            'cleaning_area_margin_multiplier' => 'معامل هامش المساحة',
+            'cleaning_setup_buffer_minutes' => 'دقائق التحضير الإضافية',
             'commission_type' => 'نوع العمولة',
             'default_commission_rate' => 'نسبة العمولة الافتراضية (%)',
             'commission_fixed_amount' => 'قيمة العمولة الثابتة',
@@ -445,9 +556,22 @@ return [
             'coverage_ok' => 'عتبة التغطية الطبيعية',
             'minimum_deposit_amount' => 'الحد الأدنى للتأمين لبدء العمل',
             'default_max_negative_balance' => 'الحد الأقصى الافتراضي للرصيد السالب',
+            'restriction_threshold_percent' => 'حد تقييد العامل (% من التأمين)',
             'trust_reject_after_accept_penalty' => 'خصم الثقة عند الرفض بعد القبول',
             'trust_minimum_for_dispatch' => 'الحد الأدنى لدرجة الثقة للإرسال',
             'worker_finance_enabled' => 'تفعيل قواعد مالية العاملين',
+        ],
+        'hints' => [
+            'restriction_threshold_percent' => 'يتم تقييد العامل تلقائياً عندما تبلغ العمولة المستحقة هذه النسبة من قيمة تأمينه.',
+            'trust_reject_after_accept_penalty' => 'عدد النقاط التي تُخصم من درجة ثقة العامل عند رفضه طلباً بعد أن قَبِله. كلما زادت القيمة زاد تأثير الرفض على درجة الثقة.',
+            'user_cancellation_fee' => 'مبلغ ثابت يُعرض للمستخدم عند إلغاء طلب تنظيف. يُسجَّل على الطلب عند الإلغاء.',
+            'coverage_thresholds' => 'إعداد تشغيلي لتصنيف مدى توفّر العاملين في المنطقة (ليس سعراً). يُستخدم لتحديد ما إذا كانت تغطية المنطقة ضعيفة أو كافية.',
+            'coverage_low' => 'إذا كان عدد العاملين المتاحين قريباً من هذا الرقم أو أقل، تُعتبر التغطية ضعيفة.',
+            'coverage_ok' => 'عند وصول عدد العاملين المتاحين إلى هذا الرقم تقريباً، تُعتبر التغطية كافية.',
+            'time_extension' => 'حدّد سعر تمديد الوقت لكل فترة (كل 15 دقيقة). يُحتسب السعر حسب الفترة التي تقع ضمنها الدقائق الإضافية.',
+        ],
+        'extension' => [
+            'range_label' => 'من :start إلى :end دقيقة',
         ],
         'options' => [
             'commission_percent' => 'نسبة مئوية',
@@ -465,6 +589,72 @@ return [
         ],
         'actions' => [
             'save' => 'حفظ الإعدادات',
+        ],
+    ],
+
+    'transactions' => [
+        'nav_label' => 'المعاملات المالية',
+        'model' => 'معاملة مالية',
+        'plural' => 'المعاملات المالية',
+        'fields' => [
+            'id' => 'المعرّف',
+            'worker' => 'العامل',
+            'type' => 'النوع',
+            'amount' => 'المبلغ',
+            'balance_before' => 'الرصيد قبل',
+            'balance_after' => 'الرصيد عند هذه العمولة',
+            'date' => 'التاريخ',
+            'notes' => 'ملاحظات',
+            'reference' => 'المرجع',
+            'created_by' => 'بواسطة',
+        ],
+        'filters' => [
+            'from' => 'من',
+            'to' => 'إلى',
+        ],
+        'types' => [
+            'deposit' => 'إيداع',
+            'settlement' => 'تسوية',
+            'refund' => 'استرداد',
+            'withdrawal' => 'استرداد (سابق)',
+            'admin_fee' => 'عمولة الإدارة',
+            'adjustment' => 'تعديل',
+        ],
+        'actions' => [
+            'export' => 'تصدير',
+            'create' => 'إضافة معاملة',
+            'create_success' => 'تمت إضافة المعاملة بنجاح',
+            'error' => 'تعذّر تنفيذ العملية',
+        ],
+        'hints' => [
+            'adjustment_amount' => 'استخدم قيمة موجبة لزيادة الرصيد وقيمة سالبة لخصمه.',
+        ],
+        'references' => [
+            'admin_deposit' => 'إيداع يدوي من الإدارة',
+            'admin_settlement' => 'تسوية دين',
+            'admin_refund' => 'استرداد من الإدارة',
+            'admin_adjustment' => 'تعديل يدوي',
+            'admin_fee_booking' => 'عمولة الإدارة — حجز #:id',
+        ],
+    ],
+
+    'sos_notification' => [
+        'title' => 'بلاغ طوارئ جديد (SOS)',
+        'body' => 'قام أحد المستخدمين بإرسال بلاغ طوارئ يحتاج إلى متابعة فورية.',
+        'view' => 'عرض البلاغ',
+    ],
+
+    'report' => [
+        'nav_label' => 'التقرير المالي',
+        'title' => 'التقرير المالي',
+        'subtitle' => 'نظرة شاملة على التأمينات والعمولات والتسويات وحالة العاملين.',
+        'metrics' => [
+            'deposits_held' => 'إجمالي التأمينات المحتجزة',
+            'outstanding_commissions' => 'إجمالي العمولات المستحقة',
+            'settlements_received' => 'إجمالي التسويات المستلمة',
+            'deposit_refunds' => 'إجمالي مبالغ الاسترداد',
+            'active_workers' => 'العاملون النشطون',
+            'restricted_workers' => 'العاملون المقيّدون',
         ],
     ],
 
@@ -611,7 +801,7 @@ return [
         'pricing' => [
             'final' => 'نهائي',
             'provisional' => 'مبدئي',
-            'formula' => 'الأساسي :base + الإضافات :addons + التنقل :travel + الإلغاء :cancellation = الإجمالي :total',
+            'formula' => 'الأساسي :base + الإضافات :addons + التنقل :travel + الإلغاء :cancellation + عمولة الإدارة :admin = الإجمالي :total',
             'worker_payout_formula' => 'مستحقات العامل: الحصة :share + التنقل :travel + الإدارة :admin = :total',
             'worker_payout_formula_legacy' => 'المعادلة القديمة: الإجمالي :total - الإدارة :admin = العامل :worker',
         ],
@@ -638,6 +828,7 @@ return [
             'description' => 'إدارة التسعير الأساسي والإضافات والعمولة وتكاليف التنقل وسياسة فوترة الوقت.',
         ],
         'geographic_coverage' => [
+            'manage_neighborhoods' => 'إدارة الأحياء',
             'title' => 'التغطية الجغرافية',
             'description' => 'عرض الطلب مقابل تغطية العاملين حسب المنطقة لاكتشاف الفجوات.',
             'search_placeholder' => 'ابحث باسم المنطقة...',
@@ -664,6 +855,45 @@ return [
                 'demand' => 'الطلب',
                 'workers' => 'العاملون',
             ],
+        ],
+        'geographic_coverage_legacy' => [
+            'title' => 'التغطية الجغرافية',
+            'description' => 'قائمة الأحياء مع عدد العاملين ومستوى التغطية.',
+            'search_placeholder' => 'ابحث باسم الحي...',
+            'table_title' => 'جدول التغطية',
+            'empty' => 'لا توجد بيانات تغطية مطابقة للمرشحات الحالية.',
+            'summary' => [
+                'neighborhoods_count' => 'الأحياء المعروضة',
+                'workers_count' => 'العاملون النشطون ضمن التغطية',
+                'pending_bookings_count' => 'الحجوزات المعلقة',
+                'active_bookings_count' => 'المعيّنة / قيد التنفيذ',
+                'uncovered_count' => 'أحياء بلا تغطية',
+            ],
+            'columns' => [
+                'neighborhood' => 'الحي',
+                'pending_bookings_count' => 'الحجوزات المعلقة',
+                'active_bookings_count' => 'المعيّنة / قيد التنفيذ',
+                'workers_count' => 'عدد العاملين',
+                'coverage_ratio' => 'نسبة التغطية',
+            ],
+            'levels' => [
+                'uncovered' => 'غير مغطى',
+                'high' => 'ضغط مرتفع',
+                'ok' => 'متوازن',
+                'low' => 'ضغط منخفض',
+            ],
+            'legacy_unmapped_title' => 'مناطق قديمة غير مربوطة',
+            'legacy_unmapped_description' => 'هذه الصفوف ما زالت تعتمد على أسماء نصية حرة ويجب ربطها بحي معتمد.',
+            'legacy_warning' => 'ما زال هناك :count اسم منطقة قديم يحتاج إلى مراجعة.',
+            'legacy_empty' => 'لا توجد مناطق قديمة بانتظار الربط.',
+            'legacy_columns' => [
+                'name' => 'اسم المنطقة القديمة',
+                'zones_count' => 'عدد الصفوف',
+                'workers_count' => 'العاملون',
+            ],
+        ],
+        'cleaning_neighborhoods' => [
+            'list' => 'إدارة أحياء حلب المعتمدة المستخدمة في تغطية العاملين وعناوين العملاء وقواعد الإرسال.',
         ],
         'cleaning_bookings' => [
             'list' => 'عرض وإدارة جميع حجوزات التنظيف.',
@@ -858,6 +1088,9 @@ return [
             'property_damage' => 'تلف بالممتلكات',
             'unprofessional' => 'سلوك غير مهني',
             'billing_issue' => 'مشكلة في الدفع',
+            'customer_terms_violation' => 'مخالفة شروط العميل',
+            'financial_or_verbal_dispute' => 'خلاف مالي أو لفظي',
+            'force_majeure' => 'ظرف قاهر',
             'other' => 'أخرى',
         ],
         'dispute_resolution' => [
@@ -920,5 +1153,3 @@ return [
         ],
     ],
 ];
-
-

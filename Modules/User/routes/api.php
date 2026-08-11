@@ -10,6 +10,7 @@ use Modules\User\Http\Controllers\API\LoginController;
 use Modules\User\Http\Controllers\API\LoginVerifyController;
 use Modules\User\Http\Controllers\API\MeController;
 use Modules\User\Http\Controllers\API\RegisterController;
+use Modules\User\Http\Controllers\API\ResendAccountVerificationOtpController;
 use Modules\User\Http\Controllers\API\ResetPasswordConfirmController;
 use Modules\User\Http\Controllers\API\ResetPasswordController;
 use Modules\User\Http\Controllers\API\RestaurantCartProductsCountController;
@@ -52,9 +53,11 @@ use Modules\User\Http\Controllers\API\UserAddressShowController;
 use Modules\User\Http\Controllers\API\UserAddressStoreController;
 use Modules\User\Http\Controllers\API\UserAddressUpdateController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderCancelController;
+use Modules\User\Http\Controllers\API\UserCleaningCancellationFeeController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderCompletionConfirmController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderCompletionExtendTimeController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderCompletionRejectController;
+use Modules\User\Http\Controllers\API\UserCleaningPreferredWorkerRejectionDecisionController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderReviewController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderEstimatePriceController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderEstimateSizeController;
@@ -73,6 +76,8 @@ use Modules\User\Http\Controllers\API\UserMarketingOffersIndexController;
 use Modules\User\Http\Controllers\API\UserNotificationsIndexController;
 use Modules\User\Http\Controllers\API\UserNotificationsMarkAllAsReadController;
 use Modules\User\Http\Controllers\API\UserNotificationsMarkAsReadController;
+use Modules\User\Http\Controllers\API\UserNotificationsDestroyAllController;
+use Modules\User\Http\Controllers\API\UserNotificationsDestroyController;
 use Modules\User\Http\Controllers\API\UserOrderCancelController;
 use Modules\User\Http\Controllers\API\UserOrderReorderController;
 use Modules\User\Http\Controllers\API\UserOrderScheduleController;
@@ -90,7 +95,6 @@ use Modules\User\Http\Controllers\API\UserRestaurantCartItemDestroyController;
 use Modules\User\Http\Controllers\API\UserRestaurantCartItemStoreController;
 use Modules\User\Http\Controllers\API\UserRestaurantCartItemUpdateController;
 use Modules\User\Http\Controllers\API\UserRestaurantCartShowController;
-use Modules\User\Http\Controllers\API\UserRestaurantCheckoutController;
 use Modules\User\Http\Controllers\API\UserRestaurantCheckoutPreviewController;
 use Modules\User\Http\Controllers\API\UserRestaurantDetailsController;
 use Modules\User\Http\Controllers\API\UserRestaurantFavoriteDestroyController;
@@ -109,6 +113,7 @@ use Modules\User\Http\Controllers\API\UserRestaurantProductsSearchController;
 use Modules\User\Http\Controllers\API\UserRestaurantProductsByCategoryController;
 use Modules\User\Http\Controllers\API\UserRestaurantProductsWithOffersController;
 use Modules\User\Http\Controllers\API\UserSosController;
+use Modules\User\Http\Controllers\API\UserSupermarketCartDestroyController;
 use Modules\User\Http\Controllers\API\UserSupermarketCartItemDestroyController;
 use Modules\User\Http\Controllers\API\UserSupermarketCartItemStoreController;
 use Modules\User\Http\Controllers\API\UserSupermarketCartItemUpdateController;
@@ -136,6 +141,7 @@ use Modules\User\Http\Controllers\API\VerifyAccountController;
 Route::prefix('v1/user')->group(function (): void {
     Route::post('register', RegisterController::class);
     Route::post('verify-account', VerifyAccountController::class);
+    Route::post('verify-account/resend', ResendAccountVerificationOtpController::class);
 
     Route::post('login', LoginController::class);
     Route::post('login/verify', LoginVerifyController::class);
@@ -202,6 +208,8 @@ Route::prefix('v1/user')->group(function (): void {
 
         Route::get('notifications', UserNotificationsIndexController::class);
         Route::patch('notifications/read-all', UserNotificationsMarkAllAsReadController::class);
+        Route::delete('notifications/all', UserNotificationsDestroyAllController::class);
+        Route::delete('notifications/{id}', UserNotificationsDestroyController::class);
         Route::patch('notifications/{id}/read', UserNotificationsMarkAsReadController::class);
         Route::put('notifications/token', RegisterFcmTokenController::class);
 
@@ -231,15 +239,18 @@ Route::prefix('v1/user')->group(function (): void {
         Route::post('favorites/products/{product}', UserProductFavoriteStoreController::class);
         Route::delete('favorites/products/{product}', UserProductFavoriteDestroyController::class);
 
+        Route::get('cleaning/cancellation-fee', UserCleaningCancellationFeeController::class);
         Route::get('cleaning/orders', UserCleaningOrdersController::class);
         Route::post('cleaning/orders', UserCleaningOrderStoreController::class);
         Route::post('cleaning/orders/estimate-size', UserCleaningOrderEstimateSizeController::class);
+        Route::get('cleaning/preferred-worker-rejection/decisions/pending', [UserCleaningPreferredWorkerRejectionDecisionController::class, 'pending']);
         Route::get('cleaning/orders/previous-workers', UserCleaningPreviousWorkersController::class);
         Route::post('cleaning/orders/estimate-price', UserCleaningOrderEstimatePriceController::class);
         Route::get('cleaning/orders/{order}', UserCleaningOrderShowController::class);
         Route::patch('cleaning/orders/{order}', UserCleaningOrderUpdateController::class);
         Route::patch('cleaning/orders/{order}/room-assignments', UserCleaningOrderRoomAssignmentsController::class);
         Route::post('cleaning/orders/{order}/cancel', UserCleaningOrderCancelController::class);
+        Route::post('cleaning/orders/{order}/preferred-worker-rejection/decision', [UserCleaningPreferredWorkerRejectionDecisionController::class, 'decide']);
         Route::post('cleaning/orders/{order}/sos', UserCleaningOrderSosController::class);
         Route::post('cleaning/orders/{order}/start-verification/confirm', UserCleaningOrderStartVerificationConfirmController::class)
             ->middleware('throttle:cleaning-start-verification');
@@ -256,19 +267,21 @@ Route::prefix('v1/user')->group(function (): void {
         Route::post('orders/{section}/{orderId}/reorder', UserOrderReorderController::class);
         Route::patch('orders/{section}/{orderId}/schedule', UserOrderScheduleController::class);
 
-        Route::get('restaurants/cart', UserRestaurantCartShowController::class);
+        Route::get('restaurants/carts', UserRestaurantCartShowController::class);
+        Route::get('restaurants/carts/{cartId}', UserRestaurantCartShowController::class)->whereNumber('cartId');
         Route::post('restaurants/cart/items', UserRestaurantCartItemStoreController::class);
-        Route::patch('restaurants/cart/items/{itemId}', UserRestaurantCartItemUpdateController::class);
-        Route::delete('restaurants/cart/items/{itemId}', UserRestaurantCartItemDestroyController::class);
+        Route::patch('restaurants/carts/{cartId}/items/{itemId}', UserRestaurantCartItemUpdateController::class)->whereNumber(['cartId', 'itemId']);
+        Route::delete('restaurants/carts/{cartId}/items/{itemId}', UserRestaurantCartItemDestroyController::class)->whereNumber(['cartId', 'itemId']);
         Route::get('restaurants/cart/products-count', RestaurantCartProductsCountController::class);
-        Route::post('restaurants/checkout', UserRestaurantCheckoutController::class);
-        Route::post('restaurants/checkout/preview', UserRestaurantCheckoutPreviewController::class);
-        Route::post('restaurants/orders', UserRestaurantOrderStoreController::class);
+        Route::post('restaurants/carts/{cartId}/checkout/preview', UserRestaurantCheckoutPreviewController::class)->whereNumber('cartId');
+        Route::post('restaurants/carts/{cartId}/orders', UserRestaurantOrderStoreController::class)->whereNumber('cartId');
 
-        Route::get('supermarket/cart', UserSupermarketCartShowController::class);
+        Route::get('supermarket/carts', UserSupermarketCartShowController::class);
+        Route::get('supermarket/carts/{cartId}', UserSupermarketCartShowController::class)->whereNumber('cartId');
+        Route::delete('supermarket/carts/{cartId}', UserSupermarketCartDestroyController::class)->whereNumber('cartId');
         Route::post('supermarket/cart/items', UserSupermarketCartItemStoreController::class);
-        Route::patch('supermarket/cart/items/{itemId}', UserSupermarketCartItemUpdateController::class);
-        Route::delete('supermarket/cart/items/{itemId}', UserSupermarketCartItemDestroyController::class);
+        Route::patch('supermarket/carts/{cartId}/items/{itemId}', UserSupermarketCartItemUpdateController::class)->whereNumber(['cartId', 'itemId']);
+        Route::delete('supermarket/carts/{cartId}/items/{itemId}', UserSupermarketCartItemDestroyController::class)->whereNumber(['cartId', 'itemId']);
         Route::get('supermarket/master-products/search', UserSupermarketMasterProductSearchController::class);
         Route::get('supermarket/shopping-lists', UserSupermarketShoppingListIndexController::class);
         Route::post('supermarket/shopping-lists', UserSupermarketShoppingListStoreController::class);
@@ -279,8 +292,8 @@ Route::prefix('v1/user')->group(function (): void {
         Route::post('supermarket/shopping-lists/{shoppingList}/items', UserSupermarketShoppingListItemStoreController::class)->whereNumber('shoppingList');
         Route::patch('supermarket/shopping-lists/{shoppingList}/items/{item}', UserSupermarketShoppingListItemUpdateController::class)->whereNumber(['shoppingList', 'item']);
         Route::delete('supermarket/shopping-lists/{shoppingList}/items/{item}', UserSupermarketShoppingListItemDestroyController::class)->whereNumber(['shoppingList', 'item']);
-        Route::post('supermarket/checkout/preview', UserSupermarketCheckoutPreviewController::class);
-        Route::post('supermarket/orders', UserSupermarketOrderStoreController::class);
+        Route::post('supermarket/carts/{cartId}/checkout/preview', UserSupermarketCheckoutPreviewController::class)->whereNumber('cartId');
+        Route::post('supermarket/carts/{cartId}/orders', UserSupermarketOrderStoreController::class)->whereNumber('cartId');
         Route::get('supermarket/orders/{order}/status', SmOrderStatusController::class)->whereNumber('order');
 
         Route::get('restaurants/luck-box/options', RestaurantLuckBoxOptionsController::class);

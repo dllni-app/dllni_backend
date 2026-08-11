@@ -1,0 +1,155 @@
+<?php
+
+declare(strict_types=1);
+
+use App\Models\User;
+use Laravel\Sanctum\Sanctum;
+use Modules\Delivery\Enums\DeliveryOrderStatus;
+use Modules\Delivery\Models\DeliveryCompany;
+use Modules\Delivery\Models\DeliveryOrder;
+use Modules\Delivery\Services\DeliveryOrderCreationService;
+use Modules\Resturants\Enums\OrderStatus;
+use Modules\Resturants\Enums\OrderType;
+use Modules\Resturants\Models\Order;
+use Modules\Supermarket\Enums\SmOrderStatus;
+use Modules\Supermarket\Models\SmOrder;
+
+it('returns linked delivery data and real tracking for restaurant orders', function (): void {
+    $user = User::factory()->create();
+    $company = DeliveryCompany::factory()->create();
+    $order = Order::factory()->create([
+        'user_id' => $user->id,
+        'order_type' => OrderType::Delivery->value,
+        'status' => OrderStatus::ReadyForPickup->value,
+        'ready_for_pickup_at' => now()->subMinutes(5),
+    ]);
+    $deliveryOrder = DeliveryOrder::factory()->create([
+        'company_id' => $company->id,
+        'created_by_user_id' => $user->id,
+        'source_type' => DeliveryOrderCreationService::SOURCE_RESTAURANT_ORDER,
+        'source_id' => $order->id,
+        'status' => DeliveryOrderStatus::Accepted->value,
+        'accepted_at' => now(),
+    ]);
+
+    Sanctum::actingAs($user);
+
+    $this->getJson('/api/v1/user/orders?section=restaurant')
+        ->assertOk()
+        ->assertJsonPath('data.0.deliveryOrderId', $deliveryOrder->id)
+        ->assertJsonPath('data.0.deliverySummary.enabled', true);
+
+    $this->getJson('/api/v1/user/orders/restaurant/'.$order->id)
+        ->assertOk()
+        ->assertJsonPath('data.deliveryOrderId', $deliveryOrder->id);
+
+    $this->getJson('/api/v1/user/orders/restaurant/'.$order->id.'/tracking')
+        ->assertOk()
+        ->assertJsonPath('deliveryOrderId', $deliveryOrder->id)
+        ->assertJsonStructure(['delivery', 'eta', 'map', 'timeline', 'merchant', 'actions']);
+});
+
+it('returns linked delivery data and real tracking for supermarket orders', function (): void {
+    $user = User::factory()->create();
+    $company = DeliveryCompany::factory()->create();
+    $order = SmOrder::factory()->create([
+        'customer_id' => $user->id,
+        'status' => SmOrderStatus::ReadyForPickup->value,
+        'ready_for_pickup_at' => now()->subMinutes(5),
+    ]);
+    $deliveryOrder = DeliveryOrder::factory()->create([
+        'company_id' => $company->id,
+        'created_by_user_id' => $user->id,
+        'source_type' => DeliveryOrderCreationService::SOURCE_SUPERMARKET_ORDER,
+        'source_id' => $order->id,
+        'status' => DeliveryOrderStatus::Accepted->value,
+        'accepted_at' => now(),
+    ]);
+
+    Sanctum::actingAs($user);
+
+    $this->getJson('/api/v1/user/orders?section=supermarket')
+        ->assertOk()
+        ->assertJsonPath('data.0.deliveryOrderId', $deliveryOrder->id)
+        ->assertJsonPath('data.0.deliverySummary.enabled', true)
+        ->assertJsonPath('data.0.fulfillment.type', 'delivery');
+
+    $this->getJson('/api/v1/user/orders/supermarket/'.$order->id)
+        ->assertOk()
+        ->assertJsonPath('data.deliveryOrderId', $deliveryOrder->id);
+
+    $this->getJson('/api/v1/user/orders/supermarket/'.$order->id.'/tracking')
+        ->assertOk()
+        ->assertJsonPath('deliveryOrderId', $deliveryOrder->id)
+        ->assertJsonStructure(['delivery', 'eta', 'map', 'timeline', 'merchant', 'actions']);
+});
+
+it('returns legacy source-linked delivery orders when explicit owner is missing', function (): void {
+    $owner = User::factory()->create();
+    $other = User::factory()->create();
+    $company = DeliveryCompany::factory()->create();
+
+    $restaurantOrder = Order::factory()->create([
+        'user_id' => $owner->id,
+        'order_type' => OrderType::Delivery->value,
+    ]);
+    $supermarketOrder = SmOrder::factory()->create([
+        'customer_id' => $owner->id,
+    ]);
+    $foreignRestaurantOrder = Order::factory()->create([
+        'user_id' => $other->id,
+        'order_type' => OrderType::Delivery->value,
+    ]);
+
+    $restaurantDelivery = DeliveryOrder::factory()->create([
+        'company_id' => $company->id,
+        'created_by_user_id' => null,
+        'source_type' => DeliveryOrderCreationService::SOURCE_RESTAURANT_ORDER,
+        'source_id' => $restaurantOrder->id,
+    ]);
+    $supermarketDelivery = DeliveryOrder::factory()->create([
+        'company_id' => $company->id,
+        'created_by_user_id' => null,
+        'source_type' => DeliveryOrderCreationService::SOURCE_SUPERMARKET_ORDER,
+        'source_id' => $supermarketOrder->id,
+    ]);
+    $foreignDelivery = DeliveryOrder::factory()->create([
+        'company_id' => $company->id,
+        'created_by_user_id' => null,
+        'source_type' => DeliveryOrderCreationService::SOURCE_RESTAURANT_ORDER,
+        'source_id' => $foreignRestaurantOrder->id,
+    ]);
+
+    Sanctum::actingAs($owner);
+
+    $response = $this->getJson('/api/v1/delivery/user/orders?perPage=20')
+        ->assertOk();
+
+    $ids = collect($response->json('data'))->pluck('id')->all();
+
+    expect($ids)
+        ->toContain($restaurantDelivery->id)
+        ->toContain($supermarketDelivery->id)
+        ->not->toContain($foreignDelivery->id);
+
+    $this->getJson('/api/v1/delivery/user/orders/'.$restaurantDelivery->id)
+        ->assertOk()
+        ->assertJsonPath('data.id', $restaurantDelivery->id);
+
+    $this->getJson('/api/v1/delivery/user/orders/'.$supermarketDelivery->id)
+        ->assertOk()
+        ->assertJsonPath('data.id', $supermarketDelivery->id);
+
+    $this->getJson('/api/v1/delivery/user/orders/'.$foreignDelivery->id)
+        ->assertNotFound();
+});
+
+it('rejects access to another users delivery order', function (): void {
+    $owner = User::factory()->create();
+    $other = User::factory()->create();
+    $deliveryOrder = DeliveryOrder::factory()->create(['created_by_user_id' => $owner->id]);
+
+    Sanctum::actingAs($other);
+
+    $this->getJson('/api/v1/delivery/user/orders/'.$deliveryOrder->id)->assertNotFound();
+});

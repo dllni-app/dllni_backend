@@ -37,6 +37,11 @@ final class CleaningBookingRoom extends Model
         return $this->belongsTo(Worker::class, 'assigned_worker_id');
     }
 
+    public function plannedPreferredWorker(): BelongsTo
+    {
+        return $this->belongsTo(Worker::class, 'planned_preferred_worker_id');
+    }
+
     public function casts(): array
     {
         return [

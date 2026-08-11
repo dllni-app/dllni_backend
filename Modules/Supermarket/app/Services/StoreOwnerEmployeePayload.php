@@ -10,7 +10,9 @@ final class StoreOwnerEmployeePayload
 {
     public static function make(SmStoreStaff $staff): array
     {
-        $permissions = $staff->user?->permissions ?? collect();
+        $permissions = ($staff->user?->permissions ?? collect())
+            ->where('group', 'supermarket_owner')
+            ->values();
 
         return [
             'id' => $staff->id,
@@ -24,6 +26,14 @@ final class StoreOwnerEmployeePayload
                 'phone' => $staff->user?->phone,
                 'profileImageUrl' => $staff->user?->getFirstMediaUrl('primary-image') ?: null,
             ],
+            'permissions' => $permissions
+                ->map(static fn ($permission): array => [
+                    'id' => $permission->id,
+                    'name' => $permission->name,
+                    'guardName' => $permission->guard_name,
+                ])
+                ->values()
+                ->all(),
             'permissionIds' => $permissions->pluck('id')->values()->all(),
             'effectivePermissions' => $permissions->pluck('name')->values()->all(),
             'createdAt' => $staff->created_at?->toDateTimeString(),

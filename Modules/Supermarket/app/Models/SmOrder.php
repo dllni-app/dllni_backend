@@ -12,6 +12,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
+use Modules\Delivery\Models\DeliveryOrder;
 use Modules\Supermarket\Enums\SmOrderStatus;
 use Modules\Supermarket\Enums\SmPickupMode;
 use Modules\Supermarket\Traits\FilterQueries\SmOrderFilterQuery;
@@ -32,6 +34,9 @@ final class SmOrder extends Model
         'status',
         'pickup_mode',
         'pickup_scheduled_for',
+        'accepted_at',
+        'estimated_preparation_minutes',
+        'estimated_ready_at',
         'ready_for_pickup_at',
         'picked_up_at',
         'customer_pickup_confirmed_at',
@@ -54,6 +59,11 @@ final class SmOrder extends Model
     public function store(): BelongsTo
     {
         return $this->belongsTo(SmStore::class, 'store_id');
+    }
+
+    public function deliveryOrder(): MorphOne
+    {
+        return $this->morphOne(DeliveryOrder::class, 'source', 'source_type', 'source_id');
     }
 
     public function coupon(): BelongsTo
@@ -92,14 +102,16 @@ final class SmOrder extends Model
             'status' => SmOrderStatus::class,
             'pickup_mode' => SmPickupMode::class,
             'pickup_scheduled_for' => 'datetime',
+            'accepted_at' => 'datetime',
+            'estimated_ready_at' => 'datetime',
             'ready_for_pickup_at' => 'datetime',
             'picked_up_at' => 'datetime',
             'customer_pickup_confirmed_at' => 'datetime',
-            'subtotal' => 'decimal:2',
-            'discount_amount' => 'decimal:2',
-            'service_fee' => 'decimal:2',
-            'total_amount' => 'decimal:2',
-            'cancellation_fee_amount' => 'decimal:2',
+            'subtotal' => 'integer',
+            'discount_amount' => 'integer',
+            'service_fee' => 'integer',
+            'total_amount' => 'integer',
+            'cancellation_fee_amount' => 'integer',
             'cancellation_policy_snapshot' => 'array',
             'cancelled_at' => 'datetime',
         ];

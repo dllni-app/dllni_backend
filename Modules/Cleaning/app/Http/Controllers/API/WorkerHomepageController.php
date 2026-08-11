@@ -6,23 +6,27 @@ namespace Modules\Cleaning\Http\Controllers\API;
 
 use App\Enums\GenderPreference;
 use App\Enums\WorkerPreferredWorkType;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
-use Modules\Cleaning\Models\CleaningTimeWarning;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
+use Modules\Cleaning\Models\CleaningTimeWarning;
 use Modules\Cleaning\Services\DepositService;
+use Modules\Cleaning\Services\WorkerOrderSolvencyService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class WorkerHomepageController
 {
+    private const ACCEPTED_ASSIGNMENT_STATUSES = ['accepted', 'accepted_waiting_team', 'accepted_waiting_for_order_start'];
+
     public function __construct(
         private readonly DepositService $depositService,
+        private readonly WorkerOrderSolvencyService $solvencyService,
     ) {}
 
     public function __invoke(Request $request): JsonResponse
@@ -51,6 +55,7 @@ final class WorkerHomepageController
                 'todayCount' => 0,
                 'completedCount' => 0,
                 'pendingCount' => 0,
+                'confirmedCount' => 0,
                 'inProgressCount' => 0,
                 'cancelledCount' => 0,
                 'totalEarnings' => 0,
@@ -69,6 +74,7 @@ final class WorkerHomepageController
                 'isEligibleForNewRequests' => false,
                 'depositSummary' => null,
                 'dispatchEligibility' => null,
+                'commissionCapacityEligibility' => null,
                 'bookingsWeeklyChart' => $this->emptyBookingsWeeklyChart($weekStart, $dayLabels),
                 'invoicesFourWeeksChart' => $this->emptyInvoicesFourWeeksChart($fourWeekStart),
             ]);
@@ -79,7 +85,7 @@ final class WorkerHomepageController
                 ->orWhereHas('workerAssignments', function (Builder $assignments) use ($worker): void {
                     $assignments
                         ->where('worker_id', $worker->id)
-                        ->where('status', 'accepted');
+                        ->whereIn('status', self::ACCEPTED_ASSIGNMENT_STATUSES);
                 });
         });
 
@@ -99,6 +105,11 @@ final class WorkerHomepageController
                 CleaningBookingStatus::Pending,
                 CleaningBookingStatus::WorkerAssigned,
             ])
+            ->whereDate('scheduled_date', '>=', $today)
+            ->count();
+
+        $confirmedCount = (clone $baseQuery)
+            ->where('status', CleaningBookingStatus::WorkerAssigned)
             ->whereDate('scheduled_date', '>=', $today)
             ->count();
 
@@ -136,29 +147,19 @@ final class WorkerHomepageController
             default => 0.0,
         };
 
-        $newOrdersCount = CleaningBooking::query()
-            ->where('status', CleaningBookingStatus::Pending)
-            ->whereDate('scheduled_date', '>=', $today)
-            ->where(fn ($q) => $q->whereNull('worker_id')->orWhere('worker_id', $worker->id))
-            ->when(
-                $this->preferredWorkType($worker) === WorkerPreferredWorkType::Cleaning,
-                fn (Builder $query): Builder => $query->where('property_type', '!=', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
-            )
-            ->when(
-                $this->preferredWorkType($worker) === WorkerPreferredWorkType::Events,
-                fn (Builder $query): Builder => $query->where('property_type', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
-            )
-            ->whereDoesntHave('workerAssignments', fn (Builder $assignments) => $assignments
-                ->where('worker_id', $worker->id)
-                ->where('status', 'accepted'))
-            ->where(function ($genderQuery) use ($worker): void {
-                $genderQuery
-                    ->whereNull('gender_preference')
-                    ->orWhere('gender_preference', GenderPreference::Any->value)
-                    ->orWhere('gender_preference', $worker->gender);
-            })
-            ->whereDoesntHave('rejections', fn ($q) => $q->where('worker_id', $worker->id))
-            ->count();
+        $newOrderCandidates = $this->newOrdersCandidateQuery($worker, $today)->get();
+        $newOrdersCount = 0;
+        $blockedByCommissionCapacityCount = 0;
+
+        foreach ($newOrderCandidates as $candidate) {
+            if ($this->solvencyService->canWorkerReceiveBooking($worker, $candidate)) {
+                $newOrdersCount++;
+
+                continue;
+            }
+
+            $blockedByCommissionCapacityCount++;
+        }
 
         $pendingExtensionRequestsCount = CleaningTimeWarning::query()
             ->where('booking_type', 'cleaning_booking')
@@ -169,7 +170,7 @@ final class WorkerHomepageController
                         ->where('worker_id', $worker->id)
                         ->orWhereHas('workerAssignments', fn (Builder $assignments) => $assignments
                             ->where('worker_id', $worker->id)
-                            ->where('status', 'accepted'));
+                            ->whereIn('status', self::ACCEPTED_ASSIGNMENT_STATUSES));
                 });
             })
             ->count();
@@ -184,7 +185,7 @@ final class WorkerHomepageController
 
         $adminAmount = (float) $completedFourWeeksBookings->sum(fn (CleaningBooking $booking): float => $this->bookingAdminAmount($booking, $worker->id));
         $workerAmount = (float) $completedFourWeeksBookings->sum(fn (CleaningBooking $booking): float => $this->bookingWorkerAmount($booking, $worker->id));
-        $grossInvoicesAmount = (float) $completedFourWeeksBookings->sum(fn (CleaningBooking $booking): float => $this->bookingGrossAmount($booking));
+        $grossInvoicesAmount = (float) $completedFourWeeksBookings->sum(fn (CleaningBooking $booking): float => $this->bookingGrossAmount($booking, $worker->id));
 
         $weeklyBookingsCounts = (clone $baseQuery)
             ->whereBetween('scheduled_date', [$weekStart, $weekEnd])
@@ -229,6 +230,12 @@ final class WorkerHomepageController
         $worker->loadMissing('deposit');
         $depositSummary = $this->depositService->depositStatusPayload($worker);
         $dispatchEligibility = $this->newRequestEligibility($worker, $depositSummary);
+        $commissionCapacityEligibility = $this->commissionCapacityEligibility(
+            $worker,
+            $depositSummary,
+            $newOrdersCount,
+            $blockedByCommissionCapacityCount,
+        );
         $canReceiveNewRequests = (bool) $dispatchEligibility['canReceiveNewRequests'];
 
         return response()->json([
@@ -237,6 +244,7 @@ final class WorkerHomepageController
             'todayCount' => $todayCount,
             'completedCount' => $completedCount,
             'pendingCount' => $pendingCount,
+            'confirmedCount' => $confirmedCount,
             'inProgressCount' => $inProgressCount,
             'cancelledCount' => $cancelledCount,
             'totalEarnings' => $totalEarnings,
@@ -247,6 +255,7 @@ final class WorkerHomepageController
             'isEligibleForNewRequests' => $canReceiveNewRequests,
             'depositSummary' => $depositSummary,
             'dispatchEligibility' => $dispatchEligibility,
+            'commissionCapacityEligibility' => $commissionCapacityEligibility,
             'amountSummary' => [
                 'period' => 'last_4_weeks',
                 'currency' => 'SYP',
@@ -260,10 +269,32 @@ final class WorkerHomepageController
         ]);
     }
 
-    /**
-     * @param  array<string, string>  $dayLabels
-     * @return array<int, array{date: string, dayKey: string, dayLabelAr: string, bookingsCount: int}>
-     */
+    private function newOrdersCandidateQuery(object $worker, Carbon $today): Builder
+    {
+        return CleaningBooking::query()
+            ->where('status', CleaningBookingStatus::Pending)
+            ->whereDate('scheduled_date', '>=', $today)
+            ->where(fn ($q) => $q->whereNull('worker_id')->orWhere('worker_id', $worker->id))
+            ->when(
+                $this->preferredWorkType($worker) === WorkerPreferredWorkType::Cleaning,
+                fn (Builder $query): Builder => $query->where('property_type', '!=', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
+            )
+            ->when(
+                $this->preferredWorkType($worker) === WorkerPreferredWorkType::Events,
+                fn (Builder $query): Builder => $query->where('property_type', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
+            )
+            ->whereDoesntHave('workerAssignments', fn (Builder $assignments) => $assignments
+                ->where('worker_id', $worker->id)
+                ->whereIn('status', self::ACCEPTED_ASSIGNMENT_STATUSES))
+            ->where(function ($genderQuery) use ($worker): void {
+                $genderQuery
+                    ->whereNull('gender_preference')
+                    ->orWhere('gender_preference', GenderPreference::Any->value)
+                    ->orWhere('gender_preference', $worker->gender);
+            })
+            ->whereDoesntHave('rejections', fn ($q) => $q->where('worker_id', $worker->id));
+    }
+
     private function emptyBookingsWeeklyChart(Carbon $weekStart, array $dayLabels): array
     {
         $rows = [];
@@ -282,9 +313,6 @@ final class WorkerHomepageController
         return $rows;
     }
 
-    /**
-     * @return array<int, array{weekNumber: int, label: string, from: string, to: string, invoiceAmount: float, invoiceAmountThousands: float}>
-     */
     private function emptyInvoicesFourWeeksChart(Carbon $fourWeekStart): array
     {
         $rows = [];
@@ -313,10 +341,10 @@ final class WorkerHomepageController
             : null;
 
         if ($assignment instanceof CleaningBookingWorkerAssignment) {
-            return (float) $assignment->worker_amount;
+            return $this->assignmentNetAmount($assignment);
         }
 
-        return max(0.0, round((float) ($booking->total_price ?? 0) - (float) ($booking->admin_margin_amount ?? 0), 2));
+        return max(0.0, round($this->bookingGrossAmount($booking, $workerId) - (float) ($booking->admin_margin_amount ?? 0), 2));
     }
 
     private function preferredWorkType(object $worker): WorkerPreferredWorkType
@@ -339,15 +367,40 @@ final class WorkerHomepageController
         return (float) ($booking->admin_margin_amount ?? 0);
     }
 
-    private function bookingGrossAmount(CleaningBooking $booking): float
+    private function bookingGrossAmount(CleaningBooking $booking, int $workerId): float
     {
-        return (float) ($booking->total_price ?? 0);
+        $assignment = $booking->relationLoaded('workerAssignments')
+            ? $booking->workerAssignments->firstWhere('worker_id', $workerId)
+            : null;
+
+        if ($assignment instanceof CleaningBookingWorkerAssignment) {
+            return $this->assignmentGrossAmount($assignment);
+        }
+
+        $gross = round(
+            (float) ($booking->base_price ?? 0)
+            + (float) ($booking->addons_total ?? 0)
+            + (float) ($booking->travel_fee ?? 0),
+            2,
+        );
+
+        if ($gross > 0.0) {
+            return $gross;
+        }
+
+        return max(0.0, round((float) ($booking->total_price ?? 0) - (float) ($booking->admin_margin_amount ?? 0), 2));
     }
 
-    /**
-     * @param  array<string, mixed>  $depositSummary
-     * @return array<string, mixed>
-     */
+    private function assignmentGrossAmount(CleaningBookingWorkerAssignment $assignment): float
+    {
+        return round((float) $assignment->service_share_amount + (float) $assignment->travel_fee, 2);
+    }
+
+    private function assignmentNetAmount(CleaningBookingWorkerAssignment $assignment): float
+    {
+        return max(0.0, round($this->assignmentGrossAmount($assignment) - (float) $assignment->admin_margin_amount, 2));
+    }
+
     private function newRequestEligibility(object $worker, array $depositSummary): array
     {
         $canReceive = (bool) ($depositSummary['isEligibleForNewRequests'] ?? false);
@@ -362,7 +415,33 @@ final class WorkerHomepageController
         ];
     }
 
-    /** @param array<string, mixed> $depositSummary */
+    private function commissionCapacityEligibility(object $worker, array $depositSummary, int $availableNewOrdersCount, int $blockedNewOrdersCount): array
+    {
+        $capacitySummary = $this->solvencyService->workerCapacitySummary($worker);
+        $hasBlockedOrders = $blockedNewOrdersCount > 0;
+        $reasonCode = $hasBlockedOrders
+            ? WorkerOrderSolvencyService::REASON_INSUFFICIENT_COMMISSION_CAPACITY
+            : WorkerOrderSolvencyService::REASON_ELIGIBLE;
+
+        return [
+            'canReceiveNewRequests' => ! $hasBlockedOrders,
+            'canAcceptNewBookings' => ! $hasBlockedOrders,
+            'reasonCode' => $reasonCode,
+            'message' => $this->commissionCapacityMessage($reasonCode),
+            'depositSummary' => array_merge($depositSummary, $capacitySummary),
+            'availableNewOrdersCount' => $availableNewOrdersCount,
+            'blockedNewOrdersCount' => $blockedNewOrdersCount,
+        ];
+    }
+
+    private function commissionCapacityMessage(string $reasonCode): string
+    {
+        return match ($reasonCode) {
+            WorkerOrderSolvencyService::REASON_INSUFFICIENT_COMMISSION_CAPACITY => 'Your available commission capacity is not enough to receive some new requests. Please recharge your deposit account, settle the outstanding amount, or wait until reserved commissions are released.',
+            default => 'Your available commission capacity can receive new requests.',
+        };
+    }
+
     private function eligibilityReasonCode(object $worker, array $depositSummary, bool $canReceive): string
     {
         if (! $worker->is_active) {
@@ -377,8 +456,18 @@ final class WorkerHomepageController
             return 'eligible';
         }
 
+        if ((bool) ($depositSummary['isAllowanceLimitExhausted'] ?? false)) {
+            return 'allowance_limit_exhausted';
+        }
+
         if (($depositSummary['exceedanceAmount'] ?? null) !== null) {
             return 'deposit_below_allowed_balance';
+        }
+
+        $currentBalance = (float) ($depositSummary['currentBalance'] ?? 0);
+        $minimumRequired = (float) ($depositSummary['minimumRequired'] ?? 0);
+        if ($currentBalance > 0 && $minimumRequired > 0 && $currentBalance < $minimumRequired) {
+            return 'deposit_required_before_start';
         }
 
         return 'trust_score_too_low';
@@ -387,12 +476,14 @@ final class WorkerHomepageController
     private function eligibilityMessage(string $reasonCode): string
     {
         return match ($reasonCode) {
-            'eligible' => 'Your account can receive and accept new requests.',
-            'worker_inactive' => 'Your account is inactive. Reactivate your account to receive new requests.',
-            'worker_suspended' => 'Your account is suspended. Please contact support for more details.',
-            'deposit_below_allowed_balance' => 'Your deposit balance is below the allowed limit. Please recharge your deposit account to receive new requests.',
-            'trust_score_too_low' => 'Your trust score is below the minimum required to receive new requests.',
-            default => 'Your account cannot receive new requests right now.',
+            'eligible' => 'Account can receive and accept new requests.',
+            'worker_inactive' => 'Account is inactive.',
+            'worker_suspended' => 'Account status prevents new requests.',
+            'allowance_limit_exhausted' => 'Allowance limit has reached zero.',
+            'deposit_below_allowed_balance' => 'Indebtedness exceeds the worker allowance limit.',
+            'deposit_required_before_start' => 'Deposit balance is below the minimum required amount.',
+            'trust_score_too_low' => 'Trust score is below the required minimum.',
+            default => 'Account cannot receive new requests right now.',
         };
     }
 }

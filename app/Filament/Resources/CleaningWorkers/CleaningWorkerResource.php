@@ -66,7 +66,12 @@ final class CleaningWorkerResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
-            ->with(['user', 'zones', 'trustLogs', 'deposit'])
+            ->with([
+                'user',
+                'media',
+                'zones.neighborhood',
+                'customerRatings.customer',
+            ])
             ->whereHas('user', fn (Builder $query): Builder => $query->where('module_type', UserModuleType::CleaningWorker));
     }
 

@@ -26,6 +26,7 @@ final class UserAddressFactory extends Factory
             'mobile' => fake()->optional()->numerify('09########'),
             'city' => fake()->city(),
             'neighborhood' => fake()->streetName(),
+            'neighborhood_id' => null,
             'street' => fake()->streetName(),
             'building' => (string) fake()->buildingNumber(),
             'floor' => (string) fake()->numberBetween(1, 10),

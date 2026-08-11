@@ -12,18 +12,30 @@ use Modules\Supermarket\Http\Resources\SmProductResource;
 use Modules\Supermarket\Models\SmProduct;
 use Modules\Supermarket\Services\SmSemanticProductSearchService;
 use Modules\User\Http\Requests\DiscoverSupermarketProductsRequest;
+use Modules\User\Services\UserPopularSearchService;
 
 final class SmProductsSearchController
 {
     private const float SEMANTIC_STRONG_SCORE_THRESHOLD = 0.9;
 
+    private const int LOCAL_FUZZY_MAX_CANDIDATES = 500;
+
     public function __construct(
         private readonly SmSemanticProductSearchService $semanticSearchService,
+        private readonly UserPopularSearchService $popularSearches,
     ) {}
 
     public function __invoke(DiscoverSupermarketProductsRequest $request): AnonymousResourceCollection
     {
         $query = $this->resolveSemanticQuery($request);
+
+        if ($query !== null && $request->integer('page', 1) === 1) {
+            $this->popularSearches->record(
+                UserPopularSearchService::SUPERMARKET,
+                $query,
+                UserPopularSearchService::PRODUCTS,
+            );
+        }
 
         if ($query !== null) {
             $semanticPaginator = $this->semanticSearch($request, $query);
@@ -47,7 +59,7 @@ final class SmProductsSearchController
                 ->where(fn ($q) => $q
                     ->whereNull('suspension_until')
                     ->orWhere('suspension_until', '<=', $now)))
-            ->with(['media', 'store']);
+            ->with(['media', 'store', 'masterProduct.media']);
 
         $search = $request->validated('search');
         if ((! is_string($search) || $search === '') && is_string($resolvedQuery) && $resolvedQuery !== '') {
@@ -115,12 +127,8 @@ final class SmProductsSearchController
 
         $results = $this->semanticSearchService->search($payload);
 
-        if ($results === null) {
-            return null;
-        }
-
-        if ($results === []) {
-            return null;
+        if ($results === null || $results === []) {
+            return $this->localFuzzySearch($request, $query);
         }
 
         $ids = array_values(array_unique(array_map(static fn (array $row): int => (int) $row['id'], $results)));
@@ -134,7 +142,7 @@ final class SmProductsSearchController
                 ->where(fn ($q) => $q
                     ->whereNull('suspension_until')
                     ->orWhere('suspension_until', '<=', $now)))
-            ->with(['media', 'store'])
+            ->with(['media', 'store', 'masterProduct.media'])
             ->get()
             ->keyBy('id');
 
@@ -155,6 +163,81 @@ final class SmProductsSearchController
 
         $filtered = $this->filterSemanticResultsByTextSignal($ordered, $query);
         if ($filtered->isEmpty()) {
+            return $this->localFuzzySearch($request, $query);
+        }
+
+        return $this->paginateCollection($filtered, $perPage, $page, $request->query());
+    }
+
+    private function localFuzzySearch(DiscoverSupermarketProductsRequest $request, string $query): ?LengthAwarePaginator
+    {
+        $tokens = $this->extractSearchTokens($query);
+        if ($tokens === []) {
+            return null;
+        }
+
+        $perPage = $request->integer('perPage', 20);
+        $page = max(1, $request->integer('page', 1));
+        $now = CarbonImmutable::now();
+
+        $productsQuery = SmProduct::query()
+            ->where('is_available', true)
+            ->whereHas('store', fn ($storeQuery) => $storeQuery
+                ->where('is_active', true)
+                ->where(fn ($q) => $q
+                    ->whereNull('suspension_until')
+                    ->orWhere('suspension_until', '<=', $now)));
+
+        $storeId = $request->input('store_id', $request->input('filter.storeId'));
+        if (is_numeric($storeId)) {
+            $productsQuery->where('store_id', (int) $storeId);
+        }
+
+        $categoryId = $request->input('category_id', $request->input('filter.categoryId'));
+        if (is_numeric($categoryId)) {
+            $productsQuery->where('category_id', (int) $categoryId);
+        }
+
+        $priceMin = $request->input('price_min');
+        if (is_numeric($priceMin)) {
+            $productsQuery->where('price', '>=', (float) $priceMin);
+        }
+
+        $priceMax = $request->input('price_max');
+        if (is_numeric($priceMax)) {
+            $productsQuery->where('price', '<=', (float) $priceMax);
+        }
+
+        $patterns = $this->buildFuzzySqlPatterns($tokens);
+        if ($patterns === []) {
+            return null;
+        }
+
+        $productsQuery->where(function ($candidateQuery) use ($patterns): void {
+            foreach ($patterns as $pattern) {
+                $candidateQuery
+                    ->orWhere('name', 'like', $pattern)
+                    ->orWhere('description', 'like', $pattern)
+                    ->orWhere('barcode', 'like', $pattern);
+            }
+        });
+
+        $candidateLimit = min(
+            self::LOCAL_FUZZY_MAX_CANDIDATES,
+            max(100, $perPage * $page * 10),
+        );
+
+        $candidates = $productsQuery
+            ->with(['media', 'store', 'masterProduct.media'])
+            ->limit($candidateLimit)
+            ->get();
+
+        if ($candidates->isEmpty()) {
+            return null;
+        }
+
+        $filtered = $this->filterSemanticResultsByTextSignal($candidates, $query);
+        if ($filtered->isEmpty()) {
             return null;
         }
 
@@ -162,6 +245,42 @@ final class SmProductsSearchController
     }
 
     /**
+     * @param  list<string>  $tokens
+     * @return list<string>
+     */
+    private function buildFuzzySqlPatterns(array $tokens): array
+    {
+        $patterns = [];
+
+        foreach ($tokens as $token) {
+            $patterns[] = '%'.$token.'%';
+            $chars = preg_split('//u', $token, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            $length = count($chars);
+
+            for ($index = 0; $index < $length; $index++) {
+                $prefix = implode('', array_slice($chars, 0, $index));
+                $suffix = implode('', array_slice($chars, $index + 1));
+
+                if ($prefix !== '' || $suffix !== '') {
+                    $patterns[] = '%'.$prefix.'%'.$suffix.'%';
+                }
+            }
+
+            for ($index = 1; $index < $length; $index++) {
+                $prefix = implode('', array_slice($chars, 0, $index));
+                $suffix = implode('', array_slice($chars, $index));
+                $patterns[] = '%'.$prefix.'%'.$suffix.'%';
+            }
+        }
+
+        return array_values(array_unique($patterns));
+    }
+
+    /**
+     * Keep semantic recall, but reject unrelated vector matches unless there is
+     * a strong semantic score or an exact/fuzzy lexical signal in the product.
+     * Supports both Arabic and English spelling errors.
+     *
      * @param  Collection<int, SmProduct>  $items
      */
     private function filterSemanticResultsByTextSignal(Collection $items, string $query): Collection
@@ -181,16 +300,24 @@ final class SmProductsSearchController
                     return true;
                 }
 
-                $searchableText = $this->normalizeArabicText(
+                $searchableText = $this->normalizeSearchText(
                     implode(' ', array_filter([
                         (string) $product->name,
                         (string) ($product->description ?? ''),
                     ]))
                 );
 
+                $searchableTokens = $this->extractSearchTokens($searchableText);
+
                 foreach ($tokens as $token) {
                     if (mb_strpos($searchableText, $token) !== false) {
                         return true;
+                    }
+
+                    foreach ($searchableTokens as $candidateToken) {
+                        if ($this->isFuzzyTokenMatch($token, $candidateToken)) {
+                            return true;
+                        }
                     }
                 }
 
@@ -204,7 +331,7 @@ final class SmProductsSearchController
      */
     private function extractSearchTokens(string $query): array
     {
-        $normalized = $this->normalizeArabicText($query);
+        $normalized = $this->normalizeSearchText($query);
         $parts = preg_split('/\s+/u', $normalized) ?: [];
 
         $tokens = [];
@@ -220,16 +347,140 @@ final class SmProductsSearchController
         return array_values(array_unique($tokens));
     }
 
-    private function normalizeArabicText(string $text): string
+    private function normalizeSearchText(string $text): string
     {
         $text = mb_strtolower($text);
-        $text = preg_replace('/[\p{Mn}\x{064B}-\x{065F}\x{0670}]/u', '', $text) ?? $text;
-        $text = str_replace(['أ', 'إ', 'آ'], 'ا', $text);
-        $text = str_replace('ة', 'ه', $text);
-        $text = str_replace('ى', 'ي', $text);
+        $text = str_replace('ـ', '', $text);
+        $text = preg_replace('/[\p{Mn}\x{0610}-\x{061A}\x{064B}-\x{065F}\x{0670}\x{06D6}-\x{06ED}]/u', '', $text) ?? $text;
+        $text = strtr($text, [
+            'أ' => 'ا',
+            'إ' => 'ا',
+            'آ' => 'ا',
+            'ٱ' => 'ا',
+            'ة' => 'ه',
+            'ۀ' => 'ه',
+            'ى' => 'ي',
+            'ی' => 'ي',
+            'ئ' => 'ي',
+            'ؤ' => 'و',
+            'ک' => 'ك',
+            'گ' => 'ك',
+            '٠' => '0',
+            '١' => '1',
+            '٢' => '2',
+            '٣' => '3',
+            '٤' => '4',
+            '٥' => '5',
+            '٦' => '6',
+            '٧' => '7',
+            '٨' => '8',
+            '٩' => '9',
+            '۰' => '0',
+            '۱' => '1',
+            '۲' => '2',
+            '۳' => '3',
+            '۴' => '4',
+            '۵' => '5',
+            '۶' => '6',
+            '۷' => '7',
+            '۸' => '8',
+            '۹' => '9',
+        ]);
         $text = preg_replace('/[^\p{Arabic}\p{L}\p{N}\s]+/u', ' ', $text) ?? $text;
 
         return mb_trim(preg_replace('/\s+/u', ' ', $text) ?? $text);
+    }
+
+    private function isFuzzyTokenMatch(string $queryToken, string $candidateToken): bool
+    {
+        if ($queryToken === $candidateToken) {
+            return true;
+        }
+
+        $queryLength = mb_strlen($queryToken);
+        $candidateLength = mb_strlen($candidateToken);
+
+        if ($queryLength < 2 || $candidateLength < 2) {
+            return false;
+        }
+
+        $minLength = min($queryLength, $candidateLength);
+        if ($minLength >= 3 && (mb_strpos($queryToken, $candidateToken) !== false || mb_strpos($candidateToken, $queryToken) !== false)) {
+            return true;
+        }
+
+        $maxLength = max($queryLength, $candidateLength);
+        $maxDistance = match (true) {
+            $maxLength <= 4 => 1,
+            $maxLength <= 8 => 2,
+            default => 3,
+        };
+
+        if (abs($queryLength - $candidateLength) > $maxDistance) {
+            return false;
+        }
+
+        $distance = $this->unicodeDamerauLevenshtein($queryToken, $candidateToken);
+        if ($distance > $maxDistance) {
+            return false;
+        }
+
+        if ($maxLength <= 4) {
+            return $distance <= 1;
+        }
+
+        $similarity = 1 - ($distance / $maxLength);
+
+        return $similarity >= 0.65;
+    }
+
+    private function unicodeDamerauLevenshtein(string $left, string $right): int
+    {
+        $leftChars = preg_split('//u', $left, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $rightChars = preg_split('//u', $right, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        $leftLength = count($leftChars);
+        $rightLength = count($rightChars);
+
+        if ($leftLength === 0) {
+            return $rightLength;
+        }
+
+        if ($rightLength === 0) {
+            return $leftLength;
+        }
+
+        $previousPrevious = null;
+        $previous = range(0, $rightLength);
+
+        for ($i = 1; $i <= $leftLength; $i++) {
+            $current = [$i];
+
+            for ($j = 1; $j <= $rightLength; $j++) {
+                $cost = $leftChars[$i - 1] === $rightChars[$j - 1] ? 0 : 1;
+
+                $current[$j] = min(
+                    $current[$j - 1] + 1,
+                    $previous[$j] + 1,
+                    $previous[$j - 1] + $cost,
+                );
+
+                if (
+                    $previousPrevious !== null
+                    && $i > 1
+                    && $j > 1
+                    && $leftChars[$i - 1] === $rightChars[$j - 2]
+                    && $leftChars[$i - 2] === $rightChars[$j - 1]
+                ) {
+                    $current[$j] = min($current[$j], $previousPrevious[$j - 2] + 1);
+                }
+            }
+
+            $previousPrevious = $previous;
+            $previous = $current;
+        }
+
+        return $previous[$rightLength];
     }
 
     /**

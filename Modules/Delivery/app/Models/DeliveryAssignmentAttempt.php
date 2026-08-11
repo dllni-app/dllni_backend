@@ -11,7 +11,7 @@ final class DeliveryAssignmentAttempt extends Model
 {
     protected $table = 'delivery_assignment_attempts';
 
-    protected $fillable = ['order_id', 'driver_id', 'attempt_no', 'status', 'distance_to_pickup_km', 'offered_at', 'expires_at', 'responded_at', 'reject_reason'];
+    protected $fillable = ['order_id', 'driver_id', 'attempt_no', 'dispatch_wave', 'candidate_tier', 'status', 'distance_to_pickup_km', 'offered_at', 'expires_at', 'responded_at', 'reject_reason'];
 
     public function order(): BelongsTo
     {

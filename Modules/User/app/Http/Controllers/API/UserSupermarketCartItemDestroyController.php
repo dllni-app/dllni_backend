@@ -14,10 +14,10 @@ final class UserSupermarketCartItemDestroyController
         private readonly UserSupermarketCartService $carts,
     ) {}
 
-    public function __invoke(Request $request, int $itemId): JsonResponse
+    public function __invoke(Request $request, int $cartId, int $itemId): JsonResponse
     {
         return response()->json([
-            'data' => $this->carts->deleteItem((int) $request->user()->id, $itemId),
+            'data' => $this->carts->deleteItem((int) $request->user()->id, $cartId, $itemId),
         ]);
     }
 }

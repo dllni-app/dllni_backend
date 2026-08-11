@@ -36,18 +36,23 @@ final class RestaurantOwnerCouponSummaryController
             ->get();
 
         $topCoupon = $coupons->sortByDesc('usage_count')->first();
+        $topCouponOrders = $topCoupon
+            ? $orders->where('promo_code_id', $topCoupon->id)
+            : collect();
 
         return response()->json([
             'summary' => [
                 'activeCount' => $activeCount,
                 'expiredCount' => $expiredCount,
                 'totalUsageOrders' => $orders->count(),
-                'totalSavings' => (float) $orders->sum('discount_amount'),
-                'revenueImpact' => (float) $orders->sum('total_amount'),
+                'totalSavings' => round((float) $orders->sum('discount_amount'), 2),
+                'revenueImpact' => round((float) $orders->sum('total_amount'), 2),
                 'topPerforming' => $topCoupon ? [
                     'id' => $topCoupon->id,
                     'code' => $topCoupon->code,
+                    'usedCount' => (int) $topCoupon->usage_count,
                     'usageCount' => (int) $topCoupon->usage_count,
+                    'generatedRevenue' => round((float) $topCouponOrders->sum('total_amount'), 2),
                 ] : null,
             ],
         ]);

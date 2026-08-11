@@ -26,7 +26,7 @@ final class StoreOwnerEmployeeStoreController
             $validated['name'],
             $validated['email'] ?? null,
             $validated['phone'] ?? null,
-            $validated['isActive'] ?? true,
+            (bool) ($validated['isActive'] ?? true),
             $validated['permissionIds'] ?? []
         );
 

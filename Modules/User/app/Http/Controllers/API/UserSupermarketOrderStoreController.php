@@ -15,14 +15,17 @@ final class UserSupermarketOrderStoreController
         private readonly UserSupermarketCheckoutPipelineService $checkout,
     ) {}
 
-    public function __invoke(UserSupermarketOrderStoreRequest $request): JsonResponse
+    public function __invoke(UserSupermarketOrderStoreRequest $request, int $cartId): JsonResponse
     {
         $order = $this->checkout->place(
             userId: (int) $request->user()->id,
+            cartId: $cartId,
+            fulfillmentType: (string) $request->string('fulfillmentType'),
             receiveMode: (string) $request->string('receiveMode'),
             scheduledAt: $request->input('scheduledAt'),
             couponCode: $request->input('couponCode'),
             note: $request->input('note'),
+            addressId: $request->integer('addressId') ?: null,
         );
 
         return response()->json([

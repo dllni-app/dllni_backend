@@ -26,6 +26,12 @@ final class DriverAuthController
             ]);
         }
 
+        if (! $user->is_active) {
+            throw ValidationException::withMessages([
+                'phone' => ['This account has been deactivated. Contact support.'],
+            ]);
+        }
+
         $driver = DeliveryDriver::query()
             ->with(['company', 'user'])
             ->where('user_id', $user->id)

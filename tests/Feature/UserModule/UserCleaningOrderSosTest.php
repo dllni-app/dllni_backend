@@ -7,12 +7,16 @@ use App\Enums\EmergencyType;
 use App\Enums\SOSStatus;
 use App\Models\User;
 use Laravel\Sanctum\Sanctum;
+use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 
 it('allows a user to create a cleaning order SOS with location and emergency type', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
-    $booking = CleaningBooking::factory()->create(['customer_id' => $user->id]);
+    $booking = CleaningBooking::factory()->create([
+        'customer_id' => $user->id,
+        'status' => CleaningBookingStatus::Pending->value,
+    ]);
 
     $response = $this->postJson("/api/v1/user/cleaning/orders/{$booking->id}/sos", [
         'emergency_type' => EmergencyType::SafetyThreat->value,
@@ -52,7 +56,10 @@ it('allows a user to create a cleaning order SOS with location and emergency typ
 it('normalizes camelCase cleaning SOS payload fields', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
-    $booking = CleaningBooking::factory()->create(['customer_id' => $user->id]);
+    $booking = CleaningBooking::factory()->create([
+        'customer_id' => $user->id,
+        'status' => CleaningBookingStatus::Pending->value,
+    ]);
 
     $response = $this->postJson("/api/v1/user/cleaning/orders/{$booking->id}/sos", [
         'emergencyType' => EmergencyType::MedicalEmergency->value,
@@ -72,7 +79,10 @@ it('normalizes camelCase cleaning SOS payload fields', function (): void {
 it('returns an existing active cleaning SOS instead of creating duplicates', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
-    $booking = CleaningBooking::factory()->create(['customer_id' => $user->id]);
+    $booking = CleaningBooking::factory()->create([
+        'customer_id' => $user->id,
+        'status' => CleaningBookingStatus::Pending->value,
+    ]);
 
     $payload = [
         'emergency_type' => EmergencyType::SevereConflict->value,

@@ -10,19 +10,28 @@ use App\Enums\WorkerPreferredWorkType;
 use App\Traits\FilterQueries\WorkerFilterQuery;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningNeighborhood;
+use Modules\Cleaning\Support\CleaningNeighborhoodNameNormalizer;
+use Spatie\Activitylog\Models\Concerns\LogsActivity;
+use Spatie\Activitylog\Support\LogOptions;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
+use Throwable;
 
 final class Worker extends Model implements HasMedia
 {
     use HasFactory;
     use InteractsWithMedia;
+    use LogsActivity;
     use WorkerFilterQuery;
+
+    private const MIN_NEIGHBORHOOD_NAME_LENGTH = 2;
 
     protected $fillable = [
         'user_id',
@@ -50,14 +59,73 @@ final class Worker extends Model implements HasMedia
         'security_deposit_status',
     ];
 
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logOnly(['is_active', 'is_suspended', 'security_deposit_status'])
+            ->logOnlyDirty()
+            ->dontLogEmptyChanges();
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
+    /**
+     * Workers who are fully active: enabled, not suspended, and not financially restricted.
+     */
+    public function scopeActiveAvailable(Builder $query): Builder
+    {
+        return $query->where('is_active', true)
+            ->where('is_suspended', false)
+            ->where(function (Builder $status): void {
+                $status->whereNull('security_deposit_status')
+                    ->orWhere('security_deposit_status', 'active');
+            });
+    }
+
+    /**
+     * Workers who are restricted from taking new work: deactivated, suspended,
+     * or blocked by their deposit balance / commission utilization.
+     */
+    public function scopeRestricted(Builder $query): Builder
+    {
+        return $query->where(function (Builder $restricted): void {
+            $restricted->where('is_active', false)
+                ->orWhere('is_suspended', true)
+                ->orWhere(function (Builder $status): void {
+                    $status->whereNotNull('security_deposit_status')
+                        ->where('security_deposit_status', '!=', 'active');
+                });
+        });
+    }
+
     public function zones(): HasMany
     {
         return $this->hasMany(WorkerZone::class);
+    }
+
+    public function scopeCoversNeighborhood(Builder $query, int $neighborhoodId): Builder
+    {
+        $neighborhoodNames = self::coverageNeighborhoodNames($neighborhoodId);
+
+        return $query->where(function (Builder $workers) use ($neighborhoodId, $neighborhoodNames): void {
+            $workers->whereHas('zones', function (Builder $zones) use ($neighborhoodId): void {
+                $zones->where('worker_zones.is_active', true)
+                    ->where('worker_zones.neighborhood_id', $neighborhoodId);
+            });
+
+            if ($neighborhoodNames === []) {
+                return;
+            }
+
+            $workers->orWhere(function (Builder $addressQuery) use ($neighborhoodNames): void {
+                foreach ($neighborhoodNames as $name) {
+                    $addressQuery->orWhere('home_address', 'like', '%'.self::escapeLike($name).'%');
+                }
+            });
+        });
     }
 
     public function availability(): HasMany
@@ -111,15 +179,81 @@ final class Worker extends Model implements HasMedia
         ];
     }
 
+    /**
+     * @return array<string, array{available: bool, data: array<int, array<string, string>>}>
+     */
+    public function getNormalizedDefaultWorkingHours(): array
+    {
+        $raw = $this->default_working_hours ?? [];
+        $normalized = [];
+        foreach (DayOfWeek::values() as $day) {
+            $normalized[$day] = $this->normalizeDayWorkingHours($raw[$day] ?? null);
+        }
+
+        return $normalized;
+    }
+
+    public function isAvailableForBooking(?CleaningBooking $booking): bool
+    {
+        if (! $booking instanceof CleaningBooking) {
+            return false;
+        }
+
+        $dateTime = $this->bookingDateTime($booking);
+
+        if (! $dateTime instanceof CarbonInterface) {
+            return false;
+        }
+
+        return $this->isAvailableAt($dateTime);
+    }
+
+    public function hasActiveCoverageForNeighborhood(?int $neighborhoodId): bool
+    {
+        return $neighborhoodId !== null;
+    }
+
+    public function isAvailableAt(CarbonInterface $dateTime): bool
+    {
+        $dayKey = mb_strtolower($dateTime->format('l'));
+        $dayHours = $this->getNormalizedDefaultWorkingHours()[$dayKey] ?? ['available' => false, 'data' => []];
+
+        if (! (bool) ($dayHours['available'] ?? false)) {
+            return false;
+        }
+
+        $targetMinutes = $this->minutesFromTime($dateTime->format('H:i'));
+        if ($targetMinutes === null) {
+            return false;
+        }
+
+        foreach ($dayHours['data'] as $period) {
+            if (! is_array($period)) {
+                continue;
+            }
+
+            [$from, $to] = $this->timeRangeFromPeriod($period);
+
+            if ($from === null || $to === null) {
+                continue;
+            }
+
+            if ($this->isWithinWorkingPeriod($targetMinutes, $from, $to)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     protected static function booted(): void
     {
-        static::updated(function (self $worker): void {
+        self::updated(function (self $worker): void {
             if (! $worker->wasChanged('first_name')) {
                 return;
             }
 
             $user = $worker->user;
-
             if (! $user || $user->module_type !== UserModuleType::CleaningWorker) {
                 return;
             }
@@ -135,17 +269,42 @@ final class Worker extends Model implements HasMedia
     }
 
     /**
-     * @return array<string, array{available: bool, data: array<int, array<string, string>>}>
+     * @return array<int, string>
      */
-    public function getNormalizedDefaultWorkingHours(): array
+    private static function coverageNeighborhoodNames(int $neighborhoodId): array
     {
-        $raw = $this->default_working_hours ?? [];
+        $neighborhood = CleaningNeighborhood::query()->find($neighborhoodId);
+        if (! $neighborhood instanceof CleaningNeighborhood) {
+            return [];
+        }
+
+        $aliases = is_array($neighborhood->aliases) ? $neighborhood->aliases : [];
+        $names = array_merge([
+            $neighborhood->name_ar,
+            $neighborhood->name_en,
+            $neighborhood->normalized_name,
+        ], $aliases);
+
         $normalized = [];
-        foreach (DayOfWeek::values() as $day) {
-            $normalized[$day] = $this->normalizeDayWorkingHours($raw[$day] ?? null);
+        foreach ($names as $name) {
+            if (! is_string($name)) {
+                continue;
+            }
+
+            $name = CleaningNeighborhoodNameNormalizer::repairText($name);
+            if (mb_strlen($name) < self::MIN_NEIGHBORHOOD_NAME_LENGTH || in_array($name, $normalized, true)) {
+                continue;
+            }
+
+            $normalized[] = $name;
         }
 
         return $normalized;
+    }
+
+    private static function escapeLike(string $value): string
+    {
+        return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
     }
 
     /**
@@ -182,54 +341,6 @@ final class Worker extends Model implements HasMedia
         return ['available' => false, 'data' => []];
     }
 
-    public function isAvailableForBooking(?CleaningBooking $booking): bool
-    {
-        if (! $booking instanceof CleaningBooking) {
-            return false;
-        }
-
-        $dateTime = $this->bookingDateTime($booking);
-
-        if (! $dateTime instanceof CarbonInterface) {
-            return false;
-        }
-
-        return $this->isAvailableAt($dateTime);
-    }
-
-    public function isAvailableAt(CarbonInterface $dateTime): bool
-    {
-        $dayKey = mb_strtolower($dateTime->format('l'));
-        $dayHours = $this->getNormalizedDefaultWorkingHours()[$dayKey] ?? ['available' => false, 'data' => []];
-
-        if (! (bool) ($dayHours['available'] ?? false)) {
-            return false;
-        }
-
-        $targetMinutes = $this->minutesFromTime($dateTime->format('H:i'));
-        if ($targetMinutes === null) {
-            return false;
-        }
-
-        foreach ($dayHours['data'] as $period) {
-            if (! is_array($period)) {
-                continue;
-            }
-
-            [$from, $to] = $this->timeRangeFromPeriod($period);
-
-            if ($from === null || $to === null) {
-                continue;
-            }
-
-            if ($this->isWithinWorkingPeriod($targetMinutes, $from, $to)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     private function bookingDateTime(CleaningBooking $booking): ?CarbonInterface
     {
         if ($booking->scheduled_date === null || $booking->scheduled_time === null) {
@@ -247,7 +358,7 @@ final class Worker extends Model implements HasMedia
 
         try {
             return Carbon::parse($scheduledDate.' '.$scheduledTime, config('app.timezone'));
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return null;
         }
     }
@@ -304,11 +415,33 @@ final class Worker extends Model implements HasMedia
                 if ($parsed instanceof CarbonInterface) {
                     return $parsed->hour * 60 + $parsed->minute;
                 }
-            } catch (\Throwable) {
+            } catch (Throwable) {
                 continue;
             }
         }
 
         return null;
+    }
+
+    private function homeAddressMatchesNeighborhood(int $neighborhoodId): bool
+    {
+        $homeAddress = CleaningNeighborhoodNameNormalizer::normalize((string) $this->home_address);
+        if ($homeAddress === '') {
+            return false;
+        }
+
+        foreach (self::coverageNeighborhoodNames($neighborhoodId) as $name) {
+            $normalizedName = CleaningNeighborhoodNameNormalizer::normalize($name);
+
+            if (mb_strlen($normalizedName) < self::MIN_NEIGHBORHOOD_NAME_LENGTH) {
+                continue;
+            }
+
+            if (str_contains($homeAddress, $normalizedName)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

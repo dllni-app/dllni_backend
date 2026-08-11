@@ -6,6 +6,7 @@ namespace App\Observers;
 
 use App\Jobs\NotifyWorkerDisputeOpenedJob;
 use App\Models\Dispute;
+use App\Services\LegacySupportCaseSyncService;
 use Modules\Delivery\Services\DeliveryDisputeService;
 
 final class DisputeObserver
@@ -13,6 +14,7 @@ final class DisputeObserver
     public function created(Dispute $dispute): void
     {
         NotifyWorkerDisputeOpenedJob::dispatch($dispute->id);
+        app(LegacySupportCaseSyncService::class)->syncDispute($dispute);
 
         if ($dispute->booking_type === 'delivery_order') {
             app(DeliveryDisputeService::class)->handleCreated($dispute);
@@ -21,6 +23,8 @@ final class DisputeObserver
 
     public function updated(Dispute $dispute): void
     {
+        app(LegacySupportCaseSyncService::class)->syncDispute($dispute);
+
         if ($dispute->booking_type !== 'delivery_order' || ! $dispute->wasChanged('status')) {
             return;
         }

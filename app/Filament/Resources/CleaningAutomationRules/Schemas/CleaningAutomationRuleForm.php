@@ -16,23 +16,23 @@ final class CleaningAutomationRuleForm
     {
         return $schema
             ->components([
-                TextInput::make('name')->label('الاسم')->required(),
+                TextInput::make('name')->label('Name')->required(),
                 Select::make('type')
-                    ->label('النوع')
+                    ->label('Type')
                     ->options([
-                        'suspend' => 'تعليق تلقائي',
-                        'reward' => 'مكافأة',
+                        'suspend' => 'Suspend',
+                        'reward' => 'Reward',
                     ])
                     ->required(),
-                Toggle::make('is_active')->label('نشط')->default(true),
+                Toggle::make('is_active')->label('Active')->default(true),
                 KeyValue::make('conditions')
-                    ->label('الشروط')
-                    ->keyLabel('المفتاح')
-                    ->valueLabel('القيمة'),
+                    ->label('Conditions')
+                    ->keyLabel('Key')
+                    ->valueLabel('Value'),
                 KeyValue::make('actions')
-                    ->label('الإجراءات')
-                    ->keyLabel('المفتاح')
-                    ->valueLabel('القيمة'),
+                    ->label('Actions')
+                    ->keyLabel('Key')
+                    ->valueLabel('Value'),
             ]);
     }
 }

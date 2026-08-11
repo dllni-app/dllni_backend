@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Http\Resources;
 
-use App\Models\BookingReview;
+use App\Models\WorkerCustomerRating;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * @mixin BookingReview
+ * @mixin WorkerCustomerRating
  */
 final class WorkerReviewResource extends JsonResource
 {

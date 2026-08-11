@@ -20,10 +20,13 @@ final class CleaningTimeWarningObserver
             BroadcastAfterResponse::send(new ServiceExtensionRequested(
                 $timeWarning->id,
                 $booking->id,
-                $booking->worker_id,
+                $timeWarning->worker_id ?? $booking->worker_id,
                 $timeWarning->additional_minutes,
                 $timeWarning->quoted_amount !== null ? (float) $timeWarning->quoted_amount : null,
                 $timeWarning->quoted_currency,
+                $timeWarning->quoted_base_amount !== null ? (float) $timeWarning->quoted_base_amount : null,
+                $timeWarning->quoted_admin_margin_amount !== null ? (float) $timeWarning->quoted_admin_margin_amount : null,
+                $timeWarning->quoted_amount !== null ? (float) $timeWarning->quoted_amount : null,
             ));
         }
 

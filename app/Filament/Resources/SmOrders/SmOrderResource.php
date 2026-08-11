@@ -35,6 +35,16 @@ final class SmOrderResource extends Resource
         return __('supermarket_admin.orders');
     }
 
+    public static function getModelLabel(): string
+    {
+        return 'طلب متجر';
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return 'طلبات المتاجر';
+    }
+
     public static function getNavigationTooltip(): ?string
     {
         return __('supermarket_admin.tooltips.orders');

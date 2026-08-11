@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Enums\UserModuleType;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Model;
 use Laravel\Sanctum\Sanctum;
 use Modules\Resturants\Models\Restaurant;
 use Spatie\Activitylog\Models\Activity;
@@ -89,6 +90,28 @@ it('returns activity log with causer information', function () {
     expect($data)->toHaveKeys(['id', 'description', 'logName', 'causer', 'createdAt']);
     expect($data['causer']['id'])->toBe($this->user->id);
     expect($data['causer']['name'])->toBe($this->user->name);
+});
+
+it('returns a null avatar when the causer has no avatar attribute', function () {
+    Activity::create([
+        'log_name' => 'products',
+        'description' => 'أضاف منتجاً جديداً (Test Product)',
+        'causer_type' => User::class,
+        'causer_id' => $this->user->id,
+        'properties' => ['restaurant_id' => $this->restaurant->id],
+    ]);
+
+    Model::preventAccessingMissingAttributes();
+
+    try {
+        $response = $this->getJson('/api/v1/restaurant-owner/activity-logs');
+
+        $response
+            ->assertSuccessful()
+            ->assertJsonPath('data.0.causer.avatarUrl', null);
+    } finally {
+        Model::preventAccessingMissingAttributes(false);
+    }
 });
 
 it('validates log name parameter', function () {

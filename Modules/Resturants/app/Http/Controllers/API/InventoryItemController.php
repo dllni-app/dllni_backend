@@ -28,7 +28,7 @@ final class InventoryItemController
 
         $items = InventoryItem::getQuery()
             ->where('restaurant_id', $restaurant->id)
-            ->with(['restaurant'])
+            ->with(['restaurant', 'products'])
             ->paginate($request->get('perPage', 20));
 
         return InventoryItemResource::collection($items);

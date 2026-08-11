@@ -123,6 +123,57 @@ return [
                 ],
             ],
         ],
+        'cleaning.booking.worker_rejected' => [
+            'legacy_type' => 'worker_rejected',
+            'module' => 'cleaning',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'رفض العامل الطلب',
+                    'body' => 'رفض مقدم الخدمة الطلب رقم :booking_number.',
+                ],
+                'en' => [
+                    'title' => 'Worker rejected order',
+                    'body' => 'The service provider rejected booking :booking_number.',
+                ],
+            ],
+        ],
+        'cleaning.booking.preferred_worker_rejected' => [
+            'legacy_type' => 'preferred_worker_rejected',
+            'module' => 'cleaning',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'رفض العامل المخصص الطلب',
+                    'body' => 'رفض العامل المخصص الطلب، وتم تحويله إلى طلب عام. نبحث الآن عن عامل بديل.',
+                ],
+                'en' => [
+                    'title' => 'Preferred worker declined',
+                    'body' => 'The preferred worker declined the order. We changed it to a public request and are looking for another worker.',
+                ],
+            ],
+        ],
+        'cleaning.booking.preferred_worker_rejected_decision_required' => [
+            'legacy_type' => 'preferred_worker_rejection_decision_required',
+            'module' => 'cleaning',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'Ø±ÙØ¶ Ø§Ù„Ø¹Ø§Ù…Ù„ Ø§Ù„Ù…Ø®ØµØµ Ø§Ù„Ø·Ù„Ø¨',
+                    'body' => 'Ø±ÙØ¶ Ø§Ù„Ø¹Ø§Ù…Ù„ Ø§Ù„Ù…Ø®ØµØµ Ø§Ù„Ø·Ù„Ø¨. Ø§ÙØªØ­ Ø§Ù„ØªØ·Ø¨ÙŠÙ‚ Ù„ØªØ­ÙˆÙŠÙ„Ù‡ Ø¥Ù„Ù‰ Ø·Ù„Ø¨ Ø¹Ø§Ù… Ø£Ùˆ Ø¥Ù„ØºØ§Ø¦Ù‡ Ø¨Ø¯ÙˆÙ† Ø±Ø³ÙˆÙ….',
+                ],
+                'en' => [
+                    'title' => 'Preferred worker declined',
+                    'body' => 'The preferred worker declined the order. Open the app to make it a public request or cancel it without fees.',
+                ],
+            ],
+        ],
         'cleaning.booking.worker_started_travel' => [
             'legacy_type' => 'worker_started_travel',
             'module' => 'cleaning',
@@ -479,6 +530,40 @@ return [
                 'en' => [
                     'title' => 'Order accepted',
                     'body' => 'A driver accepted delivery order :order_number.',
+                ],
+            ],
+        ],
+        'delivery.order.merchant_preparation_updated' => [
+            'legacy_type' => 'delivery_order_merchant_preparation_updated',
+            'module' => 'delivery',
+            'category' => 'orders',
+            'priority' => 'normal',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'تحديث وقت تجهيز الطلب',
+                    'body' => 'تم تحديث وقت تجهيز الطلب :order_number.',
+                ],
+                'en' => [
+                    'title' => 'Preparation time updated',
+                    'body' => 'The preparation estimate for order :order_number was updated.',
+                ],
+            ],
+        ],
+        'delivery.order.merchant_ready' => [
+            'legacy_type' => 'delivery_order_merchant_ready',
+            'module' => 'delivery',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'الطلب جاهز للاستلام',
+                    'body' => 'أصبح الطلب :order_number جاهزاً للاستلام.',
+                ],
+                'en' => [
+                    'title' => 'Order ready for pickup',
+                    'body' => 'Order :order_number is ready for pickup.',
                 ],
             ],
         ],

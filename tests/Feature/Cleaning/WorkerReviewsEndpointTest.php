@@ -2,9 +2,10 @@
 
 declare(strict_types=1);
 
-use App\Models\BookingReview;
+use App\Enums\WorkerCustomerRatingType;
 use App\Models\User;
 use App\Models\Worker;
+use App\Models\WorkerCustomerRating;
 use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
@@ -33,26 +34,30 @@ it('returns worker reviews with aggregate meta', function (): void {
         'status' => CleaningBookingStatus::Completed,
     ]);
 
-    BookingReview::query()->create([
+    WorkerCustomerRating::query()->create([
         'booking_id' => $bookingOne->id,
         'booking_type' => 'cleaning_booking',
+        'worker_id' => $worker->id,
         'customer_id' => $customerOne->id,
+        'rating_type' => WorkerCustomerRatingType::CustomerToWorker,
         'rating' => 5,
         'comment' => 'Excellent service.',
     ]);
-    DB::table('booking_reviews')->where('booking_id', $bookingOne->id)->update([
+    DB::table('worker_customer_ratings')->where('booking_id', $bookingOne->id)->update([
         'created_at' => now()->subDay(),
         'updated_at' => now()->subDay(),
     ]);
 
-    BookingReview::query()->create([
+    WorkerCustomerRating::query()->create([
         'booking_id' => $bookingTwo->id,
         'booking_type' => 'cleaning_booking',
+        'worker_id' => $worker->id,
         'customer_id' => $customerTwo->id,
+        'rating_type' => WorkerCustomerRatingType::CustomerToWorker,
         'rating' => 4,
         'comment' => 'Good work.',
     ]);
-    DB::table('booking_reviews')->where('booking_id', $bookingTwo->id)->update([
+    DB::table('worker_customer_ratings')->where('booking_id', $bookingTwo->id)->update([
         'created_at' => now(),
         'updated_at' => now(),
     ]);

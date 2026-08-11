@@ -7,8 +7,9 @@ use Database\Factories\SmCategoryFactory;
 use Database\Factories\SmProductFactory;
 use Database\Factories\SmStoreFactory;
 use Laravel\Sanctum\Sanctum;
+use Modules\Supermarket\Models\SmCart;
 
-it('preserves items from multiple stores in the same supermarket cart', function (): void {
+it('creates separate supermarket carts for products from different stores', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
@@ -43,24 +44,167 @@ it('preserves items from multiple stores in the same supermarket cart', function
         'quantity' => 2,
     ])->assertCreated();
 
-    // Same cart is reused
-    expect($secondAddResponse->json('data.id'))->toBe($firstCartId);
+    $secondCartId = (int) $secondAddResponse->json('data.id');
 
-    // Two merchant groups exist
-    expect($secondAddResponse->json('data.merchantGroups'))->toHaveCount(2);
+    expect($secondCartId)->not->toBe($firstCartId);
+    expect($firstAddResponse->json('data.storeId'))->toBe($firstStore->id);
+    expect($secondAddResponse->json('data.storeId'))->toBe($secondStore->id);
+    expect($secondAddResponse->json('data.merchant.id'))->toBe($secondStore->id);
 
-    // Only one cart in DB
-    $this->assertDatabaseCount('sm_carts', 1);
+    $this->assertArrayNotHasKey('merchantGroups', $secondAddResponse->json('data'));
+    $this->assertArrayNotHasKey('isMultiMerchant', $secondAddResponse->json('data'));
+    $this->assertArrayNotHasKey('checkout', $secondAddResponse->json('data'));
 
-    // Both items exist
+    $listResponse = $this->getJson('/api/v1/user/supermarket/carts')
+        ->assertOk()
+        ->assertJsonCount(2, 'data');
+
+    $storeIds = collect($listResponse->json('data'))
+        ->pluck('storeId')
+        ->sort()
+        ->values()
+        ->all();
+
+    expect($storeIds)->toBe([$firstStore->id, $secondStore->id]);
+    expect($listResponse->json('data.0'))->toHaveKeys([
+        'id',
+        'storeId',
+        'merchantId',
+        'merchant',
+        'store',
+        'items',
+        'productsCount',
+        'amounts',
+    ]);
+    expect($listResponse->json('data.0.items'))->toBeArray();
+
+    $this->assertDatabaseCount('sm_carts', 2);
+
+    $this->assertDatabaseHas('sm_carts', [
+        'id' => $firstCartId,
+        'user_id' => $user->id,
+        'store_id' => $firstStore->id,
+    ]);
+    $this->assertDatabaseHas('sm_carts', [
+        'id' => $secondCartId,
+        'user_id' => $user->id,
+        'store_id' => $secondStore->id,
+    ]);
     $this->assertDatabaseHas('sm_cart_items', [
         'cart_id' => $firstCartId,
         'product_id' => $firstProduct->id,
         'quantity' => 1,
     ]);
     $this->assertDatabaseHas('sm_cart_items', [
-        'cart_id' => $firstCartId,
+        'cart_id' => $secondCartId,
         'product_id' => $secondProduct->id,
         'quantity' => 2,
+    ]);
+});
+
+it('returns cart list payloads with store data and item data', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $store = SmStoreFactory::new()->create();
+    $cart = SmCart::create([
+        'user_id' => $user->id,
+        'store_id' => $store->id,
+    ]);
+
+    $this->getJson('/api/v1/user/supermarket/carts')
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.id', $cart->id)
+        ->assertJsonPath('data.0.storeId', $store->id)
+        ->assertJsonPath('data.0.merchantId', $store->id)
+        ->assertJsonPath('data.0.store.id', $store->id)
+        ->assertJsonPath('data.0.merchant.id', $store->id)
+        ->assertJsonPath('data.0.items', [])
+        ->assertJsonPath('data.0.productsCount', 0)
+        ->assertJsonPath('data.0.amounts.subtotal', 0.0)
+        ->assertJsonPath('data.0.amounts.total', 0.0);
+});
+
+it('increments quantity when the same supermarket product is added again', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $store = SmStoreFactory::new()->create();
+    $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+    $product = SmProductFactory::new()->create([
+        'store_id' => $store->id,
+        'category_id' => $category->id,
+        'is_available' => true,
+        'price' => 10,
+    ]);
+
+    $firstAddResponse = $this->postJson('/api/v1/user/supermarket/cart/items', [
+        'productId' => $product->id,
+        'quantity' => 1,
+    ])->assertCreated();
+
+    $cartId = (int) $firstAddResponse->json('data.id');
+
+    $secondAddResponse = $this->postJson('/api/v1/user/supermarket/cart/items', [
+        'productId' => $product->id,
+        'quantity' => 2,
+    ])->assertCreated();
+
+    expect($secondAddResponse->json('data.id'))->toBe($cartId);
+    expect($secondAddResponse->json('data.storeId'))->toBe($store->id);
+    expect($secondAddResponse->json('data.items'))->toHaveCount(1);
+    expect($secondAddResponse->json('data.items.0.quantity'))->toBe(3);
+    expect($secondAddResponse->json('data.productsCount'))->toBe(3);
+
+    $this->assertArrayNotHasKey('merchantGroups', $secondAddResponse->json('data'));
+    $this->assertArrayNotHasKey('isMultiMerchant', $secondAddResponse->json('data'));
+    $this->assertArrayNotHasKey('checkout', $secondAddResponse->json('data'));
+
+    $this->assertDatabaseCount('sm_carts', 1);
+    $this->assertDatabaseCount('sm_cart_items', 1);
+    $this->assertDatabaseHas('sm_carts', [
+        'id' => $cartId,
+        'user_id' => $user->id,
+        'store_id' => $store->id,
+    ]);
+    $this->assertDatabaseHas('sm_cart_items', [
+        'cart_id' => $cartId,
+        'product_id' => $product->id,
+        'quantity' => 3,
+    ]);
+});
+
+it('deletes a full supermarket cart by id', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $store = SmStoreFactory::new()->create();
+    $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+    $product = SmProductFactory::new()->create([
+        'store_id' => $store->id,
+        'category_id' => $category->id,
+        'is_available' => true,
+        'price' => 10,
+    ]);
+
+    $addResponse = $this->postJson('/api/v1/user/supermarket/cart/items', [
+        'productId' => $product->id,
+        'quantity' => 1,
+    ])->assertCreated();
+
+    $cartId = (int) $addResponse->json('data.id');
+
+    $this->deleteJson("/api/v1/user/supermarket/carts/{$cartId}")
+        ->assertOk()
+        ->assertJsonPath('data.id', null)
+        ->assertJsonPath('data.storeId', $store->id)
+        ->assertJsonPath('data.productsCount', 0);
+
+    $this->assertDatabaseMissing('sm_carts', [
+        'id' => $cartId,
+    ]);
+    $this->assertDatabaseMissing('sm_cart_items', [
+        'cart_id' => $cartId,
     ]);
 });

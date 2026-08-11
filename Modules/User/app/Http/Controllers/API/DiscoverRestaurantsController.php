@@ -10,9 +10,14 @@ use Illuminate\Support\Str;
 use Modules\Resturants\Http\Resources\RestaurantResource;
 use Modules\Resturants\Models\Restaurant;
 use Modules\User\Http\Requests\DiscoverRestaurantsRequest;
+use Modules\User\Services\UserPopularSearchService;
 
 final class DiscoverRestaurantsController
 {
+    public function __construct(
+        private readonly UserPopularSearchService $popularSearches,
+    ) {}
+
     public function __invoke(DiscoverRestaurantsRequest $request): AnonymousResourceCollection
     {
         $now = CarbonImmutable::now();
@@ -22,6 +27,14 @@ final class DiscoverRestaurantsController
 
         $search = $request->validated('search');
         if (is_string($search) && $search !== '') {
+            if ($request->integer('page', 1) === 1) {
+                $this->popularSearches->record(
+                    UserPopularSearchService::RESTAURANT,
+                    $search,
+                    UserPopularSearchService::MERCHANTS,
+                );
+            }
+
             $escaped = addcslashes($search, '%_\\');
 
             $query->where(fn ($q) => $q
@@ -53,32 +66,11 @@ final class DiscoverRestaurantsController
                     ->where('close_time', '>=', $time));
         }
 
-        $resolvedPreparationMin = 'COALESCE(estimated_preparation_time_min, CASE WHEN estimated_preparation_time - 10 < 1 THEN 1 ELSE estimated_preparation_time - 10 END)';
-        $resolvedPreparationMax = 'COALESCE(estimated_preparation_time_max, estimated_preparation_time)';
-
-        $preparationTimeMin = $request->validated('filter.preparationTimeMin');
-        if (is_numeric($preparationTimeMin)) {
-            $query->whereRaw(
-                "{$resolvedPreparationMin} >= ?",
-                [(int) $preparationTimeMin],
-            );
-        }
-
-        $preparationTimeMax = $request->validated('filter.preparationTimeMax');
-        if (is_numeric($preparationTimeMax)) {
-            $query->whereRaw(
-                "{$resolvedPreparationMax} <= ?",
-                [(int) $preparationTimeMax],
-            );
-        }
-
         $sort = $request->validated('sort') ?? 'rating';
 
         match ($sort) {
             'nearest' => $this->applyNearestSort($query, $request),
-            'fastest' => $query
-                ->orderByRaw("{$resolvedPreparationMax} ASC")
-                ->orderByRaw("{$resolvedPreparationMin} ASC"),
+            'fastest' => $query->orderBy('estimated_preparation_time'),
             default => $query->orderByDesc('average_rating')->orderByDesc('is_featured'),
         };
 

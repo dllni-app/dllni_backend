@@ -24,7 +24,7 @@ final class WorkerController
     public function index(WorkerFilterRequest $request): AnonymousResourceCollection
     {
         $workers = Worker::getQuery()
-            ->with(['user', 'media'])
+            ->with(['user', 'media', 'zones.neighborhood'])
             ->paginate($request->get('perPage', 10));
 
         return WorkerResource::collection($workers);
@@ -42,14 +42,14 @@ final class WorkerController
         }
 
         return WorkerResource::make(
-            $worker->load(['user', 'zones', 'availability', 'trustLogs', 'media'])
+            $worker->load(['user', 'zones.neighborhood', 'availability', 'trustLogs', 'media'])
         );
     }
 
     public function show(Worker $worker): WorkerResource
     {
         $worker->load([
-            'user', 'zones', 'availability', 'trustLogs', 'media',
+            'user', 'zones.neighborhood', 'availability', 'trustLogs', 'media',
         ]);
 
         return WorkerResource::make($worker);
@@ -67,7 +67,7 @@ final class WorkerController
         }
 
         return WorkerResource::make(
-            $updated->load(['user', 'zones', 'availability', 'trustLogs', 'media'])
+            $updated->load(['user', 'zones.neighborhood', 'availability', 'trustLogs', 'media'])
         );
     }
 

@@ -30,6 +30,7 @@ trait CleaningBookingFilterQuery
                 AllowedFilter::exact('workerId', 'worker_id'),
                 AllowedFilter::exact('propertyType', 'property_type'),
                 AllowedFilter::scope('forCurrentWorker'),
+                AllowedFilter::scope('assignedToCurrentWorker'),
                 AllowedFilter::scope('hasDispute'),
             ])
             ->allowedSorts([
@@ -109,6 +110,18 @@ trait CleaningBookingFilterQuery
                         ->where('worker_id', $worker->id)
                         ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
                 })
+                ->orWhere(function (Builder $preferred) use ($worker, $canReceiveNewRequests): void {
+                    if (! $canReceiveNewRequests) {
+                        $preferred->where('id', -1);
+
+                        return;
+                    }
+
+                    $preferred->where('status', CleaningBookingStatus::Pending)
+                        ->whereNull('worker_id')
+                        ->where('preferred_worker_id', $worker->id)
+                        ->whereDoesntHave('rejections', fn (Builder $rejections) => $rejections->where('worker_id', $worker->id));
+                })
                 ->orWhere(function (Builder $pending) use ($worker, $preferredWorkType, $canReceiveNewRequests): void {
                     if (! $canReceiveNewRequests) {
                         $pending->where('id', -1);
@@ -118,6 +131,7 @@ trait CleaningBookingFilterQuery
 
                     $pending->where('status', CleaningBookingStatus::Pending)
                         ->whereNull('worker_id')
+                        ->whereNull('preferred_worker_id')
                         ->when(
                             $preferredWorkType === WorkerPreferredWorkType::Cleaning,
                             fn (Builder $query): Builder => $query->where('property_type', '!=', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
@@ -133,6 +147,28 @@ trait CleaningBookingFilterQuery
                                 ->orWhere('gender_preference', $worker->gender);
                         })
                         ->whereDoesntHave('rejections', fn (Builder $rejections) => $rejections->where('worker_id', $worker->id));
+                });
+        });
+    }
+
+    public function scopeAssignedToCurrentWorker(Builder $query, mixed $value): Builder
+    {
+        if (! filter_var($value, FILTER_VALIDATE_BOOLEAN)) {
+            return $query;
+        }
+
+        $worker = auth()->user()?->worker;
+
+        if (! $worker) {
+            return $query->where('id', -1);
+        }
+
+        return $query->where(function (Builder $assigned) use ($worker): void {
+            $assigned->where('worker_id', $worker->id)
+                ->orWhereHas('workerAssignments', function (Builder $assignments) use ($worker): void {
+                    $assignments
+                        ->where('worker_id', $worker->id)
+                        ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
                 });
         });
     }

@@ -16,7 +16,7 @@ final class OrderAcceptRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'preparationTimeMinutes' => 'required|integer|min:1|max:120',
+            'preparationTimeMinutes' => 'sometimes|nullable|integer|min:1|max:120',
             'assignedEmployeeId' => 'nullable|exists:users,id',
             'kitchenNotes' => 'nullable|string|max:1000',
         ];

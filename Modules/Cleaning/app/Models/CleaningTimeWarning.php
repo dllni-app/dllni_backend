@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Models;
 
+use App\Models\Worker;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Modules\Cleaning\Enums\CleaningTimeWarningResponse;
 use Modules\Cleaning\Observers\CleaningTimeWarningObserver;
@@ -19,6 +21,7 @@ final class CleaningTimeWarning extends Model
     protected $fillable = [
         'booking_id',
         'booking_type',
+        'worker_id',
         'customer_response',
         'customer_message',
         'worker_response',
@@ -26,6 +29,8 @@ final class CleaningTimeWarning extends Model
         'customer_responded_at',
         'worker_responded_at',
         'additional_minutes',
+        'quoted_base_amount',
+        'quoted_admin_margin_amount',
         'quoted_amount',
         'quoted_currency',
         'price_applied_at',
@@ -37,15 +42,23 @@ final class CleaningTimeWarning extends Model
         return $this->morphTo(__FUNCTION__, 'booking_type', 'booking_id');
     }
 
+    public function worker(): BelongsTo
+    {
+        return $this->belongsTo(Worker::class);
+    }
+
     public function casts(): array
     {
         return [
+            'worker_id' => 'integer',
             'customer_response' => CleaningTimeWarningResponse::class,
             'worker_response' => CleaningTimeWarningResponse::class,
             'sent_at' => 'datetime',
             'customer_responded_at' => 'datetime',
             'worker_responded_at' => 'datetime',
-            'quoted_amount' => 'decimal:2',
+            'quoted_base_amount' => 'integer',
+            'quoted_admin_margin_amount' => 'integer',
+            'quoted_amount' => 'integer',
             'price_applied_at' => 'datetime',
         ];
     }

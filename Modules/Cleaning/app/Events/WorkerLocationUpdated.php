@@ -42,6 +42,8 @@ final class WorkerLocationUpdated implements ShouldBroadcastNow
     public function broadcastWith(): array
     {
         return [
+            'cleaningBookingId' => $this->cleaningBookingId,
+            'bookingId' => $this->cleaningBookingId,
             'latitude' => $this->latitude,
             'longitude' => $this->longitude,
             'workerId' => $this->workerId,

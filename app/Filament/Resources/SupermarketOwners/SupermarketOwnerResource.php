@@ -30,12 +30,12 @@ final class SupermarketOwnerResource extends Resource
 
     public static function getNavigationGroup(): ?string
     {
-        return 'Supermarket Management';
+        return 'قسم المتاجر';
     }
 
     public static function getNavigationLabel(): string
     {
-        return 'Supermarket Owners';
+        return 'مالكو المتاجر';
     }
 
     public static function form(Schema $schema): Schema
@@ -68,4 +68,3 @@ final class SupermarketOwnerResource extends Resource
         ];
     }
 }
-

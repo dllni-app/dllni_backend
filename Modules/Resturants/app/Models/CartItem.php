@@ -18,12 +18,13 @@ final class CartItem extends Model
         'unit_price',
         'total_price',
         'special_instructions',
+        'signature_hash',
     ];
 
     protected $casts = [
         'quantity' => 'integer',
-        'unit_price' => 'decimal:2',
-        'total_price' => 'decimal:2',
+        'unit_price' => 'integer',
+        'total_price' => 'integer',
     ];
 
     public function cart(): BelongsTo

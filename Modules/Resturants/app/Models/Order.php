@@ -12,11 +12,14 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
+use Modules\Delivery\Models\DeliveryOrder;
 use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Enums\OrderType;
 use Modules\Resturants\Enums\RestaurantPickupMode;
 use Modules\Resturants\Models\RestaurantGroupOrder;
 use Modules\Resturants\Traits\FilterQueries\OrderFilterQuery;
+use Modules\User\Models\UserAddress;
 
 final class Order extends Model
 {
@@ -25,6 +28,7 @@ final class Order extends Model
 
     protected $fillable = [
         'user_id',
+        'user_address_id',
         'restaurant_id',
         'promo_code_id',
         'assigned_staff_id',
@@ -47,6 +51,7 @@ final class Order extends Model
         'special_instructions',
         'accepted_at',
         'estimated_preparation_minutes',
+        'estimated_ready_at',
         'kitchen_notes',
         'preparing_at',
         'completed_at',
@@ -65,9 +70,19 @@ final class Order extends Model
         return $this->belongsTo(User::class, 'user_id');
     }
 
+    public function userAddress(): BelongsTo
+    {
+        return $this->belongsTo(UserAddress::class, 'user_address_id');
+    }
+
     public function restaurant(): BelongsTo
     {
         return $this->belongsTo(Restaurant::class);
+    }
+
+    public function deliveryOrder(): MorphOne
+    {
+        return $this->morphOne(DeliveryOrder::class, 'source', 'source_type', 'source_id');
     }
 
     public function promoCode(): BelongsTo
@@ -140,14 +155,15 @@ final class Order extends Model
             'ready_for_pickup_at' => 'datetime',
             'picked_up_at' => 'datetime',
             'customer_pickup_confirmed_at' => 'datetime',
-            'subtotal' => 'decimal:2',
-            'discount_amount' => 'decimal:2',
-            'tax_amount' => 'decimal:2',
-            'service_fee' => 'decimal:2',
-            'total_amount' => 'decimal:2',
-            'cancellation_fee_amount' => 'decimal:2',
+            'subtotal' => 'integer',
+            'discount_amount' => 'integer',
+            'tax_amount' => 'integer',
+            'service_fee' => 'integer',
+            'total_amount' => 'integer',
+            'cancellation_fee_amount' => 'integer',
             'cancellation_policy_snapshot' => 'array',
             'accepted_at' => 'datetime',
+            'estimated_ready_at' => 'datetime',
             'preparing_at' => 'datetime',
             'completed_at' => 'datetime',
             'cancelled_at' => 'datetime',

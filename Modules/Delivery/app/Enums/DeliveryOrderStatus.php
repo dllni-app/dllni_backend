@@ -7,6 +7,8 @@ namespace Modules\Delivery\Enums;
 enum DeliveryOrderStatus: string
 {
     case New = 'new';
+    case WaitingMerchantReady = 'waiting_merchant_ready';
+    case SearchingForDriver = 'searching_for_driver';
     case Dispatching = 'dispatching';
     case Offered = 'offered';
     case Accepted = 'accepted';

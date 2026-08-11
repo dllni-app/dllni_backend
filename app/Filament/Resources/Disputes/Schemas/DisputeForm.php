@@ -21,7 +21,13 @@ final class DisputeForm
             ->components([
                 TextInput::make('ticket_number')->label(__('cleaning_admin.disputes.fields.ticket_number'))->required(),
                 TextInput::make('booking_id')->label(__('cleaning_admin.disputes.fields.booking_number'))->numeric()->required(),
-                TextInput::make('booking_type')->label(__('cleaning_admin.disputes.fields.booking_type'))->required(),
+                Select::make('booking_type')
+                    ->label(__('cleaning_admin.disputes.fields.booking_type'))
+                    ->options([
+                        'cleaning_booking' => __('cleaning_admin.booking_morph_labels.cleaning'),
+                        'event_booking' => __('cleaning_admin.booking_morph_labels.event'),
+                    ])
+                    ->required(),
                 Textarea::make('description')->label(__('cleaning_admin.disputes.fields.description'))->rows(4),
                 Select::make('category')
                     ->label(__('cleaning_admin.disputes.fields.category'))

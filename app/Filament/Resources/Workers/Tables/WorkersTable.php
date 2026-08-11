@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Workers\Tables;
 
 use App\Enums\WorkerPreferredWorkType;
+use App\Filament\Resources\Workers\Support\WorkerSuspensionActions;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\IconColumn;
@@ -90,23 +91,19 @@ final class WorkersTable
                         __('cleaning_admin.column_descriptions.total_completed_jobs'),
                     ))
                     ->sortable(),
-                IconColumn::make('is_active')
-                    ->label(__('cleaning_admin.workers.fields.is_active'))
-                    ->tooltip(__('cleaning_admin.column_descriptions.is_active'))
-                    ->boolean(),
                 IconColumn::make('is_suspended')
                     ->label(__('cleaning_admin.workers.fields.suspended'))
                     ->tooltip(__('cleaning_admin.column_descriptions.is_suspended'))
                     ->boolean(),
             ])
             ->filters([
-                TernaryFilter::make('is_active')->label(__('cleaning_admin.workers.fields.is_active')),
                 TernaryFilter::make('is_suspended')->label(__('cleaning_admin.workers.fields.suspended')),
             ])
             ->recordActions([
                 ViewAction::make()
                     ->label(__('cleaning_admin.workers.view'))
                     ->modal(),
+                ...WorkerSuspensionActions::make(),
                 EditAction::make()
                     ->label(__('cleaning_admin.workers.edit'))
                     ->modal(),

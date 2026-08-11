@@ -12,32 +12,22 @@ use Modules\Supermarket\Models\SmStoreStaff;
 
 final class StoreOwnerContextService
 {
-    private ?User $resolvedOwner = null;
+    private ?User $resolvedUser = null;
+
+    private ?SmStore $resolvedStore = null;
 
     /** @throws AuthorizationException */
     public function owner(): User
     {
-        $owner = $this->authenticatedOwner();
-
-        if (! $owner) {
-            throw new AuthorizationException('Unauthenticated.');
-        }
-
-        return $owner;
+        return $this->authenticatedSeller();
     }
 
     /** @throws AuthorizationException */
     public function store(int $storeId): SmStore
     {
-        $store = SmStore::query()->find($storeId);
+        $store = $this->ownedStore();
 
-        if (! $store) {
-            throw new AuthorizationException('You do not have access to this store.');
-        }
-
-        $owner = $this->authenticatedOwner();
-
-        if ($owner && (int) $store->owner_user_id !== (int) $owner->id) {
+        if ((int) $store->id !== $storeId) {
             throw new AuthorizationException('You do not have access to this store.');
         }
 
@@ -45,64 +35,66 @@ final class StoreOwnerContextService
     }
 
     /**
-     * Default store for the authenticated supermarket seller (lowest id), matching bulk master-product flows.
+     * Resolve the authenticated seller's store. Owners are resolved directly;
+     * active employees are resolved through their staff assignment.
      *
      * @throws AuthorizationException
      */
     public function ownedStore(): SmStore
     {
-        $owner = $this->owner();
-
-        $store = SmStore::query()
-            ->where('owner_user_id', $owner->id)
-            ->orderBy('id')
-            ->first();
-
-        if (! $store) {
-            throw new AuthorizationException('No store found for the authenticated store owner.');
+        if ($this->resolvedStore !== null) {
+            return $this->resolvedStore;
         }
 
-        return $store;
+        $user = $this->authenticatedSeller();
+        $store = $user->smStores()->orderBy('id')->first();
+
+        if (! $store) {
+            $store = SmStoreStaff::query()
+                ->where('user_id', $user->id)
+                ->where('is_active', true)
+                ->with('store')
+                ->orderBy('id')
+                ->first()
+                ?->store;
+        }
+
+        if (! $store) {
+            throw new AuthorizationException('No store found for the authenticated supermarket seller.');
+        }
+
+        return $this->resolvedStore = $store;
     }
 
     /** @throws AuthorizationException */
     public function ensureOwnedStaff(SmStoreStaff $staff): void
     {
-        $owner = $this->authenticatedOwner();
+        $store = $this->ownedStore();
 
-        if (! $owner) {
-            return;
-        }
-
-        $isOwned = SmStore::query()
-            ->where('id', $staff->store_id)
-            ->where('owner_user_id', $owner->id)
-            ->exists();
-
-        if (! $isOwned) {
+        if ((int) $staff->store_id !== (int) $store->id) {
             throw new AuthorizationException('You do not have access to this employee.');
         }
     }
 
     /** @throws AuthorizationException */
-    private function authenticatedOwner(): ?User
+    private function authenticatedSeller(): User
     {
-        if ($this->resolvedOwner !== null) {
-            return $this->resolvedOwner;
+        if ($this->resolvedUser !== null) {
+            return $this->resolvedUser;
         }
 
         /** @var User|null $user */
         $user = request()->user();
 
         if (! $user) {
-            return null;
+            throw new AuthorizationException('Unauthenticated.');
         }
 
         if ($this->moduleTypeValue($user) !== UserModuleType::SupermarketSeller->value) {
             throw new AuthorizationException('This endpoint is for supermarket sellers only.');
         }
 
-        return $this->resolvedOwner = $user;
+        return $this->resolvedUser = $user;
     }
 
     private function moduleTypeValue(User $user): ?string

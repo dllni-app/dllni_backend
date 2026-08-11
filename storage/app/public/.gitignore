@@ -1,2 +1,4 @@
 *
 !.gitignore
+!cleaning-home-types/
+!cleaning-home-types/*.png

@@ -4,209 +4,487 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningWorkers\Schemas;
 
+use App\Enums\WorkerCustomerRatingType;
+use App\Enums\WorkerPreferredWorkType;
 use App\Models\Worker;
+use App\Models\WorkerCustomerRating;
+use App\Models\WorkerZone;
+use BackedEnum;
+use Carbon\Carbon;
 use Filament\Infolists\Components\ImageEntry;
+use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Components\ViewEntry;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-use Illuminate\Support\Facades\DB;
-use Modules\Cleaning\Models\CleaningBooking;
-use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
+use Filament\Support\Icons\Heroicon;
+use Illuminate\Database\Eloquent\Collection;
+use Throwable;
 
 final class CleaningWorkerInfolist
 {
     public static function configure(Schema $schema): Schema
     {
         return $schema->components([
-            Section::make('ملخص العامل')
-                ->description('نظرة سريعة على حالة العامل ومؤشرات الأداء الأساسية.')
-                ->columns(4)
+            Grid::make(12)
                 ->schema([
-                    ImageEntry::make('avatar_preview')
-                        ->label('الصورة')
-                        ->getStateUsing(fn (Worker $record): ?string => $record->getFirstMediaUrl('avatar') ?: null)
-                        ->defaultImageUrl(fn (Worker $record): string => self::fallbackAvatarUrl($record))
-                        ->circular()
-                        ->imageHeight(88),
-                    TextEntry::make('display_name')
-                        ->label('الاسم')
-                        ->state(fn (Worker $record): string => $record->user?->name ?: $record->first_name ?: '-')
-                        ->weight('bold'),
-                    TextEntry::make('account_status')
-                        ->label('حالة الحساب')
-                        ->state(fn (Worker $record): string => $record->is_suspended ? 'موقوف' : ($record->is_active ? 'نشط' : 'غير نشط'))
-                        ->badge()
-                        ->color(fn (string $state): string => $state === 'موقوف' ? 'danger' : 'gray'),
-                    TextEntry::make('security_deposit_status')
-                        ->label('حالة التأمين')
-                        ->formatStateUsing(fn (?string $state): string => self::depositStatusLabel($state))
-                        ->badge()
-                        ->color('gray'),
-                    TextEntry::make('trust_score')
-                        ->label('درجة الثقة')
-                        ->formatStateUsing(fn ($state): string => self::number($state).' / 100'),
-                    TextEntry::make('average_rating')
-                        ->label('متوسط التقييم')
-                        ->formatStateUsing(fn ($state): string => self::decimal($state).' / 5'),
-                    TextEntry::make('acceptance_rate')
-                        ->label('معدل القبول')
-                        ->formatStateUsing(fn ($state): string => self::decimal($state).'%'),
-                    TextEntry::make('open_disputes_count')
-                        ->label('النزاعات المفتوحة')
-                        ->formatStateUsing(fn ($state): string => self::number($state)),
-                ]),
-            Section::make('بيانات الحساب والملف')
-                ->description('معلومات التواصل والبيانات الشخصية المستخدمة في الدعم والتشغيل.')
-                ->columns(3)
-                ->schema([
-                    TextEntry::make('user.email')->label('البريد الإلكتروني')->placeholder('-')->copyable(),
-                    TextEntry::make('user.phone')->label('رقم الهاتف')->placeholder('-')->copyable(),
-                    TextEntry::make('gender')->label('الجنس')->formatStateUsing(fn ($state): string => self::genderLabel($state))->placeholder('-'),
-                    TextEntry::make('birthday')->label('تاريخ الميلاد')->date('Y-m-d')->placeholder('-'),
-                    TextEntry::make('preferred_work_type')->label('نوع العمل المفضل')->formatStateUsing(fn ($state): string => self::preferredWorkTypeLabel($state))->placeholder('-'),
-                    TextEntry::make('bio')->label('نبذة')->placeholder('-')->columnSpanFull(),
-                ]),
-            Section::make('الأداء والمالية')
-                ->description('أرقام مختصرة بدون ألوان قوية حتى يسهل قراءتها ومقارنتها.')
-                ->columns(4)
-                ->schema([
-                    TextEntry::make('total_completed_jobs')->label('المهام المنجزة')->formatStateUsing(fn ($state): string => self::number($state)),
-                    TextEntry::make('gross_revenue')->label('إجمالي الإيرادات')->state(fn (Worker $record): string => self::money(self::financialSummary($record)['gross_revenue'])),
-                    TextEntry::make('worker_net_earnings')->label('صافي مستحقات العامل')->state(fn (Worker $record): string => self::money(self::financialSummary($record)['worker_net_earnings'])),
-                    TextEntry::make('admin_margin_total')->label('هامش الإدارة')->state(fn (Worker $record): string => self::money(self::financialSummary($record)['admin_margin_total'])),
-                ]),
-            Section::make('التأمين والأهلية')
-                ->description('القيم المالية المطلوبة لتحديد قدرة العامل على استقبال الطلبات.')
-                ->columns(3)
-                ->schema([
-                    TextEntry::make('deposit.current_balance')->label('الرصيد الحالي')->money('SYP')->placeholder('SYP 0.00'),
-                    TextEntry::make('deposit.deposited_total')->label('إجمالي الإيداع')->money('SYP')->placeholder('SYP 0.00'),
-                    TextEntry::make('deposit.withdrawn_total')->label('إجمالي السحب')->money('SYP')->placeholder('SYP 0.00'),
-                    TextEntry::make('deposit.minimum_required')->label('الحد الأدنى المطلوب')->money('SYP')->placeholder('SYP 0.00'),
-                    TextEntry::make('deposit.max_negative_balance')->label('الحد الأقصى للرصيد السالب')->money('SYP')->placeholder('SYP 0.00'),
-                    TextEntry::make('dispatch_eligibility')
-                        ->label('أهلية استقبال الطلبات')
-                        ->state(fn (Worker $record): string => $record->is_active && ! $record->is_suspended ? 'مؤهل' : 'غير مؤهل')
-                        ->badge()
-                        ->color('gray'),
-                ]),
-            Section::make('الموقع والتوفر')
-                ->description('بيانات الموقع وساعات العمل الأساسية.')
-                ->columns(2)
-                ->schema([
-                    TextEntry::make('home_address')->label('عنوان المنزل')->placeholder('-')->columnSpanFull(),
-                    TextEntry::make('home_latitude')->label('خط العرض')->placeholder('-'),
-                    TextEntry::make('home_longitude')->label('خط الطول')->placeholder('-'),
-                    TextEntry::make('default_working_hours')->label('ساعات العمل الافتراضية')->state(fn (Worker $record): array => self::workingHours($record->default_working_hours))->listWithLineBreaks()->columnSpanFull(),
-                ]),
+                    Section::make('ملخص العامل')
+                        ->description('البيانات الأساسية وحالة حساب العامل في تطبيق التنظيف.')
+                        ->schema([
+                            Grid::make(4)
+                                ->schema([
+                                    ImageEntry::make('avatar_preview')
+                                        ->label('الصورة')
+                                        ->getStateUsing(fn (Worker $record): ?string => self::workerAvatarUrl($record))
+                                        ->defaultImageUrl(fn (Worker $record): string => self::fallbackAvatarUrl($record))
+                                        ->circular()
+                                        ->imageHeight(96),
+                                    Group::make()
+                                        ->schema([
+                                            TextEntry::make('worker_display_name')
+                                                ->label('الاسم')
+                                                ->state(fn (Worker $record): string => $record->user?->name ?: $record->first_name ?: '-')
+                                                ->weight('bold')
+                                                ->size('lg'),
+                                            TextEntry::make('account_status')
+                                                ->label('حالة الحساب')
+                                                ->state(fn (Worker $record): string => self::accountStatusLabel($record))
+                                                ->badge()
+                                                ->color(fn (mixed $state): string => self::accountStatusColor($state)),
+                                            TextEntry::make('user.phone')
+                                                ->label('رقم الهاتف')
+                                                ->placeholder('-')
+                                                ->copyable(),
+                                            TextEntry::make('user.email')
+                                                ->label('البريد الإلكتروني')
+                                                ->placeholder('-')
+                                                ->copyable(),
+                                            TextEntry::make('preferred_work_type_display')
+                                                ->label('نوع العمل المفضل')
+                                                ->state(fn (Worker $record): string => self::preferredWorkTypeLabel($record))
+                                                ->badge()
+                                                ->color('info'),
+                                            TextEntry::make('home_address')
+                                                ->label('موقع بدء المهمة')
+                                                ->placeholder('-'),
+                                        ])
+                                        ->columns(3)
+                                        ->columnSpan(3),
+                                ]),
+                        ])
+                        ->columnSpanFull(),
+
+                    Section::make('إحصائيات')
+                        ->description('نفس مؤشرات الأداء المعروضة للعامل داخل cleaning_owner_app.')
+                        ->schema([
+                            TextEntry::make('statistics_total_completed_jobs')
+                                ->label('الطلبات المكتملة')
+                                ->state(fn (Worker $record): string => self::formatInteger($record->total_completed_jobs))
+                                ->icon(Heroicon::OutlinedCheckCircle)
+                                ->weight('bold'),
+                            TextEntry::make('statistics_average_rating')
+                                ->label('متوسط التقييم')
+                                ->state(fn (Worker $record): string => self::formatStars(self::reviewsSummary($record)['average']))
+                                ->icon(Heroicon::OutlinedStar)
+                                ->weight('bold'),
+                            TextEntry::make('statistics_trust_score')
+                                ->label('درجة الثقة')
+                                ->state(fn (Worker $record): string => self::formatInteger($record->trust_score))
+                                ->suffix(' / 100')
+                                ->icon(Heroicon::OutlinedShieldCheck)
+                                ->weight('bold'),
+                            TextEntry::make('statistics_acceptance_rate')
+                                ->label('نسبة قبول الطلبات')
+                                ->state(fn (Worker $record): string => self::formatDecimal($record->acceptance_rate))
+                                ->suffix('%')
+                                ->icon(Heroicon::OutlinedArrowTrendingUp)
+                                ->weight('bold'),
+                            TextEntry::make('statistics_cancellation_rate')
+                                ->label('نسبة إلغاء الطلبات')
+                                ->state(fn (Worker $record): string => self::formatDecimal($record->cancellation_rate))
+                                ->suffix('%')
+                                ->icon(Heroicon::OutlinedArrowTrendingDown)
+                                ->weight('bold'),
+                            TextEntry::make('statistics_open_disputes_count')
+                                ->label('النزاعات المفتوحة')
+                                ->state(fn (Worker $record): string => self::formatInteger($record->open_disputes_count))
+                                ->icon(Heroicon::OutlinedExclamationTriangle)
+                                ->weight('bold'),
+                        ])
+                        ->columns(3)
+                        ->columnSpanFull(),
+
+                    Section::make('التقييمات والتعليقات')
+                        ->description('يعرض ملخص التقييمات، ومن قام بالتقييم، وقيمة التقييم، والتعليق المرتبط به.')
+                        ->schema([
+                            TextEntry::make('reviews_average')
+                                ->label('متوسط التقييم')
+                                ->state(fn (Worker $record): string => self::formatStars(self::reviewsSummary($record)['average']))
+                                ->icon(Heroicon::OutlinedStar)
+                                ->weight('bold'),
+                            TextEntry::make('reviews_total')
+                                ->label('إجمالي التقييمات')
+                                ->state(fn (Worker $record): string => self::formatInteger(self::reviewsSummary($record)['total']))
+                                ->icon(Heroicon::OutlinedChatBubbleLeftRight)
+                                ->weight('bold'),
+                            TextEntry::make('reviews_distribution')
+                                ->label('توزيع التقييمات')
+                                ->state(fn (Worker $record): array => self::ratingDistribution($record))
+                                ->listWithLineBreaks()
+                                ->placeholder('لا توجد تقييمات بعد.'),
+                            TextEntry::make('reviews_empty_state')
+                                ->hiddenLabel()
+                                ->state('لا توجد تقييمات من العملاء حتى الآن.')
+                                ->visible(fn (Worker $record): bool => self::customerReviews($record)->isEmpty())
+                                ->color('gray')
+                                ->columnSpanFull(),
+                            RepeatableEntry::make('customer_reviews')
+                                ->label('تفاصيل التقييمات')
+                                ->getStateUsing(fn (Worker $record): array => self::reviewEntries($record))
+                                ->visible(fn (Worker $record): bool => self::customerReviews($record)->isNotEmpty())
+                                ->schema([
+                                    TextEntry::make('customer_name')
+                                        ->label('من قام بالتقييم')
+                                        ->weight('bold'),
+                                    TextEntry::make('customer_phone')
+                                        ->label('رقم العميل')
+                                        ->placeholder('-')
+                                        ->copyable(),
+                                    TextEntry::make('rating')
+                                        ->label('التقييم')
+                                        ->formatStateUsing(fn (mixed $state): string => self::formatStars((float) $state))
+                                        ->badge()
+                                        ->color(fn (mixed $state): string => self::ratingColor($state)),
+                                    TextEntry::make('rating_type')
+                                        ->label('نوع التقييم')
+                                        ->badge()
+                                        ->color('info'),
+                                    TextEntry::make('booking_reference')
+                                        ->label('الطلب'),
+                                    TextEntry::make('created_at')
+                                        ->label('تاريخ التقييم'),
+                                    TextEntry::make('comment')
+                                        ->label('بماذا قيّم العامل؟')
+                                        ->placeholder('لم يكتب العميل تعليقاً.')
+                                        ->columnSpanFull(),
+                                ])
+                                ->columns(3)
+                                ->columnSpanFull(),
+                        ])
+                        ->columns(3)
+                        ->columnSpanFull(),
+
+                    Section::make('أوقات العمل')
+                        ->description('الأيام والفترات التي اختار العامل استقبال الطلبات خلالها داخل التطبيق.')
+                        ->schema([
+                            ViewEntry::make('worker_working_hours')
+                                ->hiddenLabel()
+                                ->getStateUsing(fn (Worker $record): array => self::workingHoursState($record))
+                                ->view('filament.resources.workers.infolists.working-hours')
+                                ->columnSpanFull(),
+                        ])
+                        ->columnSpanFull(),
+
+                    Section::make('مناطق العمل')
+                        ->description('الأحياء والمناطق التي اختار العامل استقبال طلبات التنظيف ضمنها.')
+                        ->schema([
+                            TextEntry::make('work_areas_empty_state')
+                                ->hiddenLabel()
+                                ->state('لم يحدد العامل مناطق عمل بعد.')
+                                ->visible(fn (Worker $record): bool => self::workAreaEntries($record) === [])
+                                ->color('gray')
+                                ->columnSpanFull(),
+                            RepeatableEntry::make('work_areas')
+                                ->hiddenLabel()
+                                ->getStateUsing(fn (Worker $record): array => self::workAreaEntries($record))
+                                ->visible(fn (Worker $record): bool => self::workAreaEntries($record) !== [])
+                                ->schema([
+                                    TextEntry::make('name')
+                                        ->label('المنطقة')
+                                        ->weight('bold'),
+                                    TextEntry::make('city')
+                                        ->label('المدينة')
+                                        ->placeholder('-'),
+                                    TextEntry::make('status')
+                                        ->label('الحالة')
+                                        ->badge()
+                                        ->color(fn (mixed $state): string => (string) $state === 'نشطة' ? 'success' : 'gray'),
+                                ])
+                                ->columns(3)
+                                ->columnSpanFull(),
+                        ])
+                        ->columnSpanFull(),
+                ])
+                ->columnSpanFull(),
         ]);
+    }
+
+    private static function workerAvatarUrl(Worker $worker): ?string
+    {
+        $url = $worker->getFirstMediaUrl('avatar');
+
+        return $url !== '' ? $url : null;
     }
 
     private static function fallbackAvatarUrl(Worker $worker): string
     {
         $name = rawurlencode($worker->user?->name ?: $worker->first_name ?: 'Worker');
+
         return "https://ui-avatars.com/api/?name={$name}&background=f3f4f6&color=111827";
     }
 
-    private static function number(mixed $value): string
+    private static function accountStatusLabel(Worker $worker): string
     {
-        return number_format((float) ($value ?? 0), 0);
+        if ($worker->is_suspended) {
+            return 'موقوف';
+        }
+
+        return $worker->is_active ? 'نشط' : 'غير نشط';
     }
 
-    private static function decimal(mixed $value): string
+    private static function accountStatusColor(mixed $state): string
     {
-        return number_format((float) ($value ?? 0), 1);
+        return match ((string) $state) {
+            'نشط' => 'success',
+            'موقوف' => 'danger',
+            default => 'gray',
+        };
     }
 
-    private static function money(mixed $value): string
+    private static function preferredWorkTypeLabel(Worker $worker): string
     {
-        return 'SYP '.number_format((float) ($value ?? 0), 2);
+        $value = $worker->preferred_work_type instanceof WorkerPreferredWorkType
+            ? $worker->preferred_work_type->value
+            : (is_string($worker->preferred_work_type) ? $worker->preferred_work_type : WorkerPreferredWorkType::Both->value);
+
+        return WorkerPreferredWorkType::options()[$value] ?? $value;
     }
 
-    private static function depositStatusLabel(?string $status): string
+    /**
+     * @return Collection<int, WorkerCustomerRating>
+     */
+    private static function customerReviews(Worker $worker): Collection
     {
-        return match ($status) {
-            'active' => 'نشط',
-            'insufficient_balance' => 'رصيد غير كاف',
-            'missing_deposit' => 'لا يوجد تأمين',
-            'suspended' => 'موقوف',
+        $worker->loadMissing(['customerRatings.customer']);
+
+        return $worker->customerRatings
+            ->filter(
+                fn (WorkerCustomerRating $rating): bool => self::enumValue($rating->rating_type)
+                    === WorkerCustomerRatingType::CustomerToWorker->value,
+            )
+            ->sortByDesc('created_at')
+            ->values();
+    }
+
+    /**
+     * @return array{average:float,total:int,counts:array<int, int>}
+     */
+    private static function reviewsSummary(Worker $worker): array
+    {
+        $reviews = self::customerReviews($worker);
+        $counts = array_fill(1, 5, 0);
+
+        foreach ($reviews as $review) {
+            $rating = (int) $review->rating;
+            if ($rating >= 1 && $rating <= 5) {
+                $counts[$rating]++;
+            }
+        }
+
+        $average = $reviews->isNotEmpty()
+            ? round((float) $reviews->avg('rating'), 1)
+            : (float) ($worker->average_rating ?? 0);
+
+        return [
+            'average' => $average,
+            'total' => $reviews->count(),
+            'counts' => $counts,
+        ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private static function ratingDistribution(Worker $worker): array
+    {
+        $summary = self::reviewsSummary($worker);
+
+        if ($summary['total'] === 0) {
+            return [];
+        }
+
+        $distribution = [];
+        for ($rating = 5; $rating >= 1; $rating--) {
+            $distribution[] = $rating.' نجوم: '.($summary['counts'][$rating] ?? 0);
+        }
+
+        return $distribution;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private static function reviewEntries(Worker $worker): array
+    {
+        return self::customerReviews($worker)
+            ->map(fn (WorkerCustomerRating $review): array => [
+                'customer_name' => $review->customer?->name ?: 'مستخدم غير متاح',
+                'customer_phone' => $review->customer?->phone,
+                'rating' => (int) $review->rating,
+                'rating_type' => self::ratingTypeLabel($review->rating_type),
+                'booking_reference' => self::bookingReference($review),
+                'created_at' => $review->created_at?->format('Y-m-d H:i') ?: '-',
+                'comment' => $review->comment,
+            ])
+            ->all();
+    }
+
+    private static function ratingTypeLabel(mixed $ratingType): string
+    {
+        return match (self::enumValue($ratingType)) {
+            WorkerCustomerRatingType::CustomerToWorker->value => 'تقييم العميل للعامل',
+            WorkerCustomerRatingType::WorkerToCustomer->value => 'تقييم العامل للعميل',
             default => 'غير محدد',
         };
     }
 
-    private static function genderLabel(mixed $state): string
+    private static function bookingReference(WorkerCustomerRating $review): string
     {
-        return match ((string) $state) {
-            'male' => 'ذكر',
-            'female' => 'أنثى',
-            default => '-',
+        $bookingType = class_basename((string) $review->booking_type);
+        $typeLabel = match ($bookingType) {
+            'CleaningBooking' => 'طلب تنظيف',
+            'EventBooking' => 'طلب فعالية',
+            default => 'طلب',
+        };
+
+        return $typeLabel.' #'.$review->booking_id;
+    }
+
+    private static function ratingColor(mixed $state): string
+    {
+        $rating = (int) $state;
+
+        return match (true) {
+            $rating >= 4 => 'success',
+            $rating === 3 => 'warning',
+            default => 'danger',
         };
     }
 
-    private static function preferredWorkTypeLabel(mixed $state): string
+    private static function enumValue(mixed $value): string
     {
-        $value = $state instanceof \BackedEnum ? $state->value : (string) $state;
-        return match ($value) {
-            'cleaning' => 'تنظيف',
-            'events' => 'مناسبات',
-            'both' => 'كلاهما',
-            default => '-',
-        };
+        return $value instanceof BackedEnum ? (string) $value->value : (string) $value;
     }
 
-    /** @return array{gross_revenue: float, worker_net_earnings: float, admin_margin_total: float} */
-    private static function financialSummary(Worker $worker): array
+    /**
+     * @return array<int, array{key:string,label:string,available:bool,ranges:array<int, array{from:string,to:string,label:string}>}>
+     */
+    private static function workingHoursState(Worker $worker): array
     {
-        $assignmentTotals = CleaningBookingWorkerAssignment::query()
-            ->where('worker_id', $worker->id)
-            ->selectRaw('COALESCE(SUM(service_share_amount + travel_fee + admin_margin_amount), 0) as gross_total')
-            ->selectRaw('COALESCE(SUM(worker_amount), 0) as worker_total')
-            ->selectRaw('COALESCE(SUM(admin_margin_amount), 0) as admin_total')
-            ->first();
-
-        $legacyGross = (float) CleaningBooking::query()
-            ->where('worker_id', $worker->id)
-            ->whereDoesntHave('workerAssignments', fn ($query) => $query->where('worker_id', $worker->id))
-            ->where('status', 'completed')
-            ->sum('total_price');
-
-        return [
-            'gross_revenue' => (float) ($assignmentTotals?->gross_total ?? 0) + $legacyGross,
-            'worker_net_earnings' => (float) ($assignmentTotals?->worker_total ?? 0) + $legacyGross,
-            'admin_margin_total' => (float) ($assignmentTotals?->admin_total ?? 0),
+        $normalized = $worker->getNormalizedDefaultWorkingHours();
+        $dayLabels = [
+            'sunday' => 'الأحد',
+            'monday' => 'الإثنين',
+            'tuesday' => 'الثلاثاء',
+            'wednesday' => 'الأربعاء',
+            'thursday' => 'الخميس',
+            'friday' => 'الجمعة',
+            'saturday' => 'السبت',
         ];
-    }
 
-    /** @return array<int, string> */
-    private static function workingHours(mixed $state): array
-    {
-        if (! is_array($state) || $state === []) {
-            return ['غير محدد'];
+        $days = [];
+        foreach ($dayLabels as $day => $label) {
+            $dayData = $normalized[$day] ?? ['available' => false, 'data' => []];
+            $ranges = [];
+
+            foreach ((array) ($dayData['data'] ?? []) as $period) {
+                if (! is_array($period)) {
+                    continue;
+                }
+
+                $from = isset($period['from']) && is_string($period['from'])
+                    ? $period['from']
+                    : array_key_first($period);
+                $to = isset($period['to']) && is_string($period['to'])
+                    ? $period['to']
+                    : (is_string($from) ? ($period[$from] ?? null) : null);
+
+                if (! is_string($from) || ! is_string($to)) {
+                    continue;
+                }
+
+                $ranges[] = [
+                    'from' => $from,
+                    'to' => $to,
+                    'label' => self::formatWorkingTime($from).' — '.self::formatWorkingTime($to),
+                ];
+            }
+
+            $days[] = [
+                'key' => $day,
+                'label' => $label,
+                'available' => (bool) ($dayData['available'] ?? false) && $ranges !== [],
+                'ranges' => $ranges,
+            ];
         }
 
-        $days = [
-            'sunday' => 'الأحد', 'monday' => 'الإثنين', 'tuesday' => 'الثلاثاء',
-            'wednesday' => 'الأربعاء', 'thursday' => 'الخميس', 'friday' => 'الجمعة', 'saturday' => 'السبت',
-        ];
+        return $days;
+    }
 
-        $lines = [];
-        foreach ($days as $key => $label) {
-            $day = $state[$key] ?? null;
-            if (! is_array($day) || (isset($day['available']) && ! $day['available'])) {
-                $lines[] = $label.': غير متاح';
+    private static function formatWorkingTime(string $time): string
+    {
+        foreach (['H:i', 'H:i:s'] as $format) {
+            try {
+                $parsed = Carbon::createFromFormat($format, $time);
+
+                return str_replace(['AM', 'PM'], ['ص', 'م'], $parsed->format('h:i A'));
+            } catch (Throwable) {
                 continue;
             }
-
-            $periods = is_array($day['data'] ?? null) ? $day['data'] : [$day];
-            $ranges = [];
-            foreach ($periods as $period) {
-                if (is_array($period) && isset($period['from'], $period['to'])) {
-                    $ranges[] = $period['from'].' - '.$period['to'];
-                }
-            }
-            $lines[] = $label.': '.($ranges === [] ? 'غير متاح' : implode('، ', $ranges));
         }
 
-        return $lines;
+        return $time;
+    }
+
+    /**
+     * @return array<int, array{name:string,city:?string,status:string}>
+     */
+    private static function workAreaEntries(Worker $worker): array
+    {
+        $worker->loadMissing(['zones.neighborhood']);
+
+        return $worker->zones
+            ->sortByDesc(fn (WorkerZone $zone): bool => (bool) $zone->is_active)
+            ->map(fn (WorkerZone $zone): array => [
+                'name' => $zone->neighborhood?->name_ar
+                    ?: $zone->name
+                    ?: $zone->neighborhood?->name_en
+                    ?: '-',
+                'city' => $zone->neighborhood?->city_name,
+                'status' => $zone->is_active ? 'نشطة' : 'غير نشطة',
+            ])
+            ->values()
+            ->all();
+    }
+
+    private static function formatInteger(mixed $value): string
+    {
+        return number_format((float) ($value ?? 0), 0, '.', ',');
+    }
+
+    private static function formatDecimal(mixed $value): string
+    {
+        return number_format((float) ($value ?? 0), 1, '.', ',');
+    }
+
+    private static function formatStars(float $rating): string
+    {
+        $clamped = max(0, min(5, (int) round($rating)));
+        $filled = str_repeat('★', $clamped);
+        $empty = str_repeat('☆', 5 - $clamped);
+
+        return $filled.$empty.' ('.self::formatDecimal($rating).')';
     }
 }

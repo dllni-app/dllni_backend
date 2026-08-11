@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Modules\Supermarket\Services;
 
+use App\Models\MasterProduct;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Modules\Supermarket\Enums\SmOrderStatus;
 use Modules\Supermarket\Models\SmOrder;
 use Modules\Supermarket\Models\SmOrderItem;
+use Modules\Supermarket\Models\SmProduct;
 use Modules\Supermarket\Models\SmStore;
 
 final class StoreOwnerDashboardPerformanceService
@@ -23,7 +25,7 @@ final class StoreOwnerDashboardPerformanceService
 
         $totalOrders = (clone $ordersQuery)->count();
 
-        $topProducts = SmOrderItem::query()
+        $topProductRows = SmOrderItem::query()
             ->selectRaw('sm_products.id as product_id, sm_products.name as product_name, SUM(sm_order_items.quantity) as quantity_sold, SUM(sm_order_items.total_price) as revenue')
             ->join('sm_orders', 'sm_orders.id', '=', 'sm_order_items.order_id')
             ->join('sm_products', 'sm_products.id', '=', 'sm_order_items.product_id')
@@ -33,13 +35,47 @@ final class StoreOwnerDashboardPerformanceService
             ->groupBy('sm_products.id', 'sm_products.name')
             ->orderByDesc('revenue')
             ->limit(5)
+            ->get();
+
+        $productsById = SmProduct::query()
+            ->with(['media', 'masterProduct.media'])
+            ->whereIn('id', $topProductRows->pluck('product_id'))
             ->get()
-            ->map(static fn ($row): array => [
-                'productId' => (int) $row->product_id,
-                'name' => (string) $row->product_name,
-                'quantity' => (int) $row->quantity_sold,
-                'revenue' => (float) $row->revenue,
-            ])
+            ->keyBy('id');
+
+        $topProducts = $topProductRows
+            ->map(static function ($row) use ($productsById): array {
+                /** @var SmProduct|null $product */
+                $product = $productsById->get((int) $row->product_id);
+                $media = $product?->getMedia(SmProduct::IMAGE_COLLECTION) ?? collect();
+
+                if ($media->isEmpty() && $product?->masterProduct !== null) {
+                    $media = $product->masterProduct->getMedia(MasterProduct::IMAGE_COLLECTION);
+
+                    if ($media->isEmpty()) {
+                        $fallbackMedia = $product->masterProduct->getFirstMedia();
+
+                        if ($fallbackMedia !== null) {
+                            $media = collect([$fallbackMedia]);
+                        }
+                    }
+                }
+
+                $imageUrls = $media
+                    ->map(static fn ($mediaItem): string => $mediaItem->getFullUrl())
+                    ->values();
+                $primaryImage = $imageUrls->first();
+
+                return [
+                    'productId' => (int) $row->product_id,
+                    'name' => (string) $row->product_name,
+                    'quantity' => (int) $row->quantity_sold,
+                    'revenue' => (float) $row->revenue,
+                    'imageUrl' => $primaryImage,
+                    'primaryImage' => $primaryImage,
+                    'imageUrls' => $imageUrls->all(),
+                ];
+            })
             ->values()
             ->all();
 

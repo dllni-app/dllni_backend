@@ -12,7 +12,9 @@ use Database\Factories\SmOrderFactory;
 use Database\Factories\SmOrderItemFactory;
 use Database\Factories\SmProductFactory;
 use Database\Factories\SmStoreFactory;
+use Illuminate\Http\UploadedFile;
 use Laravel\Sanctum\Sanctum;
+use Modules\Supermarket\Models\SmProduct;
 
 use function Pest\Laravel\getJson;
 
@@ -42,6 +44,11 @@ it('returns top selling products block for the authenticated owner store', funct
         'category_id' => $category->id,
         'name' => 'Product A',
     ]);
+
+    $productA->addMedia(UploadedFile::fake()->image('product-a.jpg', 100, 100))
+        ->usingFileName('product-a.jpg')
+        ->toMediaCollection(SmProduct::IMAGE_COLLECTION);
+    $productAImageUrl = $productA->getFirstMediaUrl(SmProduct::IMAGE_COLLECTION);
 
     $productB = SmProductFactory::new()->create([
         'store_id' => $store->id,
@@ -176,6 +183,9 @@ it('returns top selling products block for the authenticated owner store', funct
     $response->assertJsonPath('topProducts.0.name', 'Product A');
     $response->assertJsonPath('topProducts.0.quantity', 5);
     $response->assertJsonPath('topProducts.0.revenue', 100);
+    $response->assertJsonPath('topProducts.0.imageUrl', $productAImageUrl);
+    $response->assertJsonPath('topProducts.0.primaryImage', $productAImageUrl);
+    $response->assertJsonPath('topProducts.0.imageUrls.0', $productAImageUrl);
 
     $response->assertJsonPath('offersImpact.discountedOrdersCount', 2);
     $response->assertJsonPath('offersImpact.conversionRatePercent', 66.67);
