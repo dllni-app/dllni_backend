@@ -89,6 +89,41 @@ it('creates inventory item', function () {
     ]);
 });
 
+it('stores a custom inventory usage quantity for each linked product', function () {
+    $restaurant = Restaurant::factory()->create();
+    $restaurant->user->update([
+        'module_type' => UserModuleType::RestaurantSeller->value,
+    ]);
+    $product = Product::factory()->create([
+        'restaurant_id' => $restaurant->id,
+    ]);
+    Sanctum::actingAs($restaurant->user);
+
+    $response = $this->postJson('/api/v1/inventory-items', [
+        'name' => 'Chicken Breast',
+        'unit' => 'kg',
+        'quantity' => 20,
+        'minimumLimit' => 3,
+        'unitCost' => 50,
+        'products' => [
+            [
+                'productId' => $product->id,
+                'quantityUsed' => 0.25,
+            ],
+        ],
+    ]);
+
+    $response->assertCreated();
+    $response->assertJsonPath('data.products.0.id', $product->id);
+    $response->assertJsonPath('data.products.0.quantityUsed', 0.25);
+
+    $this->assertDatabaseHas('inventory_item_product', [
+        'inventory_item_id' => $response->json('data.id'),
+        'product_id' => $product->id,
+        'quantity_used' => 0.25,
+    ]);
+});
+
 it('lists inventory items with filter and product ids', function () {
     $restaurant = Restaurant::factory()->create();
     $restaurant->user->update([
