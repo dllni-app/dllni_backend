@@ -81,7 +81,7 @@ trait RestaurantFilterQuery
         }
 
         return $query->whereRaw(
-            'COALESCE(estimated_preparation_time_min, GREATEST(1, estimated_preparation_time - 10)) >= ?',
+            'COALESCE(estimated_preparation_time_min, CASE WHEN estimated_preparation_time - 10 < 1 THEN 1 ELSE estimated_preparation_time - 10 END) >= ?',
             [(int) $value],
         );
     }
