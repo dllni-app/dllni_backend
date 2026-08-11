@@ -25,6 +25,8 @@ final class DiscoverRestaurantsRequest extends FormRequest
             'longitude' => ['sometimes', 'numeric', 'between:-180,180'],
             'filter.openNow' => ['sometimes', 'boolean'],
             'filter.hasOffers' => ['sometimes', 'boolean'],
+            'filter.preparationTimeMin' => ['sometimes', 'integer', 'min:1'],
+            'filter.preparationTimeMax' => ['sometimes', 'integer', 'min:1', 'gte:filter.preparationTimeMin'],
             'sort' => ['sometimes', 'string', 'in:rating,nearest,fastest'],
         ];
     }
