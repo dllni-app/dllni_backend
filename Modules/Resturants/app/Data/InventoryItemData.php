@@ -23,5 +23,6 @@ final class InventoryItemData extends Data
         public ?float $minimumLimit,
         public ?float $unitCost,
         public ?array $productIds = null,
+        public ?array $products = null,
     ) {}
 }
