@@ -19,8 +19,6 @@ final class CleaningBannerForm
 
     private const IMAGE_MIN_HEIGHT = 520;
 
-    private const IMAGE_ASPECT_RATIO = '30:13';
-
     private const IMAGE_MAX_SIZE_KB = 4096;
 
     public static function configure(Schema $schema): Schema
@@ -41,16 +39,12 @@ final class CleaningBannerForm
                         FileUpload::make('image_path')
                             ->label(__('cleaning_admin.cleaning_banners.fields.image'))
                             ->helperText(app()->isLocale('ar')
-                                ? 'المقاس الأدنى 1200×520 بكسل وبنسبة 30:13. الحد الأقصى لحجم الملف 4 ميغابايت. الصيغ المدعومة: JPG وPNG وWebP.'
-                                : 'Minimum 1200×520 px with a 30:13 aspect ratio. Maximum file size is 4 MB. Supported formats: JPG, PNG, and WebP.')
+                                ? 'المقاس الأدنى 1200×520 بكسل. الحد الأقصى لحجم الملف 4 ميغابايت. الصيغ المدعومة: JPG وPNG وWebP.'
+                                : 'Minimum dimensions are 1200×520 px. Maximum file size is 4 MB. Supported formats: JPG, PNG, and WebP.')
                             ->disk('public')
                             ->directory('cleaning-banners')
                             ->image()
                             ->imageEditor()
-                            ->imageEditorViewportWidth((string) self::IMAGE_MIN_WIDTH)
-                            ->imageEditorViewportHeight((string) self::IMAGE_MIN_HEIGHT)
-                            ->imageAspectRatio(self::IMAGE_ASPECT_RATIO)
-                            ->automaticallyOpenImageEditorForAspectRatio()
                             ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
                             ->rule(
                                 Rule::dimensions()
@@ -60,8 +54,8 @@ final class CleaningBannerForm
                             ->maxSize(self::IMAGE_MAX_SIZE_KB)
                             ->validationMessages([
                                 'dimensions' => app()->isLocale('ar')
-                                    ? 'يجب أن تكون صورة البانر بأبعاد لا تقل عن 1200×520 بكسل وبنسبة 30:13.'
-                                    : 'The banner image must be at least 1200×520 px with a 30:13 aspect ratio.',
+                                    ? 'يجب ألا تقل أبعاد صورة البانر عن 1200×520 بكسل.'
+                                    : 'The banner image dimensions must be at least 1200×520 px.',
                                 'max' => app()->isLocale('ar')
                                     ? 'يجب ألا يتجاوز حجم صورة البانر 4 ميغابايت.'
                                     : 'The banner image must not exceed 4 MB.',
