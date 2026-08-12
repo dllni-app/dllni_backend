@@ -4,12 +4,8 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningBanners;
 
-use App\Filament\Resources\CleaningBanners\Pages\CreateCleaningBanner;
-use App\Filament\Resources\CleaningBanners\Pages\EditCleaningBanner;
 use App\Filament\Resources\CleaningBanners\Pages\ListCleaningBanners;
-use App\Filament\Resources\CleaningBanners\Pages\ViewCleaningBanner;
 use App\Filament\Resources\CleaningBanners\Schemas\CleaningBannerForm;
-use App\Filament\Resources\CleaningBanners\Schemas\CleaningBannerInfolist;
 use App\Filament\Resources\CleaningBanners\Tables\CleaningBannersTable;
 use BackedEnum;
 use Filament\Resources\Resource;
@@ -38,7 +34,9 @@ final class CleaningBannerResource extends Resource
 
     public static function getNavigationTooltip(): ?string
     {
-        return __('cleaning_admin.cleaning_banners.tooltip');
+        return app()->isLocale('ar')
+            ? 'إضافة وحذف وترتيب بنرات قسم التنظيف في تطبيق المستخدم.'
+            : 'Add, delete, and reorder cleaning banners in the user app.';
     }
 
     public static function getModelLabel(): string
@@ -56,11 +54,6 @@ final class CleaningBannerResource extends Resource
         return CleaningBannerForm::configure($schema);
     }
 
-    public static function infolist(Schema $schema): Schema
-    {
-        return CleaningBannerInfolist::configure($schema);
-    }
-
     public static function table(Table $table): Table
     {
         return CleaningBannersTable::configure($table);
@@ -73,7 +66,7 @@ final class CleaningBannerResource extends Resource
 
     public static function canView(Model $record): bool
     {
-        return self::hasPermission('banners.view');
+        return false;
     }
 
     public static function canCreate(): bool
@@ -83,12 +76,17 @@ final class CleaningBannerResource extends Resource
 
     public static function canEdit(Model $record): bool
     {
-        return self::hasPermission('banners.update');
+        return false;
     }
 
     public static function canDelete(Model $record): bool
     {
         return self::hasPermission('banners.delete');
+    }
+
+    public static function canReorderBanners(): bool
+    {
+        return self::hasPermission('banners.update');
     }
 
     public static function getRelations(): array
@@ -100,9 +98,6 @@ final class CleaningBannerResource extends Resource
     {
         return [
             'index' => ListCleaningBanners::route('/'),
-            'create' => CreateCleaningBanner::route('/create'),
-            'view' => ViewCleaningBanner::route('/{record}'),
-            'edit' => EditCleaningBanner::route('/{record}/edit'),
         ];
     }
 
