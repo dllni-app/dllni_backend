@@ -15,7 +15,7 @@ final class CleaningBannerForm
 
     private const IMAGE_MIN_HEIGHT = 520;
 
-    private const IMAGE_MAX_SIZE_KB = 4096;
+    private const IMAGE_MAX_SIZE_KB = 1024;
 
     public static function configure(Schema $schema): Schema
     {
@@ -36,8 +36,8 @@ final class CleaningBannerForm
                     FileUpload::make('image_path')
                         ->label(app()->isLocale('ar') ? 'صورة البانر' : 'Banner Image')
                         ->helperText(app()->isLocale('ar')
-                            ? 'الأبعاد الموصى بها: 1200×520 بكسل. الحد الأقصى لحجم الصورة: 4 ميغابايت. الصيغ المدعومة: JPG وPNG وWebP.'
-                            : 'Recommended dimensions: 1200×520 px. Maximum image size: 4 MB. Supported formats: JPG, PNG, and WebP.')
+                            ? 'الأبعاد الموصى بها: 1200×520 بكسل. الحد الأقصى لحجم الصورة: 1 ميغابايت. الصيغ المدعومة: JPG وPNG وWebP.'
+                            : 'Recommended dimensions: 1200×520 px. Maximum image size: 1 MB. Supported formats: JPG, PNG, and WebP.')
                         ->disk('public')
                         ->directory('cleaning-banners')
                         ->image()
@@ -54,8 +54,8 @@ final class CleaningBannerForm
                                 ? 'يجب ألا تقل أبعاد صورة البانر عن 1200×520 بكسل.'
                                 : 'The banner image dimensions must be at least 1200×520 px.',
                             'max' => app()->isLocale('ar')
-                                ? 'يجب ألا يتجاوز حجم صورة البانر 4 ميغابايت.'
-                                : 'The banner image must not exceed 4 MB.',
+                                ? 'يجب ألا يتجاوز حجم صورة البانر 1 ميغابايت.'
+                                : 'The banner image must not exceed 1 MB.',
                             'mimetypes' => app()->isLocale('ar')
                                 ? 'صيغة صورة البانر غير مدعومة. استخدم JPG أو PNG أو WebP.'
                                 : 'Unsupported banner image format. Use JPG, PNG, or WebP.',
