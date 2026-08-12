@@ -33,8 +33,8 @@ final class HomepageBannerForm
                         FileUpload::make('image_upload')
                             ->label(app()->isLocale('ar') ? 'صورة البانر' : 'Banner Image')
                             ->helperText(app()->isLocale('ar')
-                                ? 'الأبعاد الموصى بها: 1200×1000 بكسل.'
-                                : 'Recommended dimensions: 1200×1000 px.')
+                                ? 'الأبعاد الموصى بها: 1200×1000 بكسل. الحد الأقصى لحجم الصورة: 1 ميغابايت. الصيغ المدعومة: JPG وPNG وWebP.'
+                                : 'Recommended dimensions: 1200×1000 px. Maximum image size: 1 MB. Supported formats: JPG, PNG, and WebP.')
                             ->image()
                             ->imageEditor()
                             ->imageEditorViewportWidth(self::RECOMMENDED_WIDTH)
