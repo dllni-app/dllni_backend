@@ -23,48 +23,54 @@ final class HomepageBannerForm
 
     public static function configure(Schema $schema): Schema
     {
-        return $schema
-            ->components([
-                Section::make(app()->isLocale('ar') ? 'صورة البانر' : 'Banner Image')
-                    ->description(app()->isLocale('ar')
-                        ? 'بانر الصفحة الرئيسية يظهر في تطبيق المستخدم كصورة فقط.'
-                        : 'The homepage banner is displayed in the user app as an image only.')
-                    ->schema([
-                        FileUpload::make('image_upload')
-                            ->label(app()->isLocale('ar') ? 'صورة البانر' : 'Banner Image')
-                            ->helperText(app()->isLocale('ar')
-                                ? 'الأبعاد الموصى بها: 1200×1000 بكسل. الحد الأقصى لحجم الصورة: 1 ميغابايت. الصيغ المدعومة: JPG وPNG وWebP.'
-                                : 'Recommended dimensions: 1200×1000 px. Maximum image size: 1 MB. Supported formats: JPG, PNG, and WebP.')
-                            ->image()
-                            ->imageEditor()
-                            ->imageEditorViewportWidth(self::RECOMMENDED_WIDTH)
-                            ->imageEditorViewportHeight(self::RECOMMENDED_HEIGHT)
-                            ->imageAspectRatio('6:5')
-                            ->automaticallyOpenImageEditorForAspectRatio()
-                            ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
-                            ->rule(
-                                Rule::dimensions()
-                                    ->minWidth(self::MIN_WIDTH)
-                                    ->minHeight(self::MIN_HEIGHT)
-                                    ->ratio(6 / 5)
-                            )
-                            ->maxSize(self::MAX_SIZE_KB)
-                            ->validationMessages([
-                                'dimensions' => app()->isLocale('ar')
-                                    ? 'يجب أن تكون صورة البانر بنسبة 6:5 وبأبعاد لا تقل عن 600×500 بكسل. المقاس الموصى به 1200×1000 بكسل.'
-                                    : 'The banner image must use a 6:5 ratio and be at least 600×500 px. The recommended size is 1200×1000 px.',
-                                'max' => app()->isLocale('ar')
-                                    ? 'يجب ألا يتجاوز حجم صورة البانر 1 ميغابايت.'
-                                    : 'The banner image must not exceed 1 MB.',
-                                'mimetypes' => app()->isLocale('ar')
-                                    ? 'صيغة صورة البانر غير مدعومة. استخدم JPG أو PNG أو WebP.'
-                                    : 'Unsupported banner image format. Use JPG, PNG, or WebP.',
-                            ])
-                            ->maxFiles(1)
-                            ->storeFiles(false)
-                            ->dehydrated(false)
-                            ->required(fn (string $operation): bool => $operation === 'create'),
-                    ]),
-            ]);
+        return $schema->components(self::components());
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    public static function components(): array
+    {
+        return [
+            Section::make(app()->isLocale('ar') ? 'صورة البانر' : 'Banner Image')
+                ->description(app()->isLocale('ar')
+                    ? 'بانر الصفحة الرئيسية يظهر في تطبيق المستخدم كصورة فقط.'
+                    : 'The homepage banner is displayed in the user app as an image only.')
+                ->schema([
+                    FileUpload::make('image_upload')
+                        ->label(app()->isLocale('ar') ? 'صورة البانر' : 'Banner Image')
+                        ->helperText(app()->isLocale('ar')
+                            ? 'الأبعاد الموصى بها: 1200×1000 بكسل. الحد الأقصى لحجم الصورة: 1 ميغابايت. الصيغ المدعومة: JPG وPNG وWebP.'
+                            : 'Recommended dimensions: 1200×1000 px. Maximum image size: 1 MB. Supported formats: JPG, PNG, and WebP.')
+                        ->image()
+                        ->imageEditor()
+                        ->imageEditorViewportWidth(self::RECOMMENDED_WIDTH)
+                        ->imageEditorViewportHeight(self::RECOMMENDED_HEIGHT)
+                        ->imageAspectRatio('6:5')
+                        ->automaticallyOpenImageEditorForAspectRatio()
+                        ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+                        ->rule(
+                            Rule::dimensions()
+                                ->minWidth(self::MIN_WIDTH)
+                                ->minHeight(self::MIN_HEIGHT)
+                                ->ratio(6 / 5)
+                        )
+                        ->maxSize(self::MAX_SIZE_KB)
+                        ->validationMessages([
+                            'dimensions' => app()->isLocale('ar')
+                                ? 'يجب أن تكون صورة البانر بنسبة 6:5 وبأبعاد لا تقل عن 600×500 بكسل. المقاس الموصى به 1200×1000 بكسل.'
+                                : 'The banner image must use a 6:5 ratio and be at least 600×500 px. The recommended size is 1200×1000 px.',
+                            'max' => app()->isLocale('ar')
+                                ? 'يجب ألا يتجاوز حجم صورة البانر 1 ميغابايت.'
+                                : 'The banner image must not exceed 1 MB.',
+                            'mimetypes' => app()->isLocale('ar')
+                                ? 'صيغة صورة البانر غير مدعومة. استخدم JPG أو PNG أو WebP.'
+                                : 'Unsupported banner image format. Use JPG, PNG, or WebP.',
+                        ])
+                        ->maxFiles(1)
+                        ->storeFiles(false)
+                        ->required(),
+                ]),
+        ];
     }
 }
