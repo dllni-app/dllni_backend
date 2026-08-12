@@ -4,93 +4,66 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\HomepageBanners\Schemas;
 
-use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
-use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-use Modules\User\Enums\MarketingOfferTheme;
+use Illuminate\Validation\Rule;
 
 final class HomepageBannerForm
 {
+    private const RECOMMENDED_WIDTH = 1200;
+
+    private const RECOMMENDED_HEIGHT = 1000;
+
+    private const MIN_WIDTH = 600;
+
+    private const MIN_HEIGHT = 500;
+
+    private const MAX_SIZE_KB = 1024;
+
     public static function configure(Schema $schema): Schema
     {
         return $schema
             ->components([
-                Section::make(app()->isLocale('ar') ? 'محتوى البانر' : 'Banner Content')
+                Section::make(app()->isLocale('ar') ? 'صورة البانر' : 'Banner Image')
                     ->description(app()->isLocale('ar')
-                        ? 'هذه البيانات تظهر في بانر الصفحة الرئيسية لتطبيق المستخدم.'
-                        : 'This content is displayed in the user app homepage banner.')
-                    ->columns(2)
+                        ? 'بانر الصفحة الرئيسية يظهر في تطبيق المستخدم كصورة فقط.'
+                        : 'The homepage banner is displayed in the user app as an image only.')
                     ->schema([
-                        TextInput::make('title')
-                            ->label(app()->isLocale('ar') ? 'العنوان' : 'Title')
-                            ->required()
-                            ->maxLength(255),
-                        TextInput::make('discount_label')
-                            ->label(app()->isLocale('ar') ? 'نص العرض أو الخصم' : 'Offer or Discount Label')
-                            ->helperText(app()->isLocale('ar')
-                                ? 'مثال: خصم 15%.'
-                                : 'Example: 15% off.')
-                            ->required()
-                            ->maxLength(255),
-                        Textarea::make('description')
-                            ->label(app()->isLocale('ar') ? 'الوصف' : 'Description')
-                            ->rows(3)
-                            ->maxLength(2000)
-                            ->columnSpanFull(),
-                        TextInput::make('promo_code')
-                            ->label(app()->isLocale('ar') ? 'رمز العرض' : 'Promo Code')
-                            ->maxLength(255),
-                        Select::make('theme')
-                            ->label(app()->isLocale('ar') ? 'لون العرض' : 'Theme')
-                            ->options([
-                                MarketingOfferTheme::Orange->value => app()->isLocale('ar') ? 'برتقالي' : 'Orange',
-                                MarketingOfferTheme::Green->value => app()->isLocale('ar') ? 'أخضر' : 'Green',
-                                MarketingOfferTheme::Gold->value => app()->isLocale('ar') ? 'ذهبي' : 'Gold',
-                            ])
-                            ->default(MarketingOfferTheme::Orange->value)
-                            ->native(false)
-                            ->required(),
                         FileUpload::make('image_upload')
                             ->label(app()->isLocale('ar') ? 'صورة البانر' : 'Banner Image')
                             ->helperText(app()->isLocale('ar')
-                                ? 'الحد الأقصى 4 ميغابايت. عند التعديل اترك الحقل فارغاً للاحتفاظ بالصورة الحالية.'
-                                : 'Maximum 4 MB. Leave empty while editing to keep the current image.')
+                                ? 'الأبعاد الموصى بها: 1200×1000 بكسل بنسبة 6:5. الحد الأدنى: 600×500 بكسل. الحد الأقصى للحجم: 1 ميغابايت. الصيغ المدعومة: JPG وPNG وWebP. عند التعديل اترك الحقل فارغاً للاحتفاظ بالصورة الحالية.'
+                                : 'Recommended dimensions: 1200×1000 px at a 6:5 ratio. Minimum: 600×500 px. Maximum file size: 1 MB. Supported formats: JPG, PNG, and WebP. Leave empty while editing to keep the current image.')
                             ->image()
                             ->imageEditor()
+                            ->imageEditorViewportWidth((string) self::RECOMMENDED_WIDTH)
+                            ->imageEditorViewportHeight((string) self::RECOMMENDED_HEIGHT)
+                            ->imageAspectRatio('6:5')
+                            ->automaticallyOpenImageEditorForAspectRatio()
                             ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
-                            ->maxSize(4096)
+                            ->rule(
+                                Rule::dimensions()
+                                    ->minWidth(self::MIN_WIDTH)
+                                    ->minHeight(self::MIN_HEIGHT)
+                                    ->ratio(6 / 5)
+                            )
+                            ->maxSize(self::MAX_SIZE_KB)
+                            ->validationMessages([
+                                'dimensions' => app()->isLocale('ar')
+                                    ? 'يجب أن تكون صورة البانر بنسبة 6:5 وبأبعاد لا تقل عن 600×500 بكسل. المقاس الموصى به 1200×1000 بكسل.'
+                                    : 'The banner image must use a 6:5 ratio and be at least 600×500 px. The recommended size is 1200×1000 px.',
+                                'max' => app()->isLocale('ar')
+                                    ? 'يجب ألا يتجاوز حجم صورة البانر 1 ميغابايت.'
+                                    : 'The banner image must not exceed 1 MB.',
+                                'mimetypes' => app()->isLocale('ar')
+                                    ? 'صيغة صورة البانر غير مدعومة. استخدم JPG أو PNG أو WebP.'
+                                    : 'Unsupported banner image format. Use JPG, PNG, or WebP.',
+                            ])
+                            ->maxFiles(1)
                             ->storeFiles(false)
                             ->dehydrated(false)
-                            ->required(fn (string $operation): bool => $operation === 'create')
-                            ->columnSpanFull(),
-                    ]),
-                Section::make(app()->isLocale('ar') ? 'الظهور والترتيب' : 'Visibility and Ordering')
-                    ->columns(2)
-                    ->schema([
-                        TextInput::make('sort_order')
-                            ->label(app()->isLocale('ar') ? 'الترتيب' : 'Sort Order')
-                            ->numeric()
-                            ->minValue(0)
-                            ->default(0)
-                            ->required(),
-                        Toggle::make('is_active')
-                            ->label(app()->isLocale('ar') ? 'نشط' : 'Active')
-                            ->default(true),
-                        DateTimePicker::make('starts_at')
-                            ->label(app()->isLocale('ar') ? 'يبدأ الظهور في' : 'Starts At'),
-                        DateTimePicker::make('ends_at')
-                            ->label(app()->isLocale('ar') ? 'ينتهي الظهور في' : 'Ends At')
-                            ->afterOrEqual('starts_at')
-                            ->validationMessages([
-                                'after_or_equal' => app()->isLocale('ar')
-                                    ? 'يجب أن يكون وقت نهاية الظهور بعد وقت البداية أو مساوياً له.'
-                                    : 'The end time must be after or equal to the start time.',
-                            ]),
+                            ->required(fn (string $operation): bool => $operation === 'create'),
                     ]),
             ]);
     }
