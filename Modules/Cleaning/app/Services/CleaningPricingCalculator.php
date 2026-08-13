@@ -11,18 +11,27 @@ use InvalidArgumentException;
 final class CleaningPricingCalculator
 {
     private const DEFAULT_TRAVEL_PER_KM = 7500.0;
-    private const SYRIAN_CASH_INCREMENT = 500.0;
+
+    /**
+     * Prices are stored in the new SYP units, so monetary calculations must no
+     * longer be rounded up to 500 SYP. Keep the smallest cash increment at one
+     * lira to avoid inflating room prices, hourly rates, and commissions.
+     */
+    private const SYRIAN_CASH_INCREMENT = 1.0;
 
     public function provisional(float $basePrice, float $addonsTotal = 0.0): array
     {
         $basePrice = $this->roundMoney($basePrice);
         $addonsTotal = $this->roundMoney($addonsTotal);
+        $serviceSubtotal = $this->roundMoney($basePrice + $addonsTotal);
+        $financial = CleaningFinancialSetting::query()->first();
+        $adminMargin = $this->adminMargin($serviceSubtotal, $financial);
 
         return [
             'travelFee' => 0.0,
             'distanceKm' => null,
-            'adminMargin' => 0.0,
-            'totalPrice' => $this->roundMoney($basePrice + $addonsTotal),
+            'adminMargin' => $adminMargin,
+            'totalPrice' => $this->roundMoney($serviceSubtotal + $adminMargin),
             'isPricingFinal' => false,
         ];
     }
@@ -55,11 +64,7 @@ final class CleaningPricingCalculator
         $financial = CleaningFinancialSetting::query()->first();
         $travelPerKm = max(0.0, (float) ($financial?->travel_per_km ?? self::DEFAULT_TRAVEL_PER_KM));
         $travelFee = $this->roundMoney($exactDistanceKm * $travelPerKm);
-
-        $commissionType = (string) ($financial?->commission_type ?? 'percent');
-        $adminMargin = $commissionType === 'fixed'
-            ? $this->roundMoney(max(0.0, (float) ($financial?->commission_fixed_amount ?? 0.0)))
-            : $this->roundMoney($serviceSubtotal * (max(0.0, (float) ($financial?->default_commission_rate ?? 0.0)) / 100));
+        $adminMargin = $this->adminMargin($serviceSubtotal, $financial);
 
         return [
             'travelFee' => $travelFee,
@@ -77,6 +82,17 @@ final class CleaningPricingCalculator
         }
 
         return (float) (ceil($amount / self::SYRIAN_CASH_INCREMENT) * self::SYRIAN_CASH_INCREMENT);
+    }
+
+    private function adminMargin(float $serviceSubtotal, ?CleaningFinancialSetting $financial): float
+    {
+        $commissionType = (string) ($financial?->commission_type ?? 'percent');
+
+        return $commissionType === 'fixed'
+            ? $this->roundMoney(max(0.0, (float) ($financial?->commission_fixed_amount ?? 0.0)))
+            : $this->roundMoney(
+                $serviceSubtotal * (max(0.0, (float) ($financial?->default_commission_rate ?? 0.0)) / 100)
+            );
     }
 
     private function measureKm(float $a, float $b, float $c, float $d): float
