@@ -55,6 +55,7 @@ it('sends registration sms from the queued job', function (): void {
 
         return $request->method() === 'GET'
             && str_contains($request->url(), 'ConcatenatedSender.aspx')
+            && ($query['From'] ?? null) === 'ع الندهة'
             && ($query['Gsm'] ?? null) === '963944000111'
             && ($query['Lang'] ?? null) === (string) $smsPayload['lang']
             && ($query['Msg'] ?? null) === strtoupper(bin2hex(mb_convert_encoding($smsPayload['message'], 'UTF-16BE', 'UTF-8')));
