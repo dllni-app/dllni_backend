@@ -17,8 +17,8 @@ final class CleaningFinancialDefaults
     public const APP_ROOM_TYPES = ['bedroom', 'bathroom', 'kitchen', 'living_room', 'balcony', 'corridor', 'shed'];
 
     public const ROOM_SIZES = ['small', 'medium', 'large'];
-    public const BASE_UNIT_PRICE = 50;
-    public const DEEP_CLEANING_MULTIPLIER = 4.00;
+    public const BASE_UNIT_PRICE = 240;
+    public const DEEP_CLEANING_MULTIPLIER = 2.50;
     public const AREA_MARGIN_MULTIPLIER = 1.18;
     public const SETUP_BUFFER_MINUTES = 22;
 
@@ -40,11 +40,11 @@ final class CleaningFinancialDefaults
     {
         return [
             'bedroom' => ['small' => 1.0, 'medium' => 1.5, 'large' => 2.0],
-            'bathroom' => ['small' => 0.5, 'medium' => 1.5, 'large' => 2.0],
+            'bathroom' => ['small' => 0.5, 'medium' => 1.0, 'large' => 1.5],
             'toilet' => ['small' => 0.5, 'medium' => 1.5, 'large' => 2.0],
             'kitchen' => ['small' => 1.0, 'medium' => 1.5, 'large' => 2.0],
             'living_room' => ['small' => 1.0, 'medium' => 1.5, 'large' => 2.0],
-            'balcony' => ['small' => 0.5, 'medium' => 1.5, 'large' => 2.0],
+            'balcony' => ['small' => 0.5, 'medium' => 1.0, 'large' => 1.5],
             'corridor' => ['small' => 0.25, 'medium' => 0.5, 'large' => 0.75],
             'shed' => ['small' => 1.0, 'medium' => 1.5, 'large' => 2.0],
         ];
@@ -53,14 +53,14 @@ final class CleaningFinancialDefaults
     public static function roomTimeMinutes(): array
     {
         return [
-            'bedroom' => ['small' => ['regular' => 25, 'deep' => 50], 'medium' => ['regular' => 35, 'deep' => 70], 'large' => ['regular' => 45, 'deep' => 90]],
-            'bathroom' => ['small' => ['regular' => 20, 'deep' => 45], 'medium' => ['regular' => 28, 'deep' => 55], 'large' => ['regular' => 35, 'deep' => 70]],
+            'bedroom' => ['small' => ['regular' => 35, 'deep' => 60], 'medium' => ['regular' => 40, 'deep' => 75], 'large' => ['regular' => 45, 'deep' => 90]],
+            'bathroom' => ['small' => ['regular' => 15, 'deep' => 30], 'medium' => ['regular' => 20, 'deep' => 35], 'large' => ['regular' => 30, 'deep' => 40]],
             'toilet' => ['small' => ['regular' => 10, 'deep' => 20], 'medium' => ['regular' => 14, 'deep' => 25], 'large' => ['regular' => 18, 'deep' => 30]],
-            'kitchen' => ['small' => ['regular' => 30, 'deep' => 65], 'medium' => ['regular' => 40, 'deep' => 85], 'large' => ['regular' => 55, 'deep' => 110]],
-            'living_room' => ['small' => ['regular' => 30, 'deep' => 60], 'medium' => ['regular' => 40, 'deep' => 80], 'large' => ['regular' => 55, 'deep' => 110]],
-            'balcony' => ['small' => ['regular' => 12, 'deep' => 25], 'medium' => ['regular' => 18, 'deep' => 35], 'large' => ['regular' => 25, 'deep' => 45]],
-            'corridor' => ['small' => ['regular' => 8, 'deep' => 15], 'medium' => ['regular' => 12, 'deep' => 22], 'large' => ['regular' => 16, 'deep' => 28]],
-            'shed' => ['small' => ['regular' => 25, 'deep' => 50], 'medium' => ['regular' => 35, 'deep' => 70], 'large' => ['regular' => 50, 'deep' => 100]],
+            'kitchen' => ['small' => ['regular' => 30, 'deep' => 60], 'medium' => ['regular' => 45, 'deep' => 90], 'large' => ['regular' => 60, 'deep' => 120]],
+            'living_room' => ['small' => ['regular' => 35, 'deep' => 60], 'medium' => ['regular' => 40, 'deep' => 75], 'large' => ['regular' => 45, 'deep' => 90]],
+            'balcony' => ['small' => ['regular' => 15, 'deep' => 60], 'medium' => ['regular' => 20, 'deep' => 90], 'large' => ['regular' => 25, 'deep' => 120]],
+            'corridor' => ['small' => ['regular' => 10, 'deep' => 15], 'medium' => ['regular' => 15, 'deep' => 22], 'large' => ['regular' => 20, 'deep' => 28]],
+            'shed' => ['small' => ['regular' => 25, 'deep' => 45], 'medium' => ['regular' => 35, 'deep' => 60], 'large' => ['regular' => 50, 'deep' => 90]],
         ];
     }
 }
