@@ -33,44 +33,4 @@ final class WorkerAccountProfileUpdateRequest extends FormRequest
             'homeLongitude' => ['nullable', 'numeric', 'between:-180,180'],
         ];
     }
-
-    public function withValidator($validator): void
-    {
-        $validator->after(function ($validator): void {
-            $worker = auth()->user()?->worker;
-            if (! $worker) {
-                return;
-            }
-
-            $isActive = array_key_exists('isActive', $this->all())
-                ? (bool) $this->input('isActive')
-                : (bool) $worker->is_active;
-
-            if (! $isActive) {
-                return;
-            }
-
-            $homeAddress = array_key_exists('homeAddress', $this->all())
-                ? $this->input('homeAddress')
-                : $worker->home_address;
-            $homeLatitude = array_key_exists('homeLatitude', $this->all())
-                ? $this->input('homeLatitude')
-                : $worker->home_latitude;
-            $homeLongitude = array_key_exists('homeLongitude', $this->all())
-                ? $this->input('homeLongitude')
-                : $worker->home_longitude;
-
-            if ($homeAddress === null || mb_trim((string) $homeAddress) === '') {
-                $validator->errors()->add('homeAddress', 'Active workers must have a home address.');
-            }
-
-            if ($homeLatitude === null) {
-                $validator->errors()->add('homeLatitude', 'Active workers must have home latitude.');
-            }
-
-            if ($homeLongitude === null) {
-                $validator->errors()->add('homeLongitude', 'Active workers must have home longitude.');
-            }
-        });
-    }
 }
