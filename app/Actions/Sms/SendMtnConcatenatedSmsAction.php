@@ -43,7 +43,7 @@ final class SendMtnConcatenatedSmsAction
             ->get($baseUrl, [
                 'User' => config('services.mtn_sms.user'),
                 'Pass' => config('services.mtn_sms.password'),
-                'From' => config('services.mtn_sms.from', 'Dllni 24'),
+                'From' => config('services.mtn_sms.from', 'ع الندهة'),
                 'Gsm' => $payload->gsmString(),
                 'Msg' => $this->encodeMessage($payload->message, $payload->lang),
                 'Lang' => $payload->lang,
