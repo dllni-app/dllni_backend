@@ -7,9 +7,14 @@ namespace Database\Seeders;
 use App\Enums\UserModuleType;
 use App\Models\User;
 use Illuminate\Database\Seeder;
+use Modules\Delivery\Enums\DeliveryDriverAvailabilityStatus;
+use Modules\Delivery\Models\DeliveryCompany;
+use Modules\Delivery\Models\DeliveryDriver;
 
 final class RequestedTestUsersSeeder extends Seeder
 {
+    private const DELIVERY_PHONE = '+963900000001';
+
     /**
      * @var array<int, array{name: string, phone: string, password: string, module_type: UserModuleType|null}>
      */
@@ -34,7 +39,7 @@ final class RequestedTestUsersSeeder extends Seeder
         ],
         [
             'name' => 'Delivery Test User',
-            'phone' => '+963900000001',
+            'phone' => self::DELIVERY_PHONE,
             'password' => 'secret123',
             'module_type' => UserModuleType::DeliveryDriver,
         ],
@@ -42,16 +47,55 @@ final class RequestedTestUsersSeeder extends Seeder
 
     public function run(): void
     {
+        $users = [];
+
         foreach (self::USERS as $profile) {
-            User::updateOrCreate(
+            $users[$profile['phone']] = User::updateOrCreate(
                 ['phone' => $profile['phone']],
                 [
                     'name' => $profile['name'],
                     'module_type' => $profile['module_type']?->value,
                     'password' => bcrypt($profile['password']),
                     'phone_verified_at' => now(),
+                    'is_active' => true,
                 ]
-            );
+            )->fresh();
         }
+
+        $this->ensureDeliveryDriverProfile($users[self::DELIVERY_PHONE]);
+    }
+
+    private function ensureDeliveryDriverProfile(User $deliveryUser): void
+    {
+        $owner = User::query()
+            ->where('email', 'admin@admin.com')
+            ->firstOrFail();
+
+        $company = DeliveryCompany::updateOrCreate(
+            ['owner_user_id' => $owner->id],
+            [
+                'name' => 'Dllni Delivery',
+                'legal_name' => 'Dllni Delivery',
+                'phone' => self::DELIVERY_PHONE,
+                'is_active' => true,
+                'is_suspended' => false,
+                'suspension_reason' => null,
+                'suspended_until' => null,
+            ]
+        )->fresh();
+
+        DeliveryDriver::updateOrCreate(
+            ['user_id' => $deliveryUser->id],
+            [
+                'company_id' => $company->id,
+                'first_name' => 'Delivery Test User',
+                'phone' => self::DELIVERY_PHONE,
+                'availability_status' => DeliveryDriverAvailabilityStatus::Available->value,
+                'is_active' => true,
+                'is_suspended' => false,
+                'suspension_reason' => null,
+                'suspended_until' => null,
+            ]
+        );
     }
 }
