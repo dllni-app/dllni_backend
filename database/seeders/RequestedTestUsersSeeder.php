@@ -16,7 +16,7 @@ final class RequestedTestUsersSeeder extends Seeder
     private const DELIVERY_PHONE = '+963900000001';
 
     /**
-     * @var array<int, array{name: string, phone: string, password: string, module_type: UserModuleType|null}>
+     * @var array<int, array{name: string, phone: string, password: string, module_type: UserModuleType|null, email?: string}>
      */
     private const USERS = [
         [
@@ -40,6 +40,7 @@ final class RequestedTestUsersSeeder extends Seeder
         [
             'name' => 'Delivery Test User',
             'phone' => self::DELIVERY_PHONE,
+            'email' => 'mandoub.test@dllni.sy',
             'password' => 'secret123',
             'module_type' => UserModuleType::DeliveryDriver,
         ],
@@ -50,15 +51,22 @@ final class RequestedTestUsersSeeder extends Seeder
         $users = [];
 
         foreach (self::USERS as $profile) {
+            $attributes = [
+                'name' => $profile['name'],
+                'module_type' => $profile['module_type']?->value,
+                'password' => bcrypt($profile['password']),
+                'phone_verified_at' => now(),
+                'is_active' => true,
+            ];
+
+            if (isset($profile['email'])) {
+                $attributes['email'] = $profile['email'];
+                $attributes['email_verified_at'] = now();
+            }
+
             $users[$profile['phone']] = User::updateOrCreate(
                 ['phone' => $profile['phone']],
-                [
-                    'name' => $profile['name'],
-                    'module_type' => $profile['module_type']?->value,
-                    'password' => bcrypt($profile['password']),
-                    'phone_verified_at' => now(),
-                    'is_active' => true,
-                ]
+                $attributes,
             )->fresh();
         }
 
@@ -67,12 +75,8 @@ final class RequestedTestUsersSeeder extends Seeder
 
     private function ensureDeliveryDriverProfile(User $deliveryUser): void
     {
-        $owner = User::query()
-            ->where('email', 'admin@admin.com')
-            ->firstOrFail();
-
         $company = DeliveryCompany::updateOrCreate(
-            ['owner_user_id' => $owner->id],
+            ['owner_user_id' => $deliveryUser->id],
             [
                 'name' => 'Dllni Delivery',
                 'legal_name' => 'Dllni Delivery',
