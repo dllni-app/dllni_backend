@@ -43,7 +43,9 @@ Route::prefix('v1/delivery/driver')->group(function (): void {
         Route::get('financial/summary', DriverFinancialController::class);
 
         Route::get('notifications', [DriverNotificationController::class, 'index']);
+        Route::delete('notifications/all', [DriverNotificationController::class, 'destroyAll']);
         Route::patch('notifications/{id}/read', [DriverNotificationController::class, 'markAsRead']);
+        Route::delete('notifications/{id}', [DriverNotificationController::class, 'destroy']);
 
         Route::get('disputes', DriverDisputeController::class);
 
