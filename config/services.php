@@ -59,7 +59,7 @@ return [
         'base_url' => env('MTN_SMS_BASE_URL', 'https://services.mtnsyr.com:7443/general/MTNSERVICES/ConcatenatedSender.aspx'),
         'user' => env('MTN_SMS_USER'),
         'password' => env('MTN_SMS_PASSWORD'),
-        'from' => env('MTN_SMS_FROM', 'Dllni 24'),
+        'from' => env('MTN_SMS_FROM', 'ع الندهة'),
         'timeout' => (int) env('MTN_SMS_TIMEOUT', 15),
         'retry_times' => (int) env('MTN_SMS_RETRY_TIMES', 2),
         'retry_sleep' => (int) env('MTN_SMS_RETRY_SLEEP', 500),

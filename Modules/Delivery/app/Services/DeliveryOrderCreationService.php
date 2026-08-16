@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Delivery\Services;
 
 use Illuminate\Validation\ValidationException;
+use Modules\Delivery\Enums\DeliveryDriverAvailabilityStatus;
 use Modules\Delivery\Models\DeliveryCompany;
 use Modules\Delivery\Models\DeliveryOrder;
 use Modules\Resturants\Models\Order;
@@ -113,7 +114,22 @@ final class DeliveryOrderCreationService
 
     private function resolveCompany(): DeliveryCompany
     {
-        $company = DeliveryCompany::query()->where('is_active', true)->where('is_suspended', false)->oldest('id')->first();
+        $company = DeliveryCompany::query()
+            ->where('is_active', true)
+            ->where('is_suspended', false)
+            ->withCount([
+                'drivers as available_drivers_count' => static fn ($query) => $query
+                    ->where('is_active', true)
+                    ->where('is_suspended', false)
+                    ->where('availability_status', DeliveryDriverAvailabilityStatus::Available->value),
+                'drivers as active_drivers_count' => static fn ($query) => $query
+                    ->where('is_active', true)
+                    ->where('is_suspended', false),
+            ])
+            ->orderByDesc('available_drivers_count')
+            ->orderByDesc('active_drivers_count')
+            ->oldest('id')
+            ->first();
 
         if (! $company instanceof DeliveryCompany) {
             throw ValidationException::withMessages(['delivery' => ['No delivery company is available right now.']]);

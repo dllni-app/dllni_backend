@@ -3,12 +3,14 @@
 declare(strict_types=1);
 
 use App\Models\User;
+use Database\Factories\SmProductFactory;
 use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
-use Modules\Delivery\Models\DeliveryCompany;
-use Modules\Delivery\Models\DeliveryOrder;
 use Modules\Delivery\Enums\DeliveryOrderStatus;
 use Modules\Delivery\Jobs\DispatchDeliveryOrderJob;
+use Modules\Delivery\Models\DeliveryCompany;
+use Modules\Delivery\Models\DeliveryDriver;
+use Modules\Delivery\Models\DeliveryOrder;
 use Modules\Delivery\Services\DeliveryOrderCreationService;
 use Modules\Resturants\Models\Cart;
 use Modules\Resturants\Models\CartItem;
@@ -20,7 +22,6 @@ use Modules\Supermarket\Models\SmCartItem;
 use Modules\Supermarket\Models\SmOrder;
 use Modules\Supermarket\Models\SmStore;
 use Modules\User\Models\UserAddress;
-use Database\Factories\SmProductFactory;
 
 function linkedDeliveryAddress(User $user, array $overrides = []): UserAddress
 {
@@ -94,6 +95,32 @@ it('restaurant delivery checkout creates a linked delivery order', function (): 
         ->and((int) $order->deliveryOrder->created_by_user_id)->toBe((int) $user->id);
 
     Queue::assertNotPushed(DispatchDeliveryOrderJob::class);
+});
+
+it('restaurant delivery checkout prefers a company with dispatch-capable drivers', function (): void {
+    Queue::fake();
+    $user = User::factory()->create();
+    DeliveryCompany::factory()->create(['is_active' => true, 'is_suspended' => false]);
+    $dispatchableCompany = DeliveryCompany::factory()->create(['is_active' => true, 'is_suspended' => false]);
+    DeliveryDriver::factory()->available()->create([
+        'company_id' => $dispatchableCompany->id,
+        'is_active' => true,
+        'is_suspended' => false,
+    ]);
+    $address = linkedDeliveryAddress($user);
+    $cart = linkedRestaurantCart($user);
+
+    Sanctum::actingAs($user);
+
+    $this->postJson('/api/v1/user/restaurants/carts/'.$cart->id.'/orders', [
+        'fulfillmentType' => 'delivery',
+        'receiveMode' => 'immediate',
+        'addressId' => $address->id,
+    ])->assertCreated();
+
+    $order = Order::query()->where('user_id', $user->id)->firstOrFail();
+
+    expect((int) $order->deliveryOrder?->company_id)->toBe((int) $dispatchableCompany->id);
 });
 
 it('restaurant pickup checkout does not create a delivery order', function (): void {

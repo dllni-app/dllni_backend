@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Supermarket\Services;
 
+use App\Support\SupermarketOwnerPermissionCatalog;
 use Modules\Supermarket\Models\SmStoreStaff;
 
 final class StoreOwnerEmployeePayload
@@ -11,7 +12,8 @@ final class StoreOwnerEmployeePayload
     public static function make(SmStoreStaff $staff): array
     {
         $permissions = ($staff->user?->permissions ?? collect())
-            ->where('group', 'supermarket_owner')
+            ->where('group', SupermarketOwnerPermissionCatalog::GROUP)
+            ->whereIn('name', SupermarketOwnerPermissionCatalog::NAMES)
             ->values();
 
         return [

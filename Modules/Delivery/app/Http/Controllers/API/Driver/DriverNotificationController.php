@@ -6,6 +6,8 @@ namespace Modules\Delivery\Http\Controllers\API\Driver;
 
 use App\Http\Resources\UserNotificationResource;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Modules\Delivery\Http\Requests\Driver\DriverNotificationIndexRequest;
 
@@ -26,7 +28,7 @@ final class DriverNotificationController
         );
     }
 
-    public function markAsRead(\Illuminate\Http\Request $request, string $id): JsonResponse
+    public function markAsRead(Request $request, string $id): JsonResponse
     {
         $notification = $request->user()->notifications()->where('id', $id)->firstOrFail();
         $notification->markAsRead();
@@ -34,5 +36,19 @@ final class DriverNotificationController
         return response()->json([
             'data' => ['ok' => true],
         ]);
+    }
+
+    public function destroy(Request $request, string $id): Response
+    {
+        $request->user()->notifications()->where('id', $id)->firstOrFail()->delete();
+
+        return response()->noContent();
+    }
+
+    public function destroyAll(Request $request): Response
+    {
+        $request->user()->notifications()->delete();
+
+        return response()->noContent();
     }
 }

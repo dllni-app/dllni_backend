@@ -4,12 +4,8 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\HomepageBanners;
 
-use App\Filament\Resources\HomepageBanners\Pages\CreateHomepageBanner;
-use App\Filament\Resources\HomepageBanners\Pages\EditHomepageBanner;
 use App\Filament\Resources\HomepageBanners\Pages\ListHomepageBanners;
-use App\Filament\Resources\HomepageBanners\Pages\ViewHomepageBanner;
 use App\Filament\Resources\HomepageBanners\Schemas\HomepageBannerForm;
-use App\Filament\Resources\HomepageBanners\Schemas\HomepageBannerInfolist;
 use App\Filament\Resources\HomepageBanners\Tables\HomepageBannersTable;
 use BackedEnum;
 use Filament\Resources\Resource;
@@ -40,8 +36,8 @@ final class HomepageBannerResource extends Resource
     public static function getNavigationTooltip(): ?string
     {
         return app()->isLocale('ar')
-            ? 'إدارة البنرات والعروض المعروضة في الصفحة الرئيسية لتطبيق المستخدم.'
-            : 'Manage banners and offers displayed on the user app homepage.';
+            ? 'إضافة وحذف وترتيب بنرات الصفحة الرئيسية لتطبيق المستخدم.'
+            : 'Add, delete, and reorder user app homepage banners.';
     }
 
     public static function getModelLabel(): string
@@ -57,11 +53,6 @@ final class HomepageBannerResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return HomepageBannerForm::configure($schema);
-    }
-
-    public static function infolist(Schema $schema): Schema
-    {
-        return HomepageBannerInfolist::configure($schema);
     }
 
     public static function table(Table $table): Table
@@ -81,7 +72,7 @@ final class HomepageBannerResource extends Resource
 
     public static function canView(Model $record): bool
     {
-        return self::hasPermission('offers.view');
+        return false;
     }
 
     public static function canCreate(): bool
@@ -91,12 +82,17 @@ final class HomepageBannerResource extends Resource
 
     public static function canEdit(Model $record): bool
     {
-        return self::hasPermission('offers.update');
+        return false;
     }
 
     public static function canDelete(Model $record): bool
     {
         return self::hasPermission('offers.delete');
+    }
+
+    public static function canReorderBanners(): bool
+    {
+        return self::hasPermission('offers.update');
     }
 
     public static function getRelations(): array
@@ -108,9 +104,6 @@ final class HomepageBannerResource extends Resource
     {
         return [
             'index' => ListHomepageBanners::route('/'),
-            'create' => CreateHomepageBanner::route('/create'),
-            'view' => ViewHomepageBanner::route('/{record}'),
-            'edit' => EditHomepageBanner::route('/{record}/edit'),
         ];
     }
 

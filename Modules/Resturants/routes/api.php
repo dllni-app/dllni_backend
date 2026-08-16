@@ -32,6 +32,8 @@ use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerEmplo
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerEmployeeIndexController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerEmployeeStoreController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerEmployeeUpdateController;
+use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerNotificationDestroyAllController;
+use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerNotificationDestroyController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerNotificationMarkReadAllController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerNotificationMarkReadController;
 use Modules\Resturants\Http\Controllers\API\RestaurantOwner\RestaurantOwnerNotificationsController;
@@ -210,7 +212,9 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () use (
 
         Route::get('notifications', RestaurantOwnerNotificationsController::class);
         Route::patch('notifications/read-all', RestaurantOwnerNotificationMarkReadAllController::class);
+        Route::delete('notifications/all', RestaurantOwnerNotificationDestroyAllController::class);
         Route::patch('notifications/{notification}/read', RestaurantOwnerNotificationMarkReadController::class);
+        Route::delete('notifications/{notification}', RestaurantOwnerNotificationDestroyController::class);
 
         Route::get('activity-logs', RestaurantOwnerActivityLogController::class)
             ->middleware($staffPermission);

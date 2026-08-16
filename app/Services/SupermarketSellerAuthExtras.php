@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Enums\UserModuleType;
 use App\Models\User;
+use App\Support\SupermarketOwnerPermissionCatalog;
 use Illuminate\Support\Collection;
 use Spatie\Permission\Models\Permission;
 
@@ -53,7 +54,8 @@ final class SupermarketSellerAuthExtras
         /** @var Collection<int, Permission> $catalog */
         $catalog = Permission::query()
             ->where('guard_name', $guardName)
-            ->where('group', 'supermarket_owner')
+            ->where('group', SupermarketOwnerPermissionCatalog::GROUP)
+            ->whereIn('name', SupermarketOwnerPermissionCatalog::NAMES)
             ->orderBy('name')
             ->get();
 
@@ -61,7 +63,8 @@ final class SupermarketSellerAuthExtras
             $selected = $catalog;
         } else {
             $assignedIds = $user->getAllPermissions()
-                ->where('group', 'supermarket_owner')
+                ->where('group', SupermarketOwnerPermissionCatalog::GROUP)
+                ->whereIn('name', SupermarketOwnerPermissionCatalog::NAMES)
                 ->pluck('id')
                 ->all();
 

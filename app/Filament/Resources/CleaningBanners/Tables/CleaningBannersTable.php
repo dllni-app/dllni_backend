@@ -5,13 +5,12 @@ declare(strict_types=1);
 namespace App\Filament\Resources\CleaningBanners\Tables;
 
 use App\Filament\Resources\CleaningBanners\CleaningBannerResource;
-use Filament\Actions\EditAction;
-use Filament\Actions\ViewAction;
-use Filament\Tables\Columns\IconColumn;
+use Filament\Actions\Action;
+use Filament\Actions\DeleteAction;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\Storage;
 use Modules\Cleaning\Models\CleaningBanner;
 
 final class CleaningBannersTable
@@ -21,43 +20,41 @@ final class CleaningBannersTable
         return $table
             ->columns([
                 ImageColumn::make('image')
-                    ->label('')
-                    ->defaultImageUrl('https://ui-avatars.com/api/?name=B&background=random')
+                    ->label(app()->isLocale('ar') ? 'صورة البانر' : 'Banner Image')
                     ->getStateUsing(fn (CleaningBanner $record): ?string => $record->imageUrl()),
-                TextColumn::make('title')
-                    ->label(__('cleaning_admin.cleaning_banners.fields.title'))
-                    ->searchable()
-                    ->sortable(),
-                TextColumn::make('sort_order')
-                    ->label(__('cleaning_admin.cleaning_banners.fields.sort_order'))
-                    ->sortable(),
-                TextColumn::make('starts_at')
-                    ->label(__('cleaning_admin.cleaning_banners.fields.starts_at'))
-                    ->dateTime('Y-m-d H:i')
-                    ->toggleable(isToggledHiddenByDefault: true)
-                    ->sortable(),
-                TextColumn::make('ends_at')
-                    ->label(__('cleaning_admin.cleaning_banners.fields.ends_at'))
-                    ->dateTime('Y-m-d H:i')
-                    ->toggleable(isToggledHiddenByDefault: true)
-                    ->sortable(),
-                IconColumn::make('is_active')
-                    ->label(__('cleaning_admin.cleaning_banners.fields.is_active'))
-                    ->boolean(),
+                TextColumn::make('created_at')
+                    ->label(app()->isLocale('ar') ? 'تاريخ الإضافة' : 'Created At')
+                    ->dateTime('Y-m-d H:i'),
             ])
             ->defaultSort('sort_order')
-            ->filters([
-                TernaryFilter::make('is_active')
-                    ->label(__('cleaning_admin.cleaning_banners.filters.is_active')),
-            ])
+            ->reorderable('sort_order', CleaningBannerResource::canReorderBanners())
+            ->reorderRecordsTriggerAction(
+                fn (Action $action, bool $isReordering): Action => $action
+                    ->button()
+                    ->label($isReordering
+                        ? (app()->isLocale('ar') ? 'إنهاء تغيير الترتيب' : 'Finish Reordering')
+                        : (app()->isLocale('ar') ? 'تغيير الترتيب بالسحب والإفلات' : 'Reorder by Drag and Drop')),
+            )
             ->recordActions([
-                ViewAction::make()
-                    ->label(__('cleaning_admin.shared.actions.view'))
-                    ->url(fn (CleaningBanner $record): string => CleaningBannerResource::getUrl('view', ['record' => $record])),
-                EditAction::make()
-                    ->label(__('cleaning_admin.shared.actions.edit'))
-                    ->url(fn (CleaningBanner $record): string => CleaningBannerResource::getUrl('edit', ['record' => $record])),
+                DeleteAction::make()
+                    ->label(app()->isLocale('ar') ? 'حذف' : 'Delete')
+                    ->requiresConfirmation()
+                    ->modalHeading(app()->isLocale('ar') ? 'حذف بانر التنظيف' : 'Delete Cleaning Banner')
+                    ->modalDescription(app()->isLocale('ar')
+                        ? 'سيتم حذف البانر من قسم التنظيف في تطبيق المستخدم.'
+                        : 'This banner will be removed from the cleaning section in the user app.')
+                    ->before(function (CleaningBanner $record): void {
+                        if (is_string($record->image_path) && $record->image_path !== '') {
+                            Storage::disk('public')->delete($record->image_path);
+                        }
+                    }),
             ])
+            ->emptyStateHeading(app()->isLocale('ar')
+                ? 'لا توجد بنرات لقسم التنظيف'
+                : 'No cleaning banners')
+            ->emptyStateDescription(app()->isLocale('ar')
+                ? 'اضغط «إضافة بانر» لإضافة أول صورة.'
+                : 'Click “Add Banner” to add the first image.')
             ->modifyQueryUsing(fn ($query) => $query->orderBy('sort_order')->orderBy('id'));
     }
 }

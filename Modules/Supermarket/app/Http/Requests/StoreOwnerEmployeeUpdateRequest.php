@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Supermarket\Http\Requests;
 
+use App\Support\SupermarketOwnerPermissionCatalog;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -56,7 +57,9 @@ final class StoreOwnerEmployeeUpdateRequest extends FormRequest
             'permissionIds.*' => [
                 'integer',
                 Rule::exists('permissions', 'id')->where(
-                    static fn ($query) => $query->where('group', 'supermarket_owner')
+                    static fn ($query) => $query
+                        ->where('group', SupermarketOwnerPermissionCatalog::GROUP)
+                        ->whereIn('name', SupermarketOwnerPermissionCatalog::NAMES)
                 ),
             ],
             'syncPermissions' => 'sometimes|boolean',
