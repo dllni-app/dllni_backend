@@ -11,10 +11,14 @@ use App\Models\BookingStatusLog;
 use App\Models\User;
 use App\Models\Worker;
 use App\Notifications\Cleaning\BookingLifecycleNotification;
+use App\Notifications\CleaningBookingStatusChangedDashboardNotification;
+use App\Notifications\NewCleaningBookingDashboardNotification;
+use App\Support\DashboardAdminRecipients;
 use BackedEnum;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Modules\Cleaning\Enums\CleaningAssignmentMode;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
@@ -76,8 +80,11 @@ final class CleaningBookingObserver
             'to_status' => $booking->status->value,
         ]);
 
+        $this->notifyAdminsNewBooking($booking);
+
         if ($booking->status !== CleaningBookingStatus::Pending) {
             $this->notifyLifecycleCreated($booking);
+
             return;
         }
 
@@ -112,6 +119,8 @@ final class CleaningBookingObserver
             if ($booking->status === CleaningBookingStatus::Completed) {
                 $this->chargeAdminCommission($booking);
             }
+
+            $this->notifyAdminsStatusChanged($booking, $fromStatusValue);
 
             return;
         }
@@ -288,6 +297,7 @@ final class CleaningBookingObserver
                         $depositService->recordAdminFeeDebit($worker, $booking, $amount);
                     }
                 });
+
                 return;
             }
 
@@ -324,6 +334,28 @@ final class CleaningBookingObserver
         }
 
         ConvertPreferredCleaningBookingToOpenJob::dispatch($booking->id)->delay(now()->addMinutes($delayMinutes))->afterCommit();
+    }
+
+    private function notifyAdminsNewBooking(CleaningBooking $booking): void
+    {
+        $admins = DashboardAdminRecipients::all();
+
+        if ($admins->isNotEmpty()) {
+            Notification::send($admins, new NewCleaningBookingDashboardNotification($booking));
+        }
+    }
+
+    private function notifyAdminsStatusChanged(CleaningBooking $booking, string $fromStatusValue): void
+    {
+        $admins = DashboardAdminRecipients::all();
+
+        if ($admins->isNotEmpty()) {
+            Notification::send($admins, new CleaningBookingStatusChangedDashboardNotification(
+                $booking,
+                $fromStatusValue,
+                $booking->status->value,
+            ));
+        }
     }
 
     private function notifyLifecycleCreated(CleaningBooking $booking): void

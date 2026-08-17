@@ -8,7 +8,7 @@ use App\Enums\EmergencyType;
 use App\Models\SosAlert;
 use App\Models\User;
 use App\Notifications\NewUserSosDashboardNotification;
-use Illuminate\Support\Collection;
+use App\Support\DashboardAdminRecipients;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Modules\Resturants\Models\Order;
@@ -24,31 +24,19 @@ final class CreateUserSosAlertAction
                 'booking_id' => $order->getKey(),
                 'booking_type' => Order::class,
                 'emergency_type' => EmergencyType::SafetyThreat->value,
-                'message' => trim($message),
+                'message' => mb_trim($message),
                 'source' => 'user',
                 'status' => 'pending',
                 'triggered_at' => now(),
             ]);
         });
 
-        $admins = $this->dashboardAdmins();
+        $admins = DashboardAdminRecipients::all();
 
         if ($admins->isNotEmpty()) {
             Notification::send($admins, new NewUserSosDashboardNotification($sos));
         }
 
         return $sos;
-    }
-
-    /**
-     * @return Collection<int, User>
-     */
-    private function dashboardAdmins(): Collection
-    {
-        return User::query()
-            ->whereHas('roles', static function ($query): void {
-                $query->whereIn('name', ['admin', 'Super Admin']);
-            })
-            ->get();
     }
 }

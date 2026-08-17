@@ -644,6 +644,24 @@ return [
         'view' => 'عرض البلاغ',
     ],
 
+    'booking_notification' => [
+        'created_title' => 'حجز تنظيف جديد',
+        'created_body' => 'تم إنشاء حجز جديد (:booking).',
+        'status_changed_title' => 'تغيرت حالة الحجز',
+        'status_changed_body' => 'انتقل الحجز :booking من :from إلى :to.',
+        'view' => 'عرض الحجز',
+    ],
+
+    'deposit_notification' => [
+        'title' => 'رصيد عامل حرج',
+        'body' => ':worker تجاوز الحد المسموح للرصيد السالب (الدين: :debt).',
+        'view' => 'عرض التأمينات',
+    ],
+
+    'hard_alarm' => [
+        'acknowledge' => 'تأكيد الاطلاع وإيقاف التنبيه',
+    ],
+
     'report' => [
         'nav_label' => 'التقرير المالي',
         'title' => 'التقرير المالي',

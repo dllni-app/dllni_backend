@@ -617,6 +617,24 @@ return [
         'view' => 'View alert',
     ],
 
+    'booking_notification' => [
+        'created_title' => 'New cleaning booking',
+        'created_body' => 'A new booking (:booking) was created.',
+        'status_changed_title' => 'Booking status changed',
+        'status_changed_body' => 'Booking :booking moved from :from to :to.',
+        'view' => 'View booking',
+    ],
+
+    'deposit_notification' => [
+        'title' => 'Worker deposit critical',
+        'body' => ':worker has exceeded their allowed negative balance (debt: :debt).',
+        'view' => 'View deposits',
+    ],
+
+    'hard_alarm' => [
+        'acknowledge' => 'Acknowledge & stop',
+    ],
+
     'report' => [
         'nav_label' => 'Financial report',
         'title' => 'Financial report',
