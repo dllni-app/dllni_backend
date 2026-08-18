@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Modules\User\Http\Controllers\API;
 
 use Illuminate\Http\JsonResponse;
-use Modules\Cleaning\Http\Resources\CleaningBookingResource;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\User\Http\Requests\UserCleaningOrderRoomAssignmentsRequest;
+use Modules\User\Http\Resources\UserCleaningBookingResource;
 use Modules\User\Services\UserCleaningOrderService;
 
 final class UserCleaningOrderRoomAssignmentsController
@@ -33,7 +33,7 @@ final class UserCleaningOrderRoomAssignmentsController
         ]);
 
         return response()->json([
-            'order' => CleaningBookingResource::make($updated),
+            'order' => UserCleaningBookingResource::make($updated),
         ]);
     }
 }
