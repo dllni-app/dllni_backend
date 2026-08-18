@@ -7,6 +7,7 @@ use App\Models\Worker;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
+use Modules\Cleaning\Observers\CleaningBookingObserver;
 use Modules\Cleaning\Services\CleaningCouponPricingService;
 
 it('applies a percentage cleaning coupon to service travel and administration amounts', function (): void {
@@ -94,10 +95,15 @@ it('synchronizes the discounted booking and worker financial shares when a coupo
         'currency' => 'SYP',
     ]);
 
-    $booking->forceFill([
-        'platform_coupon_id' => $coupon->id,
-        'platform_coupon_code' => $coupon->code,
-    ])->save();
+    CleaningBookingObserver::withoutLifecycleUpdateNotificationsFor(
+        (int) $booking->id,
+        function () use ($booking, $coupon): void {
+            $booking->forceFill([
+                'platform_coupon_id' => $coupon->id,
+                'platform_coupon_code' => $coupon->code,
+            ])->save();
+        },
+    );
 
     $booking->refresh();
     $assignment->refresh();
