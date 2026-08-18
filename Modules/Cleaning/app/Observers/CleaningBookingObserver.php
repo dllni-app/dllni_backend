@@ -23,6 +23,7 @@ use Modules\Cleaning\Enums\CleaningAssignmentMode;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
+use Modules\Cleaning\Services\CleaningCouponPricingService;
 use Modules\Cleaning\Services\DepositService;
 use Modules\User\Services\FemaleWorkerSafetyPolicyService;
 use Throwable;
@@ -68,6 +69,21 @@ final class CleaningBookingObserver
 
         if ($booking->isDirty('status')) {
             $this->applyCancellationSourceSnapshot($booking);
+        }
+
+        if (
+            (int) ($booking->platform_coupon_id ?? 0) > 0
+            && $booking->isDirty([
+                'platform_coupon_id',
+                'base_price',
+                'addons_total',
+                'travel_fee',
+                'admin_margin_amount',
+                'total_price',
+                'is_pricing_final',
+            ])
+        ) {
+            app(CleaningCouponPricingService::class)->applyBeforeSave($booking);
         }
     }
 
