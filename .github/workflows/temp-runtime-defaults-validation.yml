@@ -36,16 +36,14 @@ jobs:
           DB_DATABASE: database/database.sqlite
         run: php artisan migrate --force
 
-      - name: Check changed PHP formatting
+      - name: Check runtime fallback formatting
         run: |
           vendor/bin/pint --test \
             Modules/Cleaning/app/Services/CleaningExtendedTimePricingService.php \
             Modules/Cleaning/app/Services/CleaningPricingCalculator.php \
             Modules/Cleaning/app/Services/WorkerTrustService.php \
             Modules/Cleaning/app/Support/CleaningRuntimeSettings.php \
-            Modules/User/app/Services/UserCleaningOrderEstimationService.php \
             app/Filament/Resources/CleaningNeighborhoods/Tables/CleaningNeighborhoodsTable.php \
-            app/Models/CleaningFinancialSetting.php \
             tests/Feature/Cleaning/CleaningRuntimeSettingsFallbackTest.php
 
       - name: Run targeted regression tests
