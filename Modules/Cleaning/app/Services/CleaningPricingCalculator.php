@@ -7,11 +7,10 @@ namespace Modules\Cleaning\Services;
 use App\Models\CleaningFinancialSetting;
 use App\Models\Worker;
 use InvalidArgumentException;
+use Modules\Cleaning\Support\CleaningRuntimeSettings;
 
 final class CleaningPricingCalculator
 {
-    private const DEFAULT_TRAVEL_PER_KM = 7500.0;
-
     /**
      * Prices are stored in the new SYP units, so monetary calculations must no
      * longer be rounded up to 500 SYP. Keep the smallest cash increment at one
@@ -24,7 +23,7 @@ final class CleaningPricingCalculator
         $basePrice = $this->roundMoney($basePrice);
         $addonsTotal = $this->roundMoney($addonsTotal);
         $serviceSubtotal = $this->roundMoney($basePrice + $addonsTotal);
-        $financial = CleaningFinancialSetting::query()->first();
+        $financial = CleaningRuntimeSettings::financial();
         $adminMargin = $this->adminMargin($serviceSubtotal, $financial);
 
         return [
@@ -61,8 +60,8 @@ final class CleaningPricingCalculator
         $exactDistanceKm = $this->measureKm((float) $a, (float) $b, $c, $d);
         $distanceKm = round($exactDistanceKm, 3);
 
-        $financial = CleaningFinancialSetting::query()->first();
-        $travelPerKm = max(0.0, (float) ($financial?->travel_per_km ?? self::DEFAULT_TRAVEL_PER_KM));
+        $financial = CleaningRuntimeSettings::financial();
+        $travelPerKm = max(0.0, (float) $financial->travel_per_km);
         $travelFee = $this->roundMoney($exactDistanceKm * $travelPerKm);
         $adminMargin = $this->adminMargin($serviceSubtotal, $financial);
 
@@ -84,14 +83,14 @@ final class CleaningPricingCalculator
         return (float) (ceil($amount / self::SYRIAN_CASH_INCREMENT) * self::SYRIAN_CASH_INCREMENT);
     }
 
-    private function adminMargin(float $serviceSubtotal, ?CleaningFinancialSetting $financial): float
+    private function adminMargin(float $serviceSubtotal, CleaningFinancialSetting $financial): float
     {
-        $commissionType = (string) ($financial?->commission_type ?? 'percent');
+        $commissionType = (string) $financial->commission_type;
 
         return $commissionType === 'fixed'
-            ? $this->roundMoney(max(0.0, (float) ($financial?->commission_fixed_amount ?? 0.0)))
+            ? $this->roundMoney(max(0.0, (float) ($financial->commission_fixed_amount ?? 0.0)))
             : $this->roundMoney(
-                $serviceSubtotal * (max(0.0, (float) ($financial?->default_commission_rate ?? 0.0)) / 100)
+                $serviceSubtotal * (max(0.0, (float) $financial->default_commission_rate) / 100)
             );
     }
 
