@@ -403,7 +403,7 @@ final class CleaningBookingResource extends JsonResource
             'worker_finished_property_rooms' => $rooms,
             'roomCount' => (int) $assignment->room_count,
             'roomsWeight' => (float) $assignment->rooms_weight,
-            'totalHours' => $this->workerDurationHours(),
+            'totalHours' => $this->workerDurationHours($assignment),
             'serviceShareAmount' => $serviceShare,
             'travelFee' => $travelFee,
             'adminMarginAmount' => $adminMargin,
@@ -659,7 +659,7 @@ final class CleaningBookingResource extends JsonResource
         return $format === 'iso' ? $value->toIso8601String() : $value->toDateTimeString();
     }
 
-    private function workerDurationHours(): ?float
+    private function workerDurationHours(?CleaningBookingWorkerAssignment $assignment = null): ?float
     {
         $details = is_array($this->property_details) ? $this->property_details : [];
         $bookingHours = (float) (
@@ -672,14 +672,36 @@ final class CleaningBookingResource extends JsonResource
             return null;
         }
 
-        return round($bookingHours / max(1, (int) ($this->number_of_workers ?? 1)), 2);
+        if ((string) $this->property_type === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE) {
+            return round($bookingHours, 2);
+        }
+
+        $workerCount = max(1, (int) ($this->number_of_workers ?? 1));
+        if ($workerCount <= 1) {
+            return round($bookingHours, 2);
+        }
+
+        $roomsWeight = $assignment instanceof CleaningBookingWorkerAssignment
+            ? (float) $assignment->rooms_weight
+            : 0.0;
+        if ($roomsWeight > 0.0) {
+            $totalRoomWeight = $this->relationLoaded('rooms')
+                ? round((float) $this->rooms->sum('weight'), 2)
+                : round((float) $this->rooms()->sum('weight'), 2);
+
+            if ($totalRoomWeight > 0.0) {
+                return round(max(0.25, $bookingHours * ($roomsWeight / $totalRoomWeight)), 2);
+            }
+        }
+
+        return round($bookingHours / $workerCount, 2);
     }
 
     private function workTimerPayload(string $status, ?CleaningBookingWorkerAssignment $assignment = null): array
     {
         $start = $assignment?->work_started_at ?? $this->work_started_at ?? $this->arrived_at;
         $hours = $assignment instanceof CleaningBookingWorkerAssignment
-            ? (float) ($this->workerDurationHours() ?? 0)
+            ? (float) ($this->workerDurationHours($assignment) ?? 0)
             : (float) ($this->total_hours ?: $this->estimated_hours ?: 0);
         if ($start === null || $hours <= 0) return ['timerStartAt' => $start?->toIso8601String(), 'expectedFinishAt' => null, 'durationHours' => $hours > 0 ? $hours : null, 'remainingWorkSeconds' => 0, 'overdueWorkSeconds' => 0, 'isWorkOverdue' => false, 'shouldShowWorkTimer' => false, 'source' => ['startField' => null, 'durationField' => null]];
         $expected = $start->copy()->addSeconds((int) round($hours * 3600));
