@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 use App\Enums\SOSStatus;
 use App\Models\User;
+use App\Notifications\NewSupportCaseDashboardNotification;
 use Laravel\Sanctum\Sanctum;
-use Spatie\Permission\Models\Role;
 use Modules\Resturants\Models\Order;
-use App\Notifications\NewUserSosDashboardNotification;
+use Spatie\Permission\Models\Role;
 
 it('allows a user to create SOS with a valid order and message', function (): void {
     $user = User::factory()->create();
@@ -42,7 +42,7 @@ it('allows a user to create SOS with a valid order and message', function (): vo
     $this->assertDatabaseHas('notifications', [
         'notifiable_type' => $admin->getMorphClass(),
         'notifiable_id' => $admin->id,
-        'type' => NewUserSosDashboardNotification::class,
+        'type' => NewSupportCaseDashboardNotification::class,
     ]);
 });
 

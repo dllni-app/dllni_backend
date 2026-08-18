@@ -9,6 +9,8 @@ use Filament\Actions\Action;
 use Filament\Notifications\Notification as FilamentNotification;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Facades\Lang;
+use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 
 final class CleaningBookingStatusChangedDashboardNotification extends Notification
@@ -36,22 +38,34 @@ final class CleaningBookingStatusChangedDashboardNotification extends Notificati
     {
         return array_merge(
             FilamentNotification::make()
-                ->title(__('cleaning_admin.booking_notification.status_changed_title'))
-                ->body(__('cleaning_admin.booking_notification.status_changed_body', [
+                ->title(Lang::get('cleaning_admin.booking_notification.status_changed_title', [], 'ar'))
+                ->body(Lang::get('cleaning_admin.booking_notification.status_changed_body', [
                     'booking' => $this->booking->booking_number ?? (string) $this->booking->id,
-                    'from' => $this->fromStatus,
-                    'to' => $this->toStatus,
-                ]))
+                    'from' => $this->arabicStatusLabel($this->fromStatus),
+                    'to' => $this->arabicStatusLabel($this->toStatus),
+                ], 'ar'))
                 ->icon('heroicon-o-arrow-path')
                 ->info()
                 ->actions([
                     Action::make('view')
-                        ->label(__('cleaning_admin.booking_notification.view'))
+                        ->label(Lang::get('cleaning_admin.booking_notification.view', [], 'ar'))
                         ->url(CleaningBookingResource::getUrl('view', ['record' => $this->booking]))
                         ->markAsRead(),
                 ])
                 ->getDatabaseMessage(),
             ['sound_type' => 'notify'],
         );
+    }
+
+    private function arabicStatusLabel(string $status): string
+    {
+        if ($status === CleaningBookingStatus::UnderDispute->value) {
+            return 'قيد النزاع';
+        }
+
+        $key = 'cleaning_admin.enums.cleaning_booking_status.'.$status;
+        $translated = Lang::get($key, [], 'ar');
+
+        return $translated === $key ? $status : $translated;
     }
 }
