@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Admin;
 
+use App\Notifications\NewSupportCaseDashboardNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -24,18 +25,39 @@ final class AlertSoundCheckController
             ->orderBy('created_at')
             ->get();
 
-        $hardAlarm = $notifications->first(fn ($notification): bool => ($notification->data['sound_type'] ?? 'notify') === 'hard_alarm');
+        $hardAlarm = $notifications->last(
+            fn ($notification): bool => ($notification->data['sound_type'] ?? 'notify') === 'hard_alarm'
+        );
 
         if ($hardAlarm) {
-            return response()->json([
-                'soundType' => 'hard_alarm',
-                'title' => (string) ($hardAlarm->data['title'] ?? ''),
-                'body' => (string) ($hardAlarm->data['body'] ?? ''),
-            ]);
+            return response()->json($this->payloadFor($hardAlarm, 'hard_alarm', true));
         }
 
-        return response()->json([
-            'soundType' => $notifications->isNotEmpty() ? 'notify' : null,
-        ]);
+        $latest = $notifications->last();
+
+        if (! $latest) {
+            return response()->json(['soundType' => null]);
+        }
+
+        return response()->json($this->payloadFor(
+            $latest,
+            (string) ($latest->data['sound_type'] ?? 'notify'),
+            $latest->type === NewSupportCaseDashboardNotification::class,
+        ));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function payloadFor(object $notification, string $soundType, bool $showBanner): array
+    {
+        return [
+            'soundType' => $soundType,
+            'title' => (string) ($notification->data['title'] ?? ''),
+            'body' => (string) ($notification->data['body'] ?? ''),
+            'notificationId' => (string) $notification->id,
+            'notificationType' => (string) $notification->type,
+            'showBanner' => $showBanner,
+        ];
     }
 }
