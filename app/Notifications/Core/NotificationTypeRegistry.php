@@ -63,16 +63,39 @@ final class NotificationTypeRegistry
     /** @return array<string, mixed> */
     private function types(): array
     {
-        $configuredTypes = config('notification_types.types', []);
-        $extensionTypes = config('notification_type_extensions.types', []);
-        $cleaningRepeatedTypes = config('cleaning_repeated_notification_types.types', []);
-        $platformCouponTypes = config('platform_coupon_notification_types.types', []);
-
         return array_replace(
-            is_array($configuredTypes) ? $configuredTypes : [],
-            is_array($extensionTypes) ? $extensionTypes : [],
-            is_array($cleaningRepeatedTypes) ? $cleaningRepeatedTypes : [],
-            is_array($platformCouponTypes) ? $platformCouponTypes : [],
+            $this->typesFromConfigAndFile('notification_types', 'notification_types.php'),
+            $this->typesFromConfigAndFile('notification_type_extensions', 'notification_type_extensions.php'),
+            $this->typesFromConfigAndFile('cleaning_repeated_notification_types', 'cleaning_repeated_notification_types.php'),
+            $this->typesFromConfigAndFile('platform_coupon_notification_types', 'platform_coupon_notification_types.php'),
         );
+    }
+
+    /**
+     * Merge the currently loaded Laravel config with the configuration file on disk.
+     *
+     * Long-running queue workers can keep an older cached config array after a deploy.
+     * Loading the file as a fallback means newly added notification types are still
+     * discoverable until the worker/config cache is restarted. Loaded config remains
+     * authoritative for keys that already exist so runtime/test overrides still work.
+     *
+     * @return array<string, mixed>
+     */
+    private function typesFromConfigAndFile(string $configKey, string $fileName): array
+    {
+        $configuredTypes = config($configKey.'.types', []);
+        $configuredTypes = is_array($configuredTypes) ? $configuredTypes : [];
+
+        $fileTypes = [];
+        $path = config_path($fileName);
+
+        if (is_file($path)) {
+            $fileConfig = require $path;
+            if (is_array($fileConfig) && is_array($fileConfig['types'] ?? null)) {
+                $fileTypes = $fileConfig['types'];
+            }
+        }
+
+        return array_replace($fileTypes, $configuredTypes);
     }
 }
