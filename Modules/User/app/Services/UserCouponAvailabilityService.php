@@ -130,7 +130,9 @@ final class UserCouponAvailabilityService
             $normalizedInput['addressLongitude'],
             $normalizedInput['preferredWorkerId'],
         );
-        $subtotal = round((float) $pricing['basePrice'] + (float) $pricing['addonsTotal'], 2);
+        $subtotal = $normalizedInput['preferredWorkerId'] !== null
+            ? round((float) $pricing['totalPrice'], 2)
+            : round((float) $pricing['basePrice'] + (float) $pricing['addonsTotal'], 2);
 
         $coupon = $this->findPlatformCoupon($couponCode);
         if (! $coupon) {
