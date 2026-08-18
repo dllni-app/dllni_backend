@@ -62,7 +62,12 @@ final class CleaningPricingCalculator
 
         $financial = CleaningRuntimeSettings::financial();
         $travelPerKm = max(0.0, (float) $financial->travel_per_km);
-        $travelFee = $this->roundMoney($exactDistanceKm * $travelPerKm);
+        $calculatedTravelFee = $this->roundMoney($exactDistanceKm * $travelPerKm);
+        // The configured per-kilometre value is also the minimum transport fee.
+        // This prevents very short routes from producing values such as 1 SYP.
+        $travelFee = $travelPerKm > 0.0
+            ? max($this->roundMoney($travelPerKm), $calculatedTravelFee)
+            : 0.0;
         $adminMargin = $this->adminMargin($serviceSubtotal, $financial);
 
         return [
