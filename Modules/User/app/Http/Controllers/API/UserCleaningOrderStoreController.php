@@ -9,8 +9,8 @@ use App\Services\Coupons\PlatformCouponRedemptionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
-use Modules\Cleaning\Http\Resources\CleaningBookingResource;
 use Modules\User\Http\Requests\UserCleaningOrderStoreRequest;
+use Modules\User\Http\Resources\UserCleaningBookingResource;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 use Modules\User\Services\UserCleaningOrderService;
 
@@ -82,7 +82,7 @@ final class UserCleaningOrderStoreController
             'billingPolicy',
         ]);
 
-        return response()->json(['order' => CleaningBookingResource::make($order)], 201);
+        return response()->json(['order' => UserCleaningBookingResource::make($order)], 201);
     }
 
     /** @param array<string, mixed> $validated */
