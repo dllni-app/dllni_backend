@@ -53,6 +53,8 @@ final class CleaningBookingTeamUpdated implements ShouldBroadcastNow
     public function broadcastWith(): array
     {
         return [
+            'cleaningBookingId' => $this->cleaningBookingId,
+            'bookingId' => $this->cleaningBookingId,
             'team' => $this->team,
         ];
     }
