@@ -11,6 +11,7 @@ use InvalidArgumentException;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingRoom;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Throwable;
 
@@ -162,9 +163,9 @@ final class WorkerOrderSolvencyService
      * exposed separately for screens that need to show the amount before the
      * administration margin is deducted.
      *
-     * Before acceptance, service cost is divided by the required worker count and transport
-     * is calculated from the current worker's home location. After acceptance, persisted
-     * assignment amounts are returned so the preview is replaced by the final worker share.
+     * Regular cleaning previews use the next available planned worker slot, so
+     * the displayed service share matches the room plan shown to the customer.
+     * Event-assistance orders intentionally remain evenly split between workers.
      *
      * @return array<string, mixed>
      */
@@ -193,6 +194,7 @@ final class WorkerOrderSolvencyService
                 'acceptedAt' => $assignment->accepted_at?->toIso8601String(),
                 'roomCount' => (int) $assignment->room_count,
                 'roomsWeight' => (float) $assignment->rooms_weight,
+                'workerSlot' => null,
                 'totalHours' => $totalHours,
                 'serviceShareAmount' => $serviceShare,
                 'travelFee' => $travelFee,
@@ -208,11 +210,8 @@ final class WorkerOrderSolvencyService
             ];
         }
 
-        $workerCount = max(1, (int) ($booking->number_of_workers ?? 1));
-        $serviceShare = round(
-            ((float) ($booking->base_price ?? 0) + (float) ($booking->addons_total ?? 0)) / $workerCount,
-            2,
-        );
+        $preview = $this->previewServiceShare($booking);
+        $serviceShare = $preview['serviceShareAmount'];
         $pricing = $this->pricingCalculator->finalizedForWorker(
             $serviceShare,
             0.0,
@@ -230,8 +229,9 @@ final class WorkerOrderSolvencyService
             'workerId' => (int) $worker->id,
             'status' => null,
             'acceptedAt' => null,
-            'roomCount' => 0,
-            'roomsWeight' => 0.0,
+            'roomCount' => $preview['roomCount'],
+            'roomsWeight' => $preview['roomsWeight'],
+            'workerSlot' => $preview['workerSlot'],
             'totalHours' => $totalHours,
             'serviceShareAmount' => $serviceShare,
             'travelFee' => $travelFee,
@@ -241,7 +241,7 @@ final class WorkerOrderSolvencyService
             'grossTotalPrice' => $grossWorkerTotal,
             'netTotalPrice' => $workerAmount,
             'currency' => (string) config('app.currency', 'SYP'),
-            'roomIds' => [],
+            'roomIds' => $preview['roomIds'],
             'isPricingFinal' => false,
             'isPreview' => true,
         ];
@@ -270,6 +270,67 @@ final class WorkerOrderSolvencyService
         return in_array($status, CleaningBookingWorkerAssignmentStatus::acceptedValues(), true);
     }
 
+    /**
+     * @return array{serviceShareAmount:float, roomCount:int, roomsWeight:float, workerSlot:?int, roomIds:array<int, int>}
+     */
+    private function previewServiceShare(CleaningBooking $booking): array
+    {
+        $workerCount = max(1, (int) ($booking->number_of_workers ?? 1));
+        $subtotal = round(
+            (float) ($booking->base_price ?? 0) + (float) ($booking->addons_total ?? 0),
+            2,
+        );
+
+        if ((string) $booking->property_type === 'event_assistance') {
+            return [
+                'serviceShareAmount' => round($subtotal / $workerCount, 2),
+                'roomCount' => 0,
+                'roomsWeight' => 0.0,
+                'workerSlot' => null,
+                'roomIds' => [],
+            ];
+        }
+
+        $acceptedCount = CleaningBookingWorkerAssignment::query()
+            ->where('cleaning_booking_id', $booking->id)
+            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
+            ->count();
+        $nextSlot = min($workerCount, $acceptedCount + 1);
+
+        $plannedRooms = CleaningBookingRoom::query()
+            ->where('cleaning_booking_id', $booking->id)
+            ->whereNotNull('planned_worker_slot')
+            ->get(['id', 'planned_worker_slot', 'weight']);
+
+        $totalWeight = round((float) $plannedRooms->sum(
+            static fn (CleaningBookingRoom $room): float => (float) $room->weight,
+        ), 2);
+        $slotRooms = $plannedRooms
+            ->filter(static fn (CleaningBookingRoom $room): bool => (int) $room->planned_worker_slot === $nextSlot)
+            ->values();
+        $slotWeight = round((float) $slotRooms->sum(
+            static fn (CleaningBookingRoom $room): float => (float) $room->weight,
+        ), 2);
+
+        if ($totalWeight <= 0.0 || $slotWeight <= 0.0) {
+            return [
+                'serviceShareAmount' => round($subtotal / $workerCount, 2),
+                'roomCount' => 0,
+                'roomsWeight' => 0.0,
+                'workerSlot' => null,
+                'roomIds' => [],
+            ];
+        }
+
+        return [
+            'serviceShareAmount' => round($subtotal * ($slotWeight / $totalWeight), 2),
+            'roomCount' => $slotRooms->count(),
+            'roomsWeight' => $slotWeight,
+            'workerSlot' => $nextSlot,
+            'roomIds' => $slotRooms->pluck('id')->map(static fn (mixed $id): int => (int) $id)->all(),
+        ];
+    }
+
     private function workerDurationHours(CleaningBooking $booking): ?float
     {
         $details = is_array($booking->property_details) ? $booking->property_details : [];
@@ -281,6 +342,10 @@ final class WorkerOrderSolvencyService
 
         if ($bookingHours <= 0) {
             return null;
+        }
+
+        if ((string) $booking->property_type === 'event_assistance') {
+            return round($bookingHours, 2);
         }
 
         return round($bookingHours / max(1, (int) ($booking->number_of_workers ?? 1)), 2);
