@@ -176,8 +176,14 @@ final class WorkerOrderSolvencyService
     ): array {
         $assignment ??= $this->assignmentForWorker($booking, $worker);
         $totalHours = $this->workerDurationHours($booking);
+        $isProvisionalEvent = (string) $booking->property_type === 'event_assistance'
+            && ! (bool) $booking->is_pricing_final;
 
-        if ($assignment instanceof CleaningBookingWorkerAssignment && $this->isAcceptedAssignment($assignment)) {
+        if (
+            $assignment instanceof CleaningBookingWorkerAssignment
+            && $this->isAcceptedAssignment($assignment)
+            && ! $isProvisionalEvent
+        ) {
             $serviceShare = (float) $assignment->service_share_amount;
             $travelFee = (float) $assignment->travel_fee;
             $adminMargin = (float) $assignment->admin_margin_amount;
@@ -225,10 +231,14 @@ final class WorkerOrderSolvencyService
         $workerAmount = $this->netWorkerAmount($serviceShare, $travelFee, $adminMargin);
 
         return [
-            'id' => null,
+            'id' => $assignment instanceof CleaningBookingWorkerAssignment ? (int) $assignment->id : null,
             'workerId' => (int) $worker->id,
-            'status' => null,
-            'acceptedAt' => null,
+            'status' => $assignment instanceof CleaningBookingWorkerAssignment
+                ? ($assignment->status instanceof CleaningBookingWorkerAssignmentStatus
+                    ? $assignment->status->value
+                    : (string) $assignment->status)
+                : null,
+            'acceptedAt' => $assignment?->accepted_at?->toIso8601String(),
             'roomCount' => $preview['roomCount'],
             'roomsWeight' => $preview['roomsWeight'],
             'workerSlot' => $preview['workerSlot'],
@@ -240,7 +250,7 @@ final class WorkerOrderSolvencyService
             'totalPrice' => $workerAmount,
             'grossTotalPrice' => $grossWorkerTotal,
             'netTotalPrice' => $workerAmount,
-            'currency' => (string) config('app.currency', 'SYP'),
+            'currency' => (string) ($assignment?->currency ?: config('app.currency', 'SYP')),
             'roomIds' => $preview['roomIds'],
             'isPricingFinal' => false,
             'isPreview' => true,
