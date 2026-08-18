@@ -10,13 +10,21 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (! Schema::hasTable('cleaning_bookings')) {
+            return;
+        }
+
         if (! Schema::hasColumn('cleaning_bookings', 'cancelled_by_worker_id')) {
-            Schema::table('cleaning_bookings', function (Blueprint $table): void {
-                $table->foreignId('cancelled_by_worker_id')
-                    ->nullable()
-                    ->after('cancelled_by_role')
-                    ->constrained('workers')
-                    ->nullOnDelete();
+            $hasCancelledByRole = Schema::hasColumn('cleaning_bookings', 'cancelled_by_role');
+
+            Schema::table('cleaning_bookings', function (Blueprint $table) use ($hasCancelledByRole): void {
+                $column = $table->foreignId('cancelled_by_worker_id')->nullable();
+
+                if ($hasCancelledByRole) {
+                    $column->after('cancelled_by_role');
+                }
+
+                $column->constrained('workers')->nullOnDelete();
             });
         }
 
@@ -26,6 +34,10 @@ return new class extends Migration
                     ->nullable()
                     ->after('cancelled_by_worker_id');
             });
+        }
+
+        if (! Schema::hasTable('cleaning_booking_worker_assignments')) {
+            return;
         }
 
         if (! Schema::hasColumn('cleaning_booking_worker_assignments', 'status_before_booking_cancellation')) {
