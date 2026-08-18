@@ -156,3 +156,125 @@ it('keeps event assistance worker pricing evenly split', function (): void {
         ->and($offer['totalHours'])->toBe(2.0)
         ->and($offer['travelFee'])->toBe(10.0);
 });
+
+it('keeps an accepted event worker on the equal preview until the whole team is finalized', function (): void {
+    $booking = CleaningBooking::factory()->create([
+        'status' => CleaningBookingStatus::Pending->value,
+        'assignment_mode' => 'open_count',
+        'property_type' => 'event_assistance',
+        'property_details' => [
+            'event_type' => 'birthday',
+            'guest_count' => 20,
+            'venue_type' => 'apartment',
+            'hours' => 2,
+        ],
+        'number_of_workers' => 3,
+        'base_price' => 1200,
+        'addons_total' => 0,
+        'travel_fee' => 0,
+        'admin_margin_amount' => 300,
+        'total_price' => 1500,
+        'is_pricing_final' => false,
+        'estimated_hours' => 2,
+        'total_hours' => 2,
+        'address_latitude' => 36.2,
+        'address_longitude' => 37.1,
+    ]);
+
+    $worker = Worker::factory()->create([
+        'home_address' => 'Same location',
+        'home_latitude' => 36.2,
+        'home_longitude' => 37.1,
+    ]);
+
+    $assignment = CleaningBookingWorkerAssignment::query()->create([
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $worker->id,
+        'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
+        'accepted_at' => now(),
+        'room_count' => 0,
+        'rooms_weight' => 0,
+        'service_share_amount' => 0,
+        'travel_fee' => 0,
+        'admin_margin_amount' => 0,
+        'worker_amount' => 0,
+        'currency' => 'SYP',
+    ]);
+
+    $offer = app(WorkerOrderSolvencyService::class)->workerOfferForBooking(
+        $worker,
+        $booking->fresh(),
+        $assignment,
+    );
+
+    expect($offer['id'])->toBe($assignment->id)
+        ->and($offer['isPreview'])->toBeTrue()
+        ->and($offer['isPricingFinal'])->toBeFalse()
+        ->and($offer['serviceShareAmount'])->toBe(400.0)
+        ->and($offer['travelFee'])->toBe(10.0)
+        ->and($offer['totalHours'])->toBe(2.0);
+});
+
+it('normalizes finalized event assignments to equal service shares', function (): void {
+    $booking = CleaningBooking::factory()->create([
+        'status' => CleaningBookingStatus::Pending->value,
+        'assignment_mode' => 'open_count',
+        'property_type' => 'event_assistance',
+        'property_details' => [
+            'event_type' => 'birthday',
+            'guest_count' => 20,
+            'venue_type' => 'apartment',
+            'hours' => 2,
+        ],
+        'number_of_workers' => 3,
+        'base_price' => 1200,
+        'addons_total' => 0,
+        'travel_fee' => 0,
+        'admin_margin_amount' => 300,
+        'total_price' => 1500,
+        'is_pricing_final' => false,
+        'estimated_hours' => 2,
+        'total_hours' => 2,
+        'address_latitude' => 36.2,
+        'address_longitude' => 37.1,
+    ]);
+
+    $workers = Worker::factory()->count(3)->create();
+
+    foreach ($workers as $index => $worker) {
+        CleaningBookingWorkerAssignment::query()->create([
+            'cleaning_booking_id' => $booking->id,
+            'worker_id' => $worker->id,
+            'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
+            'accepted_at' => now()->addSeconds($index),
+            'room_count' => $index === 0 ? 1 : 0,
+            'rooms_weight' => $index === 0 ? 1 : 0,
+            'service_share_amount' => $index === 0 ? 1200 : 0,
+            'travel_fee' => 10,
+            'admin_margin_amount' => $index === 0 ? 300 : 0,
+            'worker_amount' => $index === 0 ? 910 : 10,
+            'currency' => 'SYP',
+        ]);
+    }
+
+    $booking->forceFill([
+        'status' => CleaningBookingStatus::WorkerAssigned->value,
+        'travel_fee' => 30,
+        'admin_margin_amount' => 300,
+        'total_price' => 1530,
+        'is_pricing_final' => true,
+    ])->save();
+
+    $assignments = CleaningBookingWorkerAssignment::query()
+        ->where('cleaning_booking_id', $booking->id)
+        ->orderBy('accepted_at')
+        ->orderBy('id')
+        ->get();
+
+    expect($assignments)->toHaveCount(3)
+        ->and($assignments->pluck('service_share_amount')->map(fn ($value) => (float) $value)->all())
+        ->toBe([400.0, 400.0, 400.0])
+        ->and((float) $assignments->sum('service_share_amount'))->toBe(1200.0)
+        ->and((float) $assignments->sum('admin_margin_amount'))->toBe(300.0)
+        ->and($assignments->pluck('room_count')->all())->toBe([0, 0, 0]);
+});
