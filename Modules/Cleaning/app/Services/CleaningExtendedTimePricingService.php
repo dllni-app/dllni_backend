@@ -4,17 +4,13 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Services;
 
-use App\Models\CleaningFinancialSetting;
 use Illuminate\Validation\ValidationException;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Support\CleaningRuntimeSettings;
 
 final class CleaningExtendedTimePricingService
 {
     private const CURRENCY = 'SYP';
-
-    public function __construct(
-        private readonly CleaningPricingCalculator $pricingCalculator,
-    ) {}
 
     /**
      * Canonical 15-minute block boundaries (used as the fallback shape and to
@@ -30,6 +26,10 @@ final class CleaningExtendedTimePricingService
         ['start' => 61, 'end' => 75, 'sort' => 5],
         ['start' => 76, 'end' => 90, 'sort' => 6],
     ];
+
+    public function __construct(
+        private readonly CleaningPricingCalculator $pricingCalculator,
+    ) {}
 
     /**
      * @return array{
@@ -139,9 +139,6 @@ final class CleaningExtendedTimePricingService
     }
 
     /**
-     * Effective priced ranges: admin-configured prices when available,
-     * otherwise derived from the legacy per-30-minute rate (back-compat).
-     *
      * @return array<int, array{start:int,end:int,sort:int,price:float}>
      */
     private function effectiveRanges(): array
@@ -167,7 +164,7 @@ final class CleaningExtendedTimePricingService
      */
     private function configuredRanges(): array
     {
-        $ranges = CleaningFinancialSetting::query()->first()?->extension_ranges;
+        $ranges = CleaningRuntimeSettings::financial()->extension_ranges;
 
         if (! is_array($ranges) || $ranges === []) {
             return [];
@@ -194,15 +191,7 @@ final class CleaningExtendedTimePricingService
 
     private function ratePerThirtyMinutes(): float
     {
-        $rate = (float) (CleaningFinancialSetting::query()->value('extension_rate_per_30_minutes') ?? 0);
-
-        if ($rate <= 0) {
-            throw ValidationException::withMessages([
-                'extendedTimeRanges' => ['Cleaning extension rate is not configured.'],
-            ]);
-        }
-
-        return $rate;
+        return max(0.0, (float) CleaningRuntimeSettings::financial()->extension_rate_per_30_minutes);
     }
 
     /**

@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Modules\User\Services;
 
-use App\Models\CleaningFinancialSetting;
 use App\Models\Worker;
 use Illuminate\Support\Arr;
 use InvalidArgumentException;
 use Modules\Cleaning\Services\CleaningPricingCalculator;
 use Modules\Cleaning\Support\CleaningFinancialDefaults;
+use Modules\Cleaning\Support\CleaningRuntimeSettings;
 
 final class UserCleaningOrderEstimationService
 {
@@ -243,12 +243,12 @@ final class UserCleaningOrderEstimationService
 
     private function calculateRegularCleaningFromSettings(array $normalizedDetails): array
     {
-        $setting = CleaningFinancialSetting::query()->first();
-        $baseUnitPrice = max(0.0, (float) ($setting?->cleaning_base_unit_price ?? CleaningFinancialDefaults::BASE_UNIT_PRICE));
-        $deepMultiplier = max(1.0, (float) ($setting?->cleaning_deep_multiplier ?? CleaningFinancialDefaults::DEEP_CLEANING_MULTIPLIER));
-        $roomSizeRanges = $this->normalizedRoomSizeRanges($setting?->cleaning_room_size_ranges);
-        $roomPricingUnits = $this->normalizedRoomPricingUnits($setting?->cleaning_room_pricing_units);
-        $roomTimeMinutes = $this->normalizedRoomTimeMinutes($setting?->cleaning_room_time_minutes);
+        $setting = CleaningRuntimeSettings::financial();
+        $baseUnitPrice = max(0.0, (float) $setting->cleaning_base_unit_price);
+        $deepMultiplier = max(1.0, (float) $setting->cleaning_deep_multiplier);
+        $roomSizeRanges = $this->normalizedRoomSizeRanges($setting->cleaning_room_size_ranges);
+        $roomPricingUnits = $this->normalizedRoomPricingUnits($setting->cleaning_room_pricing_units);
+        $roomTimeMinutes = $this->normalizedRoomTimeMinutes($setting->cleaning_room_time_minutes);
         $roomBreakdown = is_array($normalizedDetails['room_size_breakdown'] ?? null)
             ? $this->normalizeRoomSizeBreakdown($normalizedDetails['room_size_breakdown'])
             : $this->legacyDetailsToRoomBreakdown($normalizedDetails);
@@ -424,10 +424,7 @@ final class UserCleaningOrderEstimationService
     private function eventOrderHourlyRate(): float
     {
         // Backward-compatible storage: the dashboard saves half of the per-worker hourly rate here.
-        $rate = (float) (CleaningFinancialSetting::query()->value('extension_rate_per_30_minutes') ?? 0);
-        if ($rate <= 0) {
-            throw new InvalidArgumentException('Event assistance hourly rate is not configured.');
-        }
+        $rate = max(0.0, (float) CleaningRuntimeSettings::financial()->extension_rate_per_30_minutes);
 
         return $this->pricingCalculator->roundMoney($rate * 2);
     }

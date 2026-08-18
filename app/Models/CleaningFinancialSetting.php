@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Modules\Cleaning\Support\CleaningRuntimeSettings;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
 
@@ -61,7 +62,7 @@ final class CleaningFinancialSetting extends Model
 
     public static function currentUserCancellationFee(): float
     {
-        return max(0.0, (float) (self::query()->value('user_cancellation_fee') ?? 0));
+        return max(0.0, (float) CleaningRuntimeSettings::financial()->user_cancellation_fee);
     }
 
     public function getActivitylogOptions(): LogOptions
