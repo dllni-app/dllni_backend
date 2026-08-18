@@ -29,7 +29,10 @@ final class CleaningBookingCancellationAuditObserver
             $booking->cancelled_by_worker_id = $authenticatedWorker->id;
         }
 
-        if ($booking->cancellation_offset_minutes === null) {
+        // Read directly from the hydrated attributes so cancellation still works when
+        // strict missing-attribute protection is enabled and this column was omitted
+        // from a partial select. The observer will populate the audit value on save.
+        if (($booking->getAttributes()['cancellation_offset_minutes'] ?? null) === null) {
             $scheduledAt = $this->scheduledStart($booking);
             $booking->cancellation_offset_minutes = $scheduledAt?->diffInMinutes($cancelledAt, false) * -1;
         }
@@ -53,7 +56,7 @@ final class CleaningBookingCancellationAuditObserver
             $assignment->forceFill([
                 'status_before_booking_cancellation' => $assignment->status_before_booking_cancellation ?? $previousStatus,
                 'booking_cancelled_at' => $assignment->booking_cancelled_at ?? $booking->cancelled_at,
-                'cancelled_by_this_worker' => (int) $assignment->worker_id === (int) ($booking->cancelled_by_worker_id ?? 0),
+                'cancelled_by_this_worker' => (int) $assignment->worker_id === (int) ($booking->getAttributes()['cancelled_by_worker_id'] ?? 0),
                 'status' => CleaningBookingWorkerAssignmentStatus::Cancelled,
             ])->saveQuietly();
         }
@@ -70,16 +73,20 @@ final class CleaningBookingCancellationAuditObserver
 
     private function scheduledStart(CleaningBooking $booking): ?Carbon
     {
-        if ($booking->scheduled_date === null || blank($booking->scheduled_time)) {
+        $attributes = $booking->getAttributes();
+        $scheduledDate = $attributes['scheduled_date'] ?? null;
+        $scheduledTime = $attributes['scheduled_time'] ?? null;
+
+        if ($scheduledDate === null || blank($scheduledTime)) {
             return null;
         }
 
         try {
-            $date = $booking->scheduled_date instanceof \DateTimeInterface
-                ? $booking->scheduled_date->format('Y-m-d')
-                : mb_substr((string) $booking->scheduled_date, 0, 10);
+            $date = $scheduledDate instanceof \DateTimeInterface
+                ? $scheduledDate->format('Y-m-d')
+                : mb_substr((string) $scheduledDate, 0, 10);
 
-            return Carbon::parse($date.' '.(string) $booking->scheduled_time);
+            return Carbon::parse($date.' '.(string) $scheduledTime);
         } catch (\Throwable) {
             return null;
         }
