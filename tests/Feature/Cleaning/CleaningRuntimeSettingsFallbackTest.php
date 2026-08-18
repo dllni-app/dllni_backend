@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Services\CleaningExtendedTimePricingService;
 use Modules\Cleaning\Services\CleaningPricingCalculator;
 use Modules\Cleaning\Support\CleaningRuntimeSettings;
+use Modules\User\Services\UserCleaningOrderEstimationService;
 
 beforeEach(function (): void {
     DB::table('cleaning_financial_settings')->delete();
@@ -69,5 +70,38 @@ it('prices cleaning and extension requests when the financial settings table is 
         ->and($ranges)->toHaveCount(6)
         ->and($ranges[0]['price'])->toBe(10.0)
         ->and($ranges[5]['price'])->toBe(500.0)
+        ->and(DB::table('cleaning_financial_settings')->exists())->toBeFalse();
+});
+
+it('estimates regular and event cleaning without seeded financial settings', function (): void {
+    $service = app(UserCleaningOrderEstimationService::class);
+
+    $regular = $service->price(
+        'apartment',
+        [
+            'rooms' => 2,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+        ],
+        null,
+        null,
+    );
+    $event = $service->price(
+        'event_assistance',
+        [
+            'eventType' => 'birthday',
+            'guestCount' => 20,
+            'venueType' => 'apartment',
+            'hours' => 2,
+        ],
+        null,
+        null,
+    );
+
+    expect($regular['basePrice'])->toBeGreaterThan(0)
+        ->and($regular['pricingAlgorithm']['baseUnitPrice'])->toBe(50.0)
+        ->and($event['eventHourlyRate'])->toBe(400.0)
+        ->and($event['eventWorkerCount'])->toBe(2)
+        ->and($event['basePrice'])->toBe(1600.0)
         ->and(DB::table('cleaning_financial_settings')->exists())->toBeFalse();
 });
