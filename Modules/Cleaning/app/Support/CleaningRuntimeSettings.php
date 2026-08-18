@@ -6,6 +6,7 @@ namespace Modules\Cleaning\Support;
 
 use App\Models\CleaningDepositSetting;
 use App\Models\CleaningFinancialSetting;
+use Illuminate\Database\Eloquent\Model;
 
 final class CleaningRuntimeSettings
 {
@@ -66,34 +67,31 @@ final class CleaningRuntimeSettings
     public static function financial(): CleaningFinancialSetting
     {
         $settings = CleaningFinancialSetting::query()->first() ?? new CleaningFinancialSetting();
+        self::applyDefaults($settings, self::financialDefaults());
 
-        return self::withDefaults($settings, self::financialDefaults());
+        return $settings;
     }
 
     public static function deposit(): CleaningDepositSetting
     {
         $settings = CleaningDepositSetting::query()->first() ?? new CleaningDepositSetting();
+        self::applyDefaults($settings, self::depositDefaults());
 
-        return self::withDefaults($settings, self::depositDefaults());
+        return $settings;
     }
 
     /**
      * Apply defaults only in memory. Existing database values always win and
      * no row is inserted or updated when configuration data is missing.
      *
-     * @template TModel of CleaningFinancialSetting|CleaningDepositSetting
-     * @param TModel $model
      * @param array<string, mixed> $defaults
-     * @return TModel
      */
-    private static function withDefaults(CleaningFinancialSetting|CleaningDepositSetting $model, array $defaults): CleaningFinancialSetting|CleaningDepositSetting
+    private static function applyDefaults(Model $model, array $defaults): void
     {
         foreach ($defaults as $key => $value) {
             if ($model->getAttribute($key) === null) {
                 $model->setAttribute($key, $value);
             }
         }
-
-        return $model;
     }
 }
