@@ -7,13 +7,8 @@ namespace Database\Seeders;
 use Database\Seeders\Permissions\RestaurantOwnerEmployeePermissionsSeeder;
 use Database\Seeders\Permissions\SupermarketOwnerEmployeePermissionsSeeder;
 use Illuminate\Database\Seeder;
-use Modules\Cleaning\Database\Seeders\AleppoNeighborhoodSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningBannerSeeder;
-use Modules\Cleaning\Database\Seeders\CleaningBillingPolicySeeder;
 use Modules\Cleaning\Database\Seeders\CleaningBookingSeeder;
-use Modules\Cleaning\Database\Seeders\CleaningFinancialSettingsSeeder;
-use Modules\Cleaning\Database\Seeders\CleaningHomeTypeSeeder;
-use Modules\Cleaning\Database\Seeders\CleaningServiceSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningWorkerArabicDataSeeder;
 use Modules\Cleaning\Database\Seeders\CleaningWorkerExtensionScenarioSeeder;
 use Modules\Cleaning\Database\Seeders\EventBookingSeeder;
@@ -39,14 +34,7 @@ final class DatabaseSeeder extends Seeder
             VerifiedUserSeeder::class,
             RequestedTestUsersSeeder::class,
 
-            CancellationPolicySeeder::class,
-            PropertyTypeConfigSeeder::class,
-            ServiceAddonSeeder::class,
-            TravelCostConfigSeeder::class,
-            CleaningBillingPolicySeeder::class,
-            CleaningFinancialSettingsSeeder::class,
-            CleaningHomeTypeSeeder::class,
-            AleppoNeighborhoodSeeder::class,
+            BaselineConfigurationSeeder::class,
         ]);
 
         if ($this->shouldSeedDemoData()) {
@@ -82,7 +70,6 @@ final class DatabaseSeeder extends Seeder
             RecipeSeeder::class,
             WorkerSeeder::class,
             WorkerFinancialTypeScenarioSeeder::class,
-            CleaningServiceSeeder::class,
             CleaningBannerSeeder::class,
             RestaurantSeeder::class,
             CleaningBookingSeeder::class,
