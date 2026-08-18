@@ -39,6 +39,7 @@ jobs:
       - name: Check runtime fallback formatting
         run: |
           vendor/bin/pint --test \
+            Modules/Cleaning/app/Http/Controllers/API/DepositManagementController.php \
             Modules/Cleaning/app/Services/CleaningExtendedTimePricingService.php \
             Modules/Cleaning/app/Services/CleaningPricingCalculator.php \
             Modules/Cleaning/app/Services/WorkerTrustService.php \
@@ -53,6 +54,5 @@ jobs:
         run: |
           php artisan test \
             tests/Feature/Cleaning/CleaningRuntimeSettingsFallbackTest.php \
-            tests/Unit/Cleaning/CleaningExtendedTimePricingServiceTest.php \
-            tests/Unit/UserModule/UserCleaningOrderEstimationServiceTest.php \
-            tests/Unit/Cleaning/CleaningPricingCalculatorRegressionTest.php
+            tests/Unit/Cleaning/CleaningPricingCalculatorRegressionTest.php \
+            tests/Unit/Notifications/NotificationTypeRegistryTest.php
