@@ -114,6 +114,7 @@ final class CleaningCustomerPricingObserver
         $assignments = CleaningBookingWorkerAssignment::query()
             ->where('cleaning_booking_id', $booking->id)
             ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
+            ->orderBy('accepted_at')
             ->orderBy('id')
             ->get();
 
@@ -122,22 +123,39 @@ final class CleaningCustomerPricingObserver
         }
 
         $targetMargin = round(max(0.0, (float) ($booking->admin_margin_amount ?? 0)), 2);
-        $totalServiceShare = round(
-            (float) $assignments->sum(
-                static fn (CleaningBookingWorkerAssignment $assignment): float => max(
-                    0.0,
-                    (float) ($assignment->service_share_amount ?? 0),
-                ),
-            ),
+        $isEventAssistance = (string) $booking->property_type === 'event_assistance';
+        $serviceSubtotal = round(
+            max(0.0, (float) ($booking->base_price ?? 0))
+            + max(0.0, (float) ($booking->addons_total ?? 0)),
             2,
         );
+        $totalServiceShare = $isEventAssistance
+            ? $serviceSubtotal
+            : round(
+                (float) $assignments->sum(
+                    static fn (CleaningBookingWorkerAssignment $assignment): float => max(
+                        0.0,
+                        (float) ($assignment->service_share_amount ?? 0),
+                    ),
+                ),
+                2,
+            );
         $remainingMargin = $targetMargin;
+        $remainingEventServiceShare = $serviceSubtotal;
         $count = $assignments->count();
 
         foreach ($assignments->values() as $index => $assignment) {
             $isLast = $index === $count - 1;
-            $serviceShare = max(0.0, (float) ($assignment->service_share_amount ?? 0));
+            $serviceShare = $isEventAssistance
+                ? ($isLast
+                    ? round(max(0.0, $remainingEventServiceShare), 2)
+                    : round($serviceSubtotal / $count, 2))
+                : max(0.0, (float) ($assignment->service_share_amount ?? 0));
             $travelFee = max(0.0, (float) ($assignment->travel_fee ?? 0));
+
+            if ($isEventAssistance) {
+                $remainingEventServiceShare = round($remainingEventServiceShare - $serviceShare, 2);
+            }
 
             if ($isLast) {
                 $margin = round(max(0.0, $remainingMargin), 2);
@@ -151,10 +169,18 @@ final class CleaningCustomerPricingObserver
 
             $remainingMargin = round($remainingMargin - $margin, 2);
 
-            $assignment->forceFill([
+            $values = [
                 'admin_margin_amount' => $margin,
                 'worker_amount' => max(0.0, round($serviceShare + $travelFee - $margin, 2)),
-            ])->saveQuietly();
+            ];
+
+            if ($isEventAssistance) {
+                $values['service_share_amount'] = $serviceShare;
+                $values['room_count'] = 0;
+                $values['rooms_weight'] = 0;
+            }
+
+            $assignment->forceFill($values)->saveQuietly();
         }
     }
 }
