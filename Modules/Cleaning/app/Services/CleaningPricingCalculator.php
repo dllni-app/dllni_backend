@@ -41,7 +41,7 @@ final class CleaningPricingCalculator
         $x = 'home_'.'latitude';
         $y = 'home_'.'longitude';
 
-        if ($worker->{$addr} === null || trim((string) $worker->{$addr}) === '' || $worker->{$x} === null || $worker->{$y} === null) {
+        if ($worker->{$addr} === null || mb_trim((string) $worker->{$addr}) === '' || $worker->{$x} === null || $worker->{$y} === null) {
             throw new InvalidArgumentException('Required pricing data is incomplete.');
         }
 
