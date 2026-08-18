@@ -61,3 +61,29 @@ it('builds configured cleaning notifications', function (
         'The time extension was rejected for cleaning booking CL-100.',
     ],
 ]);
+
+it('falls back to notification config files when loaded config is stale or incomplete', function (): void {
+    config()->set('notification_type_extensions.types', [
+        'cleaning.booking.legacy_cached_type' => [
+            'legacy_type' => 'legacy_cached_type',
+            'module' => 'cleaning',
+            'category' => 'orders',
+            'priority' => 'normal',
+            'channels' => ['database'],
+            'templates' => [],
+        ],
+    ]);
+    config()->set('cleaning_repeated_notification_types.types', []);
+    config()->set('platform_coupon_notification_types.types', []);
+
+    $registry = new NotificationTypeRegistry();
+
+    expect($registry->definition('cleaning.booking.time_extension_accepted')['legacy_type'])
+        ->toBe('time_extension_accepted')
+        ->and($registry->definition('cleaning.booking.worker_extension_response_reminder')['legacy_type'])
+        ->toBe('cleaning_worker_extension_response_reminder')
+        ->and($registry->definition('marketing.coupon.available')['legacy_type'])
+        ->toBe('coupon_available')
+        ->and($registry->definition('cleaning.booking.legacy_cached_type')['legacy_type'])
+        ->toBe('legacy_cached_type');
+});
