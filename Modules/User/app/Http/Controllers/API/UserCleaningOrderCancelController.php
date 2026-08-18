@@ -10,10 +10,10 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
-use Modules\Cleaning\Http\Resources\CleaningBookingResource;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Services\CleaningLifecycleNotificationService;
 use Modules\User\Http\Requests\UserCleaningOrderCancelRequest;
+use Modules\User\Http\Resources\UserCleaningBookingResource;
 use Modules\User\Services\UserCleaningOrderService;
 
 final class UserCleaningOrderCancelController
@@ -47,7 +47,7 @@ final class UserCleaningOrderCancelController
         $cancelled->load(['worker.user', 'timeWarnings', 'disputes', 'addons', 'billingPolicy']);
 
         return response()->json([
-            'order' => CleaningBookingResource::make($cancelled),
+            'order' => UserCleaningBookingResource::make($cancelled),
         ]);
     }
 
