@@ -359,6 +359,8 @@ final class CleaningBookingTeamService
         }
 
         $subtotal = round(((float) ($booking->base_price ?? 0)) + ((float) ($booking->addons_total ?? 0)), 2);
+        $isEventAssistance = (string) $booking->property_type === 'event_assistance';
+        $requiredWorkers = max(1, (int) ($booking->number_of_workers ?? 1));
         $totalTravelFee = 0.0;
         $totalAdminMargin = 0.0;
         $primaryWorkerId = null;
@@ -371,9 +373,11 @@ final class CleaningBookingTeamService
 
             $roomCount = $workerRooms->count();
             $roomsWeight = round((float) $workerRooms->sum(fn (CleaningBookingRoom $room): float => (float) $room->weight), 2);
-            $serviceShare = $totalRoomWeight > 0
-                ? round($subtotal * ($roomsWeight / $totalRoomWeight), 2)
-                : 0.0;
+            $serviceShare = $isEventAssistance
+                ? round($subtotal / $requiredWorkers, 2)
+                : ($totalRoomWeight > 0
+                    ? round($subtotal * ($roomsWeight / $totalRoomWeight), 2)
+                    : 0.0);
 
             $worker = $assignment->relationLoaded('worker') ? $assignment->worker : Worker::query()->find($assignment->worker_id);
 
@@ -497,7 +501,6 @@ final class CleaningBookingTeamService
             }
 
             $slot = (int) $room->planned_worker_slot;
-
             $grouped[$slot] ??= [
                 'workerSlot' => $slot,
                 'preferredWorkerId' => $room->planned_preferred_worker_id !== null ? (int) $room->planned_preferred_worker_id : null,
