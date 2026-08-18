@@ -67,6 +67,40 @@ it('returns the user-facing service value consistently in order details', functi
         ->and($payload['travelFeePending'])->toBeTrue();
 });
 
+it('shows regular cleaning elapsed estimation as total time divided by workers', function (): void {
+    $booking = CleaningBooking::factory()->create([
+        'property_type' => 'apartment',
+        'number_of_workers' => 3,
+        'estimated_hours' => 6,
+        'total_hours' => 6,
+    ])->fresh();
+
+    $payload = UserCleaningBookingResource::make($booking)->toArray(Request::create('/'));
+
+    expect($payload['estimatedHours'])->toBe(2.0)
+        ->and($payload['totalHours'])->toBe(2.0)
+        ->and($payload['bookingEstimatedHours'])->toBe(6.0)
+        ->and($payload['bookingTotalHours'])->toBe(6.0)
+        ->and($payload['durationWorkerCount'])->toBe(3);
+});
+
+it('keeps event assistance duration unchanged when multiple workers attend', function (): void {
+    $booking = CleaningBooking::factory()->create([
+        'property_type' => 'event_assistance',
+        'number_of_workers' => 3,
+        'estimated_hours' => 6,
+        'total_hours' => 6,
+    ])->fresh();
+
+    $payload = UserCleaningBookingResource::make($booking)->toArray(Request::create('/'));
+
+    expect((float) $payload['estimatedHours'])->toBe(6.0)
+        ->and((float) $payload['totalHours'])->toBe(6.0)
+        ->and($payload['bookingEstimatedHours'])->toBe(6.0)
+        ->and($payload['bookingTotalHours'])->toBe(6.0)
+        ->and($payload['durationWorkerCount'])->toBe(3);
+});
+
 it('marks a worker quote as preview and exposes net earnings as its display total', function (): void {
     $booking = CleaningBooking::factory()->create([
         'status' => CleaningBookingStatus::Pending->value,
