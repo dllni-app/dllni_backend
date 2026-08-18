@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Filament\Resources\CleaningNeighborhoods\Tables;
 
 use App\Filament\Resources\CleaningNeighborhoods\CleaningNeighborhoodResource;
-use App\Models\CleaningFinancialSetting;
 use App\Models\WorkerZone;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
@@ -18,12 +17,13 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Modules\Cleaning\Models\CleaningNeighborhood;
+use Modules\Cleaning\Support\CleaningRuntimeSettings;
 
 final class CleaningNeighborhoodsTable
 {
     public static function configure(Table $table, bool $withManagementActions = true): Table
     {
-        $thresholds = CleaningFinancialSetting::query()->first()?->coverage_thresholds ?? ['low' => 3, 'ok' => 7];
+        $thresholds = CleaningRuntimeSettings::financial()->coverage_thresholds;
         $highCoverageThreshold = (int) ($thresholds['ok'] ?? 7);
 
         $table = $table
