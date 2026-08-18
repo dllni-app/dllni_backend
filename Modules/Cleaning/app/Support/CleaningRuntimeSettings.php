@@ -84,7 +84,7 @@ final class CleaningRuntimeSettings
      * Apply defaults only in memory. Existing database values always win and
      * no row is inserted or updated when configuration data is missing.
      *
-     * @param array<string, mixed> $defaults
+     * @param  array<string, mixed>  $defaults
      */
     private static function applyDefaults(Model $model, array $defaults): void
     {
