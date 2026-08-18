@@ -35,14 +35,16 @@ it('broadcasts team and tracking lifecycle updates to workers that received the 
         'updated_at' => now(),
     ]);
 
-    $teamChannels = collect((new CleaningBookingTeamUpdated(
+    $teamEvent = new CleaningBookingTeamUpdated(
         cleaningBookingId: (int) $booking->id,
         team: [
             'cleaningBookingId' => (int) $booking->id,
             'status' => 'worker_assigned',
             'isFulfilled' => true,
         ],
-    ))->broadcastOn())->pluck('name');
+    );
+
+    $teamChannels = collect($teamEvent->broadcastOn())->pluck('name');
 
     $trackingChannels = collect((new CleaningBookingTrackingUpdated(
         cleaningBookingId: (int) $booking->id,
@@ -56,6 +58,14 @@ it('broadcasts team and tracking lifecycle updates to workers that received the 
         ->toContain('private-cleaning-booking.' . $booking->id)
         ->toContain('private-cleaning-worker.' . $worker->id)
         ->not->toContain('private-cleaning-worker.' . $unrelatedWorker->id);
+
+    expect($teamEvent->broadcastWith())
+        ->toMatchArray([
+            'cleaningBookingId' => (int) $booking->id,
+            'bookingId' => (int) $booking->id,
+        ])
+        ->and($teamEvent->broadcastWith()['team']['cleaningBookingId'])
+        ->toBe((int) $booking->id);
 
     expect($trackingChannels)
         ->toContain('private-cleaning-booking.' . $booking->id)
