@@ -1,0 +1,56 @@
+name: Temporary Fresh Defaults Validation
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, bcmath, intl, gd
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare application
+        run: |
+          cp .env.example .env
+          touch database/database.sqlite
+          php artisan key:generate
+
+      - name: Migrate database
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        run: php artisan migrate --force
+
+      - name: Check changed PHP formatting
+        run: |
+          vendor/bin/pint --test \
+            Modules/Cleaning/database/seeders/CleaningDepositSettingsSeeder.php \
+            app/Notifications/Core/NotificationTypeRegistry.php \
+            database/seeders/BaselineConfigurationSeeder.php \
+            database/seeders/DatabaseSeeder.php \
+            tests/Feature/ProductionBaselineSeederTest.php \
+            tests/Unit/Notifications/NotificationTypeRegistryTest.php
+
+      - name: Run targeted regression tests
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        run: |
+          php artisan test \
+            tests/Feature/ProductionBaselineSeederTest.php \
+            tests/Unit/Notifications/NotificationTypeRegistryTest.php
