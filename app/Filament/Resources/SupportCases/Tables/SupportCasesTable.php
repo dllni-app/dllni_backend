@@ -24,6 +24,7 @@ final class SupportCasesTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->poll('5s')
             ->defaultSort('created_at', 'desc')
             ->columns([
                 TextColumn::make('case_number')
