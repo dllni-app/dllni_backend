@@ -109,3 +109,65 @@ it('stores cleaning booking status change dashboard notifications in Arabic rega
         ->and($payload['body'] ?? '')->not->toContain('pending')
         ->and($payload['body'] ?? '')->not->toContain('under_dispute');
 });
+
+it('returns dispute details for the live dashboard alert poller', function (): void {
+    $admin = createDashboardAdminForNotificationTest();
+    $this->actingAs($admin);
+
+    $customer = User::factory()->create();
+    $booking = CleaningBooking::factory()->create([
+        'customer_id' => $customer->id,
+        'status' => CleaningBookingStatus::InProgress,
+    ]);
+
+    SupportCase::query()->create([
+        'case_number' => 'CMP-LIVE-001',
+        'kind' => SupportCaseKind::Complaint,
+        'priority' => SupportCasePriority::Normal,
+        'booking_id' => $booking->id,
+        'booking_type' => 'cleaning_booking',
+        'reporter_id' => $customer->id,
+        'reporter_role' => SupportCaseReporterRole::Customer,
+        'category' => 'service_quality',
+        'description' => 'Live dispute notification.',
+        'status' => SupportCaseStatus::New,
+    ]);
+
+    $this->getJson(route('admin.alert-sound-check'))
+        ->assertSuccessful()
+        ->assertJsonPath('soundType', 'notify')
+        ->assertJsonPath('showBanner', true)
+        ->assertJsonPath('title', 'نزاع جديد')
+        ->assertJsonPath('notificationType', NewSupportCaseDashboardNotification::class);
+});
+
+it('returns a hard alarm payload for the live SOS alert poller', function (): void {
+    $admin = createDashboardAdminForNotificationTest();
+    $this->actingAs($admin);
+
+    $customer = User::factory()->create();
+    $booking = CleaningBooking::factory()->create([
+        'customer_id' => $customer->id,
+        'status' => CleaningBookingStatus::InProgress,
+    ]);
+
+    SupportCase::query()->create([
+        'case_number' => 'SOS-LIVE-001',
+        'kind' => SupportCaseKind::Emergency,
+        'priority' => SupportCasePriority::Critical,
+        'booking_id' => $booking->id,
+        'booking_type' => 'cleaning_booking',
+        'reporter_id' => $customer->id,
+        'reporter_role' => SupportCaseReporterRole::Customer,
+        'category' => EmergencyType::SafetyThreat->value,
+        'description' => 'Live SOS notification.',
+        'status' => SupportCaseStatus::New,
+    ]);
+
+    $this->getJson(route('admin.alert-sound-check'))
+        ->assertSuccessful()
+        ->assertJsonPath('soundType', 'hard_alarm')
+        ->assertJsonPath('showBanner', true)
+        ->assertJsonPath('title', 'بلاغ طوارئ جديد (SOS)')
+        ->assertJsonPath('notificationType', NewSupportCaseDashboardNotification::class);
+});
