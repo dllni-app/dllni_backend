@@ -158,6 +158,10 @@ final class WorkerOrderSolvencyService
     /**
      * Returns the current worker's financial view of the booking before or after acceptance.
      *
+     * `totalPrice` is the worker's net expected earning. `grossTotalPrice` is
+     * exposed separately for screens that need to show the amount before the
+     * administration margin is deducted.
+     *
      * Before acceptance, service cost is divided by the required worker count and transport
      * is calculated from the current worker's home location. After acceptance, persisted
      * assignment amounts are returned so the preview is replaced by the final worker share.
@@ -178,6 +182,7 @@ final class WorkerOrderSolvencyService
             $adminMargin = (float) $assignment->admin_margin_amount;
             $grossWorkerTotal = $this->grossWorkerTotal($serviceShare, $travelFee);
             $workerAmount = $this->netWorkerAmount($serviceShare, $travelFee, $adminMargin);
+            $isPricingFinal = (bool) $booking->is_pricing_final;
 
             return [
                 'id' => (int) $assignment->id,
@@ -193,11 +198,13 @@ final class WorkerOrderSolvencyService
                 'travelFee' => $travelFee,
                 'adminMarginAmount' => $adminMargin,
                 'workerAmount' => $workerAmount,
-                'totalPrice' => $grossWorkerTotal,
+                'totalPrice' => $workerAmount,
+                'grossTotalPrice' => $grossWorkerTotal,
+                'netTotalPrice' => $workerAmount,
                 'currency' => (string) ($assignment->currency ?: config('app.currency', 'SYP')),
                 'roomIds' => [],
-                'isPricingFinal' => true,
-                'isPreview' => false,
+                'isPricingFinal' => $isPricingFinal,
+                'isPreview' => ! $isPricingFinal,
             ];
         }
 
@@ -230,10 +237,12 @@ final class WorkerOrderSolvencyService
             'travelFee' => $travelFee,
             'adminMarginAmount' => $adminMargin,
             'workerAmount' => $workerAmount,
-            'totalPrice' => $grossWorkerTotal,
+            'totalPrice' => $workerAmount,
+            'grossTotalPrice' => $grossWorkerTotal,
+            'netTotalPrice' => $workerAmount,
             'currency' => (string) config('app.currency', 'SYP'),
             'roomIds' => [],
-            'isPricingFinal' => true,
+            'isPricingFinal' => false,
             'isPreview' => true,
         ];
     }
