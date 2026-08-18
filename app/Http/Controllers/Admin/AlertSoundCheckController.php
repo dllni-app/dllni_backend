@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Admin;
 use App\Notifications\NewSupportCaseDashboardNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Notifications\DatabaseNotification;
 
 final class AlertSoundCheckController
 {
@@ -26,16 +27,16 @@ final class AlertSoundCheckController
             ->get();
 
         $hardAlarm = $notifications->last(
-            fn ($notification): bool => ($notification->data['sound_type'] ?? 'notify') === 'hard_alarm'
+            fn (DatabaseNotification $notification): bool => ($notification->data['sound_type'] ?? 'notify') === 'hard_alarm'
         );
 
-        if ($hardAlarm) {
+        if ($hardAlarm instanceof DatabaseNotification) {
             return response()->json($this->payloadFor($hardAlarm, 'hard_alarm', true));
         }
 
         $latest = $notifications->last();
 
-        if (! $latest) {
+        if (! $latest instanceof DatabaseNotification) {
             return response()->json(['soundType' => null]);
         }
 
@@ -49,7 +50,7 @@ final class AlertSoundCheckController
     /**
      * @return array<string, mixed>
      */
-    private function payloadFor(object $notification, string $soundType, bool $showBanner): array
+    private function payloadFor(DatabaseNotification $notification, string $soundType, bool $showBanner): array
     {
         return [
             'soundType' => $soundType,
