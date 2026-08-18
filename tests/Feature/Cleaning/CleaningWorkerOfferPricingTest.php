@@ -204,6 +204,7 @@ it('keeps every event worker on the full event duration and preserves the worker
     expect((float) $afterAccept->json('data.totalHours'))->toBe(6.0);
     expect((float) $afterAccept->json('data.workerOffer.totalHours'))->toBe(6.0);
     expect((float) $afterAccept->json('data.workerOffer.serviceShareAmount'))->toBe(1440.0);
+    expect((float) $afterAccept->json('data.myAssignment.totalHours'))->toBe(6.0);
     expect((float) $afterAccept->json('data.myAssignment.serviceShareAmount'))->toBe(1440.0);
 
     $this->assertDatabaseHas('cleaning_booking_worker_assignments', [
