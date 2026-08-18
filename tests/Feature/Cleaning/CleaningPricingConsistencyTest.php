@@ -147,3 +147,28 @@ it('keeps the finalized booking margin exact across multiple worker assignments'
         ->and((float) $assignments->sum('admin_margin_amount'))->toBe(625.0)
         ->and((float) $assignments->sum('worker_amount'))->toBe(2875.0);
 });
+
+it('does not overwrite an explicitly approved final price adjustment', function (): void {
+    $booking = CleaningBooking::factory()->create([
+        'status' => CleaningBookingStatus::WorkerAssigned->value,
+        'assignment_mode' => 'open_count',
+        'base_price' => 2500,
+        'addons_total' => 0,
+        'travel_fee' => 0,
+        'admin_margin_amount' => 625,
+        'total_price' => 3125,
+        'is_pricing_final' => true,
+    ]);
+
+    $booking->forceFill([
+        'base_price' => 3500,
+        'total_price' => 4125,
+        'is_pricing_final' => true,
+    ])->save();
+
+    $booking->refresh();
+
+    expect((float) $booking->base_price)->toBe(3500.0)
+        ->and((float) $booking->admin_margin_amount)->toBe(625.0)
+        ->and((float) $booking->total_price)->toBe(4125.0);
+});
