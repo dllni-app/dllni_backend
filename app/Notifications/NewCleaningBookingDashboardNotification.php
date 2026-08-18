@@ -9,6 +9,7 @@ use Filament\Actions\Action;
 use Filament\Notifications\Notification as FilamentNotification;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Facades\Lang;
 use Modules\Cleaning\Models\CleaningBooking;
 
 final class NewCleaningBookingDashboardNotification extends Notification
@@ -32,15 +33,15 @@ final class NewCleaningBookingDashboardNotification extends Notification
     {
         return array_merge(
             FilamentNotification::make()
-                ->title(__('cleaning_admin.booking_notification.created_title'))
-                ->body(__('cleaning_admin.booking_notification.created_body', [
+                ->title(Lang::get('cleaning_admin.booking_notification.created_title', [], 'ar'))
+                ->body(Lang::get('cleaning_admin.booking_notification.created_body', [
                     'booking' => $this->booking->booking_number ?? (string) $this->booking->id,
-                ]))
+                ], 'ar'))
                 ->icon('heroicon-o-calendar-days')
                 ->info()
                 ->actions([
                     Action::make('view')
-                        ->label(__('cleaning_admin.booking_notification.view'))
+                        ->label(Lang::get('cleaning_admin.booking_notification.view', [], 'ar'))
                         ->url(CleaningBookingResource::getUrl('view', ['record' => $this->booking]))
                         ->markAsRead(),
                 ])

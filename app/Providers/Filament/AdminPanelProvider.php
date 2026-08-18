@@ -56,7 +56,7 @@ final class AdminPanelProvider extends PanelProvider
                 fn (): HtmlString => $this->alertSoundPoller(),
             )
             ->databaseNotifications()
-            ->databaseNotificationsPolling('10s')
+            ->databaseNotificationsPolling('5s')
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
