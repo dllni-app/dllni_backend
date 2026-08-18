@@ -13,17 +13,16 @@ final class CleaningCustomerPricingObserver
 {
     public function creating(CleaningBooking $booking): void
     {
+        if ((bool) $booking->is_pricing_final) {
+            return;
+        }
+
         $this->normalizeCustomerPricing($booking);
     }
 
     public function updating(CleaningBooking $booking): void
     {
-        if (! $booking->isDirty([
-            'base_price',
-            'addons_total',
-            'travel_fee',
-            'is_pricing_final',
-        ])) {
+        if (! $this->shouldNormalizeUpdate($booking)) {
             return;
         }
 
@@ -32,22 +31,45 @@ final class CleaningCustomerPricingObserver
 
     public function updated(CleaningBooking $booking): void
     {
+        if (! (bool) $booking->is_pricing_final || ! $this->canNormalize($booking)) {
+            return;
+        }
+
         if (! $booking->wasChanged([
-            'base_price',
-            'addons_total',
             'travel_fee',
             'admin_margin_amount',
-            'total_price',
             'is_pricing_final',
         ])) {
             return;
         }
 
-        if (! (bool) $booking->is_pricing_final || ! $this->canNormalize($booking)) {
-            return;
+        $this->synchronizeWorkerMargins($booking);
+    }
+
+    private function shouldNormalizeUpdate(CleaningBooking $booking): bool
+    {
+        if (! $this->canNormalize($booking)) {
+            return false;
         }
 
-        $this->synchronizeWorkerMargins($booking);
+        $isPricingFinal = (bool) $booking->is_pricing_final;
+
+        if (! $isPricingFinal) {
+            return $booking->isDirty([
+                'base_price',
+                'addons_total',
+                'travel_fee',
+                'admin_margin_amount',
+                'total_price',
+                'is_pricing_final',
+            ]);
+        }
+
+        // Finalize or recalculate system-derived pricing, but do not overwrite a
+        // manually approved final total that only changes base_price/total_price.
+        return $booking->isDirty('is_pricing_final')
+            || $booking->isDirty('travel_fee')
+            || $booking->isDirty('admin_margin_amount');
     }
 
     private function normalizeCustomerPricing(CleaningBooking $booking): void
