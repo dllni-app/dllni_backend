@@ -17,6 +17,7 @@ use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Models\CleaningTimeWarning;
 use Modules\Cleaning\Services\DepositService;
+use Modules\Cleaning\Services\WorkerBookingScheduleConflictService;
 use Modules\Cleaning\Services\WorkerOrderSolvencyService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
@@ -27,6 +28,7 @@ final class WorkerHomepageController
     public function __construct(
         private readonly DepositService $depositService,
         private readonly WorkerOrderSolvencyService $solvencyService,
+        private readonly WorkerBookingScheduleConflictService $scheduleConflictService,
     ) {}
 
     public function __invoke(Request $request): JsonResponse
@@ -152,13 +154,21 @@ final class WorkerHomepageController
         $blockedByCommissionCapacityCount = 0;
 
         foreach ($newOrderCandidates as $candidate) {
-            if ($this->solvencyService->canWorkerReceiveBooking($worker, $candidate)) {
+            if ($this->scheduleConflictService->hasConflict($worker, $candidate)) {
+                continue;
+            }
+
+            $solvency = $this->solvencyService->solvencyPayloadForBooking($worker, $candidate);
+
+            if ((bool) ($solvency['canReceiveOrder'] ?? false)) {
                 $newOrdersCount++;
 
                 continue;
             }
 
-            $blockedByCommissionCapacityCount++;
+            if (($solvency['reasonCode'] ?? null) === WorkerOrderSolvencyService::REASON_INSUFFICIENT_COMMISSION_CAPACITY) {
+                $blockedByCommissionCapacityCount++;
+            }
         }
 
         $pendingExtensionRequestsCount = CleaningTimeWarning::query()
