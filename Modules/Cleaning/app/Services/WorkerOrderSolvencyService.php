@@ -175,7 +175,6 @@ final class WorkerOrderSolvencyService
         ?CleaningBookingWorkerAssignment $assignment = null,
     ): array {
         $assignment ??= $this->assignmentForWorker($booking, $worker);
-        $totalHours = $this->workerDurationHours($booking);
         $isProvisionalEvent = (string) $booking->property_type === 'event_assistance'
             && ! (bool) $booking->is_pricing_final;
 
@@ -184,6 +183,7 @@ final class WorkerOrderSolvencyService
             && $this->isAcceptedAssignment($assignment)
             && ! $isProvisionalEvent
         ) {
+            $totalHours = $this->workerDurationHours($booking, (float) $assignment->rooms_weight);
             $serviceShare = (float) $assignment->service_share_amount;
             $travelFee = (float) $assignment->travel_fee;
             $adminMargin = (float) $assignment->admin_margin_amount;
@@ -217,6 +217,7 @@ final class WorkerOrderSolvencyService
         }
 
         $preview = $this->previewServiceShare($booking);
+        $totalHours = $this->workerDurationHours($booking, (float) $preview['roomsWeight']);
         $serviceShare = $preview['serviceShareAmount'];
         $pricing = $this->pricingCalculator->finalizedForWorker(
             $serviceShare,
@@ -398,7 +399,7 @@ final class WorkerOrderSolvencyService
         return (float) ($allocations[$targetSlot] ?? 0.0);
     }
 
-    private function workerDurationHours(CleaningBooking $booking): ?float
+    private function workerDurationHours(CleaningBooking $booking, ?float $roomsWeight = null): ?float
     {
         $details = is_array($booking->property_details) ? $booking->property_details : [];
         $bookingHours = (float) (
@@ -415,7 +416,22 @@ final class WorkerOrderSolvencyService
             return round($bookingHours, 2);
         }
 
-        return round($bookingHours / max(1, (int) ($booking->number_of_workers ?? 1)), 2);
+        $workerCount = max(1, (int) ($booking->number_of_workers ?? 1));
+        if ($workerCount <= 1) {
+            return round($bookingHours, 2);
+        }
+
+        if ($roomsWeight !== null && $roomsWeight > 0.0) {
+            $totalRoomWeight = round((float) CleaningBookingRoom::query()
+                ->where('cleaning_booking_id', $booking->id)
+                ->sum('weight'), 2);
+
+            if ($totalRoomWeight > 0.0) {
+                return round(max(0.25, $bookingHours * ($roomsWeight / $totalRoomWeight)), 2);
+            }
+        }
+
+        return round($bookingHours / $workerCount, 2);
     }
 
     private function activeReservedCommission(Worker $worker, ?int $excludeBookingId = null): float
