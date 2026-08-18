@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Modules\User\Http\Controllers\API;
 
 use Illuminate\Http\JsonResponse;
-use Modules\Cleaning\Http\Resources\CleaningBookingResource;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Services\CleaningBookingWorkerCompletionService;
 use Modules\User\Http\Requests\UserCleaningOrderCompletionRejectRequest;
+use Modules\User\Http\Resources\UserCleaningBookingResource;
 
 final class UserCleaningOrderCompletionRejectController
 {
@@ -26,7 +26,7 @@ final class UserCleaningOrderCompletionRejectController
         );
         $updated->load(['worker.user', 'workerAssignments.worker.user', 'rooms.assignedWorker.user', 'timeWarnings', 'disputes', 'addons', 'billingPolicy']);
 
-        return CleaningBookingResource::make($updated)->additional([
+        return UserCleaningBookingResource::make($updated)->additional([
             'message' => __('Completion rejection sent successfully.'),
         ])->response();
     }
