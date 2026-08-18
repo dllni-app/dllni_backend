@@ -12,10 +12,6 @@ final class CleaningExtendedTimePricingService
 {
     private const CURRENCY = 'SYP';
 
-    public function __construct(
-        private readonly CleaningPricingCalculator $pricingCalculator,
-    ) {}
-
     /**
      * Canonical 15-minute block boundaries (used as the fallback shape and to
      * validate configured ranges).
@@ -30,6 +26,10 @@ final class CleaningExtendedTimePricingService
         ['start' => 61, 'end' => 75, 'sort' => 5],
         ['start' => 76, 'end' => 90, 'sort' => 6],
     ];
+
+    public function __construct(
+        private readonly CleaningPricingCalculator $pricingCalculator,
+    ) {}
 
     /**
      * @return array{
