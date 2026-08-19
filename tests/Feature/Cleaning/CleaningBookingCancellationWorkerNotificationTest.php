@@ -70,6 +70,8 @@ it('notifies an accepted linked worker when customer cancels a pending multi-wor
 
             return ($payload['canonicalType'] ?? null) === 'cleaning.booking.order_cancelled'
                 && ($payload['targetRole'] ?? null) === 'worker'
+                && ($payload['title'] ?? null) === 'تم إلغاء الطلب'
+                && ($payload['body'] ?? null) === "تم إلغاء حجز التنظيف رقم {$booking->booking_number}."
                 && ($data['bookingId'] ?? null) === $booking->id
                 && ($data['orderId'] ?? null) === $booking->id
                 && ($data['deep_link_target'] ?? null) === 'cleaning_booking_details'
