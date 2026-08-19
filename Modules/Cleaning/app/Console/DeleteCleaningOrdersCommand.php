@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Console;
 
 use App\Models\Dispute;
+use App\Models\SupportCase;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -164,6 +165,7 @@ final class DeleteCleaningOrdersCommand extends Command
     {
         $this->totals['disputes'] += $booking->disputes()->count();
         $this->totals['sosAlerts'] += $booking->sosAlerts()->count();
+        $this->totals['supportCases'] += $this->supportCasesForBooking($booking)->count();
         $this->totals['systemAlerts'] += $booking->systemAlerts()->count();
         $this->totals['statusLogs'] += $booking->statusLogs()->count();
         $this->totals['reviews'] += $booking->reviews()->count();
@@ -185,7 +187,12 @@ final class DeleteCleaningOrdersCommand extends Command
 
     private function deleteLinkedData(CleaningBooking $booking): void
     {
-        // Delete disputes as models so Spatie Media Library cleanup hooks run.
+        // Support cases and disputes are deleted as models so Spatie Media Library
+        // removes their attached files. Their message/event rows cascade in the DB.
+        $this->supportCasesForBooking($booking)->get()->each(static function (SupportCase $supportCase): void {
+            $supportCase->delete();
+        });
+
         $booking->disputes()->get()->each(static function (Dispute $dispute): void {
             $dispute->delete();
         });
@@ -212,6 +219,17 @@ final class DeleteCleaningOrdersCommand extends Command
         }
     }
 
+    private function supportCasesForBooking(CleaningBooking $booking): Builder
+    {
+        return SupportCase::query()
+            ->where('booking_id', $booking->id)
+            ->whereIn('booking_type', array_values(array_unique([
+                $booking->getMorphClass(),
+                CleaningBooking::class,
+                'cleaning_booking',
+            ])));
+    }
+
     private function securityCodeQuery(CleaningBooking $booking): ?\Illuminate\Database\Query\Builder
     {
         if (! Schema::hasTable('booking_security_codes')) {
@@ -230,6 +248,7 @@ final class DeleteCleaningOrdersCommand extends Command
             'orders' => 0,
             'disputes' => 0,
             'sosAlerts' => 0,
+            'supportCases' => 0,
             'systemAlerts' => 0,
             'statusLogs' => 0,
             'reviews' => 0,
