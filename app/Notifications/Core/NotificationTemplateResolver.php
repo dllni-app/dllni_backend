@@ -62,6 +62,10 @@ final class NotificationTemplateResolver
      */
     private function templateFor(string $canonicalType, array $templates, string $resolvedLocale): array
     {
+        if ($canonicalType === 'cleaning.booking.order_cancelled') {
+            return $this->arabicFallbackTemplate($canonicalType) ?? [];
+        }
+
         $default = $this->registry->defaultLocale();
 
         if ($default === 'ar') {
