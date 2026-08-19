@@ -25,6 +25,7 @@ final class CleaningBookingTeamService
         private readonly CleaningPricingCalculator $pricingCalculator,
         private readonly DepositService $depositService,
         private readonly WorkerTrustService $workerTrustService,
+        private readonly WorkerOrderSolvencyService $solvencyService,
     ) {}
 
     public function normalizeAssignmentMode(?string $assignmentMode, ?int $preferredWorkerId, ?int $numberOfWorkers = null): string
@@ -96,8 +97,13 @@ final class CleaningBookingTeamService
     {
         return DB::transaction(function () use ($booking, $worker, $roomIds): CleaningBooking {
             $booking = $this->lockBooking($booking->id);
+            $worker = Worker::query()
+                ->whereKey($worker->id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
             $this->ensureAcceptableBooking($booking, $worker);
+            $this->solvencyService->assertWorkerCanAcceptBooking($worker, $booking, $roomIds);
 
             if (! $this->depositService->isWorkerEligibleForDispatch($worker)) {
                 throw new InvalidArgumentException('Worker is not eligible to accept new requests.');
