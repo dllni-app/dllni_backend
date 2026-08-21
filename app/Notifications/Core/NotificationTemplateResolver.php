@@ -20,7 +20,8 @@ final class NotificationTemplateResolver
         $templates = is_array($definition['templates'] ?? null) ? $definition['templates'] : [];
 
         $resolvedLocale = $this->resolveLocale($templates, $locale);
-        $template = $this->templateFor($canonicalType, $templates, $resolvedLocale);
+        $template = $this->contextualTemplate($canonicalType, $context, $resolvedLocale)
+            ?? $this->templateFor($canonicalType, $templates, $resolvedLocale);
 
         $title = (string) ($template['title'] ?? '');
         $body = (string) ($template['body'] ?? '');
@@ -54,6 +55,59 @@ final class NotificationTemplateResolver
         $firstKey = array_key_first($templates);
 
         return is_string($firstKey) ? $firstKey : 'ar';
+    }
+
+    /**
+     * @param  array<string, scalar|null>  $context
+     * @return array{title: string, body: string}|null
+     */
+    private function contextualTemplate(string $canonicalType, array $context, string $resolvedLocale): ?array
+    {
+        if (
+            $canonicalType !== 'cleaning.booking.worker_assigned'
+            || ($context['actor_role'] ?? null) !== 'admin'
+        ) {
+            return null;
+        }
+
+        $targetRole = (string) ($context['target_role'] ?? 'customer');
+        $requiredWorkers = max(1, (int) ($context['required_workers'] ?? 1));
+        $isMultiWorker = $requiredWorkers > 1;
+        $isArabic = $this->registry->defaultLocale() === 'ar' && $resolvedLocale !== 'en';
+
+        if ($isArabic) {
+            if ($targetRole === 'worker') {
+                return [
+                    'title' => 'تم تعيينك لطلب تنظيف',
+                    'body' => $isMultiWorker
+                        ? 'تم تعيينك لتنفيذ طلب التنظيف رقم :booking_number. المتبقي لإكمال الفريق: :remaining_workers من أصل :required_workers عامل.'
+                        : 'تم تعيينك لتنفيذ طلب التنظيف رقم :booking_number.',
+                ];
+            }
+
+            return [
+                'title' => 'تم تعيين عامل لطلب التنظيف',
+                'body' => $isMultiWorker
+                    ? 'تم تعيين عامل لطلب التنظيف رقم :booking_number. المتبقي لإكمال الفريق: :remaining_workers من أصل :required_workers عامل.'
+                    : 'تم تعيين عامل لطلب التنظيف رقم :booking_number.',
+            ];
+        }
+
+        if ($targetRole === 'worker') {
+            return [
+                'title' => 'You were assigned to a cleaning booking',
+                'body' => $isMultiWorker
+                    ? 'You were assigned to cleaning booking :booking_number. :remaining_workers of :required_workers workers are still needed to complete the team.'
+                    : 'You were assigned to cleaning booking :booking_number.',
+            ];
+        }
+
+        return [
+            'title' => 'Worker assigned to cleaning booking',
+            'body' => $isMultiWorker
+                ? 'A worker was assigned to cleaning booking :booking_number. :remaining_workers of :required_workers workers are still needed to complete the team.'
+                : 'A worker was assigned to cleaning booking :booking_number.',
+        ];
     }
 
     /**
