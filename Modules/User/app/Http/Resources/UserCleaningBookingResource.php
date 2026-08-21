@@ -6,6 +6,7 @@ namespace Modules\User\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Http\Resources\CleaningBookingResource;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\User\Services\UserCleaningOrderEstimationService;
@@ -53,13 +54,33 @@ final class UserCleaningBookingResource extends JsonResource
             $payload['totalHours'] = round($bookingTotalHours / $workerCount, 2);
         }
 
+        $canEdit = $this->canEdit();
+
         $payload['bookingEstimatedHours'] = $bookingEstimatedHours;
         $payload['bookingTotalHours'] = $bookingTotalHours;
         $payload['durationWorkerCount'] = $workerCount;
         $payload['discountAmount'] = $discountAmount;
         $payload['subtotalBeforeDiscount'] = (float) ($this->subtotal_before_discount ?? 0);
         $payload['travelFeePending'] = ! (bool) $this->is_pricing_final;
+        $payload['canEdit'] = $canEdit;
+        $payload['can_edit'] = $canEdit;
 
         return $payload;
+    }
+
+    private function canEdit(): bool
+    {
+        $status = $this->status instanceof CleaningBookingStatus
+            ? $this->status->value
+            : (string) $this->status;
+
+        // Keep this aligned with the terminal-status guard in
+        // UserCleaningOrderService::update(). Field-level restrictions are still
+        // enforced by the update endpoint (for example after a worker accepts).
+        return ! in_array($status, [
+            CleaningBookingStatus::InProgress->value,
+            CleaningBookingStatus::Completed->value,
+            CleaningBookingStatus::Cancelled->value,
+        ], true);
     }
 }
