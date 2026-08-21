@@ -11,18 +11,25 @@ use Modules\Cleaning\Models\CleaningBooking;
 final class CleaningFinancialPenalty extends Model
 {
     public const SOURCE_DEPOSIT = 'deposit';
+
     public const SOURCE_DEBT = 'debt';
+
     public const SOURCE_MIXED = 'mixed';
+
     public const SOURCE_CUSTOMER_FEE = 'customer_fee';
 
     public const ROLE_WORKER = 'worker';
+
     public const ROLE_CUSTOMER = 'customer';
 
     public const STATUS_ACTIVE = 'active';
+
     public const STATUS_CLEARED = 'cleared';
+
     public const STATUS_CANCELLED = 'cancelled';
 
     public const REVIEW_NEEDS_REVIEW = 'needs_review';
+
     public const REVIEW_REVIEWED = 'reviewed';
 
     protected $fillable = [
