@@ -187,7 +187,7 @@ final class CleaningBookingsTable
                         Select::make('worker_id')
                             ->label('العامل')
                             ->options(fn (?CleaningBooking $record): array => self::activeWorkerOptions($record))
-                            ->helperText('تظهر فقط الحسابات النشطة غير الموقوفة والمطابقة لجنس الحجز والتي تملك عنواناً وإحداثيات منزل مكتملة.')
+                            ->helperText('تظهر فقط الحسابات والعاملون النشطون المطابقون لجنس الحجز وتغطية الحي ووقت الحجز، مع عنوان وإحداثيات منزل مكتملة.')
                             ->searchable()
                             ->required(),
                         CheckboxList::make('room_ids')
@@ -205,6 +205,7 @@ final class CleaningBookingsTable
 
                         try {
                             $worker = Worker::query()->with('user')->findOrFail((int) $data['worker_id']);
+                            self::assertDashboardWorkerEligibility($record, $worker);
                             $roomIds = array_values(array_filter(array_map('intval', (array) ($data['room_ids'] ?? []))));
                             $updated = app(CleaningBookingTeamService::class)->acceptWorker(
                                 $record->fresh(['rooms.assignedWorker.user', 'workerAssignments.worker.user']),
@@ -291,6 +292,27 @@ final class CleaningBookingsTable
                         && $record->property_type !== UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE),
                 ViewAction::make()->label('عرض'),
             ]);
+    }
+
+    private static function assertDashboardWorkerEligibility(CleaningBooking $booking, Worker $worker): void
+    {
+        if ($worker->user === null || ! (bool) $worker->user->is_active) {
+            throw new InvalidArgumentException('Worker user account is inactive.');
+        }
+
+        if (! $worker->isAvailableForBooking($booking)) {
+            throw new InvalidArgumentException('Worker is not available at booking schedule.');
+        }
+
+        if (
+            $booking->neighborhood_id !== null
+            && ! Worker::query()
+                ->whereKey($worker->id)
+                ->coversNeighborhood((int) $booking->neighborhood_id)
+                ->exists()
+        ) {
+            throw new InvalidArgumentException('Worker does not cover booking neighborhood.');
+        }
     }
 
     private static function notifyAdminWorkerAssignment(CleaningBooking $booking, Worker $worker, string $fromStatus): void
@@ -591,6 +613,7 @@ final class CleaningBookingsTable
         $query = Worker::query()
             ->with('user')
             ->activeAvailable()
+            ->whereHas('user', fn (Builder $userQuery): Builder => $userQuery->where('is_active', true))
             ->whereNotNull('home_address')
             ->where('home_address', '!=', '')
             ->whereNotNull('home_latitude')
@@ -601,6 +624,10 @@ final class CleaningBookingsTable
             : (string) ($record->gender_preference ?? 'any');
         if (in_array($genderPreference, ['male', 'female'], true)) {
             $query->where('gender', $genderPreference);
+        }
+
+        if ($record->neighborhood_id !== null) {
+            $query->coversNeighborhood((int) $record->neighborhood_id);
         }
 
         $assignmentMode = $record->assignment_mode instanceof BackedEnum
@@ -621,6 +648,7 @@ final class CleaningBookingsTable
             ->orderByDesc('trust_score')
             ->orderBy('first_name')
             ->get()
+            ->filter(fn (Worker $worker): bool => $worker->isAvailableForBooking($record))
             ->mapWithKeys(fn (Worker $worker): array => [$worker->id => self::workerLabel($worker)])
             ->all();
     }
@@ -693,6 +721,9 @@ final class CleaningBookingsTable
             'Worker home location is required before accepting bookings.' => 'عنوان منزل العامل وإحداثياته غير مكتملة. حدّث بيانات موقع العامل ثم أعد المحاولة.',
             'Customer location coordinates are required before accepting bookings.' => 'إحداثيات موقع العميل غير مكتملة في الحجز. حدّث موقع الحجز ثم أعد المحاولة.',
             'Worker is not eligible to accept new requests.' => 'العامل غير مؤهل لاستقبال طلبات جديدة بسبب حالة الحساب أو التأمين.',
+            'Worker user account is inactive.' => 'حساب المستخدم المرتبط بالعامل غير نشط.',
+            'Worker is not available at booking schedule.' => 'العامل غير متاح في تاريخ ووقت الحجز المحدد.',
+            'Worker does not cover booking neighborhood.' => 'العامل لا يغطي الحي المحدد لهذا الحجز.',
             'Worker has already accepted this booking.' => 'العامل مضاف إلى هذا الحجز مسبقاً.',
             'Booking already has the required number of workers.' => 'اكتمل العدد المطلوب من العاملين لهذا الحجز.',
             'Booking is reserved for a different preferred worker.' => 'الحجز محجوز لعامل مفضل آخر.',
