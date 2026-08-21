@@ -12,6 +12,7 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
+use Modules\Cleaning\Services\CleaningCancellationFinancialPenaltyService;
 use Modules\Cleaning\Services\CleaningLifecycleNotificationService;
 
 final class CleaningBookingCancellationAuditObserver
@@ -29,6 +30,9 @@ final class CleaningBookingCancellationAuditObserver
         if ($authenticatedWorker instanceof Worker) {
             $booking->cancelled_by_role = 'worker';
             $booking->cancelled_by_worker_id = $authenticatedWorker->id;
+        } elseif (Auth::id() !== null && (int) Auth::id() === (int) $booking->customer_id) {
+            $booking->cancelled_by_role = 'customer';
+            $booking->cancelled_by_worker_id = null;
         }
 
         // Read directly from the hydrated attributes so cancellation still works when
@@ -66,6 +70,8 @@ final class CleaningBookingCancellationAuditObserver
         }
 
         $this->notifyLinkedWorkers($booking, $linkedWorkerIds);
+
+        app(CleaningCancellationFinancialPenaltyService::class)->recordAutomatic($booking);
     }
 
     /**
