@@ -97,6 +97,7 @@ final class CleaningFinancialPenaltyResource extends Resource
                                 return '-';
                             }
                             $minutes = abs((int) $state);
+
                             return (int) $state > 0 ? "قبل الموعد بـ {$minutes} دقيقة" : ((int) $state < 0 ? "بعد الموعد بـ {$minutes} دقيقة" : 'عند موعد البدء');
                         }),
                     TextEntry::make('reviewedByAdmin.name')->label('تمت مراجعتها بواسطة')->placeholder('-'),
