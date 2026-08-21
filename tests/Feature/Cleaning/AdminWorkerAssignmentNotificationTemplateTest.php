@@ -14,7 +14,7 @@ it('renders customer admin assignment notification with remaining workers for a 
     ]);
 
     expect($copy['title'])->toBe('تم تعيين عامل لطلب التنظيف')
-        ->and($copy['body'])->toBe('تم تعيين عامل لطلب التنظيف رقم CLN-1001. المتبقي لإكمال الفريق: 2 من أصل 3 عامل.');
+        ->and($copy['body'])->toBe('تم تعيين عامل لطلب التنظيف رقم CLN-1001. عدد العاملين المتبقين لإكمال الفريق: 2 من 3.');
 });
 
 it('renders worker admin assignment notification with remaining workers for a multi-worker booking', function (): void {
@@ -27,7 +27,7 @@ it('renders worker admin assignment notification with remaining workers for a mu
     ]);
 
     expect($copy['title'])->toBe('تم تعيينك لطلب تنظيف')
-        ->and($copy['body'])->toBe('تم تعيينك لتنفيذ طلب التنظيف رقم CLN-1002. المتبقي لإكمال الفريق: 1 من أصل 4 عامل.');
+        ->and($copy['body'])->toBe('تم تعيينك لتنفيذ طلب التنظيف رقم CLN-1002. عدد العاملين المتبقين لإكمال الفريق: 1 من 4.');
 });
 
 it('does not add remaining-worker copy for a single-worker admin assignment', function (): void {
@@ -40,5 +40,5 @@ it('does not add remaining-worker copy for a single-worker admin assignment', fu
     ]);
 
     expect($copy['body'])->toBe('تم تعيين عامل لطلب التنظيف رقم CLN-1003.')
-        ->and($copy['body'])->not->toContain('المتبقي لإكمال الفريق');
+        ->and($copy['body'])->not->toContain('عدد العاملين المتبقين لإكمال الفريق');
 });
