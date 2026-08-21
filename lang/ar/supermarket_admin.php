@@ -373,4 +373,10 @@ return [
         'orders_revenue' => 'إيرادات الطلبات.',
         'date' => 'التاريخ.',
     ],
+
+    'order_notification' => [
+        'created_title' => 'طلب متجر جديد',
+        'created_body' => 'تم إنشاء طلب جديد (:order).',
+        'view' => 'عرض الطلب',
+    ],
 ];

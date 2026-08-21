@@ -322,4 +322,10 @@ return [
         'date' => 'Date.',
         'created_at' => 'Creation date.',
     ],
+
+    'order_notification' => [
+        'created_title' => 'New restaurant order',
+        'created_body' => 'A new order (:order) was created.',
+        'view' => 'View order',
+    ],
 ];

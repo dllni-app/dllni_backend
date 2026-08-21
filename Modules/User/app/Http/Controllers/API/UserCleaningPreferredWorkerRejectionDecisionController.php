@@ -6,10 +6,10 @@ namespace Modules\User\Http\Controllers\API;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Modules\Cleaning\Http\Resources\CleaningBookingResource;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Services\CleaningPreferredWorkerRejectionDecisionService;
 use Modules\User\Http\Requests\UserCleaningPreferredWorkerRejectionDecisionRequest;
+use Modules\User\Http\Resources\UserCleaningBookingResource;
 
 final class UserCleaningPreferredWorkerRejectionDecisionController
 {
@@ -17,7 +17,7 @@ final class UserCleaningPreferredWorkerRejectionDecisionController
         Request $request,
         CleaningPreferredWorkerRejectionDecisionService $service,
     ): AnonymousResourceCollection {
-        return CleaningBookingResource::collection(
+        return UserCleaningBookingResource::collection(
             $service->pendingForCustomer((int) $request->user()->id)
         );
     }
@@ -26,12 +26,12 @@ final class UserCleaningPreferredWorkerRejectionDecisionController
         UserCleaningPreferredWorkerRejectionDecisionRequest $request,
         int $order,
         CleaningPreferredWorkerRejectionDecisionService $service,
-    ): CleaningBookingResource {
+    ): UserCleaningBookingResource {
         $booking = CleaningBooking::query()
             ->where('customer_id', $request->user()->id)
             ->findOrFail($order);
 
-        return CleaningBookingResource::make(
+        return UserCleaningBookingResource::make(
             $service->decide(
                 booking: $booking,
                 customerId: (int) $request->user()->id,

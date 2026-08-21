@@ -370,4 +370,10 @@ return [
         'orders_revenue' => 'Orders revenue.',
         'date' => 'Date.',
     ],
+
+    'order_notification' => [
+        'created_title' => 'New supermarket order',
+        'created_body' => 'A new order (:order) was created.',
+        'view' => 'View order',
+    ],
 ];

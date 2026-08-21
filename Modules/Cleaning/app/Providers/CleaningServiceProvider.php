@@ -7,7 +7,10 @@ namespace Modules\Cleaning\Providers;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\ServiceProvider;
+use Modules\Cleaning\Console\DeleteCleaningOrdersCommand;
 use Modules\Cleaning\Console\DispatchDueCleaningBookingNotificationsCommand;
+use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Observers\CleaningCustomerPricingObserver;
 use Nwidart\Modules\Traits\PathNamespace;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -22,6 +25,8 @@ final class CleaningServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        CleaningBooking::observe(CleaningCustomerPricingObserver::class);
+
         $this->registerCommands();
         $this->registerCommandSchedules();
         $this->registerTranslations();
@@ -82,6 +87,7 @@ final class CleaningServiceProvider extends ServiceProvider
         }
 
         $this->commands([
+            DeleteCleaningOrdersCommand::class,
             DispatchDueCleaningBookingNotificationsCommand::class,
         ]);
     }

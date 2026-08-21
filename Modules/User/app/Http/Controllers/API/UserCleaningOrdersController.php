@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Modules\User\Http\Controllers\API;
 
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Modules\Cleaning\Http\Resources\CleaningBookingResource;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\User\Http\Requests\UserCleaningOrdersIndexRequest;
+use Modules\User\Http\Resources\UserCleaningBookingResource;
 
 final class UserCleaningOrdersController
 {
@@ -27,6 +27,6 @@ final class UserCleaningOrdersController
             ])
             ->paginate((int) $request->validated('perPage', 20));
 
-        return CleaningBookingResource::collection($orders);
+        return UserCleaningBookingResource::collection($orders);
     }
 }

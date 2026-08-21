@@ -7,6 +7,7 @@ namespace Modules\Supermarket\Models;
 use App\Models\CancellationPolicy;
 use App\Models\User;
 use Database\Factories\SmOrderFactory;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -16,8 +17,10 @@ use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Modules\Delivery\Models\DeliveryOrder;
 use Modules\Supermarket\Enums\SmOrderStatus;
 use Modules\Supermarket\Enums\SmPickupMode;
+use Modules\Supermarket\Observers\SmOrderObserver;
 use Modules\Supermarket\Traits\FilterQueries\SmOrderFilterQuery;
 
+#[ObservedBy([SmOrderObserver::class])]
 final class SmOrder extends Model
 {
     use HasFactory;

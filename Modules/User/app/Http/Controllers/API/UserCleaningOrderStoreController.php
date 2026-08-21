@@ -9,8 +9,8 @@ use App\Services\Coupons\PlatformCouponRedemptionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
-use Modules\Cleaning\Http\Resources\CleaningBookingResource;
 use Modules\User\Http\Requests\UserCleaningOrderStoreRequest;
+use Modules\User\Http\Resources\UserCleaningBookingResource;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 use Modules\User\Services\UserCleaningOrderService;
 
@@ -31,7 +31,13 @@ final class UserCleaningOrderStoreController
             $order = $service->store($request->user(), $validated);
 
             if (is_string($couponCode) && trim($couponCode) !== '') {
-                $subtotal = round((float) $order->base_price + (float) $order->addons_total, 2);
+                $subtotal = round(
+                    (float) $order->base_price
+                    + (float) $order->addons_total
+                    + (float) $order->travel_fee
+                    + (float) $order->admin_margin_amount,
+                    2,
+                );
                 $quote = $platformCoupons->quoteForPlacement(
                     userId: (int) $request->user()->id,
                     section: PlatformCoupon::SECTION_CLEANING,
@@ -49,7 +55,7 @@ final class UserCleaningOrderStoreController
                 $order->forceFill([
                     'subtotal_before_discount' => $subtotal,
                     'discount_amount' => $discount,
-                    'total_price' => round(max(0.0, (float) $order->total_price - $discount), 2),
+                    'total_price' => round(max(0.0, $subtotal - $discount), 2),
                 ])->save();
 
                 $platformCoupons->record(
@@ -76,7 +82,7 @@ final class UserCleaningOrderStoreController
             'billingPolicy',
         ]);
 
-        return response()->json(['order' => CleaningBookingResource::make($order)], 201);
+        return response()->json(['order' => UserCleaningBookingResource::make($order)], 201);
     }
 
     /** @param array<string, mixed> $validated */

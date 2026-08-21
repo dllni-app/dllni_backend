@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Filament\Resources\PlatformCoupons\Schemas;
 
 use App\Models\PlatformCoupon;
-use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
@@ -24,17 +24,15 @@ final class PlatformCouponForm
                 ->columns(2)
                 ->schema([
                     TextInput::make('code')->label('الرمز')->required()->maxLength(50)->unique(ignoreRecord: true)
-                        ->dehydrateStateUsing(fn (?string $state): string => mb_strtoupper(trim((string) $state))),
+                        ->dehydrateStateUsing(fn (?string $state): string => mb_strtoupper(mb_trim((string) $state))),
                     Select::make('section')->label('القسم')->required()->native(false)->live()->options([
                         PlatformCoupon::SECTION_CLEANING => 'التنظيف',
                         PlatformCoupon::SECTION_RESTAURANT => 'المطاعم',
                         PlatformCoupon::SECTION_SUPERMARKET => 'السوبر ماركت',
                         PlatformCoupon::SECTION_ALL => 'جميع الأقسام',
                     ]),
-                    TextInput::make('title_ar')->label('العنوان بالعربية')->required()->maxLength(255),
-                    TextInput::make('title_en')->label('العنوان بالإنجليزية')->maxLength(255),
-                    Textarea::make('description_ar')->label('الوصف بالعربية')->required()->rows(3)->columnSpanFull(),
-                    Textarea::make('description_en')->label('الوصف بالإنجليزية')->rows(3)->columnSpanFull(),
+                    TextInput::make('title_ar')->label('العنوان')->required()->maxLength(255),
+                    Textarea::make('description_ar')->label('الوصف')->required()->rows(3)->columnSpanFull(),
                 ]),
             Section::make('قيمة الخصم')
                 ->columns(2)
@@ -85,8 +83,8 @@ final class PlatformCouponForm
             Section::make('الصلاحية والحالة')
                 ->columns(3)
                 ->schema([
-                    DateTimePicker::make('starts_at')->label('يبدأ في')->seconds(false),
-                    DateTimePicker::make('expires_at')->label('ينتهي في')->seconds(false)->after('starts_at'),
+                    DatePicker::make('starts_at')->label('يبدأ في'),
+                    DatePicker::make('expires_at')->label('ينتهي في')->after('starts_at'),
                     Toggle::make('is_active')->label('فعال')->default(true),
                 ]),
         ]);

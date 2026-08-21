@@ -15,9 +15,7 @@ final class NewUserSosDashboardNotification extends Notification
 {
     use Queueable;
 
-    public function __construct(private readonly SosAlert $sos)
-    {
-    }
+    public function __construct(private readonly SosAlert $sos) {}
 
     /**
      * @return list<string>
@@ -35,17 +33,20 @@ final class NewUserSosDashboardNotification extends Notification
      */
     public function toDatabase(object $notifiable): array
     {
-        return FilamentNotification::make()
-            ->title(__('cleaning_admin.sos_notification.title'))
-            ->body(__('cleaning_admin.sos_notification.body'))
-            ->icon('heroicon-o-bell-alert')
-            ->danger()
-            ->actions([
-                Action::make('view')
-                    ->label(__('cleaning_admin.sos_notification.view'))
-                    ->url(SosAlertResource::getUrl('view', ['record' => $this->sos]))
-                    ->markAsRead(),
-            ])
-            ->getDatabaseMessage();
+        return array_merge(
+            FilamentNotification::make()
+                ->title(__('cleaning_admin.sos_notification.title'))
+                ->body(__('cleaning_admin.sos_notification.body'))
+                ->icon('heroicon-o-bell-alert')
+                ->danger()
+                ->actions([
+                    Action::make('view')
+                        ->label(__('cleaning_admin.sos_notification.view'))
+                        ->url(SosAlertResource::getUrl('view', ['record' => $this->sos]))
+                        ->markAsRead(),
+                ])
+                ->getDatabaseMessage(),
+            ['sound_type' => 'hard_alarm'],
+        );
     }
 }

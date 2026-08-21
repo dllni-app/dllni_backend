@@ -14,6 +14,7 @@ use Illuminate\Http\Response;
 use Modules\Cleaning\Http\Resources\CleaningDepositTransactionResource;
 use Modules\Cleaning\Services\AdminCleaningTransactionService;
 use Modules\Cleaning\Services\DepositService;
+use Modules\Cleaning\Support\CleaningRuntimeSettings;
 
 final class DepositManagementController
 {
@@ -134,13 +135,14 @@ final class DepositManagementController
         ]);
 
         $settings = $this->resolveSettings();
-        $settings->update(array_filter([
+        $settings->fill(array_filter([
             'minimum_deposit_amount' => $validated['minimum_deposit_amount'] ?? null,
             'restriction_threshold_percent' => 100,
             'allowance_warning_threshold_percent' => $validated['allowance_warning_threshold_percent'] ?? null,
             'trust_reject_after_accept_penalty' => $validated['trust_reject_after_accept_penalty'] ?? null,
             'trust_minimum_for_dispatch' => $validated['trust_minimum_for_dispatch'] ?? null,
         ], static fn ($value) => $value !== null));
+        $settings->save();
 
         $this->depositService->syncAllWorkerDepositStatuses();
 
@@ -179,13 +181,7 @@ final class DepositManagementController
 
     private function resolveSettings(): CleaningDepositSetting
     {
-        return CleaningDepositSetting::query()->firstOrCreate([], [
-            'minimum_deposit_amount' => 0,
-            'restriction_threshold_percent' => 100,
-            'allowance_warning_threshold_percent' => 10,
-            'trust_reject_after_accept_penalty' => (int) config('cleaning.trust.reject_after_accept_penalty', 10),
-            'trust_minimum_for_dispatch' => 0,
-        ]);
+        return CleaningRuntimeSettings::deposit();
     }
 
     private function settingsPayload(CleaningDepositSetting $settings): array

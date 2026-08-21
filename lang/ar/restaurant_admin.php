@@ -315,4 +315,10 @@ return [
         'date' => 'التاريخ.',
         'created_at' => 'تاريخ الإنشاء.',
     ],
+
+    'order_notification' => [
+        'created_title' => 'طلب مطعم جديد',
+        'created_body' => 'تم إنشاء طلب جديد (:order).',
+        'view' => 'عرض الطلب',
+    ],
 ];

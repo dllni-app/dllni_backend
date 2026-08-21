@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Models\CleaningWorkerDeposit;
 use App\Models\Dispute;
 use App\Models\MasterProduct;
 use App\Models\User;
 use App\Models\Worker;
+use App\Observers\CleaningWorkerDepositObserver;
 use App\Services\Notifications\CachedFcmService;
 use App\Services\Notifications\CachedFirebaseMessagingClient;
 use DevKandil\NotiFire\Contracts\FcmServiceInterface;
@@ -83,6 +85,7 @@ final class AppServiceProvider extends ServiceProvider
         });
 
         CleaningBooking::observe(CleaningBookingCancellationAuditObserver::class);
+        CleaningWorkerDeposit::observe(CleaningWorkerDepositObserver::class);
 
         $this->bootModelsDefaults();
         $this->bootMorphMap();
@@ -196,7 +199,7 @@ final class AppServiceProvider extends ServiceProvider
             'delivery_company' => DeliveryCompany::class,
             'delivery_driver' => DeliveryDriver::class,
             'delivery_order' => DeliveryOrder::class,
-            'cleaning_worker_deposit' => \App\Models\CleaningWorkerDeposit::class,
+            'cleaning_worker_deposit' => CleaningWorkerDeposit::class,
             'cleaning_deposit_transaction' => \App\Models\CleaningDepositTransaction::class,
             'cleaning_deposit_setting' => \App\Models\CleaningDepositSetting::class,
             'cleaning_financial_setting' => \App\Models\CleaningFinancialSetting::class,

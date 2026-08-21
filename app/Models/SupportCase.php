@@ -9,6 +9,8 @@ use App\Enums\SupportCasePriority;
 use App\Enums\SupportCaseReporterRole;
 use App\Enums\SupportCaseResolution;
 use App\Enums\SupportCaseStatus;
+use App\Observers\SupportCaseObserver;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -20,6 +22,7 @@ use Modules\Delivery\Models\DeliveryOrder;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 
+#[ObservedBy([SupportCaseObserver::class])]
 final class SupportCase extends Model implements HasMedia
 {
     use InteractsWithMedia;

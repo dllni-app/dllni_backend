@@ -78,7 +78,12 @@
     <x-filament::section :heading="__('cleaning_admin.financial.sections.travel_costs')">
         <div class="grid gap-4 md:grid-cols-2">
             <div class="flex flex-col gap-1"><span class="text-sm">{{ __('cleaning_admin.financial.fields.travel_markup_type') }}</span><div class="flex items-center rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-600 dark:border-gray-600 dark:bg-gray-800/60 dark:text-gray-300">{{ __('cleaning_admin.financial.options.travel_fixed') }}</div></div>
-            <label class="flex flex-col gap-1"><span class="text-sm">{{ __('cleaning_admin.financial.fields.travel_per_km') }}</span><input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="travelPerKm">@error('travelPerKm') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror</label>
+            <label class="flex flex-col gap-1">
+                <span class="text-sm">{{ __('cleaning_admin.financial.fields.travel_per_km') }}</span>
+                <input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="travelPerKm">
+                <span class="text-xs text-gray-500 dark:text-gray-400">{{ app()->isLocale('ar') ? 'هذه القيمة هي أيضاً الحد الأدنى لرسوم التنقل؛ إذا كان حساب المسافة أقل منها يتم اعتماد هذه القيمة كحد أدنى.' : 'This value is also the minimum travel fee; shorter-distance calculations are raised to this minimum.' }}</span>
+                @error('travelPerKm') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
+            </label>
             <div class="flex flex-col gap-1"><span class="text-sm">{{ __('cleaning_admin.financial.fields.travel_distance_start_point') }}</span><div class="flex items-center rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-600 dark:border-gray-600 dark:bg-gray-800/60 dark:text-gray-300">{{ __('cleaning_admin.financial.options.worker_home') }}</div></div>
         </div>
     </x-filament::section>

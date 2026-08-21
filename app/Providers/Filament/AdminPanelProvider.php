@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Providers\Filament;
 
+use App\Filament\Pages\CleaningOverview;
 use App\Http\Middleware\SetCleaningAdminLocale;
 use App\Support\Filament\AlnadhaTheme;
 use Filament\Http\Middleware\Authenticate;
@@ -50,8 +51,12 @@ final class AdminPanelProvider extends PanelProvider
                 PanelsRenderHook::HEAD_START,
                 fn (): HtmlString => $this->forceLatinDigitsScript(),
             )
+            ->renderHook(
+                PanelsRenderHook::BODY_END,
+                fn (): HtmlString => $this->alertSoundPoller(),
+            )
             ->databaseNotifications()
-            ->databaseNotificationsPolling(null)
+            ->databaseNotificationsPolling('5s')
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
@@ -67,6 +72,20 @@ final class AdminPanelProvider extends PanelProvider
             ->authMiddleware([
                 Authenticate::class,
             ]);
+    }
+
+    /**
+     * Play notification/alarm sounds on the dashboard for admins who can access
+     * the cleaning section, whenever a new SOS, deposit-critical, or cleaning
+     * booking dashboard notification arrives.
+     */
+    private function alertSoundPoller(): HtmlString
+    {
+        if (! CleaningOverview::canAccess()) {
+            return new HtmlString('');
+        }
+
+        return new HtmlString(view('filament.admin.hard-alarm-banner')->render());
     }
 
     /**

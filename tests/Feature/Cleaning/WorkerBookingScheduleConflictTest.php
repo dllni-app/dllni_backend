@@ -175,4 +175,13 @@ it('uses estimated hours when total hours are unavailable while checking overlap
 
     $response->assertOk()
         ->assertJsonCount(0, 'data');
+
+    $homepageResponse = $this->getJson('/api/v1/cleaning/worker/homepage');
+
+    $homepageResponse->assertOk()
+        ->assertJsonPath('newOrdersCount', 0)
+        ->assertJsonPath('commissionCapacityEligibility.canReceiveNewRequests', true)
+        ->assertJsonPath('commissionCapacityEligibility.canAcceptNewBookings', true)
+        ->assertJsonPath('commissionCapacityEligibility.reasonCode', 'eligible')
+        ->assertJsonPath('commissionCapacityEligibility.blockedNewOrdersCount', 0);
 });

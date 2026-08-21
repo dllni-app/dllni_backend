@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Services;
 
-use App\Models\CleaningDepositSetting;
 use App\Models\Worker;
 use App\Models\WorkerTrustLog;
 use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Support\CleaningRuntimeSettings;
 
 final class WorkerTrustService
 {
@@ -26,10 +26,9 @@ final class WorkerTrustService
 
     public function applyRejectAfterAcceptPenalty(Worker $worker, CleaningBooking $booking): void
     {
-        $settings = CleaningDepositSetting::query()->first();
         $penalty = max(
             0,
-            (int) ($settings?->trust_reject_after_accept_penalty ?? config('cleaning.trust.reject_after_accept_penalty', 10))
+            (int) CleaningRuntimeSettings::deposit()->trust_reject_after_accept_penalty,
         );
 
         $this->applyPenalty(

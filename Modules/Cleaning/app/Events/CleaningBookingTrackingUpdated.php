@@ -8,6 +8,7 @@ use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
+use Modules\Cleaning\Services\CleaningWorkerRealtimeAudienceService;
 
 final class CleaningBookingTrackingUpdated implements ShouldBroadcastNow
 {
@@ -27,9 +28,18 @@ final class CleaningBookingTrackingUpdated implements ShouldBroadcastNow
      */
     public function broadcastOn(): array
     {
-        return [
+        $channels = [
             new PrivateChannel('cleaning-booking.' . $this->cleaningBookingId),
         ];
+
+        $workerIds = app(CleaningWorkerRealtimeAudienceService::class)
+            ->workerIdsForBooking($this->cleaningBookingId);
+
+        foreach ($workerIds as $workerId) {
+            $channels[] = new PrivateChannel('cleaning-worker.' . $workerId);
+        }
+
+        return $channels;
     }
 
     public function broadcastAs(): string

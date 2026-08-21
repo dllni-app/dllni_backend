@@ -7,6 +7,7 @@ namespace Modules\Resturants\Models;
 use App\Models\CancellationPolicy;
 use App\Models\User;
 use Database\Factories\OrderFactory;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -17,10 +18,11 @@ use Modules\Delivery\Models\DeliveryOrder;
 use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Enums\OrderType;
 use Modules\Resturants\Enums\RestaurantPickupMode;
-use Modules\Resturants\Models\RestaurantGroupOrder;
+use Modules\Resturants\Observers\OrderObserver;
 use Modules\Resturants\Traits\FilterQueries\OrderFilterQuery;
 use Modules\User\Models\UserAddress;
 
+#[ObservedBy([OrderObserver::class])]
 final class Order extends Model
 {
     use HasFactory;
