@@ -6,6 +6,7 @@ namespace Modules\Cleaning\Observers;
 
 use App\Models\Worker;
 use Carbon\Carbon;
+use DateTimeInterface;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
@@ -14,6 +15,7 @@ use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Services\CleaningCancellationFinancialPenaltyService;
 use Modules\Cleaning\Services\CleaningLifecycleNotificationService;
+use Throwable;
 
 final class CleaningBookingCancellationAuditObserver
 {
@@ -75,7 +77,7 @@ final class CleaningBookingCancellationAuditObserver
     }
 
     /**
-     * @param Collection<int, CleaningBookingWorkerAssignment> $assignments
+     * @param  Collection<int, CleaningBookingWorkerAssignment>  $assignments
      * @return array<int, int>
      */
     private function linkedWorkerIds(CleaningBooking $booking, Collection $assignments): array
@@ -187,12 +189,12 @@ final class CleaningBookingCancellationAuditObserver
         }
 
         try {
-            $date = $scheduledDate instanceof \DateTimeInterface
+            $date = $scheduledDate instanceof DateTimeInterface
                 ? $scheduledDate->format('Y-m-d')
                 : mb_substr((string) $scheduledDate, 0, 10);
 
             return Carbon::parse($date.' '.(string) $scheduledTime);
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return null;
         }
     }
