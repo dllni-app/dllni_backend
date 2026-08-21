@@ -30,7 +30,7 @@ final class CleaningCancellationFinancialPenaltyService
      */
     public function recordAutomatic(CleaningBooking $booking): ?CleaningFinancialPenalty
     {
-        $amount = CleaningFinancialSetting::currentUserCancellationFee();
+        $amount = CleaningFinancialSetting::currentCancellationFee();
 
         if ($amount <= 0) {
             return null;
