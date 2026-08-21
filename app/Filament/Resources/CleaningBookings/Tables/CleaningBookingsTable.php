@@ -28,7 +28,9 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Services\CleaningBookingTeamService;
+use Modules\Cleaning\Services\CleaningLifecycleNotificationService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
+use Throwable;
 
 final class CleaningBookingsTable
 {
@@ -178,7 +180,8 @@ final class CleaningBookingsTable
                     ->label('إضافة عامل')
                     ->icon('heroicon-o-user-plus')
                     ->color('success')
-                    ->visible(fn (CleaningBooking $record): bool => ! in_array($record->status, [CleaningBookingStatus::InProgress, CleaningBookingStatus::Completed, CleaningBookingStatus::Cancelled], true) && $record->acceptedWorkerCount() < max(1, (int) ($record->number_of_workers ?? 1)))
+                    ->visible(fn (CleaningBooking $record): bool => in_array($record->status, [CleaningBookingStatus::Pending, CleaningBookingStatus::WorkerAssigned], true)
+                        && $record->acceptedWorkerCount() < max(1, (int) ($record->number_of_workers ?? 1)))
                     ->modalHeading('إضافة عامل')
                     ->form([
                         Select::make('worker_id')
@@ -196,6 +199,10 @@ final class CleaningBookingsTable
                                 && (int) ($record->rooms_count ?? $record->rooms()->count()) > 0),
                     ])
                     ->action(function (CleaningBooking $record, array $data): void {
+                        $fromStatus = $record->status instanceof BackedEnum
+                            ? (string) $record->status->value
+                            : (string) $record->status;
+
                         try {
                             $worker = Worker::query()->with('user')->findOrFail((int) $data['worker_id']);
                             $roomIds = array_values(array_filter(array_map('intval', (array) ($data['room_ids'] ?? []))));
@@ -216,6 +223,7 @@ final class CleaningBookingsTable
                         }
 
                         $record->setRawAttributes($updated->getAttributes(), true);
+                        self::notifyAdminWorkerAssignment($updated, $worker, $fromStatus);
 
                         Notification::make()->title('تمت إضافة العامل')->success()->send();
                     }),
@@ -283,6 +291,54 @@ final class CleaningBookingsTable
                         && $record->property_type !== UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE),
                 ViewAction::make()->label('عرض'),
             ]);
+    }
+
+    private static function notifyAdminWorkerAssignment(CleaningBooking $booking, Worker $worker, string $fromStatus): void
+    {
+        $requiredWorkers = max(1, (int) ($booking->number_of_workers ?? 1));
+        $acceptedWorkers = $booking->acceptedWorkerCount();
+        $remainingWorkers = max(0, $requiredWorkers - $acceptedWorkers);
+        $occurredAt = $booking->updated_at?->toIso8601String() ?? now()->toIso8601String();
+        $extraData = [
+            'assignedWorkerId' => (int) $worker->id,
+            'requiredWorkers' => $requiredWorkers,
+            'acceptedWorkers' => $acceptedWorkers,
+            'remainingWorkers' => $remainingWorkers,
+        ];
+        $templateContext = [
+            'required_workers' => $requiredWorkers,
+            'accepted_workers' => $acceptedWorkers,
+            'remaining_workers' => $remainingWorkers,
+        ];
+
+        try {
+            $notifications = app(CleaningLifecycleNotificationService::class);
+
+            $notifications->notifyCustomer(
+                booking: $booking,
+                canonicalType: 'cleaning.booking.worker_assigned',
+                action: 'worker_assigned_by_admin',
+                actorRole: 'admin',
+                fromStatus: $fromStatus,
+                occurredAt: $occurredAt,
+                extraData: $extraData,
+                templateContext: $templateContext,
+            );
+
+            $notifications->notifyWorkerById(
+                booking: $booking,
+                workerId: (int) $worker->id,
+                canonicalType: 'cleaning.booking.worker_assigned',
+                action: 'worker_assigned_by_admin',
+                actorRole: 'admin',
+                fromStatus: $fromStatus,
+                occurredAt: $occurredAt,
+                extraData: $extraData,
+                templateContext: $templateContext,
+            );
+        } catch (Throwable $exception) {
+            report($exception);
+        }
     }
 
     private static function assignedWorkerNames(CleaningBooking $record): array
