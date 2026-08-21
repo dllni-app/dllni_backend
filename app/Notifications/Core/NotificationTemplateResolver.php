@@ -20,7 +20,7 @@ final class NotificationTemplateResolver
         $templates = is_array($definition['templates'] ?? null) ? $definition['templates'] : [];
 
         $resolvedLocale = $this->resolveLocale($templates, $locale);
-        $template = $this->contextualTemplate($canonicalType, $context, $resolvedLocale)
+        $template = $this->contextualTemplate($canonicalType, $context, $resolvedLocale, $locale)
             ?? $this->templateFor($canonicalType, $templates, $resolvedLocale);
 
         $title = (string) ($template['title'] ?? '');
@@ -61,8 +61,12 @@ final class NotificationTemplateResolver
      * @param  array<string, scalar|null>  $context
      * @return array{title: string, body: string}|null
      */
-    private function contextualTemplate(string $canonicalType, array $context, string $resolvedLocale): ?array
-    {
+    private function contextualTemplate(
+        string $canonicalType,
+        array $context,
+        string $resolvedLocale,
+        ?string $requestedLocale,
+    ): ?array {
         if (
             $canonicalType !== 'cleaning.booking.worker_assigned'
             || ($context['actor_role'] ?? null) !== 'admin'
@@ -73,7 +77,10 @@ final class NotificationTemplateResolver
         $targetRole = (string) ($context['target_role'] ?? 'customer');
         $requiredWorkers = max(1, (int) ($context['required_workers'] ?? 1));
         $isMultiWorker = $requiredWorkers > 1;
-        $isArabic = $this->registry->defaultLocale() === 'ar' && $resolvedLocale !== 'en';
+        $requested = is_string($requestedLocale) ? mb_strtolower($requestedLocale) : null;
+        $isArabic = $requested === 'ar'
+            || ($requested === null && $this->registry->defaultLocale() === 'ar')
+            || ($requested !== 'en' && $resolvedLocale === 'ar');
 
         if ($isArabic) {
             if ($targetRole === 'worker') {
