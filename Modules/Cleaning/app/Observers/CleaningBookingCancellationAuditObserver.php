@@ -6,13 +6,16 @@ namespace Modules\Cleaning\Observers;
 
 use App\Models\Worker;
 use Carbon\Carbon;
+use DateTimeInterface;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
+use Modules\Cleaning\Services\CleaningCancellationFinancialPenaltyService;
 use Modules\Cleaning\Services\CleaningLifecycleNotificationService;
+use Throwable;
 
 final class CleaningBookingCancellationAuditObserver
 {
@@ -29,6 +32,9 @@ final class CleaningBookingCancellationAuditObserver
         if ($authenticatedWorker instanceof Worker) {
             $booking->cancelled_by_role = 'worker';
             $booking->cancelled_by_worker_id = $authenticatedWorker->id;
+        } elseif (Auth::id() !== null && (int) Auth::id() === (int) $booking->customer_id) {
+            $booking->cancelled_by_role = 'customer';
+            $booking->cancelled_by_worker_id = null;
         }
 
         // Read directly from the hydrated attributes so cancellation still works when
@@ -66,10 +72,12 @@ final class CleaningBookingCancellationAuditObserver
         }
 
         $this->notifyLinkedWorkers($booking, $linkedWorkerIds);
+
+        app(CleaningCancellationFinancialPenaltyService::class)->recordAutomatic($booking);
     }
 
     /**
-     * @param Collection<int, CleaningBookingWorkerAssignment> $assignments
+     * @param  Collection<int, CleaningBookingWorkerAssignment>  $assignments
      * @return array<int, int>
      */
     private function linkedWorkerIds(CleaningBooking $booking, Collection $assignments): array
@@ -181,12 +189,12 @@ final class CleaningBookingCancellationAuditObserver
         }
 
         try {
-            $date = $scheduledDate instanceof \DateTimeInterface
+            $date = $scheduledDate instanceof DateTimeInterface
                 ? $scheduledDate->format('Y-m-d')
                 : mb_substr((string) $scheduledDate, 0, 10);
 
             return Carbon::parse($date.' '.(string) $scheduledTime);
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return null;
         }
     }
