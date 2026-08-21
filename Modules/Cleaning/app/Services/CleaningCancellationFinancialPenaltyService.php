@@ -18,6 +18,7 @@ use Modules\Cleaning\Models\CleaningBooking;
 final class CleaningCancellationFinancialPenaltyService
 {
     private const REFERENCE_PREFIX = 'cleaning_cancellation_penalty:';
+
     private const REVERSAL_REFERENCE_PREFIX = 'cleaning_cancellation_penalty_reversal:';
 
     public function __construct(
