@@ -87,7 +87,7 @@ final class NotificationTemplateResolver
                 return [
                     'title' => 'تم تعيينك لطلب تنظيف',
                     'body' => $isMultiWorker
-                        ? 'تم تعيينك لتنفيذ طلب التنظيف رقم :booking_number. المتبقي لإكمال الفريق: :remaining_workers من أصل :required_workers عامل.'
+                        ? 'تم تعيينك لتنفيذ طلب التنظيف رقم :booking_number. عدد العاملين المتبقين لإكمال الفريق: :remaining_workers من :required_workers.'
                         : 'تم تعيينك لتنفيذ طلب التنظيف رقم :booking_number.',
                 ];
             }
@@ -95,7 +95,7 @@ final class NotificationTemplateResolver
             return [
                 'title' => 'تم تعيين عامل لطلب التنظيف',
                 'body' => $isMultiWorker
-                    ? 'تم تعيين عامل لطلب التنظيف رقم :booking_number. المتبقي لإكمال الفريق: :remaining_workers من أصل :required_workers عامل.'
+                    ? 'تم تعيين عامل لطلب التنظيف رقم :booking_number. عدد العاملين المتبقين لإكمال الفريق: :remaining_workers من :required_workers.'
                     : 'تم تعيين عامل لطلب التنظيف رقم :booking_number.',
             ];
         }
