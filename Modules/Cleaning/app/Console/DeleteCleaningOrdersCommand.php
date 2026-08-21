@@ -17,7 +17,9 @@ final class DeleteCleaningOrdersCommand extends Command
     protected $signature = 'cleaning:delete-orders
         {--dry-run : Preview matching orders and linked data without deleting anything}
         {--all : Delete all cleaning orders}
-        {--ids=* : Cleaning order IDs; repeat the option or pass comma-separated IDs}';
+        {--ids=* : Cleaning order IDs; repeat the option or pass comma-separated IDs}
+        {--codes=* : Cleaning order codes (booking numbers); repeat the option or pass comma-separated codes}
+        {--except : Delete all cleaning orders except the orders selected by --ids and/or --codes}';
 
     protected $description = 'Delete cleaning orders and their linked data';
 
@@ -39,32 +41,36 @@ final class DeleteCleaningOrdersCommand extends Command
     public function handle(): int
     {
         $ids = $this->resolveIds();
+        $codes = $this->resolveCodes();
         $deleteAll = (bool) $this->option('all');
+        $except = (bool) $this->option('except');
         $dryRun = (bool) $this->option('dry-run');
+        $hasSelectors = $ids !== [] || $codes !== [];
 
-        if ($deleteAll && $ids !== []) {
-            $this->error('Use either --all or --ids, not both.');
-
-            return self::INVALID;
-        }
-
-        if (! $deleteAll && $ids === []) {
-            $this->error('Specify --all or at least one --ids value.');
+        if ($deleteAll && ($hasSelectors || $except)) {
+            $this->error('Use --all by itself; do not combine it with --ids, --codes, or --except.');
 
             return self::INVALID;
         }
 
-        $query = $this->selectedOrdersQuery($deleteAll, $ids);
+        if ($except && ! $hasSelectors) {
+            $this->error('The --except flag requires at least one --ids or --codes value.');
+
+            return self::INVALID;
+        }
+
+        if (! $deleteAll && ! $hasSelectors) {
+            $this->error('Specify --all or at least one --ids/--codes value.');
+
+            return self::INVALID;
+        }
+
+        if (! $this->validateSelectorsExist($ids, $codes, $except)) {
+            return self::INVALID;
+        }
+
+        $query = $this->selectedOrdersQuery($deleteAll, $except, $ids, $codes);
         $matchedCount = (clone $query)->count();
-
-        if (! $deleteAll && $matchedCount < count($ids)) {
-            $foundIds = (clone $query)->pluck('id')->map(static fn (mixed $id): int => (int) $id)->all();
-            $missingIds = array_values(array_diff($ids, $foundIds));
-
-            if ($missingIds !== []) {
-                $this->warn('Cleaning orders not found: '.implode(', ', $missingIds));
-            }
-        }
 
         if ($matchedCount === 0) {
             $this->info('No matching cleaning orders found.');
@@ -74,6 +80,10 @@ final class DeleteCleaningOrdersCommand extends Command
 
         $this->totals = $this->emptyTotals();
         $this->totals['orders'] = $matchedCount;
+
+        if ($except) {
+            $this->warn('EXCEPT MODE: selected IDs/codes will be preserved; every other cleaning order is targeted.');
+        }
 
         if ($dryRun) {
             (clone $query)->chunkById(100, function ($bookings): void {
@@ -149,13 +159,115 @@ final class DeleteCleaningOrdersCommand extends Command
         return array_values(array_unique($ids));
     }
 
-    /** @param array<int, int> $ids */
-    private function selectedOrdersQuery(bool $deleteAll, array $ids): Builder
+    /** @return array<int, string> */
+    private function resolveCodes(): array
+    {
+        $rawValues = (array) $this->option('codes');
+        $codes = [];
+
+        foreach ($rawValues as $rawValue) {
+            foreach (explode(',', (string) $rawValue) as $value) {
+                $value = trim($value);
+
+                if ($value !== '') {
+                    $codes[] = $value;
+                }
+            }
+        }
+
+        return array_values(array_unique($codes));
+    }
+
+    /**
+     * @param  array<int, int>  $ids
+     * @param  array<int, string>  $codes
+     */
+    private function validateSelectorsExist(array $ids, array $codes, bool $except): bool
+    {
+        $missingIds = [];
+        $missingCodes = [];
+
+        if ($ids !== []) {
+            $foundIds = CleaningBooking::query()
+                ->whereIn('id', $ids)
+                ->pluck('id')
+                ->map(static fn (mixed $id): int => (int) $id)
+                ->all();
+            $missingIds = array_values(array_diff($ids, $foundIds));
+        }
+
+        if ($codes !== []) {
+            $foundCodes = CleaningBooking::query()
+                ->whereIn('booking_number', $codes)
+                ->pluck('booking_number')
+                ->map(static fn (mixed $code): string => (string) $code)
+                ->all();
+            $missingCodes = array_values(array_diff($codes, $foundCodes));
+        }
+
+        if ($missingIds === [] && $missingCodes === []) {
+            return true;
+        }
+
+        if ($except) {
+            if ($missingIds !== []) {
+                $this->error('Cannot use --except: cleaning order IDs not found: '.implode(', ', $missingIds));
+            }
+
+            if ($missingCodes !== []) {
+                $this->error('Cannot use --except: cleaning order codes not found: '.implode(', ', $missingCodes));
+            }
+
+            $this->error('Nothing was deleted because every --except selector must exist.');
+
+            return false;
+        }
+
+        if ($missingIds !== []) {
+            $this->warn('Cleaning orders not found by ID: '.implode(', ', $missingIds));
+        }
+
+        if ($missingCodes !== []) {
+            $this->warn('Cleaning orders not found by code: '.implode(', ', $missingCodes));
+        }
+
+        return true;
+    }
+
+    /**
+     * @param  array<int, int>  $ids
+     * @param  array<int, string>  $codes
+     */
+    private function selectedOrdersQuery(bool $deleteAll, bool $except, array $ids, array $codes): Builder
     {
         $query = CleaningBooking::query()->orderBy('id');
 
-        if (! $deleteAll) {
+        if ($deleteAll) {
+            return $query;
+        }
+
+        if ($except) {
+            if ($ids !== []) {
+                $query->whereNotIn('id', $ids);
+            }
+
+            if ($codes !== []) {
+                $query->whereNotIn('booking_number', $codes);
+            }
+
+            return $query;
+        }
+
+        if ($ids !== [] && $codes !== []) {
+            $query->where(static function (Builder $selectorQuery) use ($ids, $codes): void {
+                $selectorQuery
+                    ->whereIn('id', $ids)
+                    ->orWhereIn('booking_number', $codes);
+            });
+        } elseif ($ids !== []) {
             $query->whereIn('id', $ids);
+        } else {
+            $query->whereIn('booking_number', $codes);
         }
 
         return $query;
