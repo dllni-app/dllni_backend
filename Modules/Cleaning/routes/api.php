@@ -13,6 +13,7 @@ use Modules\Cleaning\Http\Controllers\API\CleaningBookingDeliveryFeeController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingLocationController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingPriceAdjustmentRequestController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingSecurityCodeController;
+use Modules\Cleaning\Http\Controllers\API\CleaningBookingShowController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingStartTravelController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingStartWorkController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingWorkerLocationsController;
@@ -106,7 +107,8 @@ Route::prefix('v1')->group(function () {
         Route::post('cleaning-bookings/{cleaning_booking}/complete', CleaningBookingCompleteController::class)->name('cleaning-bookings.complete');
         Route::post('cleaning-bookings/{cleaning_booking}/finish', [CleaningBookingController::class, 'finish'])->name('cleaning-bookings.finish');
         Route::post('cleaning-bookings/{cleaning_booking}/cancel', [CleaningBookingController::class, 'cancel'])->name('cleaning-bookings.cancel');
-        Route::apiResource('cleaning-bookings', CleaningBookingController::class);
+        Route::get('cleaning-bookings/{cleaning_booking}', CleaningBookingShowController::class)->name('cleaning-bookings.show');
+        Route::apiResource('cleaning-bookings', CleaningBookingController::class)->except(['show']);
         Route::apiResource('event-bookings', EventBookingController::class);
 
         Route::post('cleaning-time-warnings/{cleaning_time_warning}/accept', [CleaningTimeWarningController::class, 'accept'])->name('cleaning-time-warnings.accept');
