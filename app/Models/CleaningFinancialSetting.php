@@ -38,6 +38,17 @@ final class CleaningFinancialSetting extends Model
         'cleaning_room_time_minutes',
     ];
 
+    public static function currentCancellationFee(): float
+    {
+        return max(0.0, (float) CleaningRuntimeSettings::financial()->user_cancellation_fee);
+    }
+
+    /** @deprecated Use currentCancellationFee(). */
+    public static function currentUserCancellationFee(): float
+    {
+        return self::currentCancellationFee();
+    }
+
     public function casts(): array
     {
         return [
@@ -58,11 +69,6 @@ final class CleaningFinancialSetting extends Model
             'cleaning_room_pricing_units' => 'array',
             'cleaning_room_time_minutes' => 'array',
         ];
-    }
-
-    public static function currentUserCancellationFee(): float
-    {
-        return max(0.0, (float) CleaningRuntimeSettings::financial()->user_cancellation_fee);
     }
 
     public function getActivitylogOptions(): LogOptions

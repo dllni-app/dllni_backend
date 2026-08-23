@@ -59,16 +59,35 @@ final class CleaningFinancialPenaltyResource extends Resource
             Section::make('تفاصيل الغرامة')
                 ->schema([
                     TextEntry::make('booking.booking_number')->label('رقم الطلب'),
+                    TextEntry::make('penalized_role')
+                        ->label('الطرف الملغِي')
+                        ->badge()
+                        ->formatStateUsing(fn (string $state): string => $state === CleaningFinancialPenalty::ROLE_CUSTOMER ? 'المستخدم' : 'العامل'),
                     TextEntry::make('worker.user.name')->label('العامل')->placeholder('-'),
+                    TextEntry::make('customer.name')->label('المستخدم')->placeholder('-'),
                     TextEntry::make('amount')->label('قيمة الغرامة')->money('SYP'),
+                    TextEntry::make('review_status')
+                        ->label('المراجعة')
+                        ->badge()
+                        ->formatStateUsing(fn (string $state): string => $state === CleaningFinancialPenalty::REVIEW_REVIEWED ? 'تمت مراجعتها' : 'تحتاج مراجعة'),
+                    TextEntry::make('status')
+                        ->label('حالة الغرامة')
+                        ->badge()
+                        ->formatStateUsing(fn (string $state): string => match ($state) {
+                            CleaningFinancialPenalty::STATUS_CANCELLED => 'ملغاة',
+                            CleaningFinancialPenalty::STATUS_CLEARED => 'مصفرّة',
+                            default => 'فعالة',
+                        }),
                     TextEntry::make('financial_source')
                         ->label('المصدر المالي')
                         ->badge()
-                        ->formatStateUsing(fn (string $state): string => $state === CleaningFinancialPenalty::SOURCE_DEPOSIT ? 'رصيد الإيداع' : 'الدين'),
-                    TextEntry::make('status')
-                        ->label('الحالة')
-                        ->badge()
-                        ->formatStateUsing(fn (string $state): string => $state === CleaningFinancialPenalty::STATUS_CLEARED ? 'مصفرّة' : 'فعالة'),
+                        ->formatStateUsing(fn (string $state): string => match ($state) {
+                            CleaningFinancialPenalty::SOURCE_DEPOSIT => 'رصيد الإيداع',
+                            CleaningFinancialPenalty::SOURCE_DEBT => 'الدين',
+                            CleaningFinancialPenalty::SOURCE_MIXED => 'إيداع + دين',
+                            CleaningFinancialPenalty::SOURCE_CUSTOMER_FEE => 'غرامة مستخدم',
+                            default => $state,
+                        }),
                     TextEntry::make('notes')->label('الملاحظات')->columnSpanFull(),
                     TextEntry::make('cancellation_reason_snapshot')->label('سبب إلغاء الطلب')->placeholder('-')->columnSpanFull(),
                     TextEntry::make('cancellation_offset_minutes')
@@ -78,11 +97,16 @@ final class CleaningFinancialPenaltyResource extends Resource
                                 return '-';
                             }
                             $minutes = abs((int) $state);
+
                             return (int) $state > 0 ? "قبل الموعد بـ {$minutes} دقيقة" : ((int) $state < 0 ? "بعد الموعد بـ {$minutes} دقيقة" : 'عند موعد البدء');
                         }),
-                    TextEntry::make('appliedByAdmin.name')->label('أضيفت بواسطة')->placeholder('-'),
-                    TextEntry::make('applied_at')->label('تاريخ الإضافة')->dateTime(),
-                    TextEntry::make('cleared_at')->label('تاريخ التصفير')->dateTime()->placeholder('-'),
+                    TextEntry::make('reviewedByAdmin.name')->label('تمت مراجعتها بواسطة')->placeholder('-'),
+                    TextEntry::make('reviewed_at')->label('تاريخ المراجعة')->dateTime()->placeholder('-'),
+                    TextEntry::make('appliedByAdmin.name')->label('أضيفت بواسطة')->placeholder('تلقائي'),
+                    TextEntry::make('applied_at')->label('تاريخ التسجيل')->dateTime(),
+                    TextEntry::make('cancelledByAdmin.name')->label('ألغيت بواسطة')->placeholder('-'),
+                    TextEntry::make('penalty_cancelled_at')->label('تاريخ إلغاء الغرامة')->dateTime()->placeholder('-'),
+                    TextEntry::make('penalty_cancellation_note')->label('سبب إلغاء الغرامة')->placeholder('-')->columnSpanFull(),
                 ])
                 ->columns(3),
         ]);
