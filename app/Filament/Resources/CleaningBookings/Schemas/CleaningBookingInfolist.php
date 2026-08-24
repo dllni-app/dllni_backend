@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningBookings\Schemas;
 
+use App\Models\PlatformCoupon;
 use Carbon\Carbon;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
@@ -18,6 +19,9 @@ use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class CleaningBookingInfolist
 {
+    /** @var array<int, PlatformCoupon|null> */
+    private static array $platformCouponCache = [];
+
     public static function configure(Schema $schema): Schema
     {
         return $schema
@@ -175,6 +179,43 @@ final class CleaningBookingInfolist
                                         TextEntry::make('total_price')->label('الإجمالي')->formatStateUsing(fn ($state): string => self::money($state))->weight('bold'),
                                     ])
                                     ->columns(2),
+                                Section::make('الكوبون والخصم')
+                                    ->schema([
+                                        TextEntry::make('coupon_used_status')
+                                            ->label('تم استخدام كوبون؟')
+                                            ->state(fn (CleaningBooking $record): string => self::couponUsed($record) ? 'نعم' : 'لا')
+                                            ->badge()
+                                            ->color(fn (CleaningBooking $record): string => self::couponUsed($record) ? 'success' : 'gray'),
+                                        TextEntry::make('coupon_code_display')
+                                            ->label('كود الكوبون')
+                                            ->state(fn (CleaningBooking $record): string => self::couponCode($record))
+                                            ->visible(fn (CleaningBooking $record): bool => self::couponUsed($record)),
+                                        TextEntry::make('coupon_type_display')
+                                            ->label('نوع الخصم')
+                                            ->state(fn (CleaningBooking $record): string => self::couponTypeLabel($record))
+                                            ->visible(fn (CleaningBooking $record): bool => self::couponUsed($record)),
+                                        TextEntry::make('coupon_value_display')
+                                            ->label('نسبة/قيمة الكوبون')
+                                            ->state(fn (CleaningBooking $record): string => self::couponValueLabel($record))
+                                            ->visible(fn (CleaningBooking $record): bool => self::couponUsed($record)),
+                                        TextEntry::make('coupon_price_before')
+                                            ->label('تكلفة الطلب قبل الكوبون')
+                                            ->state(fn (CleaningBooking $record): float => self::priceBeforeCoupon($record))
+                                            ->formatStateUsing(fn ($state): string => self::money($state))
+                                            ->visible(fn (CleaningBooking $record): bool => self::couponUsed($record)),
+                                        TextEntry::make('coupon_discount_amount')
+                                            ->label('قيمة الخصم الفعلية')
+                                            ->state(fn (CleaningBooking $record): float => (float) ($record->discount_amount ?? 0))
+                                            ->formatStateUsing(fn ($state): string => self::money($state))
+                                            ->visible(fn (CleaningBooking $record): bool => self::couponUsed($record)),
+                                        TextEntry::make('coupon_price_after')
+                                            ->label('تكلفة الطلب بعد الكوبون')
+                                            ->state(fn (CleaningBooking $record): float => (float) ($record->total_price ?? 0))
+                                            ->formatStateUsing(fn ($state): string => self::money($state))
+                                            ->weight('bold')
+                                            ->visible(fn (CleaningBooking $record): bool => self::couponUsed($record)),
+                                    ])
+                                    ->columns(2),
                                 Section::make('الأطراف')
                                     ->schema([
                                         TextEntry::make('customer.name')->label('العميل')->placeholder('-'),
@@ -215,6 +256,70 @@ final class CleaningBookingInfolist
                             ]),
                     ]),
             ]);
+    }
+
+    private static function couponUsed(CleaningBooking $record): bool
+    {
+        return filled($record->platform_coupon_code)
+            || $record->platform_coupon_id !== null
+            || (float) ($record->discount_amount ?? 0) > 0;
+    }
+
+    private static function couponCode(CleaningBooking $record): string
+    {
+        return (string) ($record->platform_coupon_code ?: self::platformCoupon($record)?->code ?: '—');
+    }
+
+    private static function couponType(CleaningBooking $record): ?string
+    {
+        return self::platformCoupon($record)?->discount_type;
+    }
+
+    private static function couponTypeLabel(CleaningBooking $record): string
+    {
+        return match (self::couponType($record)) {
+            'percentage' => 'نسبة مئوية',
+            'fixed', 'fixed_amount' => 'مبلغ ثابت',
+            default => '—',
+        };
+    }
+
+    private static function couponValueLabel(CleaningBooking $record): string
+    {
+        $coupon = self::platformCoupon($record);
+        if ($coupon === null || $coupon->discount_value === null) {
+            return '—';
+        }
+
+        $value = (float) $coupon->discount_value;
+        if ($coupon->discount_type === 'percentage') {
+            return self::decimal($value).'%';
+        }
+
+        return self::money($value);
+    }
+
+    private static function priceBeforeCoupon(CleaningBooking $record): float
+    {
+        if ($record->subtotal_before_discount !== null) {
+            return max(0.0, (float) $record->subtotal_before_discount);
+        }
+
+        return max(0.0, (float) ($record->total_price ?? 0) + (float) ($record->discount_amount ?? 0));
+    }
+
+    private static function platformCoupon(CleaningBooking $record): ?PlatformCoupon
+    {
+        $couponId = (int) ($record->platform_coupon_id ?? 0);
+        if ($couponId <= 0) {
+            return null;
+        }
+
+        if (! array_key_exists($couponId, self::$platformCouponCache)) {
+            self::$platformCouponCache[$couponId] = PlatformCoupon::query()->find($couponId);
+        }
+
+        return self::$platformCouponCache[$couponId];
     }
 
     private static function preferredWorkerNames(mixed $record): array
@@ -408,6 +513,11 @@ final class CleaningBookingInfolist
     private static function money(mixed $amount): string
     {
         return self::integer($amount).' ل.س';
+    }
+
+    private static function decimal(float $value): string
+    {
+        return rtrim(rtrim(number_format($value, 2, '.', ','), '0'), '.');
     }
 
     private static function integer(mixed $value): string

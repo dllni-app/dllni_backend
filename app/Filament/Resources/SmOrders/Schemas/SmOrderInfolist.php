@@ -10,6 +10,7 @@ use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Schema;
 use Modules\Supermarket\Enums\SmOrderStatus;
+use Modules\Supermarket\Models\SmOrder;
 
 final class SmOrderInfolist
 {
@@ -43,6 +44,43 @@ final class SmOrderInfolist
                             ->placeholder('—'),
                     ])
                     ->columns(2),
+                Section::make('الكوبون والخصم')
+                    ->schema([
+                        TextEntry::make('coupon_used_status')
+                            ->label('تم استخدام كوبون؟')
+                            ->state(fn (SmOrder $record): string => self::couponUsed($record) ? 'نعم' : 'لا')
+                            ->badge()
+                            ->color(fn (SmOrder $record): string => self::couponUsed($record) ? 'success' : 'gray'),
+                        TextEntry::make('coupon_code_display')
+                            ->label('كود الكوبون')
+                            ->state(fn (SmOrder $record): string => self::couponCode($record))
+                            ->visible(fn (SmOrder $record): bool => self::couponUsed($record)),
+                        TextEntry::make('coupon_type_display')
+                            ->label('نوع الخصم')
+                            ->state(fn (SmOrder $record): string => self::couponTypeLabel($record))
+                            ->visible(fn (SmOrder $record): bool => self::couponUsed($record)),
+                        TextEntry::make('coupon_value_display')
+                            ->label('نسبة/قيمة الكوبون')
+                            ->state(fn (SmOrder $record): string => self::couponValueLabel($record))
+                            ->visible(fn (SmOrder $record): bool => self::couponUsed($record)),
+                        TextEntry::make('coupon_price_before')
+                            ->label('تكلفة الطلب قبل الكوبون')
+                            ->state(fn (SmOrder $record): float => self::priceBeforeCoupon($record))
+                            ->formatStateUsing(fn ($state): string => ArabicDashboardLabels::money($state))
+                            ->visible(fn (SmOrder $record): bool => self::couponUsed($record)),
+                        TextEntry::make('coupon_discount_amount')
+                            ->label('قيمة الخصم الفعلية')
+                            ->state(fn (SmOrder $record): float => (float) ($record->discount_amount ?? 0))
+                            ->formatStateUsing(fn ($state): string => ArabicDashboardLabels::money($state))
+                            ->visible(fn (SmOrder $record): bool => self::couponUsed($record)),
+                        TextEntry::make('coupon_price_after')
+                            ->label('تكلفة الطلب بعد الكوبون')
+                            ->state(fn (SmOrder $record): float => (float) ($record->total_amount ?? 0))
+                            ->formatStateUsing(fn ($state): string => ArabicDashboardLabels::money($state))
+                            ->weight('bold')
+                            ->visible(fn (SmOrder $record): bool => self::couponUsed($record)),
+                    ])
+                    ->columns(3),
                 Section::make(__('supermarket_admin.infolist.status_timeline'))
                     ->schema([
                         RepeatableEntry::make('statusLogs')
@@ -55,5 +93,80 @@ final class SmOrderInfolist
                     ])
                     ->collapsible(),
             ]);
+    }
+
+    private static function couponUsed(SmOrder $record): bool
+    {
+        return filled($record->platform_coupon_code)
+            || $record->platform_coupon_id !== null
+            || $record->coupon_id !== null
+            || (float) ($record->discount_amount ?? 0) > 0;
+    }
+
+    private static function couponCode(SmOrder $record): string
+    {
+        return (string) ($record->platform_coupon_code
+            ?: $record->platformCoupon?->code
+            ?: $record->coupon?->code
+            ?: '—');
+    }
+
+    private static function couponType(SmOrder $record): ?string
+    {
+        if (filled($record->platform_coupon_code) || $record->platform_coupon_id !== null) {
+            return $record->platformCoupon?->discount_type;
+        }
+
+        return $record->coupon?->type;
+    }
+
+    private static function couponTypeLabel(SmOrder $record): string
+    {
+        return match (self::couponType($record)) {
+            'percentage' => 'نسبة مئوية',
+            'fixed', 'fixed_amount' => 'مبلغ ثابت',
+            default => '—',
+        };
+    }
+
+    private static function couponValue(SmOrder $record): ?float
+    {
+        if (filled($record->platform_coupon_code) || $record->platform_coupon_id !== null) {
+            return $record->platformCoupon?->discount_value !== null
+                ? (float) $record->platformCoupon->discount_value
+                : null;
+        }
+
+        if ($record->coupon === null) {
+            return null;
+        }
+
+        return $record->coupon->type === 'percentage'
+            ? ($record->coupon->percent !== null ? (float) $record->coupon->percent : null)
+            : ($record->coupon->value !== null ? (float) $record->coupon->value : null);
+    }
+
+    private static function couponValueLabel(SmOrder $record): string
+    {
+        $value = self::couponValue($record);
+        if ($value === null) {
+            return '—';
+        }
+
+        if (self::couponType($record) === 'percentage') {
+            return self::formatNumber($value).'%';
+        }
+
+        return ArabicDashboardLabels::money($value);
+    }
+
+    private static function priceBeforeCoupon(SmOrder $record): float
+    {
+        return max(0.0, (float) ($record->total_amount ?? 0) + (float) ($record->discount_amount ?? 0));
+    }
+
+    private static function formatNumber(float $value): string
+    {
+        return rtrim(rtrim(number_format($value, 2, '.', ','), '0'), '.');
     }
 }
