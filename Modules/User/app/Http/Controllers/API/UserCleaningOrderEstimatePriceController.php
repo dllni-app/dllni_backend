@@ -35,6 +35,8 @@ final class UserCleaningOrderEstimatePriceController
             $preferredWorkerCount = is_array($validated['preferredWorkerIds'] ?? null)
                 ? count($validated['preferredWorkerIds'])
                 : (isset($validated['preferredWorkerId']) ? 1 : 0);
+            $hasExplicitWorkerCount = array_key_exists('numberOfWorkers', $validated)
+                && is_numeric($validated['numberOfWorkers']);
             $explicitWorkerCount = max(1, (int) ($validated['numberOfWorkers'] ?? 1));
             $selectedWorkerCount = max(1, $explicitWorkerCount, $preferredWorkerCount);
 
@@ -47,7 +49,9 @@ final class UserCleaningOrderEstimatePriceController
                 ? 1
                 : max(
                     $selectedWorkerCount,
-                    (int) ($estimation['recommendation']['suggestedTeamSize'] ?? 1),
+                    $hasExplicitWorkerCount || $preferredWorkerCount > 0
+                        ? 1
+                        : (int) ($estimation['recommendation']['suggestedTeamSize'] ?? 1),
                 );
             $capacity = CleaningWorkerCapacity::payload((float) $estimation['estimatedHours']);
 
