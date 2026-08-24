@@ -13,6 +13,7 @@ use Modules\User\Http\Requests\UserCleaningOrderEstimatePriceRequest;
 use Modules\User\Models\UserAddress;
 use Modules\User\Services\FemaleWorkerSafetyPolicyService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
+use Modules\User\Support\CleaningWorkerCapacity;
 
 final class UserCleaningOrderEstimatePriceController
 {
@@ -31,18 +32,28 @@ final class UserCleaningOrderEstimatePriceController
                 isset($validated['serviceIds']) ? (array) $validated['serviceIds'] : null,
             );
 
+            $preferredWorkerCount = is_array($validated['preferredWorkerIds'] ?? null)
+                ? count($validated['preferredWorkerIds'])
+                : (isset($validated['preferredWorkerId']) ? 1 : 0);
+            $explicitWorkerCount = max(1, (int) ($validated['numberOfWorkers'] ?? 1));
+            $selectedWorkerCount = max(1, $explicitWorkerCount, $preferredWorkerCount);
+
             $assignmentMode = $this->resolveAssignmentMode(
                 $validated['assignmentMode'] ?? null,
                 $validated['preferredWorkerId'] ?? null,
-                $validated['numberOfWorkers'] ?? null,
+                $selectedWorkerCount,
             );
-            $requiredWorkers = $assignmentMode === 'preferred_worker'
+            $requestedWorkers = $assignmentMode === 'preferred_worker'
                 ? 1
-                : max(1, (int) ($validated['numberOfWorkers'] ?? $estimation['recommendation']['suggestedTeamSize'] ?? 1));
+                : max(
+                    $selectedWorkerCount,
+                    (int) ($estimation['recommendation']['suggestedTeamSize'] ?? 1),
+                );
+            $capacity = CleaningWorkerCapacity::payload((float) $estimation['estimatedHours']);
 
             $pricingPropertyDetails = (array) $validated['propertyDetails'];
             if ($service->isEventAssistanceType((string) $validated['propertyType'])) {
-                $pricingPropertyDetails['workerCount'] = $requiredWorkers;
+                $pricingPropertyDetails['workerCount'] = $requestedWorkers;
             }
 
             $pricing = $service->price(
@@ -50,7 +61,7 @@ final class UserCleaningOrderEstimatePriceController
                 $pricingPropertyDetails,
                 $addressLatitude,
                 $addressLongitude,
-                $validated['preferredWorkerId'] ?? null,
+                $assignmentMode === 'preferred_worker' ? ($validated['preferredWorkerId'] ?? null) : null,
                 isset($validated['serviceIds']) ? (array) $validated['serviceIds'] : null,
             );
         } catch (InvalidArgumentException $exception) {
@@ -69,7 +80,7 @@ final class UserCleaningOrderEstimatePriceController
                 (array) $validated['propertyDetails'],
                 is_array($validated['workerRoomAssignments']) ? $validated['workerRoomAssignments'] : null,
                 $assignmentMode,
-                $requiredWorkers,
+                $requestedWorkers,
                 isset($validated['preferredWorkerId']) ? (int) $validated['preferredWorkerId'] : null,
             );
 
@@ -91,10 +102,11 @@ final class UserCleaningOrderEstimatePriceController
             ],
             'pricing' => $pricing,
             'assignmentMode' => $assignmentMode,
+            ...$capacity,
             'workerAcceptance' => [
-                'required' => $requiredWorkers,
+                'required' => $requestedWorkers,
                 'accepted' => 0,
-                'remaining' => $requiredWorkers,
+                'remaining' => $requestedWorkers,
                 'isFulfilled' => false,
             ],
             'recommendation' => $estimation['recommendation'] ?? null,
