@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Resturants\Models;
 
 use App\Models\CancellationPolicy;
+use App\Models\PlatformCoupon;
 use App\Models\User;
 use Database\Factories\OrderFactory;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
@@ -90,6 +91,11 @@ final class Order extends Model
     public function promoCode(): BelongsTo
     {
         return $this->belongsTo(PromoCode::class);
+    }
+
+    public function platformCoupon(): BelongsTo
+    {
+        return $this->belongsTo(PlatformCoupon::class, 'platform_coupon_id');
     }
 
     public function assignedStaff(): BelongsTo
