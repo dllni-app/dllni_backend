@@ -6,6 +6,8 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Requests\UserNotificationRequests\UserNotificationIndexRequest;
 use App\Http\Resources\UserNotificationResource;
+use App\Notifications\Cleaning\NewOrderRequestNotification;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 
@@ -14,8 +16,13 @@ final class UserNotificationController
     public function index(UserNotificationIndexRequest $request): AnonymousResourceCollection
     {
         $user = auth()->user();
-        $countUnread = $user->unreadNotifications()->count();
         $query = $user->notifications()->getQuery();
+
+        $this->excludeUnavailableNewOrderNotifications($query);
+
+        $countUnread = (clone $query)
+            ->whereNull('read_at')
+            ->count();
 
         if ($request->boolean('filter.unread')) {
             $query->whereNull('read_at');
@@ -58,5 +65,23 @@ final class UserNotificationController
         auth()->user()->notifications()->delete();
 
         return response()->noContent();
+    }
+
+    private function excludeUnavailableNewOrderNotifications(Builder $query): void
+    {
+        $query->where(function (Builder $query): void {
+            $query->where('type', '!=', NewOrderRequestNotification::class)
+                ->orWhere(function (Builder $query): void {
+                    $query->where('type', NewOrderRequestNotification::class)
+                        ->where(function (Builder $query): void {
+                            $query->whereNull('data->state')
+                                ->orWhere('data->state', '!=', 'unavailable');
+                        })
+                        ->where(function (Builder $query): void {
+                            $query->whereNull('data->data->state')
+                                ->orWhere('data->data->state', '!=', 'unavailable');
+                        });
+                });
+        });
     }
 }
