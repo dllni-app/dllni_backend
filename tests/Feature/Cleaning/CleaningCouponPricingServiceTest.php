@@ -8,41 +8,80 @@ use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Services\CleaningCouponPricingService;
 
-it('uses the administration margin before reducing worker earnings', function (): void {
+it('uses the administration percentage before reducing worker earnings', function (): void {
     $booking = cleaningCouponBooking();
     $worker = Worker::factory()->create();
     $assignment = cleaningCouponAssignment($booking, $worker);
-    $coupon = cleaningFixedCoupon('ADMIN80', 80);
+    $coupon = cleaningPercentageCoupon('ADMIN8', 8);
 
     $booking->forceFill(['platform_coupon_id' => $coupon->id]);
 
     app(CleaningCouponPricingService::class)->applyBeforeSave($booking);
     $assignment->refresh();
 
+    // The customer still gets 8% of the existing 1,100 total (88). Financially,
+    // 8 percentage points come out of the 10% admin share, so worker net is unchanged.
     expect((float) $booking->subtotal_before_discount)->toBe(1100.0)
-        ->and((float) $booking->discount_amount)->toBe(80.0)
+        ->and((float) $booking->discount_amount)->toBe(88.0)
         ->and((float) $booking->admin_margin_amount)->toBe(20.0)
-        ->and((float) $booking->total_price)->toBe(1020.0)
+        ->and((float) $booking->total_price)->toBe(1012.0)
         ->and((float) $assignment->admin_margin_amount)->toBe(20.0)
         ->and((float) $assignment->worker_amount)->toBe(900.0);
 });
 
-it('reduces worker earnings only by the coupon amount above the administration margin', function (): void {
+it('does not reduce worker earnings when coupon percentage equals administration percentage', function (): void {
     $booking = cleaningCouponBooking();
     $worker = Worker::factory()->create();
     $assignment = cleaningCouponAssignment($booking, $worker);
-    $coupon = cleaningFixedCoupon('WORKER150', 150);
+    $coupon = cleaningPercentageCoupon('ADMIN10', 10);
 
     $booking->forceFill(['platform_coupon_id' => $coupon->id]);
 
     app(CleaningCouponPricingService::class)->applyBeforeSave($booking);
     $assignment->refresh();
 
+    expect((float) $booking->discount_amount)->toBe(110.0)
+        ->and((float) $booking->admin_margin_amount)->toBe(0.0)
+        ->and((float) $booking->total_price)->toBe(990.0)
+        ->and((float) $assignment->admin_margin_amount)->toBe(0.0)
+        ->and((float) $assignment->worker_amount)->toBe(900.0);
+});
+
+it('reduces worker earnings only by percentage points above the administration percentage', function (): void {
+    $booking = cleaningCouponBooking();
+    $worker = Worker::factory()->create();
+    $assignment = cleaningCouponAssignment($booking, $worker);
+    $coupon = cleaningPercentageCoupon('WORKER15', 15);
+
+    $booking->forceFill(['platform_coupon_id' => $coupon->id]);
+
+    app(CleaningCouponPricingService::class)->applyBeforeSave($booking);
+    $assignment->refresh();
+
+    // Admin is 10% of 1,000. A 15% coupon therefore consumes admin's 10 points
+    // and only the remaining 5 points (50) reduce the worker's original 900 net.
     expect((float) $booking->subtotal_before_discount)->toBe(1100.0)
-        ->and((float) $booking->discount_amount)->toBe(150.0)
+        ->and((float) $booking->discount_amount)->toBe(165.0)
+        ->and((float) $booking->admin_margin_amount)->toBe(0.0)
+        ->and((float) $booking->total_price)->toBe(935.0)
+        ->and((float) $assignment->admin_margin_amount)->toBe(0.0)
+        ->and((float) $assignment->worker_amount)->toBe(850.0);
+});
+
+it('keeps fixed coupons amount-based with administration first', function (): void {
+    $booking = cleaningCouponBooking();
+    $worker = Worker::factory()->create();
+    $assignment = cleaningCouponAssignment($booking, $worker);
+    $coupon = cleaningFixedCoupon('FIXED150', 150);
+
+    $booking->forceFill(['platform_coupon_id' => $coupon->id]);
+
+    app(CleaningCouponPricingService::class)->applyBeforeSave($booking);
+    $assignment->refresh();
+
+    expect((float) $booking->discount_amount)->toBe(150.0)
         ->and((float) $booking->admin_margin_amount)->toBe(0.0)
         ->and((float) $booking->total_price)->toBe(950.0)
-        ->and((float) $assignment->admin_margin_amount)->toBe(0.0)
         ->and((float) $assignment->worker_amount)->toBe(850.0);
 });
 
@@ -75,7 +114,17 @@ function cleaningCouponAssignment(CleaningBooking $booking, Worker $worker): Cle
     ]);
 }
 
+function cleaningPercentageCoupon(string $code, float $discount): PlatformCoupon
+{
+    return cleaningCoupon($code, PlatformCoupon::DISCOUNT_PERCENTAGE, $discount);
+}
+
 function cleaningFixedCoupon(string $code, float $discount): PlatformCoupon
+{
+    return cleaningCoupon($code, PlatformCoupon::DISCOUNT_FIXED, $discount);
+}
+
+function cleaningCoupon(string $code, string $type, float $discount): PlatformCoupon
 {
     return PlatformCoupon::query()->create([
         'code' => $code,
@@ -84,7 +133,7 @@ function cleaningFixedCoupon(string $code, float $discount): PlatformCoupon
         'description_ar' => 'اختبار توزيع خصم الكوبون',
         'description_en' => 'Coupon allocation test',
         'section' => PlatformCoupon::SECTION_CLEANING,
-        'discount_type' => PlatformCoupon::DISCOUNT_FIXED,
+        'discount_type' => $type,
         'discount_value' => $discount,
         'max_discount_amount' => null,
         'min_order_amount' => null,
