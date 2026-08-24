@@ -10,6 +10,7 @@ use InvalidArgumentException;
 use Modules\Cleaning\Services\CleaningExtendedTimePricingService;
 use Modules\User\Http\Requests\UserCleaningOrderEstimateSizeRequest;
 use Modules\User\Services\UserCleaningOrderEstimationService;
+use Modules\User\Support\CleaningWorkerCapacity;
 
 final class UserCleaningOrderEstimateSizeController
 {
@@ -31,6 +32,8 @@ final class UserCleaningOrderEstimateSizeController
             ]);
         }
 
+        $capacity = CleaningWorkerCapacity::payload((float) $estimation['estimatedHours']);
+
         return response()->json([
             'size' => [
                 'estimatedSqm' => $estimation['estimatedSqm'],
@@ -39,7 +42,9 @@ final class UserCleaningOrderEstimateSizeController
             'estimation' => [
                 'estimatedHours' => $estimation['estimatedHours'],
                 'estimatedMinutes' => (int) round($estimation['estimatedHours'] * 60),
+                ...$capacity,
             ],
+            ...$capacity,
             'recommendation' => $estimation['recommendation'] ?? null,
             'extendedTimeRanges' => $extendedTimePricing->ranges(),
         ]);

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Supermarket\Models;
 
 use App\Models\CancellationPolicy;
+use App\Models\PlatformCoupon;
 use App\Models\User;
 use Database\Factories\SmOrderFactory;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
@@ -72,6 +73,11 @@ final class SmOrder extends Model
     public function coupon(): BelongsTo
     {
         return $this->belongsTo(SmCoupon::class, 'coupon_id');
+    }
+
+    public function platformCoupon(): BelongsTo
+    {
+        return $this->belongsTo(PlatformCoupon::class, 'platform_coupon_id');
     }
 
     public function cancellationPolicy(): BelongsTo
