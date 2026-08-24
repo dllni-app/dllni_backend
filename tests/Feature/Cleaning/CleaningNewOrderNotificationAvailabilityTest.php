@@ -108,7 +108,7 @@ beforeEach(function (): void {
     };
 });
 
-it('closes other worker notifications immediately when a single-worker booking is accepted', function (): void {
+it('deletes every new-order notification when a single-worker booking is accepted', function (): void {
     $customer = User::factory()->create(['email' => 'single-notification-customer@example.com']);
     Sanctum::actingAs($customer);
 
@@ -126,14 +126,8 @@ it('closes other worker notifications immediately when a single-worker booking i
     Sanctum::actingAs($acceptedUser);
     postJson("/api/v1/cleaning-bookings/{$booking->id}/accept")->assertOk();
 
-    $acceptedNotification->refresh();
-    $otherNotification->refresh();
-
-    expect($acceptedNotification->data['data']['state'] ?? null)->toBeNull();
-    expect($otherNotification->data['data']['state'] ?? null)->toBe('unavailable');
-    expect($otherNotification->data['data']['actionable'] ?? null)->toBeFalse();
-    expect($otherNotification->data['data']['closeReason'] ?? null)->toBe('required_workers_fulfilled');
-    expect($otherNotification->read_at)->not->toBeNull();
+    expect(DatabaseNotification::query()->whereKey($acceptedNotification->id)->exists())->toBeFalse();
+    expect(DatabaseNotification::query()->whereKey($otherNotification->id)->exists())->toBeFalse();
 
     Sanctum::actingAs($otherUser);
     getJson("/api/v1/cleaning-bookings/{$booking->id}")->assertStatus(409);
@@ -142,7 +136,7 @@ it('closes other worker notifications immediately when a single-worker booking i
     getJson("/api/v1/cleaning-bookings/{$booking->id}")->assertOk();
 });
 
-it('keeps notifications actionable until all required workers accept a multi-worker booking', function (): void {
+it('keeps notifications available until all required workers accept a multi-worker booking', function (): void {
     $customer = User::factory()->create(['email' => 'multi-notification-customer@example.com']);
     Sanctum::actingAs($customer);
 
@@ -164,9 +158,9 @@ it('keeps notifications actionable until all required workers accept a multi-wor
         ->assertOk()
         ->assertJsonPath('data.status', 'pending');
 
-    $otherNotification->refresh();
-    expect($otherNotification->data['data']['state'] ?? null)->toBeNull();
-    expect($otherNotification->read_at)->toBeNull();
+    expect(DatabaseNotification::query()->whereKey($workerOneNotification->id)->exists())->toBeTrue();
+    expect(DatabaseNotification::query()->whereKey($workerTwoNotification->id)->exists())->toBeTrue();
+    expect(DatabaseNotification::query()->whereKey($otherNotification->id)->exists())->toBeTrue();
 
     Sanctum::actingAs($otherUser);
     getJson("/api/v1/cleaning-bookings/{$booking->id}")->assertOk();
@@ -176,15 +170,9 @@ it('keeps notifications actionable until all required workers accept a multi-wor
         ->assertOk()
         ->assertJsonPath('data.status', 'worker_assigned');
 
-    $workerOneNotification->refresh();
-    $workerTwoNotification->refresh();
-    $otherNotification->refresh();
-
-    expect($workerOneNotification->data['data']['state'] ?? null)->toBeNull();
-    expect($workerTwoNotification->data['data']['state'] ?? null)->toBeNull();
-    expect($otherNotification->data['data']['state'] ?? null)->toBe('unavailable');
-    expect($otherNotification->data['data']['actionable'] ?? null)->toBeFalse();
-    expect($otherNotification->read_at)->not->toBeNull();
+    expect(DatabaseNotification::query()->whereKey($workerOneNotification->id)->exists())->toBeFalse();
+    expect(DatabaseNotification::query()->whereKey($workerTwoNotification->id)->exists())->toBeFalse();
+    expect(DatabaseNotification::query()->whereKey($otherNotification->id)->exists())->toBeFalse();
 
     Sanctum::actingAs($otherUser);
     getJson("/api/v1/cleaning-bookings/{$booking->id}")->assertStatus(409);
@@ -194,4 +182,33 @@ it('keeps notifications actionable until all required workers accept a multi-wor
 
     Sanctum::actingAs($workerTwoUser);
     getJson("/api/v1/cleaning-bookings/{$booking->id}")->assertOk();
+});
+
+it('does not return legacy unavailable new-order notifications in the notification feed', function (): void {
+    $customer = User::factory()->create(['email' => 'legacy-notification-customer@example.com']);
+    Sanctum::actingAs($customer);
+
+    $create = postJson('/api/v1/user/cleaning/orders', ($this->bookingPayload)(1));
+    $create->assertCreated();
+
+    $booking = CleaningBooking::query()->findOrFail((int) $create->json('order.id'));
+    [$workerUser] = ($this->createWorker)('legacy-notification-worker@example.com', 33.51);
+
+    $notification = ($this->createNewOrderNotification)($workerUser, $booking);
+    $payload = $notification->data;
+    $payload['state'] = 'unavailable';
+    $payload['actionable'] = false;
+    $payload['data']['state'] = 'unavailable';
+    $payload['data']['actionable'] = false;
+
+    $notification->forceFill([
+        'data' => $payload,
+        'read_at' => null,
+    ])->save();
+
+    Sanctum::actingAs($workerUser);
+    getJson('/api/v1/notifications')
+        ->assertOk()
+        ->assertJsonMissing(['id' => $notification->id])
+        ->assertJsonPath('countUnread', 0);
 });
