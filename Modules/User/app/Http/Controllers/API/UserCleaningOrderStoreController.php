@@ -9,23 +9,28 @@ use App\Services\Coupons\PlatformCouponRedemptionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 use Modules\User\Http\Requests\UserCleaningOrderStoreRequest;
 use Modules\User\Http\Resources\UserCleaningBookingResource;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 use Modules\User\Services\UserCleaningOrderService;
+use Modules\User\Support\CleaningWorkerCapacity;
 
 final class UserCleaningOrderStoreController
 {
     public function __invoke(
         UserCleaningOrderStoreRequest $request,
         UserCleaningOrderService $service,
+        UserCleaningOrderEstimationService $estimationService,
         PlatformCouponRedemptionService $platformCoupons,
     ): JsonResponse {
         $couponCode = $request->input('couponCode');
         Validator::make(['couponCode' => $couponCode], [
             'couponCode' => ['nullable', 'string', 'max:50'],
         ])->validate();
-        $validated = $this->withEventWorkerCount($request->validated());
+        $validated = $this->normalizeWorkerCount($request->validated());
+        $validated = $this->withEventWorkerCount($validated);
+        $this->assertWorkerCapacity($validated, $estimationService);
 
         $order = DB::transaction(function () use ($request, $service, $platformCoupons, $couponCode, $validated) {
             $order = $service->store($request->user(), $validated);
@@ -83,6 +88,48 @@ final class UserCleaningOrderStoreController
         ]);
 
         return response()->json(['order' => UserCleaningBookingResource::make($order)], 201);
+    }
+
+    /** @param array<string, mixed> $validated */
+    private function normalizeWorkerCount(array $validated): array
+    {
+        $preferredWorkerIds = is_array($validated['preferredWorkerIds'] ?? null)
+            ? array_values(array_unique(array_filter(
+                array_map('intval', $validated['preferredWorkerIds']),
+                static fn (int $id): bool => $id > 0,
+            )))
+            : [];
+        $requestedWorkers = max(1, (int) ($validated['numberOfWorkers'] ?? 1));
+
+        $validated['numberOfWorkers'] = max($requestedWorkers, count($preferredWorkerIds));
+
+        return $validated;
+    }
+
+    /** @param array<string, mixed> $validated */
+    private function assertWorkerCapacity(array $validated, UserCleaningOrderEstimationService $estimationService): void
+    {
+        $propertyType = (string) ($validated['propertyType'] ?? '');
+        if ($estimationService->isEventAssistanceType($propertyType)) {
+            return;
+        }
+
+        $estimation = $estimationService->estimate(
+            $propertyType,
+            (array) ($validated['propertyDetails'] ?? []),
+        );
+        $requiredWorkers = CleaningWorkerCapacity::requiredWorkers((float) $estimation['estimatedHours']);
+        $requestedWorkers = max(1, (int) ($validated['numberOfWorkers'] ?? 1));
+
+        if ($requestedWorkers >= $requiredWorkers) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'numberOfWorkers' => [
+                "مدة العمل المقدرة تتجاوز 8 ساعات لكل عامل. يجب طلب {$requiredWorkers} عمال على الأقل لإتمام هذا الطلب.",
+            ],
+        ]);
     }
 
     /** @param array<string, mixed> $validated */
