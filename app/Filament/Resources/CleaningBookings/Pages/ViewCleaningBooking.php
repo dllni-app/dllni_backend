@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\CleaningBookings\Pages;
 
 use App\Filament\Resources\CleaningBookings\CleaningBookingResource;
+use App\Filament\Resources\CleaningBookings\Widgets\CleaningBookingTrackingWidget;
 use App\Filament\Resources\Disputes\DisputeResource;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
@@ -17,6 +18,13 @@ final class ViewCleaningBooking extends ViewRecord
     public function getTitle(): string
     {
         return 'عرض حجز تنظيف';
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [
+            CleaningBookingTrackingWidget::class,
+        ];
     }
 
     protected function getHeaderActions(): array
