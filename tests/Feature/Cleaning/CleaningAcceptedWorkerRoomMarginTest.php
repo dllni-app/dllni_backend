@@ -23,7 +23,7 @@ beforeEach(function (): void {
     );
 });
 
-it('assigns the accepted worker planned rooms and their proportional admin margin before the team is full', function (): void {
+it('assigns rooms immediately and deducts the admin percentage from all three workers by work share', function (): void {
     $booking = CleaningBooking::factory()->create([
         'status' => CleaningBookingStatus::Pending->value,
         'assignment_mode' => 'open_count',
@@ -52,35 +52,67 @@ it('assigns the accepted worker planned rooms and their proportional admin margi
     expect($booking->rooms()->orderBy('planned_worker_slot')->pluck('planned_worker_slot')->all())
         ->toBe([1, 2, 3]);
 
-    $worker = Worker::factory()->create([
-        'home_address' => 'Same location',
-        'home_latitude' => 36.2,
-        'home_longitude' => 37.1,
-    ]);
+    $createAcceptedWorker = function (int $acceptedAfterSeconds) use ($booking): array {
+        $worker = Worker::factory()->create([
+            'home_address' => 'Same location',
+            'home_latitude' => 36.2,
+            'home_longitude' => 37.1,
+        ]);
 
-    $assignment = CleaningBookingWorkerAssignment::query()->create([
-        'cleaning_booking_id' => $booking->id,
-        'worker_id' => $worker->id,
-        'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
-        'accepted_at' => now(),
-        'room_count' => 0,
-        'rooms_weight' => 0,
-        'service_share_amount' => 0,
-        'travel_fee' => 0,
-        'admin_margin_amount' => 0,
-        'worker_amount' => 0,
-        'currency' => 'SYP',
-    ]);
+        $assignment = CleaningBookingWorkerAssignment::query()->create([
+            'cleaning_booking_id' => $booking->id,
+            'worker_id' => $worker->id,
+            'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
+            'accepted_at' => now()->addSeconds($acceptedAfterSeconds),
+            'room_count' => 0,
+            'rooms_weight' => 0,
+            'service_share_amount' => 0,
+            'travel_fee' => 0,
+            'admin_margin_amount' => 0,
+            'worker_amount' => 0,
+            'currency' => 'SYP',
+        ]);
 
+        return [$worker, $assignment];
+    };
+
+    [$firstWorker, $firstAssignment] = $createAcceptedWorker(0);
+
+    // This is the screenshot state: one worker has accepted while two workers
+    // are still missing. Their assigned room and administration share must be
+    // available immediately instead of remaining zero until team completion.
     $teamService->recalculateBookingTeam($booking->fresh(), finalizeBooking: false);
-    $assignment->refresh();
+    $firstAssignment->refresh();
 
-    expect($assignment->room_count)->toBe(1)
-        ->and((float) $assignment->rooms_weight)->toBe(1.0)
-        ->and((float) $assignment->service_share_amount)->toBe(1000.0)
-        ->and((float) $assignment->admin_margin_amount)->toBe(100.0)
-        ->and((float) $assignment->travel_fee)->toBe(10.0)
-        ->and((float) $assignment->worker_amount)->toBe(910.0);
+    expect($firstAssignment->room_count)->toBe(1)
+        ->and((float) $firstAssignment->rooms_weight)->toBe(1.0)
+        ->and((float) $firstAssignment->service_share_amount)->toBe(1000.0)
+        ->and((float) $firstAssignment->admin_margin_amount)->toBe(100.0)
+        ->and((float) $firstAssignment->travel_fee)->toBe(10.0)
+        ->and((float) $firstAssignment->worker_amount)->toBe(910.0);
 
-    expect($booking->rooms()->where('assigned_worker_id', $worker->id)->count())->toBe(1);
+    expect($booking->rooms()->where('assigned_worker_id', $firstWorker->id)->count())->toBe(1);
+
+    [$secondWorker] = $createAcceptedWorker(1);
+    [$thirdWorker] = $createAcceptedWorker(2);
+
+    $finalBooking = $teamService->recalculateBookingTeam($booking->fresh(), finalizeBooking: true);
+    $assignments = CleaningBookingWorkerAssignment::query()
+        ->where('cleaning_booking_id', $booking->id)
+        ->orderBy('accepted_at')
+        ->orderBy('id')
+        ->get();
+
+    expect($assignments)->toHaveCount(3)
+        ->and($assignments->pluck('room_count')->all())->toBe([1, 1, 1])
+        ->and($assignments->pluck('service_share_amount')->map(fn ($value) => (float) $value)->all())
+        ->toBe([1000.0, 1000.0, 1000.0])
+        ->and($assignments->pluck('admin_margin_amount')->map(fn ($value) => (float) $value)->all())
+        ->toBe([100.0, 100.0, 100.0])
+        ->and((float) $assignments->sum('admin_margin_amount'))->toBe(300.0)
+        ->and((float) $finalBooking->admin_margin_amount)->toBe(300.0);
+
+    foreach ([$firstWorker, $secondWorker, $thirdWorker] as $worker) {
+        expect($booking->rooms()->where('assigned_worker_id', $worker->id)->count())->toBe(1);
+    }
 });
