@@ -8,6 +8,7 @@ use App\Filament\Resources\CleaningBookings\CleaningBookingResource;
 use App\Models\Worker;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
@@ -124,7 +125,7 @@ final class CleaningBookingTrackingController
                 : null,
             'locationUpdatedAt' => $locationUpdatedAt === null
                 ? null
-                : (string) $locationUpdatedAt,
+                : Carbon::parse((string) $locationUpdatedAt)->toIso8601String(),
             'isTravelling' => $booking->started_travel_at !== null && $booking->arrived_at === null,
         ];
     }
