@@ -45,6 +45,7 @@ final class CleaningFinancialSummaryService
             'currentDebtBalance' => round(max(0.0, (float) ($accountTotals?->current_debt ?? 0)), 2),
             'currentAdminCommissionBalance' => round(max(0.0, $commissionTotal - $closedAdminRevenue), 2),
             'withdrawnAdminRevenue' => round($withdrawnAdminRevenue, 2),
+            'collectedAdminRevenue' => round($closedAdminRevenue, 2),
             'totalRevenue' => round($this->totalRevenue(), 2),
             'reservedActiveCommission' => round($this->reservedActiveCommission(), 2),
             'financiallyBlockedWorkers' => Worker::query()
