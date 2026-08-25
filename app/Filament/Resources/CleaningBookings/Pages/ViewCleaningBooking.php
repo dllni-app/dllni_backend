@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningBookings\Pages;
 
+use App\Enums\WorkerCustomerRatingType;
 use App\Filament\Resources\CleaningBookings\CleaningBookingResource;
 use App\Filament\Resources\CleaningBookings\Widgets\CleaningBookingTrackingWidget;
 use App\Filament\Resources\Disputes\DisputeResource;
-use App\Models\BookingReview;
+use App\Models\WorkerCustomerRating;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Infolists\Components\RepeatableEntry;
@@ -32,7 +33,8 @@ final class ViewCleaningBooking extends ViewRecord
     public function infolist(Schema $schema): Schema
     {
         $this->record->loadMissing([
-            'reviews.customer',
+            'ratings.customer',
+            'ratings.worker.user',
             'timeWarnings.booking',
             'timeWarnings.worker.user',
         ]);
@@ -45,36 +47,39 @@ final class ViewCleaningBooking extends ViewRecord
 
         return $schema->components([
             ...$existingComponents,
-            Section::make('تقييم العميل')
-                ->description('التقييم والملاحظات التي أرسلها العميل بعد اكتمال الطلب.')
+            Section::make('تقييم العميل ومراجعته')
+                ->description('يعرض تقييم العميل المرتبط بهذا الحجز وتعليقه لكل عامل تم تقييمه من تطبيق العميل.')
                 ->schema([
-                    RepeatableEntry::make('reviews')
+                    RepeatableEntry::make('customer_worker_ratings')
                         ->hiddenLabel()
+                        ->getStateUsing(fn (CleaningBooking $record): array => self::customerWorkerRatings($record))
                         ->schema([
-                            TextEntry::make('customer.name')
+                            TextEntry::make('customer_name')
                                 ->label('العميل')
+                                ->placeholder('-'),
+                            TextEntry::make('worker_name')
+                                ->label('العامل الذي تم تقييمه')
                                 ->placeholder('-'),
                             TextEntry::make('rating')
                                 ->label('التقييم')
-                                ->state(fn (BookingReview $record): string => sprintf('%d / 5', (int) $record->rating))
+                                ->formatStateUsing(fn (mixed $state): string => self::formatRating((int) $state))
                                 ->badge()
-                                ->color(fn (BookingReview $record): string => self::reviewColor((int) $record->rating)),
+                                ->color(fn (mixed $state): string => self::reviewColor((int) $state)),
                             TextEntry::make('created_at')
                                 ->label('وقت التقييم')
-                                ->dateTime('Y-m-d h:i A')
                                 ->placeholder('-'),
                             TextEntry::make('comment')
-                                ->label('ملاحظات العميل')
-                                ->placeholder('لا توجد ملاحظات مكتوبة')
+                                ->label('مراجعة العميل')
+                                ->placeholder('لم يكتب العميل تعليقاً.')
                                 ->columnSpanFull(),
                         ])
                         ->columns([
                             'default' => 1,
                             'md' => 2,
-                            'xl' => 3,
+                            'xl' => 4,
                         ]),
                 ])
-                ->visible(fn (CleaningBooking $record): bool => $record->reviews->isNotEmpty())
+                ->visible(fn (CleaningBooking $record): bool => self::customerWorkerRatings($record) !== [])
                 ->columnSpanFull(),
             Section::make('تمديدات الوقت')
                 ->description('سجل طلبات تمديد وقت العمل والمدة المطلوبة والمبلغ ورد العامل، بنفس بيانات تطبيق العميل والعامل.')
@@ -173,6 +178,42 @@ final class ViewCleaningBooking extends ViewRecord
                 ->label('تعديل')
                 ->visible(fn (): bool => CleaningBookingResource::canEdit($this->record)),
         ];
+    }
+
+    /**
+     * @return array<int, array{
+     *     customer_name:string,
+     *     worker_name:string,
+     *     rating:int,
+     *     comment:?string,
+     *     created_at:string
+     * }>
+     */
+    private static function customerWorkerRatings(CleaningBooking $record): array
+    {
+        $ratings = $record->relationLoaded('ratings')
+            ? $record->ratings
+            : $record->ratings()->with(['customer', 'worker.user'])->get();
+
+        return $ratings
+            ->filter(fn (WorkerCustomerRating $rating): bool => self::enumValue($rating->rating_type) === WorkerCustomerRatingType::CustomerToWorker->value)
+            ->sortByDesc('created_at')
+            ->map(fn (WorkerCustomerRating $rating): array => [
+                'customer_name' => $rating->customer?->name ?? $record->customer?->name ?? '-',
+                'worker_name' => $rating->worker?->user?->name ?? $rating->worker?->first_name ?? '-',
+                'rating' => (int) $rating->rating,
+                'comment' => filled($rating->comment) ? (string) $rating->comment : null,
+                'created_at' => $rating->created_at?->format('Y-m-d h:i A') ?? '-',
+            ])
+            ->values()
+            ->all();
+    }
+
+    private static function formatRating(int $rating): string
+    {
+        $rating = max(0, min(5, $rating));
+
+        return sprintf('%s (%d / 5)', str_repeat('★', $rating).str_repeat('☆', 5 - $rating), $rating);
     }
 
     private static function reviewColor(int $rating): string
