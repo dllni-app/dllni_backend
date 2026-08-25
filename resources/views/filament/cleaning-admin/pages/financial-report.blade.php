@@ -14,6 +14,7 @@
                 <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-900">
                     <p class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ $metric['label'] }}</p>
                     <p class="mt-2 text-2xl font-extrabold {{ $accent }}">{{ $metric['value'] }}</p>
+                    <p class="mt-3 text-xs leading-5 text-gray-400 dark:text-gray-500">{{ $metric['description'] }}</p>
                 </div>
             @endforeach
         </div>
