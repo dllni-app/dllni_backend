@@ -9,6 +9,7 @@ use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Services\CleaningBookingTeamService;
+use Modules\Cleaning\Services\WorkerOrderSolvencyService;
 
 beforeEach(function (): void {
     CleaningFinancialSetting::query()->updateOrCreate(
@@ -21,6 +22,56 @@ beforeEach(function (): void {
             'travel_distance_start_point' => 'worker_home',
         ],
     );
+});
+
+it('returns the exact planned room ids in the worker offer before acceptance', function (): void {
+    $booking = CleaningBooking::factory()->create([
+        'status' => CleaningBookingStatus::Pending->value,
+        'assignment_mode' => 'open_count',
+        'property_type' => 'apartment',
+        'property_details' => [
+            'room_size_breakdown' => [
+                'bedroom' => ['small' => 2],
+            ],
+        ],
+        'number_of_workers' => 2,
+        'base_price' => 2000,
+        'addons_total' => 0,
+        'travel_fee' => 0,
+        'admin_margin_amount' => 0,
+        'total_price' => 2000,
+        'is_pricing_final' => false,
+        'estimated_hours' => 2,
+        'total_hours' => 2,
+        'address_latitude' => 36.2,
+        'address_longitude' => 37.1,
+    ]);
+
+    app(CleaningBookingTeamService::class)->syncRooms($booking, null);
+
+    $expectedRoomIds = $booking->rooms()
+        ->where('planned_worker_slot', 1)
+        ->orderBy('id')
+        ->pluck('id')
+        ->map(static fn ($id): int => (int) $id)
+        ->all();
+
+    $worker = Worker::factory()->create([
+        'home_address' => 'Same location',
+        'home_latitude' => 36.2,
+        'home_longitude' => 37.1,
+    ]);
+
+    $offer = app(WorkerOrderSolvencyService::class)->workerOfferForBooking(
+        $worker,
+        $booking->fresh(),
+    );
+
+    expect($expectedRoomIds)->toHaveCount(1)
+        ->and($offer['isPreview'])->toBeTrue()
+        ->and($offer['workerSlot'])->toBe(1)
+        ->and($offer['roomCount'])->toBe(1)
+        ->and($offer['roomIds'])->toBe($expectedRoomIds);
 });
 
 it('assigns rooms immediately and deducts the admin percentage from all three workers by work share', function (): void {

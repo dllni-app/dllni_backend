@@ -177,11 +177,20 @@ final class WorkerOrderSolvencyService
         $assignment ??= $this->assignmentForWorker($booking, $worker);
         $isProvisionalEvent = (string) $booking->property_type === 'event_assistance'
             && ! (bool) $booking->is_pricing_final;
+        $isProvisionalUnpricedAssignment = $assignment instanceof CleaningBookingWorkerAssignment
+            && $this->isAcceptedAssignment($assignment)
+            && ! (bool) $booking->is_pricing_final
+            && ! $isProvisionalEvent
+            && (int) ($booking->platform_coupon_id ?? 0) <= 0
+            && (float) ($assignment->service_share_amount ?? 0) <= 0.0
+            && (float) ($assignment->rooms_weight ?? 0) <= 0.0
+            && ((float) ($booking->base_price ?? 0) + (float) ($booking->addons_total ?? 0)) > 0.0;
 
         if (
             $assignment instanceof CleaningBookingWorkerAssignment
             && $this->isAcceptedAssignment($assignment)
             && ! $isProvisionalEvent
+            && ! $isProvisionalUnpricedAssignment
         ) {
             $totalHours = $this->workerDurationHours($booking, (float) $assignment->rooms_weight);
             $serviceShare = (float) $assignment->service_share_amount;
@@ -216,7 +225,7 @@ final class WorkerOrderSolvencyService
             ];
         }
 
-        $preview = $this->previewServiceShare($booking);
+        $preview = $this->previewServiceShare($booking, $assignment);
         $totalHours = $this->workerDurationHours($booking, (float) $preview['roomsWeight']);
         $serviceShare = $preview['serviceShareAmount'];
         $pricing = $this->pricingCalculator->finalizedForWorker(
@@ -284,8 +293,10 @@ final class WorkerOrderSolvencyService
     /**
      * @return array{serviceShareAmount:float, adminMarginAmount:float, roomCount:int, roomsWeight:float, workerSlot:?int, roomIds:array<int, int>}
      */
-    private function previewServiceShare(CleaningBooking $booking): array
-    {
+    private function previewServiceShare(
+        CleaningBooking $booking,
+        ?CleaningBookingWorkerAssignment $assignment = null,
+    ): array {
         $workerCount = max(1, (int) ($booking->number_of_workers ?? 1));
         $subtotal = round(
             (float) ($booking->base_price ?? 0) + (float) ($booking->addons_total ?? 0),
@@ -304,11 +315,21 @@ final class WorkerOrderSolvencyService
             ];
         }
 
-        $acceptedCount = CleaningBookingWorkerAssignment::query()
+        $acceptedAssignments = CleaningBookingWorkerAssignment::query()
             ->where('cleaning_booking_id', $booking->id)
             ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
-            ->count();
-        $nextSlot = min($workerCount, $acceptedCount + 1);
+            ->orderBy('accepted_at')
+            ->orderBy('id')
+            ->get(['id']);
+        $acceptedCount = $acceptedAssignments->count();
+        $assignmentIndex = $assignment instanceof CleaningBookingWorkerAssignment
+            ? $acceptedAssignments->search(
+                static fn (CleaningBookingWorkerAssignment $candidate): bool => (int) $candidate->id === (int) $assignment->id
+            )
+            : false;
+        $nextSlot = $assignmentIndex !== false
+            ? min($workerCount, ((int) $assignmentIndex) + 1)
+            : min($workerCount, $acceptedCount + 1);
 
         $plannedRooms = CleaningBookingRoom::query()
             ->where('cleaning_booking_id', $booking->id)

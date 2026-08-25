@@ -394,9 +394,11 @@ final class CleaningBookingTeamService
             $roomsWeight = round((float) $workerRooms->sum(fn (CleaningBookingRoom $room): float => (float) $room->weight), 2);
             $serviceShare = $isEventAssistance
                 ? round($subtotal / $requiredWorkers, 2)
-                : ($totalRoomWeight > 0
+                : ($roomsWeight > 0.0 && $totalRoomWeight > 0.0
                     ? round($subtotal * ($roomsWeight / $totalRoomWeight), 2)
-                    : 0.0);
+                    : (! $finalizeBooking
+                        ? round($subtotal / $requiredWorkers, 2)
+                        : 0.0));
 
             $worker = $assignment->relationLoaded('worker') ? $assignment->worker : Worker::query()->find($assignment->worker_id);
 
