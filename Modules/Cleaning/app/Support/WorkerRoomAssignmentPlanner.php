@@ -36,14 +36,11 @@ final class WorkerRoomAssignmentPlanner
     ): array {
         $derivedRooms = self::generateRoomBlueprints($propertyDetails);
 
-        if ($workerRoomAssignments === null) {
-            return [
-                'errors' => [],
-                'assignments' => [],
-                'roomPlans' => [],
-                'derivedRooms' => $derivedRooms,
-            ];
-        }
+        // An omitted explicit room assignment means "auto-plan" rather than
+        // "leave every room unplanned". Building the worker slots here lets
+        // the first accepted worker immediately receive the rooms planned for
+        // their slot while the remaining team members are still being found.
+        $workerRoomAssignments ??= [];
 
         $workerRoomAssignments = self::normalizePreferredWorkerAssignments(
             $workerRoomAssignments,
