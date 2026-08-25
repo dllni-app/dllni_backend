@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Models\CleaningFinancialSetting;
 use App\Models\Worker;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
@@ -10,6 +11,17 @@ use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Services\CleaningBookingTeamService;
 
 it('does not create extra workload for a high-trust worker when the rooms divide evenly', function (): void {
+    CleaningFinancialSetting::query()->updateOrCreate(
+        ['id' => 1],
+        [
+            'default_commission_rate' => 10,
+            'commission_type' => 'percent',
+            'commission_fixed_amount' => null,
+            'travel_per_km' => 10,
+            'travel_distance_start_point' => 'worker_home',
+        ],
+    );
+
     $booking = CleaningBooking::factory()->create([
         'status' => CleaningBookingStatus::Pending->value,
         'assignment_mode' => 'open_count',
