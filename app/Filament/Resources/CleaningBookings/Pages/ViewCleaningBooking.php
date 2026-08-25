@@ -32,6 +32,7 @@ final class ViewCleaningBooking extends ViewRecord
     {
         $this->record->loadMissing([
             'reviews.customer',
+            'timeWarnings.booking',
             'timeWarnings.worker.user',
         ]);
 
