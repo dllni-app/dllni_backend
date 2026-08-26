@@ -29,16 +29,23 @@ final class CleaningBookingSessionPricingService
                 return $booking;
             }
 
-            $totalHours = max(0.01, (float) $sessions->sum('duration_hours'));
+            $activeForService = $sessions->reject(fn (CleaningBookingSession $session): bool => $session->status === CleaningBookingSessionStatus::Cancelled);
+            $totalHours = max(0.01, (float) $activeForService->sum('duration_hours'));
             $baseTotal = max(0.0, (float) $booking->base_price);
             $remainingBase = $baseTotal;
-            $count = $sessions->count();
+            $pricedCount = $activeForService->count();
+            $pricedIndex = 0;
 
-            foreach ($sessions->values() as $index => $session) {
-                $base = $index === $count - 1
+            foreach ($sessions->values() as $session) {
+                if ($session->status === CleaningBookingSessionStatus::Cancelled) {
+                    continue;
+                }
+
+                $base = $pricedIndex === $pricedCount - 1
                     ? round(max(0.0, $remainingBase), 2)
                     : round($baseTotal * ((float) $session->duration_hours / $totalHours), 2);
                 $remainingBase = round($remainingBase - $base, 2);
+                $pricedIndex++;
                 $provisional = $this->calculator->provisional($base, 0.0);
 
                 $session->forceFill([
@@ -84,15 +91,12 @@ final class CleaningBookingSessionPricingService
                     $session->workerAssignments()
                         ->whereNotIn('status', [CleaningBookingWorkerAssignmentStatus::Completed->value])
                         ->update(['status' => CleaningBookingWorkerAssignmentStatus::Cancelled->value, 'updated_at' => now()]);
-                    $session->forceFill([
-                        'base_price' => 0,
-                        'travel_fee' => 0,
-                        'travel_distance_km' => null,
-                        'admin_margin_amount' => 0,
-                        'extension_fee_total' => 0,
-                        'total_price' => (float) $session->cancellation_fee,
-                        'is_pricing_final' => true,
-                    ])->saveQuietly();
+                    continue;
+                }
+
+                // Historical execution is immutable. Never create a completed
+                // assignment for a worker who joined only after this day ended.
+                if ($session->status === CleaningBookingSessionStatus::Completed) {
                     continue;
                 }
 
@@ -126,6 +130,9 @@ final class CleaningBookingSessionPricingService
                         CleaningBookingWorkerAssignmentStatus::Pending->value,
                         CleaningBookingWorkerAssignmentStatus::Accepted->value,
                         CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
+                        CleaningBookingWorkerAssignmentStatus::Rejected->value,
+                        CleaningBookingWorkerAssignmentStatus::Withdrawn->value,
+                        CleaningBookingWorkerAssignmentStatus::Cancelled->value,
                     ], true)) {
                         $sessionAssignment->status = $this->initialAssignmentStatusForSession($session);
                     }
@@ -143,12 +150,12 @@ final class CleaningBookingSessionPricingService
                 if ($acceptedWorkerIds === []) {
                     $session->workerAssignments()
                         ->whereNotIn('status', [CleaningBookingWorkerAssignmentStatus::Completed->value])
-                        ->update(['status' => CleaningBookingWorkerAssignmentStatus::Cancelled->value, 'updated_at' => now()]);
+                        ->update(['status' => CleaningBookingWorkerAssignmentStatus::Withdrawn->value, 'updated_at' => now()]);
                 } else {
                     $session->workerAssignments()
                         ->whereNotIn('worker_id', $acceptedWorkerIds)
                         ->whereNotIn('status', [CleaningBookingWorkerAssignmentStatus::Completed->value])
-                        ->update(['status' => CleaningBookingWorkerAssignmentStatus::Cancelled->value, 'updated_at' => now()]);
+                        ->update(['status' => CleaningBookingWorkerAssignmentStatus::Withdrawn->value, 'updated_at' => now()]);
                 }
 
                 $session->load('workerAssignments');
@@ -160,7 +167,6 @@ final class CleaningBookingSessionPricingService
                     ));
                     $travel = round((float) $activeAssignments->sum('travel_fee'), 2);
                     $admin = round((float) $activeAssignments->sum('admin_margin_amount'), 2);
-                    $distance = $activeAssignments->max(fn (CleaningBookingSessionWorkerAssignment $assignment): float => 0.0);
                     $session->forceFill([
                         'travel_fee' => $travel,
                         'admin_margin_amount' => $admin,
@@ -180,7 +186,7 @@ final class CleaningBookingSessionPricingService
                 }
             }
 
-            foreach ($accepted as $parentAssignment) {
+            foreach ($booking->workerAssignments as $parentAssignment) {
                 $rows = CleaningBookingSessionWorkerAssignment::query()
                     ->where('cleaning_booking_worker_assignment_id', $parentAssignment->id)
                     ->whereNotIn('status', [CleaningBookingWorkerAssignmentStatus::Cancelled->value, CleaningBookingWorkerAssignmentStatus::Rejected->value, CleaningBookingWorkerAssignmentStatus::Withdrawn->value])
