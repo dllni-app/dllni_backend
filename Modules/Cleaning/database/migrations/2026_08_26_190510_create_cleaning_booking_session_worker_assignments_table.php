@@ -10,14 +10,36 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // MySQL applies CREATE TABLE and foreign-key ALTER statements separately.
+        // If a previous attempt failed while adding a constraint, the new table
+        // can remain behind even though Laravel did not record this migration.
+        // This table belongs exclusively to this migration, so recreate it cleanly.
+        Schema::dropIfExists('cleaning_booking_session_worker_assignments');
+
         Schema::create('cleaning_booking_session_worker_assignments', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('cleaning_booking_session_id')->constrained('cleaning_booking_sessions')->cascadeOnDelete();
-            $table->foreignId('cleaning_booking_worker_assignment_id')
-                ->nullable()
-                ->constrained('cleaning_booking_worker_assignments')
+
+            // Explicit short FK names are required because MySQL limits
+            // identifiers (including constraint names) to 64 characters.
+            $table->unsignedBigInteger('cleaning_booking_session_id');
+            $table->unsignedBigInteger('cleaning_booking_worker_assignment_id')->nullable();
+            $table->unsignedBigInteger('worker_id');
+
+            $table->foreign('cleaning_booking_session_id', 'cb_swa_session_fk')
+                ->references('id')
+                ->on('cleaning_booking_sessions')
+                ->cascadeOnDelete();
+
+            $table->foreign('cleaning_booking_worker_assignment_id', 'cb_swa_parent_fk')
+                ->references('id')
+                ->on('cleaning_booking_worker_assignments')
                 ->nullOnDelete();
-            $table->foreignId('worker_id')->constrained('workers')->cascadeOnDelete();
+
+            $table->foreign('worker_id', 'cb_swa_worker_fk')
+                ->references('id')
+                ->on('workers')
+                ->cascadeOnDelete();
+
             $table->string('status')->default('accepted_waiting_for_order_start');
 
             $table->timestamp('started_travel_at')->nullable();
