@@ -12,6 +12,7 @@ use Modules\Cleaning\Support\WorkerRoomAssignmentPlanner;
 use Modules\User\Http\Requests\UserCleaningOrderEstimatePriceRequest;
 use Modules\User\Models\UserAddress;
 use Modules\User\Services\FemaleWorkerSafetyPolicyService;
+use Modules\User\Services\UserCleaningMultiDayEventPricingService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 use Modules\User\Support\CleaningWorkerCapacity;
 
@@ -20,6 +21,7 @@ final class UserCleaningOrderEstimatePriceController
     public function __invoke(
         UserCleaningOrderEstimatePriceRequest $request,
         UserCleaningOrderEstimationService $service,
+        UserCleaningMultiDayEventPricingService $multiDayPricing,
         CleaningExtendedTimePricingService $extendedTimePricing,
     ): JsonResponse {
         $validated = $request->validated();
@@ -53,33 +55,57 @@ final class UserCleaningOrderEstimatePriceController
                         ? 1
                         : (int) ($estimation['recommendation']['suggestedTeamSize'] ?? 1),
                 );
-            $capacity = CleaningWorkerCapacity::payload((float) $estimation['estimatedHours']);
 
-            $pricingPropertyDetails = (array) $validated['propertyDetails'];
-            if ($service->isEventAssistanceType((string) $validated['propertyType'])) {
-                $pricingPropertyDetails['workerCount'] = $requestedWorkers;
+            $isEventAssistance = $service->isEventAssistanceType((string) $validated['propertyType']);
+            $schedule = is_array($validated['schedule'] ?? null) ? $validated['schedule'] : null;
+            $scheduleSessions = is_array($schedule['sessions'] ?? null) ? array_values($schedule['sessions']) : [];
+            $scheduleQuote = null;
+
+            if ($isEventAssistance && $scheduleSessions !== []) {
+                $scheduleQuote = $multiDayPricing->quote(
+                    propertyDetails: (array) $validated['propertyDetails'],
+                    sessions: $scheduleSessions,
+                    workerCount: $requestedWorkers,
+                    addressLatitude: $addressLatitude,
+                    addressLongitude: $addressLongitude,
+                    preferredWorkerId: $assignmentMode === 'preferred_worker' ? ($validated['preferredWorkerId'] ?? null) : null,
+                );
+                $pricing = $scheduleQuote['pricing'];
+                $estimation['estimatedHours'] = (float) $scheduleQuote['size']['estimatedHours'];
+                $estimation['estimatedSqm'] = (float) $scheduleQuote['size']['estimatedSqm'];
+                $estimation['recommendation'] = $scheduleQuote['recommendation'];
+            } else {
+                $pricingPropertyDetails = (array) $validated['propertyDetails'];
+                if ($isEventAssistance) {
+                    $pricingPropertyDetails['workerCount'] = $requestedWorkers;
+                }
+
+                $pricing = $service->price(
+                    (string) $validated['propertyType'],
+                    $pricingPropertyDetails,
+                    $addressLatitude,
+                    $addressLongitude,
+                    $assignmentMode === 'preferred_worker' ? ($validated['preferredWorkerId'] ?? null) : null,
+                    isset($validated['serviceIds']) ? (array) $validated['serviceIds'] : null,
+                );
             }
-
-            $pricing = $service->price(
-                (string) $validated['propertyType'],
-                $pricingPropertyDetails,
-                $addressLatitude,
-                $addressLongitude,
-                $assignmentMode === 'preferred_worker' ? ($validated['preferredWorkerId'] ?? null) : null,
-                isset($validated['serviceIds']) ? (array) $validated['serviceIds'] : null,
-            );
         } catch (InvalidArgumentException $exception) {
             throw ValidationException::withMessages([
                 'pricing' => [$exception->getMessage()],
             ]);
         }
 
+        $capacityHours = (float) $estimation['estimatedHours'];
+        if ($isEventAssistance && $scheduleSessions !== []) {
+            $capacityHours = max(array_map(
+                static fn (array $session): float => (float) ($session['hours'] ?? 1),
+                $scheduleSessions,
+            ));
+        }
+        $capacity = CleaningWorkerCapacity::payload($capacityHours);
         $workerRoomAssignments = null;
 
-        if (
-            array_key_exists('workerRoomAssignments', $validated)
-            && ! $service->isEventAssistanceType((string) $validated['propertyType'])
-        ) {
+        if (array_key_exists('workerRoomAssignments', $validated) && ! $isEventAssistance) {
             $plan = WorkerRoomAssignmentPlanner::plan(
                 (array) $validated['propertyDetails'],
                 is_array($validated['workerRoomAssignments']) ? $validated['workerRoomAssignments'] : null,
@@ -98,7 +124,7 @@ final class UserCleaningOrderEstimatePriceController
             );
         }
 
-        return response()->json([
+        $response = [
             'size' => [
                 'estimatedSqm' => $estimation['estimatedSqm'],
                 'estimatedHours' => $estimation['estimatedHours'],
@@ -118,13 +144,16 @@ final class UserCleaningOrderEstimatePriceController
             'workEnvironmentConfirmation' => $this->workEnvironmentConfirmationPayload($validated),
             'extendedTimeRanges' => $extendedTimePricing->ranges(),
             'algorithmVersion' => $service->algorithmVersion(),
-        ]);
+        ];
+
+        if (is_array($scheduleQuote)) {
+            $response['schedule'] = $scheduleQuote['schedule'];
+        }
+
+        return response()->json($response);
     }
 
-    /**
-     * @param  array<string, mixed>  $validated
-     * @return array{0: mixed, 1: mixed}
-     */
+    /** @param array<string, mixed> $validated @return array{0: mixed, 1: mixed} */
     private function resolveAddressCoordinates(array $validated, int $userId): array
     {
         $addressId = $validated['addressId'] ?? null;
@@ -160,15 +189,12 @@ final class UserCleaningOrderEstimatePriceController
         if ($normalizedMode === 'open_count') {
             return 'open_count';
         }
-
         if ($hasPreferredWorker && $requestedWorkers <= 1) {
             return 'preferred_worker';
         }
-
         if ($normalizedMode === 'preferred_worker') {
             return 'open_count';
         }
-
         if ($normalizedMode !== null) {
             return $normalizedMode;
         }
@@ -176,18 +202,13 @@ final class UserCleaningOrderEstimatePriceController
         return 'open_count';
     }
 
-    /**
-     * @param  array<string, mixed>  $validated
-     * @return array<string, mixed>
-     */
+    /** @param array<string, mixed> $validated @return array<string, mixed> */
     private function workEnvironmentConfirmationPayload(array $validated): array
     {
         $genderPreference = mb_strtolower((string) ($validated['genderPreference'] ?? 'any'));
 
         if ($genderPreference !== 'female') {
-            return [
-                'required' => false,
-            ];
+            return ['required' => false];
         }
 
         return [

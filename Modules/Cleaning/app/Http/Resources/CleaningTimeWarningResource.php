@@ -10,9 +10,7 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningTimeWarningResponse;
 use Modules\Cleaning\Models\CleaningTimeWarning;
 
-/**
- * @mixin CleaningTimeWarning
- */
+/** @mixin CleaningTimeWarning */
 final class CleaningTimeWarningResource extends JsonResource
 {
     public function toArray(Request $request): array
@@ -29,6 +27,8 @@ final class CleaningTimeWarningResource extends JsonResource
             'id' => $this->id,
             'bookingId' => $this->booking_id,
             'bookingType' => $this->booking_type,
+            'sessionId' => $this->cleaning_booking_session_id,
+            'session_id' => $this->cleaning_booking_session_id,
             'workerId' => $this->worker_id,
             'worker_id' => $this->worker_id,
             'bookingStatus' => $bookingStatus,
@@ -51,6 +51,7 @@ final class CleaningTimeWarningResource extends JsonResource
             'priceAppliedAt' => $this->price_applied_at?->toDateTimeString(),
             'workerRejectMessage' => $this->worker_reject_message,
             'booking' => $this->whenLoaded('booking'),
+            'session' => $this->whenLoaded('session'),
             'createdAt' => $this->created_at->toDateTimeString(),
             'updatedAt' => $this->updated_at->toDateTimeString(),
         ];

@@ -65,8 +65,6 @@ final class CleaningCustomerPricingObserver
             ]);
         }
 
-        // Finalize or recalculate system-derived pricing, but do not overwrite a
-        // manually approved final total that only changes base_price/total_price.
         return $booking->isDirty('is_pricing_final')
             || $booking->isDirty('travel_fee')
             || $booking->isDirty('admin_margin_amount');
@@ -103,6 +101,15 @@ final class CleaningCustomerPricingObserver
     private function canNormalize(CleaningBooking $booking): bool
     {
         if ((int) ($booking->platform_coupon_id ?? 0) > 0) {
+            return false;
+        }
+
+        // Once event-assistance sessions exist, their per-visit pricing is the
+        // source of truth. Re-running the legacy parent pricing observer here
+        // would collapse several travel/admin amounts into a single visit.
+        if ($booking->exists
+            && $booking->isEventAssistanceBooking()
+            && $booking->sessions()->exists()) {
             return false;
         }
 

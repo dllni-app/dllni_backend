@@ -70,6 +70,7 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
     public function rules(): array
     {
         $isEventAssistance = $this->isEventAssistanceRequested();
+        $today = now(config('app.timezone'))->toDateString();
 
         return [
             'propertyType' => ['required', 'string', Rule::in(UserCleaningOrderEstimationService::PROPERTY_TYPES)],
@@ -100,6 +101,13 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             'propertyDetails.venueType' => [Rule::requiredIf($isEventAssistance), 'string', Rule::in($this->availableVenueTypes())],
             'propertyDetails.customService' => [Rule::requiredIf($isEventAssistance), Rule::prohibitedIf(! $isEventAssistance), 'string', 'max:255'],
             'propertyDetails.hours' => [Rule::requiredIf($isEventAssistance), Rule::prohibitedIf(! $isEventAssistance), 'numeric', 'min:1', 'max:24'],
+            'schedule' => [$isEventAssistance ? 'sometimes' : 'prohibited', 'array:mode,sessions'],
+            'schedule.mode' => ['sometimes', 'string', Rule::in(['single_day', 'multi_day'])],
+            'schedule.sessions' => ['sometimes', 'array', 'min:1', 'max:31'],
+            'schedule.sessions.*' => ['array:date,time,hours'],
+            'schedule.sessions.*.date' => ['required_with:schedule.sessions', 'date', 'after_or_equal:'.$today],
+            'schedule.sessions.*.time' => ['required_with:schedule.sessions', 'date_format:H:i'],
+            'schedule.sessions.*.hours' => ['required_with:schedule.sessions', 'numeric', 'min:1', 'max:24'],
             'serviceIds' => $isEventAssistance ? ['prohibited'] : ['sometimes', 'array', 'min:1'],
             'serviceIds.*' => $isEventAssistance ? ['prohibited'] : ['integer', 'distinct', 'exists:cleaning_services,id'],
             'addressId' => ['nullable', 'integer', Rule::exists('user_addresses', 'id')->where('user_id', (int) ($this->user()?->id ?? 0))],
@@ -119,14 +127,11 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
     {
         $validator->after(function (Validator $validator): void {
             $this->validateSelectedAddressCompleteness($validator);
-
             $this->validateWorkerRoomAssignments($validator);
         });
     }
 
-    /**
-     * @return array<int, int>
-     */
+    /** @return array<int, int> */
     private function normalizePreferredWorkerIds(mixed $value): array
     {
         if ($value === null || $value === '') {
@@ -214,9 +219,7 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
         return mb_substr((string) $address->label, 0, 500);
     }
 
-    /**
-     * @return array<int, string>
-     */
+    /** @return array<int, string> */
     private function availableVenueTypes(): array
     {
         return array_values(array_filter(

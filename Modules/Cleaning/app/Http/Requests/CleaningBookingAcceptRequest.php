@@ -34,10 +34,22 @@ final class CleaningBookingAcceptRequest extends FormRequest
                     return;
                 }
 
-                if (app(WorkerBookingScheduleConflictService::class)->hasConflict($worker, $booking)) {
+                $conflicts = app(WorkerBookingScheduleConflictService::class)->conflictsForBooking($worker, $booking);
+                if ($conflicts === []) {
+                    return;
+                }
+
+                $validator->errors()->add(
+                    'schedule',
+                    $booking->isMultiDayEventAssistance()
+                        ? 'Worker is not available for all event days.'
+                        : 'This booking overlaps another confirmed booking in your schedule.'
+                );
+
+                foreach ($conflicts as $conflict) {
                     $validator->errors()->add(
-                        'schedule',
-                        'This booking overlaps another confirmed booking in your schedule.'
+                        'scheduleConflicts',
+                        sprintf('%s %s-%s', $conflict['date'], $conflict['start'], $conflict['end'])
                     );
                 }
             },

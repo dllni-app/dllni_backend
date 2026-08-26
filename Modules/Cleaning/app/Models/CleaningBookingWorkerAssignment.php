@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 
 final class CleaningBookingWorkerAssignment extends Model
@@ -51,6 +52,11 @@ final class CleaningBookingWorkerAssignment extends Model
         return $this->belongsTo(Worker::class);
     }
 
+    public function sessionAssignments(): HasMany
+    {
+        return $this->hasMany(CleaningBookingSessionWorkerAssignment::class, 'cleaning_booking_worker_assignment_id');
+    }
+
     public function casts(): array
     {
         return [
@@ -68,9 +74,6 @@ final class CleaningBookingWorkerAssignment extends Model
             'worker_finished_property_rooms' => 'array',
             'room_count' => 'integer',
             'rooms_weight' => 'decimal:2',
-            // These columns are DECIMAL(12,2). Casting them to integer silently
-            // truncated room-weight shares such as 166.67 to 166 in API/domain
-            // calculations. Preserve the stored precision instead.
             'service_share_amount' => 'float',
             'travel_fee' => 'float',
             'admin_margin_amount' => 'float',

@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Delivery\Models\DeliveryDriverTrustLog;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
@@ -27,6 +28,7 @@ final class Dispute extends Model implements HasMedia
     protected $fillable = [
         'booking_id',
         'booking_type',
+        'cleaning_booking_session_id',
         'ticket_number',
         'description',
         'category',
@@ -44,6 +46,11 @@ final class Dispute extends Model implements HasMedia
     public function booking(): MorphTo
     {
         return $this->morphTo(__FUNCTION__, 'booking_type', 'booking_id');
+    }
+
+    public function cleaningBookingSession(): BelongsTo
+    {
+        return $this->belongsTo(CleaningBookingSession::class, 'cleaning_booking_session_id');
     }
 
     public function messages(): HasMany
@@ -74,6 +81,7 @@ final class Dispute extends Model implements HasMedia
     public function casts(): array
     {
         return [
+            'cleaning_booking_session_id' => 'integer',
             'category' => DisputeCategory::class,
             'status' => DisputeStatus::class,
             'resolution' => DisputeResolution::class,
