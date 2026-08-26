@@ -14,6 +14,7 @@ use Modules\Cleaning\Services\CleaningBookingScheduleService;
 use Modules\Cleaning\Services\CleaningBookingSessionPricingService;
 use Modules\User\Http\Requests\UserCleaningOrderStoreRequest;
 use Modules\User\Http\Resources\UserCleaningBookingResource;
+use Modules\User\Services\UserCleaningMultiDayEventPricingService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 use Modules\User\Services\UserCleaningOrderService;
 use Modules\User\Support\CleaningWorkerCapacity;
@@ -24,6 +25,7 @@ final class UserCleaningOrderStoreController
         UserCleaningOrderStoreRequest $request,
         UserCleaningOrderService $service,
         UserCleaningOrderEstimationService $estimationService,
+        UserCleaningMultiDayEventPricingService $multiDayPricing,
         PlatformCouponRedemptionService $platformCoupons,
         CleaningBookingScheduleService $scheduleService,
         CleaningBookingSessionPricingService $sessionPricing,
@@ -37,14 +39,45 @@ final class UserCleaningOrderStoreController
         $this->assertWorkerCapacity($validated, $estimationService);
         $scheduleInput = $request->input('schedule');
 
-        $order = DB::transaction(function () use ($request, $service, $platformCoupons, $couponCode, $validated, $scheduleInput, $scheduleService, $sessionPricing) {
+        $order = DB::transaction(function () use ($request, $service, $multiDayPricing, $platformCoupons, $couponCode, $validated, $scheduleInput, $scheduleService, $sessionPricing) {
             $order = $service->store($request->user(), $validated);
 
             if ($order->isEventAssistanceBooking()) {
                 $order = $scheduleService->sync($order, array_merge($validated, [
                     'schedule' => is_array($scheduleInput) ? $scheduleInput : null,
                 ]));
-                $order = $sessionPricing->initializeFromParent($order);
+
+                $sessions = $order->sessions()->orderBy('sequence')->get()
+                    ->map(static fn ($session): array => [
+                        'date' => $session->scheduled_date->toDateString(),
+                        'time' => (string) $session->scheduled_time,
+                        'hours' => (float) $session->duration_hours,
+                    ])->all();
+
+                $quote = $multiDayPricing->quote(
+                    propertyDetails: (array) $validated['propertyDetails'],
+                    sessions: $sessions,
+                    workerCount: max(1, (int) $order->number_of_workers),
+                    addressLatitude: $order->address_latitude,
+                    addressLongitude: $order->address_longitude,
+                    preferredWorkerId: null,
+                );
+                $propertyDetails = is_array($order->property_details) ? $order->property_details : [];
+                $propertyDetails['hours'] = (float) $quote['schedule']['totalHours'];
+                $order->forceFill([
+                    'property_details' => $propertyDetails,
+                    'estimated_hours' => (float) $quote['schedule']['totalHours'],
+                    'total_hours' => (float) $quote['schedule']['totalHours'],
+                    'base_price' => (float) $quote['pricing']['basePrice'],
+                    'addons_total' => (float) $quote['pricing']['addonsTotal'],
+                    'travel_fee' => 0,
+                    'travel_distance_km' => null,
+                    'admin_margin_amount' => (float) $quote['pricing']['adminMargin'],
+                    'is_pricing_final' => false,
+                    'total_price' => (float) $quote['pricing']['totalPrice'],
+                ])->saveQuietly();
+
+                $order = $sessionPricing->initializeFromParent($order->fresh(['sessions']));
             }
 
             if (is_string($couponCode) && trim($couponCode) !== '') {
