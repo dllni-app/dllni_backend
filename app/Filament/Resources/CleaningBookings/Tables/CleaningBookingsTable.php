@@ -28,6 +28,7 @@ use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Services\CleaningBookingMultiDayTeamService;
 use Modules\Cleaning\Services\CleaningBookingTeamService;
 use Modules\Cleaning\Services\CleaningLifecycleNotificationService;
 use Modules\Cleaning\Services\WorkerBookingScheduleConflictService;
@@ -201,7 +202,7 @@ final class CleaningBookingsTable
                 Filter::make('partial_team')
                     ->label('فريق جزئي')
                     ->query(fn (Builder $query): Builder => $query
-                        ->where('status', CleaningBookingStatus::Pending->value)
+                        ->whereIn('status', [CleaningBookingStatus::Pending->value, CleaningBookingStatus::PartiallyCompleted->value])
                         ->whereHas('acceptedWorkerAssignments')),
                 Filter::make('fulfilled_team')
                     ->label('فريق مكتمل')
@@ -257,7 +258,7 @@ final class CleaningBookingsTable
                             $worker = Worker::query()->with('user')->findOrFail((int) $data['worker_id']);
                             self::assertDashboardWorkerEligibility($record, $worker);
                             $roomIds = array_values(array_filter(array_map('intval', (array) ($data['room_ids'] ?? []))));
-                            $updated = app(CleaningBookingTeamService::class)->acceptWorker(
+                            $updated = app(CleaningBookingMultiDayTeamService::class)->acceptWorker(
                                 $record->fresh(['sessions', 'rooms.assignedWorker.user', 'workerAssignments.worker.user']),
                                 $worker,
                                 $roomIds !== [] ? $roomIds : null,
@@ -301,7 +302,7 @@ final class CleaningBookingsTable
                     ])
                     ->action(function (CleaningBooking $record, array $data): void {
                         $worker = Worker::query()->with('user')->findOrFail((int) $data['worker_id']);
-                        $updated = app(CleaningBookingTeamService::class)->rejectWorker(
+                        $updated = app(CleaningBookingMultiDayTeamService::class)->releaseWorker(
                             $record->fresh(['sessions.workerAssignments', 'rooms.assignedWorker.user', 'workerAssignments.worker.user']),
                             $worker,
                             filled($data['reason'] ?? null) ? (string) $data['reason'] : null,
@@ -642,6 +643,21 @@ final class CleaningBookingsTable
 
     private static function workerPayoutAmount(CleaningBooking $record): float
     {
+        if (self::isEventAssistance($record) && $record->sessionsCount() > 0) {
+            return (float) $record->sessions
+                ->flatMap(fn ($session) => $session->workerAssignments)
+                ->filter(static fn ($assignment): bool => ! in_array(
+                    (string) ($assignment->status?->value ?? $assignment->status),
+                    [
+                        CleaningBookingWorkerAssignmentStatus::Rejected->value,
+                        CleaningBookingWorkerAssignmentStatus::Withdrawn->value,
+                        CleaningBookingWorkerAssignmentStatus::Cancelled->value,
+                    ],
+                    true,
+                ))
+                ->sum('worker_amount');
+        }
+
         $assignments = $record->relationLoaded('workerAssignments')
             ? $record->workerAssignments
             : $record->workerAssignments()->get();
@@ -667,6 +683,10 @@ final class CleaningBookingsTable
 
     private static function workerPayoutFormula(CleaningBooking $record): string
     {
+        if (self::isEventAssistance($record) && $record->sessionsCount() > 0) {
+            return 'إجمالي مستحقات العاملين هو مجموع snapshots المحفوظة لكل يوم تنفيذ.';
+        }
+
         $assignments = $record->relationLoaded('workerAssignments')
             ? $record->workerAssignments
             : $record->workerAssignments()->get();
@@ -824,6 +844,7 @@ final class CleaningBookingsTable
             'Booking already has the required number of workers.' => 'اكتمل العدد المطلوب من العاملين لهذا الحجز.',
             'Booking is reserved for a different preferred worker.' => 'الحجز محجوز لعامل مفضل آخر.',
             'Booking cannot be accepted in current status.' => 'لا يمكن إضافة عامل في الحالة الحالية للحجز.',
+            'Booking has no remaining event sessions.' => 'لا توجد أيام متبقية في المناسبة يمكن تعيين العامل لها.',
             default => 'تعذر إضافة العامل بسبب عدم استيفاء شروط الحجز. راجع بيانات العامل والحجز ثم أعد المحاولة.',
         };
     }
