@@ -89,6 +89,13 @@ final class AppendCleaningBookingScheduleResponse
     /** @param array<string, mixed> $payload */
     private function appendEstimateSchedule(Request $request, array $payload): array
     {
+        // The multi-day estimate controller returns the authoritative per-session
+        // pricing breakdown. Keep it intact; this method remains only as a
+        // compatibility fallback for older estimate paths.
+        if (is_array($payload['schedule']['sessions'] ?? null)) {
+            return $payload;
+        }
+
         $sessions = $request->input('schedule.sessions', []);
         if (! is_array($sessions) || $sessions === []) {
             return $payload;
@@ -96,6 +103,8 @@ final class AppendCleaningBookingScheduleResponse
 
         $pricing = is_array($payload['pricing'] ?? null) ? $payload['pricing'] : [];
         $basePrice = (float) ($pricing['basePrice'] ?? 0);
+        $adminMargin = (float) ($pricing['adminMargin'] ?? 0);
+        $travelFee = (float) ($pricing['travelFee'] ?? 0);
         $totalHours = max(0.0, (float) array_sum(array_map(
             static fn (mixed $session): float => is_array($session) && is_numeric($session['hours'] ?? null) ? (float) $session['hours'] : 0.0,
             $sessions,
@@ -103,6 +112,8 @@ final class AppendCleaningBookingScheduleResponse
 
         $sessionPayload = [];
         $remainingBase = $basePrice;
+        $remainingAdmin = $adminMargin;
+        $remainingTravel = $travelFee;
         $count = count($sessions);
 
         foreach (array_values($sessions) as $index => $session) {
@@ -111,10 +122,14 @@ final class AppendCleaningBookingScheduleResponse
             }
 
             $hours = (float) ($session['hours'] ?? 0);
-            $sessionBase = $index === $count - 1
-                ? round(max(0.0, $remainingBase), 2)
-                : round($totalHours > 0 ? $basePrice * ($hours / $totalHours) : 0, 2);
+            $ratio = $totalHours > 0 ? $hours / $totalHours : 0.0;
+            $isLast = $index === $count - 1;
+            $sessionBase = $isLast ? round(max(0.0, $remainingBase), 2) : round($basePrice * $ratio, 2);
+            $sessionAdmin = $isLast ? round(max(0.0, $remainingAdmin), 2) : round($adminMargin * $ratio, 2);
+            $sessionTravel = $isLast ? round(max(0.0, $remainingTravel), 2) : round($travelFee * $ratio, 2);
             $remainingBase = round($remainingBase - $sessionBase, 2);
+            $remainingAdmin = round($remainingAdmin - $sessionAdmin, 2);
+            $remainingTravel = round($remainingTravel - $sessionTravel, 2);
 
             $sessionPayload[] = [
                 'sequence' => $index + 1,
@@ -122,8 +137,9 @@ final class AppendCleaningBookingScheduleResponse
                 'time' => $session['time'] ?? null,
                 'hours' => $hours,
                 'basePrice' => $sessionBase,
-                'travelFee' => 0.0,
-                'totalPrice' => $sessionBase,
+                'travelFee' => $sessionTravel,
+                'adminMargin' => $sessionAdmin,
+                'totalPrice' => round($sessionBase + $sessionTravel + $sessionAdmin, 2),
             ];
         }
 
