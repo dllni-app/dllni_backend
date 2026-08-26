@@ -21,6 +21,7 @@ final class CleaningTimeWarning extends Model
     protected $fillable = [
         'booking_id',
         'booking_type',
+        'cleaning_booking_session_id',
         'worker_id',
         'customer_response',
         'customer_message',
@@ -42,6 +43,11 @@ final class CleaningTimeWarning extends Model
         return $this->morphTo(__FUNCTION__, 'booking_type', 'booking_id');
     }
 
+    public function session(): BelongsTo
+    {
+        return $this->belongsTo(CleaningBookingSession::class, 'cleaning_booking_session_id');
+    }
+
     public function worker(): BelongsTo
     {
         return $this->belongsTo(Worker::class);
@@ -50,6 +56,7 @@ final class CleaningTimeWarning extends Model
     public function casts(): array
     {
         return [
+            'cleaning_booking_session_id' => 'integer',
             'worker_id' => 'integer',
             'customer_response' => CleaningTimeWarningResponse::class,
             'worker_response' => CleaningTimeWarningResponse::class,
