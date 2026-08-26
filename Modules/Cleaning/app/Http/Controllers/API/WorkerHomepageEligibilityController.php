@@ -6,9 +6,11 @@ namespace Modules\Cleaning\Http\Controllers\API;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Modules\Cleaning\Services\WorkerDispatchEligibilityService;
 use Modules\Cleaning\Services\WorkerFinancialAccountStatusService;
 use Modules\Cleaning\Services\WorkerOrderSolvencyService;
+use Modules\Cleaning\Services\WorkerSessionMetricsService;
 
 final class WorkerHomepageEligibilityController
 {
@@ -17,6 +19,7 @@ final class WorkerHomepageEligibilityController
     public function __construct(
         private readonly WorkerHomepageController $homepageController,
         private readonly WorkerFinancialAccountStatusService $financialAccountStatusService,
+        private readonly WorkerSessionMetricsService $sessionMetrics,
     ) {}
 
     public function __invoke(Request $request): JsonResponse
@@ -24,6 +27,32 @@ final class WorkerHomepageEligibilityController
         $response = ($this->homepageController)($request);
         $payload = $response->getData(true);
         $worker = auth()->user()?->worker;
+
+        if ($worker !== null) {
+            $today = Carbon::today();
+            $weekStart = $today->copy()->startOfWeek(Carbon::MONDAY);
+            $weekEnd = $weekStart->copy()->addDays(6);
+            $fourWeekStart = $weekStart->copy()->subWeeks(3);
+            $fourWeekEnd = $weekEnd->copy();
+            $payload = $this->sessionMetrics->patchHomepage(
+                payload: $payload,
+                worker: $worker,
+                today: $today,
+                weekStart: $weekStart,
+                weekEnd: $weekEnd,
+                fourWeekStart: $fourWeekStart,
+                fourWeekEnd: $fourWeekEnd,
+                dayLabels: [
+                    'monday' => 'الاثنين',
+                    'tuesday' => 'الثلاثاء',
+                    'wednesday' => 'الأربعاء',
+                    'thursday' => 'الخميس',
+                    'friday' => 'الجمعة',
+                    'saturday' => 'السبت',
+                    'sunday' => 'الأحد',
+                ],
+            );
+        }
 
         if ($worker !== null && ! $this->financialAccountStatusService->isFinancialAccountActive($worker)) {
             $depositSummary = is_array($payload['depositSummary'] ?? null)
