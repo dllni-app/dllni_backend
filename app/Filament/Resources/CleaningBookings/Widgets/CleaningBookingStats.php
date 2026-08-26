@@ -30,10 +30,13 @@ final class CleaningBookingStats extends StatsOverviewWidget
             Stat::make(__('cleaning_admin.booking.stats.assigned'), $this->statusCount(CleaningBookingStatus::WorkerAssigned))
                 ->icon('heroicon-o-user-plus')
                 ->color('info'),
+            Stat::make('منفذ جزئياً', $this->statusCount(CleaningBookingStatus::PartiallyCompleted))
+                ->icon('heroicon-o-calendar-days')
+                ->color('warning'),
             Stat::make(__('cleaning_admin.booking.stats.in_progress'), $this->statusCount(CleaningBookingStatus::InProgress))
                 ->icon('heroicon-o-play')
                 ->color('success'),
-            Stat::make(__('cleaning_admin.booking.stats.today'), CleaningBooking::query()->whereDate('scheduled_date', today())->count())
+            Stat::make(__('cleaning_admin.booking.stats.today'), CleaningBooking::query()->scheduledOn(today())->count())
                 ->icon('heroicon-o-calendar')
                 ->color('gray'),
         ];
@@ -47,7 +50,10 @@ final class CleaningBookingStats extends StatsOverviewWidget
     private function searchingCount(): int
     {
         return CleaningBooking::query()
-            ->where('status', CleaningBookingStatus::Pending->value)
+            ->whereIn('status', [
+                CleaningBookingStatus::Pending->value,
+                CleaningBookingStatus::PartiallyCompleted->value,
+            ])
             ->whereHas('acceptedWorkerAssignments')
             ->count();
     }
