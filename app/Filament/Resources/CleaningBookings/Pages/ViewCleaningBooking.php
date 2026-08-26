@@ -39,9 +39,10 @@ final class ViewCleaningBooking extends ViewRecord
             'timeWarnings.worker.user',
         ]);
 
-        // The resource infolist already owns its responsive internal grid.
-        // Keeping the ViewRecord root schema to one column lets that grid use
-        // the full available page width instead of leaving a large empty area.
+        // ViewRecord schemas use a multi-column root layout by default. The
+        // existing cleaning booking infolist already owns its responsive grid,
+        // so keeping the root at one column prevents that grid from occupying
+        // only half of the available page and leaving a large empty area.
         $schema = parent::infolist($schema)->columns(1);
         $existingComponents = $schema->getComponents(withHidden: true, withOriginalKeys: true);
 
@@ -156,13 +157,6 @@ final class ViewCleaningBooking extends ViewRecord
                 ->visible(fn (CleaningBooking $record): bool => $record->timeWarnings->isNotEmpty())
                 ->columnSpanFull(),
         ]);
-    }
-
-    protected function getHeaderWidgets(): array
-    {
-        return [
-            CleaningBookingTrackingWidget::class,
-        ];
     }
 
     protected function getHeaderActions(): array
