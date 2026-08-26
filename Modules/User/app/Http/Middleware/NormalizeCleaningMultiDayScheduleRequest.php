@@ -77,10 +77,12 @@ final class NormalizeCleaningMultiDayScheduleRequest
         }
 
         $first = $sessions[0];
-        $totalHours = round(array_sum(array_column($sessions, 'hours')), 2);
         $propertyDetails = $request->input('propertyDetails', []);
         $propertyDetails = is_array($propertyDetails) ? $propertyDetails : [];
-        $propertyDetails['hours'] = $totalHours;
+        // Keep the legacy propertyDetails.hours value within the existing one-day
+        // validation contract. The canonical aggregate duration is derived from
+        // schedule.sessions and persisted after the booking is created/updated.
+        $propertyDetails['hours'] = $first['hours'];
 
         $request->merge([
             'schedule' => ['mode' => $mode, 'sessions' => $sessions],
