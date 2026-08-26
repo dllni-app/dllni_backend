@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Http\Controllers\API;
 
+use App\Models\Worker;
 use BackedEnum;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -17,6 +18,7 @@ use Modules\Cleaning\Http\Resources\CleaningTimeWarningResource;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningTimeWarning;
 use Modules\Cleaning\Models\EventBooking;
+use Modules\Cleaning\Services\CleaningBookingSessionLifecycleService;
 use Modules\Cleaning\Services\CleaningTimeWarningService;
 use Modules\Cleaning\Services\CleaningTimeWarningWorkerNotificationService;
 use Throwable;
@@ -26,12 +28,13 @@ final class CleaningTimeWarningController
     public function __construct(
         private CleaningTimeWarningService $cleaningTimeWarningService,
         private CleaningTimeWarningWorkerNotificationService $workerNotificationService,
+        private CleaningBookingSessionLifecycleService $sessionLifecycle,
     ) {}
 
     public function index(CleaningTimeWarningFilterRequest $request): AnonymousResourceCollection
     {
         $warnings = CleaningTimeWarning::getQuery()
-            ->with(['booking']);
+            ->with(['booking', 'session']);
 
         $filters = (array) $request->input('filter', []);
         $worker = $request->user()?->worker;
@@ -73,7 +76,7 @@ final class CleaningTimeWarningController
 
     public function show(CleaningTimeWarning $cleaning_time_warning): CleaningTimeWarningResource
     {
-        $cleaning_time_warning->load(['booking']);
+        $cleaning_time_warning->load(['booking', 'session']);
 
         return CleaningTimeWarningResource::make($cleaning_time_warning);
     }
@@ -85,17 +88,26 @@ final class CleaningTimeWarningController
         $fromStatus = $this->warningStatus($cleaning_time_warning);
 
         try {
-            $warning = $this->cleaningTimeWarningService->accept(
-                $cleaning_time_warning,
-                $request->validated('additionalMinutes')
-            );
+            if ($cleaning_time_warning->cleaning_booking_session_id !== null) {
+                $worker = $request->user()?->worker;
+                if (! $worker instanceof Worker) {
+                    abort(403, 'User must have an associated worker.');
+                }
+                $this->sessionLifecycle->acceptExtension($cleaning_time_warning, $worker);
+                $warning = $cleaning_time_warning->fresh(['booking', 'session']);
+            } else {
+                $warning = $this->cleaningTimeWarningService->accept(
+                    $cleaning_time_warning,
+                    $request->validated('additionalMinutes')
+                );
+            }
         } catch (InvalidArgumentException $e) {
             throw ValidationException::withMessages(['warning' => [$e->getMessage()]]);
         }
 
         $this->workerNotificationService->accepted($warning, $fromStatus);
 
-        return CleaningTimeWarningResource::make($warning->load(['booking']));
+        return CleaningTimeWarningResource::make($warning->load(['booking', 'session']));
     }
 
     /** @throws Throwable */
@@ -105,17 +117,30 @@ final class CleaningTimeWarningController
         $fromStatus = $this->warningStatus($cleaning_time_warning);
 
         try {
-            $warning = $this->cleaningTimeWarningService->reject(
-                $cleaning_time_warning,
-                $request->validated('message')
-            );
+            if ($cleaning_time_warning->cleaning_booking_session_id !== null) {
+                $worker = $request->user()?->worker;
+                if (! $worker instanceof Worker) {
+                    abort(403, 'User must have an associated worker.');
+                }
+                $this->sessionLifecycle->rejectExtension(
+                    $cleaning_time_warning,
+                    $worker,
+                    $request->validated('message')
+                );
+                $warning = $cleaning_time_warning->fresh(['booking', 'session']);
+            } else {
+                $warning = $this->cleaningTimeWarningService->reject(
+                    $cleaning_time_warning,
+                    $request->validated('message')
+                );
+            }
         } catch (InvalidArgumentException $e) {
             throw ValidationException::withMessages(['warning' => [$e->getMessage()]]);
         }
 
         $this->workerNotificationService->declined($warning, $fromStatus, $request->validated('message'));
 
-        return CleaningTimeWarningResource::make($warning->load(['booking']));
+        return CleaningTimeWarningResource::make($warning->load(['booking', 'session']));
     }
 
     private function ensureWorkerOwnsWarning(CleaningTimeWarning $warning): void
@@ -167,6 +192,11 @@ final class CleaningTimeWarningController
 
     private function warningStatus(CleaningTimeWarning $warning): ?string
     {
+        if ($warning->cleaning_booking_session_id !== null && $warning->session !== null) {
+            $status = $warning->session->status;
+            return $status instanceof BackedEnum ? (string) $status->value : (string) $status;
+        }
+
         $booking = $warning->booking;
         $status = ($booking instanceof CleaningBooking || $booking instanceof EventBooking)
             ? $booking->status

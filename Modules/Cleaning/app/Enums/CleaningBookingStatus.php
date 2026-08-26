@@ -13,6 +13,7 @@ enum CleaningBookingStatus: string
     case InProgress = 'in_progress';
     case AwaitingCustomerCompletion = 'awaiting_customer_completion';
     case TimeExtensionRequested = 'time_extension_requested';
+    case PartiallyCompleted = 'partially_completed';
     case UnderDispute = 'under_dispute';
     case Completed = 'completed';
     case Cancelled = 'cancelled';
@@ -21,6 +22,10 @@ enum CleaningBookingStatus: string
     {
         if ($this === self::UnderDispute) {
             return 'قيد النزاع';
+        }
+
+        if ($this === self::PartiallyCompleted) {
+            return 'منفذ جزئياً';
         }
 
         return __('cleaning_admin.enums.cleaning_booking_status.'.$this->value);

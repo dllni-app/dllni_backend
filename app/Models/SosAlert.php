@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Resturants\Models\Order;
 
 #[ObservedBy([SosAlertObserver::class])]
@@ -24,6 +25,7 @@ final class SosAlert extends Model
         'order_id',
         'booking_id',
         'booking_type',
+        'cleaning_booking_session_id',
         'emergency_type',
         'message',
         'source',
@@ -41,6 +43,11 @@ final class SosAlert extends Model
     public function booking(): MorphTo
     {
         return $this->morphTo(__FUNCTION__, 'booking_type', 'booking_id');
+    }
+
+    public function cleaningBookingSession(): BelongsTo
+    {
+        return $this->belongsTo(CleaningBookingSession::class, 'cleaning_booking_session_id');
     }
 
     public function user(): BelongsTo
@@ -66,6 +73,7 @@ final class SosAlert extends Model
     public function casts(): array
     {
         return [
+            'cleaning_booking_session_id' => 'integer',
             'emergency_type' => EmergencyType::class,
             'status' => SOSStatus::class,
             'message' => 'string',

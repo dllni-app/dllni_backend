@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Modules\User\Http\Controllers\API;
 
 use App\Models\Worker;
-use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -13,16 +12,17 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
+use Modules\Cleaning\Services\CleaningBookingScheduleService;
 use Modules\Cleaning\Services\DepositService;
 use Modules\Cleaning\Services\WorkerBookingScheduleConflictService;
 use Modules\User\Http\Requests\UserCleaningPreviousWorkersRequest;
-use Throwable;
 
 final class UserCleaningPreviousWorkersController
 {
     public function __construct(
         private readonly DepositService $depositService,
         private readonly WorkerBookingScheduleConflictService $scheduleConflictService,
+        private readonly CleaningBookingScheduleService $scheduleService,
     ) {}
 
     public function __invoke(UserCleaningPreviousWorkersRequest $request): JsonResponse
@@ -30,14 +30,14 @@ final class UserCleaningPreviousWorkersController
         $userId = Auth::id();
         $validated = $request->validated();
         $genderPreference = $validated['genderPreference'] ?? null;
-        $scheduledAt = $this->scheduledAt(
-            $validated['scheduledDate'] ?? null,
-            $validated['scheduledTime'] ?? null,
-        );
-        $scheduleCandidate = $this->scheduleCandidate(
-            $scheduledAt,
-            $validated['durationHours'] ?? null,
-        );
+        $definitions = $this->scheduleService->definitions([
+            'schedule' => $request->input('schedule'),
+            'scheduledDate' => $validated['scheduledDate'] ?? null,
+            'scheduledTime' => $validated['scheduledTime'] ?? null,
+            'propertyDetails' => [
+                'hours' => $validated['durationHours'] ?? 1,
+            ],
+        ]);
 
         $assignmentHistory = CleaningBookingWorkerAssignment::query()
             ->join('cleaning_bookings', 'cleaning_booking_worker_assignments.cleaning_booking_id', '=', 'cleaning_bookings.id')
@@ -98,11 +98,7 @@ final class UserCleaningPreviousWorkersController
                 fn ($query) => $query->where('gender', $genderPreference),
             )
             ->get()
-            ->filter(fn (Worker $worker): bool => $this->isWorkerEligible(
-                $worker,
-                $scheduledAt,
-                $scheduleCandidate,
-            ))
+            ->filter(fn (Worker $worker): bool => $this->isWorkerEligible($worker, $definitions))
             ->keyBy('id');
 
         $payload = $history
@@ -136,48 +132,17 @@ final class UserCleaningPreviousWorkersController
         ]);
     }
 
-    private function isWorkerEligible(
-        Worker $worker,
-        ?Carbon $scheduledAt,
-        ?CleaningBooking $scheduleCandidate,
-    ): bool {
+    /** @param array<int, array{date:string,time:string,hours:float}> $definitions */
+    private function isWorkerEligible(Worker $worker, array $definitions): bool
+    {
         if (! $this->depositService->isWorkerEligibleForDispatch($worker)) {
             return false;
         }
 
-        if ($scheduleCandidate !== null && $this->scheduleConflictService->hasConflict($worker, $scheduleCandidate)) {
+        if ($definitions !== [] && $this->scheduleConflictService->hasConflictForDefinitions($worker, $definitions)) {
             return false;
         }
 
         return true;
-    }
-
-    private function scheduledAt(mixed $scheduledDate, mixed $scheduledTime): ?Carbon
-    {
-        if (! is_string($scheduledDate) || ! is_string($scheduledTime)) {
-            return null;
-        }
-
-        try {
-            return Carbon::parse($scheduledDate.' '.mb_trim($scheduledTime), config('app.timezone'));
-        } catch (Throwable) {
-            return null;
-        }
-    }
-
-    private function scheduleCandidate(?Carbon $scheduledAt, mixed $durationHours): ?CleaningBooking
-    {
-        if ($scheduledAt === null) {
-            return null;
-        }
-
-        $duration = is_numeric($durationHours) ? (float) $durationHours : 1.0;
-
-        return new CleaningBooking([
-            'scheduled_date' => $scheduledAt->toDateString(),
-            'scheduled_time' => $scheduledAt->format('H:i'),
-            'estimated_hours' => max($duration, 1.0),
-            'total_hours' => max($duration, 1.0),
-        ]);
     }
 }

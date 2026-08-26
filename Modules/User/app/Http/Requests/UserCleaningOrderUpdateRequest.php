@@ -56,7 +56,7 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
             'propertyDetails.guestCount' => [Rule::requiredIf($eventPayloadRequested), 'integer', 'min:1', 'max:5000'],
             'propertyDetails.venueType' => [Rule::requiredIf($eventPayloadRequested), 'string', Rule::in($this->availableVenueTypes())],
             'propertyDetails.customService' => [Rule::requiredIf($eventPayloadRequested), Rule::prohibitedIf(! $isEventAssistance), 'string', 'max:255'],
-            'propertyDetails.hours' => [Rule::requiredIf($eventPayloadRequested), Rule::prohibitedIf(! $isEventAssistance), 'numeric', 'min:1', 'max:24'],
+            'propertyDetails.hours' => [Rule::requiredIf($eventPayloadRequested), Rule::prohibitedIf(! $isEventAssistance), 'numeric', 'min:1', 'max:744'],
             'propertyDetails.specialRequirement' => ['nullable', 'string', 'max:255'],
             'propertyDetails.notes' => ['nullable', 'string', 'max:2000'],
             'cleaning_services' => ['sometimes', 'nullable', 'array'],
@@ -134,6 +134,14 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
             return true;
         }
 
+        $bookingId = $this->route('order');
+        if (is_numeric($bookingId)) {
+            return CleaningBooking::query()
+                ->whereKey((int) $bookingId)
+                ->where('property_type', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
+                ->exists();
+        }
+
         return $this->shouldValidateEventPayload();
     }
 
@@ -146,8 +154,7 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
         return $this->has('propertyDetails.eventType')
             || $this->has('propertyDetails.guestCount')
             || $this->has('propertyDetails.venueType')
-            || $this->has('propertyDetails.customService')
-            || $this->has('propertyDetails.hours');
+            || $this->has('propertyDetails.customService');
     }
 
     private function requiresFemaleWorkerSafetyConfirmation(): bool
@@ -167,7 +174,7 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
         $hasAcceptedAssignments = CleaningBooking::query()
             ->whereKey((int) $bookingId)
             ->whereHas('workerAssignments', static function ($query): void {
-                $query->where('status', CleaningBookingWorkerAssignmentStatus::Accepted->value);
+                $query->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
             })
             ->exists();
 
