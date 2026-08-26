@@ -68,12 +68,11 @@ final class UserRestaurantProductsSearchService
 
         $results = $this->semanticSearchService->search($payload);
 
-        if ($results === null) {
+        // An empty semantic result should not make the user-facing search look
+        // broken. Fall back to the local database search just like the
+        // supermarket search does when the semantic service has no matches.
+        if ($results === null || $results === []) {
             return null;
-        }
-
-        if ($results === []) {
-            return $this->paginateCollection(collect(), $perPage, $page, $query);
         }
 
         $ids = array_values(array_unique(array_map(static fn(array $row): int => (int) $row['id'], $results)));
@@ -109,7 +108,9 @@ final class UserRestaurantProductsSearchService
 
             $productsQuery->where(function ($query) use ($escaped): void {
                 $query->where('name', 'like', "%{$escaped}%")
-                    ->orWhere('description', 'like', "%{$escaped}%");
+                    ->orWhere('description', 'like', "%{$escaped}%")
+                    ->orWhereHas('category', fn($categoryQuery) => $categoryQuery
+                        ->where('name', 'like', "%{$escaped}%"));
             });
 
             $productsQuery->reorder()

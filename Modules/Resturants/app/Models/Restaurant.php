@@ -44,6 +44,8 @@ final class Restaurant extends Model implements HasMedia
         'average_rating',
         'total_reviews',
         'estimated_preparation_time',
+        'estimated_preparation_time_min',
+        'estimated_preparation_time_max',
         'minimum_order_amount',
         'price_range',
         'reputation_score',
@@ -214,6 +216,34 @@ final class Restaurant extends Model implements HasMedia
         });
     }
 
+    protected static function booted(): void
+    {
+        static::saving(function (Restaurant $restaurant): void {
+            $legacy = $restaurant->estimated_preparation_time;
+            $min = $restaurant->estimated_preparation_time_min;
+            $max = $restaurant->estimated_preparation_time_max;
+
+            if ($restaurant->isDirty('estimated_preparation_time_max')) {
+                $restaurant->estimated_preparation_time = $max;
+                $legacy = $max;
+            } elseif ($restaurant->isDirty('estimated_preparation_time') && $legacy !== null) {
+                $restaurant->estimated_preparation_time_max = (int) $legacy;
+                $max = (int) $legacy;
+            }
+
+            if ($restaurant->isDirty('estimated_preparation_time') &&
+                ! $restaurant->isDirty('estimated_preparation_time_min') &&
+                $legacy !== null) {
+                $restaurant->estimated_preparation_time_min = max(1, (int) $legacy - 10);
+                $min = $restaurant->estimated_preparation_time_min;
+            }
+
+            if ($max !== null && $min === null) {
+                $restaurant->estimated_preparation_time_min = max(1, (int) $max - 10);
+            }
+        });
+    }
+
     protected static function newFactory(): RestaurantFactory
     {
         return RestaurantFactory::new();
@@ -225,6 +255,9 @@ final class Restaurant extends Model implements HasMedia
             'latitude' => 'decimal:8',
             'longitude' => 'decimal:8',
             'average_rating' => 'decimal:2',
+            'estimated_preparation_time' => 'integer',
+            'estimated_preparation_time_min' => 'integer',
+            'estimated_preparation_time_max' => 'integer',
             'minimum_order_amount' => 'decimal:2',
             'price_range' => PriceRange::class,
             'manual_visibility_override' => 'boolean',

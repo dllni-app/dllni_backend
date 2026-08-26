@@ -6,6 +6,7 @@ namespace App\Filament\Resources\CleaningBookings\Pages;
 
 use App\Enums\WorkerCustomerRatingType;
 use App\Filament\Resources\CleaningBookings\CleaningBookingResource;
+use App\Filament\Resources\CleaningBookings\Widgets\CleaningBookingTrackingWidget;
 use App\Filament\Resources\Disputes\DisputeResource;
 use App\Models\WorkerCustomerRating;
 use Filament\Actions\Action;

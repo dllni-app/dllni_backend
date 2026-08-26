@@ -13,6 +13,7 @@ final class UserRestaurantProductsWithOffersService
 {
     public function paginateProductsWithActiveOffers(
         ?int $restaurantId = null,
+        ?int $offerId = null,
         int $perPage = 15,
     ): LengthAwarePaginator {
         $since = CarbonImmutable::now()->subDays(30);
@@ -30,23 +31,31 @@ final class UserRestaurantProductsWithOffersService
                         ->where('created_at', '>=', $since)),
             ])
             ->with([
-                'offers' => function ($query) {
+                'offers' => function ($query) use ($offerId) {
                     $query->where('is_active', true)
                         ->where(function ($q) {
                             $q->whereNull('ends_at')
                                 ->orWhere('ends_at', '>', now());
                         });
+
+                    if ($offerId !== null) {
+                        $query->where('offers.id', $offerId);
+                    }
                 },
                 'restaurant' => fn ($q) => $q->select(['id', 'name', 'city', 'district']),
                 'category' => fn ($q) => $q->select(['id', 'name']),
                 'media',
             ])
-            ->whereHas('offers', function ($query) {
+            ->whereHas('offers', function ($query) use ($offerId) {
                 $query->where('is_active', true)
                     ->where(function ($q) {
                         $q->whereNull('ends_at')
                             ->orWhere('ends_at', '>', now());
                     });
+
+                if ($offerId !== null) {
+                    $query->where('offers.id', $offerId);
+                }
             });
 
         if ($restaurantId !== null) {

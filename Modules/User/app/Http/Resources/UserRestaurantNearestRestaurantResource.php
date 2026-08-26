@@ -20,9 +20,15 @@ final class UserRestaurantNearestRestaurantResource extends JsonResource
         /** @var Restaurant $restaurant */
         $restaurant = $this->resource;
 
-        $prep = (int) $restaurant->estimated_preparation_time;
-        $deliveryMin = max(5, $prep - 5);
-        $deliveryMax = $prep + 15;
+        $legacyPreparationTime = $restaurant->estimated_preparation_time !== null
+            ? (int) $restaurant->estimated_preparation_time
+            : null;
+        $preparationTimeMax = $restaurant->estimated_preparation_time_max !== null
+            ? (int) $restaurant->estimated_preparation_time_max
+            : $legacyPreparationTime;
+        $preparationTimeMin = $restaurant->estimated_preparation_time_min !== null
+            ? (int) $restaurant->estimated_preparation_time_min
+            : ($preparationTimeMax !== null ? max(1, $preparationTimeMax - 10) : null);
 
         $distanceKm = array_key_exists('distanceKm', $restaurant->getAttributes())
             ? round((float) $restaurant->getAttribute('distanceKm'), 2)
@@ -46,8 +52,10 @@ final class UserRestaurantNearestRestaurantResource extends JsonResource
                 : '',
             'distanceKm' => $distanceKm,
             'distanceUnit' => $distanceKm !== null ? 'km' : null,
-            'estimatedDeliveryMinutesMin' => $deliveryMin,
-            'estimatedDeliveryMinutesMax' => $deliveryMax,
+            'estimatedDeliveryMinutesMin' => $preparationTimeMin,
+            'estimatedDeliveryMinutesMax' => $preparationTimeMax,
+            'estimatedPreparationTimeMin' => $preparationTimeMin,
+            'estimatedPreparationTimeMax' => $preparationTimeMax,
             'discountOfferBadge' => $this->formatDiscountBadge($restaurant->primaryActiveOffer),
             'isMostRequested' => $popularCount >= UserRestaurantNearestRestaurantsService::mostRequestedMinOrders(),
             'popularOrdersCount' => $popularCount,

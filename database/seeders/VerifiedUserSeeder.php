@@ -23,6 +23,7 @@ final class VerifiedUserSeeder extends Seeder
             'password' => bcrypt('password'),
             'phone_verified_at' => now(),
             'email_verified_at' => now(),
+            'is_active' => true,
         ])->save();
     }
 }

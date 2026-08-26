@@ -55,6 +55,10 @@ return [
         'image_sleep_ms' => (int) env('OPENFOODFACTS_IMAGE_SLEEP_MS', 100),
     ],
 
+    'osrm' => [
+        'url' => env('OSRM_URL', 'https://router.project-osrm.org'),
+    ],
+
     'mtn_sms' => [
         'base_url' => env('MTN_SMS_BASE_URL', 'https://services.mtnsyr.com:7443/general/MTNSERVICES/ConcatenatedSender.aspx'),
         'user' => env('MTN_SMS_USER'),

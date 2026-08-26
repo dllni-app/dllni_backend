@@ -25,6 +25,10 @@ it('lists discover restaurants with pagination', function (): void {
                 'distanceKm',
                 'imageUrl',
                 'listingOffer',
+                'estimatedPreparationTime',
+                'estimatedPreparationTimeMin',
+                'estimatedPreparationTimeMax',
+                'preparationTimeRange' => ['min', 'max'],
             ],
         ],
         'links',
@@ -61,6 +65,53 @@ it('filters discover restaurants by hasOffers', function (): void {
     $names = collect($response->json('data'))->pluck('name')->all();
     expect($names)->toContain('Has Offer');
     expect($names)->not->toContain('No Offer');
+});
+
+it('filters discover restaurants by preparation time range', function (): void {
+    Restaurant::factory()->create([
+        'name' => 'Fast Range',
+        'is_active' => true,
+        'estimated_preparation_time_min' => 10,
+        'estimated_preparation_time_max' => 20,
+    ]);
+
+    Restaurant::factory()->create([
+        'name' => 'Slow Range',
+        'is_active' => true,
+        'estimated_preparation_time_min' => 25,
+        'estimated_preparation_time_max' => 40,
+    ]);
+
+    $response = $this->getJson(
+        '/api/v1/user/restaurants/discover?filter[preparationTimeMin]=5&filter[preparationTimeMax]=25'
+    );
+
+    $response->assertOk();
+    $names = collect($response->json('data'))->pluck('name')->all();
+    expect($names)->toContain('Fast Range');
+    expect($names)->not->toContain('Slow Range');
+});
+
+it('sorts fastest restaurants by preparation time upper bound then lower bound', function (): void {
+    Restaurant::factory()->create([
+        'name' => 'Slower',
+        'is_active' => true,
+        'estimated_preparation_time_min' => 10,
+        'estimated_preparation_time_max' => 30,
+    ]);
+
+    Restaurant::factory()->create([
+        'name' => 'Faster',
+        'is_active' => true,
+        'estimated_preparation_time_min' => 15,
+        'estimated_preparation_time_max' => 20,
+    ]);
+
+    $response = $this->getJson('/api/v1/user/restaurants/discover?sort=fastest&perPage=50');
+
+    $response->assertOk();
+    $names = collect($response->json('data'))->pluck('name')->values();
+    expect($names->search('Faster'))->toBeLessThan($names->search('Slower'));
 });
 
 it('includes listing offer payload for restaurants with an active offer', function (): void {

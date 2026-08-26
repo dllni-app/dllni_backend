@@ -3,7 +3,9 @@
 declare(strict_types=1);
 
 use App\Models\User;
+use Modules\Resturants\Enums\DiscountType;
 use Modules\Resturants\Models\Category;
+use Modules\Resturants\Models\Offer;
 use Modules\Resturants\Models\Order;
 use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
@@ -22,13 +24,25 @@ it('returns restaurant details payload', function (): void {
         'sort_order' => 1,
     ]);
 
-    Product::factory()->create([
+    $product = Product::factory()->create([
         'restaurant_id' => $restaurant->id,
         'category_id' => $category->id,
         'name' => 'Whopper',
+        'price' => 100,
+        'discounted_price' => null,
         'is_available' => true,
         'is_featured' => true,
     ]);
+
+    $offer = Offer::factory()->create([
+        'restaurant_id' => $restaurant->id,
+        'discount_type' => DiscountType::Percentage->value,
+        'discount_value' => 20,
+        'starts_at' => now()->subHour(),
+        'ends_at' => now()->addDay(),
+        'is_active' => true,
+    ]);
+    $offer->products()->attach($product->id);
 
     $reviewUser = User::factory()->create(['name' => 'Ahmad']);
     $order = Order::factory()->create([
@@ -49,12 +63,17 @@ it('returns restaurant details payload', function (): void {
     $response = $this->getJson("/api/v1/user/restaurants/{$restaurant->id}");
 
     // Assert
-    $response->assertOk()->assertJsonStructure([
-        'restaurant',
-        'offers',
-        'popularProducts',
-        'categories',
-        'ratingSummary' => ['average', 'total', 'counts'],
-        'reviews',
-    ]);
+    $response->assertOk()
+        ->assertJsonStructure([
+            'restaurant',
+            'offers',
+            'popularProducts',
+            'categories',
+            'ratingSummary' => ['average', 'total', 'counts'],
+            'reviews',
+        ])
+        ->assertJsonPath('popularProducts.0.price', 100)
+        ->assertJsonPath('popularProducts.0.discountedPrice', 80)
+        ->assertJsonPath('categories.0.products.0.price', 100)
+        ->assertJsonPath('categories.0.products.0.discountedPrice', 80);
 });
