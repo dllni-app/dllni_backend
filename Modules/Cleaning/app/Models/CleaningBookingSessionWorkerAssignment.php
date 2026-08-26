@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Models;
 
 use App\Models\Worker;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
+use Modules\Cleaning\Observers\CleaningBookingSessionWorkerAssignmentObserver;
 
+#[ObservedBy([CleaningBookingSessionWorkerAssignmentObserver::class])]
 final class CleaningBookingSessionWorkerAssignment extends Model
 {
     protected $fillable = [
