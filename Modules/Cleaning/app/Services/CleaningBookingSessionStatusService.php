@@ -17,16 +17,15 @@ final class CleaningBookingSessionStatusService
     public function refreshParent(CleaningBooking $booking): CleaningBooking
     {
         $booking->loadMissing(['sessions.workerAssignments', 'workerAssignments.sessionAssignments.session']);
+        $sessions = $booking->sessions->sortBy('sequence')->values();
 
-        if ($booking->sessions->isEmpty()) {
+        if ($sessions->isEmpty()) {
             return $booking;
         }
 
-        $this->projectTeamStateToSessions($booking);
-        $booking->load(['sessions.workerAssignments', 'workerAssignments.sessionAssignments.session']);
-        $sessions = $booking->sessions->sortBy('sequence')->values();
-
         $this->refreshParentWorkerAssignments($booking);
+        $booking->unsetRelation('workerAssignments');
+        $booking->load('workerAssignments');
 
         $nonCancelled = $sessions->reject(fn (CleaningBookingSession $session): bool => $session->status === CleaningBookingSessionStatus::Cancelled);
         $completedCount = $nonCancelled->filter(fn (CleaningBookingSession $session): bool => $session->status === CleaningBookingSessionStatus::Completed)->count();
@@ -51,31 +50,7 @@ final class CleaningBookingSessionStatusService
             'cancelled_at' => $status === CleaningBookingStatus::Cancelled ? ($booking->cancelled_at ?? now()) : null,
         ])->saveQuietly();
 
-        return $booking->fresh(['sessions.workerAssignments.worker.user', 'workerAssignments.worker.user']);
-    }
-
-    private function projectTeamStateToSessions(CleaningBooking $booking): void
-    {
-        $teamFulfilled = $booking->isTeamFulfilled();
-
-        foreach ($booking->sessions as $session) {
-            if ($teamFulfilled && $session->status === CleaningBookingSessionStatus::Scheduled) {
-                $session->forceFill(['status' => CleaningBookingSessionStatus::WorkerAssigned])->saveQuietly();
-                continue;
-            }
-
-            if (! $teamFulfilled && $session->status === CleaningBookingSessionStatus::WorkerAssigned) {
-                $hasStartedAssignment = $session->workerAssignments->contains(
-                    fn (CleaningBookingSessionWorkerAssignment $assignment): bool => $assignment->started_travel_at !== null
-                        || $assignment->arrived_at !== null
-                        || $assignment->work_started_at !== null
-                );
-
-                if (! $hasStartedAssignment) {
-                    $session->forceFill(['status' => CleaningBookingSessionStatus::Scheduled])->saveQuietly();
-                }
-            }
-        }
+        return $booking->fresh(['sessions.workerAssignments', 'workerAssignments']);
     }
 
     /** @param Collection<int, CleaningBookingSession> $sessions @param Collection<int, CleaningBookingSession> $nonCancelled */
@@ -118,8 +93,26 @@ final class CleaningBookingSessionStatusService
     private function refreshParentWorkerAssignments(CleaningBooking $booking): void
     {
         foreach ($booking->workerAssignments as $parent) {
+            $parentStatus = (string) ($parent->status?->value ?? $parent->status);
+
+            // A worker released after executing earlier sessions must remain
+            // released at booking level. Completed session history is retained,
+            // but must not make the worker count toward the future team again.
+            if (in_array($parentStatus, [
+                CleaningBookingWorkerAssignmentStatus::Rejected->value,
+                CleaningBookingWorkerAssignmentStatus::Withdrawn->value,
+                CleaningBookingWorkerAssignmentStatus::Cancelled->value,
+            ], true)) {
+                continue;
+            }
+
             $sessionAssignments = $parent->sessionAssignments
-                ->filter(fn (CleaningBookingSessionWorkerAssignment $assignment): bool => $assignment->session?->status !== CleaningBookingSessionStatus::Cancelled);
+                ->filter(fn (CleaningBookingSessionWorkerAssignment $assignment): bool => $assignment->session?->status !== CleaningBookingSessionStatus::Cancelled)
+                ->filter(fn (CleaningBookingSessionWorkerAssignment $assignment): bool => in_array(
+                    (string) ($assignment->status?->value ?? $assignment->status),
+                    CleaningBookingWorkerAssignmentStatus::acceptedValues(),
+                    true,
+                ));
 
             if ($sessionAssignments->isEmpty()) {
                 continue;
