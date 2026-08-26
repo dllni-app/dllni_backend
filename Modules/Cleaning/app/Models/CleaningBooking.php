@@ -13,6 +13,7 @@ use App\Models\Worker;
 use App\Models\WorkerCustomerRating;
 use Database\Factories\CleaningBookingFactory;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -21,6 +22,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Modules\Cleaning\Enums\CleaningAssignmentMode;
+use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Observers\CleaningBookingObserver;
@@ -30,6 +32,7 @@ use Modules\Cleaning\Traits\FilterQueries\CleaningBookingFilterQuery;
  * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\Dispute> $disputes
  * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\SosAlert> $sosAlerts
  * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\SystemAlert> $systemAlerts
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, CleaningBookingSession> $sessions
  */
 #[ObservedBy([CleaningBookingObserver::class])]
 final class CleaningBooking extends Model
@@ -130,6 +133,35 @@ final class CleaningBooking extends Model
     public function roomAssignments(): HasMany
     {
         return $this->rooms();
+    }
+
+    public function sessions(): HasMany
+    {
+        return $this->hasMany(CleaningBookingSession::class, 'cleaning_booking_id')
+            ->orderBy('sequence');
+    }
+
+    public function activeSessions(): HasMany
+    {
+        return $this->hasMany(CleaningBookingSession::class, 'cleaning_booking_id')
+            ->whereNotIn('status', [
+                CleaningBookingSessionStatus::Completed->value,
+                CleaningBookingSessionStatus::Cancelled->value,
+            ])
+            ->orderBy('scheduled_date')
+            ->orderBy('scheduled_time');
+    }
+
+    public function completedSessions(): HasMany
+    {
+        return $this->hasMany(CleaningBookingSession::class, 'cleaning_booking_id')
+            ->where('status', CleaningBookingSessionStatus::Completed->value);
+    }
+
+    public function cancelledSessions(): HasMany
+    {
+        return $this->hasMany(CleaningBookingSession::class, 'cleaning_booking_id')
+            ->where('status', CleaningBookingSessionStatus::Cancelled->value);
     }
 
     public function workerAssignments(): HasMany
@@ -302,6 +334,80 @@ final class CleaningBooking extends Model
         return $this->property_type === 'event_assistance';
     }
 
+    public function isMultiDayEventAssistance(): bool
+    {
+        return $this->isEventAssistanceBooking() && $this->sessionsCount() > 1;
+    }
+
+    public function sessionsCount(): int
+    {
+        if ($this->relationLoaded('sessions')) {
+            return $this->sessions->count();
+        }
+
+        return $this->sessions()->count();
+    }
+
+    public function completedSessionsCount(): int
+    {
+        if ($this->relationLoaded('sessions')) {
+            return $this->sessions
+                ->filter(fn (CleaningBookingSession $session): bool => $session->status === CleaningBookingSessionStatus::Completed)
+                ->count();
+        }
+
+        return $this->completedSessions()->count();
+    }
+
+    public function cancelledSessionsCount(): int
+    {
+        if ($this->relationLoaded('sessions')) {
+            return $this->sessions
+                ->filter(fn (CleaningBookingSession $session): bool => $session->status === CleaningBookingSessionStatus::Cancelled)
+                ->count();
+        }
+
+        return $this->cancelledSessions()->count();
+    }
+
+    public function remainingSessionsCount(): int
+    {
+        return max(0, $this->sessionsCount() - $this->completedSessionsCount() - $this->cancelledSessionsCount());
+    }
+
+    public function firstSession(): ?CleaningBookingSession
+    {
+        if ($this->relationLoaded('sessions')) {
+            return $this->sessions->sortBy('sequence')->first();
+        }
+
+        return $this->sessions()->orderBy('sequence')->first();
+    }
+
+    public function lastSession(): ?CleaningBookingSession
+    {
+        if ($this->relationLoaded('sessions')) {
+            return $this->sessions->sortByDesc('sequence')->first();
+        }
+
+        return $this->sessions()->orderByDesc('sequence')->first();
+    }
+
+    public function nextActiveSession(): ?CleaningBookingSession
+    {
+        if ($this->relationLoaded('sessions')) {
+            return $this->sessions
+                ->filter(fn (CleaningBookingSession $session): bool => ! in_array($session->status, [
+                    CleaningBookingSessionStatus::Completed,
+                    CleaningBookingSessionStatus::Cancelled,
+                ], true))
+                ->sortBy(fn (CleaningBookingSession $session): string => ($session->scheduled_date?->toDateString() ?? '').' '.(string) $session->scheduled_time)
+                ->first();
+        }
+
+        return $this->activeSessions()->first();
+    }
+
     public function isDeepCleaningBooking(): bool
     {
         $details = is_array($this->property_details) ? $this->property_details : [];
@@ -356,6 +462,19 @@ final class CleaningBooking extends Model
     public function notStartApprovedWorkerCount(): int
     {
         return max(0, $this->acceptedWorkerCount() - $this->startApprovedWorkerCount());
+    }
+
+    public function scopeScheduledOn(Builder $query, mixed $date): Builder
+    {
+        return $query->where(function (Builder $scheduleQuery) use ($date): void {
+            $scheduleQuery
+                ->whereHas('sessions', fn (Builder $sessionQuery): Builder => $sessionQuery->whereDate('scheduled_date', $date))
+                ->orWhere(function (Builder $legacyQuery) use ($date): void {
+                    $legacyQuery
+                        ->whereDoesntHave('sessions')
+                        ->whereDate('scheduled_date', $date);
+                });
+        });
     }
 
     protected static function newFactory(): CleaningBookingFactory
