@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Services\CleaningBookingSessionLifecycleService;
 use Modules\Cleaning\Services\CleaningLifecycleNotificationService;
 use Modules\User\Http\Requests\UserCleaningOrderCancelRequest;
 use Modules\User\Http\Resources\UserCleaningBookingResource;
@@ -28,23 +29,66 @@ final class UserCleaningOrderCancelController
         int $order,
         UserCleaningOrderService $service,
         CleaningLifecycleNotificationService $lifecycleNotifications,
+        CleaningBookingSessionLifecycleService $sessionLifecycle,
     ): JsonResponse {
         $model = CleaningBooking::query()
             ->where('customer_id', $request->user()->id)
+            ->with('sessions')
             ->findOrFail($order);
 
         $reason = $request->validated('reason');
+        $fee = CleaningFinancialSetting::currentUserCancellationFee();
 
-        $cancelled = in_array($model->status, self::ARRIVAL_CANCEL_STATUSES, true)
-            ? $this->cancelAfterWorkerArrival($model, $reason, $lifecycleNotifications)
-            : $service->cancel($model, $reason);
+        if ($model->isEventAssistanceBooking() && $model->sessions->isNotEmpty()) {
+            $cancelled = $sessionLifecycle->cancelRemainingSessions(
+                $model,
+                'customer',
+                $reason,
+                $fee,
+            );
 
-        $cancelled->forceFill([
-            'cancelled_by_role' => 'customer',
-            'cancellation_fee' => CleaningFinancialSetting::currentUserCancellationFee(),
-        ])->save();
+            $cancelled->forceFill([
+                'cancelled_by_role' => $cancelled->status === CleaningBookingStatus::Cancelled ? 'customer' : null,
+                'cancellation_reason' => $cancelled->status === CleaningBookingStatus::Cancelled ? $reason : null,
+                'cancelled_at' => $cancelled->status === CleaningBookingStatus::Cancelled ? ($cancelled->cancelled_at ?? now()) : null,
+            ])->saveQuietly();
+
+            foreach ($cancelled->acceptedWorkerAssignments()->with('worker.user')->get() as $assignment) {
+                $lifecycleNotifications->notifyWorkerById(
+                    booking: $cancelled,
+                    workerId: (int) $assignment->worker_id,
+                    canonicalType: 'cleaning.booking.order_cancelled',
+                    action: 'customer_cancelled_remaining_sessions',
+                    actorRole: 'customer',
+                    occurredAt: now()->toIso8601String(),
+                    extraData: [
+                        'remainingSessionsCancelled' => true,
+                        'completedSessionsCount' => $cancelled->completedSessionsCount(),
+                        'remainingSessionsCount' => $cancelled->remainingSessionsCount(),
+                    ],
+                );
+            }
+        } else {
+            $cancelled = in_array($model->status, self::ARRIVAL_CANCEL_STATUSES, true)
+                ? $this->cancelAfterWorkerArrival($model, $reason, $lifecycleNotifications)
+                : $service->cancel($model, $reason);
+
+            $cancelled->forceFill([
+                'cancelled_by_role' => 'customer',
+                'cancellation_fee' => $fee,
+            ])->save();
+        }
+
         $cancelled = $cancelled->fresh();
-        $cancelled->load(['worker.user', 'timeWarnings', 'disputes', 'addons', 'billingPolicy']);
+        $cancelled->load([
+            'worker.user',
+            'workerAssignments.worker.user',
+            'sessions.workerAssignments.worker.user',
+            'timeWarnings',
+            'disputes',
+            'addons',
+            'billingPolicy',
+        ]);
 
         return response()->json([
             'order' => UserCleaningBookingResource::make($cancelled),
