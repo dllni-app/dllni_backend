@@ -10,6 +10,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
+use Modules\Cleaning\Services\CleaningBookingScheduleService;
+use Modules\Cleaning\Services\CleaningBookingSessionPricingService;
 use Modules\User\Http\Requests\UserCleaningOrderStoreRequest;
 use Modules\User\Http\Resources\UserCleaningBookingResource;
 use Modules\User\Services\UserCleaningOrderEstimationService;
@@ -23,6 +25,8 @@ final class UserCleaningOrderStoreController
         UserCleaningOrderService $service,
         UserCleaningOrderEstimationService $estimationService,
         PlatformCouponRedemptionService $platformCoupons,
+        CleaningBookingScheduleService $scheduleService,
+        CleaningBookingSessionPricingService $sessionPricing,
     ): JsonResponse {
         $couponCode = $request->input('couponCode');
         Validator::make(['couponCode' => $couponCode], [
@@ -31,9 +35,17 @@ final class UserCleaningOrderStoreController
         $validated = $this->normalizeWorkerCount($request->validated());
         $validated = $this->withEventWorkerCount($validated);
         $this->assertWorkerCapacity($validated, $estimationService);
+        $scheduleInput = $request->input('schedule');
 
-        $order = DB::transaction(function () use ($request, $service, $platformCoupons, $couponCode, $validated) {
+        $order = DB::transaction(function () use ($request, $service, $platformCoupons, $couponCode, $validated, $scheduleInput, $scheduleService, $sessionPricing) {
             $order = $service->store($request->user(), $validated);
+
+            if ($order->isEventAssistanceBooking()) {
+                $order = $scheduleService->sync($order, array_merge($validated, [
+                    'schedule' => is_array($scheduleInput) ? $scheduleInput : null,
+                ]));
+                $order = $sessionPricing->initializeFromParent($order);
+            }
 
             if (is_string($couponCode) && trim($couponCode) !== '') {
                 $subtotal = round(
@@ -51,7 +63,7 @@ final class UserCleaningOrderStoreController
                     context: [
                         'propertyType' => (string) $order->property_type,
                         'cleaningMode' => $order->property_details['cleaning_mode'] ?? null,
-                        'eventType' => $order->property_details['eventType'] ?? null,
+                        'eventType' => $order->property_details['eventType'] ?? $order->property_details['event_type'] ?? null,
                     ],
                     required: true,
                 );
@@ -81,6 +93,7 @@ final class UserCleaningOrderStoreController
             'preferredWorker.user',
             'rooms.assignedWorker.user',
             'workerAssignments.worker.user',
+            'sessions.workerAssignments.worker.user',
             'timeWarnings',
             'disputes',
             'addons',
