@@ -21,15 +21,15 @@ it('keeps the worker service share unchanged while the coupon fits inside the ad
     app(CleaningCouponPricingService::class)->applyBeforeSave($booking);
     $assignment->refresh();
 
-    // 8% is taken from the 1,000 service amount. The admin percentage drops
-    // from 10% to 2%, while the workers' service share remains untouched.
+    // 8% is taken from the full 1,100 customer total (= 88). Admin absorbs the
+    // whole discount, so service stays 1,000 and admin drops from 100 to 12.
     expect((float) $booking->subtotal_before_discount)->toBe(1100.0)
-        ->and((float) $booking->discount_amount)->toBe(80.0)
-        ->and((float) $booking->admin_margin_amount)->toBe(20.0)
-        ->and((float) $booking->total_price)->toBe(1020.0)
+        ->and((float) $booking->discount_amount)->toBe(88.0)
+        ->and((float) $booking->admin_margin_amount)->toBe(12.0)
+        ->and((float) $booking->total_price)->toBe(1012.0)
         ->and((float) $assignment->service_share_amount)->toBe(1000.0)
-        ->and((float) $assignment->admin_margin_amount)->toBe(20.0)
-        ->and((float) $assignment->worker_amount)->toBe(980.0);
+        ->and((float) $assignment->admin_margin_amount)->toBe(12.0)
+        ->and((float) $assignment->worker_amount)->toBe(988.0);
 });
 
 it('keeps the worker service share unchanged when coupon percentage equals administration percentage', function (): void {
@@ -43,12 +43,12 @@ it('keeps the worker service share unchanged when coupon percentage equals admin
     app(CleaningCouponPricingService::class)->applyBeforeSave($booking);
     $assignment->refresh();
 
-    expect((float) $booking->discount_amount)->toBe(100.0)
+    expect((float) $booking->discount_amount)->toBe(110.0)
         ->and((float) $booking->admin_margin_amount)->toBe(0.0)
-        ->and((float) $booking->total_price)->toBe(1000.0)
-        ->and((float) $assignment->service_share_amount)->toBe(1000.0)
+        ->and((float) $booking->total_price)->toBe(990.0)
+        ->and((float) $assignment->service_share_amount)->toBe(990.0)
         ->and((float) $assignment->admin_margin_amount)->toBe(0.0)
-        ->and((float) $assignment->worker_amount)->toBe(1000.0);
+        ->and((float) $assignment->worker_amount)->toBe(990.0);
 });
 
 it('reduces the worker service share only by percentage points above the administration percentage', function (): void {
@@ -62,15 +62,15 @@ it('reduces the worker service share only by percentage points above the adminis
     app(CleaningCouponPricingService::class)->applyBeforeSave($booking);
     $assignment->refresh();
 
-    // Admin is 10% of 1,000. A 15% coupon consumes those 10 points first;
-    // only the extra 5% (50) is then deducted from the workers' service share.
+    // 15% of the full 1,100 customer total is 165. Admin funds the first 100,
+    // then only the remaining 65 is deducted from the service share.
     expect((float) $booking->subtotal_before_discount)->toBe(1100.0)
-        ->and((float) $booking->discount_amount)->toBe(150.0)
+        ->and((float) $booking->discount_amount)->toBe(165.0)
         ->and((float) $booking->admin_margin_amount)->toBe(0.0)
-        ->and((float) $booking->total_price)->toBe(950.0)
-        ->and((float) $assignment->service_share_amount)->toBe(950.0)
+        ->and((float) $booking->total_price)->toBe(935.0)
+        ->and((float) $assignment->service_share_amount)->toBe(935.0)
         ->and((float) $assignment->admin_margin_amount)->toBe(0.0)
-        ->and((float) $assignment->worker_amount)->toBe(950.0);
+        ->and((float) $assignment->worker_amount)->toBe(935.0);
 });
 
 it('returns a persisted dashboard breakdown that explains the customer and worker totals', function (): void {
@@ -110,15 +110,15 @@ it('returns a persisted dashboard breakdown that explains the customer and worke
         ->and($breakdown['grossServiceAmount'])->toBe(960.0)
         ->and($breakdown['grossAdminMargin'])->toBe(240.0)
         ->and($breakdown['grossTotal'])->toBe(1200.0)
-        ->and($breakdown['discountAmount'])->toBe(96.0)
-        ->and($breakdown['adminDiscountAmount'])->toBe(96.0)
+        ->and($breakdown['discountAmount'])->toBe(120.0)
+        ->and($breakdown['adminDiscountAmount'])->toBe(120.0)
         ->and($breakdown['platformSubsidyAmount'])->toBe(0.0)
         ->and($breakdown['workerDiscountAmount'])->toBe(0.0)
-        ->and($breakdown['adminMargin'])->toBe(144.0)
-        ->and($breakdown['totalPrice'])->toBe(1104.0)
+        ->and($breakdown['adminMargin'])->toBe(120.0)
+        ->and($breakdown['totalPrice'])->toBe(1080.0)
         ->and((float) $assignment->service_share_amount)->toBe(960.0)
-        ->and((float) $assignment->admin_margin_amount)->toBe(144.0)
-        ->and((float) $assignment->worker_amount)->toBe(816.0);
+        ->and((float) $assignment->admin_margin_amount)->toBe(120.0)
+        ->and((float) $assignment->worker_amount)->toBe(840.0);
 });
 
 it('returns the corrected coupon totals through the user cleaning order api', function (): void {
@@ -129,10 +129,10 @@ it('returns the corrected coupon totals through the user cleaning order api', fu
         'base_price' => 960,
         'addons_total' => 0,
         'travel_fee' => 0,
-        'admin_margin_amount' => 144,
+        'admin_margin_amount' => 120,
         'subtotal_before_discount' => 1200,
-        'discount_amount' => 96,
-        'total_price' => 1104,
+        'discount_amount' => 120,
+        'total_price' => 1080,
         'platform_coupon_id' => $coupon->id,
         'platform_coupon_code' => $coupon->code,
         'is_pricing_final' => true,
@@ -144,13 +144,13 @@ it('returns the corrected coupon totals through the user cleaning order api', fu
         ->assertOk()
         ->assertJsonPath('data.basePrice', 960)
         ->assertJsonPath('data.servicePrice', 960)
-        ->assertJsonPath('data.adminMargin', 144)
-        ->assertJsonPath('data.totalPrice', 1104)
-        ->assertJsonPath('data.discountAmount', 96)
+        ->assertJsonPath('data.adminMargin', 120)
+        ->assertJsonPath('data.totalPrice', 1080)
+        ->assertJsonPath('data.discountAmount', 120)
         ->assertJsonPath('data.subtotalBeforeDiscount', 1200)
         ->assertJsonPath('data.bookingBasePrice', 960)
-        ->assertJsonPath('data.bookingAdminMargin', 144)
-        ->assertJsonPath('data.bookingTotalPrice', 1104);
+        ->assertJsonPath('data.bookingAdminMargin', 120)
+        ->assertJsonPath('data.bookingTotalPrice', 1080);
 });
 
 it('does not reapply the coupon to worker shares on a later pricing save', function (): void {
@@ -167,15 +167,15 @@ it('does not reapply the coupon to worker shares on a later pricing save', funct
     $assignment->refresh();
 
     expect((float) $assignment->service_share_amount)->toBe(1000.0)
-        ->and((float) $assignment->admin_margin_amount)->toBe(20.0);
+        ->and((float) $assignment->admin_margin_amount)->toBe(12.0);
 
     $booking->forceFill(['total_price' => (float) $booking->total_price + 1]);
     app(CleaningCouponPricingService::class)->applyBeforeSave($booking);
     $assignment->refresh();
 
     expect((float) $assignment->service_share_amount)->toBe(1000.0)
-        ->and((float) $assignment->admin_margin_amount)->toBe(20.0)
-        ->and((float) $assignment->worker_amount)->toBe(980.0);
+        ->and((float) $assignment->admin_margin_amount)->toBe(12.0)
+        ->and((float) $assignment->worker_amount)->toBe(988.0);
 });
 
 it('does not reapply a coupon after the administration margin has reached zero', function (): void {
@@ -191,18 +191,18 @@ it('does not reapply a coupon after the administration margin has reached zero',
     $assignment->refresh();
 
     expect((float) $booking->admin_margin_amount)->toBe(0.0)
-        ->and((float) $assignment->service_share_amount)->toBe(1000.0)
-        ->and((float) $assignment->worker_amount)->toBe(1000.0);
+        ->and((float) $assignment->service_share_amount)->toBe(990.0)
+        ->and((float) $assignment->worker_amount)->toBe(990.0);
 
     $booking->forceFill(['total_price' => (float) $booking->total_price + 1]);
     app(CleaningCouponPricingService::class)->applyBeforeSave($booking);
     $assignment->refresh();
 
-    expect((float) $booking->discount_amount)->toBe(100.0)
+    expect((float) $booking->discount_amount)->toBe(110.0)
         ->and((float) $booking->admin_margin_amount)->toBe(0.0)
-        ->and((float) $booking->total_price)->toBe(1000.0)
-        ->and((float) $assignment->service_share_amount)->toBe(1000.0)
-        ->and((float) $assignment->worker_amount)->toBe(1000.0);
+        ->and((float) $booking->total_price)->toBe(990.0)
+        ->and((float) $assignment->service_share_amount)->toBe(990.0)
+        ->and((float) $assignment->worker_amount)->toBe(990.0);
 });
 
 it('keeps fixed coupons amount-based with administration first', function (): void {
