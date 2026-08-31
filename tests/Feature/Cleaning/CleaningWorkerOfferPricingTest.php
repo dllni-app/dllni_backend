@@ -282,7 +282,11 @@ it('uses the discounted admin margin in pending worker api offers without reduci
         ->assertJsonPath('data.workerOffer.serviceShareAmount', 960)
         ->assertJsonPath('data.workerOffer.adminMarginAmount', 144)
         ->assertJsonPath('data.myAssignment.serviceShareAmount', 960)
-        ->assertJsonPath('data.myAssignment.adminMarginAmount', 144);
+        ->assertJsonPath('data.myAssignment.adminMarginAmount', 144)
+        ->assertJsonPath('data.couponApplied', true)
+        ->assertJsonPath('data.couponCode', 'WORKER10')
+        ->assertJsonPath('data.discountAmount', 96)
+        ->assertJsonPath('data.subtotalBeforeDiscount', 1200);
 });
 
 it('reduces pending worker service share only by coupon excess above admin margin', function (): void {
