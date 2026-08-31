@@ -170,10 +170,14 @@ it('creates an open cleaning order with coupon deducted from provisional admin m
         + (float) $response->json('order.addonsTotal');
     $grossAdminMargin = (float) app(CleaningPricingCalculator::class)
         ->provisional($serviceAmount, 0.0)['adminMargin'];
-    $expectedDiscount = round($serviceAmount * 0.10, 2);
-    $expectedAdminMargin = round(max(0.0, $grossAdminMargin - $expectedDiscount), 2);
     $expectedGrossTotal = round($serviceAmount + $grossAdminMargin, 2);
-    $expectedTotal = round($serviceAmount + $expectedAdminMargin, 2);
+    $expectedDiscount = round($expectedGrossTotal * 0.10, 2);
+    $expectedAdminMargin = round(max(0.0, $grossAdminMargin - $expectedDiscount), 2);
+    $expectedServiceAmount = round(
+        max(0.0, $serviceAmount - max(0.0, $expectedDiscount - $grossAdminMargin)),
+        2,
+    );
+    $expectedTotal = round($expectedServiceAmount + $expectedAdminMargin, 2);
 
     expect((float) $response->json('order.discountAmount'))->toBe($expectedDiscount)
         ->and((float) $response->json('order.subtotalBeforeDiscount'))->toBe($expectedGrossTotal)
@@ -202,9 +206,9 @@ it('creates an open cleaning order with coupon deducted from provisional admin m
     $workerResponse = getJson("/api/v1/cleaning-bookings/{$booking->id}")
         ->assertOk();
 
-    expect((float) $workerResponse->json('data.serviceShareAmount'))->toBe($serviceAmount)
+    expect((float) $workerResponse->json('data.serviceShareAmount'))->toBe($expectedServiceAmount)
         ->and((float) $workerResponse->json('data.adminMargin'))->toBe($expectedAdminMargin)
-        ->and((float) $workerResponse->json('data.workerOffer.serviceShareAmount'))->toBe($serviceAmount)
+        ->and((float) $workerResponse->json('data.workerOffer.serviceShareAmount'))->toBe($expectedServiceAmount)
         ->and((float) $workerResponse->json('data.workerOffer.adminMarginAmount'))->toBe($expectedAdminMargin)
         ->and((float) $workerResponse->json('data.discountAmount'))->toBe($expectedDiscount)
         ->and((float) $workerResponse->json('data.subtotalBeforeDiscount'))->toBe($expectedGrossTotal);
