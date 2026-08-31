@@ -8,7 +8,7 @@ use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Services\CleaningCouponPricingService;
 
-it('uses the administration percentage before reducing worker earnings', function (): void {
+it('keeps the worker service share unchanged while the coupon fits inside the administration margin', function (): void {
     $booking = cleaningCouponBooking();
     $worker = Worker::factory()->create();
     $assignment = cleaningCouponAssignment($booking, $worker);
@@ -30,7 +30,7 @@ it('uses the administration percentage before reducing worker earnings', functio
         ->and((float) $assignment->worker_amount)->toBe(980.0);
 });
 
-it('does not reduce worker earnings when coupon percentage equals administration percentage', function (): void {
+it('keeps the worker service share unchanged when coupon percentage equals administration percentage', function (): void {
     $booking = cleaningCouponBooking();
     $worker = Worker::factory()->create();
     $assignment = cleaningCouponAssignment($booking, $worker);
@@ -49,7 +49,7 @@ it('does not reduce worker earnings when coupon percentage equals administration
         ->and((float) $assignment->worker_amount)->toBe(1000.0);
 });
 
-it('reduces worker earnings only by percentage points above the administration percentage', function (): void {
+it('reduces the worker service share only by percentage points above the administration percentage', function (): void {
     $booking = cleaningCouponBooking();
     $worker = Worker::factory()->create();
     $assignment = cleaningCouponAssignment($booking, $worker);
@@ -142,6 +142,33 @@ it('does not reapply the coupon to worker shares on a later pricing save', funct
     expect((float) $assignment->service_share_amount)->toBe(1000.0)
         ->and((float) $assignment->admin_margin_amount)->toBe(20.0)
         ->and((float) $assignment->worker_amount)->toBe(980.0);
+});
+
+it('does not reapply a coupon after the administration margin has reached zero', function (): void {
+    $booking = cleaningCouponBooking();
+    $worker = Worker::factory()->create();
+    $assignment = cleaningCouponAssignment($booking, $worker);
+    $coupon = cleaningPercentageCoupon('IDEMPOTENT10', 10);
+
+    $booking->forceFill(['platform_coupon_id' => $coupon->id]);
+    app(CleaningCouponPricingService::class)->applyBeforeSave($booking);
+    $booking->saveQuietly();
+    $booking->refresh();
+    $assignment->refresh();
+
+    expect((float) $booking->admin_margin_amount)->toBe(0.0)
+        ->and((float) $assignment->service_share_amount)->toBe(1000.0)
+        ->and((float) $assignment->worker_amount)->toBe(1000.0);
+
+    $booking->forceFill(['total_price' => (float) $booking->total_price + 1]);
+    app(CleaningCouponPricingService::class)->applyBeforeSave($booking);
+    $assignment->refresh();
+
+    expect((float) $booking->discount_amount)->toBe(100.0)
+        ->and((float) $booking->admin_margin_amount)->toBe(0.0)
+        ->and((float) $booking->total_price)->toBe(1000.0)
+        ->and((float) $assignment->service_share_amount)->toBe(1000.0)
+        ->and((float) $assignment->worker_amount)->toBe(1000.0);
 });
 
 it('keeps fixed coupons amount-based with administration first', function (): void {
