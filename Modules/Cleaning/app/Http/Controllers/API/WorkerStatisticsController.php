@@ -130,7 +130,7 @@ final class WorkerStatisticsController
             return $this->assignmentNetAmount($assignment);
         }
 
-        return max(0.0, round($this->bookingGrossAmount($booking, $workerId) - (float) ($booking->admin_margin_amount ?? 0), 2));
+        return max(0.0, $this->bookingGrossAmount($booking, $workerId));
     }
 
     private function bookingGrossAmount(CleaningBooking $booking, int $workerId): float
@@ -164,6 +164,6 @@ final class WorkerStatisticsController
 
     private function assignmentNetAmount(CleaningBookingWorkerAssignment $assignment): float
     {
-        return max(0.0, round($this->assignmentGrossAmount($assignment) - (float) $assignment->admin_margin_amount, 2));
+        return max(0.0, $this->assignmentGrossAmount($assignment));
     }
 }
