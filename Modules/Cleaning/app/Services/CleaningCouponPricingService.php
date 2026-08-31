@@ -151,12 +151,22 @@ final class CleaningCouponPricingService
             2,
         );
         $grossTravelFee = round(max(0.0, (float) ($booking->travel_fee ?? 0)), 2);
-        $grossAdminMargin = $this->grossStoredComponent(
-            currentValue: (float) ($booking->admin_margin_amount ?? 0),
-            fieldIsDirty: $booking->isDirty('admin_margin_amount'),
-            previousNetFactor: $previousFactors['adminNetFactor'],
-            treatCurrentAsGross: $couponWasJustAttached || $booking->isDirty('admin_margin_amount'),
-        );
+        if ($couponWasJustAttached || $booking->isDirty('admin_margin_amount')) {
+            $grossAdminMargin = round(max(0.0, (float) ($booking->admin_margin_amount ?? 0)), 2);
+        } else {
+            // The subtotal snapshot is the reliable source for the original admin
+            // margin, including the case where the coupon reduced net admin to 0.
+            $originalGrossTotal = max(0.0, (float) ($booking->getOriginal('subtotal_before_discount') ?? 0));
+            $originalServiceAmount = round(
+                max(0.0, (float) ($booking->getOriginal('base_price') ?? 0))
+                + max(0.0, (float) ($booking->getOriginal('addons_total') ?? 0)),
+                2,
+            );
+            $originalTravelFee = round(max(0.0, (float) ($booking->getOriginal('travel_fee') ?? 0)), 2);
+            $grossAdminMargin = $originalGrossTotal > 0.0
+                ? round(max(0.0, $originalGrossTotal - $originalServiceAmount - $originalTravelFee), 2)
+                : round(max(0.0, (float) ($booking->admin_margin_amount ?? 0)), 2);
+        }
 
         $allocation = $this->allocation(
             $coupon,
@@ -247,25 +257,6 @@ final class CleaningCouponPricingService
             'assignmentWorkerNetFactor' => 1.0,
             'adminNetFactor' => 1.0,
         ];
-    }
-
-    private function grossStoredComponent(
-        float $currentValue,
-        bool $fieldIsDirty,
-        float $previousNetFactor,
-        bool $treatCurrentAsGross,
-    ): float {
-        $currentValue = max(0.0, $currentValue);
-
-        if ($fieldIsDirty || $treatCurrentAsGross || $previousNetFactor >= 1.0) {
-            return round($currentValue, 2);
-        }
-
-        if ($previousNetFactor <= 0.0) {
-            return 0.0;
-        }
-
-        return round($currentValue / $previousNetFactor, 2);
     }
 
     private function applyToWorkerAssignments(
