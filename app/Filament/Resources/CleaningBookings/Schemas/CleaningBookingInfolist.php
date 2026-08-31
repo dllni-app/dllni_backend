@@ -15,12 +15,16 @@ use Filament\Schemas\Schema;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
+use Modules\Cleaning\Services\CleaningCouponPricingService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class CleaningBookingInfolist
 {
     /** @var array<int, PlatformCoupon|null> */
     private static array $platformCouponCache = [];
+
+    /** @var array<int, array<string, float>|null> */
+    private static array $couponBreakdownCache = [];
 
     public static function configure(Schema $schema): Schema
     {
@@ -148,7 +152,7 @@ final class CleaningBookingInfolist
                                                     ->visible(fn (CleaningBookingWorkerAssignment $record): bool => ! self::isEventAssistance($record->booking)),
                                                 TextEntry::make('service_share_amount')->label('حصة الخدمة')->formatStateUsing(fn ($state): string => self::money($state)),
                                                 TextEntry::make('travel_fee')->label('رسوم التنقل')->formatStateUsing(fn ($state): string => self::money($state)),
-                                                TextEntry::make('admin_margin_amount')->label('هامش الإدارة')->formatStateUsing(fn ($state): string => self::money($state)),
+                                                TextEntry::make('admin_margin_amount')->label('صافي هامش الإدارة')->formatStateUsing(fn ($state): string => self::money($state)),
                                                 TextEntry::make('worker_amount')->label('مستحقات العامل')->formatStateUsing(fn ($state): string => self::money($state)),
                                             ])
                                             ->columns(4),
@@ -176,10 +180,11 @@ final class CleaningBookingInfolist
                                         TextEntry::make('travel_fee')->label('رسوم التنقل')->formatStateUsing(fn ($state): string => self::money($state)),
                                         TextEntry::make('travel_distance_km')->label('مسافة التنقل (كم)')->formatStateUsing(fn ($state): string => self::integer($state))->placeholder('-'),
                                         TextEntry::make('admin_margin_amount')->label('هامش الإدارة')->formatStateUsing(fn ($state): string => self::money($state)),
-                                        TextEntry::make('total_price')->label('الإجمالي')->formatStateUsing(fn ($state): string => self::money($state))->weight('bold'),
+                                        TextEntry::make('total_price')->label('إجمالي العميل')->formatStateUsing(fn ($state): string => self::money($state))->weight('bold'),
                                     ])
                                     ->columns(2),
                                 Section::make('الكوبون والخصم')
+                                    ->description('يوضح توزيع الخصم بين الإدارة والمنصة والعامل حتى تتطابق أرقام لوحة التحكم مع تطبيق العامل.')
                                     ->schema([
                                         TextEntry::make('coupon_used_status')
                                             ->label('تم استخدام كوبون؟')
@@ -208,8 +213,40 @@ final class CleaningBookingInfolist
                                             ->state(fn (CleaningBooking $record): float => (float) ($record->discount_amount ?? 0))
                                             ->formatStateUsing(fn ($state): string => self::money($state))
                                             ->visible(fn (CleaningBooking $record): bool => self::couponUsed($record)),
+                                        TextEntry::make('coupon_admin_margin_before')
+                                            ->label('هامش الإدارة قبل الخصم')
+                                            ->state(fn (CleaningBooking $record): float => (float) (self::couponBreakdown($record)['grossAdminMargin'] ?? 0))
+                                            ->formatStateUsing(fn ($state): string => self::money($state))
+                                            ->visible(fn (CleaningBooking $record): bool => self::couponUsed($record)),
+                                        TextEntry::make('coupon_admin_discount_amount')
+                                            ->label('خصم الكوبون من هامش الإدارة')
+                                            ->state(fn (CleaningBooking $record): float => (float) (self::couponBreakdown($record)['adminDiscountAmount'] ?? 0))
+                                            ->formatStateUsing(fn ($state): string => self::money($state))
+                                            ->visible(fn (CleaningBooking $record): bool => self::couponUsed($record)),
+                                        TextEntry::make('coupon_platform_subsidy_amount')
+                                            ->label('دعم المنصة من الكوبون')
+                                            ->state(fn (CleaningBooking $record): float => (float) (self::couponBreakdown($record)['platformSubsidyAmount'] ?? 0))
+                                            ->formatStateUsing(fn ($state): string => self::money($state))
+                                            ->visible(fn (CleaningBooking $record): bool => self::couponUsed($record)),
+                                        TextEntry::make('coupon_worker_discount_amount')
+                                            ->label('خصم محمّل على العاملين')
+                                            ->state(fn (CleaningBooking $record): float => (float) (self::couponBreakdown($record)['workerDiscountAmount'] ?? 0))
+                                            ->formatStateUsing(fn ($state): string => self::money($state))
+                                            ->visible(fn (CleaningBooking $record): bool => self::couponUsed($record) && (float) (self::couponBreakdown($record)['workerDiscountAmount'] ?? 0) > 0),
+                                        TextEntry::make('coupon_admin_margin_after')
+                                            ->label('صافي هامش الإدارة')
+                                            ->state(fn (CleaningBooking $record): float => (float) ($record->admin_margin_amount ?? 0))
+                                            ->formatStateUsing(fn ($state): string => self::money($state))
+                                            ->weight('bold')
+                                            ->visible(fn (CleaningBooking $record): bool => self::couponUsed($record)),
+                                        TextEntry::make('coupon_worker_amount_total')
+                                            ->label('إجمالي مستحقات العاملين')
+                                            ->state(fn (CleaningBooking $record): float => self::acceptedAssignmentsTotal($record, 'worker_amount'))
+                                            ->formatStateUsing(fn ($state): string => self::money($state))
+                                            ->weight('bold')
+                                            ->visible(fn (CleaningBooking $record): bool => self::couponUsed($record)),
                                         TextEntry::make('coupon_price_after')
-                                            ->label('تكلفة الطلب بعد الكوبون')
+                                            ->label('إجمالي العميل بعد الخصم')
                                             ->state(fn (CleaningBooking $record): float => (float) ($record->total_price ?? 0))
                                             ->formatStateUsing(fn ($state): string => self::money($state))
                                             ->weight('bold')
@@ -306,6 +343,19 @@ final class CleaningBookingInfolist
         }
 
         return max(0.0, (float) ($record->total_price ?? 0) + (float) ($record->discount_amount ?? 0));
+    }
+
+    /** @return array<string, float>|null */
+    private static function couponBreakdown(CleaningBooking $record): ?array
+    {
+        $bookingId = (int) $record->getKey();
+
+        if (! array_key_exists($bookingId, self::$couponBreakdownCache)) {
+            self::$couponBreakdownCache[$bookingId] = app(CleaningCouponPricingService::class)
+                ->storedBreakdown($record);
+        }
+
+        return self::$couponBreakdownCache[$bookingId];
     }
 
     private static function platformCoupon(CleaningBooking $record): ?PlatformCoupon

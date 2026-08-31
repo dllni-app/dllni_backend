@@ -127,6 +127,106 @@ final class CleaningCouponPricingService
     }
 
     /**
+     * Return the persisted coupon financial breakdown for admin/support display.
+     *
+     * The booking stores gross service snapshots, net travel/admin values, the
+     * original subtotal, and the final customer discount. Reconstruct the gross
+     * travel/admin components from those persisted values without mutating the
+     * booking or worker assignments so Filament can explain where every amount
+     * went.
+     *
+     * @return array{
+     *     grossServiceAmount: float,
+     *     grossTravelFee: float,
+     *     grossAdminMargin: float,
+     *     grossTotal: float,
+     *     discountAmount: float,
+     *     allocatedDiscountAmount: float,
+     *     platformSubsidyAmount: float,
+     *     adminDiscountAmount: float,
+     *     workerDiscountAmount: float,
+     *     adminMargin: float,
+     *     totalPrice: float
+     * }|null
+     */
+    public function storedBreakdown(CleaningBooking $booking): ?array
+    {
+        $couponId = (int) ($booking->platform_coupon_id ?? 0);
+        if ($couponId <= 0) {
+            return null;
+        }
+
+        $coupon = PlatformCoupon::query()->find($couponId);
+        if (! $coupon instanceof PlatformCoupon) {
+            return null;
+        }
+
+        $grossServiceAmount = round(
+            max(0.0, (float) ($booking->base_price ?? 0))
+            + max(0.0, (float) ($booking->addons_total ?? 0)),
+            2,
+        );
+        $discountAmount = round(max(0.0, (float) ($booking->discount_amount ?? 0)), 2);
+        $grossTotal = round(max(
+            0.0,
+            (float) ($booking->subtotal_before_discount
+                ?? ((float) ($booking->total_price ?? 0) + $discountAmount)),
+        ), 2);
+        $netTravelFee = round(max(0.0, (float) ($booking->travel_fee ?? 0)), 2);
+        $netAdminMargin = round(max(0.0, (float) ($booking->admin_margin_amount ?? 0)), 2);
+        $allocatedDiscountAmount = $this->allocatedDiscountAmount(
+            $coupon,
+            $grossServiceAmount,
+            $discountAmount,
+        );
+        $grossNonServiceAmount = round(max(0.0, $grossTotal - $grossServiceAmount), 2);
+
+        if ($netAdminMargin > 0.0) {
+            $grossAdminMargin = min(
+                $grossNonServiceAmount,
+                $netAdminMargin + $allocatedDiscountAmount,
+            );
+        } else {
+            $componentTotalAfterAllocation = max(0.0, $grossTotal - $allocatedDiscountAmount);
+            $denominator = $componentTotalAfterAllocation - $netTravelFee;
+
+            if (abs($denominator) > self::FACTOR_EPSILON) {
+                $grossAdminMargin = (
+                    ($componentTotalAfterAllocation * $grossNonServiceAmount)
+                    - ($netTravelFee * $grossTotal)
+                ) / $denominator;
+            } else {
+                $grossAdminMargin = $grossNonServiceAmount - $netTravelFee;
+            }
+
+            $grossAdminMargin = min(
+                $grossNonServiceAmount,
+                max(0.0, $grossAdminMargin),
+            );
+        }
+
+        $grossAdminMargin = round(max(0.0, $grossAdminMargin), 2);
+        $grossTravelFee = round(max(0.0, $grossNonServiceAmount - $grossAdminMargin), 2);
+        $adminDiscountAmount = round(min($allocatedDiscountAmount, $grossAdminMargin), 2);
+        $workerDiscountAmount = round(max(0.0, $allocatedDiscountAmount - $adminDiscountAmount), 2);
+        $platformSubsidyAmount = round(max(0.0, $discountAmount - $allocatedDiscountAmount), 2);
+
+        return [
+            'grossServiceAmount' => $grossServiceAmount,
+            'grossTravelFee' => $grossTravelFee,
+            'grossAdminMargin' => $grossAdminMargin,
+            'grossTotal' => $grossTotal,
+            'discountAmount' => $discountAmount,
+            'allocatedDiscountAmount' => $allocatedDiscountAmount,
+            'platformSubsidyAmount' => $platformSubsidyAmount,
+            'adminDiscountAmount' => $adminDiscountAmount,
+            'workerDiscountAmount' => $workerDiscountAmount,
+            'adminMargin' => $netAdminMargin,
+            'totalPrice' => round(max(0.0, (float) ($booking->total_price ?? 0)), 2),
+        ];
+    }
+
+    /**
      * Mutate a booking before it is saved so coupon discounts stay synchronized
      * when worker assignment recalculates travel and administration amounts.
      */

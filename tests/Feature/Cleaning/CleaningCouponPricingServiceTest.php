@@ -68,6 +68,54 @@ it('reduces worker earnings only by percentage points above the administration p
         ->and((float) $assignment->worker_amount)->toBe(850.0);
 });
 
+it('returns a persisted dashboard breakdown that explains the customer and worker totals', function (): void {
+    $coupon = cleaningPercentageCoupon('DASH10', 10);
+    $worker = Worker::factory()->create();
+    $booking = CleaningBooking::withoutEvents(fn (): CleaningBooking => CleaningBooking::factory()->create([
+        'base_price' => 960,
+        'addons_total' => 0,
+        'travel_fee' => 0,
+        'admin_margin_amount' => 240,
+        'total_price' => 1200,
+        'is_pricing_final' => true,
+    ]));
+    $assignment = CleaningBookingWorkerAssignment::query()->create([
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $worker->id,
+        'status' => 'accepted_waiting_for_order_start',
+        'accepted_at' => now(),
+        'room_count' => 1,
+        'rooms_weight' => 1,
+        'service_share_amount' => 960,
+        'travel_fee' => 0,
+        'admin_margin_amount' => 240,
+        'worker_amount' => 720,
+        'currency' => 'SYP',
+    ]);
+
+    $booking->forceFill(['platform_coupon_id' => $coupon->id]);
+    app(CleaningCouponPricingService::class)->applyBeforeSave($booking);
+    $booking->saveQuietly();
+    $booking->refresh();
+    $assignment->refresh();
+
+    $breakdown = app(CleaningCouponPricingService::class)->storedBreakdown($booking);
+
+    expect($breakdown)->not->toBeNull()
+        ->and($breakdown['grossServiceAmount'])->toBe(960.0)
+        ->and($breakdown['grossAdminMargin'])->toBe(240.0)
+        ->and($breakdown['grossTotal'])->toBe(1200.0)
+        ->and($breakdown['discountAmount'])->toBe(120.0)
+        ->and($breakdown['adminDiscountAmount'])->toBe(96.0)
+        ->and($breakdown['platformSubsidyAmount'])->toBe(24.0)
+        ->and($breakdown['workerDiscountAmount'])->toBe(0.0)
+        ->and($breakdown['adminMargin'])->toBe(144.0)
+        ->and($breakdown['totalPrice'])->toBe(1080.0)
+        ->and((float) $assignment->service_share_amount)->toBe(864.0)
+        ->and((float) $assignment->admin_margin_amount)->toBe(144.0)
+        ->and((float) $assignment->worker_amount)->toBe(720.0);
+});
+
 it('keeps fixed coupons amount-based with administration first', function (): void {
     $booking = cleaningCouponBooking();
     $worker = Worker::factory()->create();
