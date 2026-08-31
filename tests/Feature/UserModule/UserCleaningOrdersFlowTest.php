@@ -189,6 +189,25 @@ it('creates an open cleaning order with coupon deducted from provisional admin m
         ->and((float) $booking->discount_amount)->toBe($expectedDiscount)
         ->and((float) $booking->subtotal_before_discount)->toBe($expectedGrossTotal)
         ->and((float) $booking->total_price)->toBe($expectedTotal);
+
+    $workerUser = User::factory()->create();
+    Worker::factory()->create([
+        'user_id' => $workerUser->id,
+        'home_address' => 'Worker home',
+        'home_latitude' => 33.5,
+        'home_longitude' => 36.3,
+    ]);
+    Sanctum::actingAs($workerUser);
+
+    $workerResponse = getJson("/api/v1/cleaning-bookings/{$booking->id}")
+        ->assertOk();
+
+    expect((float) $workerResponse->json('data.serviceShareAmount'))->toBe($serviceAmount)
+        ->and((float) $workerResponse->json('data.adminMargin'))->toBe($expectedAdminMargin)
+        ->and((float) $workerResponse->json('data.workerOffer.serviceShareAmount'))->toBe($serviceAmount)
+        ->and((float) $workerResponse->json('data.workerOffer.adminMarginAmount'))->toBe($expectedAdminMargin)
+        ->and((float) $workerResponse->json('data.discountAmount'))->toBe($expectedDiscount)
+        ->and((float) $workerResponse->json('data.subtotalBeforeDiscount'))->toBe($expectedGrossTotal);
 });
 
 it('creates a deep cleaning order and persists the mode in the response payload', function (): void {
