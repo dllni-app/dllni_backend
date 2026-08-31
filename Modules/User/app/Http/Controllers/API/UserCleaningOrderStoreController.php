@@ -59,7 +59,7 @@ final class UserCleaningOrderStoreController
                     context: [
                         'propertyType' => (string) $order->property_type,
                         'cleaningMode' => $order->property_details['cleaning_mode'] ?? null,
-                        'eventType' => $order->property_details['eventType'] ?? null,
+                        'eventType' => $order->property_details['event_type'] ?? $order->property_details['eventType'] ?? null,
                     ],
                     required: true,
                 );
