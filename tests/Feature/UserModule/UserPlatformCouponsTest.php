@@ -113,7 +113,7 @@ it('checks a platform restaurant coupon against the explicit cart', function ():
         ->assertJsonPath('data.coupon.source', 'platform');
 });
 
-it('previews cleaning percentage coupons from service value and consumes admin margin first', function (): void {
+it('previews cleaning percentage coupons from the full customer total and consumes admin margin first', function (): void {
     $user = User::factory()->create();
     $worker = Worker::factory()->create([
         'home_address' => 'Worker home',
@@ -148,7 +148,7 @@ it('previews cleaning percentage coupons from service value and consumes admin m
         $serviceAmount + (float) $pricing['travelFee'] + (float) $pricing['adminMargin'],
         2,
     );
-    $expectedDiscount = round($serviceAmount * 0.08, 2);
+    $expectedDiscount = round($grossTotal * 0.08, 2);
 
     $response = $this->postJson('/api/v1/user/coupons/check', [
         'section' => PlatformCoupon::SECTION_CLEANING,
