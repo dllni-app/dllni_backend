@@ -178,31 +178,40 @@ final class RepairCleaningCouponPricingCommand extends Command
      */
     private function previewBooking(CleaningBooking $booking): array
     {
-        $breakdown = $this->couponPricingService->storedBreakdown($booking);
+        DB::beginTransaction();
 
-        if (! is_array($breakdown)) {
+        try {
+            $lockedBooking = CleaningBooking::query()
+                ->whereKey($booking->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $lockedBooking instanceof CleaningBooking) {
+                return [
+                    'status' => 'skipped',
+                    'discount' => 0.0,
+                    'admin' => 0.0,
+                    'total' => 0.0,
+                ];
+            }
+
+            $before = $this->financialSnapshot($lockedBooking);
+
+            $this->couponPricingService->applyBeforeSave($lockedBooking);
+            $lockedBooking->saveQuietly();
+            $lockedBooking->refresh();
+
+            $after = $this->financialSnapshot($lockedBooking);
+
             return [
-                'status' => 'skipped',
-                'discount' => (float) ($booking->discount_amount ?? 0),
-                'admin' => (float) ($booking->admin_margin_amount ?? 0),
-                'total' => (float) ($booking->total_price ?? 0),
+                'status' => $before !== $after ? 'changed' : 'unchanged',
+                'discount' => (float) $lockedBooking->discount_amount,
+                'admin' => (float) $lockedBooking->admin_margin_amount,
+                'total' => (float) $lockedBooking->total_price,
             ];
+        } finally {
+            DB::rollBack();
         }
-
-        $expectedDiscount = round((float) $breakdown['discountAmount'], 2);
-        $expectedAdmin = round((float) $breakdown['adminMargin'], 2);
-        $expectedTotal = round((float) $breakdown['totalPrice'], 2);
-        $changed = $this->moneyChanged((float) ($booking->discount_amount ?? 0), $expectedDiscount)
-            || $this->moneyChanged((float) ($booking->admin_margin_amount ?? 0), $expectedAdmin)
-            || $this->moneyChanged((float) ($booking->total_price ?? 0), $expectedTotal)
-            || $this->legacyAssignmentPricingExists($booking);
-
-        return [
-            'status' => $changed ? 'changed' : 'unchanged',
-            'discount' => $expectedDiscount,
-            'admin' => $expectedAdmin,
-            'total' => $expectedTotal,
-        ];
     }
 
     /**
@@ -287,25 +296,6 @@ final class RepairCleaningCouponPricingCommand extends Command
         ];
     }
 
-    private function legacyAssignmentPricingExists(CleaningBooking $booking): bool
-    {
-        $breakdown = $this->couponPricingService->storedBreakdown($booking);
-        if (! is_array($breakdown)) {
-            return false;
-        }
-
-        $grossService = max(0.0, (float) ($breakdown['grossServiceAmount'] ?? 0));
-        $serviceNetFactor = max(0.0, min(1.0, (float) ($breakdown['assignmentWorkerNetFactor'] ?? 1)));
-
-        if ($serviceNetFactor >= 1.0 || $grossService <= 0.0) {
-            return false;
-        }
-
-        return $booking->workerAssignments()
-            ->where('service_share_amount', '<', $grossService)
-            ->exists();
-    }
-
     /** @param array<string, mixed> $result */
     private function resultRow(CleaningBooking $booking, array $result): array
     {
@@ -321,11 +311,6 @@ final class RepairCleaningCouponPricingCommand extends Command
             number_format((float) $result['total'], 2),
             $result['status'],
         ];
-    }
-
-    private function moneyChanged(float $left, float $right): bool
-    {
-        return abs($left - $right) > 0.01;
     }
 
     /** @return array<int, int> */
