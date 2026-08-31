@@ -3,7 +3,9 @@
 declare(strict_types=1);
 
 use App\Models\PlatformCoupon;
+use App\Models\User;
 use App\Models\Worker;
+use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Services\CleaningCouponPricingService;
@@ -117,6 +119,38 @@ it('returns a persisted dashboard breakdown that explains the customer and worke
         ->and((float) $assignment->service_share_amount)->toBe(960.0)
         ->and((float) $assignment->admin_margin_amount)->toBe(144.0)
         ->and((float) $assignment->worker_amount)->toBe(816.0);
+});
+
+it('returns the corrected coupon totals through the user cleaning order api', function (): void {
+    $customer = User::factory()->create();
+    $coupon = cleaningPercentageCoupon('USERAPI10', 10);
+    $booking = CleaningBooking::withoutEvents(fn (): CleaningBooking => CleaningBooking::factory()->create([
+        'customer_id' => $customer->id,
+        'base_price' => 960,
+        'addons_total' => 0,
+        'travel_fee' => 0,
+        'admin_margin_amount' => 144,
+        'subtotal_before_discount' => 1200,
+        'discount_amount' => 96,
+        'total_price' => 1104,
+        'platform_coupon_id' => $coupon->id,
+        'platform_coupon_code' => $coupon->code,
+        'is_pricing_final' => true,
+    ]));
+
+    Sanctum::actingAs($customer);
+
+    $this->getJson("/api/v1/user/cleaning/orders/{$booking->id}")
+        ->assertOk()
+        ->assertJsonPath('data.basePrice', 960)
+        ->assertJsonPath('data.servicePrice', 960)
+        ->assertJsonPath('data.adminMargin', 144)
+        ->assertJsonPath('data.totalPrice', 1104)
+        ->assertJsonPath('data.discountAmount', 96)
+        ->assertJsonPath('data.subtotalBeforeDiscount', 1200)
+        ->assertJsonPath('data.bookingBasePrice', 960)
+        ->assertJsonPath('data.bookingAdminMargin', 144)
+        ->assertJsonPath('data.bookingTotalPrice', 1104);
 });
 
 it('does not reapply the coupon to worker shares on a later pricing save', function (): void {
