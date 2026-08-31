@@ -29,11 +29,11 @@ it('applies percentage cleaning coupons to admin first and only then to service 
             'grossTravelFee' => 5000.0,
             'grossAdminMargin' => 10000.0,
             'grossTotal' => 115000.0,
-            'discountAmount' => 20000.0,
-            'serviceAmount' => 90000.0,
+            'discountAmount' => 23000.0,
+            'serviceAmount' => 87000.0,
             'travelFee' => 5000.0,
             'adminMargin' => 0.0,
-            'totalPrice' => 95000.0,
+            'totalPrice' => 92000.0,
         ]);
 });
 
@@ -109,12 +109,12 @@ it('synchronizes the discounted booking and worker financial shares when a coupo
     $assignment->refresh();
 
     expect((float) $booking->subtotal_before_discount)->toBe(115000.0)
-        ->and((float) $booking->discount_amount)->toBe(20000.0)
+        ->and((float) $booking->discount_amount)->toBe(23000.0)
         ->and((float) $booking->travel_fee)->toBe(5000.0)
         ->and((float) $booking->admin_margin_amount)->toBe(0.0)
-        ->and((float) $booking->total_price)->toBe(95000.0)
-        ->and((float) $assignment->service_share_amount)->toBe(90000.0)
+        ->and((float) $booking->total_price)->toBe(92000.0)
+        ->and((float) $assignment->service_share_amount)->toBe(87000.0)
         ->and((float) $assignment->travel_fee)->toBe(5000.0)
         ->and((float) $assignment->admin_margin_amount)->toBe(0.0)
-        ->and((float) $assignment->worker_amount)->toBe(95000.0);
+        ->and((float) $assignment->worker_amount)->toBe(92000.0);
 });
