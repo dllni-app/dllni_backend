@@ -457,7 +457,8 @@ final class CleaningBookingResource extends JsonResource
 
     private function netWorkerAmount(float $serviceShare, float $travelFee, float $adminMargin): float
     {
-        return max(0.0, round($serviceShare + $travelFee - $adminMargin, 2));
+        // The administration margin is charged on top of the worker share.
+        return max(0.0, round($serviceShare + $travelFee, 2));
     }
 
     /** @return array<int, CleaningBookingWorkerAssignment> */
