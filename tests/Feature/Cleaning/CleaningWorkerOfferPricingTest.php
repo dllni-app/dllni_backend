@@ -258,10 +258,10 @@ it('uses the discounted admin margin in pending worker api offers without reduci
         'base_price' => 960,
         'addons_total' => 0,
         'travel_fee' => 0,
-        'admin_margin_amount' => 144,
+        'admin_margin_amount' => 120,
         'subtotal_before_discount' => 1200,
-        'discount_amount' => 96,
-        'total_price' => 1104,
+        'discount_amount' => 120,
+        'total_price' => 1080,
         'platform_coupon_id' => $coupon->id,
         'platform_coupon_code' => $coupon->code,
         'is_pricing_final' => false,
@@ -278,14 +278,14 @@ it('uses the discounted admin margin in pending worker api offers without reduci
     $response->assertOk()
         ->assertJsonPath('data.basePrice', 960)
         ->assertJsonPath('data.serviceShareAmount', 960)
-        ->assertJsonPath('data.adminMargin', 144)
+        ->assertJsonPath('data.adminMargin', 120)
         ->assertJsonPath('data.workerOffer.serviceShareAmount', 960)
-        ->assertJsonPath('data.workerOffer.adminMarginAmount', 144)
+        ->assertJsonPath('data.workerOffer.adminMarginAmount', 120)
         ->assertJsonPath('data.myAssignment.serviceShareAmount', 960)
-        ->assertJsonPath('data.myAssignment.adminMarginAmount', 144)
+        ->assertJsonPath('data.myAssignment.adminMarginAmount', 120)
         ->assertJsonPath('data.couponApplied', true)
         ->assertJsonPath('data.couponCode', 'WORKER10')
-        ->assertJsonPath('data.discountAmount', 96)
+        ->assertJsonPath('data.discountAmount', 120)
         ->assertJsonPath('data.subtotalBeforeDiscount', 1200);
 });
 
@@ -334,8 +334,8 @@ it('reduces pending worker service share only by coupon excess above admin margi
         'travel_fee' => 0,
         'admin_margin_amount' => 0,
         'subtotal_before_discount' => 1100,
-        'discount_amount' => 150,
-        'total_price' => 950,
+        'discount_amount' => 165,
+        'total_price' => 935,
         'platform_coupon_id' => $coupon->id,
         'platform_coupon_code' => $coupon->code,
         'is_pricing_final' => false,
@@ -350,9 +350,9 @@ it('reduces pending worker service share only by coupon excess above admin margi
     $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}");
 
     $response->assertOk()
-        ->assertJsonPath('data.basePrice', 950)
-        ->assertJsonPath('data.serviceShareAmount', 950)
+        ->assertJsonPath('data.basePrice', 935)
+        ->assertJsonPath('data.serviceShareAmount', 935)
         ->assertJsonPath('data.adminMargin', 0)
-        ->assertJsonPath('data.workerOffer.serviceShareAmount', 950)
+        ->assertJsonPath('data.workerOffer.serviceShareAmount', 935)
         ->assertJsonPath('data.workerOffer.adminMarginAmount', 0);
 });
