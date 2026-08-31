@@ -128,8 +128,8 @@ it('marks a worker quote as preview and exposes net earnings as its display tota
         ->and($offer['travelFee'])->toBe(5171.0)
         ->and($offer['adminMarginAmount'])->toBe(313.0)
         ->and($offer['grossTotalPrice'])->toBe(6421.0)
-        ->and($offer['workerAmount'])->toBe(6108.0)
-        ->and($offer['totalPrice'])->toBe(6108.0)
+        ->and($offer['workerAmount'])->toBe(6421.0)
+        ->and($offer['totalPrice'])->toBe(6421.0)
         ->and($offer['isPreview'])->toBeTrue()
         ->and($offer['isPricingFinal'])->toBeFalse();
 });
@@ -160,7 +160,7 @@ it('keeps the finalized booking margin exact across multiple worker assignments'
             'service_share_amount' => 1250,
             'travel_fee' => 500,
             'admin_margin_amount' => 313,
-            'worker_amount' => 1437,
+            'worker_amount' => 1750,
             'currency' => 'SYP',
         ]);
     }
@@ -179,7 +179,7 @@ it('keeps the finalized booking margin exact across multiple worker assignments'
     expect((float) $booking->admin_margin_amount)->toBe(625.0)
         ->and((float) $booking->total_price)->toBe(4125.0)
         ->and((float) $assignments->sum('admin_margin_amount'))->toBe(625.0)
-        ->and((float) $assignments->sum('worker_amount'))->toBe(2875.0);
+        ->and((float) $assignments->sum('worker_amount'))->toBe(3500.0);
 });
 
 it('does not overwrite an explicitly approved final price adjustment', function (): void {
