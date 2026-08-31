@@ -134,6 +134,72 @@ it('repairs the intermediate service-based coupon data without reducing service 
         ->and((float) $assignment->worker_amount)->toBe(960.0);
 });
 
+it('repairs a correct coupon booking whose worker due still subtracts admin margin', function (): void {
+    $coupon = PlatformCoupon::query()->create([
+        'code' => 'REPAIR-WORKER-DUE',
+        'title_ar' => 'كوبون تنظيف',
+        'title_en' => 'Cleaning coupon',
+        'description_ar' => 'اختبار',
+        'description_en' => 'Test',
+        'section' => PlatformCoupon::SECTION_CLEANING,
+        'discount_type' => PlatformCoupon::DISCOUNT_PERCENTAGE,
+        'discount_value' => 10,
+        'max_discount_amount' => null,
+        'min_order_amount' => null,
+        'audience_type' => PlatformCoupon::AUDIENCE_ALL_USERS,
+        'total_usage_limit' => null,
+        'per_user_usage_limit' => null,
+        'used_count' => 0,
+        'starts_at' => now()->subDay(),
+        'expires_at' => now()->addDay(),
+        'is_active' => true,
+    ]);
+    $worker = Worker::factory()->create();
+    $booking = CleaningBooking::withoutEvents(fn (): CleaningBooking => CleaningBooking::factory()->create([
+        'status' => CleaningBookingStatus::WorkerAssigned,
+        'worker_id' => $worker->id,
+        'number_of_workers' => 1,
+        'base_price' => 960,
+        'addons_total' => 0,
+        'travel_fee' => 0,
+        'admin_margin_amount' => 120,
+        'subtotal_before_discount' => 1200,
+        'discount_amount' => 120,
+        'total_price' => 1080,
+        'platform_coupon_id' => $coupon->id,
+        'platform_coupon_code' => $coupon->code,
+        'is_pricing_final' => true,
+    ]));
+    $assignment = CleaningBookingWorkerAssignment::query()->create([
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $worker->id,
+        'status' => 'accepted_waiting_for_order_start',
+        'accepted_at' => now(),
+        'room_count' => 1,
+        'rooms_weight' => 1,
+        'service_share_amount' => 960,
+        'travel_fee' => 0,
+        'admin_margin_amount' => 120,
+        'worker_amount' => 840,
+        'currency' => 'SYP',
+    ]);
+
+    Artisan::call('cleaning:repair-coupon-pricing', [
+        '--apply' => true,
+        '--ids' => [$booking->id],
+    ]);
+
+    $booking->refresh();
+    $assignment->refresh();
+
+    expect((float) $booking->discount_amount)->toBe(120.0)
+        ->and((float) $booking->admin_margin_amount)->toBe(120.0)
+        ->and((float) $booking->total_price)->toBe(1080.0)
+        ->and((float) $assignment->service_share_amount)->toBe(960.0)
+        ->and((float) $assignment->admin_margin_amount)->toBe(120.0)
+        ->and((float) $assignment->worker_amount)->toBe(960.0);
+});
+
 it('is idempotent after legacy coupon data has been repaired', function (): void {
     [$booking, $assignment] = legacyCouponBookingForRepair('REPAIR-IDEMPOTENT');
 
