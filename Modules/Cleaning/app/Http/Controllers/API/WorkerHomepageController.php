@@ -354,7 +354,7 @@ final class WorkerHomepageController
             return $this->assignmentNetAmount($assignment);
         }
 
-        return max(0.0, round($this->bookingGrossAmount($booking, $workerId) - (float) ($booking->admin_margin_amount ?? 0), 2));
+        return max(0.0, $this->bookingGrossAmount($booking, $workerId));
     }
 
     private function preferredWorkType(object $worker): WorkerPreferredWorkType
@@ -408,7 +408,7 @@ final class WorkerHomepageController
 
     private function assignmentNetAmount(CleaningBookingWorkerAssignment $assignment): float
     {
-        return max(0.0, round($this->assignmentGrossAmount($assignment) - (float) $assignment->admin_margin_amount, 2));
+        return max(0.0, $this->assignmentGrossAmount($assignment));
     }
 
     private function newRequestEligibility(object $worker, array $depositSummary): array
