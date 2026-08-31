@@ -64,7 +64,7 @@ it('returns the same worker financial values used by the Filament dashboard', fu
         'service_share_amount' => 2000,
         'travel_fee' => 250,
         'admin_margin_amount' => 500,
-        'worker_amount' => 1750,
+        'worker_amount' => 2250,
         'currency' => 'SYP',
     ]);
 
