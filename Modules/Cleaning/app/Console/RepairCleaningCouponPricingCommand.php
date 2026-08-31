@@ -20,7 +20,7 @@ final class RepairCleaningCouponPricingCommand extends Command
         {--codes=* : Cleaning booking numbers; repeat the option or pass comma-separated codes}
         {--coupon-codes=* : Coupon codes; repeat the option or pass comma-separated codes}';
 
-    protected $description = 'Repair legacy cleaning coupon pricing snapshots and worker assignment amounts using the current admin-first coupon rule';
+    protected $description = 'Repair legacy cleaning coupons: calculate percentage from the full customer total, consume admin margin first, then reduce service only by any remaining discount';
 
     public function __construct(
         private readonly CleaningCouponPricingService $couponPricingService,
@@ -133,6 +133,7 @@ final class RepairCleaningCouponPricingCommand extends Command
         }
 
         $mode = $apply ? 'APPLY' : 'DRY RUN';
+        $this->line('Rule: coupon percentage = % of gross customer total; discount is taken from admin first, then service only for the remainder.');
         $this->info(
             sprintf(
                 '%s complete. matched=%d changed=%d unchanged=%d skipped=%d failed=%d',
