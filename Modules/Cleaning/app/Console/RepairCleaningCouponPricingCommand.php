@@ -20,7 +20,7 @@ final class RepairCleaningCouponPricingCommand extends Command
         {--codes=* : Cleaning booking numbers; repeat the option or pass comma-separated codes}
         {--coupon-codes=* : Coupon codes; repeat the option or pass comma-separated codes}';
 
-    protected $description = 'Repair legacy cleaning coupons: calculate percentage from the full customer total, consume admin margin first, then reduce service only by any remaining discount';
+    protected $description = 'Repair legacy cleaning coupon pricing and worker dues: discount the full customer total, consume admin first, and never subtract admin margin again from worker earnings';
 
     public function __construct(
         private readonly CleaningCouponPricingService $couponPricingService,
@@ -104,6 +104,8 @@ final class RepairCleaningCouponPricingCommand extends Command
                             '-',
                             number_format((float) ($booking->total_price ?? 0), 2),
                             '-',
+                            number_format($this->workerDueTotal($booking), 2),
+                            '-',
                             'failed',
                         ];
                     }
@@ -124,6 +126,8 @@ final class RepairCleaningCouponPricingCommand extends Command
                 'New admin',
                 'Old total',
                 'New total',
+                'Old worker due',
+                'New worker due',
                 'Status',
             ], $rows);
         }
@@ -133,7 +137,7 @@ final class RepairCleaningCouponPricingCommand extends Command
         }
 
         $mode = $apply ? 'APPLY' : 'DRY RUN';
-        $this->line('Rule: coupon percentage = % of gross customer total; discount is taken from admin first, then service only for the remainder.');
+        $this->line('Rule: coupon percentage = % of gross customer total; discount is funded by admin first, then service only for any remainder. Worker due = service share + travel, with no second admin deduction.');
         $this->info(
             sprintf(
                 '%s complete. matched=%d changed=%d unchanged=%d skipped=%d failed=%d',
@@ -174,7 +178,8 @@ final class RepairCleaningCouponPricingCommand extends Command
      *     status:string,
      *     discount:float,
      *     admin:float,
-     *     total:float
+     *     total:float,
+     *     workerDue:float
      * }
      */
     private function previewBooking(CleaningBooking $booking): array
@@ -193,6 +198,7 @@ final class RepairCleaningCouponPricingCommand extends Command
                     'discount' => 0.0,
                     'admin' => 0.0,
                     'total' => 0.0,
+                    'workerDue' => 0.0,
                 ];
             }
 
@@ -209,6 +215,7 @@ final class RepairCleaningCouponPricingCommand extends Command
                 'discount' => (float) $lockedBooking->discount_amount,
                 'admin' => (float) $lockedBooking->admin_margin_amount,
                 'total' => (float) $lockedBooking->total_price,
+                'workerDue' => $this->workerDueTotal($lockedBooking),
             ];
         } finally {
             DB::rollBack();
@@ -220,7 +227,8 @@ final class RepairCleaningCouponPricingCommand extends Command
      *     status:string,
      *     discount:float,
      *     admin:float,
-     *     total:float
+     *     total:float,
+     *     workerDue:float
      * }
      */
     private function repairBooking(int $bookingId): array
@@ -246,6 +254,7 @@ final class RepairCleaningCouponPricingCommand extends Command
                     'discount' => (float) ($booking->discount_amount ?? 0),
                     'admin' => (float) ($booking->admin_margin_amount ?? 0),
                     'total' => (float) ($booking->total_price ?? 0),
+                    'workerDue' => $this->workerDueTotal($booking),
                 ];
             }
 
@@ -263,6 +272,7 @@ final class RepairCleaningCouponPricingCommand extends Command
                 'discount' => (float) $booking->discount_amount,
                 'admin' => (float) $booking->admin_margin_amount,
                 'total' => (float) $booking->total_price,
+                'workerDue' => $this->workerDueTotal($booking),
             ];
         });
     }
@@ -310,8 +320,17 @@ final class RepairCleaningCouponPricingCommand extends Command
             number_format((float) $result['admin'], 2),
             number_format((float) ($booking->total_price ?? 0), 2),
             number_format((float) $result['total'], 2),
+            number_format($this->workerDueTotal($booking), 2),
+            number_format((float) ($result['workerDue'] ?? 0), 2),
             $result['status'],
         ];
+    }
+
+    private function workerDueTotal(CleaningBooking $booking): float
+    {
+        return round((float) $booking->workerAssignments()
+            ->selectRaw('COALESCE(SUM(COALESCE(service_share_amount, 0) + COALESCE(travel_fee, 0)), 0) as total_due')
+            ->value('total_due'), 2);
     }
 
     /** @return array<int, int> */
