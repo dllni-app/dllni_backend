@@ -8,6 +8,7 @@ use App\Models\PlatformCoupon;
 use App\Models\PlatformCouponConstraint;
 use App\Models\PlatformCouponRedemption;
 use App\Models\User;
+use App\Models\Worker;
 use App\Notifications\PlatformCouponAvailableNotification;
 use App\Services\Coupons\PlatformCouponEligibilityService;
 use App\Services\Coupons\PlatformCouponRedemptionService;
@@ -15,6 +16,7 @@ use Database\Factories\ProductFactory;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Laravel\Sanctum\Sanctum;
+use Modules\User\Services\UserCleaningOrderEstimationService;
 use Modules\Resturants\Models\Cart;
 use Modules\Resturants\Models\CartItem;
 use Modules\Resturants\Models\Order;
@@ -109,6 +111,58 @@ it('checks a platform restaurant coupon against the explicit cart', function ():
         ->assertJsonPath('data.amounts.discount', 20)
         ->assertJsonPath('data.amounts.total', 100)
         ->assertJsonPath('data.coupon.source', 'platform');
+});
+
+it('previews cleaning percentage coupons from service value and consumes admin margin first', function (): void {
+    $user = User::factory()->create();
+    $worker = Worker::factory()->create([
+        'home_address' => 'Worker home',
+        'home_latitude' => 33.5,
+        'home_longitude' => 36.3,
+    ]);
+    Sanctum::actingAs($user);
+
+    PlatformCoupon::query()->create(couponData([
+        'code' => 'CLEAN8',
+        'section' => PlatformCoupon::SECTION_CLEANING,
+        'discount_type' => PlatformCoupon::DISCOUNT_PERCENTAGE,
+        'discount_value' => 8,
+    ]));
+
+    $propertyDetails = [
+        'rooms' => 1,
+        'bathrooms' => 1,
+        'kitchens' => 1,
+        'living_room_size' => 'medium',
+        'cleaning_mode' => 'regular',
+    ];
+    $pricing = app(UserCleaningOrderEstimationService::class)->price(
+        'apartment',
+        $propertyDetails,
+        33.6,
+        36.3,
+        $worker->id,
+    );
+    $serviceAmount = round((float) $pricing['basePrice'] + (float) $pricing['addonsTotal'], 2);
+    $grossTotal = round(
+        $serviceAmount + (float) $pricing['travelFee'] + (float) $pricing['adminMargin'],
+        2,
+    );
+    $expectedDiscount = round($serviceAmount * 0.08, 2);
+
+    $response = $this->postJson('/api/v1/user/coupons/check', [
+        'section' => PlatformCoupon::SECTION_CLEANING,
+        'couponCode' => 'CLEAN8',
+        'propertyType' => 'apartment',
+        'propertyDetails' => $propertyDetails,
+        'addressLatitude' => 33.6,
+        'addressLongitude' => 36.3,
+        'preferredWorkerId' => $worker->id,
+    ])->assertOk();
+
+    expect((float) $response->json('data.amounts.subtotal'))->toBe($grossTotal)
+        ->and((float) $response->json('data.amounts.discount'))->toBe($expectedDiscount)
+        ->and((float) $response->json('data.amounts.total'))->toBe(round($grossTotal - $expectedDiscount, 2));
 });
 
 it('enforces cleaning property mode and event constraints', function (): void {
