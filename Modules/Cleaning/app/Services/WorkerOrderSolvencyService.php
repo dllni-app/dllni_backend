@@ -27,6 +27,7 @@ final class WorkerOrderSolvencyService
 
     public function __construct(
         private readonly CleaningPricingCalculator $pricingCalculator,
+        private readonly CleaningCouponPricingService $couponPricingService,
         private readonly DepositService $depositService,
         private readonly WorkerDebtService $debtService,
         private readonly WorkerBookingScheduleConflictService $scheduleConflictService,
@@ -298,11 +299,26 @@ final class WorkerOrderSolvencyService
         ?CleaningBookingWorkerAssignment $assignment = null,
     ): array {
         $workerCount = max(1, (int) ($booking->number_of_workers ?? 1));
-        $subtotal = round(
+        $grossServiceSubtotal = round(
             (float) ($booking->base_price ?? 0) + (float) ($booking->addons_total ?? 0),
             2,
         );
-        $targetAdminMargin = (float) $this->pricingCalculator->provisional($subtotal, 0.0)['adminMargin'];
+        $subtotal = $grossServiceSubtotal;
+        $targetAdminMargin = (float) $this->pricingCalculator->provisional($grossServiceSubtotal, 0.0)['adminMargin'];
+
+        // Pending worker offers must use the same coupon allocation already shown
+        // to the customer. If the coupon fits inside the administration margin,
+        // the worker service share stays unchanged and only admin margin drops.
+        // If the coupon exceeds the admin margin, only the excess reduces the
+        // service share. Travel remains outside the coupon calculation.
+        if ((int) ($booking->platform_coupon_id ?? 0) > 0) {
+            $couponBreakdown = $this->couponPricingService->storedBreakdown($booking);
+
+            if (is_array($couponBreakdown)) {
+                $subtotal = round(max(0.0, (float) ($couponBreakdown['serviceAmount'] ?? $grossServiceSubtotal)), 2);
+                $targetAdminMargin = round(max(0.0, (float) ($couponBreakdown['adminMargin'] ?? $targetAdminMargin)), 2);
+            }
+        }
 
         if ((string) $booking->property_type === 'event_assistance') {
             return [
