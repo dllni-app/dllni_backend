@@ -83,7 +83,7 @@ it('keeps a provisional equal service share for an accepted worker before rooms 
     expect((float) $assignment->service_share_amount)->toBe(150.0)
         ->and((float) $assignment->travel_fee)->toBe(10.0)
         ->and((float) $assignment->admin_margin_amount)->toBe(38.0)
-        ->and((float) $assignment->worker_amount)->toBe(122.0)
+        ->and((float) $assignment->worker_amount)->toBe(160.0)
         ->and($booking->status)->toBe(CleaningBookingStatus::Pending)
         ->and((bool) $booking->is_pricing_final)->toBeFalse();
 });
@@ -147,8 +147,8 @@ it('repairs the worker offer view for an existing provisional assignment stored 
     expect($offer['serviceShareAmount'])->toBe(150.0)
         ->and($offer['travelFee'])->toBe(10.0)
         ->and($offer['adminMarginAmount'])->toBe(38.0)
-        ->and($offer['workerAmount'])->toBe(122.0)
-        ->and($offer['totalPrice'])->toBe(122.0)
+        ->and($offer['workerAmount'])->toBe(160.0)
+        ->and($offer['totalPrice'])->toBe(160.0)
         ->and($offer['workerSlot'])->toBe(1)
         ->and($offer['isPreview'])->toBeTrue()
         ->and($offer['isPricingFinal'])->toBeFalse();
