@@ -329,8 +329,7 @@ final class RepairCleaningCouponPricingCommand extends Command
     private function workerDueTotal(CleaningBooking $booking): float
     {
         return round((float) $booking->workerAssignments()
-            ->selectRaw('COALESCE(SUM(COALESCE(service_share_amount, 0) + COALESCE(travel_fee, 0)), 0) as total_due')
-            ->value('total_due'), 2);
+            ->sum(DB::raw('COALESCE(service_share_amount, 0) + COALESCE(travel_fee, 0)')), 2);
     }
 
     /** @return array<int, int> */
