@@ -125,47 +125,7 @@ final class CleaningBookingInfolist
                                             ->visible(fn ($record): bool => ! self::isEventAssistance($record)),
                                     ])
                                     ->columns(3),
-                                Section::make('العاملون المقبولون')
-                                    ->schema([
-                                        RepeatableEntry::make('acceptedWorkerAssignments')
-                                            ->label('تعيينات العاملين المقبولين')
-                                            ->schema([
-                                                TextEntry::make('worker.first_name')->label('العامل المقبول')->placeholder('-'),
-                                                TextEntry::make('status')
-                                                    ->label('الحالة')
-                                                    ->badge()
-                                                    ->formatStateUsing(fn ($state): string => self::workerAssignmentStatusLabel($state))
-                                                    ->color(fn ($state): string => self::workerAssignmentStatusColor($state)),
-                                                TextEntry::make('accepted_at')
-                                                    ->label('تاريخ القبول')
-                                                    ->formatStateUsing(fn ($state): string => self::dateTime($state))
-                                                    ->placeholder('-'),
-                                                TextEntry::make('room_count')
-                                                    ->label('عدد الغرف')
-                                                    ->formatStateUsing(fn ($state): string => self::integer($state))
-                                                    ->placeholder('-')
-                                                    ->visible(fn (CleaningBookingWorkerAssignment $record): bool => ! self::isEventAssistance($record->booking)),
-                                                TextEntry::make('rooms_weight')
-                                                    ->label('وزن الغرف')
-                                                    ->formatStateUsing(fn ($state): string => self::integer($state))
-                                                    ->placeholder('-')
-                                                    ->visible(fn (CleaningBookingWorkerAssignment $record): bool => ! self::isEventAssistance($record->booking)),
-                                                TextEntry::make('service_share_amount')->label('حصة الخدمة')->formatStateUsing(fn ($state): string => self::money($state)),
-                                                TextEntry::make('travel_fee')->label('رسوم التنقل')->formatStateUsing(fn ($state): string => self::money($state)),
-                                                TextEntry::make('admin_margin_amount')->label('صافي هامش الإدارة')->formatStateUsing(fn ($state): string => self::money($state)),
-                                                TextEntry::make('worker_amount')->label('مستحقات العامل')->formatStateUsing(fn ($state): string => self::money($state)),
-                                            ])
-                                            ->columns(4),
-                                    ])
-                                    ->visible(fn ($record): bool => $record->acceptedWorkerAssignments()->exists()),
-                                Section::make('تفصيل المستحقات')
-                                    ->schema([
-                                        TextEntry::make('worker_share_total')->label('إجمالي حصة العامل')->state(fn ($record): string => self::money(self::acceptedAssignmentsTotal($record, 'service_share_amount'))),
-                                        TextEntry::make('worker_travel_total')->label('إجمالي التنقل للعامل')->state(fn ($record): string => self::money(self::acceptedAssignmentsTotal($record, 'travel_fee'))),
-                                        TextEntry::make('worker_admin_total')->label('إجمالي هامش الإدارة للعامل')->state(fn ($record): string => self::money(self::acceptedAssignmentsTotal($record, 'admin_margin_amount'))),
-                                        TextEntry::make('worker_amount_total')->label('مستحقات العامل')->state(fn ($record): string => self::money(self::acceptedAssignmentsTotal($record, 'worker_amount'))),
-                                    ])
-                                    ->columns(2),
+
                             ])
                             ->columnSpan([
                                 'default' => 12,
@@ -173,87 +133,69 @@ final class CleaningBookingInfolist
                             ]),
                         Group::make()
                             ->schema([
-                                Section::make('التسعير')
+                                Section::make('الملخص المالي')
+                                    ->description('الأرقام النهائية التي يحتاجها مدير المنصة لمراجعة الطلب وحصص الأطراف.')
                                     ->schema([
-                                        TextEntry::make('base_price')->label('السعر الأساسي')->formatStateUsing(fn ($state): string => self::money($state)),
-                                        TextEntry::make('addons_total')->label('الإضافات')->formatStateUsing(fn ($state): string => self::money($state)),
-                                        TextEntry::make('travel_fee')->label('رسوم التنقل')->formatStateUsing(fn ($state): string => self::money($state)),
-                                        TextEntry::make('travel_distance_km')->label('مسافة التنقل (كم)')->formatStateUsing(fn ($state): string => self::integer($state))->placeholder('-'),
-                                        TextEntry::make('admin_margin_amount')->label('صافي هامش الإدارة')->formatStateUsing(fn ($state): string => self::money($state)),
-                                        TextEntry::make('total_price')->label('إجمالي العميل')->formatStateUsing(fn ($state): string => self::money($state))->weight('bold'),
+                                        TextEntry::make('financial_service')
+                                            ->label('قيمة الخدمة')
+                                            ->state(fn (CleaningBooking $record): string => self::financialServiceSummary($record)),
+                                        TextEntry::make('financial_travel')
+                                            ->label('رسوم التنقل')
+                                            ->state(fn (CleaningBooking $record): string => self::money($record->travel_fee))
+                                            ->visible(fn (CleaningBooking $record): bool => (float) ($record->travel_fee ?? 0) > 0),
+                                        TextEntry::make('financial_admin')
+                                            ->label('هامش الإدارة')
+                                            ->state(fn (CleaningBooking $record): string => self::financialAdminSummary($record)),
+                                        TextEntry::make('financial_coupon')
+                                            ->label('الكوبون')
+                                            ->state(fn (CleaningBooking $record): string => self::financialCouponSummary($record))
+                                            ->visible(fn (CleaningBooking $record): bool => self::couponUsed($record)),
+                                        TextEntry::make('financial_before_coupon')
+                                            ->label('قبل الكوبون')
+                                            ->state(fn (CleaningBooking $record): string => self::money(self::priceBeforeCoupon($record)))
+                                            ->visible(fn (CleaningBooking $record): bool => self::couponUsed($record)),
+                                        TextEntry::make('financial_customer_total')
+                                            ->label('المطلوب من العميل')
+                                            ->state(fn (CleaningBooking $record): string => self::money(
+                                                self::couponUsed($record)
+                                                    ? (self::couponBreakdown($record)['totalPrice'] ?? $record->total_price)
+                                                    : $record->total_price
+                                            ))
+                                            ->weight('bold'),
                                     ])
                                     ->columns(2),
-                                Section::make('الكوبون والخصم')
-                                    ->description('يُخصم الكوبون من هامش الإدارة أولاً، ولا تنخفض حصة الخدمة الخاصة بالعمال إلا إذا تجاوزت قيمة الخصم هامش الإدارة.')
+                                Section::make('حصص العاملين')
+                                    ->description('القيم الفعلية المعتمدة لكل عامل في هذا الطلب.')
                                     ->schema([
-                                        TextEntry::make('coupon_used_status')
-                                            ->label('تم استخدام كوبون؟')
-                                            ->state(fn (CleaningBooking $record): string => self::couponUsed($record) ? 'نعم' : 'لا')
-                                            ->badge()
-                                            ->color(fn (CleaningBooking $record): string => self::couponUsed($record) ? 'success' : 'gray'),
-                                        TextEntry::make('coupon_code_display')
-                                            ->label('كود الكوبون')
-                                            ->state(fn (CleaningBooking $record): string => self::couponCode($record))
-                                            ->visible(fn (CleaningBooking $record): bool => self::couponUsed($record)),
-                                        TextEntry::make('coupon_type_display')
-                                            ->label('نوع الخصم')
-                                            ->state(fn (CleaningBooking $record): string => self::couponTypeLabel($record))
-                                            ->visible(fn (CleaningBooking $record): bool => self::couponUsed($record)),
-                                        TextEntry::make('coupon_value_display')
-                                            ->label('نسبة/قيمة الكوبون')
-                                            ->state(fn (CleaningBooking $record): string => self::couponValueLabel($record))
-                                            ->visible(fn (CleaningBooking $record): bool => self::couponUsed($record)),
-                                        TextEntry::make('coupon_price_before')
-                                            ->label('تكلفة الطلب قبل الكوبون')
-                                            ->state(fn (CleaningBooking $record): float => self::priceBeforeCoupon($record))
-                                            ->formatStateUsing(fn ($state): string => self::money($state))
-                                            ->visible(fn (CleaningBooking $record): bool => self::couponUsed($record)),
-                                        TextEntry::make('coupon_discount_amount')
-                                            ->label('قيمة الخصم الفعلية')
-                                            ->state(fn (CleaningBooking $record): float => (float) (self::couponBreakdown($record)['discountAmount'] ?? $record->discount_amount ?? 0))
-                                            ->formatStateUsing(fn ($state): string => self::money($state))
-                                            ->visible(fn (CleaningBooking $record): bool => self::couponUsed($record)),
-                                        TextEntry::make('coupon_admin_margin_before')
-                                            ->label('هامش الإدارة قبل الخصم')
-                                            ->state(fn (CleaningBooking $record): float => (float) (self::couponBreakdown($record)['grossAdminMargin'] ?? 0))
-                                            ->formatStateUsing(fn ($state): string => self::money($state))
-                                            ->visible(fn (CleaningBooking $record): bool => self::couponUsed($record)),
-                                        TextEntry::make('coupon_admin_discount_amount')
-                                            ->label('خصم الكوبون من هامش الإدارة')
-                                            ->state(fn (CleaningBooking $record): float => (float) (self::couponBreakdown($record)['adminDiscountAmount'] ?? 0))
-                                            ->formatStateUsing(fn ($state): string => self::money($state))
-                                            ->visible(fn (CleaningBooking $record): bool => self::couponUsed($record)),
-                                        TextEntry::make('coupon_worker_discount_amount')
-                                            ->label('الخصم الزائد من حصة العمال')
-                                            ->state(fn (CleaningBooking $record): float => (float) (self::couponBreakdown($record)['workerDiscountAmount'] ?? 0))
-                                            ->formatStateUsing(fn ($state): string => self::money($state))
-                                            ->visible(fn (CleaningBooking $record): bool => self::couponUsed($record) && (float) (self::couponBreakdown($record)['workerDiscountAmount'] ?? 0) > 0),
-                                        TextEntry::make('coupon_admin_margin_after')
-                                            ->label('صافي هامش الإدارة')
-                                            ->state(fn (CleaningBooking $record): float => (float) (self::couponBreakdown($record)['adminMargin'] ?? $record->admin_margin_amount ?? 0))
-                                            ->formatStateUsing(fn ($state): string => self::money($state))
-                                            ->weight('bold')
-                                            ->visible(fn (CleaningBooking $record): bool => self::couponUsed($record)),
-                                        TextEntry::make('coupon_service_after_discount')
-                                            ->label('حصة الخدمة بعد الخصم (إجمالي العمال)')
-                                            ->state(fn (CleaningBooking $record): float => (float) (self::couponBreakdown($record)['serviceAmount'] ?? $record->base_price ?? 0))
-                                            ->formatStateUsing(fn ($state): string => self::money($state))
-                                            ->weight('bold')
-                                            ->visible(fn (CleaningBooking $record): bool => self::couponUsed($record)),
-                                        TextEntry::make('coupon_worker_amount_total')
-                                            ->label('إجمالي مستحقات العاملين')
-                                            ->state(fn (CleaningBooking $record): float => self::acceptedAssignmentsTotal($record, 'worker_amount'))
-                                            ->formatStateUsing(fn ($state): string => self::money($state))
-                                            ->weight('bold')
-                                            ->visible(fn (CleaningBooking $record): bool => self::couponUsed($record)),
-                                        TextEntry::make('coupon_price_after')
-                                            ->label('إجمالي العميل بعد الخصم')
-                                            ->state(fn (CleaningBooking $record): float => (float) (self::couponBreakdown($record)['totalPrice'] ?? $record->total_price ?? 0))
-                                            ->formatStateUsing(fn ($state): string => self::money($state))
-                                            ->weight('bold')
-                                            ->visible(fn (CleaningBooking $record): bool => self::couponUsed($record)),
+                                        RepeatableEntry::make('acceptedWorkerAssignments')
+                                            ->hiddenLabel()
+                                            ->schema([
+                                                TextEntry::make('worker.first_name')
+                                                    ->label('العامل')
+                                                    ->placeholder('-'),
+                                                TextEntry::make('status')
+                                                    ->label('الحالة')
+                                                    ->badge()
+                                                    ->formatStateUsing(fn ($state): string => self::workerAssignmentStatusLabel($state))
+                                                    ->color(fn ($state): string => self::workerAssignmentStatusColor($state)),
+                                                TextEntry::make('service_share_amount')
+                                                    ->label('حصة الخدمة')
+                                                    ->formatStateUsing(fn ($state): string => self::money($state)),
+                                                TextEntry::make('travel_fee')
+                                                    ->label('رسوم التنقل')
+                                                    ->formatStateUsing(fn ($state): string => self::money($state))
+                                                    ->visible(fn (CleaningBookingWorkerAssignment $record): bool => (float) ($record->travel_fee ?? 0) > 0),
+                                                TextEntry::make('admin_margin_amount')
+                                                    ->label('هامش الإدارة')
+                                                    ->formatStateUsing(fn ($state): string => self::money($state)),
+                                                TextEntry::make('worker_amount')
+                                                    ->label('صافي مستحق العامل')
+                                                    ->formatStateUsing(fn ($state): string => self::money($state))
+                                                    ->weight('bold'),
+                                            ])
+                                            ->columns(3),
                                     ])
-                                    ->columns(2),
+                                    ->visible(fn (CleaningBooking $record): bool => $record->acceptedWorkerAssignments()->exists()),
                                 Section::make('الأطراف')
                                     ->schema([
                                         TextEntry::make('customer.name')->label('العميل')->placeholder('-'),
@@ -308,20 +250,6 @@ final class CleaningBookingInfolist
         return (string) ($record->platform_coupon_code ?: self::platformCoupon($record)?->code ?: '—');
     }
 
-    private static function couponType(CleaningBooking $record): ?string
-    {
-        return self::platformCoupon($record)?->discount_type;
-    }
-
-    private static function couponTypeLabel(CleaningBooking $record): string
-    {
-        return match (self::couponType($record)) {
-            'percentage' => 'نسبة مئوية',
-            'fixed', 'fixed_amount' => 'مبلغ ثابت',
-            default => '—',
-        };
-    }
-
     private static function couponValueLabel(CleaningBooking $record): string
     {
         $coupon = self::platformCoupon($record);
@@ -335,6 +263,43 @@ final class CleaningBookingInfolist
         }
 
         return self::money($value);
+    }
+
+    private static function financialServiceSummary(CleaningBooking $record): string
+    {
+        $breakdown = self::couponBreakdown($record);
+        $gross = (float) ($breakdown['grossServiceAmount']
+            ?? ((float) ($record->base_price ?? 0) + (float) ($record->addons_total ?? 0)));
+        $net = (float) ($breakdown['serviceAmount'] ?? $gross);
+
+        if (abs($gross - $net) <= 0.01) {
+            return self::money($net);
+        }
+
+        return sprintf('%s (قبل الخصم %s)', self::money($net), self::money($gross));
+    }
+
+    private static function financialAdminSummary(CleaningBooking $record): string
+    {
+        if (! self::couponUsed($record)) {
+            return self::money($record->admin_margin_amount);
+        }
+
+        $breakdown = self::couponBreakdown($record);
+        $gross = (float) ($breakdown['grossAdminMargin'] ?? $record->admin_margin_amount ?? 0);
+        $net = (float) ($breakdown['adminMargin'] ?? $record->admin_margin_amount ?? 0);
+
+        return sprintf('%s (قبل الخصم %s)', self::money($net), self::money($gross));
+    }
+
+    private static function financialCouponSummary(CleaningBooking $record): string
+    {
+        $value = self::couponValueLabel($record);
+        $discount = (float) (self::couponBreakdown($record)['discountAmount']
+            ?? $record->discount_amount
+            ?? 0);
+
+        return sprintf('%s • %s • خصم %s', self::couponCode($record), $value, self::money($discount));
     }
 
     private static function priceBeforeCoupon(CleaningBooking $record): float
@@ -427,13 +392,6 @@ final class CleaningBookingInfolist
         $percent = (int) round(($assignedRooms / $totalRooms) * 100);
 
         return sprintf('%d/%d (%d%%)', $assignedRooms, $totalRooms, $percent);
-    }
-
-    private static function acceptedAssignmentsTotal(mixed $record, string $field): float
-    {
-        return (float) $record->workerAssignments()
-            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
-            ->sum($field);
     }
 
     private static function workerAssignmentStatusLabel(mixed $state): string
