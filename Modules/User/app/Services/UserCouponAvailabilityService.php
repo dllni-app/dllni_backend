@@ -7,6 +7,7 @@ namespace Modules\User\Services;
 use App\Models\PlatformCoupon;
 use App\Services\Coupons\PlatformCouponEligibilityService;
 use Illuminate\Validation\ValidationException;
+use Modules\Cleaning\Services\CleaningCouponPricingService;
 use Modules\Resturants\Models\Cart;
 use Modules\Resturants\Models\PromoCode;
 use Modules\Supermarket\Models\SmCart;
@@ -17,6 +18,7 @@ final class UserCouponAvailabilityService
     public function __construct(
         private readonly PlatformCouponEligibilityService $platformEligibility,
         private readonly UserCleaningOrderEstimationService $cleaningEstimation,
+        private readonly CleaningCouponPricingService $cleaningCouponPricing,
     ) {}
 
     /** @return array<string, mixed> */
@@ -130,9 +132,13 @@ final class UserCouponAvailabilityService
             $normalizedInput['addressLongitude'],
             $normalizedInput['preferredWorkerId'],
         );
-        $subtotal = $normalizedInput['preferredWorkerId'] !== null
-            ? round((float) $pricing['totalPrice'], 2)
-            : round((float) $pricing['basePrice'] + (float) $pricing['addonsTotal'], 2);
+        $serviceAmount = round(
+            (float) $pricing['basePrice'] + (float) $pricing['addonsTotal'],
+            2,
+        );
+        $travelFee = round(max(0.0, (float) ($pricing['travelFee'] ?? 0)), 2);
+        $adminMargin = round(max(0.0, (float) ($pricing['adminMargin'] ?? 0)), 2);
+        $subtotal = round($serviceAmount + $travelFee + $adminMargin, 2);
 
         $coupon = $this->findPlatformCoupon($couponCode);
         if (! $coupon) {
@@ -147,6 +153,13 @@ final class UserCouponAvailabilityService
             );
         }
 
+        $allocation = $this->cleaningCouponPricing->allocation(
+            $coupon,
+            $serviceAmount,
+            $travelFee,
+            $adminMargin,
+        );
+
         return $this->platformResult(
             coupon: $coupon,
             userId: $userId,
@@ -157,6 +170,7 @@ final class UserCouponAvailabilityService
                 'cleaningMode' => $normalizedInput['propertyDetails']['cleaning_mode'] ?? null,
                 'eventType' => $normalizedInput['propertyDetails']['eventType'] ?? null,
             ],
+            discountOverride: (float) $allocation['discountAmount'],
         );
     }
 
@@ -167,11 +181,12 @@ final class UserCouponAvailabilityService
         string $section,
         float $subtotal,
         array $context = [],
+        ?float $discountOverride = null,
     ): array {
         $coupon->loadMissing('constraints');
         $eligibility = $this->platformEligibility->evaluate($coupon, $userId, $section, $subtotal, $context);
         $discount = $eligibility['isValid']
-            ? $this->platformEligibility->calculateDiscount($coupon, $subtotal)
+            ? ($discountOverride ?? $this->platformEligibility->calculateDiscount($coupon, $subtotal))
             : 0.0;
 
         return $this->legacyResult(
