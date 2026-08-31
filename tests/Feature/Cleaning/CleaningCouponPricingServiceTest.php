@@ -135,7 +135,7 @@ it('does not reapply the coupon to worker shares on a later pricing save', funct
     expect((float) $assignment->service_share_amount)->toBe(1000.0)
         ->and((float) $assignment->admin_margin_amount)->toBe(20.0);
 
-    $booking->forceFill(['total_price' => (float) $booking->total_price]);
+    $booking->forceFill(['total_price' => (float) $booking->total_price + 1]);
     app(CleaningCouponPricingService::class)->applyBeforeSave($booking);
     $assignment->refresh();
 
