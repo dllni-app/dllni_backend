@@ -109,6 +109,11 @@ final class CleaningCouponPricingService
         $grossTravelFee = round(max(0.0, (float) ($booking->travel_fee ?? 0)), 2);
         $grossAdminMargin = round(max(0.0, $grossTotal - $grossServiceAmount - $grossTravelFee), 2);
 
+        if (! (bool) $booking->is_pricing_final && $grossAdminMargin <= 0.0) {
+            $grossAdminMargin = (float) $this->pricingCalculator
+                ->provisional($grossServiceAmount, 0.0)['adminMargin'];
+        }
+
         return $this->allocation(
             $coupon,
             $grossServiceAmount,
