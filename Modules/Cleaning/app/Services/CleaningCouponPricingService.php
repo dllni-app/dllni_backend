@@ -18,13 +18,13 @@ final class CleaningCouponPricingService
     ) {}
 
     /**
-     * Apply cleaning coupons against the administration share first.
-     * Percentage coupons are calculated from the gross service amount. The
-     * administration margin absorbs the discount first; only any excess reduces
-     * the workers' service share. Travel fees are never discounted.
+     * Apply cleaning coupons against the full customer order total, then fund the
+     * discount from the administration margin first. Only the amount that remains
+     * after administration reaches zero may reduce the service share. Travel is
+     * never reduced as a component.
      *
-     * Example: service 960, admin 25% = 240, coupon 10% => discount 96,
-     * admin becomes 144 (15%), service remains 960, total becomes 1,104.
+     * Example: service 960 + admin 240 = order total 1,200. A 10% coupon is 120.
+     * Admin becomes 120, service remains 960, and the customer pays 1,080.
      */
     public function allocation(
         PlatformCoupon $coupon,
@@ -39,10 +39,15 @@ final class CleaningCouponPricingService
 
         $eligibleAmount = round($grossServiceAmount + $grossAdminMargin, 2);
         if ($coupon->discount_type === PlatformCoupon::DISCOUNT_PERCENTAGE) {
-            $discountAmount = $this->couponEligibility->calculateDiscount($coupon, $grossServiceAmount);
+            // The advertised percentage is calculated from the full amount the
+            // customer would pay before the coupon (service + travel + admin).
+            $discountAmount = $this->couponEligibility->calculateDiscount($coupon, $grossTotal);
         } else {
-            $discountAmount = min(max(0.0, (float) $coupon->discount_value), $eligibleAmount);
+            $discountAmount = min(max(0.0, (float) $coupon->discount_value), $grossTotal);
         }
+
+        // The discount is funded by admin first, then service. Travel is never
+        // reduced, so the maximum fundable discount is admin + service.
         $discountAmount = round(min(max(0.0, $discountAmount), $eligibleAmount), 2);
 
         $adminDiscountAmount = round(min($discountAmount, $grossAdminMargin), 2);
@@ -235,23 +240,39 @@ final class CleaningCouponPricingService
         );
 
         $assignmentFactor = (float) $currentAllocation['assignmentWorkerNetFactor'];
+        $expectedDiscount = (float) $currentAllocation['discountAmount'];
+        $expectedAdmin = (float) $currentAllocation['adminMargin'];
+        $expectedTotal = (float) $currentAllocation['totalPrice'];
+        $storedTotal = max(0.0, (float) ($booking->getOriginal('total_price') ?? 0));
 
-        // The previous implementation calculated percentage coupons on the full
-        // customer total and reduced assignment service/travel by the coupon
-        // percentage even while admin still covered it. Restore those rows once
-        // before applying the corrected rule.
+        $legacyFactor = $grossTotal > 0.0
+            ? max(0.0, min(1.0, ($grossTotal - $storedDiscount) / $grossTotal))
+            : 1.0;
+
+        $bookingPricingDiffersFromCurrentRule =
+            abs($storedDiscount - $expectedDiscount) > 0.02
+            || abs($netAdminMargin - $expectedAdmin) > 0.02
+            || abs($storedTotal - $expectedTotal) > 0.02;
+
+        // Historical coupon versions reduced assignment service/travel by the
+        // customer's overall coupon factor. Restore that gross share only when
+        // the persisted row still looks legacy. This also keeps reruns idempotent.
         if (
-            $coupon->discount_type === PlatformCoupon::DISCOUNT_PERCENTAGE
-            && abs($storedDiscount - (float) $currentAllocation['discountAmount']) > 0.02
+            $legacyFactor < 1.0
+            && (
+                (
+                    abs($storedDiscount - $expectedDiscount) <= 0.02
+                    && $bookingPricingDiffersFromCurrentRule
+                )
+                || $this->assignmentsMatchLegacyServiceFactor(
+                    $booking,
+                    $grossServiceAmount,
+                    $legacyFactor,
+                    $assignmentFactor,
+                )
+            )
         ) {
-            $grossWorkerAmount = max(0.0, $grossServiceAmount + $grossTravelFee);
-            $legacyAllocated = min(
-                $storedDiscount,
-                max(0.0, $grossServiceAmount * (max(0.0, (float) $coupon->discount_value) / 100)),
-            );
-            $assignmentFactor = $grossWorkerAmount > 0.0
-                ? max(0.0, min(1.0, ($grossWorkerAmount - $legacyAllocated) / $grossWorkerAmount))
-                : 1.0;
+            $assignmentFactor = $legacyFactor;
         }
 
         return [
@@ -261,6 +282,45 @@ final class CleaningCouponPricingService
                 ? max(0.0, min(1.0, $netAdminMargin / $grossAdminMargin))
                 : 1.0,
         ];
+    }
+
+    private function assignmentsMatchLegacyServiceFactor(
+        CleaningBooking $booking,
+        float $grossServiceAmount,
+        float $legacyFactor,
+        float $currentRuleFactor,
+    ): bool {
+        if (
+            $grossServiceAmount <= 0.0
+            || abs($legacyFactor - $currentRuleFactor) <= 0.0001
+        ) {
+            return false;
+        }
+
+        $assignments = CleaningBookingWorkerAssignment::query()
+            ->where('cleaning_booking_id', $booking->id)
+            ->get(['service_share_amount']);
+
+        if ($assignments->isEmpty()) {
+            return false;
+        }
+
+        // When the team is fully represented, the sum is a reliable fingerprint
+        // of the old global factor. For partial teams we avoid guessing.
+        $requiredWorkers = max(1, (int) ($booking->number_of_workers ?? 1));
+        if ($assignments->count() < $requiredWorkers) {
+            return false;
+        }
+
+        $storedServiceTotal = round((float) $assignments->sum(
+            static fn (CleaningBookingWorkerAssignment $assignment): float =>
+                max(0.0, (float) ($assignment->service_share_amount ?? 0)),
+        ), 2);
+        $legacyServiceTotal = round($grossServiceAmount * $legacyFactor, 2);
+        $currentServiceTotal = round($grossServiceAmount * $currentRuleFactor, 2);
+
+        return abs($storedServiceTotal - $legacyServiceTotal) <= 1.0
+            && abs($storedServiceTotal - $currentServiceTotal) > 1.0;
     }
 
     /** @return array{customerWorkerNetFactor: float, assignmentWorkerNetFactor: float, adminNetFactor: float} */
