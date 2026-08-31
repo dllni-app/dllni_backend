@@ -493,6 +493,8 @@ final class WorkerOrderSolvencyService
 
     private function netWorkerAmount(float $serviceShare, float $travelFee, float $adminMargin): float
     {
-        return max(0.0, round($this->grossWorkerTotal($serviceShare, $travelFee) - $adminMargin, 2));
+        // Admin margin is a separate customer-side/platform amount. It must not
+        // be deducted from the worker earnings a second time.
+        return max(0.0, $this->grossWorkerTotal($serviceShare, $travelFee));
     }
 }
