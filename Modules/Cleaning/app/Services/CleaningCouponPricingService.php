@@ -135,10 +135,11 @@ final class CleaningCouponPricingService
         $previousFactors = $this->previousDiscountFactors($booking, $coupon);
         $couponWasJustAttached = $booking->isDirty('platform_coupon_id')
             || empty($booking->getOriginal('platform_coupon_id'));
-        $pricingWasRecalculated = $booking->isDirty([
+        $assignmentPricingWasRecalculated = $booking->isDirty([
+            'base_price',
+            'addons_total',
             'travel_fee',
             'admin_margin_amount',
-            'total_price',
             'is_pricing_final',
         ]);
 
@@ -154,7 +155,7 @@ final class CleaningCouponPricingService
             currentValue: (float) ($booking->admin_margin_amount ?? 0),
             fieldIsDirty: $booking->isDirty('admin_margin_amount'),
             previousNetFactor: $previousFactors['adminNetFactor'],
-            treatCurrentAsGross: $couponWasJustAttached || $pricingWasRecalculated,
+            treatCurrentAsGross: $couponWasJustAttached || $booking->isDirty('admin_margin_amount'),
         );
 
         $allocation = $this->allocation(
@@ -170,7 +171,7 @@ final class CleaningCouponPricingService
             (float) $allocation['adminNetFactor'],
             $previousFactors['assignmentWorkerNetFactor'],
             $previousFactors['adminNetFactor'],
-            $couponWasJustAttached || $pricingWasRecalculated,
+            $couponWasJustAttached || $assignmentPricingWasRecalculated,
         );
 
         $booking->travel_fee = $allocation['travelFee'];
@@ -296,9 +297,9 @@ final class CleaningCouponPricingService
                 $currentAssignmentValuesAreGross,
             );
 
-            // Assignment gross is reduced by the allocated coupon percentage
-            // while admin margin is reduced by the admin-funded percentage. The
-            // difference is therefore exactly the worker-funded excess only.
+            // Keep service/travel at their gross worker share while the coupon
+            // fits inside the administration margin. Only the excess coupon
+            // reduces the service share; travel is never discounted.
             $serviceShare = round($grossServiceShare * $assignmentWorkerNetFactor, 2);
             $travelFee = round($grossTravelFee, 2);
             $adminMargin = round($grossAdminMargin * $adminNetFactor, 2);
