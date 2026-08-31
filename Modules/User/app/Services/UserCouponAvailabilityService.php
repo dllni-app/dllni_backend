@@ -168,7 +168,7 @@ final class UserCouponAvailabilityService
             context: [
                 'propertyType' => $normalizedInput['propertyType'],
                 'cleaningMode' => $normalizedInput['propertyDetails']['cleaning_mode'] ?? null,
-                'eventType' => $normalizedInput['propertyDetails']['eventType'] ?? null,
+                'eventType' => $normalizedInput['propertyDetails']['event_type'] ?? $normalizedInput['propertyDetails']['eventType'] ?? null,
             ],
             discountOverride: (float) $allocation['discountAmount'],
         );
