@@ -179,7 +179,7 @@ final class CleaningBookingInfolist
                                         TextEntry::make('addons_total')->label('الإضافات')->formatStateUsing(fn ($state): string => self::money($state)),
                                         TextEntry::make('travel_fee')->label('رسوم التنقل')->formatStateUsing(fn ($state): string => self::money($state)),
                                         TextEntry::make('travel_distance_km')->label('مسافة التنقل (كم)')->formatStateUsing(fn ($state): string => self::integer($state))->placeholder('-'),
-                                        TextEntry::make('admin_margin_amount')->label('هامش الإدارة')->formatStateUsing(fn ($state): string => self::money($state)),
+                                        TextEntry::make('admin_margin_amount')->label('صافي هامش الإدارة')->formatStateUsing(fn ($state): string => self::money($state)),
                                         TextEntry::make('total_price')->label('إجمالي العميل')->formatStateUsing(fn ($state): string => self::money($state))->weight('bold'),
                                     ])
                                     ->columns(2),
