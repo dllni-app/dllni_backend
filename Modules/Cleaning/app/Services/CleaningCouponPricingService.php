@@ -373,7 +373,9 @@ final class CleaningCouponPricingService
                 'service_share_amount' => $serviceShare,
                 'travel_fee' => $travelFee,
                 'admin_margin_amount' => $adminMargin,
-                'worker_amount' => round(max(0.0, $serviceShare + $travelFee - $adminMargin), 2),
+                // Administration margin is added to the customer price separately;
+                // it is not deducted again from the worker's service/travel share.
+                'worker_amount' => round(max(0.0, $serviceShare + $travelFee), 2),
             ])->saveQuietly();
         }
     }
