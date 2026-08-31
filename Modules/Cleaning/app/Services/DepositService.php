@@ -182,7 +182,7 @@ final class DepositService
             ->where('cleaning_booking_worker_assignments.worker_id', $worker->id)
             ->where('cleaning_bookings.status', CleaningBookingStatus::Completed->value)
             ->whereIn('cleaning_booking_worker_assignments.status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
-            ->sum(DB::raw('CASE WHEN COALESCE(cleaning_booking_worker_assignments.service_share_amount,0)+COALESCE(cleaning_booking_worker_assignments.travel_fee,0)-COALESCE(cleaning_booking_worker_assignments.admin_margin_amount,0) > 0 THEN COALESCE(cleaning_booking_worker_assignments.service_share_amount,0)+COALESCE(cleaning_booking_worker_assignments.travel_fee,0)-COALESCE(cleaning_booking_worker_assignments.admin_margin_amount,0) ELSE 0 END'));
+            ->sum(DB::raw('CASE WHEN COALESCE(cleaning_booking_worker_assignments.service_share_amount,0)+COALESCE(cleaning_booking_worker_assignments.travel_fee,0) > 0 THEN COALESCE(cleaning_booking_worker_assignments.service_share_amount,0)+COALESCE(cleaning_booking_worker_assignments.travel_fee,0) ELSE 0 END'));
         $configuredAllowance = (float) $allowance['configuredAllowedDebtLimit'];
         $usedAllowance = (float) $allowance['allowanceUsedAmount'];
 
