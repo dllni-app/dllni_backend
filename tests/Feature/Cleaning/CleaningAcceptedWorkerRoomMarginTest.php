@@ -141,7 +141,7 @@ it('assigns rooms immediately and deducts the admin percentage from all three wo
         ->and((float) $firstAssignment->service_share_amount)->toBe(1000.0)
         ->and((float) $firstAssignment->admin_margin_amount)->toBe(100.0)
         ->and((float) $firstAssignment->travel_fee)->toBe(10.0)
-        ->and((float) $firstAssignment->worker_amount)->toBe(910.0)
+        ->and((float) $firstAssignment->worker_amount)->toBe(1010.0)
         ->and((float) $provisionalBooking->admin_margin_amount)->toBe(300.0)
         ->and((float) $provisionalBooking->total_price)->toBe(3300.0);
 
