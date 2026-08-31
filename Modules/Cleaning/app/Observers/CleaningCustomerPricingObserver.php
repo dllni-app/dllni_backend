@@ -171,7 +171,7 @@ final class CleaningCustomerPricingObserver
 
             $values = [
                 'admin_margin_amount' => $margin,
-                'worker_amount' => max(0.0, round($serviceShare + $travelFee - $margin, 2)),
+                'worker_amount' => max(0.0, round($serviceShare + $travelFee, 2)),
             ];
 
             if ($isEventAssistance) {
