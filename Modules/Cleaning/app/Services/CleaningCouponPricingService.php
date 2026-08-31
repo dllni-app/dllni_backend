@@ -19,34 +19,13 @@ final class CleaningCouponPricingService
     ) {}
 
     /**
-     * Charge the coupon percentage to the administration percentage first.
-     * Only percentage points above the administration share reduce worker net
-     * earnings. The customer still receives the exact coupon discount that was
-     * already calculated for the order.
+     * Apply cleaning coupons against the administration share first.
+     * Percentage coupons are calculated from the gross service amount. The
+     * administration margin absorbs the discount first; only any excess reduces
+     * the workers' service share. Travel fees are never discounted.
      *
-     * Fixed-value coupons keep the same amount-based fallback: administration
-     * absorbs the fixed discount first and the worker absorbs only the excess.
-     *
-     * @return array{
-     *     grossServiceAmount: float,
-     *     grossTravelFee: float,
-     *     grossAdminMargin: float,
-     *     grossTotal: float,
-     *     discountAmount: float,
-     *     discountRatio: float,
-     *     netFactor: float,
-     *     allocatedDiscountAmount: float,
-     *     platformSubsidyAmount: float,
-     *     adminDiscountAmount: float,
-     *     workerDiscountAmount: float,
-     *     customerWorkerNetFactor: float,
-     *     assignmentWorkerNetFactor: float,
-     *     adminNetFactor: float,
-     *     serviceAmount: float,
-     *     travelFee: float,
-     *     adminMargin: float,
-     *     totalPrice: float
-     * }
+     * Example: service 960, admin 25% = 240, coupon 10% => discount 96,
+     * admin becomes 144 (15%), service remains 960, total becomes 1,104.
      */
     public function allocation(
         PlatformCoupon $coupon,
@@ -57,52 +36,28 @@ final class CleaningCouponPricingService
         $grossServiceAmount = round(max(0.0, $serviceAmount), 2);
         $grossTravelFee = round(max(0.0, $travelFee), 2);
         $grossAdminMargin = round(max(0.0, $adminMargin), 2);
-        $grossWorkerAmount = round($grossServiceAmount + $grossTravelFee, 2);
-        $grossTotal = round($grossWorkerAmount + $grossAdminMargin, 2);
-        $discountAmount = $grossTotal > 0
-            ? $this->couponEligibility->calculateDiscount($coupon, $grossTotal)
-            : 0.0;
-        $discountAmount = round(min(max(0.0, $discountAmount), $grossTotal), 2);
-        $discountRatio = $grossTotal > 0 ? min(1.0, $discountAmount / $grossTotal) : 0.0;
-        $netFactor = max(0.0, 1.0 - $discountRatio);
+        $grossTotal = round($grossServiceAmount + $grossTravelFee + $grossAdminMargin, 2);
 
-        $allocatedDiscountAmount = $this->allocatedDiscountAmount(
-            $coupon,
-            $grossServiceAmount,
-            $discountAmount,
-        );
-        $adminDiscountAmount = round(min($allocatedDiscountAmount, $grossAdminMargin), 2);
-        $workerDiscountAmount = round(max(0.0, $allocatedDiscountAmount - $adminDiscountAmount), 2);
-        $platformSubsidyAmount = round(max(0.0, $discountAmount - $allocatedDiscountAmount), 2);
+        $eligibleAmount = round($grossServiceAmount + $grossAdminMargin, 2);
+        if ($coupon->discount_type === PlatformCoupon::DISCOUNT_PERCENTAGE) {
+            $discountAmount = $this->couponEligibility->calculateDiscount($coupon, $grossServiceAmount);
+        } else {
+            $discountAmount = min(max(0.0, (float) $coupon->discount_value), $eligibleAmount);
+        }
+        $discountAmount = round(min(max(0.0, $discountAmount), $eligibleAmount), 2);
+
+        $adminDiscountAmount = round(min($discountAmount, $grossAdminMargin), 2);
+        $workerDiscountAmount = round(max(0.0, $discountAmount - $adminDiscountAmount), 2);
         $adminNet = round(max(0.0, $grossAdminMargin - $adminDiscountAmount), 2);
-
-        $customerWorkerNetFactor = $grossWorkerAmount > 0
-            ? max(0.0, min(1.0, ($grossWorkerAmount - $workerDiscountAmount) / $grossWorkerAmount))
+        $serviceNet = round(max(0.0, $grossServiceAmount - $workerDiscountAmount), 2);
+        $travelNet = $grossTravelFee;
+        $serviceNetFactor = $grossServiceAmount > 0.0
+            ? max(0.0, min(1.0, $serviceNet / $grossServiceAmount))
             : 1.0;
-        $assignmentWorkerNetFactor = $grossWorkerAmount > 0
-            ? max(0.0, min(1.0, ($grossWorkerAmount - $allocatedDiscountAmount) / $grossWorkerAmount))
-            : 1.0;
-        $adminNetFactor = $grossAdminMargin > 0
+        $adminNetFactor = $grossAdminMargin > 0.0
             ? max(0.0, min(1.0, $adminNet / $grossAdminMargin))
             : 1.0;
-
-        $serviceNet = round($grossServiceAmount * $customerWorkerNetFactor, 2);
-        $travelNet = round($grossTravelFee * $customerWorkerNetFactor, 2);
-        $allocatedComponentTotal = round(max(0.0, $grossTotal - $allocatedDiscountAmount), 2);
-
-        // Keep the administration/worker allocation exact after rounding. Any
-        // remaining customer discount is platform-funded and intentionally does
-        // not reduce either the administration percentage or worker earnings.
-        $roundingDelta = round($allocatedComponentTotal - ($serviceNet + $travelNet + $adminNet), 2);
-        if ($roundingDelta !== 0.0) {
-            if ($grossServiceAmount > 0) {
-                $serviceNet = round(max(0.0, $serviceNet + $roundingDelta), 2);
-            } elseif ($grossTravelFee > 0) {
-                $travelNet = round(max(0.0, $travelNet + $roundingDelta), 2);
-            } else {
-                $adminNet = round(max(0.0, $adminNet + $roundingDelta), 2);
-            }
-        }
+        $discountRatio = $grossTotal > 0.0 ? min(1.0, $discountAmount / $grossTotal) : 0.0;
 
         return [
             'grossServiceAmount' => $grossServiceAmount,
@@ -111,18 +66,18 @@ final class CleaningCouponPricingService
             'grossTotal' => $grossTotal,
             'discountAmount' => $discountAmount,
             'discountRatio' => $discountRatio,
-            'netFactor' => $netFactor,
-            'allocatedDiscountAmount' => $allocatedDiscountAmount,
-            'platformSubsidyAmount' => $platformSubsidyAmount,
+            'netFactor' => max(0.0, 1.0 - $discountRatio),
+            'allocatedDiscountAmount' => $discountAmount,
+            'platformSubsidyAmount' => 0.0,
             'adminDiscountAmount' => $adminDiscountAmount,
             'workerDiscountAmount' => $workerDiscountAmount,
-            'customerWorkerNetFactor' => $customerWorkerNetFactor,
-            'assignmentWorkerNetFactor' => $assignmentWorkerNetFactor,
+            'customerWorkerNetFactor' => $serviceNetFactor,
+            'assignmentWorkerNetFactor' => $serviceNetFactor,
             'adminNetFactor' => $adminNetFactor,
             'serviceAmount' => $serviceNet,
             'travelFee' => $travelNet,
             'adminMargin' => $adminNet,
-            'totalPrice' => round(max(0.0, $grossTotal - $discountAmount), 2),
+            'totalPrice' => round($serviceNet + $travelNet + $adminNet, 2),
         ];
     }
 
