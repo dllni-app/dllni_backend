@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Modules\User\Http\Requests\UserCleaningOrderStoreRequest;
 use Modules\User\Http\Resources\UserCleaningBookingResource;
+use Modules\Cleaning\Services\CleaningPricingCalculator;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 use Modules\User\Services\UserCleaningOrderService;
 use Modules\User\Support\CleaningWorkerCapacity;
@@ -23,6 +24,7 @@ final class UserCleaningOrderStoreController
         UserCleaningOrderService $service,
         UserCleaningOrderEstimationService $estimationService,
         PlatformCouponRedemptionService $platformCoupons,
+        CleaningPricingCalculator $pricingCalculator,
     ): JsonResponse {
         $couponCode = $request->input('couponCode');
         Validator::make(['couponCode' => $couponCode], [
@@ -32,15 +34,21 @@ final class UserCleaningOrderStoreController
         $validated = $this->withEventWorkerCount($validated);
         $this->assertWorkerCapacity($validated, $estimationService);
 
-        $order = DB::transaction(function () use ($request, $service, $platformCoupons, $couponCode, $validated) {
+        $order = DB::transaction(function () use ($request, $service, $platformCoupons, $pricingCalculator, $couponCode, $validated) {
             $order = $service->store($request->user(), $validated);
 
             if (is_string($couponCode) && trim($couponCode) !== '') {
+                $serviceSubtotal = round(
+                    (float) $order->base_price + (float) $order->addons_total,
+                    2,
+                );
+                $couponAdminMargin = (bool) $order->is_pricing_final
+                    ? max(0.0, (float) $order->admin_margin_amount)
+                    : (float) $pricingCalculator->provisional($serviceSubtotal, 0.0)['adminMargin'];
                 $subtotal = round(
-                    (float) $order->base_price
-                    + (float) $order->addons_total
+                    $serviceSubtotal
                     + (float) $order->travel_fee
-                    + (float) $order->admin_margin_amount,
+                    + $couponAdminMargin,
                     2,
                 );
                 $quote = $platformCoupons->quoteForPlacement(
