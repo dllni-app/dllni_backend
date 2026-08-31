@@ -10,7 +10,7 @@ use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Observers\CleaningBookingObserver;
 use Modules\Cleaning\Services\CleaningCouponPricingService;
 
-it('applies a percentage cleaning coupon to service travel and administration amounts', function (): void {
+it('applies percentage cleaning coupons to admin first and only then to service share', function (): void {
     $coupon = new PlatformCoupon([
         'discount_type' => PlatformCoupon::DISCOUNT_PERCENTAGE,
         'discount_value' => 20,
@@ -29,15 +29,15 @@ it('applies a percentage cleaning coupon to service travel and administration am
             'grossTravelFee' => 5000.0,
             'grossAdminMargin' => 10000.0,
             'grossTotal' => 115000.0,
-            'discountAmount' => 23000.0,
-            'serviceAmount' => 80000.0,
-            'travelFee' => 4000.0,
-            'adminMargin' => 8000.0,
-            'totalPrice' => 92000.0,
+            'discountAmount' => 20000.0,
+            'serviceAmount' => 90000.0,
+            'travelFee' => 5000.0,
+            'adminMargin' => 0.0,
+            'totalPrice' => 95000.0,
         ]);
 });
 
-it('allocates a fixed cleaning coupon proportionally across every price component', function (): void {
+it('applies a fixed cleaning coupon to admin first and only the excess to service share', function (): void {
     $coupon = new PlatformCoupon([
         'discount_type' => PlatformCoupon::DISCOUNT_FIXED,
         'discount_value' => 23000,
@@ -51,9 +51,9 @@ it('allocates a fixed cleaning coupon proportionally across every price componen
     );
 
     expect($allocation['discountAmount'])->toBe(23000.0)
-        ->and($allocation['serviceAmount'])->toBe(80000.0)
-        ->and($allocation['travelFee'])->toBe(4000.0)
-        ->and($allocation['adminMargin'])->toBe(8000.0)
+        ->and($allocation['serviceAmount'])->toBe(87000.0)
+        ->and($allocation['travelFee'])->toBe(5000.0)
+        ->and($allocation['adminMargin'])->toBe(0.0)
         ->and($allocation['totalPrice'])->toBe(92000.0);
 });
 
@@ -109,12 +109,12 @@ it('synchronizes the discounted booking and worker financial shares when a coupo
     $assignment->refresh();
 
     expect((float) $booking->subtotal_before_discount)->toBe(115000.0)
-        ->and((float) $booking->discount_amount)->toBe(23000.0)
-        ->and((float) $booking->travel_fee)->toBe(4000.0)
-        ->and((float) $booking->admin_margin_amount)->toBe(8000.0)
-        ->and((float) $booking->total_price)->toBe(92000.0)
-        ->and((float) $assignment->service_share_amount)->toBe(80000.0)
-        ->and((float) $assignment->travel_fee)->toBe(4000.0)
-        ->and((float) $assignment->admin_margin_amount)->toBe(8000.0)
-        ->and((float) $assignment->worker_amount)->toBe(76000.0);
+        ->and((float) $booking->discount_amount)->toBe(20000.0)
+        ->and((float) $booking->travel_fee)->toBe(5000.0)
+        ->and((float) $booking->admin_margin_amount)->toBe(0.0)
+        ->and((float) $booking->total_price)->toBe(95000.0)
+        ->and((float) $assignment->service_share_amount)->toBe(90000.0)
+        ->and((float) $assignment->travel_fee)->toBe(5000.0)
+        ->and((float) $assignment->admin_margin_amount)->toBe(0.0)
+        ->and((float) $assignment->worker_amount)->toBe(95000.0);
 });
