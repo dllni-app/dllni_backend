@@ -32,7 +32,7 @@ it('keeps the worker service share unchanged while the coupon fits inside the ad
         ->and((float) $assignment->worker_amount)->toBe(988.0);
 });
 
-it('keeps the worker service share unchanged when coupon percentage equals administration percentage', function (): void {
+it('starts reducing service only after the full-order coupon exhausts administration margin', function (): void {
     $booking = cleaningCouponBooking();
     $worker = Worker::factory()->create();
     $assignment = cleaningCouponAssignment($booking, $worker);
@@ -51,7 +51,7 @@ it('keeps the worker service share unchanged when coupon percentage equals admin
         ->and((float) $assignment->worker_amount)->toBe(990.0);
 });
 
-it('reduces the worker service share only by percentage points above the administration percentage', function (): void {
+it('deducts only the coupon remainder from service after administration reaches zero', function (): void {
     $booking = cleaningCouponBooking();
     $worker = Worker::factory()->create();
     $assignment = cleaningCouponAssignment($booking, $worker);
