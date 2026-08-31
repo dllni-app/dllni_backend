@@ -6,6 +6,7 @@ use App\Enums\WorkerCustomerRatingType;
 use App\Enums\WorkerPreferredWorkType;
 use App\Models\CancellationPolicy;
 use App\Models\CleaningFinancialSetting;
+use App\Models\PlatformCoupon;
 use App\Models\User;
 use App\Models\Worker;
 use App\Models\WorkerCustomerRating;
@@ -22,6 +23,7 @@ use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Models\CleaningService;
+use Modules\Cleaning\Services\CleaningPricingCalculator;
 use Modules\Cleaning\Models\ServicePricing;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
@@ -112,6 +114,81 @@ it('creates a cleaning order for authenticated user', function (): void {
         'price' => 4500.0,
         'currency' => 'SYP',
     ]);
+});
+
+it('creates an open cleaning order with coupon deducted from provisional admin margin before worker share', function (): void {
+    CleaningFinancialSetting::query()->updateOrCreate(
+        ['id' => 1],
+        [
+            'default_commission_rate' => 25,
+            'commission_type' => 'percent',
+            'commission_fixed_amount' => null,
+            'travel_per_km' => 0,
+            'travel_distance_start_point' => 'worker_home',
+        ],
+    );
+
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $coupon = PlatformCoupon::query()->create([
+        'code' => 'USERCREATE10',
+        'title_ar' => 'خصم تنظيف',
+        'title_en' => 'Cleaning discount',
+        'description_ar' => 'اختبار',
+        'description_en' => 'Test',
+        'section' => PlatformCoupon::SECTION_CLEANING,
+        'discount_type' => PlatformCoupon::DISCOUNT_PERCENTAGE,
+        'discount_value' => 10,
+        'audience_type' => PlatformCoupon::AUDIENCE_ALL_USERS,
+        'is_active' => true,
+        'starts_at' => now()->subMinute(),
+        'expires_at' => now()->addDay(),
+    ]);
+
+    $response = postJson('/api/v1/user/cleaning/orders', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'address' => 'Damascus - Mazzeh',
+            'location_name' => 'Home',
+            'rooms' => 2,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+        ],
+        'assignmentMode' => 'open_count',
+        'numberOfWorkers' => 1,
+        'scheduledDate' => now()->addDay()->format('Y-m-d'),
+        'scheduledTime' => '09:00',
+        'addressLatitude' => 33.5138,
+        'addressLongitude' => 36.2765,
+        'couponCode' => $coupon->code,
+        'termsAccepted' => true,
+    ])->assertCreated();
+
+    $serviceAmount = (float) $response->json('order.basePrice')
+        + (float) $response->json('order.addonsTotal');
+    $grossAdminMargin = (float) app(CleaningPricingCalculator::class)
+        ->provisional($serviceAmount, 0.0)['adminMargin'];
+    $expectedDiscount = round($serviceAmount * 0.10, 2);
+    $expectedAdminMargin = round(max(0.0, $grossAdminMargin - $expectedDiscount), 2);
+    $expectedGrossTotal = round($serviceAmount + $grossAdminMargin, 2);
+    $expectedTotal = round($serviceAmount + $expectedAdminMargin, 2);
+
+    expect((float) $response->json('order.discountAmount'))->toBe($expectedDiscount)
+        ->and((float) $response->json('order.subtotalBeforeDiscount'))->toBe($expectedGrossTotal)
+        ->and((float) $response->json('order.adminMargin'))->toBe($expectedAdminMargin)
+        ->and((float) $response->json('order.totalPrice'))->toBe($expectedTotal)
+        ->and((float) $response->json('order.basePrice'))->toBe((float) $response->json('order.bookingBasePrice'))
+        ->and($response->json('order.couponApplied'))->toBeTrue()
+        ->and($response->json('order.couponCode'))->toBe('USERCREATE10');
+
+    $booking = CleaningBooking::query()->findOrFail((int) $response->json('order.id'));
+    expect((float) $booking->base_price)->toBe((float) $response->json('order.basePrice'))
+        ->and((float) $booking->admin_margin_amount)->toBe($expectedAdminMargin)
+        ->and((float) $booking->discount_amount)->toBe($expectedDiscount)
+        ->and((float) $booking->subtotal_before_discount)->toBe($expectedGrossTotal)
+        ->and((float) $booking->total_price)->toBe($expectedTotal);
 });
 
 it('creates a deep cleaning order and persists the mode in the response payload', function (): void {
