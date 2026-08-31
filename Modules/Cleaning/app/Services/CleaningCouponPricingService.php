@@ -14,6 +14,7 @@ final class CleaningCouponPricingService
 {
     public function __construct(
         private readonly PlatformCouponEligibilityService $couponEligibility,
+        private readonly CleaningPricingCalculator $pricingCalculator,
     ) {}
 
     /**
@@ -151,8 +152,16 @@ final class CleaningCouponPricingService
             2,
         );
         $grossTravelFee = round(max(0.0, (float) ($booking->travel_fee ?? 0)), 2);
-        if ($couponWasJustAttached || $booking->isDirty('admin_margin_amount')) {
-            $grossAdminMargin = round(max(0.0, (float) ($booking->admin_margin_amount ?? 0)), 2);
+        $currentAdminMargin = round(max(0.0, (float) ($booking->admin_margin_amount ?? 0)), 2);
+        if (! (bool) $booking->is_pricing_final && $currentAdminMargin <= 0.0) {
+            // Open-count bookings are initially stored without an admin margin
+            // until a worker is assigned. Coupons still consume the configured
+            // provisional administration margin first, otherwise the pending
+            // user/worker APIs would incorrectly deduct the coupon from service.
+            $grossAdminMargin = (float) $this->pricingCalculator
+                ->provisional($grossServiceAmount, 0.0)['adminMargin'];
+        } elseif ($couponWasJustAttached || $booking->isDirty('admin_margin_amount')) {
+            $grossAdminMargin = $currentAdminMargin;
         } else {
             // The subtotal snapshot is the reliable source for the original admin
             // margin, including the case where the coupon reduced net admin to 0.
@@ -165,7 +174,7 @@ final class CleaningCouponPricingService
             $originalTravelFee = round(max(0.0, (float) ($booking->getOriginal('travel_fee') ?? 0)), 2);
             $grossAdminMargin = $originalGrossTotal > 0.0
                 ? round(max(0.0, $originalGrossTotal - $originalServiceAmount - $originalTravelFee), 2)
-                : round(max(0.0, (float) ($booking->admin_margin_amount ?? 0)), 2);
+                : $currentAdminMargin;
         }
 
         $allocation = $this->allocation(
