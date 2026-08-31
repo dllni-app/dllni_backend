@@ -29,7 +29,7 @@ it('keeps the worker service share unchanged while the coupon fits inside the ad
         ->and((float) $booking->total_price)->toBe(1012.0)
         ->and((float) $assignment->service_share_amount)->toBe(1000.0)
         ->and((float) $assignment->admin_margin_amount)->toBe(12.0)
-        ->and((float) $assignment->worker_amount)->toBe(988.0);
+        ->and((float) $assignment->worker_amount)->toBe(1000.0);
 });
 
 it('starts reducing service only after the full-order coupon exhausts administration margin', function (): void {
@@ -118,7 +118,7 @@ it('returns a persisted dashboard breakdown that explains the customer and worke
         ->and($breakdown['totalPrice'])->toBe(1080.0)
         ->and((float) $assignment->service_share_amount)->toBe(960.0)
         ->and((float) $assignment->admin_margin_amount)->toBe(120.0)
-        ->and((float) $assignment->worker_amount)->toBe(840.0);
+        ->and((float) $assignment->worker_amount)->toBe(960.0);
 });
 
 it('returns the corrected coupon totals through the user cleaning order api', function (): void {
@@ -175,7 +175,7 @@ it('does not reapply the coupon to worker shares on a later pricing save', funct
 
     expect((float) $assignment->service_share_amount)->toBe(1000.0)
         ->and((float) $assignment->admin_margin_amount)->toBe(12.0)
-        ->and((float) $assignment->worker_amount)->toBe(988.0);
+        ->and((float) $assignment->worker_amount)->toBe(1000.0);
 });
 
 it('does not reapply a coupon after the administration margin has reached zero', function (): void {
