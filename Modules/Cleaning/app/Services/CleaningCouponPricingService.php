@@ -12,8 +12,6 @@ use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 
 final class CleaningCouponPricingService
 {
-    private const FACTOR_EPSILON = 0.0001;
-
     public function __construct(
         private readonly PlatformCouponEligibilityService $couponEligibility,
     ) {}
@@ -185,27 +183,6 @@ final class CleaningCouponPricingService
     }
 
     /**
-     * The order discount can include administration/travel markup because that
-     * is how the current customer total is quoted. For percentage coupons, the
-     * financial burden still follows percentage points on the gross service
-     * value: admin percentage first, then worker percentage. The difference is
-     * platform-funded so the customer-facing discount never changes.
-     */
-    private function allocatedDiscountAmount(
-        PlatformCoupon $coupon,
-        float $grossServiceAmount,
-        float $discountAmount,
-    ): float {
-        if ($coupon->discount_type !== PlatformCoupon::DISCOUNT_PERCENTAGE || $grossServiceAmount <= 0.0) {
-            return round($discountAmount, 2);
-        }
-
-        $percentageAmount = $grossServiceAmount * (max(0.0, (float) $coupon->discount_value) / 100);
-
-        return round(min($discountAmount, max(0.0, $percentageAmount)), 2);
-    }
-
-    /**
      * @return array{customerWorkerNetFactor: float, assignmentWorkerNetFactor: float, adminNetFactor: float}
      */
     private function previousDiscountFactors(CleaningBooking $booking, PlatformCoupon $coupon): array
@@ -258,44 +235,6 @@ final class CleaningCouponPricingService
             'adminNetFactor' => $grossAdminMargin > 0.0
                 ? max(0.0, min(1.0, $netAdminMargin / $grossAdminMargin))
                 : 1.0,
-        ];
-    }
-
-    /**
-     * @return array{customerWorkerNetFactor: float, assignmentWorkerNetFactor: float, adminNetFactor: float}|null
-     */
-    private function legacyPreviousDiscountFactors(
-        float $grossTotal,
-        float $discount,
-        float $grossServiceAmount,
-        float $netTravelFee,
-        float $netAdminMargin,
-    ): ?array {
-        $legacyNetFactor = max(0.0, min(1.0, 1.0 - ($discount / $grossTotal)));
-        if ($legacyNetFactor <= self::FACTOR_EPSILON) {
-            if ($netTravelFee <= 0.01 && $netAdminMargin <= 0.01) {
-                return [
-                    'customerWorkerNetFactor' => 0.0,
-                    'assignmentWorkerNetFactor' => 0.0,
-                    'adminNetFactor' => 0.0,
-                ];
-            }
-
-            return null;
-        }
-
-        $legacyGrossTravelFee = $netTravelFee / $legacyNetFactor;
-        $legacyGrossAdminMargin = max(0.0, $grossTotal - $grossServiceAmount - $legacyGrossTravelFee);
-        $expectedNetAdminMargin = round($legacyGrossAdminMargin * $legacyNetFactor, 2);
-
-        if (abs($expectedNetAdminMargin - $netAdminMargin) > 0.02) {
-            return null;
-        }
-
-        return [
-            'customerWorkerNetFactor' => $legacyNetFactor,
-            'assignmentWorkerNetFactor' => $legacyNetFactor,
-            'adminNetFactor' => $legacyNetFactor,
         ];
     }
 
