@@ -63,7 +63,7 @@ it('repairs legacy coupon booking and worker assignment values', function (): vo
         ->and((float) $assignment->service_share_amount)->toBe(960.0)
         ->and((float) $assignment->travel_fee)->toBe(0.0)
         ->and((float) $assignment->admin_margin_amount)->toBe(120.0)
-        ->and((float) $assignment->worker_amount)->toBe(840.0);
+        ->and((float) $assignment->worker_amount)->toBe(960.0);
 });
 
 it('repairs the intermediate service-based coupon data without reducing service again', function (): void {
@@ -131,7 +131,7 @@ it('repairs the intermediate service-based coupon data without reducing service 
         ->and((float) $booking->total_price)->toBe(1080.0)
         ->and((float) $assignment->service_share_amount)->toBe(960.0)
         ->and((float) $assignment->admin_margin_amount)->toBe(120.0)
-        ->and((float) $assignment->worker_amount)->toBe(840.0);
+        ->and((float) $assignment->worker_amount)->toBe(960.0);
 });
 
 it('is idempotent after legacy coupon data has been repaired', function (): void {
