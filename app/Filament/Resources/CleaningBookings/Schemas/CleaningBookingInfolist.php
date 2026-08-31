@@ -185,10 +185,10 @@ final class CleaningBookingInfolist
                                                     ->formatStateUsing(fn ($state): string => self::money($state))
                                                     ->visible(fn (CleaningBookingWorkerAssignment $record): bool => (float) ($record->travel_fee ?? 0) > 0),
                                                 TextEntry::make('admin_margin_amount')
-                                                    ->label('هامش الإدارة')
+                                                    ->label('هامش الإدارة (على العميل)')
                                                     ->formatStateUsing(fn ($state): string => self::money($state)),
                                                 TextEntry::make('worker_amount')
-                                                    ->label('صافي مستحق العامل')
+                                                    ->label('مستحق العامل')
                                                     ->formatStateUsing(fn ($state): string => self::money($state))
                                                     ->weight('bold'),
                                             ])
