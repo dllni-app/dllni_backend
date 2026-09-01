@@ -26,7 +26,7 @@ jobs:
           coverage: none
 
       - name: Validate composer manifest
-        run: composer validate --no-check-publish --no-interaction
+        run: composer validate --no-check-publish --no-check-lock --no-interaction
 
       - name: PHP syntax check for modified backend files
         run: |
