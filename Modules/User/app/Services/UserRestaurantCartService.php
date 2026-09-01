@@ -18,6 +18,7 @@ final class UserRestaurantCartService
         'restaurant.media',
         'items.product.category',
         'items.product.media',
+        'items.product.offers',
         'items.product.modifierGroups.modifiers',
         'items.modifiers',
     ];
@@ -62,7 +63,7 @@ final class UserRestaurantCartService
     ): array {
         return DB::transaction(function () use ($userId, $productId, $quantity, $modifierIds, $substituteProductId, $note, $quantityMode): array {
             $product = Product::query()
-                ->with(['modifierGroups.modifiers'])
+                ->with(['offers', 'modifierGroups.modifiers'])
                 ->findOrFail($productId);
 
             if (! $product->restaurant_id) {
@@ -150,7 +151,7 @@ final class UserRestaurantCartService
                 ->whereKey($itemId)
                 ->where('cart_id', $cartId)
                 ->whereHas('cart', fn ($q) => $q->where('user_id', $userId))
-                ->with(['product.modifierGroups.modifiers', 'cart', 'modifiers'])
+                ->with(['product.offers', 'product.modifierGroups.modifiers', 'cart', 'modifiers'])
                 ->lockForUpdate()
                 ->firstOrFail();
 
@@ -275,7 +276,7 @@ final class UserRestaurantCartService
 
             $items = CartItem::query()
                 ->where('cart_id', $lockedCart->id)
-                ->with(['product.media', 'product.modifierGroups.modifiers', 'modifiers'])
+                ->with(['product.media', 'product.offers', 'product.modifierGroups.modifiers', 'modifiers'])
                 ->orderBy('id')
                 ->lockForUpdate()
                 ->get();
@@ -317,7 +318,7 @@ final class UserRestaurantCartService
                 /** @var CartItem $keeper */
                 $keeper = $keeperRow['item'];
                 $mergedQuantity = (int) $group->sum('quantity');
-                $unitPrice = (float) ($keeper->unit_price ?? 0);
+                $unitPrice = $this->unitPrice($keeper->product, $keeper->modifiers);
                 $normalizedNote = $this->normalizeNote($keeper->special_instructions);
 
                 foreach ($group as $row) {
@@ -423,9 +424,8 @@ final class UserRestaurantCartService
     private function unitPrice(Product $product, Collection $modifiers): float
     {
         $modifierTotal = (float) $modifiers->sum(fn (Modifier $modifier): float => (float) ($modifier->price ?? 0));
-        $basePrice = (float) ($product->discounted_price ?? $product->price ?? 0);
 
-        return $basePrice + $modifierTotal;
+        return $product->effectivePrice() + $modifierTotal;
     }
 
     /**
@@ -484,7 +484,7 @@ final class UserRestaurantCartService
      */
     private function toPayload(Cart $cart): array
     {
-        $mappedItems = $cart->items->loadMissing(['product.media', 'product.modifierGroups.modifiers', 'modifiers'])->map(function (CartItem $item): array {
+        $mappedItems = $cart->items->loadMissing(['product.media', 'product.offers', 'product.modifierGroups.modifiers', 'modifiers'])->map(function (CartItem $item): array {
             $selectedModifiers = $item->modifiers
                 ->values()
                 ->map(fn (Modifier $modifier): array => [
@@ -504,6 +504,11 @@ final class UserRestaurantCartService
             $imageUrls = $item->product !== null
                 ? $item->product->getMedia('images')->map(fn ($media) => $media->getUrl())->values()->all()
                 : [];
+            $modifierTotal = (float) collect($selectedModifiers)->sum('price');
+            $originalProductPrice = $item->product !== null ? (float) ($item->product->price ?? 0) : 0.0;
+            $effectiveProductPrice = $item->product !== null ? $item->product->effectivePrice() : 0.0;
+            $hasDiscount = $item->product !== null && $effectiveProductPrice < $originalProductPrice;
+            $originalUnitPrice = $originalProductPrice + $modifierTotal;
 
             return [
                 'id' => $item->id,
@@ -515,7 +520,12 @@ final class UserRestaurantCartService
                 'imageUrls' => $imageUrls,
                 'quantity' => (int) $item->quantity,
                 'unitPrice' => (float) ($item->unit_price ?? 0),
+                'originalUnitPrice' => $hasDiscount ? round($originalUnitPrice, 2) : null,
+                'productPrice' => $effectiveProductPrice,
+                'originalProductPrice' => $hasDiscount ? $originalProductPrice : null,
+                'hasDiscount' => $hasDiscount,
                 'totalPrice' => (float) ($item->total_price ?? 0),
+                'originalTotalPrice' => $hasDiscount ? round($originalUnitPrice * (int) $item->quantity, 2) : null,
                 'modifierIds' => $item->modifiers->pluck('id')->map(fn ($id) => (int) $id)->values()->all(),
                 'modifiers' => $selectedModifiers,
                 'additions' => $selectedModifiers,
