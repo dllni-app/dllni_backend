@@ -28,9 +28,8 @@ final class RestaurantLuckBoxSuggestController
             restaurantId: isset($validated['restaurantId']) ? (int) $validated['restaurantId'] : null,
         );
 
-        // Lucky Box is presented to the mobile app at product level. The
-        // recommendation engine can still build balanced/best-value bundles
-        // internally, but every returned entry represents exactly one product.
+        // Keep the recommendation engine free to compose bundles internally,
+        // while presenting Lucky Box to mobile users as product suggestions.
         $productSuggestions = [];
         foreach (($payload['bundles'] ?? []) as $bundle) {
             foreach (($bundle['lineItems'] ?? []) as $lineItem) {
@@ -51,6 +50,12 @@ final class RestaurantLuckBoxSuggestController
                 $suggestion['productId'] = (int) $lineItem['productId'];
                 $suggestion['productName'] = (string) ($lineItem['name'] ?? '');
                 $suggestion['productImageUrl'] = $lineItem['imageUrl'] ?? null;
+
+                if (is_array($suggestion['restaurant'] ?? null) && ! empty($lineItem['imageUrl'])) {
+                    // Existing mobile models already read this field for the
+                    // first-level card; use the actual product image there.
+                    $suggestion['restaurant']['primaryImageUrl'] = $lineItem['imageUrl'];
+                }
 
                 $productSuggestions[] = $suggestion;
             }
