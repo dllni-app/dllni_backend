@@ -7,6 +7,7 @@ namespace Modules\User\Http\Controllers\API;
 use Illuminate\Http\JsonResponse;
 use Modules\User\Http\Requests\UserRestaurantCartItemUpdateRequest;
 use Modules\User\Services\UserRestaurantCartService;
+use Modules\User\Support\UserRestaurantCartPayload;
 
 final class UserRestaurantCartItemUpdateController
 {
@@ -17,19 +18,20 @@ final class UserRestaurantCartItemUpdateController
     public function __invoke(UserRestaurantCartItemUpdateRequest $request, int $cartId, int $itemId): JsonResponse
     {
         $hasNote = $request->has('specialInstructions') || $request->has('note');
+        $cart = $this->carts->updateItem(
+            userId: (int) $request->user()->id,
+            cartId: $cartId,
+            itemId: $itemId,
+            quantity: (int) $request->integer('quantity'),
+            modifierIds: $request->has('modifierIds') ? $request->input('modifierIds', []) : null,
+            substituteProductId: $request->input('substituteProductId'),
+            note: $request->input('specialInstructions') ?? $request->input('note'),
+            replaceSubstituteProduct: $request->has('substituteProductId'),
+            replaceNote: $hasNote,
+        );
 
         return response()->json([
-            'data' => $this->carts->updateItem(
-                userId: (int) $request->user()->id,
-                cartId: $cartId,
-                itemId: $itemId,
-                quantity: (int) $request->integer('quantity'),
-                modifierIds: $request->has('modifierIds') ? $request->input('modifierIds', []) : null,
-                substituteProductId: $request->input('substituteProductId'),
-                note: $request->input('specialInstructions') ?? $request->input('note'),
-                replaceSubstituteProduct: $request->has('substituteProductId'),
-                replaceNote: $hasNote,
-            ),
+            'data' => UserRestaurantCartPayload::normalize($cart),
         ]);
     }
 }
