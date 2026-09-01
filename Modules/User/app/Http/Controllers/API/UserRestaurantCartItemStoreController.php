@@ -7,6 +7,7 @@ namespace Modules\User\Http\Controllers\API;
 use Illuminate\Http\JsonResponse;
 use Modules\User\Http\Requests\UserRestaurantCartItemStoreRequest;
 use Modules\User\Services\UserRestaurantCartService;
+use Modules\User\Support\UserRestaurantCartPayload;
 
 final class UserRestaurantCartItemStoreController
 {
@@ -34,7 +35,7 @@ final class UserRestaurantCartItemStoreController
             'quantity' => $result['quantity'],
             'cartProductsCount' => $result['cartProductsCount'],
             'operation' => $result['operation'],
-            'data' => $result['cart'],
+            'data' => UserRestaurantCartPayload::normalize($result['cart']),
         ], $result['operation'] === 'created' ? 201 : 200);
     }
 }
