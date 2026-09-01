@@ -22,10 +22,13 @@ final class SmOrderResource extends JsonResource
         $deliverySummary = DeliveryPresentation::merchantSummary($this->resource);
         $orderDetails = $this->orderDetailsPayload();
         $deliveryOrder = $this->relationLoaded('deliveryOrder') ? $this->deliveryOrder : null;
+        $fulfillmentType = $deliveryOrder !== null ? 'delivery' : 'pickup';
 
         return [
             'id' => $this->id,
             'deliveryOrderId' => $deliveryOrder?->id,
+            'fulfillmentType' => $fulfillmentType,
+            'fulfillmentTypeLabel' => $fulfillmentType === 'delivery' ? 'توصيل' : 'استلام من المتجر',
             'customerId' => $this->customer_id,
             'customer' => UserResource::make($this->whenLoaded('customer')),
             'storeId' => $this->store_id,
@@ -191,15 +194,10 @@ final class SmOrderResource extends JsonResource
             return null;
         }
 
-        // U+FFFD means the original bytes have already been lost. Do not send
-        // replacement-character garbage to clients; they can show their normal
-        // "no notes" fallback instead.
         if (str_contains($value, "\u{FFFD}") || ! mb_check_encoding($value, 'UTF-8')) {
             return null;
         }
 
-        // Repair the common case where UTF-8 Arabic bytes were decoded once as
-        // Windows-1252/Latin-1 (for example: "Ø§Ù„...").
         if (preg_match('/[ØÙ]/u', $value) === 1) {
             foreach (['Windows-1252', 'ISO-8859-1'] as $encoding) {
                 $repaired = mb_convert_encoding($value, $encoding, 'UTF-8');
