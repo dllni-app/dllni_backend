@@ -10,14 +10,14 @@ use Modules\Delivery\Notifications\DeliveryUserNotification;
 
 final class DeliveryUserNotificationService
 {
+    /**
+     * Driver acceptance is intentionally silent for the customer.
+     * The accepted state remains available in order tracking/details, while
+     * the next meaningful customer notification is when delivery actually starts.
+     */
     public function notifyAccepted(DeliveryOrder $order): void
     {
-        $this->notify(
-            order: $order,
-            title: 'مندوبك في الطريق',
-            body: 'تم قبول طلب التوصيل وسيصل المندوب إلى نقطة الاستلام قريباً.',
-            event: 'accepted',
-        );
+        // Intentionally no customer notification.
     }
 
     public function notifyStarted(DeliveryOrder $order): void
@@ -34,8 +34,8 @@ final class DeliveryUserNotificationService
     {
         $this->notify(
             order: $order,
-            title: 'تم استلام الطلب',
-            body: 'استلم المندوب طلبك وهو الآن في الطريق إليك.',
+            title: 'تم التسليم لمندوب التوصيل',
+            body: 'تم تسليم طلبك لمندوب التوصيل وهو الآن في الطريق إليك.',
             event: 'picked_up',
         );
     }
@@ -44,8 +44,8 @@ final class DeliveryUserNotificationService
     {
         $this->notify(
             order: $order,
-            title: 'تم تسليم الطلب',
-            body: 'تم تسليم طلبك بنجاح.',
+            title: 'تم الاستلام',
+            body: 'تم استلام طلبك بنجاح.',
             event: 'delivered',
         );
     }
@@ -54,8 +54,8 @@ final class DeliveryUserNotificationService
     {
         $this->notify(
             order: $order,
-            title: 'اكتمل طلب التوصيل',
-            body: 'شكراً لاستخدامك دللني.',
+            title: 'مكتمل',
+            body: 'اكتمل طلب التوصيل بنجاح. شكراً لاستخدامك ع الندهة.',
             event: 'completed',
             priority: 'normal',
         );
@@ -77,7 +77,7 @@ final class DeliveryUserNotificationService
         $this->notify(
             order: $order,
             title: 'توقف طلب التوصيل',
-            body: 'حدثت مشكلة في طلب التوصيل. يرجى التواصل مع الدعم.',
+            body: 'تعذر العثور على مندوب متاح حالياً. يرجى مراجعة تفاصيل الطلب.',
             event: 'stopped',
             reason: $reason,
         );
