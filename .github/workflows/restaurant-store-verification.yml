@@ -1,0 +1,47 @@
+name: Restaurant Store Backend Verification
+
+on:
+  push:
+    branches: [dev]
+    paths:
+      - '.github/workflows/restaurant-store-verification.yml'
+      - 'Modules/Resturants/**'
+      - 'Modules/Supermarket/**'
+      - 'Modules/User/**'
+      - 'Modules/Delivery/**'
+      - 'config/deep_links.php'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - name: Validate composer manifest
+        run: composer validate --no-check-publish --no-interaction
+
+      - name: PHP syntax check for modified backend files
+        run: |
+          php -l Modules/Resturants/app/Models/Product.php
+          php -l Modules/Resturants/app/Http/Requests/OfferRequest.php
+          php -l Modules/User/app/Http/Resources/UserRestaurantProductWithOffersResource.php
+          php -l Modules/User/app/Services/UserRestaurantCartService.php
+          php -l Modules/User/app/Services/RestaurantCartService.php
+          php -l Modules/User/app/Services/UserSupermarketCartService.php
+          php -l Modules/Delivery/app/Models/DeliveryOrder.php
+          php -l Modules/Delivery/app/Services/DeliveryUserNotificationService.php
+          php -l Modules/User/app/Http/Requests/UserRestaurantOrderStoreRequest.php
+          php -l Modules/User/app/Http/Requests/UserRestaurantCheckoutPreviewRequest.php
+          php -l Modules/User/app/Http/Requests/UserSupermarketOrderStoreRequest.php
+          php -l Modules/User/app/Http/Requests/UserSupermarketCheckoutPreviewRequest.php
+          php -l Modules/Supermarket/app/Models/SmProduct.php
+          php -l Modules/Supermarket/app/Http/Requests/SmOfferRequest.php
+          php -l config/deep_links.php
