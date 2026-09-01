@@ -21,21 +21,10 @@ final class UserRestaurantProductWithOffersResource extends JsonResource
         $attributes = $product->getAttributes();
 
         $price = $product->price !== null ? (float) $product->price : null;
-        $discounted = $product->discounted_price !== null ? (float) $product->discounted_price : null;
-        $hasDiscount = $price !== null && $discounted !== null && $discounted < $price;
-        $displayPrice = $hasDiscount ? $discounted : $price;
+        $displayPrice = $price === null ? null : $product->effectivePrice();
+        $hasDiscount = $price !== null && $displayPrice !== null && $displayPrice < $price;
 
-        // Get active offers if loaded
-        $activeOffers = [];
-        if ($product->relationLoaded('offers')) {
-            $activeOffers = $product->offers
-                ->filter(fn ($offer) => $offer->is_active && (
-                    $offer->ends_at === null || $offer->ends_at->isFuture()
-                ))
-                ->values()
-                ->all();
-        }
-
+        $activeOffers = $product->activeOffersNow();
         $popularOrdersCount = (int) ($attributes['popular_orders_count'] ?? 0);
 
         return [
@@ -43,7 +32,9 @@ final class UserRestaurantProductWithOffersResource extends JsonResource
             'name' => $product->name,
             'description' => $product->description,
             'displayPrice' => $displayPrice,
+            'discountedPrice' => $hasDiscount ? $displayPrice : null,
             'originalPrice' => $hasDiscount ? $price : null,
+            'hasDiscount' => $hasDiscount,
             'currency' => config('app.currency', 'IQD'),
             'isAvailable' => $product->is_available,
             'isFavorite' => (bool) ($attributes['isFavoritedByUser'] ?? false),
@@ -61,7 +52,9 @@ final class UserRestaurantProductWithOffersResource extends JsonResource
                 'id' => $product->category->id,
                 'name' => $product->category->name,
             ] : null,
-            'activeOffers' => $activeOffers ? UserRestaurantProductOfferResource::collection($activeOffers) : [],
+            'activeOffers' => $activeOffers->isNotEmpty()
+                ? UserRestaurantProductOfferResource::collection($activeOffers)
+                : [],
             'createdAt' => $product->created_at->toDateTimeString(),
         ];
     }
