@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Resturants\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 use Modules\Resturants\Models\Restaurant;
 
 final class OfferRequest extends FormRequest
@@ -19,8 +20,16 @@ final class OfferRequest extends FormRequest
         return [
             'restaurantId' => 'required|exists:restaurants,id',
             'name' => 'required|string|max:255',
-            'discountType' => 'required|string|in:percentage,fixed_amount',
-            'discountValue' => 'required|numeric|min:0',
+            'discountType' => ['required', 'string', Rule::in(['percentage', 'fixed_amount'])],
+            'discountValue' => [
+                'required',
+                'numeric',
+                'min:0',
+                Rule::when(
+                    $this->input('discountType') === 'percentage',
+                    ['max:100'],
+                ),
+            ],
             'startsAt' => 'nullable|date',
             'endsAt' => 'nullable|date|after_or_equal:startsAt',
             'isActive' => 'nullable|boolean',
@@ -33,7 +42,7 @@ final class OfferRequest extends FormRequest
         $endsAt = $this->input('endsAt', $this->input('ends_at'));
 
         if ($this->isMethod('post') && blank($startsAt)) {
-            $startsAt = now()->toDateString();
+            $startsAt = now()->toDateTimeString();
         }
 
         $this->merge([
