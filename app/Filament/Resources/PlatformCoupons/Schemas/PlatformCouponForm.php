@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\PlatformCoupons\Schemas;
 
 use App\Models\PlatformCoupon;
+use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -12,8 +13,10 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 
 final class PlatformCouponForm
 {
@@ -24,6 +27,17 @@ final class PlatformCouponForm
                 ->columns(2)
                 ->schema([
                     TextInput::make('code')->label('الرمز')->required()->maxLength(50)->unique(ignoreRecord: true)
+                        ->helperText('يقترح النظام رمزًا معبرًا وغير مكرر تلقائيًا، ويمكنك تعديله يدويًا.')
+                        ->suffixAction(
+                            Action::make('suggestCouponCode')
+                                ->label('اقتراح رمز')
+                                ->icon('heroicon-o-arrow-path')
+                                ->tooltip('اقتراح رمز جديد')
+                                ->disabled(fn (Get $get): bool => ! self::canGenerateCouponCode($get))
+                                ->action(function (Get $get, Set $set): void {
+                                    $set('code', self::generateCouponCode($get));
+                                }),
+                        )
                         ->dehydrateStateUsing(fn (?string $state): string => mb_strtoupper(mb_trim((string) $state))),
                     Select::make('section')->label('القسم')->required()->native(false)->live()->options([
                         PlatformCoupon::SECTION_CLEANING => 'التنظيف',
@@ -42,6 +56,14 @@ final class PlatformCouponForm
                         PlatformCoupon::DISCOUNT_PERCENTAGE => 'نسبة مئوية',
                     ]),
                     TextInput::make('discount_value')->label('قيمة الخصم')->required()->numeric()->minValue(0.01)
+                        ->live(onBlur: true)
+                        ->afterStateUpdated(function (Get $get, Set $set): void {
+                            if (filled($get('code')) || ! self::canGenerateCouponCode($get)) {
+                                return;
+                            }
+
+                            $set('code', self::generateCouponCode($get));
+                        })
                         ->maxValue(fn (Get $get): ?int => $get('discount_type') === PlatformCoupon::DISCOUNT_PERCENTAGE ? 100 : null),
                     TextInput::make('max_discount_amount')->label('الحد الأقصى للخصم')->numeric()->minValue(0)
                         ->visible(fn (Get $get): bool => $get('discount_type') === PlatformCoupon::DISCOUNT_PERCENTAGE),
@@ -88,5 +110,53 @@ final class PlatformCouponForm
                     Toggle::make('is_active')->label('فعال')->default(true),
                 ]),
         ]);
+    }
+
+    private static function canGenerateCouponCode(Get $get): bool
+    {
+        return filled($get('section'))
+            && filled($get('discount_type'))
+            && is_numeric($get('discount_value'))
+            && (float) $get('discount_value') > 0;
+    }
+
+    private static function generateCouponCode(Get $get): string
+    {
+        $section = match ($get('section')) {
+            PlatformCoupon::SECTION_CLEANING => 'CLEAN',
+            PlatformCoupon::SECTION_RESTAURANT => 'REST',
+            PlatformCoupon::SECTION_SUPERMARKET => 'SM',
+            PlatformCoupon::SECTION_ALL => 'ALL',
+            default => 'OFFER',
+        };
+
+        $discountValue = self::normalizeDiscountValue($get('discount_value'));
+        $discount = match ($get('discount_type')) {
+            PlatformCoupon::DISCOUNT_PERCENTAGE => 'P'.$discountValue,
+            PlatformCoupon::DISCOUNT_FIXED => 'F'.$discountValue,
+            default => $discountValue,
+        };
+
+        $referenceDate = filled($get('starts_at'))
+            ? Carbon::parse((string) $get('starts_at'))
+            : now();
+        $baseCode = mb_strtoupper($section.'-'.$discount.'-'.$referenceDate->format('My'));
+
+        $candidate = $baseCode;
+        $suffix = 2;
+
+        while (PlatformCoupon::query()->where('code', $candidate)->exists()) {
+            $candidate = $baseCode.'-'.str_pad((string) $suffix, 2, '0', STR_PAD_LEFT);
+            $suffix++;
+        }
+
+        return $candidate;
+    }
+
+    private static function normalizeDiscountValue(mixed $value): string
+    {
+        $normalized = number_format((float) $value, 2, '.', '');
+
+        return rtrim(rtrim($normalized, '0'), '.');
     }
 }
