@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 use Modules\Supermarket\Enums\SmProductSource;
 use Modules\Supermarket\Traits\FilterQueries\SmProductFilterQuery;
 use Spatie\MediaLibrary\HasMedia;
@@ -81,6 +82,83 @@ final class SmProduct extends Model implements HasMedia
     public function orderItems(): HasMany
     {
         return $this->hasMany(SmOrderItem::class, 'product_id');
+    }
+
+    /**
+     * Price that should be charged now, considering the product's manual
+     * discounted price and every active supermarket offer linked to it.
+     */
+    public function effectivePrice(): int
+    {
+        $basePrice = max(0, (int) ($this->attributes['price'] ?? 0));
+        $bestPrice = $basePrice;
+
+        $manualDiscount = $this->attributes['discounted_price'] ?? null;
+        if ($manualDiscount !== null && is_numeric($manualDiscount)) {
+            $bestPrice = min($bestPrice, max(0, (int) round((float) $manualDiscount)));
+        }
+
+        foreach ($this->activeOffersNow() as $offerProduct) {
+            $offer = $offerProduct->offer;
+            if (! $offer instanceof SmOffer) {
+                continue;
+            }
+
+            $candidate = $basePrice;
+            $type = strtolower(trim((string) $offer->offer_type));
+
+            if ($type === 'percent') {
+                $percent = min(100.0, max(0.0, (float) ($offer->discount_percent ?? 0)));
+                $candidate = (int) round($basePrice * (1 - ($percent / 100)));
+            } elseif ($type === 'value') {
+                $discountValue = max(0.0, (float) ($offer->discount_value ?? 0));
+                $candidate = (int) round(max(0.0, $basePrice - $discountValue));
+            }
+
+            $bestPrice = min($bestPrice, max(0, $candidate));
+        }
+
+        return $bestPrice;
+    }
+
+    /**
+     * Return a discounted price only when a real discount exists. A value of
+     * zero is intentional and represents a valid 100% discount.
+     */
+    public function getDiscountedPriceAttribute(mixed $value): ?int
+    {
+        $basePrice = max(0, (int) ($this->attributes['price'] ?? 0));
+        $effectivePrice = $this->effectivePrice();
+
+        return $effectivePrice < $basePrice ? $effectivePrice : null;
+    }
+
+    /**
+     * @return Collection<int, SmOfferProduct>
+     */
+    public function activeOffersNow(): Collection
+    {
+        $offerProducts = $this->relationLoaded('offerProducts')
+            ? $this->offerProducts->loadMissing('offer')
+            : $this->offerProducts()->with('offer')->get();
+        $now = now();
+
+        return $offerProducts
+            ->filter(static function (SmOfferProduct $offerProduct) use ($now): bool {
+                $offer = $offerProduct->offer;
+                if (! $offer instanceof SmOffer || ! $offer->is_active) {
+                    return false;
+                }
+                if ($offer->starts_at !== null && $offer->starts_at->gt($now)) {
+                    return false;
+                }
+                if ($offer->ends_at !== null && $offer->ends_at->lt($now)) {
+                    return false;
+                }
+
+                return true;
+            })
+            ->values();
     }
 
     public function registerMediaCollections(): void
