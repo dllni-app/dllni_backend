@@ -10,6 +10,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
+use Modules\Resturants\Enums\DiscountType;
 use Modules\Resturants\Traits\FilterQueries\ProductFilterQuery;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
@@ -73,6 +75,59 @@ final class Product extends Model implements HasMedia
     {
         return $this->belongsToMany(Offer::class, 'offer_product')
             ->withTimestamps();
+    }
+
+    /**
+     * Return the price the customer must actually pay right now.
+     *
+     * The best price wins between the product-level discounted_price and all
+     * currently active offers attached to the product. Percentage offers are
+     * capped at 100% and fixed discounts never make the price negative.
+     */
+    public function effectivePrice(): float
+    {
+        $originalPrice = max(0.0, (float) ($this->price ?? 0));
+        $bestPrice = $originalPrice;
+
+        if ($this->discounted_price !== null) {
+            $bestPrice = min($bestPrice, max(0.0, (float) $this->discounted_price));
+        }
+
+        foreach ($this->activeOffersNow() as $offer) {
+            $discountValue = max(0.0, (float) $offer->discount_value);
+            $candidate = match ($offer->discount_type) {
+                DiscountType::Percentage => $originalPrice * (1 - min(100.0, $discountValue) / 100),
+                DiscountType::FixedAmount => $originalPrice - $discountValue,
+            };
+
+            $bestPrice = min($bestPrice, max(0.0, $candidate));
+        }
+
+        return round($bestPrice, 2);
+    }
+
+    public function effectiveDiscountedPrice(): ?float
+    {
+        $originalPrice = max(0.0, (float) ($this->price ?? 0));
+        $effectivePrice = $this->effectivePrice();
+
+        return $effectivePrice < $originalPrice ? $effectivePrice : null;
+    }
+
+    /** @return Collection<int, Offer> */
+    public function activeOffersNow(): Collection
+    {
+        $offers = $this->relationLoaded('offers')
+            ? $this->offers
+            : $this->offers()->get();
+
+        $now = now();
+
+        return $offers
+            ->filter(static fn (Offer $offer): bool => (bool) $offer->is_active)
+            ->filter(static fn (Offer $offer): bool => $offer->starts_at === null || $offer->starts_at->lessThanOrEqualTo($now))
+            ->filter(static fn (Offer $offer): bool => $offer->ends_at === null || $offer->ends_at->greaterThanOrEqualTo($now))
+            ->values();
     }
 
     public function registerMediaCollections(): void
