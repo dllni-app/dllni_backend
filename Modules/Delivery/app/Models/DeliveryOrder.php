@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Modules\Delivery\Enums\DeliveryOrderStatus;
 use Modules\Resturants\Models\Order as RestaurantOrder;
 use Modules\Supermarket\Models\SmOrder;
 
@@ -22,6 +23,27 @@ final class DeliveryOrder extends Model
     protected $table = 'delivery_orders';
 
     protected $fillable = ['company_id', 'driver_id', 'order_number', 'customer_name', 'customer_phone', 'customer_notes', 'pickup_address', 'pickup_latitude', 'pickup_longitude', 'dropoff_address', 'dropoff_latitude', 'dropoff_longitude', 'distance_km', 'delivery_fee', 'currency', 'status', 'accepted_at', 'started_at', 'picked_up_at', 'delivered_at', 'completed_at', 'stopped_at', 'cancelled_at', 'stop_reason', 'cancel_reason', 'created_by_user_id', 'source_type', 'source_id', 'merchant_status', 'merchant_accepted_at', 'estimated_preparation_minutes', 'estimated_ready_at', 'merchant_ready_at', 'dispatch_wave', 'search_radius_km', 'dispatch_phase'];
+
+    protected static function booted(): void
+    {
+        static::updating(function (DeliveryOrder $order): void {
+            if (! $order->isDirty('status')) {
+                return;
+            }
+
+            if ($order->status !== DeliveryOrderStatus::Stopped->value || $order->driver_id === null) {
+                return;
+            }
+
+            // Once a driver has accepted the order it represents an active
+            // delivery lifecycle and must never be downgraded to "stopped".
+            // "stopped" is reserved for dispatch/search exhaustion before a
+            // driver is assigned.
+            $order->status = (string) $order->getOriginal('status');
+            $order->stopped_at = $order->getOriginal('stopped_at');
+            $order->stop_reason = $order->getOriginal('stop_reason');
+        });
+    }
 
     public function company(): BelongsTo
     {
