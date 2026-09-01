@@ -28,7 +28,7 @@ final class RestaurantCartService
     ): array {
         return DB::transaction(function () use ($userId, $productId, $quantity, $modifierIds, $substituteProductId, $specialInstructions) {
             $product = Product::query()
-                ->with(['modifierGroups.modifiers'])
+                ->with(['offers', 'modifierGroups.modifiers'])
                 ->findOrFail($productId);
 
             $cart = Cart::firstOrCreate([
@@ -38,8 +38,7 @@ final class RestaurantCartService
             $modifiers = $this->validatedModifiersForProduct($product, $modifierIds);
             $modifiersTotal = (float) $modifiers->sum(fn (Modifier $m) => (float) ($m->price ?? 0));
 
-            $basePrice = (float) ($product->discounted_price ?? $product->price ?? 0);
-            $unitPrice = $basePrice + $modifiersTotal;
+            $unitPrice = $product->effectivePrice() + $modifiersTotal;
             $totalPrice = $unitPrice * $quantity;
 
             $item = CartItem::create([
