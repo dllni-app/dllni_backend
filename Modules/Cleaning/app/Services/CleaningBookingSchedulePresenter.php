@@ -10,6 +10,7 @@ use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
+use Throwable;
 
 final class CleaningBookingSchedulePresenter
 {
@@ -223,7 +224,7 @@ final class CleaningBookingSchedulePresenter
         if ($date !== null && $time !== '') {
             try {
                 $start = CarbonImmutable::parse("{$date} {$time}", config('app.timezone'));
-            } catch (\Throwable) {
+            } catch (Throwable) {
                 $start = null;
             }
         }

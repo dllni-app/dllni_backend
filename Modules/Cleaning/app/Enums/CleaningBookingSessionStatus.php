@@ -18,23 +18,6 @@ enum CleaningBookingSessionStatus: string
     case Cancelled = 'cancelled';
     case Skipped = 'skipped';
 
-    public function label(): string
-    {
-        return match ($this) {
-            self::Scheduled => 'مجدولة',
-            self::WorkerAssigned => 'تم تعيين العمال',
-            self::AwaitingStartVerification => 'بانتظار تحقق البدء',
-            self::AwaitingWorkerStartConfirmation => 'بانتظار تأكيد العامل',
-            self::InProgress => 'قيد التنفيذ',
-            self::AwaitingCustomerCompletion => 'بانتظار تأكيد العميل',
-            self::TimeExtensionRequested => 'طلب تمديد وقت',
-            self::UnderDispute => 'قيد النزاع',
-            self::Completed => 'مكتملة',
-            self::Cancelled => 'ملغاة',
-            self::Skipped => 'متخطاة',
-        };
-    }
-
     /** @return array<int, string> */
     public static function activeValues(): array
     {
@@ -58,6 +41,23 @@ enum CleaningBookingSessionStatus: string
             self::Cancelled->value,
             self::Skipped->value,
         ];
+    }
+
+    public function label(): string
+    {
+        return match ($this) {
+            self::Scheduled => 'مجدولة',
+            self::WorkerAssigned => 'تم تعيين العمال',
+            self::AwaitingStartVerification => 'بانتظار تحقق البدء',
+            self::AwaitingWorkerStartConfirmation => 'بانتظار تأكيد العامل',
+            self::InProgress => 'قيد التنفيذ',
+            self::AwaitingCustomerCompletion => 'بانتظار تأكيد العميل',
+            self::TimeExtensionRequested => 'طلب تمديد وقت',
+            self::UnderDispute => 'قيد النزاع',
+            self::Completed => 'مكتملة',
+            self::Cancelled => 'ملغاة',
+            self::Skipped => 'متخطاة',
+        };
     }
 
     public function isTerminal(): bool

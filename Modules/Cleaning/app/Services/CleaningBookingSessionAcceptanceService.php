@@ -72,7 +72,7 @@ final class CleaningBookingSessionAcceptanceService
      * Selected-session mode intentionally permits partial success: each selected
      * session is independently validated and invalid sessions remain open.
      *
-     * @param array<int, int> $sessionIds
+     * @param  array<int, int>  $sessionIds
      * @return array{allAccepted:bool,acceptedSessionIds:array<int,int>,rejected:array<int,array{sessionId:int,reasonCode:string,message:string}>}
      */
     public function acceptSelectedSessions(CleaningBooking $booking, Worker $worker, array $sessionIds): array
@@ -111,17 +111,20 @@ final class CleaningBookingSessionAcceptanceService
 
                 if (! $session instanceof CleaningBookingSession) {
                     $rejected[] = $this->rejection($sessionId, 'session_not_found', 'The selected session does not belong to this booking.');
+
                     continue;
                 }
 
                 if ($this->workerAlreadyAccepted($session, $worker)) {
                     $accepted[] = $sessionId;
+
                     continue;
                 }
 
                 $reason = $this->validateOne($booking, $session, $worker);
                 if ($reason !== null) {
                     $rejected[] = $reason;
+
                     continue;
                 }
 
@@ -145,7 +148,7 @@ final class CleaningBookingSessionAcceptanceService
     }
 
     /**
-     * @param Collection<int, CleaningBookingSession> $sessions
+     * @param  Collection<int, CleaningBookingSession>  $sessions
      * @return array<int, array{sessionId:int,reasonCode:string,message:string}>
      */
     private function preflightAll(CleaningBooking $booking, Collection $sessions, Worker $worker): array
@@ -158,6 +161,7 @@ final class CleaningBookingSessionAcceptanceService
             $basic = $this->validateSeatAndWorker($booking, $session, $worker);
             if ($basic !== null) {
                 $rejected[] = $basic;
+
                 continue;
             }
 
@@ -165,6 +169,7 @@ final class CleaningBookingSessionAcceptanceService
             $end = $session->endsAt();
             if ($start === null || $end === null) {
                 $rejected[] = $this->rejection((int) $session->id, 'invalid_schedule', 'The session schedule is invalid.');
+
                 continue;
             }
 
@@ -175,12 +180,14 @@ final class CleaningBookingSessionAcceptanceService
                         'selected_sessions_overlap',
                         'Two selected sessions overlap in the worker schedule.',
                     );
+
                     continue 2;
                 }
             }
 
             if ($this->scheduleConflictService->hasConflictForSession($worker, $session)) {
                 $rejected[] = $this->rejection((int) $session->id, 'schedule_conflict', 'This session conflicts with another accepted booking.');
+
                 continue;
             }
 
@@ -189,6 +196,7 @@ final class CleaningBookingSessionAcceptanceService
             } catch (Throwable $exception) {
                 report($exception);
                 $rejected[] = $this->rejection((int) $session->id, 'pricing_unavailable', 'Worker pricing could not be finalized for this session.');
+
                 continue;
             }
 
@@ -199,6 +207,7 @@ final class CleaningBookingSessionAcceptanceService
                     'insufficient_commission_capacity',
                     'The worker financial allowance cannot cover every selected session.',
                 );
+
                 continue;
             }
 
@@ -333,8 +342,8 @@ final class CleaningBookingSessionAcceptanceService
     }
 
     /**
-     * @param array<int, int> $accepted
-     * @param array<int, array{sessionId:int,reasonCode:string,message:string}> $rejected
+     * @param  array<int, int>  $accepted
+     * @param  array<int, array{sessionId:int,reasonCode:string,message:string}>  $rejected
      * @return array{allAccepted:bool,acceptedSessionIds:array<int,int>,rejected:array<int,array{sessionId:int,reasonCode:string,message:string}>}
      */
     private function result(bool $allAccepted, array $accepted, array $rejected): array

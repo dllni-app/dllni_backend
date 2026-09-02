@@ -111,8 +111,8 @@ final class CleaningBookingSession extends Model
     {
         $date = $this->scheduled_date instanceof CarbonInterface
             ? $this->scheduled_date->toDateString()
-            : trim((string) $this->scheduled_date);
-        $time = trim((string) $this->scheduled_time);
+            : mb_trim((string) $this->scheduled_date);
+        $time = mb_trim((string) $this->scheduled_time);
 
         if ($date === '' || $time === '') {
             return null;

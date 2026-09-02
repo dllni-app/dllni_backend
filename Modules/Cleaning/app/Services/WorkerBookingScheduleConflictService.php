@@ -67,7 +67,7 @@ final class WorkerBookingScheduleConflictService
     }
 
     /**
-     * @param array<int, array{date:string,time:string,hours:float|int}> $definitions
+     * @param  array<int, array{date:string,time:string,hours:float|int}>  $definitions
      */
     public function hasConflictForDefinitions(Worker $worker, array $definitions, ?int $excludeBookingId = null): bool
     {
@@ -75,7 +75,7 @@ final class WorkerBookingScheduleConflictService
     }
 
     /**
-     * @param array<int, array{date:string,time:string,hours:float|int}> $definitions
+     * @param  array<int, array{date:string,time:string,hours:float|int}>  $definitions
      * @return array<int, array{sessionId:?int,start:string,end:string,conflictingBookingId:int,conflictingSessionId:?int}>
      */
     public function conflictsForDefinitions(Worker $worker, array $definitions, ?int $excludeBookingId = null): array
@@ -106,7 +106,7 @@ final class WorkerBookingScheduleConflictService
     }
 
     /**
-     * @param array<int, array{bookingId:int,sessionId:?int,start:CarbonImmutable,end:CarbonImmutable}> $candidateIntervals
+     * @param  array<int, array{bookingId:int,sessionId:?int,start:CarbonImmutable,end:CarbonImmutable}>  $candidateIntervals
      * @return array<int, array{sessionId:?int,start:string,end:string,conflictingBookingId:int,conflictingSessionId:?int}>
      */
     private function conflictsForIntervals(
@@ -267,7 +267,7 @@ final class WorkerBookingScheduleConflictService
     {
         $date = $session->scheduled_date instanceof CarbonInterface
             ? $session->scheduled_date->toDateString()
-            : trim((string) $session->scheduled_date);
+            : mb_trim((string) $session->scheduled_date);
 
         return $this->intervalFromParts(
             $date,
@@ -283,7 +283,7 @@ final class WorkerBookingScheduleConflictService
     {
         $date = $booking->scheduled_date instanceof CarbonInterface
             ? $booking->scheduled_date->toDateString()
-            : trim((string) $booking->scheduled_date);
+            : mb_trim((string) $booking->scheduled_date);
         $durationHours = (float) ($booking->total_hours ?? 0);
 
         if ($durationHours <= 0) {
