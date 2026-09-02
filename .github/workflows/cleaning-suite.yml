@@ -17,12 +17,15 @@ on:
       - 'Modules/Cleaning/database/migrations/*cleaning_booking_session*.php'
       - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderEstimatePriceController.php'
       - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderStoreController.php'
+      - 'Modules/User/app/Http/Controllers/API/UserCleaningPreviousWorkersController.php'
       - 'Modules/User/app/Http/Requests/Concerns/ValidatesEventAssistanceSchedule.php'
       - 'Modules/User/app/Http/Requests/UserCleaningOrderEstimatePriceRequest.php'
       - 'Modules/User/app/Http/Requests/UserCleaningOrderStoreRequest.php'
+      - 'Modules/User/app/Http/Requests/UserCleaningPreviousWorkersRequest.php'
       - 'Modules/User/app/Services/EventAssistanceScheduleService.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionAcceptanceTest.php'
       - 'tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php'
+      - 'tests/Feature/UserModule/EventAssistancePreviousWorkersScheduleTest.php'
       - '.github/workflows/cleaning-suite.yml'
   pull_request:
     paths:
@@ -38,12 +41,15 @@ on:
       - 'Modules/Cleaning/database/migrations/*cleaning_booking_session*.php'
       - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderEstimatePriceController.php'
       - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderStoreController.php'
+      - 'Modules/User/app/Http/Controllers/API/UserCleaningPreviousWorkersController.php'
       - 'Modules/User/app/Http/Requests/Concerns/ValidatesEventAssistanceSchedule.php'
       - 'Modules/User/app/Http/Requests/UserCleaningOrderEstimatePriceRequest.php'
       - 'Modules/User/app/Http/Requests/UserCleaningOrderStoreRequest.php'
+      - 'Modules/User/app/Http/Requests/UserCleaningPreviousWorkersRequest.php'
       - 'Modules/User/app/Services/EventAssistanceScheduleService.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionAcceptanceTest.php'
       - 'tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php'
+      - 'tests/Feature/UserModule/EventAssistancePreviousWorkersScheduleTest.php'
       - '.github/workflows/cleaning-suite.yml'
 
 jobs:
@@ -99,12 +105,15 @@ jobs:
             Modules/Cleaning/database/migrations/2026_09_02_230510_create_cleaning_booking_session_worker_assignments_table.php \
             Modules/User/app/Http/Controllers/API/UserCleaningOrderEstimatePriceController.php \
             Modules/User/app/Http/Controllers/API/UserCleaningOrderStoreController.php \
+            Modules/User/app/Http/Controllers/API/UserCleaningPreviousWorkersController.php \
             Modules/User/app/Http/Requests/Concerns/ValidatesEventAssistanceSchedule.php \
             Modules/User/app/Http/Requests/UserCleaningOrderEstimatePriceRequest.php \
             Modules/User/app/Http/Requests/UserCleaningOrderStoreRequest.php \
+            Modules/User/app/Http/Requests/UserCleaningPreviousWorkersRequest.php \
             Modules/User/app/Services/EventAssistanceScheduleService.php \
             tests/Feature/Cleaning/CleaningBookingSessionAcceptanceTest.php \
-            tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php
+            tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php \
+            tests/Feature/UserModule/EventAssistancePreviousWorkersScheduleTest.php
 
       - name: Run cleaning suite tests
         env:
@@ -118,6 +127,7 @@ jobs:
             tests/Feature/Cleaning/WorkerAtomicCommissionCapacityTest.php \
             tests/Feature/Cleaning/WorkerDepositEligibilityTest.php \
             tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php \
+            tests/Feature/UserModule/EventAssistancePreviousWorkersScheduleTest.php \
             2>&1 | tee cleaning-suite-test.log
 
       - name: Upload diagnostics
