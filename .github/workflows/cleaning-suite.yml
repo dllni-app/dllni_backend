@@ -1,0 +1,107 @@
+name: Cleaning Suite Foundation
+
+on:
+  push:
+    branches:
+      - feature/cleaning-suite-main
+    paths:
+      - 'Modules/Cleaning/app/Enums/CleaningBookingSession*.php'
+      - 'Modules/Cleaning/app/Models/CleaningBookingSession*.php'
+      - 'Modules/Cleaning/app/Services/CleaningBookingSession*.php'
+      - 'Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php'
+      - 'Modules/Cleaning/app/Services/WorkerBookingScheduleConflictService.php'
+      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingScheduleController.php'
+      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionAcceptanceController.php'
+      - 'Modules/Cleaning/app/Providers/RouteServiceProvider.php'
+      - 'Modules/Cleaning/routes/sessions.php'
+      - 'Modules/Cleaning/database/migrations/*cleaning_booking_session*.php'
+      - 'tests/Feature/Cleaning/CleaningBookingSessionAcceptanceTest.php'
+      - '.github/workflows/cleaning-suite.yml'
+  pull_request:
+    paths:
+      - 'Modules/Cleaning/app/Enums/CleaningBookingSession*.php'
+      - 'Modules/Cleaning/app/Models/CleaningBookingSession*.php'
+      - 'Modules/Cleaning/app/Services/CleaningBookingSession*.php'
+      - 'Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php'
+      - 'Modules/Cleaning/app/Services/WorkerBookingScheduleConflictService.php'
+      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingScheduleController.php'
+      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionAcceptanceController.php'
+      - 'Modules/Cleaning/app/Providers/RouteServiceProvider.php'
+      - 'Modules/Cleaning/routes/sessions.php'
+      - 'Modules/Cleaning/database/migrations/*cleaning_booking_session*.php'
+      - 'tests/Feature/Cleaning/CleaningBookingSessionAcceptanceTest.php'
+      - '.github/workflows/cleaning-suite.yml'
+
+jobs:
+  session-foundation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, bcmath, intl, gd
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare application
+        run: |
+          cp .env.example .env
+          touch database/database.sqlite
+          php artisan key:generate
+
+      - name: Migrate database
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        run: php artisan migrate --force
+
+      - name: Check formatting
+        run: |
+          vendor/bin/pint --test \
+            Modules/Cleaning/app/Enums/CleaningBookingSessionStatus.php \
+            Modules/Cleaning/app/Enums/CleaningBookingSessionCoverageStatus.php \
+            Modules/Cleaning/app/Models/CleaningBookingSession.php \
+            Modules/Cleaning/app/Models/CleaningBookingSessionWorkerAssignment.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionCoverageService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionSolvencyService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionWorkerPricingService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionWorkerEligibilityService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionAcceptanceService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php \
+            Modules/Cleaning/app/Services/WorkerBookingScheduleConflictService.php \
+            Modules/Cleaning/app/Http/Controllers/API/CleaningBookingScheduleController.php \
+            Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionAcceptanceController.php \
+            Modules/Cleaning/app/Providers/RouteServiceProvider.php \
+            Modules/Cleaning/routes/sessions.php \
+            Modules/Cleaning/database/migrations/2026_09_02_230500_create_cleaning_booking_sessions_table.php \
+            Modules/Cleaning/database/migrations/2026_09_02_230510_create_cleaning_booking_session_worker_assignments_table.php \
+            tests/Feature/Cleaning/CleaningBookingSessionAcceptanceTest.php
+
+      - name: Run session foundation tests
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        shell: bash
+        run: |
+          set -o pipefail
+          php artisan test \
+            tests/Feature/Cleaning/CleaningBookingSessionAcceptanceTest.php \
+            tests/Feature/Cleaning/WorkerAtomicCommissionCapacityTest.php \
+            tests/Feature/Cleaning/WorkerDepositEligibilityTest.php \
+            2>&1 | tee cleaning-suite-foundation-test.log
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cleaning-suite-foundation-diagnostics
+          path: cleaning-suite-foundation-test.log
+          if-no-files-found: ignore
