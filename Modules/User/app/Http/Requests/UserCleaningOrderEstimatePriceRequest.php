@@ -8,12 +8,14 @@ use App\Enums\GenderPreference;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
+use Modules\User\Http\Requests\Concerns\ValidatesEventAssistanceSchedule;
 use Modules\User\Http\Requests\Concerns\ValidatesWorkerRoomAssignments;
 use Modules\User\Models\UserAddress;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrderEstimatePriceRequest extends FormRequest
 {
+    use ValidatesEventAssistanceSchedule;
     use ValidatesWorkerRoomAssignments;
 
     private const INCOMPLETE_ADDRESS_MESSAGE = 'يرجى تحديث العنوان المختار وإضافة الحي والإحداثيات قبل إنشاء الطلب.';
@@ -100,6 +102,7 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             'propertyDetails.venueType' => [Rule::requiredIf($isEventAssistance), 'string', Rule::in($this->availableVenueTypes())],
             'propertyDetails.customService' => [Rule::requiredIf($isEventAssistance), Rule::prohibitedIf(! $isEventAssistance), 'string', 'max:255'],
             'propertyDetails.hours' => [Rule::requiredIf($isEventAssistance), Rule::prohibitedIf(! $isEventAssistance), 'numeric', 'min:1', 'max:24'],
+            ...$this->eventAssistanceScheduleRules($isEventAssistance),
             'serviceIds' => $isEventAssistance ? ['prohibited'] : ['sometimes', 'array', 'min:1'],
             'serviceIds.*' => $isEventAssistance ? ['prohibited'] : ['integer', 'distinct', 'exists:cleaning_services,id'],
             'addressId' => ['nullable', 'integer', Rule::exists('user_addresses', 'id')->where('user_id', (int) ($this->user()?->id ?? 0))],
@@ -119,7 +122,7 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
     {
         $validator->after(function (Validator $validator): void {
             $this->validateSelectedAddressCompleteness($validator);
-
+            $this->validateEventAssistanceSchedule($validator);
             $this->validateWorkerRoomAssignments($validator);
         });
     }
