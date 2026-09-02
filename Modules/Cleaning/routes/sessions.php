@@ -3,11 +3,17 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
+use Modules\Cleaning\Http\Controllers\API\CleaningBookingScheduleController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionAcceptanceController;
 
 Route::prefix('v1')
     ->middleware(['auth:sanctum'])
     ->group(function (): void {
+        Route::get(
+            'cleaning-bookings/{cleaning_booking}/schedule',
+            CleaningBookingScheduleController::class,
+        )->name('cleaning-bookings.schedule');
+
         Route::post(
             'cleaning-bookings/{cleaning_booking}/sessions/accept-all',
             [CleaningBookingSessionAcceptanceController::class, 'acceptAll'],
