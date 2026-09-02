@@ -5,6 +5,7 @@ on:
     branches:
       - feature/cleaning-suite-main
     paths:
+      - 'app/Providers/AppServiceProvider.php'
       - 'Modules/Cleaning/app/Enums/CleaningBookingSession*.php'
       - 'Modules/Cleaning/app/Models/CleaningBookingSession*.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSession*.php'
@@ -31,6 +32,7 @@ on:
       - '.github/workflows/cleaning-suite.yml'
   pull_request:
     paths:
+      - 'app/Providers/AppServiceProvider.php'
       - 'Modules/Cleaning/app/Enums/CleaningBookingSession*.php'
       - 'Modules/Cleaning/app/Models/CleaningBookingSession*.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSession*.php'
@@ -90,6 +92,7 @@ jobs:
       - name: Check formatting
         run: |
           vendor/bin/pint --test \
+            app/Providers/AppServiceProvider.php \
             Modules/Cleaning/app/Enums/CleaningBookingSessionStatus.php \
             Modules/Cleaning/app/Enums/CleaningBookingSessionCoverageStatus.php \
             Modules/Cleaning/app/Models/CleaningBookingSession.php \
