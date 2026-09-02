@@ -30,6 +30,7 @@ final class UserCleaningPreviousWorkersController
         $userId = Auth::id();
         $validated = $request->validated();
         $genderPreference = $validated['genderPreference'] ?? null;
+        $scheduleDefinitions = $this->scheduleDefinitions($validated['schedule']['sessions'] ?? null);
         $scheduledAt = $this->scheduledAt(
             $validated['scheduledDate'] ?? null,
             $validated['scheduledTime'] ?? null,
@@ -100,7 +101,7 @@ final class UserCleaningPreviousWorkersController
             ->get()
             ->filter(fn (Worker $worker): bool => $this->isWorkerEligible(
                 $worker,
-                $scheduledAt,
+                $scheduleDefinitions,
                 $scheduleCandidate,
             ))
             ->keyBy('id');
@@ -136,20 +137,55 @@ final class UserCleaningPreviousWorkersController
         ]);
     }
 
+    /**
+     * @param  array<int, array{date:string,time:string,hours:float}>  $scheduleDefinitions
+     */
     private function isWorkerEligible(
         Worker $worker,
-        ?Carbon $scheduledAt,
+        array $scheduleDefinitions,
         ?CleaningBooking $scheduleCandidate,
     ): bool {
         if (! $this->depositService->isWorkerEligibleForDispatch($worker)) {
             return false;
         }
 
-        if ($scheduleCandidate !== null && $this->scheduleConflictService->hasConflict($worker, $scheduleCandidate)) {
+        if (
+            $scheduleDefinitions !== []
+            && $this->scheduleConflictService->hasConflictForDefinitions($worker, $scheduleDefinitions)
+        ) {
+            return false;
+        }
+
+        if (
+            $scheduleDefinitions === []
+            && $scheduleCandidate !== null
+            && $this->scheduleConflictService->hasConflict($worker, $scheduleCandidate)
+        ) {
             return false;
         }
 
         return true;
+    }
+
+    /**
+     * @return array<int, array{date:string,time:string,hours:float}>
+     */
+    private function scheduleDefinitions(mixed $sessions): array
+    {
+        if (! is_array($sessions)) {
+            return [];
+        }
+
+        return collect($sessions)
+            ->filter(static fn (mixed $session): bool => is_array($session))
+            ->map(static fn (array $session): array => [
+                'date' => (string) ($session['date'] ?? ''),
+                'time' => (string) ($session['time'] ?? ''),
+                'hours' => max(1.0, (float) ($session['hours'] ?? 1)),
+            ])
+            ->sortBy(static fn (array $session): string => $session['date'].' '.$session['time'])
+            ->values()
+            ->all();
     }
 
     private function scheduledAt(mixed $scheduledDate, mixed $scheduledTime): ?Carbon
