@@ -1,4 +1,4 @@
-name: Cleaning Suite Foundation
+name: Cleaning Suite
 
 on:
   push:
@@ -15,7 +15,14 @@ on:
       - 'Modules/Cleaning/app/Providers/RouteServiceProvider.php'
       - 'Modules/Cleaning/routes/sessions.php'
       - 'Modules/Cleaning/database/migrations/*cleaning_booking_session*.php'
+      - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderEstimatePriceController.php'
+      - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderStoreController.php'
+      - 'Modules/User/app/Http/Requests/Concerns/ValidatesEventAssistanceSchedule.php'
+      - 'Modules/User/app/Http/Requests/UserCleaningOrderEstimatePriceRequest.php'
+      - 'Modules/User/app/Http/Requests/UserCleaningOrderStoreRequest.php'
+      - 'Modules/User/app/Services/EventAssistanceScheduleService.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionAcceptanceTest.php'
+      - 'tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php'
       - '.github/workflows/cleaning-suite.yml'
   pull_request:
     paths:
@@ -29,7 +36,14 @@ on:
       - 'Modules/Cleaning/app/Providers/RouteServiceProvider.php'
       - 'Modules/Cleaning/routes/sessions.php'
       - 'Modules/Cleaning/database/migrations/*cleaning_booking_session*.php'
+      - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderEstimatePriceController.php'
+      - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderStoreController.php'
+      - 'Modules/User/app/Http/Requests/Concerns/ValidatesEventAssistanceSchedule.php'
+      - 'Modules/User/app/Http/Requests/UserCleaningOrderEstimatePriceRequest.php'
+      - 'Modules/User/app/Http/Requests/UserCleaningOrderStoreRequest.php'
+      - 'Modules/User/app/Services/EventAssistanceScheduleService.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionAcceptanceTest.php'
+      - 'tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php'
       - '.github/workflows/cleaning-suite.yml'
 
 jobs:
@@ -83,9 +97,16 @@ jobs:
             Modules/Cleaning/routes/sessions.php \
             Modules/Cleaning/database/migrations/2026_09_02_230500_create_cleaning_booking_sessions_table.php \
             Modules/Cleaning/database/migrations/2026_09_02_230510_create_cleaning_booking_session_worker_assignments_table.php \
-            tests/Feature/Cleaning/CleaningBookingSessionAcceptanceTest.php
+            Modules/User/app/Http/Controllers/API/UserCleaningOrderEstimatePriceController.php \
+            Modules/User/app/Http/Controllers/API/UserCleaningOrderStoreController.php \
+            Modules/User/app/Http/Requests/Concerns/ValidatesEventAssistanceSchedule.php \
+            Modules/User/app/Http/Requests/UserCleaningOrderEstimatePriceRequest.php \
+            Modules/User/app/Http/Requests/UserCleaningOrderStoreRequest.php \
+            Modules/User/app/Services/EventAssistanceScheduleService.php \
+            tests/Feature/Cleaning/CleaningBookingSessionAcceptanceTest.php \
+            tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php
 
-      - name: Run session foundation tests
+      - name: Run cleaning suite tests
         env:
           DB_CONNECTION: sqlite
           DB_DATABASE: database/database.sqlite
@@ -96,12 +117,13 @@ jobs:
             tests/Feature/Cleaning/CleaningBookingSessionAcceptanceTest.php \
             tests/Feature/Cleaning/WorkerAtomicCommissionCapacityTest.php \
             tests/Feature/Cleaning/WorkerDepositEligibilityTest.php \
-            2>&1 | tee cleaning-suite-foundation-test.log
+            tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php \
+            2>&1 | tee cleaning-suite-test.log
 
       - name: Upload diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: cleaning-suite-foundation-diagnostics
-          path: cleaning-suite-foundation-test.log
+          name: cleaning-suite-diagnostics
+          path: cleaning-suite-test.log
           if-no-files-found: ignore
