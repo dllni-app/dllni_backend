@@ -26,11 +26,18 @@ final class CleaningBookingScheduleController
             abort(403, 'You are not allowed to view this cleaning booking schedule.');
         }
 
+        $bookingId = (int) $cleaning_booking->id;
+        $bookingNumber = (string) $cleaning_booking->booking_number;
+
         return response()->json([
             'success' => true,
             'data' => [
-                'bookingId' => (int) $cleaning_booking->id,
-                'bookingNumber' => (string) $cleaning_booking->booking_number,
+                'id' => $bookingId,
+                'bookingId' => $bookingId,
+                'booking_id' => $bookingId,
+                'bookingNumber' => $bookingNumber,
+                'booking_number' => $bookingNumber,
+                'status' => $cleaning_booking->status?->value ?? (string) $cleaning_booking->status,
                 'schedule' => $this->presenter->present(
                     $cleaning_booking,
                     $worker instanceof Worker ? $worker : null,
