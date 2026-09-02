@@ -14,6 +14,7 @@ on:
       - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingScheduleController.php'
       - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionAcceptanceController.php'
       - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLifecycleController.php'
+      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLocationController.php'
       - 'Modules/Cleaning/app/Providers/RouteServiceProvider.php'
       - 'Modules/Cleaning/routes/sessions.php'
       - 'Modules/Cleaning/database/migrations/*cleaning_booking_session*.php'
@@ -27,6 +28,7 @@ on:
       - 'Modules/User/app/Services/EventAssistanceScheduleService.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionAcceptanceTest.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionLifecycleTest.php'
+      - 'tests/Feature/Cleaning/CleaningBookingSessionLocationTest.php'
       - 'tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php'
       - 'tests/Feature/UserModule/EventAssistancePreviousWorkersScheduleTest.php'
       - '.github/workflows/cleaning-suite.yml'
@@ -41,6 +43,7 @@ on:
       - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingScheduleController.php'
       - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionAcceptanceController.php'
       - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLifecycleController.php'
+      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLocationController.php'
       - 'Modules/Cleaning/app/Providers/RouteServiceProvider.php'
       - 'Modules/Cleaning/routes/sessions.php'
       - 'Modules/Cleaning/database/migrations/*cleaning_booking_session*.php'
@@ -54,6 +57,7 @@ on:
       - 'Modules/User/app/Services/EventAssistanceScheduleService.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionAcceptanceTest.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionLifecycleTest.php'
+      - 'tests/Feature/Cleaning/CleaningBookingSessionLocationTest.php'
       - 'tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php'
       - 'tests/Feature/UserModule/EventAssistancePreviousWorkersScheduleTest.php'
       - '.github/workflows/cleaning-suite.yml'
@@ -108,6 +112,7 @@ jobs:
             Modules/Cleaning/app/Http/Controllers/API/CleaningBookingScheduleController.php \
             Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionAcceptanceController.php \
             Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLifecycleController.php \
+            Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLocationController.php \
             Modules/Cleaning/app/Providers/RouteServiceProvider.php \
             Modules/Cleaning/routes/sessions.php \
             Modules/Cleaning/database/migrations/2026_09_02_230500_create_cleaning_booking_sessions_table.php \
@@ -122,6 +127,7 @@ jobs:
             Modules/User/app/Services/EventAssistanceScheduleService.php \
             tests/Feature/Cleaning/CleaningBookingSessionAcceptanceTest.php \
             tests/Feature/Cleaning/CleaningBookingSessionLifecycleTest.php \
+            tests/Feature/Cleaning/CleaningBookingSessionLocationTest.php \
             tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php \
             tests/Feature/UserModule/EventAssistancePreviousWorkersScheduleTest.php
 
@@ -135,6 +141,7 @@ jobs:
           php artisan test \
             tests/Feature/Cleaning/CleaningBookingSessionAcceptanceTest.php \
             tests/Feature/Cleaning/CleaningBookingSessionLifecycleTest.php \
+            tests/Feature/Cleaning/CleaningBookingSessionLocationTest.php \
             tests/Feature/Cleaning/WorkerAtomicCommissionCapacityTest.php \
             tests/Feature/Cleaning/WorkerDepositEligibilityTest.php \
             tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php \
