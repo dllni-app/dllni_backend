@@ -22,6 +22,7 @@ final class CleaningBookingSessionAcceptanceService
         private readonly CleaningBookingSessionSolvencyService $solvencyService,
         private readonly CleaningBookingSessionWorkerPricingService $pricingService,
         private readonly CleaningBookingSessionCoverageService $coverageService,
+        private readonly CleaningBookingSessionWorkerEligibilityService $eligibilityService,
     ) {}
 
     /**
@@ -50,7 +51,7 @@ final class CleaningBookingSessionAcceptanceService
                 return $this->result(true, [], []);
             }
 
-            $preflight = $this->preflightAll($sessions, $worker);
+            $preflight = $this->preflightAll($booking, $sessions, $worker);
             if ($preflight !== []) {
                 return $this->result(false, [], $preflight);
             }
@@ -118,7 +119,7 @@ final class CleaningBookingSessionAcceptanceService
                     continue;
                 }
 
-                $reason = $this->validateOne($session, $worker);
+                $reason = $this->validateOne($booking, $session, $worker);
                 if ($reason !== null) {
                     $rejected[] = $reason;
                     continue;
@@ -147,14 +148,14 @@ final class CleaningBookingSessionAcceptanceService
      * @param Collection<int, CleaningBookingSession> $sessions
      * @return array<int, array{sessionId:int,reasonCode:string,message:string}>
      */
-    private function preflightAll(Collection $sessions, Worker $worker): array
+    private function preflightAll(CleaningBooking $booking, Collection $sessions, Worker $worker): array
     {
         $rejected = [];
         $remainingCapacity = (float) ($this->solvencyService->capacitySummary($worker)['availableCommissionCapacity'] ?? 0.0);
         $selectedIntervals = [];
 
         foreach ($sessions as $session) {
-            $basic = $this->validateSeatAndWorker($session, $worker);
+            $basic = $this->validateSeatAndWorker($booking, $session, $worker);
             if ($basic !== null) {
                 $rejected[] = $basic;
                 continue;
@@ -209,9 +210,12 @@ final class CleaningBookingSessionAcceptanceService
     }
 
     /** @return array{sessionId:int,reasonCode:string,message:string}|null */
-    private function validateOne(CleaningBookingSession $session, Worker $worker): ?array
-    {
-        $basic = $this->validateSeatAndWorker($session, $worker);
+    private function validateOne(
+        CleaningBooking $booking,
+        CleaningBookingSession $session,
+        Worker $worker,
+    ): ?array {
+        $basic = $this->validateSeatAndWorker($booking, $session, $worker);
         if ($basic !== null) {
             return $basic;
         }
@@ -241,8 +245,11 @@ final class CleaningBookingSessionAcceptanceService
     }
 
     /** @return array{sessionId:int,reasonCode:string,message:string}|null */
-    private function validateSeatAndWorker(CleaningBookingSession $session, Worker $worker): ?array
-    {
+    private function validateSeatAndWorker(
+        CleaningBooking $booking,
+        CleaningBookingSession $session,
+        Worker $worker,
+    ): ?array {
         if ($session->isTerminal()) {
             return $this->rejection((int) $session->id, 'session_closed', 'This session is no longer open for acceptance.');
         }
@@ -251,12 +258,12 @@ final class CleaningBookingSessionAcceptanceService
             return $this->rejection((int) $session->id, 'session_fully_covered', 'All worker seats for this session are already filled.');
         }
 
-        $capacity = $this->solvencyService->capacitySummary($worker);
-        if (! (bool) ($capacity['isEligibleForNewSessionRequests'] ?? false)) {
+        $eligibility = $this->eligibilityService->check($booking, $session, $worker);
+        if (! $eligibility['eligible']) {
             return $this->rejection(
                 (int) $session->id,
-                (string) ($capacity['financialWarningCode'] ?? 'worker_not_eligible'),
-                (string) ($capacity['financialWarningMessage'] ?? 'Worker is not eligible for new session requests.'),
+                $eligibility['reasonCode'],
+                $eligibility['message'],
             );
         }
 
@@ -274,17 +281,33 @@ final class CleaningBookingSessionAcceptanceService
         $quote = $this->pricingService->quoteForNextSeat($session, $worker, $acceptedBefore);
         $this->solvencyService->assertCanCover($worker, (float) $quote['adminMarginAmount']);
 
-        return CleaningBookingSessionWorkerAssignment::query()->create([
+        $assignment = CleaningBookingSessionWorkerAssignment::query()->firstOrNew([
             'cleaning_booking_session_id' => $session->id,
             'worker_id' => $worker->id,
+        ]);
+
+        $assignment->forceFill([
             'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
             'accepted_at' => now(),
+            'released_at' => null,
+            'released_reason' => null,
+            'started_travel_at' => null,
+            'arrived_at' => null,
+            'last_latitude' => null,
+            'last_longitude' => null,
+            'location_updated_at' => null,
+            'start_approved_at' => null,
+            'work_started_at' => null,
+            'work_finished_at' => null,
+            'worker_completion_message' => null,
             'service_share_amount' => $quote['serviceShareAmount'],
             'travel_fee' => $quote['travelFee'],
             'admin_margin_amount' => $quote['adminMarginAmount'],
             'worker_amount' => $quote['workerAmount'],
             'currency' => $quote['currency'],
-        ]);
+        ])->save();
+
+        return $assignment->fresh() ?? $assignment;
     }
 
     private function workerAlreadyAccepted(CleaningBookingSession $session, Worker $worker): bool
@@ -303,9 +326,7 @@ final class CleaningBookingSessionAcceptanceService
             ->first();
     }
 
-    /**
-     * @return array{sessionId:int,reasonCode:string,message:string}
-     */
+    /** @return array{sessionId:int,reasonCode:string,message:string} */
     private function rejection(int $sessionId, string $reasonCode, string $message): array
     {
         return compact('sessionId', 'reasonCode', 'message');
