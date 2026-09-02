@@ -14,34 +14,57 @@ final class CleaningBookingSessionSolvencyService
 {
     public function __construct(
         private readonly WorkerOrderSolvencyService $bookingSolvencyService,
+        private readonly DepositService $depositService,
     ) {}
 
     /** @return array<string, mixed> */
     public function capacitySummary(Worker $worker): array
     {
+        $worker->loadMissing('deposit');
         $base = $this->bookingSolvencyService->workerCapacitySummary($worker);
         $sessionReserved = $this->activeSessionReservedCommission($worker);
         $available = max(0.0, (float) ($base['availableCommissionCapacity'] ?? 0) - $sessionReserved);
+        $financialStatus = $this->depositService->depositStatusPayload($worker);
+        $eligible = (bool) ($financialStatus['isEligibleForNewRequests'] ?? false)
+            && (bool) $worker->is_active
+            && ! (bool) $worker->is_suspended;
 
         return array_merge($base, [
             'activeSessionReservedCommission' => round($sessionReserved, 2),
             'activeReservedCommission' => round((float) ($base['activeReservedCommission'] ?? 0) + $sessionReserved, 2),
             'availableCommissionCapacity' => round($available, 2),
+            'isEligibleForNewSessionRequests' => $eligible,
+            'financialWarningCode' => $financialStatus['financialWarningCode'] ?? null,
+            'financialWarningMessage' => $financialStatus['financialWarningMessage'] ?? null,
         ]);
     }
 
     public function canCover(Worker $worker, float $requiredCommission): bool
     {
+        $summary = $this->capacitySummary($worker);
+
+        if (! (bool) ($summary['isEligibleForNewSessionRequests'] ?? false)) {
+            return false;
+        }
+
         if ($requiredCommission <= 0.0) {
             return true;
         }
 
-        return (float) $this->capacitySummary($worker)['availableCommissionCapacity'] >= $requiredCommission;
+        return (float) $summary['availableCommissionCapacity'] >= $requiredCommission;
     }
 
     public function assertCanCover(Worker $worker, float $requiredCommission): void
     {
-        if ($this->canCover($worker, $requiredCommission)) {
+        $summary = $this->capacitySummary($worker);
+
+        if (! (bool) ($summary['isEligibleForNewSessionRequests'] ?? false)) {
+            throw new InvalidArgumentException(
+                (string) ($summary['financialWarningMessage'] ?? 'Worker is not financially eligible for new session requests.')
+            );
+        }
+
+        if ($requiredCommission <= 0.0 || (float) $summary['availableCommissionCapacity'] >= $requiredCommission) {
             return;
         }
 
