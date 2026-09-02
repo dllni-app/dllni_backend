@@ -10,9 +10,10 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
+use Modules\Cleaning\Services\CleaningPricingCalculator;
 use Modules\User\Http\Requests\UserCleaningOrderStoreRequest;
 use Modules\User\Http\Resources\UserCleaningBookingResource;
-use Modules\Cleaning\Services\CleaningPricingCalculator;
+use Modules\User\Services\EventAssistanceScheduleService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 use Modules\User\Services\UserCleaningOrderService;
 use Modules\User\Support\CleaningWorkerCapacity;
@@ -23,6 +24,7 @@ final class UserCleaningOrderStoreController
         UserCleaningOrderStoreRequest $request,
         UserCleaningOrderService $service,
         UserCleaningOrderEstimationService $estimationService,
+        EventAssistanceScheduleService $eventSchedule,
         PlatformCouponRedemptionService $platformCoupons,
         CleaningPricingCalculator $pricingCalculator,
     ): JsonResponse {
@@ -33,9 +35,47 @@ final class UserCleaningOrderStoreController
         $validated = $this->normalizeWorkerCount($request->validated());
         $validated = $this->withEventWorkerCount($validated);
         $this->assertWorkerCapacity($validated, $estimationService);
+        $eventPlan = $estimationService->isEventAssistanceType((string) ($validated['propertyType'] ?? ''))
+            ? $eventSchedule->resolve($validated)
+            : null;
 
-        $order = DB::transaction(function () use ($request, $service, $platformCoupons, $pricingCalculator, $couponCode, $validated) {
+        $order = DB::transaction(function () use ($request, $service, $eventSchedule, $eventPlan, $platformCoupons, $pricingCalculator, $couponCode, $validated) {
             $order = $service->store($request->user(), $validated);
+
+            if ($eventPlan !== null) {
+                $eventPricing = $eventSchedule->quote(
+                    plan: $eventPlan,
+                    propertyType: (string) $order->property_type,
+                    propertyDetails: (array) ($order->property_details ?? []),
+                    addressLatitude: $order->address_latitude,
+                    addressLongitude: $order->address_longitude,
+                    preferredWorkerId: $order->resolvedAssignmentMode() === 'preferred_worker'
+                        ? $order->preferred_worker_id
+                        : null,
+                    requiredWorkers: max(1, (int) $order->number_of_workers),
+                );
+
+                $order->forceFill([
+                    'property_details' => $eventSchedule->withAggregateHours(
+                        (array) ($order->property_details ?? []),
+                        $eventPlan,
+                    ),
+                    'estimated_hours' => $eventPlan['totalHours'],
+                    'total_hours' => $eventPlan['totalHours'],
+                    'scheduled_date' => $eventPlan['firstDate'],
+                    'scheduled_time' => $eventPlan['firstTime'],
+                    'base_price' => $eventPricing['basePrice'],
+                    'addons_total' => $eventPricing['addonsTotal'],
+                    'travel_fee' => $eventPricing['travelFee'],
+                    'travel_distance_km' => $eventPricing['distanceKm'],
+                    'admin_margin_amount' => $eventPricing['adminMargin'],
+                    'is_pricing_final' => $eventPricing['isPricingFinal'],
+                    'total_price' => $eventPricing['totalPrice'],
+                ])->save();
+
+                $eventSchedule->createSessions($order->fresh(), $eventPlan, $eventPricing);
+                $order = $order->fresh();
+            }
 
             if (is_string($couponCode) && trim($couponCode) !== '') {
                 $serviceSubtotal = round(
