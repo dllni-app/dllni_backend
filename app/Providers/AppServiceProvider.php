@@ -24,6 +24,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Observers\CleaningBookingCancellationAuditObserver;
 use Modules\Delivery\Models\DeliveryCompany;
 use Modules\Delivery\Models\DeliveryDriver;
@@ -195,6 +196,7 @@ final class AppServiceProvider extends ServiceProvider
             'sm_offer' => SmOffer::class,
             'marketing_offer' => MarketingOffer::class,
             'cleaning_booking' => CleaningBooking::class,
+            'cleaning_booking_session' => CleaningBookingSession::class,
             'event_booking' => \Modules\Cleaning\Models\EventBooking::class,
             'delivery_company' => DeliveryCompany::class,
             'delivery_driver' => DeliveryDriver::class,
