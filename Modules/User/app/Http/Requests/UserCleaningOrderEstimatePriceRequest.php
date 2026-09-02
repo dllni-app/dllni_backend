@@ -25,47 +25,6 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
         return true;
     }
 
-    protected function prepareForValidation(): void
-    {
-        $merge = [];
-
-        $preferredWorkerIds = $this->normalizePreferredWorkerIds(
-            $this->input('preferredWorkerIds', $this->input('preferredWorkerId'))
-        );
-
-        if ($preferredWorkerIds !== [] || $this->has('preferredWorkerIds')) {
-            $merge['preferredWorkerIds'] = $preferredWorkerIds;
-            $merge['preferredWorkerId'] = $preferredWorkerIds[0] ?? null;
-
-            if (count($preferredWorkerIds) > 1) {
-                if (! $this->filled('numberOfWorkers')) {
-                    $merge['numberOfWorkers'] = count($preferredWorkerIds);
-                }
-
-                if (! $this->filled('assignmentMode')) {
-                    $merge['assignmentMode'] = 'open_count';
-                }
-            }
-        }
-
-        $addressId = $this->input('addressId');
-        if (is_numeric($addressId) && $this->user() !== null) {
-            $address = UserAddress::query()
-                ->whereKey((int) $addressId)
-                ->where('user_id', (int) $this->user()->id)
-                ->first();
-
-            if ($address instanceof UserAddress) {
-                $merge['addressLatitude'] = $address->latitude !== null ? (float) $address->latitude : null;
-                $merge['addressLongitude'] = $address->longitude !== null ? (float) $address->longitude : null;
-            }
-        }
-
-        if ($merge !== []) {
-            $this->merge($merge);
-        }
-    }
-
     /**
      * @return array<string, mixed>
      */
@@ -125,6 +84,47 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             $this->validateEventAssistanceSchedule($validator);
             $this->validateWorkerRoomAssignments($validator);
         });
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $merge = [];
+
+        $preferredWorkerIds = $this->normalizePreferredWorkerIds(
+            $this->input('preferredWorkerIds', $this->input('preferredWorkerId'))
+        );
+
+        if ($preferredWorkerIds !== [] || $this->has('preferredWorkerIds')) {
+            $merge['preferredWorkerIds'] = $preferredWorkerIds;
+            $merge['preferredWorkerId'] = $preferredWorkerIds[0] ?? null;
+
+            if (count($preferredWorkerIds) > 1) {
+                if (! $this->filled('numberOfWorkers')) {
+                    $merge['numberOfWorkers'] = count($preferredWorkerIds);
+                }
+
+                if (! $this->filled('assignmentMode')) {
+                    $merge['assignmentMode'] = 'open_count';
+                }
+            }
+        }
+
+        $addressId = $this->input('addressId');
+        if (is_numeric($addressId) && $this->user() !== null) {
+            $address = UserAddress::query()
+                ->whereKey((int) $addressId)
+                ->where('user_id', (int) $this->user()->id)
+                ->first();
+
+            if ($address instanceof UserAddress) {
+                $merge['addressLatitude'] = $address->latitude !== null ? (float) $address->latitude : null;
+                $merge['addressLongitude'] = $address->longitude !== null ? (float) $address->longitude : null;
+            }
+        }
+
+        if ($merge !== []) {
+            $this->merge($merge);
+        }
     }
 
     /**

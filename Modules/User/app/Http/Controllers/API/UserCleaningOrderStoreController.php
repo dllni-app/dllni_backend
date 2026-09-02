@@ -77,7 +77,7 @@ final class UserCleaningOrderStoreController
                 $order = $order->fresh();
             }
 
-            if (is_string($couponCode) && trim($couponCode) !== '') {
+            if (is_string($couponCode) && mb_trim($couponCode) !== '') {
                 $serviceSubtotal = round(
                     (float) $order->base_price + (float) $order->addons_total,
                     2,
