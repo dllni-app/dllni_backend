@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Route;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingScheduleController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionAcceptanceController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionLifecycleController;
+use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionLocationController;
 
 Route::prefix('v1')
     ->middleware(['auth:sanctum'])
@@ -29,6 +30,11 @@ Route::prefix('v1')
             'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/start-travel',
             [CleaningBookingSessionLifecycleController::class, 'startTravel'],
         )->name('cleaning-bookings.sessions.start-travel');
+
+        Route::post(
+            'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/location',
+            CleaningBookingSessionLocationController::class,
+        )->name('cleaning-bookings.sessions.location');
 
         Route::post(
             'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/arrive',
