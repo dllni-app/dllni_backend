@@ -46,9 +46,6 @@ on:
       - 'tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php'
       - '.github/workflows/cleaning-suite.yml'
 
-permissions:
-  contents: write
-
 jobs:
   session-foundation:
     runs-on: ubuntu-latest
@@ -80,36 +77,34 @@ jobs:
           DB_DATABASE: database/database.sqlite
         run: php artisan migrate --force
 
-      - name: Format event schedule sources
+      - name: Check formatting
         run: |
-          vendor/bin/pint \
+          vendor/bin/pint --test \
+            Modules/Cleaning/app/Enums/CleaningBookingSessionStatus.php \
+            Modules/Cleaning/app/Enums/CleaningBookingSessionCoverageStatus.php \
+            Modules/Cleaning/app/Models/CleaningBookingSession.php \
+            Modules/Cleaning/app/Models/CleaningBookingSessionWorkerAssignment.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionCoverageService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionSolvencyService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionWorkerPricingService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionWorkerEligibilityService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionAcceptanceService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php \
+            Modules/Cleaning/app/Services/WorkerBookingScheduleConflictService.php \
+            Modules/Cleaning/app/Http/Controllers/API/CleaningBookingScheduleController.php \
+            Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionAcceptanceController.php \
+            Modules/Cleaning/app/Providers/RouteServiceProvider.php \
+            Modules/Cleaning/routes/sessions.php \
+            Modules/Cleaning/database/migrations/2026_09_02_230500_create_cleaning_booking_sessions_table.php \
+            Modules/Cleaning/database/migrations/2026_09_02_230510_create_cleaning_booking_session_worker_assignments_table.php \
             Modules/User/app/Http/Controllers/API/UserCleaningOrderEstimatePriceController.php \
             Modules/User/app/Http/Controllers/API/UserCleaningOrderStoreController.php \
             Modules/User/app/Http/Requests/Concerns/ValidatesEventAssistanceSchedule.php \
             Modules/User/app/Http/Requests/UserCleaningOrderEstimatePriceRequest.php \
             Modules/User/app/Http/Requests/UserCleaningOrderStoreRequest.php \
             Modules/User/app/Services/EventAssistanceScheduleService.php \
+            tests/Feature/Cleaning/CleaningBookingSessionAcceptanceTest.php \
             tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php
-
-      - name: Commit formatter output
-        if: github.event_name == 'push'
-        shell: bash
-        run: |
-          git add \
-            Modules/User/app/Http/Controllers/API/UserCleaningOrderEstimatePriceController.php \
-            Modules/User/app/Http/Controllers/API/UserCleaningOrderStoreController.php \
-            Modules/User/app/Http/Requests/Concerns/ValidatesEventAssistanceSchedule.php \
-            Modules/User/app/Http/Requests/UserCleaningOrderEstimatePriceRequest.php \
-            Modules/User/app/Http/Requests/UserCleaningOrderStoreRequest.php \
-            Modules/User/app/Services/EventAssistanceScheduleService.php \
-            tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php
-          if git diff --cached --quiet; then
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'style(cleaning): format event schedule sources'
-          git push
 
       - name: Run cleaning suite tests
         env:
