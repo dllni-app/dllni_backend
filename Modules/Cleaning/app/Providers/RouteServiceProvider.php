@@ -19,6 +19,7 @@ final class RouteServiceProvider extends ServiceProvider
     public function map(): void
     {
         $this->mapApiRoutes();
+        $this->mapSessionRoutes();
         $this->mapWebRoutes();
     }
 
@@ -30,5 +31,10 @@ final class RouteServiceProvider extends ServiceProvider
     public function mapApiRoutes(): void
     {
         Route::middleware('api')->prefix('api')->name('api.')->group(module_path($this->name, '/routes/api.php'));
+    }
+
+    public function mapSessionRoutes(): void
+    {
+        Route::middleware('api')->prefix('api')->name('api.')->group(module_path($this->name, '/routes/sessions.php'));
     }
 }
