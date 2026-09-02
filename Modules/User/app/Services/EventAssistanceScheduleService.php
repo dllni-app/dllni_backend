@@ -9,16 +9,15 @@ use Modules\Cleaning\Enums\CleaningBookingSessionCoverageStatus;
 use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
-use Modules\Cleaning\Services\CleaningPricingCalculator;
 
 final class EventAssistanceScheduleService
 {
     public function __construct(
-        private readonly CleaningPricingCalculator $pricingCalculator,
+        private readonly UserCleaningOrderEstimationService $estimationService,
     ) {}
 
     /**
-     * @param array<string, mixed> $validated
+     * @param  array<string, mixed>  $validated
      * @return array{mode:string,sessions:array<int, array{sequence:int,date:string,time:string,hours:float}>,daysCount:int,totalHours:float,firstDate:string,firstTime:string}|null
      */
     public function resolve(array $validated): ?array
@@ -75,8 +74,104 @@ final class EventAssistanceScheduleService
     }
 
     /**
-     * @param array<string, mixed> $propertyDetails
-     * @param array{totalHours:float} $plan
+     * Price every execution session independently and aggregate the parent
+     * booking from those immutable session quotes. This preserves the existing
+     * one-day pricing algorithm while charging transport for every visit.
+     *
+     * @param  array{mode:string,sessions:array<int, array{sequence:int,date:string,time:string,hours:float}>,daysCount:int,totalHours:float}  $plan
+     * @param  array<string, mixed>  $propertyDetails
+     * @return array<string, mixed>
+     */
+    public function quote(
+        array $plan,
+        string $propertyType,
+        array $propertyDetails,
+        mixed $addressLatitude,
+        mixed $addressLongitude,
+        mixed $preferredWorkerId,
+        int $requiredWorkers,
+    ): array {
+        $basePrice = 0.0;
+        $addonsTotal = 0.0;
+        $travelFee = 0.0;
+        $adminMargin = 0.0;
+        $totalPrice = 0.0;
+        $distanceKm = null;
+        $isPricingFinal = true;
+        $currency = (string) config('app.currency', 'SYP');
+        $eventHourlyRate = null;
+        $scheduleSessions = [];
+
+        foreach ($plan['sessions'] as $session) {
+            $sessionDetails = $propertyDetails;
+            $sessionDetails['hours'] = (float) $session['hours'];
+            $sessionDetails['workerCount'] = max(1, $requiredWorkers);
+
+            $pricing = $this->estimationService->price(
+                $propertyType,
+                $sessionDetails,
+                $addressLatitude,
+                $addressLongitude,
+                $preferredWorkerId,
+            );
+
+            $sessionBase = (float) ($pricing['basePrice'] ?? 0);
+            $sessionAddons = (float) ($pricing['addonsTotal'] ?? 0);
+            $sessionTravel = (float) ($pricing['travelFee'] ?? 0);
+            $sessionAdmin = (float) ($pricing['adminMargin'] ?? 0);
+            $sessionTotal = (float) ($pricing['totalPrice'] ?? 0);
+
+            $basePrice += $sessionBase;
+            $addonsTotal += $sessionAddons;
+            $travelFee += $sessionTravel;
+            $adminMargin += $sessionAdmin;
+            $totalPrice += $sessionTotal;
+            $distanceKm ??= isset($pricing['distanceKm']) ? (float) $pricing['distanceKm'] : null;
+            $eventHourlyRate ??= isset($pricing['eventHourlyRate']) ? (float) $pricing['eventHourlyRate'] : null;
+            $currency = (string) ($pricing['currency'] ?? $currency);
+            $isPricingFinal = $isPricingFinal && (bool) ($pricing['isPricingFinal'] ?? false);
+
+            $scheduleSessions[] = [
+                'sequence' => (int) $session['sequence'],
+                'date' => (string) $session['date'],
+                'time' => (string) $session['time'],
+                'hours' => (float) $session['hours'],
+                'basePrice' => round($sessionBase, 2),
+                'travelFee' => round($sessionTravel, 2),
+                'adminMargin' => round($sessionAdmin, 2),
+                'totalPrice' => round($sessionTotal, 2),
+            ];
+        }
+
+        return [
+            'basePrice' => round($basePrice, 2),
+            'addonsTotal' => round($addonsTotal, 2),
+            'travelFee' => round($travelFee, 2),
+            'distanceKm' => $distanceKm,
+            'adminMargin' => round($adminMargin, 2),
+            'isPricingFinal' => $isPricingFinal,
+            'totalPrice' => round($totalPrice, 2),
+            'currency' => $currency,
+            'serviceLines' => [],
+            'roomPricingLines' => [],
+            'pricingAlgorithm' => null,
+            'eventHourlyRate' => $eventHourlyRate,
+            'eventHours' => (float) $plan['totalHours'],
+            'eventWorkerCount' => max(1, $requiredWorkers),
+            'eventExecutionVisits' => (int) $plan['daysCount'],
+            'recommendation' => null,
+            'schedule' => [
+                'mode' => $plan['mode'],
+                'daysCount' => $plan['daysCount'],
+                'totalHours' => $plan['totalHours'],
+                'sessions' => $scheduleSessions,
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $propertyDetails
+     * @param  array{totalHours:float}  $plan
      * @return array<string, mixed>
      */
     public function withAggregateHours(array $propertyDetails, array $plan): array
@@ -87,89 +182,36 @@ final class EventAssistanceScheduleService
     }
 
     /**
-     * @param array{mode:string,sessions:array<int, array{sequence:int,date:string,time:string,hours:float}>,daysCount:int,totalHours:float} $plan
-     * @param array<string, mixed> $pricing
-     * @return array<string, mixed>
-     */
-    public function pricingPayload(array $plan, array $pricing, int $requiredWorkers): array
-    {
-        $sessions = $plan['sessions'];
-        $count = max(1, count($sessions));
-        $parentBase = max(0.0, (float) ($pricing['basePrice'] ?? 0));
-        $parentAdmin = max(0.0, (float) ($pricing['adminMargin'] ?? 0));
-        $parentTravel = max(0.0, (float) ($pricing['travelFee'] ?? 0));
-        $hourlyRate = max(0.0, (float) ($pricing['eventHourlyRate'] ?? 0));
-        $baseAllocated = 0.0;
-        $adminAllocated = 0.0;
-        $travelAllocated = 0.0;
-        $payloadSessions = [];
-
-        foreach ($sessions as $index => $session) {
-            $isLast = $index === $count - 1;
-            $calculatedBase = $this->pricingCalculator->roundMoney(
-                $hourlyRate * (float) $session['hours'] * max(1, $requiredWorkers),
-            );
-            $base = $isLast
-                ? round(max(0.0, $parentBase - $baseAllocated), 2)
-                : min($calculatedBase, round(max(0.0, $parentBase - $baseAllocated), 2));
-            $baseAllocated += $base;
-
-            $admin = $this->proportionalShare(
-                total: $parentAdmin,
-                part: $base,
-                whole: $parentBase,
-                allocated: $adminAllocated,
-                isLast: $isLast,
-            );
-            $adminAllocated += $admin;
-
-            $travel = $this->equalShare(
-                total: $parentTravel,
-                count: $count,
-                allocated: $travelAllocated,
-                isLast: $isLast,
-            );
-            $travelAllocated += $travel;
-
-            $payloadSessions[] = [
-                'sequence' => (int) $session['sequence'],
-                'date' => (string) $session['date'],
-                'time' => (string) $session['time'],
-                'hours' => (float) $session['hours'],
-                'basePrice' => round($base, 2),
-                'travelFee' => round($travel, 2),
-                'adminMargin' => round($admin, 2),
-                'totalPrice' => round($base + $travel + $admin, 2),
-            ];
-        }
-
-        return [
-            'mode' => $plan['mode'],
-            'daysCount' => $plan['daysCount'],
-            'totalHours' => $plan['totalHours'],
-            'sessions' => $payloadSessions,
-        ];
-    }
-
-    /**
-     * @param array{mode:string,sessions:array<int, array{sequence:int,date:string,time:string,hours:float}>,daysCount:int,totalHours:float} $plan
-     * @param array<string, mixed> $pricing
+     * @param  array{mode:string,sessions:array<int, array{sequence:int,date:string,time:string,hours:float}>,daysCount:int,totalHours:float}  $plan
+     * @param  array<string, mixed>  $pricing
      */
     public function createSessions(
         CleaningBooking $booking,
         array $plan,
         array $pricing,
     ): void {
-        $schedulePricing = $this->pricingPayload(
-            $plan,
-            $pricing,
-            max(1, (int) $booking->number_of_workers),
-        );
+        $schedulePricing = is_array($pricing['schedule']['sessions'] ?? null)
+            ? $pricing['schedule']['sessions']
+            : [];
+        $pricingBySequence = [];
 
-        foreach ($schedulePricing['sessions'] as $session) {
+        foreach ($schedulePricing as $sessionPricing) {
+            if (! is_array($sessionPricing)) {
+                continue;
+            }
+            $sequence = (int) ($sessionPricing['sequence'] ?? 0);
+            if ($sequence > 0) {
+                $pricingBySequence[$sequence] = $sessionPricing;
+            }
+        }
+
+        foreach ($plan['sessions'] as $session) {
+            $sequence = (int) $session['sequence'];
+            $sessionPricing = $pricingBySequence[$sequence] ?? [];
+
             CleaningBookingSession::query()->create([
                 'cleaning_booking_id' => $booking->id,
-                'sequence' => $session['sequence'],
+                'sequence' => $sequence,
                 'session_type' => UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE,
                 'calculation_mode' => 'hours',
                 'scheduled_date' => $session['date'],
@@ -178,16 +220,16 @@ final class EventAssistanceScheduleService
                 'required_workers' => max(1, (int) $booking->number_of_workers),
                 'coverage_status' => CleaningBookingSessionCoverageStatus::Searching,
                 'status' => CleaningBookingSessionStatus::Scheduled,
-                'base_price' => $session['basePrice'],
+                'base_price' => (float) ($sessionPricing['basePrice'] ?? 0),
                 'addons_total' => 0,
                 'materials_total' => 0,
                 'special_services_total' => 0,
-                'travel_fee' => $session['travelFee'],
+                'travel_fee' => (float) ($sessionPricing['travelFee'] ?? 0),
                 'travel_distance_km' => $booking->travel_distance_km,
-                'admin_margin_amount' => $session['adminMargin'],
+                'admin_margin_amount' => (float) ($sessionPricing['adminMargin'] ?? 0),
                 'extension_fee_total' => 0,
                 'cancellation_fee' => 0,
-                'total_price' => $session['totalPrice'],
+                'total_price' => (float) ($sessionPricing['totalPrice'] ?? 0),
                 'is_pricing_final' => (bool) $booking->is_pricing_final,
                 'pricing_snapshot' => [
                     'eventHourlyRate' => (float) ($pricing['eventHourlyRate'] ?? 0),
@@ -205,36 +247,5 @@ final class EventAssistanceScheduleService
     private function normalizeHours(float $hours): float
     {
         return ceil(max(1.0, $hours) * 2) / 2;
-    }
-
-    private function proportionalShare(
-        float $total,
-        float $part,
-        float $whole,
-        float $allocated,
-        bool $isLast,
-    ): float {
-        if ($total <= 0.0 || $whole <= 0.0) {
-            return 0.0;
-        }
-
-        if ($isLast) {
-            return round(max(0.0, $total - $allocated), 2);
-        }
-
-        return round($total * ($part / $whole), 2);
-    }
-
-    private function equalShare(float $total, int $count, float $allocated, bool $isLast): float
-    {
-        if ($total <= 0.0) {
-            return 0.0;
-        }
-
-        if ($isLast) {
-            return round(max(0.0, $total - $allocated), 2);
-        }
-
-        return round($total / max(1, $count), 2);
     }
 }
