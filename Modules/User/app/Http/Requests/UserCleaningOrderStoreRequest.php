@@ -7,6 +7,7 @@ namespace Modules\User\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
+use Modules\User\Http\Requests\Concerns\ValidatesEventAssistanceSchedule;
 use Modules\User\Http\Requests\Concerns\ValidatesWorkerRoomAssignments;
 use Modules\User\Models\UserAddress;
 use Modules\User\Services\FemaleWorkerSafetyPolicyService;
@@ -14,6 +15,7 @@ use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrderStoreRequest extends FormRequest
 {
+    use ValidatesEventAssistanceSchedule;
     use ValidatesWorkerRoomAssignments;
 
     private const INCOMPLETE_ADDRESS_MESSAGE = 'يرجى تحديث العنوان المختار وإضافة الحي والإحداثيات قبل إنشاء الطلب.';
@@ -130,6 +132,7 @@ final class UserCleaningOrderStoreRequest extends FormRequest
             'serviceIds.*' => ['prohibited'],
             'scheduledDate' => ['required', 'date', 'after_or_equal:'.$today],
             'scheduledTime' => ['required', 'date_format:H:i'],
+            ...$this->eventAssistanceScheduleRules($isEventAssistance),
             'addressId' => ['nullable', 'integer', Rule::exists('user_addresses', 'id')->where('user_id', (int) ($this->user()?->id ?? 0))],
             'addressLatitude' => ['nullable', 'numeric', 'between:-90,90'],
             'addressLongitude' => ['nullable', 'numeric', 'between:-180,180'],
@@ -163,6 +166,7 @@ final class UserCleaningOrderStoreRequest extends FormRequest
     {
         $validator->after(function (Validator $validator): void {
             $this->validateSelectedAddressCompleteness($validator);
+            $this->validateEventAssistanceSchedule($validator);
 
             if ($this->requiresFemaleWorkerSafetyConfirmation()) {
                 $policy = app(FemaleWorkerSafetyPolicyService::class);
