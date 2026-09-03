@@ -14,6 +14,7 @@ use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
+use Modules\Cleaning\Models\CleaningBookingSessionFinancialPenalty;
 use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
 
 final class CleaningBookingSessionCancellationService
@@ -44,6 +45,7 @@ final class CleaningBookingSessionCancellationService
         $updated = DB::transaction(function () use (
             $booking,
             $session,
+            $customerId,
             $normalizedReason,
             &$affectedWorkerIds,
             &$fromStatus,
@@ -81,10 +83,17 @@ final class CleaningBookingSessionCancellationService
                 'cancellation_fee' => $fee,
                 'cancelled_at' => $cancelledAt,
                 'cancellation_reason' => $normalizedReason,
-                'cancelled_by_role' => 'customer',
+                'cancelled_by_role' => CleaningBookingSessionFinancialPenalty::ROLE_CUSTOMER,
                 'version' => max(1, (int) $locked->version) + 1,
             ])->save();
 
+            $this->recordCustomerFinancialPenalty(
+                $booking,
+                $locked,
+                $customerId,
+                $normalizedReason,
+                $fee,
+            );
             $this->syncParentFinancials($booking);
 
             return $locked->fresh(['workerAssignments.worker.user']) ?? $locked;
@@ -191,6 +200,33 @@ final class CleaningBookingSessionCancellationService
         return $updated->fresh(['workerAssignments.worker.user']) ?? $updated;
     }
 
+    private function recordCustomerFinancialPenalty(
+        CleaningBooking $booking,
+        CleaningBookingSession $session,
+        int $customerId,
+        string $reason,
+        float $fee,
+    ): void {
+        if ($fee <= 0) {
+            return;
+        }
+
+        CleaningBookingSessionFinancialPenalty::query()->firstOrCreate(
+            ['reference_key' => 'customer:'.$session->id],
+            [
+                'cleaning_booking_id' => $booking->id,
+                'cleaning_booking_session_id' => $session->id,
+                'customer_id' => $customerId,
+                'penalized_role' => CleaningBookingSessionFinancialPenalty::ROLE_CUSTOMER,
+                'financial_source' => CleaningBookingSessionFinancialPenalty::SOURCE_CUSTOMER_FEE,
+                'amount' => $fee,
+                'status' => CleaningBookingSessionFinancialPenalty::STATUS_ACTIVE,
+                'reason_snapshot' => $reason,
+                'applied_at' => now(),
+            ],
+        );
+    }
+
     private function recordWorkerFinancialPenalty(
         CleaningBooking $booking,
         CleaningBookingSession $session,
@@ -203,19 +239,39 @@ final class CleaningBookingSessionCancellationService
         }
 
         $reference = self::WORKER_PENALTY_REFERENCE_PREFIX.$session->id.':'.$worker->id;
-        if (CleaningDepositTransaction::query()
-            ->where('worker_id', $worker->id)
-            ->where('reference', $reference)
-            ->exists()) {
+        $existing = CleaningBookingSessionFinancialPenalty::query()
+            ->where('reference_key', $reference)
+            ->first();
+        if ($existing instanceof CleaningBookingSessionFinancialPenalty) {
             return;
         }
 
-        $this->depositService->recordDebtCharge(
-            worker: $worker,
-            amount: $fee,
-            reference: $reference,
-            notes: 'غرامة إلغاء العامل للجلسة '.$session->sequence.' من الطلب '.$booking->booking_number.' — '.$reason,
-        );
+        $transaction = CleaningDepositTransaction::query()
+            ->where('worker_id', $worker->id)
+            ->where('reference', $reference)
+            ->first();
+        if (! $transaction instanceof CleaningDepositTransaction) {
+            $transaction = $this->depositService->recordDebtCharge(
+                worker: $worker,
+                amount: $fee,
+                reference: $reference,
+                notes: 'غرامة إلغاء العامل للجلسة '.$session->sequence.' من الطلب '.$booking->booking_number.' — '.$reason,
+            );
+        }
+
+        CleaningBookingSessionFinancialPenalty::query()->create([
+            'cleaning_booking_id' => $booking->id,
+            'cleaning_booking_session_id' => $session->id,
+            'worker_id' => $worker->id,
+            'financial_transaction_id' => $transaction->id,
+            'reference_key' => $reference,
+            'penalized_role' => CleaningBookingSessionFinancialPenalty::ROLE_WORKER,
+            'financial_source' => CleaningBookingSessionFinancialPenalty::SOURCE_DEBT,
+            'amount' => $fee,
+            'status' => CleaningBookingSessionFinancialPenalty::STATUS_ACTIVE,
+            'reason_snapshot' => $reason,
+            'applied_at' => now(),
+        ]);
     }
 
     private function syncParentFinancials(CleaningBooking $booking): void
@@ -292,8 +348,8 @@ final class CleaningBookingSessionCancellationService
         if ($session->isTerminal()) {
             throw new InvalidArgumentException('Session is already closed.');
         }
-        if ($session->started_travel_at !== null || $session->work_started_at !== null) {
-            throw new InvalidArgumentException('Worker can only cancel this session before starting travel.');
+        if ($session->work_started_at !== null) {
+            throw new InvalidArgumentException('Worker can only cancel this session before work starts.');
         }
     }
 
