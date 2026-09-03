@@ -10,15 +10,20 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
+use Modules\Cleaning\Http\Requests\CleaningBookingSosRequest;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Services\CleaningBookingSchedulePresenter;
+use Modules\Cleaning\Services\CleaningBookingSessionCancellationService;
 use Modules\Cleaning\Services\CleaningBookingSessionLifecycleService;
+use Modules\Cleaning\Services\CleaningBookingSessionSosService;
 
 final class CleaningBookingSessionLifecycleController
 {
     public function __construct(
         private readonly CleaningBookingSessionLifecycleService $lifecycle,
+        private readonly CleaningBookingSessionCancellationService $cancellation,
+        private readonly CleaningBookingSessionSosService $sos,
         private readonly CleaningBookingSchedulePresenter $presenter,
     ) {}
 
@@ -150,6 +155,90 @@ final class CleaningBookingSessionLifecycleController
         return $this->payload($cleaning_booking, $session);
     }
 
+    public function cancel(
+        Request $request,
+        CleaningBooking $cleaning_booking,
+        CleaningBookingSession $cleaning_booking_session,
+    ): JsonResponse {
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'max:1000'],
+        ]);
+        $user = $request->user();
+        $worker = $user?->worker;
+        $isCustomer = $user !== null && (int) $cleaning_booking->customer_id === (int) $user->id;
+
+        try {
+            if ($isCustomer) {
+                $session = $this->cancellation->cancelByCustomer(
+                    $cleaning_booking,
+                    $cleaning_booking_session,
+                    (int) $user->id,
+                    (string) $validated['reason'],
+                );
+                $worker = null;
+            } elseif ($worker instanceof Worker) {
+                $session = $this->cancellation->cancelByWorker(
+                    $cleaning_booking,
+                    $cleaning_booking_session,
+                    $worker,
+                    (string) $validated['reason'],
+                );
+            } else {
+                abort(403, 'You are not allowed to cancel this session.');
+            }
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
+        }
+
+        return $this->payload(
+            $cleaning_booking,
+            $session,
+            $worker instanceof Worker ? $worker : null,
+        );
+    }
+
+    public function sos(
+        CleaningBookingSosRequest $request,
+        CleaningBooking $cleaning_booking,
+        CleaningBookingSession $cleaning_booking_session,
+    ): JsonResponse {
+        try {
+            $alert = $this->sos->trigger(
+                $cleaning_booking,
+                $cleaning_booking_session,
+                $request->user(),
+                $request->validated(),
+            );
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
+        }
+
+        $worker = $request->user()?->worker;
+        $freshBooking = $cleaning_booking->fresh();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id' => (int) $freshBooking->id,
+                'bookingId' => (int) $freshBooking->id,
+                'bookingNumber' => $freshBooking->booking_number,
+                'status' => $freshBooking->status?->value ?? (string) $freshBooking->status,
+                'schedule' => $this->presenter->present(
+                    $freshBooking,
+                    $worker instanceof Worker ? $worker : null,
+                ),
+                'sos' => [
+                    'id' => (int) $alert->id,
+                    'status' => $alert->status?->value ?? (string) $alert->status,
+                    'source' => $alert->source,
+                    'emergencyType' => $alert->emergency_type?->value ?? (string) $alert->emergency_type,
+                    'triggeredAt' => $alert->triggered_at?->toIso8601String(),
+                ],
+            ],
+            'sessionId' => (int) $cleaning_booking_session->id,
+        ], 201);
+    }
+
     /** @param callable(Worker): CleaningBookingSession $transition */
     private function workerTransition(
         CleaningBooking $booking,
@@ -181,6 +270,8 @@ final class CleaningBookingSessionLifecycleController
                 'bookingId' => (int) $freshBooking->id,
                 'bookingNumber' => $freshBooking->booking_number,
                 'status' => $freshBooking->status?->value ?? (string) $freshBooking->status,
+                'totalPrice' => (float) $freshBooking->total_price,
+                'currency' => (string) config('app.currency', 'SYP'),
                 'schedule' => $this->presenter->present($freshBooking, $viewerWorker),
             ],
             'sessionId' => (int) $session->id,
