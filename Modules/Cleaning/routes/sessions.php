@@ -7,6 +7,7 @@ use Modules\Cleaning\Http\Controllers\API\CleaningBookingScheduleController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionAcceptanceController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionLifecycleController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionLocationController;
+use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionWorkerChangeController;
 
 Route::prefix('v1')
     ->middleware(['auth:sanctum'])
@@ -25,6 +26,11 @@ Route::prefix('v1')
             'cleaning-bookings/{cleaning_booking}/sessions/accept-selected',
             [CleaningBookingSessionAcceptanceController::class, 'acceptSelected'],
         )->name('cleaning-bookings.sessions.accept-selected');
+
+        Route::post(
+            'cleaning-bookings/{cleaning_booking}/sessions/change-workers',
+            CleaningBookingSessionWorkerChangeController::class,
+        )->name('cleaning-bookings.sessions.change-workers');
 
         Route::post(
             'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/start-travel',
