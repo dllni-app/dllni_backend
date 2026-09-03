@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Apply event phase-one backend changes
         run: python3 .github/scripts/finish_event_phase_one.py
