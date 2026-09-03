@@ -313,7 +313,7 @@ final class CleaningBookingSessionCancellationService
                 'cancellation_fee' => $cancellationFee,
                 'total_hours' => $totalHours,
                 'total_price' => round($serviceTotal + $cancellationFee, 2),
-            ])->save();
+            ])->saveQuietly();
     }
 
     private function lockSession(

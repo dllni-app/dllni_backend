@@ -160,7 +160,7 @@ it('creates an SOS with explicit session context for worker and customer actors'
     $this->postJson(
         "/api/v1/cleaning-bookings/{$booking->id}/sessions/{$session->id}/sos",
         [
-            'emergency_type' => 'other',
+            'emergency_type' => 'safety_threat',
             'message' => 'حالة طارئة أثناء تجهيز اليوم',
             'latitude' => 33.5138,
             'longitude' => 36.2765,
@@ -187,7 +187,7 @@ it('creates an SOS with explicit session context for worker and customer actors'
     $this->postJson(
         "/api/v1/cleaning-bookings/{$booking->id}/sessions/{$session->id}/sos",
         [
-            'emergency_type' => 'other',
+            'emergency_type' => 'safety_threat',
             'message' => 'أحتاج دعماً عاجلاً لهذا اليوم',
         ],
     )
