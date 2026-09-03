@@ -65,4 +65,14 @@ Route::prefix('v1')
             'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/completion/confirm',
             [CleaningBookingSessionLifecycleController::class, 'confirmCompletion'],
         )->name('cleaning-bookings.sessions.completion.confirm');
+
+        Route::post(
+            'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/cancel',
+            [CleaningBookingSessionLifecycleController::class, 'cancel'],
+        )->name('cleaning-bookings.sessions.cancel');
+
+        Route::post(
+            'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/sos',
+            [CleaningBookingSessionLifecycleController::class, 'sos'],
+        )->name('cleaning-bookings.sessions.sos');
     });
