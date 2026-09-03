@@ -19,7 +19,10 @@ final class UserCleaningOrderReviewRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'workerId' => ['required', 'integer', 'exists:workers,id'],
+            // Event assistance uses one parent-level review after the whole event
+            // is completed, so workerId is intentionally optional there. Regular
+            // cleaning still enforces workerId in UserCleaningOrderService.
+            'workerId' => ['nullable', 'integer', 'exists:workers,id'],
             'rating' => ['required', 'integer', 'min:1', 'max:5'],
             'comment' => ['nullable', 'string', 'max:1000'],
         ];
