@@ -72,9 +72,8 @@ jobs:
             tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php \
             tests/Feature/UserModule/EventAssistancePreviousWorkersScheduleTest.php
 
-      - name: Restore check-only CI and commit implementation
+      - name: Commit implementation
         run: |
-          git checkout e680433e44cec89b2579a4c5bee33d04fb42113d -- .github/workflows/cleaning-suite.yml
           git rm .github/scripts/finish_event_phase_one.py
           git add -A
           git config user.name 'github-actions[bot]'
