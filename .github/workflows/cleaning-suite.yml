@@ -5,24 +5,73 @@ on:
     branches:
       - feature/cleaning-suite-main
     paths:
+      - 'app/Providers/AppServiceProvider.php'
+      - 'Modules/Cleaning/app/Enums/CleaningBookingSession*.php'
+      - 'Modules/Cleaning/app/Models/CleaningBookingSession*.php'
+      - 'Modules/Cleaning/app/Services/CleaningBookingSession*.php'
+      - 'Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php'
+      - 'Modules/Cleaning/app/Services/WorkerBookingScheduleConflictService.php'
+      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingScheduleController.php'
+      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionAcceptanceController.php'
+      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLifecycleController.php'
+      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLocationController.php'
+      - 'Modules/Cleaning/app/Providers/RouteServiceProvider.php'
+      - 'Modules/Cleaning/routes/sessions.php'
+      - 'Modules/Cleaning/database/migrations/*cleaning_booking_session*.php'
+      - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderEstimatePriceController.php'
+      - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderStoreController.php'
+      - 'Modules/User/app/Http/Controllers/API/UserCleaningPreviousWorkersController.php'
+      - 'Modules/User/app/Http/Requests/Concerns/ValidatesEventAssistanceSchedule.php'
+      - 'Modules/User/app/Http/Requests/UserCleaningOrderEstimatePriceRequest.php'
+      - 'Modules/User/app/Http/Requests/UserCleaningOrderStoreRequest.php'
+      - 'Modules/User/app/Http/Requests/UserCleaningPreviousWorkersRequest.php'
+      - 'Modules/User/app/Services/EventAssistanceScheduleService.php'
+      - 'tests/Feature/Cleaning/CleaningBookingSessionAcceptanceTest.php'
+      - 'tests/Feature/Cleaning/CleaningBookingSessionLifecycleTest.php'
+      - 'tests/Feature/Cleaning/CleaningBookingSessionLocationTest.php'
+      - 'tests/Feature/Cleaning/CleaningBookingSessionCancellationAndSosTest.php'
+      - 'tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php'
+      - 'tests/Feature/UserModule/EventAssistancePreviousWorkersScheduleTest.php'
+      - '.github/workflows/cleaning-suite.yml'
+  pull_request:
+    paths:
+      - 'app/Providers/AppServiceProvider.php'
+      - 'Modules/Cleaning/app/Enums/CleaningBookingSession*.php'
+      - 'Modules/Cleaning/app/Models/CleaningBookingSession*.php'
+      - 'Modules/Cleaning/app/Services/CleaningBookingSession*.php'
+      - 'Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php'
+      - 'Modules/Cleaning/app/Services/WorkerBookingScheduleConflictService.php'
+      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingScheduleController.php'
+      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionAcceptanceController.php'
+      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLifecycleController.php'
+      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLocationController.php'
+      - 'Modules/Cleaning/app/Providers/RouteServiceProvider.php'
+      - 'Modules/Cleaning/routes/sessions.php'
+      - 'Modules/Cleaning/database/migrations/*cleaning_booking_session*.php'
+      - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderEstimatePriceController.php'
+      - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderStoreController.php'
+      - 'Modules/User/app/Http/Controllers/API/UserCleaningPreviousWorkersController.php'
+      - 'Modules/User/app/Http/Requests/Concerns/ValidatesEventAssistanceSchedule.php'
+      - 'Modules/User/app/Http/Requests/UserCleaningOrderEstimatePriceRequest.php'
+      - 'Modules/User/app/Http/Requests/UserCleaningOrderStoreRequest.php'
+      - 'Modules/User/app/Http/Requests/UserCleaningPreviousWorkersRequest.php'
+      - 'Modules/User/app/Services/EventAssistanceScheduleService.php'
+      - 'tests/Feature/Cleaning/CleaningBookingSessionAcceptanceTest.php'
+      - 'tests/Feature/Cleaning/CleaningBookingSessionLifecycleTest.php'
+      - 'tests/Feature/Cleaning/CleaningBookingSessionLocationTest.php'
+      - 'tests/Feature/Cleaning/CleaningBookingSessionCancellationAndSosTest.php'
+      - 'tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php'
+      - 'tests/Feature/UserModule/EventAssistancePreviousWorkersScheduleTest.php'
       - '.github/workflows/cleaning-suite.yml'
 
-permissions:
-  contents: write
-
 jobs:
-  finish-event-phase-one:
+  session-foundation:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Apply event phase-one backend changes
-        run: python3 .github/scripts/finish_event_phase_one.py
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -33,19 +82,6 @@ jobs:
 
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
-
-      - name: Format modified sources
-        run: |
-          vendor/bin/pint \
-            app/Jobs/NotifyEligibleWorkersNewOrderJob.php \
-            Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionAcceptanceController.php \
-            Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php \
-            Modules/User/app/Http/Controllers/API/UserCleaningOrderUpdateController.php \
-            Modules/User/app/Http/Requests/UserCleaningOrderUpdateRequest.php \
-            Modules/User/app/Services/EventAssistanceScheduleService.php \
-            tests/Feature/Cleaning/CleaningBookingSessionAcceptanceTest.php \
-            tests/Feature/Cleaning/CleaningNewOrderDispatchTest.php \
-            tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php
 
       - name: Prepare application
         run: |
@@ -59,24 +95,72 @@ jobs:
           DB_DATABASE: database/database.sqlite
         run: php artisan migrate --force
 
-      - name: Run focused event and session tests
-        env:
-          DB_CONNECTION: sqlite
-          DB_DATABASE: database/database.sqlite
+      - name: Check formatting
         run: |
-          php artisan test \
+          vendor/bin/pint --test \
+            app/Providers/AppServiceProvider.php \
+            Modules/Cleaning/app/Enums/CleaningBookingSessionStatus.php \
+            Modules/Cleaning/app/Enums/CleaningBookingSessionCoverageStatus.php \
+            Modules/Cleaning/app/Models/CleaningBookingSession.php \
+            Modules/Cleaning/app/Models/CleaningBookingSessionWorkerAssignment.php \
+            Modules/Cleaning/app/Models/CleaningBookingSessionFinancialPenalty.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionCoverageService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionSolvencyService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionWorkerPricingService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionWorkerEligibilityService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionAcceptanceService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionLifecycleService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionCancellationService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionParentStateService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionSosService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php \
+            Modules/Cleaning/app/Services/WorkerBookingScheduleConflictService.php \
+            Modules/Cleaning/app/Http/Controllers/API/CleaningBookingScheduleController.php \
+            Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionAcceptanceController.php \
+            Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLifecycleController.php \
+            Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLocationController.php \
+            Modules/Cleaning/app/Providers/RouteServiceProvider.php \
+            Modules/Cleaning/routes/sessions.php \
+            Modules/Cleaning/database/migrations/2026_09_02_230500_create_cleaning_booking_sessions_table.php \
+            Modules/Cleaning/database/migrations/2026_09_02_230510_create_cleaning_booking_session_worker_assignments_table.php \
+            Modules/Cleaning/database/migrations/2026_09_03_001500_create_cleaning_booking_session_financial_penalties_table.php \
+            Modules/User/app/Http/Controllers/API/UserCleaningOrderEstimatePriceController.php \
+            Modules/User/app/Http/Controllers/API/UserCleaningOrderStoreController.php \
+            Modules/User/app/Http/Controllers/API/UserCleaningPreviousWorkersController.php \
+            Modules/User/app/Http/Requests/Concerns/ValidatesEventAssistanceSchedule.php \
+            Modules/User/app/Http/Requests/UserCleaningOrderEstimatePriceRequest.php \
+            Modules/User/app/Http/Requests/UserCleaningOrderStoreRequest.php \
+            Modules/User/app/Http/Requests/UserCleaningPreviousWorkersRequest.php \
+            Modules/User/app/Services/EventAssistanceScheduleService.php \
             tests/Feature/Cleaning/CleaningBookingSessionAcceptanceTest.php \
-            tests/Feature/Cleaning/CleaningNewOrderDispatchTest.php \
             tests/Feature/Cleaning/CleaningBookingSessionLifecycleTest.php \
+            tests/Feature/Cleaning/CleaningBookingSessionLocationTest.php \
             tests/Feature/Cleaning/CleaningBookingSessionCancellationAndSosTest.php \
             tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php \
             tests/Feature/UserModule/EventAssistancePreviousWorkersScheduleTest.php
 
-      - name: Commit implementation
+      - name: Run cleaning suite tests
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        shell: bash
         run: |
-          git rm .github/scripts/finish_event_phase_one.py
-          git add -A
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'feat(cleaning): enforce multi-day event phase-one rules'
-          git push
+          set -o pipefail
+          php artisan test \
+            tests/Feature/Cleaning/CleaningBookingSessionAcceptanceTest.php \
+            tests/Feature/Cleaning/CleaningBookingSessionLifecycleTest.php \
+            tests/Feature/Cleaning/CleaningBookingSessionLocationTest.php \
+            tests/Feature/Cleaning/CleaningBookingSessionCancellationAndSosTest.php \
+            tests/Feature/Cleaning/WorkerAtomicCommissionCapacityTest.php \
+            tests/Feature/Cleaning/WorkerDepositEligibilityTest.php \
+            tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php \
+            tests/Feature/UserModule/EventAssistancePreviousWorkersScheduleTest.php \
+            2>&1 | tee cleaning-suite-test.log
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cleaning-suite-diagnostics
+          path: cleaning-suite-test.log
+          if-no-files-found: ignore
