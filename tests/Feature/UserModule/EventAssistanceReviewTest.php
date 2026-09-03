@@ -6,6 +6,7 @@ use App\Enums\WorkerCustomerRatingType;
 use App\Models\User;
 use App\Models\Worker;
 use App\Models\WorkerCustomerRating;
+use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
@@ -22,7 +23,7 @@ it('rejects an event review before the whole parent event is completed', functio
     expect(fn () => app(EventAssistanceReviewService::class)->submit($booking, [
         'rating' => 5,
         'comment' => 'ممتاز',
-    ]))->toThrow(\Illuminate\Validation\ValidationException::class);
+    ]))->toThrow(ValidationException::class);
 
     expect(WorkerCustomerRating::query()->where('booking_id', $booking->id)->count())->toBe(0);
 });
@@ -58,7 +59,7 @@ it('rejects a second parent-level event review', function (): void {
     $service->submit($booking, ['rating' => 5]);
 
     expect(fn () => $service->submit($booking->fresh(), ['rating' => 3]))
-        ->toThrow(\Illuminate\Validation\ValidationException::class);
+        ->toThrow(ValidationException::class);
 });
 
 it('keeps workerId required for ordinary cleaning reviews', function (): void {
