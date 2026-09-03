@@ -8,6 +8,7 @@ use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Services\CleaningOperationsReportingService;
 
 final class CleaningBookingStats extends StatsOverviewWidget
 {
@@ -17,10 +18,17 @@ final class CleaningBookingStats extends StatsOverviewWidget
 
     protected function getStats(): array
     {
+        $reporting = app(CleaningOperationsReportingService::class);
+
         return [
-            Stat::make(__('cleaning_admin.booking.stats.total'), CleaningBooking::query()->count())
+            Stat::make(__('cleaning_admin.booking.stats.total'), $reporting->totalBookings())
+                ->description('عدد الحجوزات الرئيسية؛ المناسبة متعددة الأيام تُحسب حجزاً واحداً.')
                 ->icon('heroicon-o-calendar-days')
                 ->color('primary'),
+            Stat::make('جلسات التنفيذ', $reporting->totalExecutionSessions())
+                ->description('كل يوم في المناسبة يُحسب جلسة تنفيذ مستقلة.')
+                ->icon('heroicon-o-rectangle-stack')
+                ->color('info'),
             Stat::make(__('cleaning_admin.booking.stats.pending'), $this->statusCount(CleaningBookingStatus::Pending))
                 ->icon('heroicon-o-clock')
                 ->color('warning'),
@@ -33,9 +41,14 @@ final class CleaningBookingStats extends StatsOverviewWidget
             Stat::make(__('cleaning_admin.booking.stats.in_progress'), $this->statusCount(CleaningBookingStatus::InProgress))
                 ->icon('heroicon-o-play')
                 ->color('success'),
-            Stat::make(__('cleaning_admin.booking.stats.today'), CleaningBooking::query()->whereDate('scheduled_date', today())->count())
+            Stat::make('جلسات اليوم', $reporting->scheduledExecutionSessionsForDay())
+                ->description('تعتمد على جلسات الأيام لا على تاريخ الحجز الرئيسي فقط.')
                 ->icon('heroicon-o-calendar')
                 ->color('gray'),
+            Stat::make('ربح الإدارة اليوم', number_format($reporting->adminRevenueForDay(), 0, '.', ',').' '.config('app.currency', 'SYP'))
+                ->description($reporting->completedExecutionSessionsForDay().' جلسات مكتملة اليوم')
+                ->icon('heroicon-o-banknotes')
+                ->color('success'),
         ];
     }
 
