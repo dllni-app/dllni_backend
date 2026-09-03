@@ -13,6 +13,7 @@ use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
 use Modules\User\Services\EventAssistanceReviewService;
 
+use function Pest\Laravel\getJson;
 use function Pest\Laravel\postJson;
 
 it('rejects an event review before the whole parent event is completed', function (): void {
@@ -80,7 +81,7 @@ it('exposes event canReview and hasReview in the customer schedule envelope', fu
     $customer = User::query()->findOrFail($booking->customer_id);
     Sanctum::actingAs($customer);
 
-    $before = \Pest\Laravel\getJson("/api/v1/cleaning/bookings/{$booking->id}/schedule");
+    $before = getJson("/api/v1/cleaning-bookings/{$booking->id}/schedule");
     $before->assertOk();
     expect($before->json('data.canReview'))->toBeTrue()
         ->and($before->json('data.hasReview'))->toBeFalse();
@@ -90,7 +91,7 @@ it('exposes event canReview and hasReview in the customer schedule envelope', fu
         'comment' => 'ممتاز',
     ])->assertOk();
 
-    $after = \Pest\Laravel\getJson("/api/v1/cleaning/bookings/{$booking->id}/schedule");
+    $after = getJson("/api/v1/cleaning-bookings/{$booking->id}/schedule");
     $after->assertOk();
     expect($after->json('data.canReview'))->toBeFalse()
         ->and($after->json('data.hasReview'))->toBeTrue();
