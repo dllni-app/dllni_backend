@@ -38,12 +38,14 @@ jobs:
         run: |
           vendor/bin/pint \
             Modules/Cleaning/app/Models/CleaningBooking.php \
+            Modules/Cleaning/app/Models/CleaningBookingSession.php \
             app/Filament/Resources/CleaningBookings/CleaningBookingResource.php \
             app/Filament/Resources/CleaningBookings/Tables/CleaningBookingsTable.php \
             app/Filament/Resources/CleaningBookings/RelationManagers/SessionsRelationManager.php \
             Modules/Cleaning/app/Services/CleaningBookingSessionLifecycleService.php \
             Modules/Cleaning/app/Services/CleaningBookingActionNotificationService.php \
-            Modules/Cleaning/app/Services/CleaningEventSessionNotificationService.php
+            Modules/Cleaning/app/Services/CleaningEventSessionNotificationService.php \
+            Modules/Cleaning/database/migrations/2026_09_03_090500_add_customer_completed_at_to_cleaning_booking_sessions_table.php
 
       - name: Prepare application
         run: |
@@ -70,7 +72,7 @@ jobs:
 
       - name: Restore check-only CI and commit implementation
         run: |
-          git checkout HEAD^ -- .github/workflows/cleaning-suite.yml
+          git checkout c3feb6961e27df6d880055d9e1c3e6dacb2d5715 -- .github/workflows/cleaning-suite.yml
           git rm .github/scripts/finalize_event_admin_ops.py
           git add -A
           git config user.name 'github-actions[bot]'
