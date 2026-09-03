@@ -35,6 +35,12 @@ final class UserCleaningOrderReviewController
                 ]);
             }
 
+            if (! isset($validated['rating'])) {
+                throw ValidationException::withMessages([
+                    'rating' => ['A rating is required when reviewing a regular cleaning booking.'],
+                ]);
+            }
+
             $service->submitReview($model, $validated);
         }
 
