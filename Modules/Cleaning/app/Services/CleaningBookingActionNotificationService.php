@@ -21,6 +21,7 @@ final class CleaningBookingActionNotificationService
         private readonly CleaningLegacyBookingActionNotificationRuleEngine $legacyRuleEngine,
         private readonly CleaningRepeatedActionNotificationRuleEngine $repeatedRuleEngine,
         private readonly CleaningLifecycleNotificationService $lifecycleNotifications,
+        private readonly CleaningEventSessionNotificationService $eventSessionNotifications,
     ) {}
 
     public function dispatchDue(?CarbonInterface $clock = null): int
@@ -36,7 +37,7 @@ final class CleaningBookingActionNotificationService
         $lookahead = max(1, (int) config('cleaning_action_notifications.lookahead_minutes', 65));
         $lookback = max(1, (int) config('cleaning_action_notifications.lookback_minutes', 180));
         $chunkSize = max(1, (int) config('cleaning_action_notifications.chunk_size', 100));
-        $sent = 0;
+        $sent = $this->eventSessionNotifications->dispatchDueReminders($now);
 
         CleaningBooking::query()
             ->with([

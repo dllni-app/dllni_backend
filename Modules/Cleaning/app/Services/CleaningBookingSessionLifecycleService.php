@@ -352,9 +352,22 @@ final class CleaningBookingSessionLifecycleService
             $locked->forceFill([
                 'status' => CleaningBookingSessionStatus::Completed,
                 'work_finished_at' => $locked->work_finished_at ?? $completedAt,
+                'customer_completed_at' => $locked->customer_completed_at ?? $completedAt,
             ])->save();
 
             $this->syncParentStatus($booking);
+
+            $bookingId = (int) $booking->id;
+            $sessionId = (int) $locked->id;
+            DB::afterCommit(static function () use ($bookingId, $sessionId): void {
+                $freshBooking = CleaningBooking::query()->with('customer')->find($bookingId);
+                $freshSession = CleaningBookingSession::query()->find($sessionId);
+
+                if ($freshBooking instanceof CleaningBooking && $freshSession instanceof CleaningBookingSession) {
+                    app(CleaningEventSessionNotificationService::class)
+                        ->notifyCompleted($freshBooking, $freshSession);
+                }
+            });
 
             return $this->freshSession($locked);
         });

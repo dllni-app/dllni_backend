@@ -182,7 +182,7 @@ final class SessionsRelationManager extends RelationManager
 
     private static function hoursLabel(float $hours): string
     {
-        return rtrim(rtrim(number_format($hours, 2, '.', ''), '0'), '.').' ساعة';
+        return mb_rtrim(mb_rtrim(number_format($hours, 2, '.', ''), '0'), '.').' ساعة';
     }
 
     private static function money(float $amount): string

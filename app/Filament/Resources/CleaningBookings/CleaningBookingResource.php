@@ -10,6 +10,7 @@ use App\Enums\SupportCaseStatus;
 use App\Filament\Resources\CleaningBookings\Pages\EditCleaningBooking;
 use App\Filament\Resources\CleaningBookings\Pages\ListCleaningBookings;
 use App\Filament\Resources\CleaningBookings\Pages\ViewCleaningBooking;
+use App\Filament\Resources\CleaningBookings\RelationManagers\SessionsRelationManager;
 use App\Filament\Resources\CleaningBookings\Schemas\CleaningBookingForm;
 use App\Filament\Resources\CleaningBookings\Schemas\CleaningBookingInfolist;
 use App\Filament\Resources\CleaningBookings\Tables\CleaningBookingsTable;
@@ -195,7 +196,9 @@ final class CleaningBookingResource extends Resource
 
     public static function getRelations(): array
     {
-        return [];
+        return [
+            SessionsRelationManager::class,
+        ];
     }
 
     public static function getPages(): array

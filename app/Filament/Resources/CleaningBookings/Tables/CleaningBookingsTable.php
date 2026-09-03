@@ -24,6 +24,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\HtmlString;
 use InvalidArgumentException;
 use Modules\Cleaning\Enums\CleaningAssignmentMode;
+use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
@@ -52,6 +53,43 @@ final class CleaningBookingsTable
                     ->getStateUsing(fn (CleaningBooking $record): string => $record->dashboardKindLabel())
                     ->badge()
                     ->color(fn (CleaningBooking $record): string => $record->dashboardKindColor()),
+                TextColumn::make('event_progress')
+                    ->label(self::headerLabel('تقدم المناسبة', 'عدد أيام المناسبة المكتملة من إجمالي أيام التنفيذ.'))
+                    ->getStateUsing(function (CleaningBooking $record): string {
+                        if (! $record->isEventAssistanceBooking() || $record->sessions->isEmpty()) {
+                            return '-';
+                        }
+
+                        $completed = $record->sessions->filter(
+                            fn ($session): bool => ($session->status?->value ?? (string) $session->status)
+                                === CleaningBookingSessionStatus::Completed->value,
+                        )->count();
+
+                        return $completed.' / '.$record->sessions->count();
+                    })
+                    ->badge()
+                    ->color('info')
+                    ->toggleable(),
+                TextColumn::make('event_next_appointment')
+                    ->label(self::headerLabel('موعد المناسبة القادم', 'أقرب يوم تنفيذ غير منتهٍ ضمن نفس رقم الحجز.'))
+                    ->getStateUsing(function (CleaningBooking $record): string {
+                        if (! $record->isEventAssistanceBooking()) {
+                            return '-';
+                        }
+
+                        $next = $record->sessions->first(function ($session): bool {
+                            $status = $session->status?->value ?? (string) $session->status;
+
+                            return ! in_array($status, CleaningBookingSessionStatus::terminalValues(), true);
+                        });
+
+                        if ($next === null) {
+                            return '-';
+                        }
+
+                        return $next->scheduled_date?->format('Y-m-d').' '.self::time($next->scheduled_time);
+                    })
+                    ->toggleable(),
                 TextColumn::make('cancelled_by_role')
                     ->label(self::headerLabel('مصدر الإلغاء', 'يوضح الجهة التي ألغت الحجز.'))
                     ->badge()
@@ -133,6 +171,7 @@ final class CleaningBookingsTable
                     'rooms.assignedWorker.user',
                     'rooms.plannedPreferredWorker.user',
                     'workerAssignments.worker.user',
+                    'sessions',
                 ])
                 ->withCount([
                     'disputes',
@@ -486,7 +525,7 @@ final class CleaningBookingsTable
 
         try {
             return Carbon::parse((string) $value)->format('h:i A');
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return (string) $value;
         }
     }

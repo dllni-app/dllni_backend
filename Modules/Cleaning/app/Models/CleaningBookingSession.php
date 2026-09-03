@@ -45,6 +45,7 @@ final class CleaningBookingSession extends Model
         'customer_confirmed_at',
         'work_started_at',
         'work_finished_at',
+        'customer_completed_at',
         'skipped_at',
         'skip_source',
         'skip_reason',
@@ -102,6 +103,7 @@ final class CleaningBookingSession extends Model
             'customer_confirmed_at' => 'datetime',
             'work_started_at' => 'datetime',
             'work_finished_at' => 'datetime',
+            'customer_completed_at' => 'datetime',
             'skipped_at' => 'datetime',
             'cancelled_at' => 'datetime',
         ];

@@ -27,9 +27,9 @@ use Modules\Cleaning\Observers\CleaningBookingObserver;
 use Modules\Cleaning\Traits\FilterQueries\CleaningBookingFilterQuery;
 
 /**
- * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\Dispute> $disputes
- * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\SosAlert> $sosAlerts
- * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\SystemAlert> $systemAlerts
+ * @property-read EloquentCollection<int, \App\Models\Dispute> $disputes
+ * @property-read EloquentCollection<int, \App\Models\SosAlert> $sosAlerts
+ * @property-read EloquentCollection<int, \App\Models\SystemAlert> $systemAlerts
  */
 #[ObservedBy([CleaningBookingObserver::class])]
 final class CleaningBooking extends Model
@@ -125,6 +125,12 @@ final class CleaningBooking extends Model
     public function rooms(): HasMany
     {
         return $this->hasMany(CleaningBookingRoom::class, 'cleaning_booking_id');
+    }
+
+    public function sessions(): HasMany
+    {
+        return $this->hasMany(CleaningBookingSession::class, 'cleaning_booking_id')
+            ->orderBy('sequence');
     }
 
     public function roomAssignments(): HasMany
