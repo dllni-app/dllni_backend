@@ -70,9 +70,8 @@ jobs:
             tests/Feature/Cleaning/CleaningBookingSessionCancellationAndSosTest.php \
             tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php
 
-      - name: Restore check-only CI and commit implementation
+      - name: Commit implementation
         run: |
-          git checkout c3feb6961e27df6d880055d9e1c3e6dacb2d5715 -- .github/workflows/cleaning-suite.yml
           git rm .github/scripts/finalize_event_admin_ops.py
           git add -A
           git config user.name 'github-actions[bot]'
