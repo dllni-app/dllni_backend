@@ -19,6 +19,7 @@ on:
       - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionAcceptanceController.php'
       - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLifecycleController.php'
       - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLocationController.php'
+      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionWorkerChangeController.php'
       - 'Modules/Cleaning/app/Providers/RouteServiceProvider.php'
       - 'Modules/Cleaning/routes/sessions.php'
       - 'Modules/Cleaning/database/migrations/*cleaning_booking_session*.php'
@@ -37,6 +38,7 @@ on:
       - 'tests/Feature/Cleaning/CleaningBookingSessionLifecycleTest.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionLocationTest.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionCancellationAndSosTest.php'
+      - 'tests/Feature/Cleaning/CleaningBookingSessionWorkerChangeTest.php'
       - 'tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php'
       - 'tests/Feature/UserModule/EventAssistancePreviousWorkersScheduleTest.php'
       - 'tests/Feature/UserModule/EventAssistanceReviewTest.php'
@@ -57,6 +59,7 @@ on:
       - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionAcceptanceController.php'
       - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLifecycleController.php'
       - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLocationController.php'
+      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionWorkerChangeController.php'
       - 'Modules/Cleaning/app/Providers/RouteServiceProvider.php'
       - 'Modules/Cleaning/routes/sessions.php'
       - 'Modules/Cleaning/database/migrations/*cleaning_booking_session*.php'
@@ -75,6 +78,7 @@ on:
       - 'tests/Feature/Cleaning/CleaningBookingSessionLifecycleTest.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionLocationTest.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionCancellationAndSosTest.php'
+      - 'tests/Feature/Cleaning/CleaningBookingSessionWorkerChangeTest.php'
       - 'tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php'
       - 'tests/Feature/UserModule/EventAssistancePreviousWorkersScheduleTest.php'
       - 'tests/Feature/UserModule/EventAssistanceReviewTest.php'
@@ -130,6 +134,7 @@ jobs:
             Modules/Cleaning/app/Services/CleaningBookingSessionCancellationService.php \
             Modules/Cleaning/app/Services/CleaningBookingSessionParentStateService.php \
             Modules/Cleaning/app/Services/CleaningBookingSessionSosService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionWorkerChangeService.php \
             Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php \
             Modules/Cleaning/app/Services/CleaningEventSessionNotificationService.php \
             Modules/Cleaning/app/Services/CleaningBookingActionNotificationService.php \
@@ -138,6 +143,7 @@ jobs:
             Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionAcceptanceController.php \
             Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLifecycleController.php \
             Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLocationController.php \
+            Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionWorkerChangeController.php \
             Modules/Cleaning/app/Providers/RouteServiceProvider.php \
             Modules/Cleaning/routes/sessions.php \
             Modules/Cleaning/database/migrations/2026_09_02_230500_create_cleaning_booking_sessions_table.php \
@@ -162,6 +168,7 @@ jobs:
             tests/Feature/Cleaning/CleaningBookingSessionLifecycleTest.php \
             tests/Feature/Cleaning/CleaningBookingSessionLocationTest.php \
             tests/Feature/Cleaning/CleaningBookingSessionCancellationAndSosTest.php \
+            tests/Feature/Cleaning/CleaningBookingSessionWorkerChangeTest.php \
             tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php \
             tests/Feature/UserModule/EventAssistancePreviousWorkersScheduleTest.php \
             $(test -f tests/Feature/UserModule/EventAssistanceReviewTest.php && echo tests/Feature/UserModule/EventAssistanceReviewTest.php)
@@ -178,6 +185,7 @@ jobs:
             tests/Feature/Cleaning/CleaningBookingSessionLifecycleTest.php
             tests/Feature/Cleaning/CleaningBookingSessionLocationTest.php
             tests/Feature/Cleaning/CleaningBookingSessionCancellationAndSosTest.php
+            tests/Feature/Cleaning/CleaningBookingSessionWorkerChangeTest.php
             tests/Feature/Cleaning/WorkerAtomicCommissionCapacityTest.php
             tests/Feature/Cleaning/WorkerDepositEligibilityTest.php
             tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php
