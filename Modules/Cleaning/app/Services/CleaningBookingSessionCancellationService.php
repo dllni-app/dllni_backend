@@ -7,7 +7,6 @@ namespace Modules\Cleaning\Services;
 use App\Models\CleaningDepositTransaction;
 use App\Models\CleaningFinancialSetting;
 use App\Models\Worker;
-use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use Modules\Cleaning\Enums\CleaningBookingSessionCoverageStatus;
@@ -25,7 +24,7 @@ final class CleaningBookingSessionCancellationService
         private readonly DepositService $depositService,
         private readonly WorkerTrustService $workerTrustService,
         private readonly CleaningLifecycleNotificationService $notifications,
-        private readonly CleaningBookingSessionLifecycleService $lifecycle,
+        private readonly CleaningBookingSessionParentStateService $parentState,
     ) {}
 
     public function cancelByCustomer(
@@ -91,7 +90,7 @@ final class CleaningBookingSessionCancellationService
             return $locked->fresh(['workerAssignments.worker.user']) ?? $locked;
         });
 
-        $this->lifecycle->refreshParentStatus($booking);
+        $this->parentState->refresh($booking);
 
         foreach ($affectedWorkerIds as $workerId) {
             $this->notifications->notifyWorkerById(
@@ -176,7 +175,7 @@ final class CleaningBookingSessionCancellationService
         });
 
         $this->workerTrustService->applyRejectAfterAcceptPenalty($worker, $booking);
-        $this->lifecycle->refreshParentStatus($booking);
+        $this->parentState->refresh($booking);
         $this->notifications->notifyCustomer(
             booking: $booking->fresh(['customer']) ?? $booking,
             canonicalType: 'cleaning.booking.worker_rejected',
