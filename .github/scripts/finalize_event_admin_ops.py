@@ -17,6 +17,50 @@ replace(
     """    public function rooms(): HasMany\n    {\n        return $this->hasMany(CleaningBookingRoom::class, 'cleaning_booking_id');\n    }\n\n    public function sessions(): HasMany\n    {\n        return $this->hasMany(CleaningBookingSession::class, 'cleaning_booking_id')\n            ->orderBy('sequence');\n    }\n\n""",
 )
 
+# Session completion has a customer-specific confirmation timestamp, distinct from work_finished_at.
+path = 'Modules/Cleaning/app/Models/CleaningBookingSession.php'
+replace(
+    path,
+    """        'work_started_at',\n        'work_finished_at',\n        'skipped_at',\n""",
+    """        'work_started_at',\n        'work_finished_at',\n        'customer_completed_at',\n        'skipped_at',\n""",
+)
+replace(
+    path,
+    """            'work_started_at' => 'datetime',\n            'work_finished_at' => 'datetime',\n            'skipped_at' => 'datetime',\n""",
+    """            'work_started_at' => 'datetime',\n            'work_finished_at' => 'datetime',\n            'customer_completed_at' => 'datetime',\n            'skipped_at' => 'datetime',\n""",
+)
+
+migration = Path('Modules/Cleaning/database/migrations/2026_09_03_090500_add_customer_completed_at_to_cleaning_booking_sessions_table.php')
+migration.write_text("""<?php
+
+declare(strict_types=1);
+
+use Illuminate\\Database\\Migrations\\Migration;
+use Illuminate\\Database\\Schema\\Blueprint;
+use Illuminate\\Support\\Facades\\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        if (! Schema::hasColumn('cleaning_booking_sessions', 'customer_completed_at')) {
+            Schema::table('cleaning_booking_sessions', function (Blueprint $table): void {
+                $table->timestamp('customer_completed_at')->nullable()->after('work_finished_at');
+            });
+        }
+    }
+
+    public function down(): void
+    {
+        if (Schema::hasColumn('cleaning_booking_sessions', 'customer_completed_at')) {
+            Schema::table('cleaning_booking_sessions', function (Blueprint $table): void {
+                $table->dropColumn('customer_completed_at');
+            });
+        }
+    }
+};
+""")
+
 # Register the read-only Filament relation manager.
 path = 'app/Filament/Resources/CleaningBookings/CleaningBookingResource.php'
 replace(
