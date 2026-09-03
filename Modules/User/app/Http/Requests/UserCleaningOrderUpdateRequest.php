@@ -9,11 +9,14 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\User\Http\Requests\Concerns\ValidatesEventAssistanceSchedule;
 use Modules\User\Services\FemaleWorkerSafetyPolicyService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrderUpdateRequest extends FormRequest
 {
+    use ValidatesEventAssistanceSchedule;
+
     public function authorize(): bool
     {
         return true;
@@ -65,6 +68,7 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
             'serviceIds.*' => ['prohibited'],
             'scheduledDate' => ['sometimes', 'date', 'after_or_equal:'.$today],
             'scheduledTime' => ['sometimes', 'date_format:H:i'],
+            ...$this->eventAssistanceScheduleRules($isEventAssistance),
             'addressLatitude' => ['sometimes', 'numeric', 'between:-90,90'],
             'addressLongitude' => ['sometimes', 'numeric', 'between:-180,180'],
             'neighborhoodId' => ['sometimes', 'nullable', 'integer', Rule::exists('cleaning_neighborhoods', 'id')->where('is_active', true)],
@@ -90,6 +94,8 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
+            $this->validateEventAssistanceSchedule($validator);
+
             $assignmentMode = $this->normalizedAssignmentMode();
             $preferredWorkerId = $this->input('preferredWorkerId');
 
@@ -131,6 +137,17 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
     private function isEventAssistanceContext(): bool
     {
         if (mb_strtolower((string) $this->input('propertyType')) === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE) {
+            return true;
+        }
+
+        $bookingId = $this->route('order');
+        if (
+            is_numeric($bookingId)
+            && CleaningBooking::query()
+                ->whereKey((int) $bookingId)
+                ->where('property_type', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
+                ->exists()
+        ) {
             return true;
         }
 

@@ -7,6 +7,7 @@ use App\Models\CleaningFinancialSetting;
 use App\Models\CleaningWorkerDeposit;
 use App\Models\User;
 use App\Models\Worker;
+use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
@@ -105,6 +106,26 @@ it('accepts only the explicitly selected sessions and keeps the others available
         ->and($second->workerAssignments()->count())->toBe(0);
 });
 
+it('rejects partial acceptance for a multi-day event through the public API', function (): void {
+    $worker = makeSessionWorker();
+    $booking = makeSessionBooking('event_assistance');
+    $first = makeExecutionSession($booking, 1, now()->addDay()->toDateString(), '10:00', 1.0);
+    makeExecutionSession($booking, 2, now()->addDays(2)->toDateString(), '10:00', 1.0);
+
+    Sanctum::actingAs($worker->user);
+
+    $this->postJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/sessions/accept-selected",
+        ['sessionIds' => [$first->id]],
+    )
+        ->assertUnprocessable()
+        ->assertJsonPath('data.acceptance.allAccepted', false)
+        ->assertJsonPath('data.acceptance.acceptedSessionIds', [])
+        ->assertJsonPath('data.acceptance.rejected.0.reasonCode', 'event_all_days_required');
+
+    expect($first->workerAssignments()->count())->toBe(0);
+});
+
 function makeSessionWorker(): Worker
 {
     $workingHours = [];
@@ -145,7 +166,7 @@ function makeSessionWorker(): Worker
     return $worker->fresh(['user', 'deposit']);
 }
 
-function makeSessionBooking(): CleaningBooking
+function makeSessionBooking(string $propertyType = 'villa'): CleaningBooking
 {
     return CleaningBooking::factory()->create([
         'status' => CleaningBookingStatus::Pending->value,
@@ -153,7 +174,7 @@ function makeSessionBooking(): CleaningBooking
         'preferred_worker_id' => null,
         'base_price' => 3000,
         'addons_total' => 0,
-        'property_type' => 'event_assistance',
+        'property_type' => $propertyType,
         'number_of_workers' => 1,
         'scheduled_date' => now()->addDay()->toDateString(),
         'scheduled_time' => '10:00',

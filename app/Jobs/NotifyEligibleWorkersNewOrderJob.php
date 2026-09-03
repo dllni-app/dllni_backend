@@ -16,10 +16,13 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
 use Modules\Cleaning\Enums\CleaningAssignmentMode;
+use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Events\CleaningBookingCreated;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Services\DepositService;
+use Modules\Cleaning\Services\WorkerBookingScheduleConflictService;
 use Modules\Cleaning\Services\WorkerOrderSolvencyService;
 use Throwable;
 
@@ -45,6 +48,7 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
 
         $depositService = app(DepositService::class);
         $solvencyService = app(WorkerOrderSolvencyService::class);
+        $scheduleConflictService = app(WorkerBookingScheduleConflictService::class);
         $bookingDateTime = $this->bookingDateTime($booking);
 
         $assignmentMode = $booking->resolvedAssignmentMode();
@@ -73,7 +77,7 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
                 ->with(['user', 'deposit'])
                 ->first();
 
-            if (! $worker instanceof Worker || ! $this->isDispatchable($worker, $bookingDateTime, $depositService)) {
+            if (! $worker instanceof Worker || ! $this->isDispatchable($worker, $booking, $bookingDateTime, $depositService, $scheduleConflictService)) {
                 $this->createDispatchAlert(
                     $booking,
                     'preferred_worker_not_eligible',
@@ -141,7 +145,7 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
         $lastBlockedPayload = null;
 
         foreach ($workers as $worker) {
-            if (! $this->isDispatchable($worker, $bookingDateTime, $depositService)) {
+            if (! $this->isDispatchable($worker, $booking, $bookingDateTime, $depositService, $scheduleConflictService)) {
                 $ineligibleCount++;
 
                 continue;
@@ -181,13 +185,45 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
         }
     }
 
-    private function isDispatchable(Worker $worker, ?Carbon $bookingDateTime, DepositService $depositService): bool
-    {
-        return $worker->user !== null
-            && (bool) $worker->user->is_active
-            && $bookingDateTime !== null
-            && $worker->isAvailableAt($bookingDateTime)
-            && $depositService->isWorkerEligibleForDispatch($worker);
+    private function isDispatchable(
+        Worker $worker,
+        CleaningBooking $booking,
+        ?Carbon $bookingDateTime,
+        DepositService $depositService,
+        WorkerBookingScheduleConflictService $scheduleConflictService,
+    ): bool {
+        if (
+            $worker->user === null
+            || ! (bool) $worker->user->is_active
+            || ! $depositService->isWorkerEligibleForDispatch($worker)
+        ) {
+            return false;
+        }
+
+        if ((string) $booking->property_type !== 'event_assistance') {
+            return $bookingDateTime !== null && $worker->isAvailableAt($bookingDateTime);
+        }
+
+        $sessions = CleaningBookingSession::query()
+            ->where('cleaning_booking_id', $booking->id)
+            ->whereNotIn('status', CleaningBookingSessionStatus::terminalValues())
+            ->orderBy('sequence')
+            ->get();
+
+        if ($sessions->isEmpty()) {
+            return $bookingDateTime !== null && $worker->isAvailableAt($bookingDateTime);
+        }
+
+        foreach ($sessions as $session) {
+            $startsAt = $session->startsAt();
+            if ($startsAt === null || ! $worker->isAvailableAt($startsAt)) {
+                return false;
+            }
+        }
+
+        $scheduleConflictService->forgetWorker($worker);
+
+        return ! $scheduleConflictService->hasConflict($worker, $booking);
     }
 
     private function bookingDateTime(CleaningBooking $booking): ?Carbon

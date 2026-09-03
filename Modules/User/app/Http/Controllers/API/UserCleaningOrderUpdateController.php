@@ -5,22 +5,43 @@ declare(strict_types=1);
 namespace Modules\User\Http\Controllers\API;
 
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\User\Http\Requests\UserCleaningOrderUpdateRequest;
 use Modules\User\Http\Resources\UserCleaningBookingResource;
+use Modules\User\Services\EventAssistanceScheduleService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 use Modules\User\Services\UserCleaningOrderService;
 
 final class UserCleaningOrderUpdateController
 {
-    public function __invoke(UserCleaningOrderUpdateRequest $request, int $order, UserCleaningOrderService $service): JsonResponse
-    {
+    public function __invoke(
+        UserCleaningOrderUpdateRequest $request,
+        int $order,
+        UserCleaningOrderService $service,
+        EventAssistanceScheduleService $eventSchedule,
+    ): JsonResponse {
         $model = CleaningBooking::query()
             ->where('customer_id', $request->user()->id)
             ->findOrFail($order);
 
         $validated = $this->withEventWorkerCount($request->validated(), $model);
-        $updated = $service->update($model, $validated);
+        $updated = DB::transaction(function () use ($model, $validated, $service, $eventSchedule): CleaningBooking {
+            $schedule = $validated['schedule'] ?? null;
+            unset($validated['schedule']);
+
+            if (is_array($schedule)) {
+                $eventSchedule->assertEditable($model);
+            }
+
+            $updated = $service->update($model, $validated);
+
+            if (is_array($schedule)) {
+                $updated = $eventSchedule->replaceSchedule($updated, ['schedule' => $schedule]);
+            }
+
+            return $updated;
+        });
         $updated->load([
             'worker.user',
             'preferredWorker.user',

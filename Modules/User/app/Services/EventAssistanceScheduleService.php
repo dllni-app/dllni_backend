@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace Modules\User\Services;
 
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Modules\Cleaning\Enums\CleaningBookingSessionCoverageStatus;
 use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
+use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
 
@@ -242,6 +245,125 @@ final class EventAssistanceScheduleService
                 ],
             ]);
         }
+    }
+
+    public function assertEditable(CleaningBooking $booking): void
+    {
+        if ((string) $booking->property_type !== UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE) {
+            throw ValidationException::withMessages([
+                'schedule' => ['Only event-assistance bookings can use an event execution schedule.'],
+            ]);
+        }
+
+        $parentStatus = $booking->status?->value ?? (string) $booking->status;
+        if ($parentStatus !== 'pending') {
+            throw ValidationException::withMessages([
+                'schedule' => ['Event days cannot be changed after worker acceptance or execution has begun.'],
+            ]);
+        }
+
+        if ($booking->workerAssignments()
+            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
+            ->exists()) {
+            throw ValidationException::withMessages([
+                'schedule' => ['Event days cannot be changed after a worker has accepted the booking.'],
+            ]);
+        }
+
+        $sessions = CleaningBookingSession::query()
+            ->where('cleaning_booking_id', $booking->id)
+            ->with('workerAssignments')
+            ->orderBy('sequence')
+            ->get();
+
+        foreach ($sessions as $session) {
+            $status = $session->status?->value ?? (string) $session->status;
+            $hasAcceptedWorker = $session->workerAssignments
+                ->contains(static fn ($assignment): bool => $assignment->isAccepted());
+
+            if (
+                $status !== CleaningBookingSessionStatus::Scheduled->value
+                || $hasAcceptedWorker
+                || $session->started_travel_at !== null
+                || $session->arrived_at !== null
+                || $session->customer_confirmed_at !== null
+                || $session->work_started_at !== null
+                || $session->work_finished_at !== null
+            ) {
+                throw ValidationException::withMessages([
+                    'schedule' => ['Event days cannot be changed after worker acceptance or execution has begun.'],
+                ]);
+            }
+        }
+    }
+
+    /** @param array<string, mixed> $validated */
+    public function replaceSchedule(CleaningBooking $booking, array $validated): CleaningBooking
+    {
+        return DB::transaction(function () use ($booking, $validated): CleaningBooking {
+            $locked = CleaningBooking::query()
+                ->whereKey($booking->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $this->assertEditable($locked);
+            $plan = $this->resolve($validated);
+
+            if ($plan === null) {
+                throw ValidationException::withMessages([
+                    'schedule' => ['At least one event execution day is required.'],
+                ]);
+            }
+
+            $pricing = $this->quote(
+                plan: $plan,
+                propertyType: (string) $locked->property_type,
+                propertyDetails: (array) ($locked->property_details ?? []),
+                addressLatitude: $locked->address_latitude,
+                addressLongitude: $locked->address_longitude,
+                preferredWorkerId: $locked->resolvedAssignmentMode() === 'preferred_worker'
+                    ? $locked->preferred_worker_id
+                    : null,
+                requiredWorkers: max(1, (int) $locked->number_of_workers),
+            );
+
+            $grossTotal = round((float) $pricing['totalPrice'], 2);
+            $discount = min(
+                $grossTotal,
+                max(0.0, (float) ($locked->discount_amount ?? 0)),
+            );
+
+            CleaningBookingSession::query()
+                ->where('cleaning_booking_id', $locked->id)
+                ->delete();
+
+            $locked->forceFill([
+                'property_details' => $this->withAggregateHours(
+                    (array) ($locked->property_details ?? []),
+                    $plan,
+                ),
+                'estimated_hours' => $plan['totalHours'],
+                'total_hours' => $plan['totalHours'],
+                'scheduled_date' => $plan['firstDate'],
+                'scheduled_time' => $plan['firstTime'],
+                'base_price' => $pricing['basePrice'],
+                'addons_total' => $pricing['addonsTotal'],
+                'travel_fee' => $pricing['travelFee'],
+                'travel_distance_km' => $pricing['distanceKm'],
+                'admin_margin_amount' => $pricing['adminMargin'],
+                'is_pricing_final' => $pricing['isPricingFinal'],
+                'subtotal_before_discount' => $discount > 0 || $locked->subtotal_before_discount !== null
+                    ? $grossTotal
+                    : null,
+                'discount_amount' => $discount,
+                'total_price' => round($grossTotal - $discount, 2),
+            ])->saveQuietly();
+
+            $locked = $locked->fresh() ?? $locked;
+            $this->createSessions($locked, $plan, $pricing);
+
+            return $locked->fresh() ?? $locked;
+        });
     }
 
     private function normalizeHours(float $hours): float

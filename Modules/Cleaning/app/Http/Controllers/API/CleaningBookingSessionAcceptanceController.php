@@ -49,6 +49,29 @@ final class CleaningBookingSessionAcceptanceController
 
         $worker = $this->worker($request);
         $this->assertBookingOpen($cleaning_booking);
+
+        if (
+            (string) $cleaning_booking->property_type === 'event_assistance'
+            && CleaningBookingSession::query()->where('cleaning_booking_id', $cleaning_booking->id)->count() > 1
+        ) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Multi-day event assistance requires accepting every event day in phase one.',
+                'data' => [
+                    'acceptance' => [
+                        'allAccepted' => false,
+                        'acceptedSessionIds' => [],
+                        'rejected' => [[
+                            'sessionId' => 0,
+                            'reasonCode' => 'event_all_days_required',
+                            'message' => 'You must be available for and accept all event days.',
+                        ]],
+                    ],
+                    'coverage' => $this->coverage($cleaning_booking),
+                ],
+            ], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
         $sessionIds = $validated['sessionIds'] ?? $validated['session_ids'] ?? [];
         $result = $this->acceptanceService->acceptSelectedSessions($cleaning_booking, $worker, $sessionIds);
 

@@ -43,6 +43,7 @@ final class CleaningBookingSchedulePresenter
             ->first();
         $firstDate = $sessions->min('scheduled_date');
         $lastDate = $sessions->max('scheduled_date');
+        $canReschedule = $this->eventScheduleCanReschedule($booking, $sessions, $viewerWorker);
 
         return [
             // `multi_day` is deliberately preserved because both legacy Flutter
@@ -69,17 +70,17 @@ final class CleaningBookingSchedulePresenter
             'firstDate' => $firstDate?->format('Y-m-d'),
             'lastDate' => $lastDate?->format('Y-m-d'),
             'nextSession' => $next instanceof CleaningBookingSession
-                ? $this->sessionPayload($next, $viewerWorker)
+                ? $this->sessionPayload($next, $viewerWorker, $canReschedule)
                 : null,
             'sessions' => $sessions
-                ->map(fn (CleaningBookingSession $session): array => $this->sessionPayload($session, $viewerWorker))
+                ->map(fn (CleaningBookingSession $session): array => $this->sessionPayload($session, $viewerWorker, $canReschedule))
                 ->values()
                 ->all(),
         ];
     }
 
     /** @return array<string, mixed> */
-    private function sessionPayload(CleaningBookingSession $session, ?Worker $viewerWorker): array
+    private function sessionPayload(CleaningBookingSession $session, ?Worker $viewerWorker, bool $canReschedule): array
     {
         $acceptedAssignments = $session->workerAssignments
             ->filter(fn (CleaningBookingSessionWorkerAssignment $assignment): bool => $assignment->isAccepted())
@@ -166,6 +167,7 @@ final class CleaningBookingSchedulePresenter
             'canSendSos' => $canSendSos,
             'canExtend' => false,
             'canCancel' => $canCancel,
+            'canReschedule' => $isCustomerView && $canReschedule,
             'coverageStatus' => $session->coverage_status?->value ?? (string) $session->coverage_status,
             'coverageStatusLabel' => $session->coverage_status?->label(),
             'requiredWorkers' => $session->requiredWorkerCount(),
@@ -289,6 +291,45 @@ final class CleaningBookingSchedulePresenter
                 'requiredWorkers' => max(1, (int) ($booking->number_of_workers ?? 1)),
             ]],
         ];
+    }
+
+    private function eventScheduleCanReschedule(CleaningBooking $booking, $sessions, ?Worker $viewerWorker): bool
+    {
+        if (
+            $viewerWorker instanceof Worker
+            || (string) $booking->property_type !== 'event_assistance'
+            || ($booking->status?->value ?? (string) $booking->status) !== 'pending'
+        ) {
+            return false;
+        }
+
+        if ($booking->workerAssignments()
+            ->whereIn('status', \Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus::acceptedValues())
+            ->exists()) {
+            return false;
+        }
+
+        foreach ($sessions as $session) {
+            if (! $session instanceof CleaningBookingSession) {
+                continue;
+            }
+
+            if (
+                $this->status($session) !== CleaningBookingSessionStatus::Scheduled->value
+                || $session->started_travel_at !== null
+                || $session->arrived_at !== null
+                || $session->customer_confirmed_at !== null
+                || $session->work_started_at !== null
+                || $session->work_finished_at !== null
+                || $session->workerAssignments->contains(
+                    static fn (CleaningBookingSessionWorkerAssignment $assignment): bool => $assignment->isAccepted(),
+                )
+            ) {
+                return false;
+            }
+        }
+
+        return $sessions->isNotEmpty();
     }
 
     private function status(CleaningBookingSession $session): string

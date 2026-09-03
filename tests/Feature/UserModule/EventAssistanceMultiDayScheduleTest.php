@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 use App\Models\CancellationPolicy;
 use App\Models\User;
+use App\Models\Worker;
 use Laravel\Sanctum\Sanctum;
 use Modules\Cleaning\Database\Seeders\CleaningFinancialSettingsSeeder;
 use Modules\Cleaning\Enums\CleaningBillingMode;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
+use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
 
 use function Pest\Laravel\getJson;
+use function Pest\Laravel\patchJson;
 use function Pest\Laravel\postJson;
 
 beforeEach(function (): void {
@@ -224,4 +227,68 @@ it('rejects a schedule mode that does not match its session count', function ():
     ])
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['schedule.mode']);
+});
+
+it('allows replacing event days before acceptance and locks the schedule after a worker accepts', function (): void {
+    $payload = multiDayEventPayload();
+    $create = postJson('/api/v1/user/cleaning/orders', $payload)->assertCreated();
+    $bookingId = (int) $create->json('order.id');
+
+    $replacement = [
+        'mode' => 'multi_day',
+        'sessions' => [
+            [
+                'date' => now(config('app.timezone'))->addDays(3)->toDateString(),
+                'time' => '09:30',
+                'hours' => 2.5,
+            ],
+            [
+                'date' => now(config('app.timezone'))->addDays(5)->toDateString(),
+                'time' => '14:00',
+                'hours' => 4,
+            ],
+        ],
+    ];
+
+    patchJson("/api/v1/user/cleaning/orders/{$bookingId}", [
+        'schedule' => $replacement,
+    ])->assertOk();
+
+    $booking = CleaningBooking::query()->findOrFail($bookingId);
+    $sessions = CleaningBookingSession::query()
+        ->where('cleaning_booking_id', $bookingId)
+        ->orderBy('sequence')
+        ->get();
+
+    expect($sessions)->toHaveCount(2)
+        ->and((float) $booking->total_hours)->toBe(6.5)
+        ->and((float) ($booking->property_details['hours'] ?? 0))->toBe(6.5)
+        ->and($booking->scheduled_date?->toDateString())->toBe($replacement['sessions'][0]['date'])
+        ->and((string) $booking->scheduled_time)->toBe('09:30');
+
+    getJson("/api/v1/cleaning-bookings/{$bookingId}/schedule")
+        ->assertOk()
+        ->assertJsonPath('data.schedule.daysCount', 2)
+        ->assertJsonPath('data.schedule.sessions.0.canReschedule', true)
+        ->assertJsonPath('data.schedule.sessions.1.canReschedule', true);
+
+    $worker = Worker::factory()->create();
+    CleaningBookingSessionWorkerAssignment::query()->create([
+        'cleaning_booking_session_id' => $sessions->first()->id,
+        'worker_id' => $worker->id,
+        'status' => 'accepted_waiting_for_order_start',
+        'accepted_at' => now(),
+        'currency' => 'SYP',
+    ]);
+
+    getJson("/api/v1/cleaning-bookings/{$bookingId}/schedule")
+        ->assertOk()
+        ->assertJsonPath('data.schedule.sessions.0.canReschedule', false)
+        ->assertJsonPath('data.schedule.sessions.1.canReschedule', false);
+
+    patchJson("/api/v1/user/cleaning/orders/{$bookingId}", [
+        'schedule' => $replacement,
+    ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('schedule');
 });
