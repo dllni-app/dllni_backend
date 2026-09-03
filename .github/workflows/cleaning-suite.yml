@@ -7,6 +7,7 @@ on:
     paths:
       - 'app/Providers/AppServiceProvider.php'
       - 'app/Filament/Resources/CleaningBookings/**'
+      - 'config/notification_type_extensions.php'
       - 'Modules/Cleaning/app/Enums/CleaningBookingSession*.php'
       - 'Modules/Cleaning/app/Models/CleaningBooking.php'
       - 'Modules/Cleaning/app/Models/CleaningBookingSession*.php'
@@ -47,6 +48,7 @@ on:
     paths:
       - 'app/Providers/AppServiceProvider.php'
       - 'app/Filament/Resources/CleaningBookings/**'
+      - 'config/notification_type_extensions.php'
       - 'Modules/Cleaning/app/Enums/CleaningBookingSession*.php'
       - 'Modules/Cleaning/app/Models/CleaningBooking.php'
       - 'Modules/Cleaning/app/Models/CleaningBookingSession*.php'
@@ -119,6 +121,7 @@ jobs:
         run: |
           vendor/bin/pint --test \
             app/Providers/AppServiceProvider.php \
+            config/notification_type_extensions.php \
             Modules/Cleaning/app/Enums/CleaningBookingSessionStatus.php \
             Modules/Cleaning/app/Enums/CleaningBookingSessionCoverageStatus.php \
             Modules/Cleaning/app/Models/CleaningBooking.php \
