@@ -94,6 +94,7 @@ final class CleaningBookingSchedulePresenter
         $endsAt = $session->endsAt();
         $now = CarbonImmutable::now(config('app.timezone'));
         $status = $this->status($session);
+        $isCustomerView = ! $viewerWorker instanceof Worker;
         $hasMyActiveAssignment = $myAssignment instanceof CleaningBookingSessionWorkerAssignment
             && $myAssignment->isActive();
         $canStartTravel = $hasMyActiveAssignment
@@ -114,7 +115,28 @@ final class CleaningBookingSchedulePresenter
             && $status === CleaningBookingSessionStatus::AwaitingWorkerStartConfirmation->value;
         $canComplete = $hasMyActiveAssignment
             && $status === CleaningBookingSessionStatus::InProgress->value;
-        $canCancel = $hasMyActiveAssignment && ! $session->isTerminal();
+        $canCancel = $isCustomerView
+            ? ! $session->isTerminal()
+                && $session->work_started_at === null
+                && in_array($status, [
+                    CleaningBookingSessionStatus::Scheduled->value,
+                    CleaningBookingSessionStatus::WorkerAssigned->value,
+                    CleaningBookingSessionStatus::AwaitingStartVerification->value,
+                    CleaningBookingSessionStatus::AwaitingWorkerStartConfirmation->value,
+                ], true)
+            : $hasMyActiveAssignment
+                && $myAssignment->started_travel_at === null
+                && $session->work_started_at === null
+                && in_array($status, [
+                    CleaningBookingSessionStatus::Scheduled->value,
+                    CleaningBookingSessionStatus::WorkerAssigned->value,
+                ], true);
+        $canConfirmStartVerification = $isCustomerView
+            && $status === CleaningBookingSessionStatus::AwaitingStartVerification->value;
+        $canConfirmCompletion = $isCustomerView
+            && $status === CleaningBookingSessionStatus::AwaitingCustomerCompletion->value;
+        $canSendSos = ! $session->isTerminal()
+            && ($isCustomerView || $hasMyActiveAssignment);
 
         return [
             'id' => (int) $session->id,
@@ -139,6 +161,9 @@ final class CleaningBookingSchedulePresenter
             'canArrive' => $canArrive,
             'canStartWork' => $canStartWork,
             'canComplete' => $canComplete,
+            'canConfirmStartVerification' => $canConfirmStartVerification,
+            'canConfirmCompletion' => $canConfirmCompletion,
+            'canSendSos' => $canSendSos,
             'canExtend' => false,
             'canCancel' => $canCancel,
             'coverageStatus' => $session->coverage_status?->value ?? (string) $session->coverage_status,
