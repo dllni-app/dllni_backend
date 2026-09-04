@@ -179,3 +179,33 @@ it('rejects duplicate recurring execution slots', function (): void {
         ->assertUnprocessable()
         ->assertJsonValidationErrors('schedule.sessions.2.time');
 });
+
+it('rejects recurring visits that span more than thirty days', function (): void {
+    $payload = recurringCleaningPayload();
+    $payload['schedule']['sessions'] = [
+        [
+            'date' => now(config('app.timezone'))->addDays(2)->toDateString(),
+            'time' => '10:00',
+        ],
+        [
+            'date' => now(config('app.timezone'))->addDays(33)->toDateString(),
+            'time' => '10:00',
+        ],
+    ];
+
+    postJson('/api/v1/user/cleaning/orders', $payload)
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('schedule.sessions');
+
+    postJson('/api/v1/user/cleaning/orders/estimate-price', [
+        'propertyType' => $payload['propertyType'],
+        'propertyDetails' => $payload['propertyDetails'],
+        'addressLatitude' => $payload['addressLatitude'],
+        'addressLongitude' => $payload['addressLongitude'],
+        'assignmentMode' => $payload['assignmentMode'],
+        'numberOfWorkers' => $payload['numberOfWorkers'],
+        'schedule' => $payload['schedule'],
+    ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('schedule.sessions');
+});
