@@ -1,0 +1,64 @@
+name: Apply Recurring Skip Capability Once
+
+on:
+  push:
+    branches:
+      - feature/cleaning-suite-main
+    paths:
+      - '.github/workflows/apply-recurring-skip-capability-once.yml'
+      - 'scripts/apply_recurring_skip_capability_patch.py'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/cleaning-suite-main
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, bcmath, intl, gd
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Apply capability patch
+        run: python scripts/apply_recurring_skip_capability_patch.py
+      - name: Format changes
+        run: |
+          vendor/bin/pint \
+            Modules/Cleaning/app/Services/CleaningBookingSessionCancellationService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php \
+            tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php
+      - name: Prepare application
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        run: |
+          cp .env.example .env
+          touch database/database.sqlite
+          php artisan key:generate
+          php artisan migrate --force
+      - name: Verify recurring capability
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        run: |
+          php artisan test \
+            tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php \
+            tests/Feature/Cleaning/RecurringCleaningPreferredWorkerFallbackTest.php \
+            tests/Feature/UserModule/RecurringCleaningScheduleTest.php
+      - name: Commit implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            Modules/Cleaning/app/Services/CleaningBookingSessionCancellationService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php \
+            tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "feat(cleaning): expose recurring skip capability"
+          git push origin HEAD:feature/cleaning-suite-main
