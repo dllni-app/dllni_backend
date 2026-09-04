@@ -6,6 +6,7 @@ on:
     branches:
       - feature/cleaning-suite-main
     paths:
+      - 'Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionCancellationService.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionWorkerChangeService.php'
       - 'Modules/Cleaning/app/Services/CleaningPreferredWorkerFallbackService.php'
@@ -22,6 +23,7 @@ on:
       - '.github/workflows/cleaning-recurring.yml'
   pull_request:
     paths:
+      - 'Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionCancellationService.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionWorkerChangeService.php'
       - 'Modules/Cleaning/app/Services/CleaningPreferredWorkerFallbackService.php'
@@ -74,6 +76,7 @@ jobs:
       - name: Check formatting
         run: |
           vendor/bin/pint --test \
+            Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php \
             Modules/Cleaning/app/Services/CleaningBookingSessionCancellationService.php \
             Modules/Cleaning/app/Services/CleaningBookingSessionWorkerChangeService.php \
             Modules/Cleaning/app/Services/CleaningPreferredWorkerFallbackService.php \
