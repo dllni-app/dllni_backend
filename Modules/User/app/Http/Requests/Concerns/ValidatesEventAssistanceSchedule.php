@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Modules\User\Http\Requests\Concerns;
 
+use Carbon\CarbonImmutable;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 trait ValidatesEventAssistanceSchedule
 {
+    private const RECURRING_MAX_WINDOW_DAYS = 30;
+
     /** @return array<string, mixed> */
     protected function eventAssistanceScheduleRules(bool $isEventAssistance, bool $requireFutureDate = true): array
     {
@@ -53,6 +56,7 @@ trait ValidatesEventAssistanceSchedule
 
         $sessions = $schedule['sessions'];
         $slots = [];
+        $recurringDates = [];
         $isEventAssistance = method_exists($this, 'isEventAssistanceContext')
             ? $this->isEventAssistanceContext()
             : mb_strtolower((string) $this->input('propertyType')) === 'event_assistance';
@@ -78,6 +82,14 @@ trait ValidatesEventAssistanceSchedule
                 );
             }
             $slots[$slot] = true;
+
+            if (! $isEventAssistance) {
+                try {
+                    $recurringDates[] = CarbonImmutable::parse($date, config('app.timezone'))->startOfDay();
+                } catch (\Throwable) {
+                    // The base date validation rule owns malformed date errors.
+                }
+            }
         }
 
         $mode = mb_strtolower(mb_trim((string) ($schedule['mode'] ?? '')));
@@ -88,6 +100,21 @@ trait ValidatesEventAssistanceSchedule
                     'schedule.sessions',
                     'الحجز الدوري يحتاج إلى زيارتين على الأقل.',
                 );
+            }
+
+            if (count($recurringDates) >= 2) {
+                usort(
+                    $recurringDates,
+                    static fn (CarbonImmutable $left, CarbonImmutable $right): int => $left->getTimestamp() <=> $right->getTimestamp(),
+                );
+                $firstDate = $recurringDates[0];
+                $lastDate = $recurringDates[count($recurringDates) - 1];
+                if ($firstDate->diffInDays($lastDate) > self::RECURRING_MAX_WINDOW_DAYS) {
+                    $validator->errors()->add(
+                        'schedule.sessions',
+                        'يجب أن تقع جميع زيارات الحجز الدوري ضمن فترة لا تتجاوز 30 يوماً.',
+                    );
+                }
             }
 
             if ($mode !== '' && $mode !== 'recurring') {
