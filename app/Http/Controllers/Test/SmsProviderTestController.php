@@ -44,6 +44,16 @@ final class SmsProviderTestController
             report($exception);
             $smsMessage->refresh();
 
+            if ($smsMessage->status === 'pending') {
+                $smsMessage->update([
+                    'status' => 'failed',
+                    'failed_at' => now(),
+                    'job_finished_at' => $smsMessage->job_finished_at ?? now(),
+                    'provider_response' => $smsMessage->provider_response ?: $exception->getMessage(),
+                ]);
+                $smsMessage->refresh();
+            }
+
             return $this->response($smsMessage, $phone, $otp, $exception->getMessage());
         }
 
@@ -63,7 +73,6 @@ final class SmsProviderTestController
         $driver = (string) config("queue.connections.{$connection}.driver", $connection);
         $queueName = config("queue.connections.{$connection}.queue");
         $workerPickedUp = $smsMessage->job_started_at !== null;
-        $terminal = in_array($smsMessage->status, ['sent', 'failed'], true);
         $success = $smsMessage->status === 'sent';
 
         $queueWaitMs = $smsMessage->queue_wait_ms;
