@@ -23,11 +23,16 @@ on:
       - 'Modules/Cleaning/routes/sessions.php'
       - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderEstimatePriceController.php'
       - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderStoreController.php'
+      - 'Modules/User/app/Http/Controllers/API/UserRecurringCleaningScheduleRevisionController.php'
       - 'Modules/User/app/Http/Requests/Concerns/ValidatesEventAssistanceSchedule.php'
+      - 'Modules/User/app/Http/Requests/UserRecurringCleaningScheduleRevisionRequest.php'
       - 'Modules/User/app/Services/RecurringCleaningScheduleService.php'
+      - 'Modules/User/app/Services/RecurringCleaningScheduleRevisionService.php'
+      - 'Modules/User/routes/api.php'
       - 'tests/Feature/Cleaning/RecurringCleaningPreferredWorkerFallbackTest.php'
       - 'tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php'
       - 'tests/Feature/UserModule/RecurringCleaningScheduleTest.php'
+      - 'tests/Feature/UserModule/RecurringCleaningScheduleRevisionTest.php'
       - '.github/workflows/cleaning-recurring.yml'
   pull_request:
     paths:
@@ -48,11 +53,16 @@ on:
       - 'Modules/Cleaning/routes/sessions.php'
       - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderEstimatePriceController.php'
       - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderStoreController.php'
+      - 'Modules/User/app/Http/Controllers/API/UserRecurringCleaningScheduleRevisionController.php'
       - 'Modules/User/app/Http/Requests/Concerns/ValidatesEventAssistanceSchedule.php'
+      - 'Modules/User/app/Http/Requests/UserRecurringCleaningScheduleRevisionRequest.php'
       - 'Modules/User/app/Services/RecurringCleaningScheduleService.php'
+      - 'Modules/User/app/Services/RecurringCleaningScheduleRevisionService.php'
+      - 'Modules/User/routes/api.php'
       - 'tests/Feature/Cleaning/RecurringCleaningPreferredWorkerFallbackTest.php'
       - 'tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php'
       - 'tests/Feature/UserModule/RecurringCleaningScheduleTest.php'
+      - 'tests/Feature/UserModule/RecurringCleaningScheduleRevisionTest.php'
       - '.github/workflows/cleaning-recurring.yml'
 
 permissions:
@@ -109,11 +119,16 @@ jobs:
             Modules/Cleaning/routes/sessions.php \
             Modules/User/app/Http/Controllers/API/UserCleaningOrderEstimatePriceController.php \
             Modules/User/app/Http/Controllers/API/UserCleaningOrderStoreController.php \
+            Modules/User/app/Http/Controllers/API/UserRecurringCleaningScheduleRevisionController.php \
             Modules/User/app/Http/Requests/Concerns/ValidatesEventAssistanceSchedule.php \
+            Modules/User/app/Http/Requests/UserRecurringCleaningScheduleRevisionRequest.php \
             Modules/User/app/Services/RecurringCleaningScheduleService.php \
+            Modules/User/app/Services/RecurringCleaningScheduleRevisionService.php \
+            Modules/User/routes/api.php \
             tests/Feature/Cleaning/RecurringCleaningPreferredWorkerFallbackTest.php \
             tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php \
-            tests/Feature/UserModule/RecurringCleaningScheduleTest.php
+            tests/Feature/UserModule/RecurringCleaningScheduleTest.php \
+            tests/Feature/UserModule/RecurringCleaningScheduleRevisionTest.php
 
       - name: Run recurring cleaning tests
         env:
@@ -123,6 +138,7 @@ jobs:
         run: |
           set -o pipefail
           php artisan test \
+            tests/Feature/UserModule/RecurringCleaningScheduleRevisionTest.php \
             tests/Feature/UserModule/RecurringCleaningScheduleTest.php \
             tests/Feature/Cleaning/RecurringCleaningPreferredWorkerFallbackTest.php \
             tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php \
