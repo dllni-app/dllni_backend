@@ -53,7 +53,9 @@ trait ValidatesEventAssistanceSchedule
 
         $sessions = $schedule['sessions'];
         $slots = [];
-        $isEventAssistance = mb_strtolower((string) $this->input('propertyType')) === 'event_assistance';
+        $isEventAssistance = method_exists($this, 'isEventAssistanceContext')
+            ? $this->isEventAssistanceContext()
+            : mb_strtolower((string) $this->input('propertyType')) === 'event_assistance';
 
         foreach ($sessions as $index => $session) {
             if (! is_array($session)) {
