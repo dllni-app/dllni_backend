@@ -8,6 +8,7 @@ on:
       - '.github/workflows/apply-recurring-pause-resume-once.yml'
       - 'scripts/apply_recurring_pause_resume_patch.py'
       - 'scripts/fix_recurring_pause_resume_constant.py'
+      - 'scripts/fix_recurring_pause_resume_financial_fixture.py'
 
 permissions:
   contents: write
@@ -30,6 +31,7 @@ jobs:
         run: |
           python scripts/apply_recurring_pause_resume_patch.py
           python scripts/fix_recurring_pause_resume_constant.py
+          python scripts/fix_recurring_pause_resume_financial_fixture.py
       - name: Format changes
         run: |
           vendor/bin/pint \
