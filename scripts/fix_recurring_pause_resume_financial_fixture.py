@@ -34,6 +34,17 @@ replacement = """    expect($booking->fresh()->recurring_paused_at)->toBeNull()
             'is_active' => true,
         ],
     );
+    $worker->forceFill([
+        'default_working_hours' => [
+            'monday' => ['available' => true, 'data' => [['00:00' => '23:59']]],
+            'tuesday' => ['available' => true, 'data' => [['00:00' => '23:59']]],
+            'wednesday' => ['available' => true, 'data' => [['00:00' => '23:59']]],
+            'thursday' => ['available' => true, 'data' => [['00:00' => '23:59']]],
+            'friday' => ['available' => true, 'data' => [['00:00' => '23:59']]],
+            'saturday' => ['available' => true, 'data' => [['00:00' => '23:59']]],
+            'sunday' => ['available' => true, 'data' => [['00:00' => '23:59']]],
+        ],
+    ])->save();
     $worker->unsetRelation('deposit');
 
     Sanctum::actingAs($workerUser);
