@@ -32,11 +32,21 @@ it('publicly sends a random otp through the configured sms provider', function (
         ->assertJsonPath('data.phone', '963944000111')
         ->assertJsonPath('data.provider.name', 'mtn')
         ->assertJsonPath('data.provider.status_code', 200)
-        ->assertJsonPath('data.provider.response', 'provider accepted');
+        ->assertJsonPath('data.provider.response', 'provider accepted')
+        ->assertJsonStructure([
+            'data' => [
+                'provider' => [
+                    'execution_time_ms',
+                    'execution_time_seconds',
+                ],
+            ],
+        ]);
 
     $otp = (string) $response->json('data.otp');
 
     expect($otp)->toMatch('/^\d{6}$/');
+    expect($response->json('data.provider.execution_time_ms'))->toBeNumeric()->toBeGreaterThanOrEqual(0);
+    expect($response->json('data.provider.execution_time_seconds'))->toBeNumeric()->toBeGreaterThanOrEqual(0);
 
     Http::assertSent(function (HttpRequest $request) use ($otp): bool {
         $query = [];
@@ -58,27 +68,51 @@ it('returns the provider failure details in the api response', function (): void
         '*' => Http::response('provider unavailable', 503),
     ]);
 
-    $this->postJson('/api/v1/test/sms-provider', [
+    $response = $this->postJson('/api/v1/test/sms-provider', [
         'phone' => '+963944000111',
-    ])
+    ]);
+
+    $response
         ->assertStatus(502)
         ->assertJsonPath('success', false)
         ->assertJsonPath('code', 'SMS_PROVIDER_TEST_FAILED')
         ->assertJsonPath('data.provider.status_code', 503)
-        ->assertJsonPath('data.provider.response', 'provider unavailable');
+        ->assertJsonPath('data.provider.response', 'provider unavailable')
+        ->assertJsonStructure([
+            'data' => [
+                'provider' => [
+                    'execution_time_ms',
+                    'execution_time_seconds',
+                ],
+            ],
+        ]);
+
+    expect($response->json('data.provider.execution_time_ms'))->toBeNumeric()->toBeGreaterThanOrEqual(0);
 });
 
 it('returns connection or configuration errors in the api response', function (): void {
     config()->set('services.mtn_sms.base_url', null);
 
-    $this->postJson('/api/v1/test/sms-provider', [
+    $response = $this->postJson('/api/v1/test/sms-provider', [
         'phone' => '0944000111',
-    ])
+    ]);
+
+    $response
         ->assertStatus(502)
         ->assertJsonPath('success', false)
         ->assertJsonPath('code', 'SMS_PROVIDER_TEST_ERROR')
         ->assertJsonPath('data.provider.status_code', null)
-        ->assertJsonPath('data.provider.error', 'MTN SMS base URL is not configured.');
+        ->assertJsonPath('data.provider.error', 'MTN SMS base URL is not configured.')
+        ->assertJsonStructure([
+            'data' => [
+                'provider' => [
+                    'execution_time_ms',
+                    'execution_time_seconds',
+                ],
+            ],
+        ]);
+
+    expect($response->json('data.provider.execution_time_ms'))->toBeNumeric()->toBeGreaterThanOrEqual(0);
 });
 
 it('can be disabled by configuration', function (): void {
