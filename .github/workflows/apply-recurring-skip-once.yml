@@ -1,0 +1,302 @@
+name: Apply Recurring Skip Once
+
+on:
+  push:
+    branches:
+      - feature/cleaning-suite-main
+    paths:
+      - '.github/workflows/apply-recurring-skip-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/cleaning-suite-main
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, bcmath, intl, gd
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Apply recurring skip flow
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          cancellation = Path('Modules/Cleaning/app/Services/CleaningBookingSessionCancellationService.php')
+          text = cancellation.read_text()
+          marker = "    public function cancelByWorker(\n"
+          if text.count(marker) != 1:
+              raise SystemExit('Unexpected cancelByWorker marker count')
+          method = r'''    public function skipRecurringByCustomer(
+        CleaningBooking $booking,
+        CleaningBookingSession $session,
+        int $customerId,
+        string $reason,
+    ): CleaningBookingSession {
+        if ((int) $booking->customer_id !== $customerId) {
+            abort(403, 'Booking belongs to another customer.');
+        }
+
+        $normalizedReason = $this->requiredReason($reason);
+        $affectedWorkerIds = [];
+        $fromStatus = '';
+
+        $updated = DB::transaction(function () use (
+            $booking,
+            $session,
+            $normalizedReason,
+            &$affectedWorkerIds,
+            &$fromStatus,
+        ): CleaningBookingSession {
+            $locked = $this->lockSession($booking, $session);
+            $this->assertCustomerCanSkipRecurring($locked);
+            $fromStatus = $this->statusValue($locked);
+            $skippedAt = now();
+
+            $assignments = CleaningBookingSessionWorkerAssignment::query()
+                ->where('cleaning_booking_session_id', $locked->id)
+                ->whereIn('status', CleaningBookingWorkerAssignmentStatus::activeValues())
+                ->lockForUpdate()
+                ->get();
+
+            if ($assignments->contains(
+                static fn (CleaningBookingSessionWorkerAssignment $assignment): bool => $assignment->started_travel_at !== null,
+            )) {
+                throw new InvalidArgumentException('A recurring session cannot be skipped after worker travel starts.');
+            }
+
+            $affectedWorkerIds = $assignments
+                ->pluck('worker_id')
+                ->map(static fn (mixed $workerId): int => (int) $workerId)
+                ->filter(static fn (int $workerId): bool => $workerId > 0)
+                ->unique()
+                ->values()
+                ->all();
+
+            foreach ($assignments as $assignment) {
+                $assignment->forceFill([
+                    'status' => CleaningBookingWorkerAssignmentStatus::Cancelled,
+                    'released_at' => $skippedAt,
+                    'released_reason' => 'Customer skipped recurring session: '.$normalizedReason,
+                ])->save();
+            }
+
+            $locked->forceFill([
+                'coverage_status' => CleaningBookingSessionCoverageStatus::Searching,
+                'status' => CleaningBookingSessionStatus::Skipped,
+                'cancellation_fee' => 0,
+                'skipped_at' => $skippedAt,
+                'skip_source' => 'customer',
+                'skip_reason' => $normalizedReason,
+                'cancelled_at' => null,
+                'cancellation_reason' => null,
+                'cancelled_by_role' => null,
+                'version' => max(1, (int) $locked->version) + 1,
+            ])->save();
+
+            $this->syncParentFinancials($booking);
+
+            return $locked->fresh(['workerAssignments.worker.user']) ?? $locked;
+        });
+
+        $this->parentState->refresh($booking);
+
+        foreach ($affectedWorkerIds as $workerId) {
+            $this->notifications->notifyWorkerById(
+                booking: $booking->fresh() ?? $booking,
+                workerId: $workerId,
+                canonicalType: 'cleaning.booking.updated',
+                action: 'customer_skipped_recurring_session',
+                actorRole: 'customer',
+                fromStatus: $fromStatus !== '' ? $fromStatus : null,
+                occurredAt: $updated->skipped_at?->toIso8601String(),
+                extraData: array_merge($this->sessionContext($updated), [
+                    'skipReason' => $normalizedReason,
+                    'skip_reason' => $normalizedReason,
+                ]),
+            );
+        }
+
+        return $updated->fresh(['workerAssignments.worker.user']) ?? $updated;
+    }
+
+'''
+          text = text.replace(marker, method + marker, 1)
+
+          assertion_marker = "    private function assertWorkerCanWithdraw(CleaningBookingSession $session): void\n"
+          if text.count(assertion_marker) != 1:
+              raise SystemExit('Unexpected worker assertion marker count')
+          assertion = r'''    private function assertCustomerCanSkipRecurring(CleaningBookingSession $session): void
+    {
+        if ((string) $session->session_type !== 'recurring_cleaning') {
+            throw new InvalidArgumentException('Only recurring cleaning sessions can be skipped.');
+        }
+        if ($session->isTerminal()) {
+            throw new InvalidArgumentException('Session is already closed.');
+        }
+        if ($session->started_travel_at !== null || $session->work_started_at !== null) {
+            throw new InvalidArgumentException('A recurring session cannot be skipped after worker travel starts.');
+        }
+    }
+
+'''
+          text = text.replace(assertion_marker, assertion + assertion_marker, 1)
+          cancellation.write_text(text)
+
+          controller = Path('Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLifecycleController.php')
+          text = controller.read_text()
+          marker = "    public function sos(\n"
+          if text.count(marker) != 1:
+              raise SystemExit('Unexpected controller sos marker count')
+          method = r'''    public function skip(
+        Request $request,
+        CleaningBooking $cleaning_booking,
+        CleaningBookingSession $cleaning_booking_session,
+    ): JsonResponse {
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'max:1000'],
+        ]);
+        $user = $request->user();
+
+        if ($user === null || (int) $cleaning_booking->customer_id !== (int) $user->id) {
+            abort(403, 'Only the booking customer can skip a recurring session.');
+        }
+
+        try {
+            $session = $this->cancellation->skipRecurringByCustomer(
+                $cleaning_booking,
+                $cleaning_booking_session,
+                (int) $user->id,
+                (string) $validated['reason'],
+            );
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
+        }
+
+        return $this->payload($cleaning_booking, $session);
+    }
+
+'''
+          text = text.replace(marker, method + marker, 1)
+          controller.write_text(text)
+
+          routes = Path('Modules/Cleaning/routes/sessions.php')
+          text = routes.read_text()
+          marker = "        Route::post(\n            'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/sos',\n"
+          if text.count(marker) != 1:
+              raise SystemExit('Unexpected route sos marker count')
+          route = r'''        Route::post(
+            'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/skip',
+            [CleaningBookingSessionLifecycleController::class, 'skip'],
+        )->name('cleaning-bookings.sessions.skip');
+
+'''
+          text = text.replace(marker, route + marker, 1)
+          routes.write_text(text)
+
+          test = Path('tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php')
+          text = test.read_text()
+          marker = "/** @return array{0:User,1:User,2:Worker,3:CleaningBooking} */\nfunction makeRecurringWorkerContinuityScenario(): array\n"
+          if text.count(marker) != 1:
+              raise SystemExit('Unexpected recurring helper marker count')
+          cases = r'''it('lets the customer skip one future recurring visit without cancelling the series', function (): void {
+    [$customer, , $worker, $booking] = makeRecurringWorkerContinuityScenario();
+    $firstSession = makeRecurringWorkerContinuitySession($booking, 1);
+    $secondSession = makeRecurringWorkerContinuitySession($booking, 2);
+    $firstAssignment = makeRecurringWorkerContinuityAssignment($firstSession, $worker);
+    $secondAssignment = makeRecurringWorkerContinuityAssignment($secondSession, $worker);
+
+    Sanctum::actingAs($customer);
+
+    $this->postJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/sessions/{$firstSession->id}/skip",
+        ['reason' => 'لن نحتاج زيارة التنظيف في هذا الموعد'],
+    )
+        ->assertOk()
+        ->assertJsonPath('data.schedule.sessions.0.status', CleaningBookingSessionStatus::Skipped->value)
+        ->assertJsonPath('data.schedule.sessions.1.status', CleaningBookingSessionStatus::WorkerAssigned->value);
+
+    expect($firstSession->fresh()->status)->toBe(CleaningBookingSessionStatus::Skipped)
+        ->and($firstSession->fresh()->skip_source)->toBe('customer')
+        ->and($firstSession->fresh()->skip_reason)->toBe('لن نحتاج زيارة التنظيف في هذا الموعد')
+        ->and($firstSession->fresh()->skipped_at)->not->toBeNull()
+        ->and((float) $firstSession->fresh()->cancellation_fee)->toBe(0.0)
+        ->and($firstAssignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::Cancelled)
+        ->and($firstAssignment->fresh()->released_reason)->toContain('Customer skipped recurring session')
+        ->and($secondAssignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart)
+        ->and($secondSession->fresh()->status)->toBe(CleaningBookingSessionStatus::WorkerAssigned)
+        ->and($booking->fresh()->status)->not->toBe(CleaningBookingStatus::Cancelled)
+        ->and((float) $booking->fresh()->total_hours)->toBe(2.0)
+        ->and((float) $booking->fresh()->total_price)->toBe(3300.0);
+
+    $this->assertDatabaseMissing('cleaning_booking_session_financial_penalties', [
+        'cleaning_booking_session_id' => $firstSession->id,
+    ]);
+});
+
+it('does not expose recurring skip for an ordinary cleaning session', function (): void {
+    [$customer, , $worker, $booking] = makeRecurringWorkerContinuityScenario();
+    $session = makeRecurringWorkerContinuitySession($booking, 1, 'regular_cleaning');
+    $assignment = makeRecurringWorkerContinuityAssignment($session, $worker);
+
+    Sanctum::actingAs($customer);
+
+    $this->postJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/sessions/{$session->id}/skip",
+        ['reason' => 'محاولة تخطي جلسة غير دورية'],
+    )
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('status');
+
+    expect($session->fresh()->status)->toBe(CleaningBookingSessionStatus::WorkerAssigned)
+        ->and($assignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart);
+});
+
+'''
+          text = text.replace(marker, cases + marker, 1)
+          test.write_text(text)
+          PY
+      - name: Format skip changes
+        run: |
+          vendor/bin/pint \
+            Modules/Cleaning/app/Services/CleaningBookingSessionCancellationService.php \
+            Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLifecycleController.php \
+            Modules/Cleaning/routes/sessions.php \
+            tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php
+      - name: Prepare application
+        run: |
+          cp .env.example .env
+          touch database/database.sqlite
+          php artisan key:generate
+          php artisan migrate --force
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+      - name: Verify recurring skip and regression
+        run: |
+          php artisan test \
+            tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php \
+            tests/Feature/Cleaning/RecurringCleaningPreferredWorkerFallbackTest.php \
+            tests/Feature/UserModule/RecurringCleaningScheduleTest.php
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+      - name: Commit skip implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            Modules/Cleaning/app/Services/CleaningBookingSessionCancellationService.php \
+            Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLifecycleController.php \
+            Modules/Cleaning/routes/sessions.php \
+            tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "feat(cleaning): allow skipping recurring visits"
+          git push origin HEAD:feature/cleaning-suite-main
