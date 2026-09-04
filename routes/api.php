@@ -17,6 +17,7 @@ use App\Http\Controllers\API\WorkerController;
 use App\Http\Controllers\DeepLinks\OpenDeepLinkController;
 use App\Http\Controllers\DeepLinks\ResolveDeepLinkController;
 use App\Http\Controllers\DeepLinks\TrackDeepLinkEventController;
+use App\Http\Controllers\Test\SmsProviderTestController;
 use Illuminate\Support\Facades\Route;
 use Modules\User\Http\Controllers\API\UserPopularSearchesController;
 
@@ -48,6 +49,12 @@ Route::prefix('v1/apps')->group(function (): void {
 });
 
 Route::get('v1/user/popular-searches', UserPopularSearchesController::class);
+
+Route::prefix('v1/test')
+    ->middleware(['throttle:5,1'])
+    ->group(function (): void {
+        Route::post('sms-provider', SmsProviderTestController::class);
+    });
 
 Route::middleware(['auth:sanctum'])->prefix('v1')->group(function (): void {
     Route::get('notifications', [UserNotificationController::class, 'index'])->name('notifications.index');
