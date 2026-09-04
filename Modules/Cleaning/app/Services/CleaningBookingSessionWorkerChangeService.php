@@ -16,6 +16,8 @@ use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
 
 final class CleaningBookingSessionWorkerChangeService
 {
+    private const RECURRING_CLEANING_SESSION_TYPE = 'recurring_cleaning';
+
     public function __construct(
         private readonly CleaningBookingSessionParentStateService $parentState,
         private readonly CleaningLifecycleNotificationService $notifications,
@@ -23,8 +25,9 @@ final class CleaningBookingSessionWorkerChangeService
 
     /**
      * Release only the explicitly selected worker assignments from future event
-     * sessions. The whole selection is validated before any assignment changes,
-     * so a stale/invalid session never produces a silent partial release.
+     * or recurring-cleaning sessions. The whole selection is validated before
+     * any assignment changes, so stale/invalid state never produces a silent
+     * partial release.
      *
      * @param  array<int,array{sessionId:int,workerIds:array<int,int>}>  $changes
      * @return array{releasedAssignments:array<int,array{sessionId:int,workerId:int}>,changedSessionIds:array<int,int>}
@@ -37,9 +40,6 @@ final class CleaningBookingSessionWorkerChangeService
     ): array {
         if ((int) $booking->customer_id !== $customerId) {
             abort(403, 'Booking belongs to another customer.');
-        }
-        if ((string) $booking->property_type !== 'event_assistance') {
-            throw new InvalidArgumentException('Worker changes are currently available only for event assistance bookings.');
         }
 
         $normalizedReason = mb_trim($reason);
@@ -66,9 +66,6 @@ final class CleaningBookingSessionWorkerChangeService
             if ((int) $lockedBooking->customer_id !== $customerId) {
                 abort(403, 'Booking belongs to another customer.');
             }
-            if ((string) $lockedBooking->property_type !== 'event_assistance') {
-                throw new InvalidArgumentException('Worker changes are currently available only for event assistance bookings.');
-            }
 
             $sessionIds = array_keys($normalizedChanges);
             $sessions = CleaningBookingSession::query()
@@ -82,6 +79,8 @@ final class CleaningBookingSessionWorkerChangeService
             if ($sessions->count() !== count($sessionIds)) {
                 throw new InvalidArgumentException('One or more selected sessions do not belong to this booking.');
             }
+
+            $this->assertBookingSupportsWorkerChanges($lockedBooking, $sessions->all());
 
             $now = CarbonImmutable::now(config('app.timezone'));
             $assignmentsBySession = [];
@@ -221,6 +220,24 @@ final class CleaningBookingSessionWorkerChangeService
         return $normalized;
     }
 
+    /** @param array<int, CleaningBookingSession> $sessions */
+    private function assertBookingSupportsWorkerChanges(
+        CleaningBooking $booking,
+        array $sessions,
+    ): void {
+        if ((string) $booking->property_type === 'event_assistance') {
+            return;
+        }
+
+        foreach ($sessions as $session) {
+            if ((string) $session->session_type !== self::RECURRING_CLEANING_SESSION_TYPE) {
+                throw new InvalidArgumentException(
+                    'Worker changes are available only for event assistance or recurring cleaning sessions.'
+                );
+            }
+        }
+    }
+
     private function assertFutureSessionCanChangeWorkers(
         CleaningBookingSession $session,
         CarbonImmutable $now,
@@ -240,7 +257,7 @@ final class CleaningBookingSessionWorkerChangeService
 
         $startsAt = $session->startsAt();
         if ($startsAt === null || ! $startsAt->gt($now)) {
-            throw new InvalidArgumentException('Only future event sessions can change workers.');
+            throw new InvalidArgumentException('Only future sessions can change workers.');
         }
     }
 }

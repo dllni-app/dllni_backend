@@ -1,0 +1,199 @@
+<?php
+
+declare(strict_types=1);
+
+use App\Models\CleaningFinancialSetting;
+use App\Models\User;
+use App\Models\Worker;
+use Illuminate\Support\Facades\Notification;
+use Laravel\Sanctum\Sanctum;
+use Modules\Cleaning\Enums\CleaningBookingSessionCoverageStatus;
+use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
+use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
+use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingSession;
+use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
+use Modules\Cleaning\Support\CleaningRuntimeSettings;
+
+beforeEach(function (): void {
+    Notification::fake();
+    CleaningFinancialSetting::query()->delete();
+    CleaningFinancialSetting::query()->create([
+        ...CleaningRuntimeSettings::financialDefaults(),
+        'user_cancellation_fee' => 0,
+    ]);
+});
+
+it('replaces the worker for one recurring visit without touching the remaining visits', function (): void {
+    [$customer, , $worker, $booking] = makeRecurringWorkerContinuityScenario();
+    $firstSession = makeRecurringWorkerContinuitySession($booking, 1);
+    $secondSession = makeRecurringWorkerContinuitySession($booking, 2);
+    $firstAssignment = makeRecurringWorkerContinuityAssignment($firstSession, $worker);
+    $secondAssignment = makeRecurringWorkerContinuityAssignment($secondSession, $worker);
+
+    Sanctum::actingAs($customer);
+
+    $this->postJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/sessions/change-workers",
+        [
+            'changes' => [[
+                'sessionId' => $firstSession->id,
+                'workerIds' => [$worker->id],
+            ]],
+            'reason' => 'نحتاج عاملاً بديلاً لهذه الزيارة فقط',
+        ],
+    )
+        ->assertOk()
+        ->assertJsonPath('data.workerChange.changedSessionIds.0', $firstSession->id)
+        ->assertJsonPath('data.workerChange.releasedAssignments.0.workerId', $worker->id)
+        ->assertJsonPath('data.schedule.sessions.0.sessionType', 'recurring_cleaning')
+        ->assertJsonPath('data.schedule.sessions.0.status', CleaningBookingSessionStatus::Scheduled->value)
+        ->assertJsonPath('data.schedule.sessions.0.coverageStatus', CleaningBookingSessionCoverageStatus::Searching->value)
+        ->assertJsonPath('data.schedule.sessions.0.acceptedWorkers', 0)
+        ->assertJsonPath('data.schedule.sessions.1.status', CleaningBookingSessionStatus::WorkerAssigned->value)
+        ->assertJsonPath('data.schedule.sessions.1.acceptedWorkers', 1);
+
+    expect($firstAssignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::Cancelled)
+        ->and($firstAssignment->fresh()->released_reason)->toContain('Customer requested worker replacement')
+        ->and($secondAssignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart)
+        ->and($firstSession->fresh()->coverage_status)->toBe(CleaningBookingSessionCoverageStatus::Searching)
+        ->and($secondSession->fresh()->coverage_status)->toBe(CleaningBookingSessionCoverageStatus::FullyCovered)
+        ->and($booking->fresh()->status)->not->toBe(CleaningBookingStatus::Cancelled);
+
+    $this->assertDatabaseMissing('cleaning_booking_session_financial_penalties', [
+        'cleaning_booking_session_id' => $firstSession->id,
+        'worker_id' => $worker->id,
+    ]);
+});
+
+it('treats worker absence as a single recurring visit withdrawal and keeps the series alive', function (): void {
+    [, $workerUser, $worker, $booking] = makeRecurringWorkerContinuityScenario();
+    $firstSession = makeRecurringWorkerContinuitySession($booking, 1);
+    $secondSession = makeRecurringWorkerContinuitySession($booking, 2);
+    $firstAssignment = makeRecurringWorkerContinuityAssignment($firstSession, $worker);
+    $secondAssignment = makeRecurringWorkerContinuityAssignment($secondSession, $worker);
+    $trustBefore = (int) $worker->trust_score;
+
+    Sanctum::actingAs($workerUser);
+
+    $this->postJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/sessions/{$firstSession->id}/cancel",
+        ['reason' => 'لن أستطيع الحضور لهذه الزيارة'],
+    )
+        ->assertOk()
+        ->assertJsonPath('data.schedule.sessions.0.sessionType', 'recurring_cleaning')
+        ->assertJsonPath('data.schedule.sessions.0.status', CleaningBookingSessionStatus::Scheduled->value)
+        ->assertJsonPath('data.schedule.sessions.0.coverageStatus', CleaningBookingSessionCoverageStatus::Searching->value)
+        ->assertJsonPath('data.schedule.sessions.1.status', CleaningBookingSessionStatus::WorkerAssigned->value)
+        ->assertJsonPath('data.schedule.sessions.1.acceptedWorkers', 1);
+
+    expect($firstAssignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::Cancelled)
+        ->and($secondAssignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart)
+        ->and($firstSession->fresh()->status)->toBe(CleaningBookingSessionStatus::Scheduled)
+        ->and($secondSession->fresh()->status)->toBe(CleaningBookingSessionStatus::WorkerAssigned)
+        ->and($booking->fresh()->status)->not->toBe(CleaningBookingStatus::Cancelled)
+        ->and((int) $worker->fresh()->trust_score)->toBeLessThan($trustBefore);
+});
+
+it('keeps worker replacement unavailable for ordinary non-recurring cleaning sessions', function (): void {
+    [$customer, , $worker, $booking] = makeRecurringWorkerContinuityScenario();
+    $session = makeRecurringWorkerContinuitySession($booking, 1, 'regular_cleaning');
+    $assignment = makeRecurringWorkerContinuityAssignment($session, $worker);
+
+    Sanctum::actingAs($customer);
+
+    $this->postJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/sessions/change-workers",
+        [
+            'changes' => [[
+                'sessionId' => $session->id,
+                'workerIds' => [$worker->id],
+            ]],
+            'reason' => 'محاولة تغيير عامل حجز مفرد',
+        ],
+    )
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('changes');
+
+    expect($assignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart);
+});
+
+/** @return array{0:User,1:User,2:Worker,3:CleaningBooking} */
+function makeRecurringWorkerContinuityScenario(): array
+{
+    $customer = User::factory()->create(['is_active' => true]);
+    $workerUser = User::factory()->create(['is_active' => true]);
+    $worker = Worker::factory()->create([
+        'user_id' => $workerUser->id,
+        'is_active' => true,
+        'is_suspended' => false,
+        'trust_score' => 90,
+    ]);
+    $booking = CleaningBooking::factory()->create([
+        'customer_id' => $customer->id,
+        'property_type' => 'apartment',
+        'status' => CleaningBookingStatus::WorkerAssigned->value,
+        'worker_id' => null,
+        'preferred_worker_id' => null,
+        'number_of_workers' => 1,
+        'scheduled_date' => now()->addDays(2)->toDateString(),
+        'scheduled_time' => '10:00',
+        'estimated_hours' => 4,
+        'total_hours' => 4,
+        'base_price' => 6000,
+        'addons_total' => 0,
+        'travel_fee' => 0,
+        'admin_margin_amount' => 600,
+        'cancellation_fee' => 0,
+        'total_price' => 6600,
+    ]);
+
+    return [$customer, $workerUser, $worker, $booking];
+}
+
+function makeRecurringWorkerContinuitySession(
+    CleaningBooking $booking,
+    int $sequence,
+    string $sessionType = 'recurring_cleaning',
+): CleaningBookingSession {
+    return CleaningBookingSession::query()->create([
+        'cleaning_booking_id' => $booking->id,
+        'sequence' => $sequence,
+        'session_type' => $sessionType,
+        'calculation_mode' => 'estimated_hours',
+        'scheduled_date' => now()->addDays($sequence + 1)->toDateString(),
+        'scheduled_time' => '10:00',
+        'duration_hours' => 2,
+        'required_workers' => 1,
+        'coverage_status' => CleaningBookingSessionCoverageStatus::FullyCovered,
+        'status' => CleaningBookingSessionStatus::WorkerAssigned,
+        'base_price' => 3000,
+        'addons_total' => 0,
+        'materials_total' => 0,
+        'special_services_total' => 0,
+        'travel_fee' => 0,
+        'admin_margin_amount' => 300,
+        'extension_fee_total' => 0,
+        'cancellation_fee' => 0,
+        'total_price' => 3300,
+        'is_pricing_final' => true,
+    ]);
+}
+
+function makeRecurringWorkerContinuityAssignment(
+    CleaningBookingSession $session,
+    Worker $worker,
+): CleaningBookingSessionWorkerAssignment {
+    return CleaningBookingSessionWorkerAssignment::query()->create([
+        'cleaning_booking_session_id' => $session->id,
+        'worker_id' => $worker->id,
+        'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart,
+        'accepted_at' => now()->subHour(),
+        'service_share_amount' => 3000,
+        'travel_fee' => 0,
+        'admin_margin_amount' => 300,
+        'worker_amount' => 3000,
+        'currency' => 'SYP',
+    ]);
+}

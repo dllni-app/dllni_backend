@@ -34,15 +34,18 @@ on:
       - 'Modules/User/app/Http/Requests/UserCleaningOrderReviewRequest.php'
       - 'Modules/User/app/Http/Requests/UserCleaningPreviousWorkersRequest.php'
       - 'Modules/User/app/Services/EventAssistanceScheduleService.php'
+      - 'Modules/User/app/Services/RecurringCleaningScheduleService.php'
       - 'Modules/User/app/Services/UserCleaningOrderService.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionAcceptanceTest.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionLifecycleTest.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionLocationTest.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionCancellationAndSosTest.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionWorkerChangeTest.php'
+      - 'tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php'
       - 'tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php'
       - 'tests/Feature/UserModule/EventAssistancePreviousWorkersScheduleTest.php'
       - 'tests/Feature/UserModule/EventAssistanceReviewTest.php'
+      - 'tests/Feature/UserModule/RecurringCleaningScheduleTest.php'
       - '.github/workflows/cleaning-suite.yml'
   pull_request:
     paths:
@@ -75,15 +78,18 @@ on:
       - 'Modules/User/app/Http/Requests/UserCleaningOrderReviewRequest.php'
       - 'Modules/User/app/Http/Requests/UserCleaningPreviousWorkersRequest.php'
       - 'Modules/User/app/Services/EventAssistanceScheduleService.php'
+      - 'Modules/User/app/Services/RecurringCleaningScheduleService.php'
       - 'Modules/User/app/Services/UserCleaningOrderService.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionAcceptanceTest.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionLifecycleTest.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionLocationTest.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionCancellationAndSosTest.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionWorkerChangeTest.php'
+      - 'tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php'
       - 'tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php'
       - 'tests/Feature/UserModule/EventAssistancePreviousWorkersScheduleTest.php'
       - 'tests/Feature/UserModule/EventAssistanceReviewTest.php'
+      - 'tests/Feature/UserModule/RecurringCleaningScheduleTest.php'
       - '.github/workflows/cleaning-suite.yml'
 
 jobs:
@@ -163,6 +169,7 @@ jobs:
             Modules/User/app/Http/Requests/UserCleaningOrderReviewRequest.php \
             Modules/User/app/Http/Requests/UserCleaningPreviousWorkersRequest.php \
             Modules/User/app/Services/EventAssistanceScheduleService.php \
+            Modules/User/app/Services/RecurringCleaningScheduleService.php \
             Modules/User/app/Services/UserCleaningOrderService.php \
             app/Filament/Resources/CleaningBookings/CleaningBookingResource.php \
             app/Filament/Resources/CleaningBookings/Tables/CleaningBookingsTable.php \
@@ -172,8 +179,10 @@ jobs:
             tests/Feature/Cleaning/CleaningBookingSessionLocationTest.php \
             tests/Feature/Cleaning/CleaningBookingSessionCancellationAndSosTest.php \
             tests/Feature/Cleaning/CleaningBookingSessionWorkerChangeTest.php \
+            tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php \
             tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php \
             tests/Feature/UserModule/EventAssistancePreviousWorkersScheduleTest.php \
+            tests/Feature/UserModule/RecurringCleaningScheduleTest.php \
             $(test -f tests/Feature/UserModule/EventAssistanceReviewTest.php && echo tests/Feature/UserModule/EventAssistanceReviewTest.php)
 
       - name: Run cleaning suite tests
@@ -189,10 +198,12 @@ jobs:
             tests/Feature/Cleaning/CleaningBookingSessionLocationTest.php
             tests/Feature/Cleaning/CleaningBookingSessionCancellationAndSosTest.php
             tests/Feature/Cleaning/CleaningBookingSessionWorkerChangeTest.php
+            tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php
             tests/Feature/Cleaning/WorkerAtomicCommissionCapacityTest.php
             tests/Feature/Cleaning/WorkerDepositEligibilityTest.php
             tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php
             tests/Feature/UserModule/EventAssistancePreviousWorkersScheduleTest.php
+            tests/Feature/UserModule/RecurringCleaningScheduleTest.php
           )
           if [ -f tests/Feature/UserModule/EventAssistanceReviewTest.php ]; then
             TESTS+=(tests/Feature/UserModule/EventAssistanceReviewTest.php)
