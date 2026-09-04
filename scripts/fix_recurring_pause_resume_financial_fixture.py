@@ -13,6 +13,17 @@ if "use App\\Models\\CleaningWorkerDeposit;\n" not in text:
         1,
     )
 
+booking_marker = """        'customer_id' => $customer->id,
+        'property_type' => 'apartment',
+"""
+booking_replacement = """        'customer_id' => $customer->id,
+        'gender_preference' => 'any',
+        'property_type' => 'apartment',
+"""
+if text.count(booking_marker) != 1:
+    raise SystemExit(f"recurring scenario booking marker: expected 1, found {text.count(booking_marker)}")
+text = text.replace(booking_marker, booking_replacement, 1)
+
 marker = """    expect($booking->fresh()->recurring_paused_at)->toBeNull()
         ->and($booking->fresh()->recurring_pause_reason)->toBeNull();
 
