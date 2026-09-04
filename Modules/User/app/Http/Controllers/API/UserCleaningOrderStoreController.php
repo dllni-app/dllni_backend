@@ -14,6 +14,7 @@ use Modules\Cleaning\Services\CleaningPricingCalculator;
 use Modules\User\Http\Requests\UserCleaningOrderStoreRequest;
 use Modules\User\Http\Resources\UserCleaningBookingResource;
 use Modules\User\Services\EventAssistanceScheduleService;
+use Modules\User\Services\RecurringCleaningScheduleService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 use Modules\User\Services\UserCleaningOrderService;
 use Modules\User\Support\CleaningWorkerCapacity;
@@ -25,6 +26,7 @@ final class UserCleaningOrderStoreController
         UserCleaningOrderService $service,
         UserCleaningOrderEstimationService $estimationService,
         EventAssistanceScheduleService $eventSchedule,
+        RecurringCleaningScheduleService $recurringSchedule,
         PlatformCouponRedemptionService $platformCoupons,
         CleaningPricingCalculator $pricingCalculator,
     ): JsonResponse {
@@ -35,11 +37,26 @@ final class UserCleaningOrderStoreController
         $validated = $this->normalizeWorkerCount($request->validated());
         $validated = $this->withEventWorkerCount($validated);
         $this->assertWorkerCapacity($validated, $estimationService);
-        $eventPlan = $estimationService->isEventAssistanceType((string) ($validated['propertyType'] ?? ''))
+        $isEventAssistance = $estimationService->isEventAssistanceType((string) ($validated['propertyType'] ?? ''));
+        $eventPlan = $isEventAssistance
             ? $eventSchedule->resolve($validated)
             : null;
+        $recurringPlan = ! $isEventAssistance
+            ? $recurringSchedule->resolve($validated)
+            : null;
 
-        $order = DB::transaction(function () use ($request, $service, $eventSchedule, $eventPlan, $platformCoupons, $pricingCalculator, $couponCode, $validated) {
+        $order = DB::transaction(function () use (
+            $request,
+            $service,
+            $eventSchedule,
+            $eventPlan,
+            $recurringSchedule,
+            $recurringPlan,
+            $platformCoupons,
+            $pricingCalculator,
+            $couponCode,
+            $validated,
+        ) {
             $order = $service->store($request->user(), $validated);
 
             if ($eventPlan !== null) {
@@ -75,6 +92,8 @@ final class UserCleaningOrderStoreController
 
                 $eventSchedule->createSessions($order->fresh(), $eventPlan, $eventPricing);
                 $order = $order->fresh();
+            } elseif ($recurringPlan !== null) {
+                $order = $recurringSchedule->materialize($order, $recurringPlan);
             }
 
             if (is_string($couponCode) && mb_trim($couponCode) !== '') {

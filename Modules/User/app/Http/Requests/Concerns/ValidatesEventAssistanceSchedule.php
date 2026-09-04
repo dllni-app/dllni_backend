@@ -17,14 +17,30 @@ trait ValidatesEventAssistanceSchedule
             $dateRules[] = 'after_or_equal:'.now(config('app.timezone'))->toDateString();
         }
 
+        $scheduleModes = $isEventAssistance
+            ? ['single_day', 'multi_day']
+            : ['recurring'];
+
         return [
-            'schedule' => [Rule::prohibitedIf(! $isEventAssistance), 'sometimes', 'array:mode,sessions'],
-            'schedule.mode' => ['required_with:schedule', 'string', Rule::in(['single_day', 'multi_day'])],
-            'schedule.sessions' => ['required_with:schedule', 'array', 'min:1'],
-            'schedule.sessions.*' => ['required', 'array:date,time,hours'],
+            // Event assistance keeps its existing explicit execution schedule.
+            // For normal cleaning, supplying a multi-day schedule means a recurring
+            // booking: each item is one independent execution visit under one parent.
+            'schedule' => ['sometimes', 'array:mode,sessions'],
+            'schedule.mode' => ['required_with:schedule', 'string', Rule::in($scheduleModes)],
+            'schedule.sessions' => [
+                'required_with:schedule',
+                'array',
+                $isEventAssistance ? 'min:1' : 'min:2',
+            ],
+            'schedule.sessions.*' => [
+                'required',
+                $isEventAssistance ? 'array:date,time,hours' : 'array:date,time',
+            ],
             'schedule.sessions.*.date' => $dateRules,
             'schedule.sessions.*.time' => ['required', 'date_format:H:i'],
-            'schedule.sessions.*.hours' => ['required', 'numeric', 'min:1', 'max:24'],
+            'schedule.sessions.*.hours' => $isEventAssistance
+                ? ['required', 'numeric', 'min:1', 'max:24']
+                : ['prohibited'],
         ];
     }
 
@@ -37,6 +53,7 @@ trait ValidatesEventAssistanceSchedule
 
         $sessions = $schedule['sessions'];
         $slots = [];
+        $isEventAssistance = mb_strtolower((string) $this->input('propertyType')) === 'event_assistance';
 
         foreach ($sessions as $index => $session) {
             if (! is_array($session)) {
@@ -53,13 +70,34 @@ trait ValidatesEventAssistanceSchedule
             if (isset($slots[$slot])) {
                 $validator->errors()->add(
                     "schedule.sessions.{$index}.time",
-                    'لا يمكن إضافة جلستين للمناسبة في نفس التاريخ والوقت.',
+                    $isEventAssistance
+                        ? 'لا يمكن إضافة جلستين للمناسبة في نفس التاريخ والوقت.'
+                        : 'لا يمكن إضافة زيارتين دوريتين في نفس التاريخ والوقت.',
                 );
             }
             $slots[$slot] = true;
         }
 
         $mode = mb_strtolower(mb_trim((string) ($schedule['mode'] ?? '')));
+
+        if (! $isEventAssistance) {
+            if (count($sessions) < 2) {
+                $validator->errors()->add(
+                    'schedule.sessions',
+                    'الحجز الدوري يحتاج إلى زيارتين على الأقل.',
+                );
+            }
+
+            if ($mode !== '' && $mode !== 'recurring') {
+                $validator->errors()->add(
+                    'schedule.mode',
+                    'يجب أن يكون نوع جدول الحجز الدوري متعدد الأيام.',
+                );
+            }
+
+            return;
+        }
+
         $expectedMode = count($sessions) > 1 ? 'multi_day' : 'single_day';
         if ($mode !== '' && $mode !== $expectedMode) {
             $validator->errors()->add(

@@ -13,6 +13,7 @@ use Modules\User\Http\Requests\UserCleaningOrderEstimatePriceRequest;
 use Modules\User\Models\UserAddress;
 use Modules\User\Services\EventAssistanceScheduleService;
 use Modules\User\Services\FemaleWorkerSafetyPolicyService;
+use Modules\User\Services\RecurringCleaningScheduleService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 use Modules\User\Support\CleaningWorkerCapacity;
 
@@ -22,12 +23,14 @@ final class UserCleaningOrderEstimatePriceController
         UserCleaningOrderEstimatePriceRequest $request,
         UserCleaningOrderEstimationService $service,
         EventAssistanceScheduleService $eventSchedule,
+        RecurringCleaningScheduleService $recurringSchedule,
         CleaningExtendedTimePricingService $extendedTimePricing,
     ): JsonResponse {
         $validated = $request->validated();
         [$addressLatitude, $addressLongitude] = $this->resolveAddressCoordinates($validated, (int) $request->user()->id);
         $isEventAssistance = $service->isEventAssistanceType((string) $validated['propertyType']);
         $eventPlan = $isEventAssistance ? $eventSchedule->resolve($validated) : null;
+        $recurringPlan = ! $isEventAssistance ? $recurringSchedule->resolve($validated) : null;
 
         try {
             $estimation = $service->estimate(
@@ -35,12 +38,18 @@ final class UserCleaningOrderEstimatePriceController
                 (array) $validated['propertyDetails'],
                 isset($validated['serviceIds']) ? (array) $validated['serviceIds'] : null,
             );
+            $singleVisitEstimatedHours = (float) $estimation['estimatedHours'];
 
             if ($eventPlan !== null) {
                 $estimation['estimatedHours'] = $eventPlan['totalHours'];
                 if (is_array($estimation['recommendation'] ?? null)) {
                     $estimation['recommendation']['hours'] = $eventPlan['totalHours'];
                 }
+            } elseif ($recurringPlan !== null) {
+                $estimation['estimatedHours'] = round(
+                    $singleVisitEstimatedHours * (int) $recurringPlan['sessionsCount'],
+                    2,
+                );
             }
 
             $preferredWorkerCount = is_array($validated['preferredWorkerIds'] ?? null)
@@ -70,7 +79,9 @@ final class UserCleaningOrderEstimatePriceController
                     static fn (array $session): float => (float) $session['hours'],
                     $eventPlan['sessions'],
                 ))
-                : (float) $estimation['estimatedHours'];
+                : ($recurringPlan !== null
+                    ? $singleVisitEstimatedHours
+                    : (float) $estimation['estimatedHours']);
             $capacity = CleaningWorkerCapacity::payload($capacityHours);
 
             $pricingPropertyDetails = (array) $validated['propertyDetails'];
@@ -99,6 +110,14 @@ final class UserCleaningOrderEstimatePriceController
                     $assignmentMode === 'preferred_worker' ? ($validated['preferredWorkerId'] ?? null) : null,
                     isset($validated['serviceIds']) ? (array) $validated['serviceIds'] : null,
                 );
+
+                if ($recurringPlan !== null) {
+                    $pricing = $recurringSchedule->quote(
+                        $recurringPlan,
+                        $pricing,
+                        $singleVisitEstimatedHours,
+                    );
+                }
             }
         } catch (InvalidArgumentException $exception) {
             throw ValidationException::withMessages([
@@ -124,9 +143,19 @@ final class UserCleaningOrderEstimatePriceController
                 throw ValidationException::withMessages($plan['errors']);
             }
 
+            $roomPricingBase = round((float) $pricing['basePrice'] + (float) $pricing['addonsTotal'], 2);
+            if ($recurringPlan !== null && is_array($pricing['schedule']['sessions'][0] ?? null)) {
+                $firstSessionPricing = $pricing['schedule']['sessions'][0];
+                $roomPricingBase = round(
+                    (float) ($firstSessionPricing['basePrice'] ?? 0)
+                    + (float) ($firstSessionPricing['addonsTotal'] ?? 0),
+                    2,
+                );
+            }
+
             $workerRoomAssignments = WorkerRoomAssignmentPlanner::withPricingPreview(
                 $plan['assignments'],
-                round((float) $pricing['basePrice'] + (float) $pricing['addonsTotal'], 2),
+                $roomPricingBase,
             );
         }
 
@@ -137,7 +166,7 @@ final class UserCleaningOrderEstimatePriceController
                 'sizeTier' => $estimation['sizeTier'],
             ],
             'pricing' => $pricing,
-            'schedule' => $eventPlan !== null ? $pricing['schedule'] : null,
+            'schedule' => ($eventPlan !== null || $recurringPlan !== null) ? $pricing['schedule'] : null,
             'assignmentMode' => $assignmentMode,
             ...$capacity,
             'workerAcceptance' => [
