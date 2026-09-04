@@ -117,6 +117,99 @@ final class CleaningBookingSessionCancellationService
         return $updated->fresh(['workerAssignments.worker.user']) ?? $updated;
     }
 
+    public function skipRecurringByCustomer(
+        CleaningBooking $booking,
+        CleaningBookingSession $session,
+        int $customerId,
+        string $reason,
+    ): CleaningBookingSession {
+        if ((int) $booking->customer_id !== $customerId) {
+            abort(403, 'Booking belongs to another customer.');
+        }
+
+        $normalizedReason = $this->requiredReason($reason);
+        $affectedWorkerIds = [];
+        $fromStatus = '';
+
+        $updated = DB::transaction(function () use (
+            $booking,
+            $session,
+            $normalizedReason,
+            &$affectedWorkerIds,
+            &$fromStatus,
+        ): CleaningBookingSession {
+            $locked = $this->lockSession($booking, $session);
+            $this->assertCustomerCanSkipRecurring($locked);
+            $fromStatus = $this->statusValue($locked);
+            $skippedAt = now();
+
+            $assignments = CleaningBookingSessionWorkerAssignment::query()
+                ->where('cleaning_booking_session_id', $locked->id)
+                ->whereIn('status', CleaningBookingWorkerAssignmentStatus::activeValues())
+                ->lockForUpdate()
+                ->get();
+
+            if ($assignments->contains(
+                static fn (CleaningBookingSessionWorkerAssignment $assignment): bool => $assignment->started_travel_at !== null,
+            )) {
+                throw new InvalidArgumentException('A recurring session cannot be skipped after worker travel starts.');
+            }
+
+            $affectedWorkerIds = $assignments
+                ->pluck('worker_id')
+                ->map(static fn (mixed $workerId): int => (int) $workerId)
+                ->filter(static fn (int $workerId): bool => $workerId > 0)
+                ->unique()
+                ->values()
+                ->all();
+
+            foreach ($assignments as $assignment) {
+                $assignment->forceFill([
+                    'status' => CleaningBookingWorkerAssignmentStatus::Cancelled,
+                    'released_at' => $skippedAt,
+                    'released_reason' => 'Customer skipped recurring session: '.$normalizedReason,
+                ])->save();
+            }
+
+            $locked->forceFill([
+                'coverage_status' => CleaningBookingSessionCoverageStatus::Searching,
+                'status' => CleaningBookingSessionStatus::Skipped,
+                'cancellation_fee' => 0,
+                'skipped_at' => $skippedAt,
+                'skip_source' => 'customer',
+                'skip_reason' => $normalizedReason,
+                'cancelled_at' => null,
+                'cancellation_reason' => null,
+                'cancelled_by_role' => null,
+                'version' => max(1, (int) $locked->version) + 1,
+            ])->save();
+
+            $this->syncParentFinancials($booking);
+
+            return $locked->fresh(['workerAssignments.worker.user']) ?? $locked;
+        });
+
+        $this->parentState->refresh($booking);
+
+        foreach ($affectedWorkerIds as $workerId) {
+            $this->notifications->notifyWorkerById(
+                booking: $booking->fresh() ?? $booking,
+                workerId: $workerId,
+                canonicalType: 'cleaning.booking.updated',
+                action: 'customer_skipped_recurring_session',
+                actorRole: 'customer',
+                fromStatus: $fromStatus !== '' ? $fromStatus : null,
+                occurredAt: $updated->skipped_at?->toIso8601String(),
+                extraData: array_merge($this->sessionContext($updated), [
+                    'skipReason' => $normalizedReason,
+                    'skip_reason' => $normalizedReason,
+                ]),
+            );
+        }
+
+        return $updated->fresh(['workerAssignments.worker.user']) ?? $updated;
+    }
+
     public function cancelByWorker(
         CleaningBooking $booking,
         CleaningBookingSession $session,
@@ -340,6 +433,19 @@ final class CleaningBookingSessionCancellationService
         }
         if ($session->work_started_at !== null) {
             throw new InvalidArgumentException('A session that already started work cannot be cancelled.');
+        }
+    }
+
+    private function assertCustomerCanSkipRecurring(CleaningBookingSession $session): void
+    {
+        if ((string) $session->session_type !== 'recurring_cleaning') {
+            throw new InvalidArgumentException('Only recurring cleaning sessions can be skipped.');
+        }
+        if ($session->isTerminal()) {
+            throw new InvalidArgumentException('Session is already closed.');
+        }
+        if ($session->started_travel_at !== null || $session->work_started_at !== null) {
+            throw new InvalidArgumentException('A recurring session cannot be skipped after worker travel starts.');
         }
     }
 

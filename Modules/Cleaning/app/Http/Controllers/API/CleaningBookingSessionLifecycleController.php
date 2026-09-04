@@ -197,6 +197,34 @@ final class CleaningBookingSessionLifecycleController
         );
     }
 
+    public function skip(
+        Request $request,
+        CleaningBooking $cleaning_booking,
+        CleaningBookingSession $cleaning_booking_session,
+    ): JsonResponse {
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'max:1000'],
+        ]);
+        $user = $request->user();
+
+        if ($user === null || (int) $cleaning_booking->customer_id !== (int) $user->id) {
+            abort(403, 'Only the booking customer can skip a recurring session.');
+        }
+
+        try {
+            $session = $this->cancellation->skipRecurringByCustomer(
+                $cleaning_booking,
+                $cleaning_booking_session,
+                (int) $user->id,
+                (string) $validated['reason'],
+            );
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
+        }
+
+        return $this->payload($cleaning_booking, $session);
+    }
+
     public function sos(
         CleaningBookingSosRequest $request,
         CleaningBooking $cleaning_booking,

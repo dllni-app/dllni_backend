@@ -78,6 +78,11 @@ Route::prefix('v1')
         )->name('cleaning-bookings.sessions.cancel');
 
         Route::post(
+            'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/skip',
+            [CleaningBookingSessionLifecycleController::class, 'skip'],
+        )->name('cleaning-bookings.sessions.skip');
+
+        Route::post(
             'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/sos',
             [CleaningBookingSessionLifecycleController::class, 'sos'],
         )->name('cleaning-bookings.sessions.sos');

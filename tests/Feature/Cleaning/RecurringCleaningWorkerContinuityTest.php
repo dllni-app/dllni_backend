@@ -119,6 +119,59 @@ it('keeps worker replacement unavailable for ordinary non-recurring cleaning ses
     expect($assignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart);
 });
 
+it('lets the customer skip one future recurring visit without cancelling the series', function (): void {
+    [$customer, , $worker, $booking] = makeRecurringWorkerContinuityScenario();
+    $firstSession = makeRecurringWorkerContinuitySession($booking, 1);
+    $secondSession = makeRecurringWorkerContinuitySession($booking, 2);
+    $firstAssignment = makeRecurringWorkerContinuityAssignment($firstSession, $worker);
+    $secondAssignment = makeRecurringWorkerContinuityAssignment($secondSession, $worker);
+
+    Sanctum::actingAs($customer);
+
+    $this->postJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/sessions/{$firstSession->id}/skip",
+        ['reason' => 'لن نحتاج زيارة التنظيف في هذا الموعد'],
+    )
+        ->assertOk()
+        ->assertJsonPath('data.schedule.sessions.0.status', CleaningBookingSessionStatus::Skipped->value)
+        ->assertJsonPath('data.schedule.sessions.1.status', CleaningBookingSessionStatus::WorkerAssigned->value);
+
+    expect($firstSession->fresh()->status)->toBe(CleaningBookingSessionStatus::Skipped)
+        ->and($firstSession->fresh()->skip_source)->toBe('customer')
+        ->and($firstSession->fresh()->skip_reason)->toBe('لن نحتاج زيارة التنظيف في هذا الموعد')
+        ->and($firstSession->fresh()->skipped_at)->not->toBeNull()
+        ->and((float) $firstSession->fresh()->cancellation_fee)->toBe(0.0)
+        ->and($firstAssignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::Cancelled)
+        ->and($firstAssignment->fresh()->released_reason)->toContain('Customer skipped recurring session')
+        ->and($secondAssignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart)
+        ->and($secondSession->fresh()->status)->toBe(CleaningBookingSessionStatus::WorkerAssigned)
+        ->and($booking->fresh()->status)->not->toBe(CleaningBookingStatus::Cancelled)
+        ->and((float) $booking->fresh()->total_hours)->toBe(2.0)
+        ->and((float) $booking->fresh()->total_price)->toBe(3300.0);
+
+    $this->assertDatabaseMissing('cleaning_booking_session_financial_penalties', [
+        'cleaning_booking_session_id' => $firstSession->id,
+    ]);
+});
+
+it('does not expose recurring skip for an ordinary cleaning session', function (): void {
+    [$customer, , $worker, $booking] = makeRecurringWorkerContinuityScenario();
+    $session = makeRecurringWorkerContinuitySession($booking, 1, 'regular_cleaning');
+    $assignment = makeRecurringWorkerContinuityAssignment($session, $worker);
+
+    Sanctum::actingAs($customer);
+
+    $this->postJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/sessions/{$session->id}/skip",
+        ['reason' => 'محاولة تخطي جلسة غير دورية'],
+    )
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('status');
+
+    expect($session->fresh()->status)->toBe(CleaningBookingSessionStatus::WorkerAssigned)
+        ->and($assignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart);
+});
+
 /** @return array{0:User,1:User,2:Worker,3:CleaningBooking} */
 function makeRecurringWorkerContinuityScenario(): array
 {
