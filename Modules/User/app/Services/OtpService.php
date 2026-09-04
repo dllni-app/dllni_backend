@@ -103,6 +103,7 @@ final class OtpService
             'lang' => $smsPayload['lang'],
             'status' => 'pending',
             'attempts_count' => 0,
+            'queued_at' => now(),
         ]);
 
         SendRegistrationSmsJob::dispatch($smsMessage->id);
