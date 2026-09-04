@@ -63,4 +63,14 @@ replacement = """    expect($booking->fresh()->recurring_paused_at)->toBeNull()
 if text.count(marker) != 1:
     raise SystemExit(f"resume acceptance marker: expected 1, found {text.count(marker)}")
 text = text.replace(marker, replacement, 1)
+
+diagnostic_marker = """        ->assertJsonPath('success', true)
+        ->assertJsonPath('data.acceptance.acceptedSessionIds.0', $firstSession->id);
+"""
+diagnostic_replacement = """        ->assertJsonPath('data.acceptance.rejected.0.reasonCode', '__diagnostic__');
+"""
+if text.count(diagnostic_marker) != 1:
+    raise SystemExit(f"resume acceptance diagnostic marker: expected 1, found {text.count(diagnostic_marker)}")
+text = text.replace(diagnostic_marker, diagnostic_replacement, 1)
+
 path.write_text(text)
