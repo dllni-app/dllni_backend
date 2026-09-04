@@ -7,6 +7,7 @@ namespace Modules\User\Http\Requests\Concerns;
 use Carbon\CarbonImmutable;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
+use Throwable;
 
 trait ValidatesEventAssistanceSchedule
 {
@@ -86,7 +87,7 @@ trait ValidatesEventAssistanceSchedule
             if (! $isEventAssistance) {
                 try {
                     $recurringDates[] = CarbonImmutable::parse($date, config('app.timezone'))->startOfDay();
-                } catch (\Throwable) {
+                } catch (Throwable) {
                     // The base date validation rule owns malformed date errors.
                 }
             }
