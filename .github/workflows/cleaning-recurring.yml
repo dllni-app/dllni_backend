@@ -1,18 +1,21 @@
 name: Cleaning Recurring
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - feature/cleaning-suite-main
     paths:
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionCancellationService.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionWorkerChangeService.php'
+      - 'Modules/Cleaning/app/Services/CleaningPreferredWorkerFallbackService.php'
       - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionWorkerChangeController.php'
       - 'Modules/Cleaning/routes/sessions.php'
       - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderEstimatePriceController.php'
       - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderStoreController.php'
       - 'Modules/User/app/Http/Requests/Concerns/ValidatesEventAssistanceSchedule.php'
       - 'Modules/User/app/Services/RecurringCleaningScheduleService.php'
+      - 'tests/Feature/Cleaning/RecurringCleaningPreferredWorkerFallbackTest.php'
       - 'tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php'
       - 'tests/Feature/UserModule/RecurringCleaningScheduleTest.php'
       - '.github/workflows/cleaning-recurring.yml'
@@ -20,15 +23,20 @@ on:
     paths:
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionCancellationService.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionWorkerChangeService.php'
+      - 'Modules/Cleaning/app/Services/CleaningPreferredWorkerFallbackService.php'
       - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionWorkerChangeController.php'
       - 'Modules/Cleaning/routes/sessions.php'
       - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderEstimatePriceController.php'
       - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderStoreController.php'
       - 'Modules/User/app/Http/Requests/Concerns/ValidatesEventAssistanceSchedule.php'
       - 'Modules/User/app/Services/RecurringCleaningScheduleService.php'
+      - 'tests/Feature/Cleaning/RecurringCleaningPreferredWorkerFallbackTest.php'
       - 'tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php'
       - 'tests/Feature/UserModule/RecurringCleaningScheduleTest.php'
       - '.github/workflows/cleaning-recurring.yml'
+
+permissions:
+  contents: read
 
 jobs:
   recurring-cleaning:
@@ -66,12 +74,14 @@ jobs:
           vendor/bin/pint --test \
             Modules/Cleaning/app/Services/CleaningBookingSessionCancellationService.php \
             Modules/Cleaning/app/Services/CleaningBookingSessionWorkerChangeService.php \
+            Modules/Cleaning/app/Services/CleaningPreferredWorkerFallbackService.php \
             Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionWorkerChangeController.php \
             Modules/Cleaning/routes/sessions.php \
             Modules/User/app/Http/Controllers/API/UserCleaningOrderEstimatePriceController.php \
             Modules/User/app/Http/Controllers/API/UserCleaningOrderStoreController.php \
             Modules/User/app/Http/Requests/Concerns/ValidatesEventAssistanceSchedule.php \
             Modules/User/app/Services/RecurringCleaningScheduleService.php \
+            tests/Feature/Cleaning/RecurringCleaningPreferredWorkerFallbackTest.php \
             tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php \
             tests/Feature/UserModule/RecurringCleaningScheduleTest.php
 
@@ -84,6 +94,7 @@ jobs:
           set -o pipefail
           php artisan test \
             tests/Feature/UserModule/RecurringCleaningScheduleTest.php \
+            tests/Feature/Cleaning/RecurringCleaningPreferredWorkerFallbackTest.php \
             tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php \
             tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php \
             2>&1 | tee recurring-cleaning-test.log
