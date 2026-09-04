@@ -128,13 +128,20 @@ it('lets the customer skip one future recurring visit without cancelling the ser
 
     Sanctum::actingAs($customer);
 
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/schedule")
+        ->assertOk()
+        ->assertJsonPath('data.schedule.sessions.0.canSkip', true)
+        ->assertJsonPath('data.schedule.sessions.1.canSkip', true);
+
     $this->postJson(
         "/api/v1/cleaning-bookings/{$booking->id}/sessions/{$firstSession->id}/skip",
         ['reason' => 'لن نحتاج زيارة التنظيف في هذا الموعد'],
     )
         ->assertOk()
         ->assertJsonPath('data.schedule.sessions.0.status', CleaningBookingSessionStatus::Skipped->value)
-        ->assertJsonPath('data.schedule.sessions.1.status', CleaningBookingSessionStatus::WorkerAssigned->value);
+        ->assertJsonPath('data.schedule.sessions.0.canSkip', false)
+        ->assertJsonPath('data.schedule.sessions.1.status', CleaningBookingSessionStatus::WorkerAssigned->value)
+        ->assertJsonPath('data.schedule.sessions.1.canSkip', true);
 
     expect($firstSession->fresh()->status)->toBe(CleaningBookingSessionStatus::Skipped)
         ->and($firstSession->fresh()->skip_source)->toBe('customer')
@@ -154,12 +161,65 @@ it('lets the customer skip one future recurring visit without cancelling the ser
     ]);
 });
 
+it('rejects skipping a recurring visit whose scheduled start is not in the future', function (): void {
+    [$customer, , $worker, $booking] = makeRecurringWorkerContinuityScenario();
+    $session = makeRecurringWorkerContinuitySession($booking, 1);
+    $assignment = makeRecurringWorkerContinuityAssignment($session, $worker);
+    $session->forceFill([
+        'scheduled_date' => now()->subDay()->toDateString(),
+        'scheduled_time' => now()->subHour()->format('H:i'),
+    ])->save();
+
+    Sanctum::actingAs($customer);
+
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/schedule")
+        ->assertOk()
+        ->assertJsonPath('data.schedule.sessions.0.canSkip', false);
+
+    $this->postJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/sessions/{$session->id}/skip",
+        ['reason' => 'محاولة تخطي زيارة انتهى موعدها'],
+    )
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('status');
+
+    expect($session->fresh()->status)->toBe(CleaningBookingSessionStatus::WorkerAssigned)
+        ->and($assignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart);
+});
+
+it('does not advertise skip after an assigned worker starts travel', function (): void {
+    [$customer, , $worker, $booking] = makeRecurringWorkerContinuityScenario();
+    $session = makeRecurringWorkerContinuitySession($booking, 1);
+    $assignment = makeRecurringWorkerContinuityAssignment($session, $worker);
+    $assignment->forceFill(['started_travel_at' => now()])->save();
+
+    Sanctum::actingAs($customer);
+
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/schedule")
+        ->assertOk()
+        ->assertJsonPath('data.schedule.sessions.0.canSkip', false);
+
+    $this->postJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/sessions/{$session->id}/skip",
+        ['reason' => 'محاولة تخطي زيارة بعد بدء الطريق'],
+    )
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('status');
+
+    expect($session->fresh()->status)->toBe(CleaningBookingSessionStatus::WorkerAssigned)
+        ->and($assignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart);
+});
+
 it('does not expose recurring skip for an ordinary cleaning session', function (): void {
     [$customer, , $worker, $booking] = makeRecurringWorkerContinuityScenario();
     $session = makeRecurringWorkerContinuitySession($booking, 1, 'regular_cleaning');
     $assignment = makeRecurringWorkerContinuityAssignment($session, $worker);
 
     Sanctum::actingAs($customer);
+
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/schedule")
+        ->assertOk()
+        ->assertJsonPath('data.schedule.sessions.0.canSkip', false);
 
     $this->postJson(
         "/api/v1/cleaning-bookings/{$booking->id}/sessions/{$session->id}/skip",

@@ -136,6 +136,22 @@ final class CleaningBookingSchedulePresenter
             && $status === CleaningBookingSessionStatus::AwaitingStartVerification->value;
         $canConfirmCompletion = $isCustomerView
             && $status === CleaningBookingSessionStatus::AwaitingCustomerCompletion->value;
+        $hasStartedTravelAssignment = $session->workerAssignments->contains(
+            static fn (CleaningBookingSessionWorkerAssignment $assignment): bool => $assignment->isActive()
+                && $assignment->started_travel_at !== null,
+        );
+        $canSkip = $isCustomerView
+            && (string) $session->session_type === 'recurring_cleaning'
+            && in_array($status, [
+                CleaningBookingSessionStatus::Scheduled->value,
+                CleaningBookingSessionStatus::WorkerAssigned->value,
+            ], true)
+            && ! $session->isTerminal()
+            && $startsAt !== null
+            && $startsAt->gt($now)
+            && $session->started_travel_at === null
+            && $session->work_started_at === null
+            && ! $hasStartedTravelAssignment;
         $canSendSos = ! $session->isTerminal()
             && ($isCustomerView || $hasMyActiveAssignment);
 
@@ -167,6 +183,7 @@ final class CleaningBookingSchedulePresenter
             'canSendSos' => $canSendSos,
             'canExtend' => false,
             'canCancel' => $canCancel,
+            'canSkip' => $canSkip,
             'canReschedule' => $isCustomerView && $canReschedule,
             'coverageStatus' => $session->coverage_status?->value ?? (string) $session->coverage_status,
             'coverageStatusLabel' => $session->coverage_status?->label(),

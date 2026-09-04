@@ -444,6 +444,16 @@ final class CleaningBookingSessionCancellationService
         if ($session->isTerminal()) {
             throw new InvalidArgumentException('Session is already closed.');
         }
+        if (! in_array($this->statusValue($session), [
+            CleaningBookingSessionStatus::Scheduled->value,
+            CleaningBookingSessionStatus::WorkerAssigned->value,
+        ], true)) {
+            throw new InvalidArgumentException('Only a recurring session waiting to start can be skipped.');
+        }
+        $startsAt = $session->startsAt();
+        if ($startsAt === null || ! $startsAt->isFuture()) {
+            throw new InvalidArgumentException('Only a future recurring session can be skipped.');
+        }
         if ($session->started_travel_at !== null || $session->work_started_at !== null) {
             throw new InvalidArgumentException('A recurring session cannot be skipped after worker travel starts.');
         }
