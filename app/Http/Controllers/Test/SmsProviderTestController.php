@@ -27,6 +27,7 @@ final class SmsProviderTestController
         $phone = (string) $request->validated('phone');
         $otp = (string) random_int(100000, 999999);
         $smsPayload = $smsMessageBuilder->registrationOtp($otp, 'ar');
+        $startedAt = hrtime(true);
 
         try {
             $result = $action->execute(new MtnSmsPayloadData(
@@ -35,6 +36,8 @@ final class SmsProviderTestController
                 lang: $smsPayload['lang'],
             ));
         } catch (Throwable $exception) {
+            $executionTimeMs = $this->executionTimeMs($startedAt);
+
             report($exception);
 
             return response()->json([
@@ -49,11 +52,14 @@ final class SmsProviderTestController
                         'status_code' => null,
                         'response' => null,
                         'error' => $exception->getMessage(),
+                        'execution_time_ms' => $executionTimeMs,
+                        'execution_time_seconds' => round($executionTimeMs / 1000, 3),
                     ],
                 ],
             ], Response::HTTP_BAD_GATEWAY);
         }
 
+        $executionTimeMs = $this->executionTimeMs($startedAt);
         $success = (bool) ($result['success'] ?? false);
 
         return response()->json([
@@ -70,8 +76,15 @@ final class SmsProviderTestController
                     'status_code' => $result['status_code'] ?? null,
                     'response' => $result['body'] ?? null,
                     'error' => null,
+                    'execution_time_ms' => $executionTimeMs,
+                    'execution_time_seconds' => round($executionTimeMs / 1000, 3),
                 ],
             ],
         ], $success ? Response::HTTP_OK : Response::HTTP_BAD_GATEWAY);
+    }
+
+    private function executionTimeMs(int $startedAt): float
+    {
+        return round((hrtime(true) - $startedAt) / 1_000_000, 2);
     }
 }
