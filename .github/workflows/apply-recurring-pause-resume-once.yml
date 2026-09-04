@@ -54,12 +54,22 @@ jobs:
         env:
           DB_CONNECTION: sqlite
           DB_DATABASE: database/database.sqlite
+        shell: bash
         run: |
+          set -o pipefail
           php artisan test \
             tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php \
             tests/Feature/Cleaning/RecurringCleaningPreferredWorkerFallbackTest.php \
             tests/Feature/UserModule/RecurringCleaningScheduleTest.php \
-            tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php
+            tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php \
+            2>&1 | tee recurring-pause-resume-test.log
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: recurring-pause-resume-diagnostics
+          path: recurring-pause-resume-test.log
+          if-no-files-found: ignore
       - name: Commit implementation
         run: |
           git config user.name "github-actions[bot]"
