@@ -21,6 +21,7 @@ final class CleaningBookingSessionFinancialAggregationService
             return in_array($this->statusValue($session), [
                 CleaningBookingSessionStatus::Cancelled->value,
                 CleaningBookingSessionStatus::Skipped->value,
+                CleaningBookingSessionStatus::Superseded->value,
             ], true);
         });
         $cancelled = $sessions->filter(
@@ -35,11 +36,14 @@ final class CleaningBookingSessionFinancialAggregationService
         $cancellationFee = round((float) $cancelled->sum('cancellation_fee'), 2);
         $serviceTotal = round((float) $chargeable->sum('total_price'), 2);
         $totalHours = round((float) $chargeable->sum('duration_hours'), 2);
-
-        CleaningBooking::query()
+        $grossTotal = round($serviceTotal + $cancellationFee, 2);
+        $lockedBooking = CleaningBooking::query()
             ->whereKey($booking->id)
             ->lockForUpdate()
-            ->firstOrFail()
+            ->firstOrFail();
+        $discount = min($grossTotal, max(0.0, (float) ($lockedBooking->discount_amount ?? 0)));
+
+        $lockedBooking
             ->forceFill([
                 'base_price' => $basePrice,
                 'addons_total' => $addonsTotal,
@@ -48,7 +52,11 @@ final class CleaningBookingSessionFinancialAggregationService
                 'extension_fee_total' => $extensionFee,
                 'cancellation_fee' => $cancellationFee,
                 'total_hours' => $totalHours,
-                'total_price' => round($serviceTotal + $cancellationFee, 2),
+                'subtotal_before_discount' => $discount > 0 || $lockedBooking->subtotal_before_discount !== null
+                    ? $grossTotal
+                    : null,
+                'discount_amount' => $discount,
+                'total_price' => round($grossTotal - $discount, 2),
             ])->saveQuietly();
     }
 

@@ -19,6 +19,7 @@ final class CleaningBookingSchedulePresenter
     {
         $sessions = CleaningBookingSession::query()
             ->where('cleaning_booking_id', $booking->id)
+            ->where('status', '!=', CleaningBookingSessionStatus::Superseded->value)
             ->with(['workerAssignments.worker.user'])
             ->orderBy('sequence')
             ->get();
