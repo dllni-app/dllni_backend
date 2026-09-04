@@ -18,6 +18,7 @@ use App\Http\Controllers\DeepLinks\OpenDeepLinkController;
 use App\Http\Controllers\DeepLinks\ResolveDeepLinkController;
 use App\Http\Controllers\DeepLinks\TrackDeepLinkEventController;
 use App\Http\Controllers\Test\SmsProviderTestController;
+use App\Http\Controllers\Test\SmsQueueTestController;
 use Illuminate\Support\Facades\Route;
 use Modules\User\Http\Controllers\API\UserPopularSearchesController;
 
@@ -54,6 +55,10 @@ Route::prefix('v1/test')
     ->middleware(['throttle:5,1'])
     ->group(function (): void {
         Route::post('sms-provider', SmsProviderTestController::class);
+        Route::post('sms-queue', [SmsQueueTestController::class, 'store']);
+        Route::get('sms-queue/{smsMessage}', [SmsQueueTestController::class, 'show'])
+            ->middleware('signed')
+            ->name('api.test.sms-queue.status');
     });
 
 Route::middleware(['auth:sanctum'])->prefix('v1')->group(function (): void {
