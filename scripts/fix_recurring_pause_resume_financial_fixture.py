@@ -13,12 +13,29 @@ if "use App\\Models\\CleaningWorkerDeposit;\n" not in text:
         1,
     )
 
+worker_marker = """        'is_active' => true,
+        'is_suspended' => false,
+        'trust_score' => 90,
+"""
+worker_replacement = """        'is_active' => true,
+        'is_suspended' => false,
+        'trust_score' => 90,
+        'home_address' => 'Damascus',
+        'home_latitude' => 33.5138,
+        'home_longitude' => 36.2765,
+"""
+if text.count(worker_marker) != 1:
+    raise SystemExit(f"recurring scenario worker marker: expected 1, found {text.count(worker_marker)}")
+text = text.replace(worker_marker, worker_replacement, 1)
+
 booking_marker = """        'customer_id' => $customer->id,
         'property_type' => 'apartment',
 """
 booking_replacement = """        'customer_id' => $customer->id,
         'gender_preference' => 'any',
         'property_type' => 'apartment',
+        'address_latitude' => 33.5100,
+        'address_longitude' => 36.2900,
 """
 if text.count(booking_marker) != 1:
     raise SystemExit(f"recurring scenario booking marker: expected 1, found {text.count(booking_marker)}")
@@ -63,14 +80,5 @@ replacement = """    expect($booking->fresh()->recurring_paused_at)->toBeNull()
 if text.count(marker) != 1:
     raise SystemExit(f"resume acceptance marker: expected 1, found {text.count(marker)}")
 text = text.replace(marker, replacement, 1)
-
-diagnostic_marker = """        ->assertJsonPath('success', true)
-        ->assertJsonPath('data.acceptance.acceptedSessionIds.0', $firstSession->id);
-"""
-diagnostic_replacement = """        ->assertJsonPath('data.acceptance.rejected.0.reasonCode', '__diagnostic__');
-"""
-if text.count(diagnostic_marker) != 1:
-    raise SystemExit(f"resume acceptance diagnostic marker: expected 1, found {text.count(diagnostic_marker)}")
-text = text.replace(diagnostic_marker, diagnostic_replacement, 1)
 
 path.write_text(text)
