@@ -26,6 +26,7 @@ final class CleaningBookingSessionCancellationService
         private readonly WorkerTrustService $workerTrustService,
         private readonly CleaningLifecycleNotificationService $notifications,
         private readonly CleaningBookingSessionParentStateService $parentState,
+        private readonly CleaningBookingSessionFinancialAggregationService $financialAggregation,
     ) {}
 
     public function cancelByCustomer(
@@ -94,7 +95,7 @@ final class CleaningBookingSessionCancellationService
                 $normalizedReason,
                 $fee,
             );
-            $this->syncParentFinancials($booking);
+            $this->financialAggregation->sync($booking);
 
             return $locked->fresh(['workerAssignments.worker.user']) ?? $locked;
         });
@@ -184,7 +185,7 @@ final class CleaningBookingSessionCancellationService
                 'version' => max(1, (int) $locked->version) + 1,
             ])->save();
 
-            $this->syncParentFinancials($booking);
+            $this->financialAggregation->sync($booking);
 
             return $locked->fresh(['workerAssignments.worker.user']) ?? $locked;
         });
@@ -365,48 +366,6 @@ final class CleaningBookingSessionCancellationService
             'reason_snapshot' => $reason,
             'applied_at' => now(),
         ]);
-    }
-
-    private function syncParentFinancials(CleaningBooking $booking): void
-    {
-        $sessions = CleaningBookingSession::query()
-            ->where('cleaning_booking_id', $booking->id)
-            ->lockForUpdate()
-            ->get();
-
-        $chargeable = $sessions->reject(function (CleaningBookingSession $session): bool {
-            return in_array($this->statusValue($session), [
-                CleaningBookingSessionStatus::Cancelled->value,
-                CleaningBookingSessionStatus::Skipped->value,
-            ], true);
-        });
-        $cancelled = $sessions->filter(
-            fn (CleaningBookingSession $session): bool => $this->statusValue($session) === CleaningBookingSessionStatus::Cancelled->value,
-        );
-
-        $basePrice = round((float) $chargeable->sum('base_price'), 2);
-        $addonsTotal = round((float) $chargeable->sum('addons_total'), 2);
-        $travelFee = round((float) $chargeable->sum('travel_fee'), 2);
-        $adminMargin = round((float) $chargeable->sum('admin_margin_amount'), 2);
-        $extensionFee = round((float) $chargeable->sum('extension_fee_total'), 2);
-        $cancellationFee = round((float) $cancelled->sum('cancellation_fee'), 2);
-        $serviceTotal = round((float) $chargeable->sum('total_price'), 2);
-        $totalHours = round((float) $chargeable->sum('duration_hours'), 2);
-
-        CleaningBooking::query()
-            ->whereKey($booking->id)
-            ->lockForUpdate()
-            ->firstOrFail()
-            ->forceFill([
-                'base_price' => $basePrice,
-                'addons_total' => $addonsTotal,
-                'travel_fee' => $travelFee,
-                'admin_margin_amount' => $adminMargin,
-                'extension_fee_total' => $extensionFee,
-                'cancellation_fee' => $cancellationFee,
-                'total_hours' => $totalHours,
-                'total_price' => round($serviceTotal + $cancellationFee, 2),
-            ])->saveQuietly();
     }
 
     private function lockSession(

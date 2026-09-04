@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\CleaningFinancialSetting;
+use App\Models\CleaningWorkerDeposit;
 use App\Models\User;
 use App\Models\Worker;
 use Illuminate\Support\Facades\Notification;
@@ -232,6 +233,168 @@ it('does not expose recurring skip for an ordinary cleaning session', function (
         ->and($assignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart);
 });
 
+it('pauses future recurring visits, releases workers and blocks acceptance until resume', function (): void {
+    [$customer, $workerUser, $worker, $booking] = makeRecurringWorkerContinuityScenario();
+    $firstSession = makeRecurringWorkerContinuitySession($booking, 1);
+    $secondSession = makeRecurringWorkerContinuitySession($booking, 2);
+    $firstAssignment = makeRecurringWorkerContinuityAssignment($firstSession, $worker);
+    $secondAssignment = makeRecurringWorkerContinuityAssignment($secondSession, $worker);
+
+    Sanctum::actingAs($customer);
+
+    $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/schedule")
+        ->assertOk()
+        ->assertJsonPath('data.schedule.isRecurring', true)
+        ->assertJsonPath('data.schedule.isPaused', false)
+        ->assertJsonPath('data.schedule.canPause', true)
+        ->assertJsonPath('data.schedule.canResume', false);
+
+    $this->postJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/recurring/pause",
+        ['reason' => 'إيقاف الزيارات لأسبوعين'],
+    )
+        ->assertOk()
+        ->assertJsonPath('data.schedule.isPaused', true)
+        ->assertJsonPath('data.schedule.canPause', false)
+        ->assertJsonPath('data.schedule.canResume', true)
+        ->assertJsonPath('data.schedule.pauseReason', 'إيقاف الزيارات لأسبوعين')
+        ->assertJsonPath('data.schedule.sessions.0.status', CleaningBookingSessionStatus::Paused->value)
+        ->assertJsonPath('data.schedule.sessions.1.status', CleaningBookingSessionStatus::Paused->value);
+
+    expect($firstAssignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::Cancelled)
+        ->and($secondAssignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::Cancelled)
+        ->and($firstSession->fresh()->status)->toBe(CleaningBookingSessionStatus::Paused)
+        ->and($secondSession->fresh()->status)->toBe(CleaningBookingSessionStatus::Paused)
+        ->and($booking->fresh()->recurring_paused_at)->not->toBeNull()
+        ->and($booking->fresh()->recurring_pause_reason)->toBe('إيقاف الزيارات لأسبوعين');
+
+    Sanctum::actingAs($workerUser);
+
+    $this->postJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/sessions/accept-selected",
+        ['sessionIds' => [$firstSession->id]],
+    )
+        ->assertOk()
+        ->assertJsonPath('success', false)
+        ->assertJsonPath('data.acceptance.rejected.0.reasonCode', 'session_paused');
+});
+
+it('resumes paused future visits and makes them available for acceptance again', function (): void {
+    [$customer, $workerUser, $worker, $booking] = makeRecurringWorkerContinuityScenario();
+    $firstSession = makeRecurringWorkerContinuitySession($booking, 1);
+    $secondSession = makeRecurringWorkerContinuitySession($booking, 2);
+    makeRecurringWorkerContinuityAssignment($firstSession, $worker);
+    makeRecurringWorkerContinuityAssignment($secondSession, $worker);
+
+    Sanctum::actingAs($customer);
+    $this->postJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/recurring/pause",
+        ['reason' => 'توقف مؤقت'],
+    )->assertOk();
+
+    $this->postJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/recurring/resume",
+    )
+        ->assertOk()
+        ->assertJsonPath('data.schedule.isPaused', false)
+        ->assertJsonPath('data.schedule.canPause', true)
+        ->assertJsonPath('data.schedule.canResume', false)
+        ->assertJsonPath('data.schedule.sessions.0.status', CleaningBookingSessionStatus::Scheduled->value)
+        ->assertJsonPath('data.schedule.sessions.1.status', CleaningBookingSessionStatus::Scheduled->value);
+
+    expect($booking->fresh()->recurring_paused_at)->toBeNull()
+        ->and($booking->fresh()->recurring_pause_reason)->toBeNull();
+
+    CleaningWorkerDeposit::query()->updateOrCreate(
+        ['worker_id' => $worker->id],
+        [
+            'current_balance' => 10000,
+            'debt_balance' => 0,
+            'deposited_total' => 10000,
+            'withdrawn_total' => 0,
+            'admin_revenue_withdrawn_total' => 0,
+            'minimum_required' => 0,
+            'max_negative_balance' => 0,
+            'is_active' => true,
+        ],
+    );
+    $worker->forceFill([
+        'default_working_hours' => [
+            'monday' => ['available' => true, 'data' => [['00:00' => '23:59']]],
+            'tuesday' => ['available' => true, 'data' => [['00:00' => '23:59']]],
+            'wednesday' => ['available' => true, 'data' => [['00:00' => '23:59']]],
+            'thursday' => ['available' => true, 'data' => [['00:00' => '23:59']]],
+            'friday' => ['available' => true, 'data' => [['00:00' => '23:59']]],
+            'saturday' => ['available' => true, 'data' => [['00:00' => '23:59']]],
+            'sunday' => ['available' => true, 'data' => [['00:00' => '23:59']]],
+        ],
+    ])->save();
+    $worker->unsetRelation('deposit');
+
+    Sanctum::actingAs($workerUser);
+    $this->postJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/sessions/accept-selected",
+        ['sessionIds' => [$firstSession->id]],
+    )
+        ->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('data.acceptance.acceptedSessionIds.0', $firstSession->id);
+});
+
+it('turns visits that expired during a pause into penalty-free skipped visits on resume', function (): void {
+    [$customer, , $worker, $booking] = makeRecurringWorkerContinuityScenario();
+    $firstSession = makeRecurringWorkerContinuitySession($booking, 1);
+    $secondSession = makeRecurringWorkerContinuitySession($booking, 2);
+    makeRecurringWorkerContinuityAssignment($firstSession, $worker);
+    makeRecurringWorkerContinuityAssignment($secondSession, $worker);
+
+    Sanctum::actingAs($customer);
+    $this->postJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/recurring/pause",
+        ['reason' => 'توقف مؤقت'],
+    )->assertOk();
+
+    $firstSession->forceFill([
+        'scheduled_date' => now()->subDay()->toDateString(),
+        'scheduled_time' => now()->subHour()->format('H:i'),
+    ])->save();
+
+    $this->postJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/recurring/resume",
+    )
+        ->assertOk()
+        ->assertJsonPath('data.seriesAction.expiredSessionIds.0', $firstSession->id)
+        ->assertJsonPath('data.schedule.sessions.0.status', CleaningBookingSessionStatus::Skipped->value)
+        ->assertJsonPath('data.schedule.sessions.1.status', CleaningBookingSessionStatus::Scheduled->value);
+
+    expect($firstSession->fresh()->skip_source)->toBe('recurring_pause_expired')
+        ->and((float) $firstSession->fresh()->cancellation_fee)->toBe(0.0)
+        ->and((float) $booking->fresh()->total_hours)->toBe(2.0)
+        ->and((float) $booking->fresh()->total_price)->toBe(3300.0);
+
+    $this->assertDatabaseMissing('cleaning_booking_session_financial_penalties', [
+        'cleaning_booking_session_id' => $firstSession->id,
+    ]);
+});
+
+it('rejects pausing an ordinary non-recurring cleaning booking', function (): void {
+    [$customer, , $worker, $booking] = makeRecurringWorkerContinuityScenario();
+    $session = makeRecurringWorkerContinuitySession($booking, 1, 'regular_cleaning');
+    $assignment = makeRecurringWorkerContinuityAssignment($session, $worker);
+
+    Sanctum::actingAs($customer);
+
+    $this->postJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/recurring/pause",
+        ['reason' => 'محاولة غير صالحة'],
+    )
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('status');
+
+    expect($session->fresh()->status)->toBe(CleaningBookingSessionStatus::WorkerAssigned)
+        ->and($assignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart);
+});
+
 /** @return array{0:User,1:User,2:Worker,3:CleaningBooking} */
 function makeRecurringWorkerContinuityScenario(): array
 {
@@ -242,10 +405,16 @@ function makeRecurringWorkerContinuityScenario(): array
         'is_active' => true,
         'is_suspended' => false,
         'trust_score' => 90,
+        'home_address' => 'Damascus',
+        'home_latitude' => 33.5138,
+        'home_longitude' => 36.2765,
     ]);
     $booking = CleaningBooking::factory()->create([
         'customer_id' => $customer->id,
+        'gender_preference' => 'any',
         'property_type' => 'apartment',
+        'address_latitude' => 33.5100,
+        'address_longitude' => 36.2900,
         'status' => CleaningBookingStatus::WorkerAssigned->value,
         'worker_id' => null,
         'preferred_worker_id' => null,

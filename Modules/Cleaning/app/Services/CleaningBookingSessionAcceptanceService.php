@@ -37,7 +37,10 @@ final class CleaningBookingSessionAcceptanceService
 
             $sessions = CleaningBookingSession::query()
                 ->where('cleaning_booking_id', $booking->id)
-                ->whereNotIn('status', CleaningBookingSessionStatus::terminalValues())
+                ->whereIn('status', [
+                    CleaningBookingSessionStatus::Scheduled->value,
+                    CleaningBookingSessionStatus::WorkerAssigned->value,
+                ])
                 ->orderBy('sequence')
                 ->lockForUpdate()
                 ->get();
@@ -259,8 +262,23 @@ final class CleaningBookingSessionAcceptanceService
         CleaningBookingSession $session,
         Worker $worker,
     ): ?array {
+        $status = $session->status instanceof CleaningBookingSessionStatus
+            ? $session->status->value
+            : (string) $session->status;
+
+        if ($status === CleaningBookingSessionStatus::Paused->value) {
+            return $this->rejection((int) $session->id, 'session_paused', 'This recurring visit is paused and cannot be accepted.');
+        }
+
         if ($session->isTerminal()) {
             return $this->rejection((int) $session->id, 'session_closed', 'This session is no longer open for acceptance.');
+        }
+
+        if (! in_array($status, [
+            CleaningBookingSessionStatus::Scheduled->value,
+            CleaningBookingSessionStatus::WorkerAssigned->value,
+        ], true)) {
+            return $this->rejection((int) $session->id, 'session_not_open', 'This session is not open for worker acceptance.');
         }
 
         if ($session->remainingWorkerCount() <= 0) {

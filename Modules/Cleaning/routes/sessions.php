@@ -8,6 +8,7 @@ use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionAcceptanceContro
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionLifecycleController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionLocationController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionWorkerChangeController;
+use Modules\Cleaning\Http\Controllers\API\CleaningRecurringSeriesController;
 
 Route::prefix('v1')
     ->middleware(['auth:sanctum'])
@@ -16,6 +17,16 @@ Route::prefix('v1')
             'cleaning-bookings/{cleaning_booking}/schedule',
             CleaningBookingScheduleController::class,
         )->name('cleaning-bookings.schedule');
+
+        Route::post(
+            'cleaning-bookings/{cleaning_booking}/recurring/pause',
+            [CleaningRecurringSeriesController::class, 'pause'],
+        )->name('cleaning-bookings.recurring.pause');
+
+        Route::post(
+            'cleaning-bookings/{cleaning_booking}/recurring/resume',
+            [CleaningRecurringSeriesController::class, 'resume'],
+        )->name('cleaning-bookings.recurring.resume');
 
         Route::post(
             'cleaning-bookings/{cleaning_booking}/sessions/accept-all',

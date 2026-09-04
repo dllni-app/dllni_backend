@@ -38,18 +38,39 @@ final class CleaningBookingSchedulePresenter
         )->count();
 
         $next = $sessions
-            ->filter(fn (CleaningBookingSession $session): bool => ! $session->isTerminal())
+            ->filter(fn (CleaningBookingSession $session): bool => ! $session->isTerminal()
+                && $this->status($session) !== CleaningBookingSessionStatus::Paused->value)
             ->sortBy(fn (CleaningBookingSession $session): string => ($session->startsAt()?->toIso8601String() ?? '9999'))
             ->first();
         $firstDate = $sessions->min('scheduled_date');
         $lastDate = $sessions->max('scheduled_date');
         $canReschedule = $this->eventScheduleCanReschedule($booking, $sessions, $viewerWorker);
+        $isRecurring = $sessions->contains(
+            fn (CleaningBookingSession $session): bool => (string) $session->session_type === CleaningBookingSession::TYPE_RECURRING_CLEANING,
+        );
+        $isRecurringPaused = $isRecurring && $booking->recurring_paused_at !== null;
+        $isCustomerView = ! $viewerWorker instanceof Worker;
+        $canPauseRecurring = $isCustomerView
+            && $isRecurring
+            && ! $isRecurringPaused
+            && $sessions->contains(fn (CleaningBookingSession $session): bool => $this->canPauseRecurringSession($session));
+        $canResumeRecurring = $isCustomerView
+            && $isRecurringPaused
+            && $sessions->contains(
+                fn (CleaningBookingSession $session): bool => $this->status($session) === CleaningBookingSessionStatus::Paused->value,
+            );
 
         return [
             // `multi_day` is deliberately preserved because both legacy Flutter
             // clients already understand it. `isMultiSession` is the canonical
             // new meaning and permits the same contract to serve recurring work.
             'mode' => $sessions->count() > 1 ? 'multi_day' : 'single_day',
+            'isRecurring' => $isRecurring,
+            'isPaused' => $isRecurringPaused,
+            'canPause' => $canPauseRecurring,
+            'canResume' => $canResumeRecurring,
+            'pausedAt' => $booking->recurring_paused_at?->toIso8601String(),
+            'pauseReason' => $booking->recurring_pause_reason,
             'isMultiSession' => $sessions->count() > 1,
             'isMultiDay' => $sessions->count() > 1,
             'sessionsCount' => $sessions->count(),
@@ -153,6 +174,7 @@ final class CleaningBookingSchedulePresenter
             && $session->work_started_at === null
             && ! $hasStartedTravelAssignment;
         $canSendSos = ! $session->isTerminal()
+            && $status !== CleaningBookingSessionStatus::Paused->value
             && ($isCustomerView || $hasMyActiveAssignment);
 
         return [
@@ -226,6 +248,35 @@ final class CleaningBookingSchedulePresenter
         ];
     }
 
+    private function canPauseRecurringSession(CleaningBookingSession $session): bool
+    {
+        if ((string) $session->session_type !== CleaningBookingSession::TYPE_RECURRING_CLEANING) {
+            return false;
+        }
+
+        if (! in_array($this->status($session), [
+            CleaningBookingSessionStatus::Scheduled->value,
+            CleaningBookingSessionStatus::WorkerAssigned->value,
+        ], true)) {
+            return false;
+        }
+
+        $startsAt = $session->startsAt();
+        if (
+            $startsAt === null
+            || ! $startsAt->isFuture()
+            || $session->started_travel_at !== null
+            || $session->work_started_at !== null
+        ) {
+            return false;
+        }
+
+        return ! $session->workerAssignments->contains(
+            static fn (CleaningBookingSessionWorkerAssignment $assignment): bool => $assignment->isActive()
+                && $assignment->started_travel_at !== null,
+        );
+    }
+
     /** @return array<string, mixed> */
     private function assignmentPayload(CleaningBookingSessionWorkerAssignment $assignment): array
     {
@@ -277,6 +328,12 @@ final class CleaningBookingSchedulePresenter
 
         return [
             'mode' => 'single_day',
+            'isRecurring' => false,
+            'isPaused' => false,
+            'canPause' => false,
+            'canResume' => false,
+            'pausedAt' => null,
+            'pauseReason' => null,
             'isMultiSession' => false,
             'isMultiDay' => false,
             'sessionsCount' => 1,

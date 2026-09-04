@@ -16,6 +16,8 @@ use Throwable;
 
 final class CleaningBookingSession extends Model
 {
+    public const TYPE_RECURRING_CLEANING = 'recurring_cleaning';
+
     protected $fillable = [
         'cleaning_booking_id',
         'sequence',

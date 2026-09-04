@@ -17,6 +17,7 @@ enum CleaningBookingSessionStatus: string
     case Completed = 'completed';
     case Cancelled = 'cancelled';
     case Skipped = 'skipped';
+    case Paused = 'paused';
 
     /** @return array<int, string> */
     public static function activeValues(): array
@@ -57,6 +58,7 @@ enum CleaningBookingSessionStatus: string
             self::Completed => 'مكتملة',
             self::Cancelled => 'ملغاة',
             self::Skipped => 'متخطاة',
+            self::Paused => 'متوقفة مؤقتاً',
         };
     }
 
