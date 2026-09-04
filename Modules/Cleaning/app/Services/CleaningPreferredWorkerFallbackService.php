@@ -12,6 +12,8 @@ use Modules\Cleaning\Models\CleaningBooking;
 
 final class CleaningPreferredWorkerFallbackService
 {
+    private const RECURRING_SESSION_TYPE = 'recurring_cleaning';
+
     public function convertToOpenIfEligible(CleaningBooking $booking): bool
     {
         return DB::transaction(function () use ($booking): bool {
@@ -52,6 +54,15 @@ final class CleaningPreferredWorkerFallbackService
         }
 
         if ($booking->preferred_worker_id === null) {
+            return false;
+        }
+
+        // Recurring bookings own worker continuity per execution session. A requested
+        // worker must never be silently replaced by the generic parent-booking
+        // fallback that converts preferred-worker requests into the open pool.
+        if ($booking->sessions()
+            ->where('session_type', self::RECURRING_SESSION_TYPE)
+            ->exists()) {
             return false;
         }
 
