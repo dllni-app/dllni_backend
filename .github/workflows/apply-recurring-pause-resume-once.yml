@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/apply-recurring-pause-resume-once.yml'
       - 'scripts/apply_recurring_pause_resume_patch.py'
+      - 'scripts/fix_recurring_pause_resume_constant.py'
 
 permissions:
   contents: write
@@ -26,13 +27,16 @@ jobs:
           coverage: none
       - run: composer install --no-interaction --prefer-dist --no-progress
       - name: Apply recurring pause resume patch
-        run: python scripts/apply_recurring_pause_resume_patch.py
+        run: |
+          python scripts/apply_recurring_pause_resume_patch.py
+          python scripts/fix_recurring_pause_resume_constant.py
       - name: Format changes
         run: |
           vendor/bin/pint \
             database/migrations/2026_09_05_000010_add_recurring_pause_fields_to_cleaning_bookings_table.php \
             Modules/Cleaning/app/Enums/CleaningBookingSessionStatus.php \
             Modules/Cleaning/app/Models/CleaningBooking.php \
+            Modules/Cleaning/app/Models/CleaningBookingSession.php \
             Modules/Cleaning/app/Services/CleaningBookingSessionFinancialAggregationService.php \
             Modules/Cleaning/app/Services/CleaningBookingSessionCancellationService.php \
             Modules/Cleaning/app/Services/RecurringCleaningPauseService.php \
@@ -78,6 +82,7 @@ jobs:
             database/migrations/2026_09_05_000010_add_recurring_pause_fields_to_cleaning_bookings_table.php \
             Modules/Cleaning/app/Enums/CleaningBookingSessionStatus.php \
             Modules/Cleaning/app/Models/CleaningBooking.php \
+            Modules/Cleaning/app/Models/CleaningBookingSession.php \
             Modules/Cleaning/app/Services/CleaningBookingSessionFinancialAggregationService.php \
             Modules/Cleaning/app/Services/CleaningBookingSessionCancellationService.php \
             Modules/Cleaning/app/Services/RecurringCleaningPauseService.php \
