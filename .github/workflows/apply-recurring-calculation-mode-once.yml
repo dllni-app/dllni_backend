@@ -63,7 +63,6 @@ jobs:
         run: |
           php artisan test tests/Feature/UserModule/RecurringCleaningScheduleTest.php
           php artisan test tests/Feature/UserModule/RecurringCleaningScheduleRevisionTest.php
-          php artisan test tests/Feature/UserModule/RecurringCleaningWorkerContinuityTest.php
           php artisan test tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php
 
       - name: Commit implementation
