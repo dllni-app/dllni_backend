@@ -39,6 +39,10 @@ final class UserCleaningOrderEstimatePriceController
                 isset($validated['serviceIds']) ? (array) $validated['serviceIds'] : null,
             );
             $singleVisitEstimatedHours = (float) $estimation['estimatedHours'];
+            $recurringSessionHours = $recurringPlan !== null
+                && (string) ($recurringPlan['calculationMode'] ?? RecurringCleaningScheduleService::CALCULATION_TASK) === RecurringCleaningScheduleService::CALCULATION_HOURS
+                    ? (float) ($recurringPlan['hoursPerVisit'] ?? $singleVisitEstimatedHours)
+                    : $singleVisitEstimatedHours;
 
             if ($eventPlan !== null) {
                 $estimation['estimatedHours'] = $eventPlan['totalHours'];
@@ -47,7 +51,7 @@ final class UserCleaningOrderEstimatePriceController
                 }
             } elseif ($recurringPlan !== null) {
                 $estimation['estimatedHours'] = round(
-                    $singleVisitEstimatedHours * (int) $recurringPlan['sessionsCount'],
+                    $recurringSessionHours * (int) $recurringPlan['sessionsCount'],
                     2,
                 );
             }
@@ -80,7 +84,7 @@ final class UserCleaningOrderEstimatePriceController
                     $eventPlan['sessions'],
                 ))
                 : ($recurringPlan !== null
-                    ? $singleVisitEstimatedHours
+                    ? $recurringSessionHours
                     : (float) $estimation['estimatedHours']);
             $capacity = CleaningWorkerCapacity::payload($capacityHours);
 
@@ -102,20 +106,31 @@ final class UserCleaningOrderEstimatePriceController
                     requiredWorkers: $requestedWorkers,
                 );
             } else {
-                $pricing = $service->price(
-                    (string) $validated['propertyType'],
-                    $pricingPropertyDetails,
-                    $addressLatitude,
-                    $addressLongitude,
-                    $assignmentMode === 'preferred_worker' ? ($validated['preferredWorkerId'] ?? null) : null,
-                    isset($validated['serviceIds']) ? (array) $validated['serviceIds'] : null,
-                );
+                $pricing = $recurringPlan !== null
+                    && (string) ($recurringPlan['calculationMode'] ?? RecurringCleaningScheduleService::CALCULATION_TASK) === RecurringCleaningScheduleService::CALCULATION_HOURS
+                        ? $service->priceRecurringHours(
+                            (string) $validated['propertyType'],
+                            $pricingPropertyDetails,
+                            $addressLatitude,
+                            $addressLongitude,
+                            $assignmentMode === 'preferred_worker' ? ($validated['preferredWorkerId'] ?? null) : null,
+                            $recurringSessionHours,
+                            $requestedWorkers,
+                        )
+                        : $service->price(
+                            (string) $validated['propertyType'],
+                            $pricingPropertyDetails,
+                            $addressLatitude,
+                            $addressLongitude,
+                            $assignmentMode === 'preferred_worker' ? ($validated['preferredWorkerId'] ?? null) : null,
+                            isset($validated['serviceIds']) ? (array) $validated['serviceIds'] : null,
+                        );
 
                 if ($recurringPlan !== null) {
                     $pricing = $recurringSchedule->quote(
                         $recurringPlan,
                         $pricing,
-                        $singleVisitEstimatedHours,
+                        $recurringSessionHours,
                     );
                 }
             }

@@ -29,8 +29,14 @@ trait ValidatesEventAssistanceSchedule
             // Event assistance keeps its existing explicit execution schedule.
             // For normal cleaning, supplying a multi-day schedule means a recurring
             // booking: each item is one independent execution visit under one parent.
-            'schedule' => ['sometimes', 'array:mode,sessions'],
+            'schedule' => ['sometimes', 'array:mode,sessions,calculationMode,hoursPerVisit'],
             'schedule.mode' => ['required_with:schedule', 'string', Rule::in($scheduleModes)],
+            'schedule.calculationMode' => $isEventAssistance
+                ? ['prohibited']
+                : ['sometimes', 'string', Rule::in(['task', 'hours'])],
+            'schedule.hoursPerVisit' => $isEventAssistance
+                ? ['prohibited']
+                : ['sometimes', 'numeric', 'min:1', 'max:24'],
             'schedule.sessions' => [
                 'required_with:schedule',
                 'array',
@@ -100,6 +106,21 @@ trait ValidatesEventAssistanceSchedule
                 $validator->errors()->add(
                     'schedule.sessions',
                     'الحجز الدوري يحتاج إلى زيارتين على الأقل.',
+                );
+            }
+
+            $calculationMode = mb_strtolower(mb_trim((string) ($schedule['calculationMode'] ?? 'task')));
+            $hasHoursPerVisit = array_key_exists('hoursPerVisit', $schedule);
+            if ($calculationMode === 'hours' && (! $hasHoursPerVisit || ! is_numeric($schedule['hoursPerVisit']))) {
+                $validator->errors()->add(
+                    'schedule.hoursPerVisit',
+                    'حدد عدد الساعات لكل زيارة عند اختيار الحجز الدوري بالساعة.',
+                );
+            }
+            if ($calculationMode !== 'hours' && $hasHoursPerVisit) {
+                $validator->errors()->add(
+                    'schedule.hoursPerVisit',
+                    'عدد الساعات لكل زيارة مسموح فقط عند اختيار الحجز الدوري بالساعة.',
                 );
             }
 

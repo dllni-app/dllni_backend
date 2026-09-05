@@ -106,7 +106,7 @@ final class RecurringCleaningScheduleRevisionService
                     'cleaning_booking_id' => $lockedBooking->id,
                     'sequence' => $maxSequence + 2000 + $index + 1,
                     'session_type' => CleaningBookingSession::TYPE_RECURRING_CLEANING,
-                    'calculation_mode' => 'estimated_hours',
+                    'calculation_mode' => $built['calculationMode'],
                     'scheduled_date' => $session['date'],
                     'scheduled_time' => $session['time'],
                     'duration_hours' => $built['sessionHours'],
@@ -130,7 +130,10 @@ final class RecurringCleaningScheduleRevisionService
                         'revisedAt' => now()->toIso8601String(),
                         'revisionToken' => $confirmedPreview['revisionToken'],
                         'pricingAlgorithmVersion' => $this->estimationService->algorithmVersion(),
+                        'calculationMode' => $built['calculationMode'],
+                        'hoursPerVisit' => $built['calculationMode'] === RecurringCleaningScheduleService::CALCULATION_HOURS ? $built['sessionHours'] : null,
                         'perVisitEstimatedHours' => $built['sessionHours'],
+                        'derivedHourlyRatePerWorker' => $built['singleVisitPricing']['recurringHourlyRatePerWorker'] ?? null,
                         'requiredWorkers' => max(1, (int) $lockedBooking->number_of_workers),
                         'currency' => (string) ($built['singleVisitPricing']['currency'] ?? config('app.currency', 'SYP')),
                     ],
@@ -222,25 +225,41 @@ final class RecurringCleaningScheduleRevisionService
         $preferredWorkerId = $booking->resolvedAssignmentMode() === 'preferred_worker'
             ? $booking->preferred_worker_id
             : null;
+        $rawCalculationMode = mb_strtolower((string) ($editable->first()->calculation_mode ?? ''));
+        $calculationMode = $rawCalculationMode === RecurringCleaningScheduleService::CALCULATION_HOURS
+            ? RecurringCleaningScheduleService::CALCULATION_HOURS
+            : RecurringCleaningScheduleService::CALCULATION_TASK;
+        $estimate = $this->estimationService->estimate(
+            (string) $booking->property_type,
+            (array) ($booking->property_details ?? []),
+        );
+        $sessionHours = $calculationMode === RecurringCleaningScheduleService::CALCULATION_HOURS
+            ? round(max(1.0, (float) ($editable->first()->duration_hours ?? 1)), 2)
+            : round(max(0.01, (float) ($estimate['estimatedHours'] ?? $editable->first()->duration_hours ?? 1)), 2);
         try {
-            $singleVisitPricing = $this->estimationService->price(
-                (string) $booking->property_type,
-                (array) ($booking->property_details ?? []),
-                $booking->address_latitude,
-                $booking->address_longitude,
-                $preferredWorkerId,
-            );
+            $singleVisitPricing = $calculationMode === RecurringCleaningScheduleService::CALCULATION_HOURS
+                ? $this->estimationService->priceRecurringHours(
+                    (string) $booking->property_type,
+                    (array) ($booking->property_details ?? []),
+                    $booking->address_latitude,
+                    $booking->address_longitude,
+                    $preferredWorkerId,
+                    $sessionHours,
+                    max(1, (int) $booking->number_of_workers),
+                )
+                : $this->estimationService->price(
+                    (string) $booking->property_type,
+                    (array) ($booking->property_details ?? []),
+                    $booking->address_latitude,
+                    $booking->address_longitude,
+                    $preferredWorkerId,
+                );
         } catch (Throwable $exception) {
             report($exception);
             throw ValidationException::withMessages([
                 'schedule' => ['تعذر إعادة تسعير الزيارات المستقبلية. حدّث بيانات الحجز وحاول مرة أخرى.'],
             ]);
         }
-        $estimate = $this->estimationService->estimate(
-            (string) $booking->property_type,
-            (array) ($booking->property_details ?? []),
-        );
-        $sessionHours = round(max(0.01, (float) ($estimate['estimatedHours'] ?? $editable->first()->duration_hours ?? 1)), 2);
 
         $immutableChargeableTotal = round((float) $visibleWithoutEditable
             ->reject(fn (CleaningBookingSession $session): bool => in_array(
@@ -275,6 +294,8 @@ final class RecurringCleaningScheduleRevisionService
                 'totalPrice' => round((float) $session->total_price, 2),
             ])->all(),
             'proposedSessions' => $proposedSessions,
+            'calculationMode' => $calculationMode,
+            'sessionHours' => $sessionHours,
             'newTotal' => $newTotal,
             'singleVisitTotal' => round((float) $singleVisitPricing['totalPrice'], 2),
         ];
@@ -294,6 +315,8 @@ final class RecurringCleaningScheduleRevisionService
             'preservedSessionsCount' => $visibleWithoutEditable->count(),
             'proposedSessionsCount' => count($proposedSessions),
             'sessionHours' => $sessionHours,
+            'calculationMode' => $calculationMode,
+            'hoursPerVisit' => $calculationMode === RecurringCleaningScheduleService::CALCULATION_HOURS ? $sessionHours : null,
             'singleVisitPricing' => [
                 'basePrice' => round((float) $singleVisitPricing['basePrice'], 2),
                 'addonsTotal' => round((float) $singleVisitPricing['addonsTotal'], 2),
@@ -315,6 +338,7 @@ final class RecurringCleaningScheduleRevisionService
             'proposedSessions' => $proposedSessions,
             'singleVisitPricing' => $singleVisitPricing,
             'sessionHours' => $sessionHours,
+            'calculationMode' => $calculationMode,
         ];
     }
 

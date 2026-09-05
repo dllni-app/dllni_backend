@@ -14,11 +14,17 @@ use Modules\Cleaning\Support\CleaningRuntimeSettings;
 final class UserCleaningOrderEstimationService
 {
     public const ALGORITHM_VERSION = '2026-08-08-event-worker-hour-v3';
+
     public const EVENT_ASSISTANCE_PROPERTY_TYPE = 'event_assistance';
+
     public const CLEANING_MODES = ['regular', 'deep'];
+
     public const PROPERTY_TYPES = ['apartment', 'villa', 'house', 'office', 'studio', self::EVENT_ASSISTANCE_PROPERTY_TYPE];
+
     public const LIVING_ROOM_SIZES = ['small', 'medium', 'large', 'very_large'];
+
     public const EVENT_TYPES = ['family_dinner', 'birthday', 'large_gathering', 'funeral', 'other'];
+
     private const ROOM_SIZE_BREAKDOWN_TYPES = CleaningFinancialDefaults::ROOM_TYPES;
 
     public function __construct(private readonly CleaningPricingCalculator $pricingCalculator) {}
@@ -238,6 +244,90 @@ final class UserCleaningOrderEstimationService
             'eventHours' => $eventHours ?? null,
             'eventWorkerCount' => $eventWorkerCount ?? null,
             'recommendation' => $estimation['recommendation'] ?? null,
+        ];
+    }
+
+    /**
+     * Price a recurring cleaning visit by booked worker-hours while deriving the
+     * hourly labor rate from the same room/task pricing configuration used by
+     * task-based cleaning. This keeps one financial source of truth.
+     *
+     * @return array<string, mixed>
+     */
+    public function priceRecurringHours(
+        string $propertyType,
+        array $propertyDetails,
+        mixed $addressLatitude,
+        mixed $addressLongitude,
+        mixed $preferredWorkerId,
+        float $hoursPerVisit,
+        int $workerCount,
+    ): array {
+        $input = $this->pricingSnapshotInput(
+            $propertyType,
+            $propertyDetails,
+            $addressLatitude,
+            $addressLongitude,
+            $preferredWorkerId,
+        );
+        if ($this->isEventAssistanceType($input['propertyType'])) {
+            throw new InvalidArgumentException('Recurring hour-based pricing is only available for normal cleaning.');
+        }
+
+        $regularCalculation = $this->calculateRegularCleaningFromSettings($input['propertyDetails']);
+        $taskBasePrice = $this->pricingCalculator->roundMoney((float) $regularCalculation['basePrice']);
+        $taskEstimatedHours = max(0.5, (float) $regularCalculation['estimatedHours']);
+        $normalizedHours = min(24.0, max(1.0, $this->roundToHalfHour($hoursPerVisit)));
+        $normalizedWorkers = max(1, $workerCount);
+        $hourlyRatePerWorker = $this->pricingCalculator->roundMoney($taskBasePrice / $taskEstimatedHours);
+        $basePrice = $this->pricingCalculator->roundMoney(
+            $hourlyRatePerWorker * $normalizedHours * $normalizedWorkers,
+        );
+        $addonsTotal = 0.0;
+
+        if ($input['preferredWorkerId'] === null) {
+            $pricing = $this->pricingCalculator->provisional($basePrice, $addonsTotal);
+        } else {
+            $worker = Worker::query()->find($input['preferredWorkerId']);
+            if (! $worker) {
+                throw new InvalidArgumentException('Selected worker is not available.');
+            }
+
+            $pricing = $this->pricingCalculator->finalizedForWorker(
+                $basePrice,
+                $addonsTotal,
+                $input['addressLatitude'],
+                $input['addressLongitude'],
+                $worker,
+            );
+        }
+
+        return [
+            'basePrice' => $basePrice,
+            'addonsTotal' => $addonsTotal,
+            'travelFee' => $pricing['travelFee'],
+            'distanceKm' => $pricing['distanceKm'],
+            'adminMargin' => $pricing['adminMargin'],
+            'isPricingFinal' => $pricing['isPricingFinal'],
+            'totalPrice' => $pricing['totalPrice'],
+            'currency' => (string) config('app.currency', 'SYP'),
+            'serviceLines' => [],
+            'roomPricingLines' => $regularCalculation['roomPricingLines'] ?? [],
+            'pricingAlgorithm' => [
+                'mode' => 'hours',
+                'derivedHourlyRatePerWorker' => $hourlyRatePerWorker,
+                'derivedFromTaskBasePrice' => $taskBasePrice,
+                'derivedFromTaskEstimatedHours' => round($taskEstimatedHours, 2),
+                'bookedHoursPerVisit' => round($normalizedHours, 2),
+                'workerCount' => $normalizedWorkers,
+            ],
+            'recurringHourlyRatePerWorker' => $hourlyRatePerWorker,
+            'recurringHoursPerVisit' => round($normalizedHours, 2),
+            'recurringWorkerCount' => $normalizedWorkers,
+            'eventHourlyRate' => null,
+            'eventHours' => null,
+            'eventWorkerCount' => null,
+            'recommendation' => null,
         ];
     }
 

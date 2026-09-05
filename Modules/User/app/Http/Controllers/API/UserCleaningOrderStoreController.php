@@ -48,6 +48,7 @@ final class UserCleaningOrderStoreController
         $order = DB::transaction(function () use (
             $request,
             $service,
+            $estimationService,
             $eventSchedule,
             $eventPlan,
             $recurringSchedule,
@@ -93,6 +94,41 @@ final class UserCleaningOrderStoreController
                 $eventSchedule->createSessions($order->fresh(), $eventPlan, $eventPricing);
                 $order = $order->fresh();
             } elseif ($recurringPlan !== null) {
+                if ((string) ($recurringPlan['calculationMode'] ?? RecurringCleaningScheduleService::CALCULATION_TASK) === RecurringCleaningScheduleService::CALCULATION_HOURS) {
+                    $sessionHours = (float) ($recurringPlan['hoursPerVisit'] ?? $order->estimated_hours);
+                    $hourPricing = $estimationService->priceRecurringHours(
+                        (string) $order->property_type,
+                        (array) ($order->property_details ?? []),
+                        $order->address_latitude,
+                        $order->address_longitude,
+                        $order->resolvedAssignmentMode() === 'preferred_worker' ? $order->preferred_worker_id : null,
+                        $sessionHours,
+                        max(1, (int) $order->number_of_workers),
+                    );
+                    $storedHourPricing = $order->resolvedAssignmentMode() === 'preferred_worker'
+                        ? $hourPricing
+                        : [
+                            ...$hourPricing,
+                            'travelFee' => 0.0,
+                            'distanceKm' => null,
+                            'adminMargin' => 0.0,
+                            'isPricingFinal' => false,
+                            'totalPrice' => round((float) $hourPricing['basePrice'] + (float) $hourPricing['addonsTotal'], 2),
+                        ];
+                    $order->forceFill([
+                        'estimated_hours' => $sessionHours,
+                        'total_hours' => $sessionHours,
+                        'base_price' => $storedHourPricing['basePrice'],
+                        'addons_total' => $storedHourPricing['addonsTotal'],
+                        'travel_fee' => $storedHourPricing['travelFee'],
+                        'travel_distance_km' => $storedHourPricing['distanceKm'],
+                        'admin_margin_amount' => $storedHourPricing['adminMargin'],
+                        'is_pricing_final' => $storedHourPricing['isPricingFinal'],
+                        'total_price' => $storedHourPricing['totalPrice'],
+                    ])->save();
+                    $order = $order->fresh();
+                }
+
                 $order = $recurringSchedule->materialize($order, $recurringPlan);
             }
 
@@ -185,7 +221,13 @@ final class UserCleaningOrderStoreController
             $propertyType,
             (array) ($validated['propertyDetails'] ?? []),
         );
-        $requiredWorkers = CleaningWorkerCapacity::requiredWorkers((float) $estimation['estimatedHours']);
+        $schedule = is_array($validated['schedule'] ?? null) ? $validated['schedule'] : [];
+        $calculationMode = mb_strtolower(mb_trim((string) ($schedule['calculationMode'] ?? RecurringCleaningScheduleService::CALCULATION_TASK)));
+        $capacityHours = mb_strtolower(mb_trim((string) ($schedule['mode'] ?? ''))) === 'recurring'
+            && $calculationMode === RecurringCleaningScheduleService::CALCULATION_HOURS
+                ? ceil(max(1.0, min(24.0, (float) ($schedule['hoursPerVisit'] ?? 0))) * 2) / 2
+                : (float) $estimation['estimatedHours'];
+        $requiredWorkers = CleaningWorkerCapacity::requiredWorkers($capacityHours);
         $requestedWorkers = max(1, (int) ($validated['numberOfWorkers'] ?? 1));
 
         if ($requestedWorkers >= $requiredWorkers) {

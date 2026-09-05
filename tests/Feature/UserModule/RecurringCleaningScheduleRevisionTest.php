@@ -292,3 +292,45 @@ it('blocks revisions while a recurring series is paused and enforces the thirty 
         ['schedule' => revisionSchedule([2, 33])],
     )->assertUnprocessable()->assertJsonValidationErrors('schedule.sessions');
 });
+
+it('preserves hour-based pricing when future recurring visits are revised', function (): void {
+    Sanctum::actingAs(User::factory()->create());
+    $payload = recurringRevisionPayload();
+    $payload['schedule']['calculationMode'] = 'hours';
+    $payload['schedule']['hoursPerVisit'] = 2.5;
+
+    $created = postJson('/api/v1/user/cleaning/orders', $payload)->assertCreated();
+    $bookingId = (int) $created->json('order.id');
+    $schedule = [
+        'mode' => 'recurring',
+        'sessions' => [
+            ['date' => now(config('app.timezone'))->addDays(3)->toDateString(), 'time' => '09:00'],
+            ['date' => now(config('app.timezone'))->addDays(10)->toDateString(), 'time' => '09:00'],
+        ],
+    ];
+
+    $preview = postJson("/api/v1/user/cleaning/orders/{$bookingId}/recurring-schedule/preview", [
+        'schedule' => $schedule,
+    ])->assertOk();
+
+    $preview
+        ->assertJsonPath('data.revision.calculationMode', 'hours')
+        ->assertJsonPath('data.revision.hoursPerVisit', 2.5)
+        ->assertJsonPath('data.revision.sessionHours', 2.5);
+
+    $token = (string) $preview->json('data.revision.revisionToken');
+    postJson("/api/v1/user/cleaning/orders/{$bookingId}/recurring-schedule/confirm", [
+        'schedule' => $schedule,
+        'revisionToken' => $token,
+    ])->assertOk();
+
+    $active = CleaningBookingSession::query()
+        ->where('cleaning_booking_id', $bookingId)
+        ->where('status', '!=', 'superseded')
+        ->orderBy('sequence')
+        ->get();
+
+    expect($active)->toHaveCount(2)
+        ->and($active->every(fn (CleaningBookingSession $session): bool => $session->calculation_mode === 'hours'))->toBeTrue()
+        ->and($active->every(fn (CleaningBookingSession $session): bool => (float) $session->duration_hours === 2.5))->toBeTrue();
+});

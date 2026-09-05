@@ -62,6 +62,7 @@ function recurringCleaningPayload(): array
         'numberOfWorkers' => 1,
         'schedule' => [
             'mode' => 'recurring',
+            'calculationMode' => 'task',
             // Intentionally unsorted. The backend owns canonical occurrence order.
             'sessions' => [
                 ['date' => $thirdDate, 'time' => '12:00'],
@@ -120,7 +121,7 @@ it('creates one parent cleaning booking with canonical recurring child sessions'
             fn (CleaningBookingSession $session): bool => $session->session_type === RecurringCleaningScheduleService::SESSION_TYPE,
         ))->toBeTrue()
         ->and($sessions->every(
-            fn (CleaningBookingSession $session): bool => $session->calculation_mode === 'estimated_hours',
+            fn (CleaningBookingSession $session): bool => $session->calculation_mode === RecurringCleaningScheduleService::CALCULATION_TASK,
         ))->toBeTrue()
         ->and($sessions->map(
             fn (CleaningBookingSession $session): string => $session->scheduled_date->toDateString(),
@@ -143,6 +144,73 @@ it('creates one parent cleaning booking with canonical recurring child sessions'
         ->assertJsonPath('data.schedule.sessionsCount', 3)
         ->assertJsonPath('data.schedule.sessions.0.sessionType', RecurringCleaningScheduleService::SESSION_TYPE)
         ->assertJsonPath('data.schedule.sessions.2.sessionType', RecurringCleaningScheduleService::SESSION_TYPE);
+});
+
+it('supports fixed-hour recurring visits with worker-seat pricing', function (): void {
+    $payload = recurringCleaningPayload();
+    $payload['numberOfWorkers'] = 2;
+    $payload['schedule']['calculationMode'] = 'hours';
+    $payload['schedule']['hoursPerVisit'] = 2.25;
+
+    $estimate = postJson('/api/v1/user/cleaning/orders/estimate-price', [
+        'propertyType' => $payload['propertyType'],
+        'propertyDetails' => $payload['propertyDetails'],
+        'addressLatitude' => $payload['addressLatitude'],
+        'addressLongitude' => $payload['addressLongitude'],
+        'assignmentMode' => $payload['assignmentMode'],
+        'numberOfWorkers' => $payload['numberOfWorkers'],
+        'schedule' => $payload['schedule'],
+    ])->assertOk();
+
+    $estimate
+        ->assertJsonPath('schedule.calculationMode', 'hours')
+        ->assertJsonPath('schedule.hoursPerVisit', 2.5)
+        ->assertJsonPath('schedule.sessions.0.hours', 2.5)
+        ->assertJsonPath('pricing.recurringHoursPerVisit', 2.5)
+        ->assertJsonPath('pricing.recurringWorkerCount', 2);
+
+    expect((float) $estimate->json('size.estimatedHours'))->toBe(7.5)
+        ->and((float) $estimate->json('pricing.recurringHourlyRatePerWorker'))->toBeGreaterThan(0)
+        ->and((float) $estimate->json('schedule.sessions.0.basePrice'))->toBeGreaterThan(0);
+
+    $created = postJson('/api/v1/user/cleaning/orders', $payload)->assertCreated();
+    $bookingId = (int) $created->json('order.id');
+    $booking = CleaningBooking::query()->findOrFail($bookingId);
+    $sessions = CleaningBookingSession::query()
+        ->where('cleaning_booking_id', $bookingId)
+        ->orderBy('sequence')
+        ->get();
+
+    expect($sessions)->toHaveCount(3)
+        ->and($sessions->every(fn (CleaningBookingSession $session): bool => $session->calculation_mode === 'hours'))->toBeTrue()
+        ->and($sessions->every(fn (CleaningBookingSession $session): bool => (float) $session->duration_hours === 2.5))->toBeTrue()
+        ->and($sessions->every(fn (CleaningBookingSession $session): bool => (string) data_get($session->pricing_snapshot, 'calculationMode') === 'hours'))->toBeTrue()
+        ->and((float) $booking->total_hours)->toBe(7.5);
+});
+
+it('validates the recurring calculation-mode contract', function (): void {
+    $payload = recurringCleaningPayload();
+    $payload['schedule']['calculationMode'] = 'hours';
+    unset($payload['schedule']['hoursPerVisit']);
+
+    postJson('/api/v1/user/cleaning/orders', $payload)
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('schedule.hoursPerVisit');
+
+    $payload = recurringCleaningPayload();
+    $payload['schedule']['hoursPerVisit'] = 2;
+
+    postJson('/api/v1/user/cleaning/orders', $payload)
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('schedule.hoursPerVisit');
+
+    $payload = recurringCleaningPayload();
+    $payload['schedule']['calculationMode'] = 'hours';
+    $payload['schedule']['hoursPerVisit'] = 25;
+
+    postJson('/api/v1/user/cleaning/orders', $payload)
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('schedule.hoursPerVisit');
 });
 
 it('keeps legacy single cleaning unchanged when no recurring schedule is supplied', function (): void {

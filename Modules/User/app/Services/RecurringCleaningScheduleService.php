@@ -14,6 +14,10 @@ final class RecurringCleaningScheduleService
 {
     public const SESSION_TYPE = 'recurring_cleaning';
 
+    public const CALCULATION_TASK = 'task';
+
+    public const CALCULATION_HOURS = 'hours';
+
     /**
      * @param  array<string, mixed>  $validated
      * @return array{mode:string,sessions:array<int,array{sequence:int,date:string,time:string}>,sessionsCount:int,firstDate:string,firstTime:string}|null
@@ -26,6 +30,17 @@ final class RecurringCleaningScheduleService
         }
 
         if (mb_strtolower(mb_trim((string) ($schedule['mode'] ?? ''))) !== 'recurring') {
+            return null;
+        }
+
+        $calculationMode = mb_strtolower(mb_trim((string) ($schedule['calculationMode'] ?? self::CALCULATION_TASK)));
+        if (! in_array($calculationMode, [self::CALCULATION_TASK, self::CALCULATION_HOURS], true)) {
+            return null;
+        }
+        $hoursPerVisit = $calculationMode === self::CALCULATION_HOURS
+            ? $this->normalizeHours((float) ($schedule['hoursPerVisit'] ?? 0))
+            : null;
+        if ($calculationMode === self::CALCULATION_HOURS && ($hoursPerVisit === null || $hoursPerVisit < 1.0)) {
             return null;
         }
 
@@ -64,6 +79,8 @@ final class RecurringCleaningScheduleService
             'mode' => 'multi_day',
             'sessions' => $normalized,
             'sessionsCount' => count($normalized),
+            'calculationMode' => $calculationMode,
+            'hoursPerVisit' => $hoursPerVisit,
             'firstDate' => $normalized[0]['date'],
             'firstTime' => $normalized[0]['time'],
         ];
@@ -116,6 +133,8 @@ final class RecurringCleaningScheduleService
                 'scheduleType' => self::SESSION_TYPE,
                 'isRecurring' => true,
                 'isMultiSession' => true,
+                'calculationMode' => (string) ($plan['calculationMode'] ?? self::CALCULATION_TASK),
+                'hoursPerVisit' => isset($plan['hoursPerVisit']) ? (float) $plan['hoursPerVisit'] : null,
                 'sessionsCount' => $count,
                 'daysCount' => $count,
                 'totalHours' => round($sessionHours * $count, 2),
@@ -130,7 +149,10 @@ final class RecurringCleaningScheduleService
     public function materialize(CleaningBooking $booking, array $plan): CleaningBooking
     {
         $count = max(1, (int) $plan['sessionsCount']);
-        $sessionHours = max(0.0, (float) $booking->estimated_hours);
+        $calculationMode = (string) ($plan['calculationMode'] ?? self::CALCULATION_TASK);
+        $sessionHours = $calculationMode === self::CALCULATION_HOURS
+            ? max(1.0, (float) ($plan['hoursPerVisit'] ?? $booking->estimated_hours))
+            : max(0.0, (float) $booking->estimated_hours);
         $basePrice = (float) $booking->base_price;
         $addonsTotal = (float) $booking->addons_total;
         $travelFee = (float) $booking->travel_fee;
@@ -154,7 +176,7 @@ final class RecurringCleaningScheduleService
                 'cleaning_booking_id' => $booking->id,
                 'sequence' => (int) $session['sequence'],
                 'session_type' => self::SESSION_TYPE,
-                'calculation_mode' => 'estimated_hours',
+                'calculation_mode' => $calculationMode,
                 'scheduled_date' => $session['date'],
                 'scheduled_time' => $session['time'],
                 'duration_hours' => $sessionHours,
@@ -176,6 +198,8 @@ final class RecurringCleaningScheduleService
                     'scheduleType' => self::SESSION_TYPE,
                     'scheduleMode' => 'multi_day',
                     'occurrencesCount' => $count,
+                    'calculationMode' => $calculationMode,
+                    'hoursPerVisit' => $calculationMode === self::CALCULATION_HOURS ? round($sessionHours, 2) : null,
                     'perVisitEstimatedHours' => round($sessionHours, 2),
                     'requiredWorkers' => max(1, (int) $booking->number_of_workers),
                     'currency' => (string) config('app.currency', 'SYP'),
@@ -184,5 +208,14 @@ final class RecurringCleaningScheduleService
         }
 
         return $booking->fresh() ?? $booking;
+    }
+
+    private function normalizeHours(float $hours): ?float
+    {
+        if ($hours < 1.0 || $hours > 24.0) {
+            return null;
+        }
+
+        return ceil($hours * 2) / 2;
     }
 }
