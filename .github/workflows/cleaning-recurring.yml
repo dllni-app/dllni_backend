@@ -28,6 +28,7 @@ on:
       - 'Modules/User/app/Http/Requests/UserRecurringCleaningScheduleRevisionRequest.php'
       - 'Modules/User/app/Services/RecurringCleaningScheduleService.php'
       - 'Modules/User/app/Services/RecurringCleaningScheduleRevisionService.php'
+      - 'Modules/User/app/Services/UserCleaningOrderEstimationService.php'
       - 'Modules/User/routes/api.php'
       - 'tests/Feature/Cleaning/RecurringCleaningPreferredWorkerFallbackTest.php'
       - 'tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php'
@@ -58,6 +59,7 @@ on:
       - 'Modules/User/app/Http/Requests/UserRecurringCleaningScheduleRevisionRequest.php'
       - 'Modules/User/app/Services/RecurringCleaningScheduleService.php'
       - 'Modules/User/app/Services/RecurringCleaningScheduleRevisionService.php'
+      - 'Modules/User/app/Services/UserCleaningOrderEstimationService.php'
       - 'Modules/User/routes/api.php'
       - 'tests/Feature/Cleaning/RecurringCleaningPreferredWorkerFallbackTest.php'
       - 'tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php'
@@ -124,6 +126,7 @@ jobs:
             Modules/User/app/Http/Requests/UserRecurringCleaningScheduleRevisionRequest.php \
             Modules/User/app/Services/RecurringCleaningScheduleService.php \
             Modules/User/app/Services/RecurringCleaningScheduleRevisionService.php \
+            Modules/User/app/Services/UserCleaningOrderEstimationService.php \
             Modules/User/routes/api.php \
             tests/Feature/Cleaning/RecurringCleaningPreferredWorkerFallbackTest.php \
             tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php \
