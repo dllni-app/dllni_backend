@@ -1,0 +1,73 @@
+name: Apply Recurring Calculation Mode Once
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/cleaning-suite-main
+    paths:
+      - '.github/workflows/apply-recurring-calculation-mode-once.yml'
+      - 'scripts/apply_recurring_calculation_mode_patch.py'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: feature/cleaning-suite-main
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, sqlite3, pdo_sqlite
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Apply recurring calculation-mode patch
+        run: python3 scripts/apply_recurring_calculation_mode_patch.py
+
+      - name: Format
+        run: vendor/bin/pint Modules/User/app/Http/Requests/Concerns/ValidatesEventAssistanceSchedule.php Modules/User/app/Services/RecurringCleaningScheduleService.php Modules/User/app/Services/UserCleaningOrderEstimationService.php Modules/User/app/Http/Controllers/API/UserCleaningOrderEstimatePriceController.php Modules/User/app/Http/Controllers/API/UserCleaningOrderStoreController.php Modules/User/app/Services/RecurringCleaningScheduleRevisionService.php tests/Feature/UserModule/RecurringCleaningScheduleTest.php tests/Feature/UserModule/RecurringCleaningScheduleRevisionTest.php
+
+      - name: Prepare application
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          touch database/database.sqlite
+          php artisan migrate:fresh --force
+
+      - name: Run recurring task-hour and regression tests
+        run: |
+          php artisan test tests/Feature/UserModule/RecurringCleaningScheduleTest.php
+          php artisan test tests/Feature/UserModule/RecurringCleaningScheduleRevisionTest.php
+          php artisan test tests/Feature/UserModule/RecurringCleaningWorkerContinuityTest.php
+          php artisan test tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php
+
+      - name: Commit implementation
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add \
+            Modules/User/app/Http/Requests/Concerns/ValidatesEventAssistanceSchedule.php \
+            Modules/User/app/Services/RecurringCleaningScheduleService.php \
+            Modules/User/app/Services/UserCleaningOrderEstimationService.php \
+            Modules/User/app/Http/Controllers/API/UserCleaningOrderEstimatePriceController.php \
+            Modules/User/app/Http/Controllers/API/UserCleaningOrderStoreController.php \
+            Modules/User/app/Services/RecurringCleaningScheduleRevisionService.php \
+            tests/Feature/UserModule/RecurringCleaningScheduleTest.php \
+            tests/Feature/UserModule/RecurringCleaningScheduleRevisionTest.php
+          if git diff --cached --quiet; then
+            echo 'No feature changes to commit.'
+            exit 0
+          fi
+          git commit -m 'feat(cleaning): support task and hour recurring modes'
+          git push origin HEAD:feature/cleaning-suite-main
