@@ -135,6 +135,10 @@ final class RecurringCleaningScheduleRevisionService
                         'perVisitEstimatedHours' => $built['sessionHours'],
                         'derivedHourlyRatePerWorker' => $built['singleVisitPricing']['recurringHourlyRatePerWorker'] ?? null,
                         'requiredWorkers' => max(1, (int) $lockedBooking->number_of_workers),
+                        'workerScope' => $lockedBooking->resolvedWorkerScope(),
+                        'specificWorkerIds' => $lockedBooking->resolvedWorkerScope() === CleaningBooking::WORKER_SCOPE_SPECIFIC
+                            ? $lockedBooking->specificWorkerIds()
+                            : [],
                         'currency' => (string) ($built['singleVisitPricing']['currency'] ?? config('app.currency', 'SYP')),
                     ],
                     'version' => 1,

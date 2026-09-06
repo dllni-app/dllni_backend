@@ -54,6 +54,8 @@ final class UserCleaningOrderService
         return DB::transaction(function () use ($user, $validated): CleaningBooking {
             $normalizedPropertyType = $this->estimationService->normalizePropertyType((string) $validated['propertyType']);
             $normalizedPropertyDetails = $this->estimationService->normalizePropertyDetailsForStorage($normalizedPropertyType, (array) $validated['propertyDetails']);
+            $explicitWorkerScope = $this->explicitWorkerScope($validated);
+            $specificWorkerIds = $this->normalizedSpecificWorkerIds($validated);
             $resolvedAssignmentMode = $this->resolveAssignmentMode($validated);
             $resolvedNeighborhood = $this->resolveNeighborhoodFromPayload($validated);
             $preferredWorkerPricing = $resolvedAssignmentMode === 'preferred_worker';
@@ -111,7 +113,9 @@ final class UserCleaningOrderService
                 'totalPrice' => round((float) $pricing['basePrice'] + (float) $pricing['addonsTotal'], 2),
             ];
 
-            if ($resolvedAssignmentMode === 'preferred_worker') {
+            if ($explicitWorkerScope === CleaningBooking::WORKER_SCOPE_SPECIFIC) {
+                $this->guardSpecificWorkerCoverage($specificWorkerIds, $resolvedNeighborhood);
+            } elseif ($resolvedAssignmentMode === 'preferred_worker') {
                 $this->guardPreferredWorkerCoverage(
                     $normalizedInput['preferredWorkerId'] !== null ? (int) $normalizedInput['preferredWorkerId'] : null,
                     $resolvedNeighborhood,
@@ -125,6 +129,10 @@ final class UserCleaningOrderService
                     ? $normalizedInput['preferredWorkerId']
                     : null,
                 'assignment_mode' => $resolvedAssignmentMode,
+                'worker_scope' => $explicitWorkerScope,
+                'specific_worker_ids' => $explicitWorkerScope === CleaningBooking::WORKER_SCOPE_SPECIFIC
+                    ? $specificWorkerIds
+                    : null,
                 'number_of_workers' => $requestedWorkers,
                 'gender_preference' => $validated['genderPreference'] ?? GenderPreference::Any->value,
                 'cancellation_policy_id' => $validated['cancellationPolicyId'] ?? $this->defaultCancellationPolicyId(),
@@ -759,6 +767,41 @@ final class UserCleaningOrderService
         ]);
     }
 
+    /** @param array<string, mixed> $validated */
+    private function explicitWorkerScope(array $validated): ?string
+    {
+        if (! array_key_exists('workerScope', $validated) || ! is_string($validated['workerScope'])) {
+            return null;
+        }
+
+        $scope = mb_strtolower(mb_trim($validated['workerScope']));
+
+        return in_array($scope, [CleaningBooking::WORKER_SCOPE_ANY, CleaningBooking::WORKER_SCOPE_SPECIFIC], true)
+            ? $scope
+            : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<int, int>
+     */
+    private function normalizedSpecificWorkerIds(array $validated): array
+    {
+        $ids = [];
+        foreach (is_array($validated['preferredWorkerIds'] ?? null) ? $validated['preferredWorkerIds'] : [] as $value) {
+            if (! is_numeric($value)) {
+                continue;
+            }
+
+            $id = (int) $value;
+            if ($id > 0 && ! in_array($id, $ids, true)) {
+                $ids[] = $id;
+            }
+        }
+
+        return $ids;
+    }
+
     private function normalizedAssignmentMode(mixed $assignmentMode): ?string
     {
         if (! is_string($assignmentMode) || mb_trim($assignmentMode) === '') {
@@ -898,6 +941,30 @@ final class UserCleaningOrderService
         }
 
         return null;
+    }
+
+    /** @param array<int, int> $specificWorkerIds */
+    private function guardSpecificWorkerCoverage(array $specificWorkerIds, ?CleaningNeighborhood $neighborhood): void
+    {
+        if ($specificWorkerIds === [] || $neighborhood === null) {
+            return;
+        }
+
+        $coveredIds = Worker::query()
+            ->whereIn('id', $specificWorkerIds)
+            ->coversNeighborhood((int) $neighborhood->id)
+            ->pluck('id')
+            ->map(static fn (mixed $id): int => (int) $id)
+            ->all();
+
+        $missing = array_values(array_diff($specificWorkerIds, $coveredIds));
+        if ($missing === []) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'preferredWorkerIds' => [self::PREFERRED_WORKER_NEIGHBORHOOD_MESSAGE],
+        ]);
     }
 
     private function guardPreferredWorkerCoverage(?int $preferredWorkerId, ?CleaningNeighborhood $neighborhood): void

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 use App\Models\CancellationPolicy;
 use App\Models\User;
+use App\Models\Worker;
 use Laravel\Sanctum\Sanctum;
+use Modules\Cleaning\Enums\CleaningAssignmentMode;
 use Modules\Cleaning\Enums\CleaningBillingMode;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
@@ -276,4 +278,71 @@ it('rejects recurring visits that span more than thirty days', function (): void
     ])
         ->assertUnprocessable()
         ->assertJsonValidationErrors('schedule.sessions');
+});
+
+it('stores an explicit multi-worker recurring specific scope without widening the pool', function (): void {
+    $workers = Worker::factory()->count(2)->create();
+    $payload = recurringCleaningPayload();
+    unset($payload['assignmentMode'], $payload['numberOfWorkers']);
+    $payload['workerScope'] = 'specific';
+    $payload['preferredWorkerIds'] = $workers->pluck('id')->all();
+
+    $estimate = postJson('/api/v1/user/cleaning/orders/estimate-price', $payload)->assertOk();
+    $estimate
+        ->assertJsonPath('workerScope', 'specific')
+        ->assertJsonPath('assignmentMode', CleaningAssignmentMode::OpenCount->value)
+        ->assertJsonPath('workerAcceptance.required', 2);
+    expect($estimate->json('specificWorkerIds'))->toBe($workers->pluck('id')->all());
+
+    $create = postJson('/api/v1/user/cleaning/orders', $payload)->assertCreated();
+    $bookingId = (int) $create->json('order.id');
+    $booking = CleaningBooking::query()->findOrFail($bookingId);
+    $sessions = CleaningBookingSession::query()
+        ->where('cleaning_booking_id', $bookingId)
+        ->orderBy('sequence')
+        ->get();
+
+    expect((string) $booking->worker_scope)->toBe(CleaningBooking::WORKER_SCOPE_SPECIFIC)
+        ->and($booking->specificWorkerIds())->toBe($workers->pluck('id')->all())
+        ->and($booking->resolvedAssignmentMode())->toBe(CleaningAssignmentMode::OpenCount->value)
+        ->and($booking->preferred_worker_id)->toBeNull()
+        ->and((int) $booking->number_of_workers)->toBe(2)
+        ->and($sessions->every(fn (CleaningBookingSession $session): bool => (int) $session->required_workers === 2))->toBeTrue()
+        ->and($sessions->every(fn (CleaningBookingSession $session): bool => data_get($session->pricing_snapshot, 'workerScope') === 'specific'))->toBeTrue()
+        ->and($sessions->every(fn (CleaningBookingSession $session): bool => data_get($session->pricing_snapshot, 'specificWorkerIds') === $workers->pluck('id')->all()))->toBeTrue();
+
+    getJson("/api/v1/cleaning-bookings/{$bookingId}/schedule")
+        ->assertOk()
+        ->assertJsonPath('data.schedule.workerScope', 'specific')
+        ->assertJsonPath('data.schedule.specificWorkerIds.0', (int) $workers[0]->id)
+        ->assertJsonPath('data.schedule.specificWorkerIds.1', (int) $workers[1]->id);
+});
+
+it('canonicalizes explicit any-worker recurring scope and clears preferred ids', function (): void {
+    $worker = Worker::factory()->create();
+    $payload = recurringCleaningPayload();
+    $payload['workerScope'] = 'any';
+    $payload['preferredWorkerIds'] = [$worker->id];
+    $payload['preferredWorkerId'] = $worker->id;
+    $payload['assignmentMode'] = 'preferred_worker';
+
+    $create = postJson('/api/v1/user/cleaning/orders', $payload)->assertCreated();
+    $booking = CleaningBooking::query()->findOrFail((int) $create->json('order.id'));
+
+    expect((string) $booking->worker_scope)->toBe(CleaningBooking::WORKER_SCOPE_ANY)
+        ->and($booking->specificWorkerIds())->toBe([])
+        ->and($booking->preferred_worker_id)->toBeNull()
+        ->and($booking->resolvedAssignmentMode())->toBe(CleaningAssignmentMode::OpenCount->value);
+});
+
+it('rejects workerScope outside a recurring cleaning schedule', function (): void {
+    $worker = Worker::factory()->create();
+    $payload = recurringCleaningPayload();
+    unset($payload['schedule']);
+    $payload['workerScope'] = 'specific';
+    $payload['preferredWorkerIds'] = [$worker->id];
+
+    postJson('/api/v1/user/cleaning/orders', $payload)
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('workerScope');
 });

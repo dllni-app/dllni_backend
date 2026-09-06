@@ -64,6 +64,10 @@ final class UserCleaningBookingResource extends JsonResource
         $payload['travelFeePending'] = ! (bool) $this->is_pricing_final;
         $payload['canEdit'] = $canEdit;
         $payload['can_edit'] = $canEdit;
+        $payload['workerScope'] = $this->resolvedWorkerScope();
+        $payload['specificWorkerIds'] = $this->resolvedWorkerScope() === CleaningBooking::WORKER_SCOPE_SPECIFIC
+            ? $this->specificWorkerIds()
+            : [];
 
         return $payload;
     }

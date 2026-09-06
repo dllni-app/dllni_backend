@@ -43,11 +43,17 @@ final class CleaningBooking extends Model
 
     public const PREFERRED_WORKER_REJECTION_DECISION_CANCELLED = 'cancelled';
 
+    public const WORKER_SCOPE_ANY = 'any';
+
+    public const WORKER_SCOPE_SPECIFIC = 'specific';
+
     protected $fillable = [
         'customer_id',
         'worker_id',
         'preferred_worker_id',
         'assignment_mode',
+        'worker_scope',
+        'specific_worker_ids',
         'converted_from_preferred_worker',
         'converted_from_preferred_worker_at',
         'preferred_worker_rejection_decision_status',
@@ -220,6 +226,7 @@ final class CleaningBooking extends Model
         return [
             'status' => CleaningBookingStatus::class,
             'assignment_mode' => CleaningAssignmentMode::class,
+            'specific_worker_ids' => 'array',
             'converted_from_preferred_worker' => 'boolean',
             'converted_from_preferred_worker_at' => 'datetime',
             'preferred_worker_rejection_worker_id' => 'integer',
@@ -276,6 +283,45 @@ final class CleaningBooking extends Model
         }
 
         return CleaningAssignmentMode::OpenCount->value;
+    }
+
+    public function resolvedWorkerScope(): string
+    {
+        $explicit = mb_strtolower(mb_trim((string) ($this->worker_scope ?? '')));
+        if (in_array($explicit, [self::WORKER_SCOPE_ANY, self::WORKER_SCOPE_SPECIFIC], true)) {
+            return $explicit;
+        }
+
+        return $this->resolvedAssignmentMode() === CleaningAssignmentMode::PreferredWorker->value
+            && $this->preferred_worker_id !== null
+                ? self::WORKER_SCOPE_SPECIFIC
+                : self::WORKER_SCOPE_ANY;
+    }
+
+    /** @return array<int, int> */
+    public function specificWorkerIds(): array
+    {
+        $ids = [];
+        foreach (is_array($this->specific_worker_ids) ? $this->specific_worker_ids : [] as $value) {
+            if (! is_numeric($value)) {
+                continue;
+            }
+
+            $id = (int) $value;
+            if ($id > 0 && ! in_array($id, $ids, true)) {
+                $ids[] = $id;
+            }
+        }
+
+        if (
+            $ids === []
+            && $this->resolvedWorkerScope() === self::WORKER_SCOPE_SPECIFIC
+            && $this->preferred_worker_id !== null
+        ) {
+            $ids[] = (int) $this->preferred_worker_id;
+        }
+
+        return $ids;
     }
 
     public function requiresPreferredWorkerRejectionDecision(): bool

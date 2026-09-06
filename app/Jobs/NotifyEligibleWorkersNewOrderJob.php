@@ -59,6 +59,20 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
             ->map(static fn (mixed $workerId): int => (int) $workerId)
             ->all();
 
+        if ((string) ($booking->worker_scope ?? '') === CleaningBooking::WORKER_SCOPE_SPECIFIC) {
+            $this->dispatchToSpecificWorkers(
+                $booking,
+                $bookingDateTime,
+                $rejectedWorkerIds,
+                $acceptedWorkerIds,
+                $depositService,
+                $solvencyService,
+                $scheduleConflictService,
+            );
+
+            return;
+        }
+
         if ($assignmentMode === CleaningAssignmentMode::PreferredWorker->value && $booking->preferred_worker_id !== null) {
             if (in_array((int) $booking->preferred_worker_id, $acceptedWorkerIds, true)) {
                 return;
@@ -185,6 +199,89 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
         }
     }
 
+    /**
+     * @param  array<int, int>  $rejectedWorkerIds
+     * @param  array<int, int>  $acceptedWorkerIds
+     */
+    private function dispatchToSpecificWorkers(
+        CleaningBooking $booking,
+        ?Carbon $bookingDateTime,
+        array $rejectedWorkerIds,
+        array $acceptedWorkerIds,
+        DepositService $depositService,
+        WorkerOrderSolvencyService $solvencyService,
+        WorkerBookingScheduleConflictService $scheduleConflictService,
+    ): void {
+        $specificWorkerIds = array_values(array_diff(
+            $booking->specificWorkerIds(),
+            $rejectedWorkerIds,
+            $acceptedWorkerIds,
+        ));
+
+        if ($specificWorkerIds === []) {
+            $this->createDispatchAlert(
+                $booking,
+                'specific_workers_exhausted',
+                'No customer-selected worker remains eligible for this recurring booking.',
+                ['specificWorkerIds' => $booking->specificWorkerIds()],
+            );
+
+            return;
+        }
+
+        $workers = Worker::query()
+            ->whereIn('id', $specificWorkerIds)
+            ->where('is_active', true)
+            ->where(function ($query): void {
+                $query->whereNull('is_suspended')->orWhere('is_suspended', false);
+            })
+            ->whereHas('user', fn ($query) => $query->where('is_active', true))
+            ->when(
+                $booking->gender_preference instanceof GenderPreference
+                    && $booking->gender_preference !== GenderPreference::Any,
+                fn ($query) => $query->where('gender', $booking->gender_preference->value),
+            )
+            ->when(
+                $booking->neighborhood_id !== null,
+                fn ($query) => $query->coversNeighborhood((int) $booking->neighborhood_id),
+            )
+            ->with(['user', 'deposit'])
+            ->get();
+
+        $notifiedCount = 0;
+        $blockedWorkerIds = [];
+
+        foreach ($workers as $worker) {
+            if (! $this->isDispatchable($worker, $booking, $bookingDateTime, $depositService, $scheduleConflictService)) {
+                $blockedWorkerIds[] = (int) $worker->id;
+
+                continue;
+            }
+
+            $solvency = $solvencyService->solvencyPayloadForBooking($worker, $booking);
+            if (! (bool) $solvency['canReceiveOrder']) {
+                $blockedWorkerIds[] = (int) $worker->id;
+
+                continue;
+            }
+
+            $this->notifyWorkerAboutNewOrder($worker, $booking);
+            $notifiedCount++;
+        }
+
+        if ($notifiedCount === 0) {
+            $this->createDispatchAlert(
+                $booking,
+                'specific_workers_unavailable',
+                'None of the customer-selected workers is currently available and eligible for this recurring booking.',
+                [
+                    'specificWorkerIds' => $booking->specificWorkerIds(),
+                    'blockedWorkerIds' => array_values(array_unique($blockedWorkerIds)),
+                ],
+            );
+        }
+    }
+
     private function isDispatchable(
         Worker $worker,
         CleaningBooking $booking,
@@ -306,6 +403,10 @@ final class NotifyEligibleWorkersNewOrderJob implements ShouldQueue
             'total_price' => (float) ($booking->total_price ?? 0),
             'numberOfWorkers' => (int) ($booking->number_of_workers ?? 1),
             'number_of_workers' => (int) ($booking->number_of_workers ?? 1),
+            'workerScope' => $booking->resolvedWorkerScope(),
+            'specificWorkerIds' => $booking->resolvedWorkerScope() === CleaningBooking::WORKER_SCOPE_SPECIFIC
+                ? $booking->specificWorkerIds()
+                : [],
         ];
     }
 

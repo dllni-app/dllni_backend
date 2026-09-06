@@ -9,6 +9,7 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 use Modules\User\Http\Requests\Concerns\ValidatesEventAssistanceSchedule;
+use Modules\User\Http\Requests\Concerns\ValidatesRecurringWorkerScope;
 use Modules\User\Http\Requests\Concerns\ValidatesWorkerRoomAssignments;
 use Modules\User\Models\UserAddress;
 use Modules\User\Services\UserCleaningOrderEstimationService;
@@ -16,6 +17,7 @@ use Modules\User\Services\UserCleaningOrderEstimationService;
 final class UserCleaningOrderEstimatePriceRequest extends FormRequest
 {
     use ValidatesEventAssistanceSchedule;
+    use ValidatesRecurringWorkerScope;
     use ValidatesWorkerRoomAssignments;
 
     private const INCOMPLETE_ADDRESS_MESSAGE = 'يرجى تحديث العنوان المختار وإضافة الحي والإحداثيات قبل إنشاء الطلب.';
@@ -70,6 +72,7 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             'preferredWorkerIds' => ['nullable', 'array', 'max:20'],
             'preferredWorkerIds.*' => ['integer', 'distinct', Rule::exists('workers', 'id')],
             'preferredWorkerId' => ['nullable', 'exists:workers,id'],
+            ...$this->recurringWorkerScopeRules(),
             'assignmentMode' => ['nullable', 'string', Rule::in(['preferred_worker', 'open_count'])],
             'numberOfWorkers' => ['nullable', 'integer', 'min:1', 'max:20'],
             'genderPreference' => ['nullable', 'string', Rule::in(array_column(GenderPreference::cases(), 'value'))],
@@ -82,6 +85,7 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
         $validator->after(function (Validator $validator): void {
             $this->validateSelectedAddressCompleteness($validator);
             $this->validateEventAssistanceSchedule($validator);
+            $this->validateRecurringWorkerScope($validator);
             $this->validateWorkerRoomAssignments($validator);
         });
     }
@@ -94,7 +98,11 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             $this->input('preferredWorkerIds', $this->input('preferredWorkerId'))
         );
 
-        if ($preferredWorkerIds !== [] || $this->has('preferredWorkerIds')) {
+        $workerScopeMerge = $this->recurringWorkerScopeMerge($preferredWorkerIds);
+        if ($workerScopeMerge !== []) {
+            $merge = array_merge($merge, $workerScopeMerge);
+        } elseif ($preferredWorkerIds !== [] || $this->has('preferredWorkerIds')) {
+            // Legacy behavior is intentionally preserved when workerScope is absent.
             $merge['preferredWorkerIds'] = $preferredWorkerIds;
             $merge['preferredWorkerId'] = $preferredWorkerIds[0] ?? null;
 

@@ -202,6 +202,10 @@ final class RecurringCleaningScheduleService
                     'hoursPerVisit' => $calculationMode === self::CALCULATION_HOURS ? round($sessionHours, 2) : null,
                     'perVisitEstimatedHours' => round($sessionHours, 2),
                     'requiredWorkers' => max(1, (int) $booking->number_of_workers),
+                    'workerScope' => $booking->resolvedWorkerScope(),
+                    'specificWorkerIds' => $booking->resolvedWorkerScope() === CleaningBooking::WORKER_SCOPE_SPECIFIC
+                        ? $booking->specificWorkerIds()
+                        : [],
                     'currency' => (string) config('app.currency', 'SYP'),
                 ],
             ]);

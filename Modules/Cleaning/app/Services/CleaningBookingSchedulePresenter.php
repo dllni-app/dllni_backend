@@ -68,6 +68,10 @@ final class CleaningBookingSchedulePresenter
             'mode' => $sessions->count() > 1 ? 'multi_day' : 'single_day',
             'isRecurring' => $isRecurring,
             'isPaused' => $isRecurringPaused,
+            'workerScope' => $booking->resolvedWorkerScope(),
+            'specificWorkerIds' => $booking->resolvedWorkerScope() === CleaningBooking::WORKER_SCOPE_SPECIFIC
+                ? $booking->specificWorkerIds()
+                : [],
             'canPause' => $canPauseRecurring,
             'canResume' => $canResumeRecurring,
             'pausedAt' => $booking->recurring_paused_at?->toIso8601String(),
@@ -331,6 +335,10 @@ final class CleaningBookingSchedulePresenter
             'mode' => 'single_day',
             'isRecurring' => false,
             'isPaused' => false,
+            'workerScope' => $booking->resolvedWorkerScope(),
+            'specificWorkerIds' => $booking->resolvedWorkerScope() === CleaningBooking::WORKER_SCOPE_SPECIFIC
+                ? $booking->specificWorkerIds()
+                : [],
             'canPause' => false,
             'canResume' => false,
             'pausedAt' => null,

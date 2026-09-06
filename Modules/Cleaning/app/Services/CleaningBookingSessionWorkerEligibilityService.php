@@ -21,6 +21,17 @@ final class CleaningBookingSessionWorkerEligibilityService
         CleaningBookingSession $session,
         Worker $worker,
     ): array {
+        if (
+            (string) $session->session_type === CleaningBookingSession::TYPE_RECURRING_CLEANING
+            && $booking->resolvedWorkerScope() === CleaningBooking::WORKER_SCOPE_SPECIFIC
+            && ! in_array((int) $worker->id, $booking->specificWorkerIds(), true)
+        ) {
+            return $this->blocked(
+                'worker_not_in_scope',
+                'This recurring booking is limited to workers selected by the customer.',
+            );
+        }
+
         $worker->loadMissing(['user', 'deposit']);
 
         if (! (bool) $worker->is_active) {

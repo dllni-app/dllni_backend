@@ -77,6 +77,8 @@ final class UserCleaningOrderEstimatePriceController
                         ? 1
                         : (int) ($estimation['recommendation']['suggestedTeamSize'] ?? 1),
                 );
+            $workerScope = $this->resolveWorkerScope($validated, $assignmentMode);
+            $specificWorkerIds = $this->resolveSpecificWorkerIds($validated, $workerScope);
 
             $capacityHours = $eventPlan !== null
                 ? max(array_map(
@@ -183,6 +185,8 @@ final class UserCleaningOrderEstimatePriceController
             'pricing' => $pricing,
             'schedule' => ($eventPlan !== null || $recurringPlan !== null) ? $pricing['schedule'] : null,
             'assignmentMode' => $assignmentMode,
+            'workerScope' => $workerScope,
+            'specificWorkerIds' => $specificWorkerIds,
             ...$capacity,
             'workerAcceptance' => [
                 'required' => $requestedWorkers,
@@ -251,6 +255,44 @@ final class UserCleaningOrderEstimatePriceController
         }
 
         return 'open_count';
+    }
+
+    /** @param array<string, mixed> $validated */
+    private function resolveWorkerScope(array $validated, string $assignmentMode): string
+    {
+        $scope = is_string($validated['workerScope'] ?? null)
+            ? mb_strtolower(mb_trim($validated['workerScope']))
+            : null;
+
+        if (in_array($scope, ['any', 'specific'], true)) {
+            return $scope;
+        }
+
+        return $assignmentMode === 'preferred_worker' ? 'specific' : 'any';
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<int, int>
+     */
+    private function resolveSpecificWorkerIds(array $validated, string $workerScope): array
+    {
+        if ($workerScope !== 'specific') {
+            return [];
+        }
+
+        $ids = [];
+        foreach (is_array($validated['preferredWorkerIds'] ?? null) ? $validated['preferredWorkerIds'] : [] as $value) {
+            if (is_numeric($value) && (int) $value > 0 && ! in_array((int) $value, $ids, true)) {
+                $ids[] = (int) $value;
+            }
+        }
+
+        if ($ids === [] && is_numeric($validated['preferredWorkerId'] ?? null)) {
+            $ids[] = (int) $validated['preferredWorkerId'];
+        }
+
+        return $ids;
     }
 
     /**
