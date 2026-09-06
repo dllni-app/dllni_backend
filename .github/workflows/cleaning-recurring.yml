@@ -9,7 +9,14 @@ on:
     paths:
       - 'database/migrations/2026_09_05_000010_add_recurring_pause_fields_to_cleaning_bookings_table.php'
       - 'database/migrations/2026_09_06_000001_add_recurring_worker_scope_to_cleaning_bookings_table.php'
+      - 'database/migrations/2026_09_06_000020_add_delivery_view_state_to_notifications_table.php'
+      - 'config/cleaning_recurring_notification_types.php'
       - 'app/Jobs/NotifyEligibleWorkersNewOrderJob.php'
+      - 'app/Http/Controllers/API/UserNotificationController.php'
+      - 'app/Http/Resources/UserNotificationResource.php'
+      - 'app/Notifications/Cleaning/BookingLifecycleNotification.php'
+      - 'app/Notifications/Core/NotificationFeedNormalizer.php'
+      - 'app/Notifications/Core/NotificationTypeRegistry.php'
       - 'Modules/Cleaning/app/Enums/CleaningBookingSessionStatus.php'
       - 'Modules/Cleaning/app/Models/CleaningBooking.php'
       - 'Modules/Cleaning/app/Models/CleaningBookingSession.php'
@@ -17,10 +24,12 @@ on:
       - 'Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionAcceptanceService.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionCancellationService.php'
+      - 'Modules/Cleaning/app/Services/CleaningBookingSessionCoverageService.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionFinancialAggregationService.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionWorkerChangeService.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionWorkerEligibilityService.php'
       - 'Modules/Cleaning/app/Services/CleaningPreferredWorkerFallbackService.php'
+      - 'Modules/Cleaning/app/Services/RecurringCleaningCoverageNotificationService.php'
       - 'Modules/Cleaning/app/Services/RecurringCleaningPauseService.php'
       - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLifecycleController.php'
       - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionWorkerChangeController.php'
@@ -41,17 +50,26 @@ on:
       - 'Modules/User/app/Services/UserCleaningOrderService.php'
       - 'Modules/User/routes/api.php'
       - 'tests/Feature/Cleaning/CleaningNewOrderDispatchTest.php'
+      - 'tests/Feature/Cleaning/RecurringCleaningCoverageNotificationTest.php'
       - 'tests/Feature/Cleaning/RecurringCleaningPreferredWorkerFallbackTest.php'
       - 'tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php'
       - 'tests/Feature/Cleaning/RecurringCleaningWorkerScopeTest.php'
       - 'tests/Feature/UserModule/RecurringCleaningScheduleTest.php'
       - 'tests/Feature/UserModule/RecurringCleaningScheduleRevisionTest.php'
+      - 'tests/Feature/UserModule/UserNotificationInteractionStateTest.php'
       - '.github/workflows/cleaning-recurring.yml'
   pull_request:
     paths:
       - 'database/migrations/2026_09_05_000010_add_recurring_pause_fields_to_cleaning_bookings_table.php'
       - 'database/migrations/2026_09_06_000001_add_recurring_worker_scope_to_cleaning_bookings_table.php'
+      - 'database/migrations/2026_09_06_000020_add_delivery_view_state_to_notifications_table.php'
+      - 'config/cleaning_recurring_notification_types.php'
       - 'app/Jobs/NotifyEligibleWorkersNewOrderJob.php'
+      - 'app/Http/Controllers/API/UserNotificationController.php'
+      - 'app/Http/Resources/UserNotificationResource.php'
+      - 'app/Notifications/Cleaning/BookingLifecycleNotification.php'
+      - 'app/Notifications/Core/NotificationFeedNormalizer.php'
+      - 'app/Notifications/Core/NotificationTypeRegistry.php'
       - 'Modules/Cleaning/app/Enums/CleaningBookingSessionStatus.php'
       - 'Modules/Cleaning/app/Models/CleaningBooking.php'
       - 'Modules/Cleaning/app/Models/CleaningBookingSession.php'
@@ -59,10 +77,12 @@ on:
       - 'Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionAcceptanceService.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionCancellationService.php'
+      - 'Modules/Cleaning/app/Services/CleaningBookingSessionCoverageService.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionFinancialAggregationService.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionWorkerChangeService.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionWorkerEligibilityService.php'
       - 'Modules/Cleaning/app/Services/CleaningPreferredWorkerFallbackService.php'
+      - 'Modules/Cleaning/app/Services/RecurringCleaningCoverageNotificationService.php'
       - 'Modules/Cleaning/app/Services/RecurringCleaningPauseService.php'
       - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLifecycleController.php'
       - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionWorkerChangeController.php'
@@ -83,11 +103,13 @@ on:
       - 'Modules/User/app/Services/UserCleaningOrderService.php'
       - 'Modules/User/routes/api.php'
       - 'tests/Feature/Cleaning/CleaningNewOrderDispatchTest.php'
+      - 'tests/Feature/Cleaning/RecurringCleaningCoverageNotificationTest.php'
       - 'tests/Feature/Cleaning/RecurringCleaningPreferredWorkerFallbackTest.php'
       - 'tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php'
       - 'tests/Feature/Cleaning/RecurringCleaningWorkerScopeTest.php'
       - 'tests/Feature/UserModule/RecurringCleaningScheduleTest.php'
       - 'tests/Feature/UserModule/RecurringCleaningScheduleRevisionTest.php'
+      - 'tests/Feature/UserModule/UserNotificationInteractionStateTest.php'
       - '.github/workflows/cleaning-recurring.yml'
 
 permissions:
@@ -129,7 +151,14 @@ jobs:
           vendor/bin/pint --test \
             database/migrations/2026_09_05_000010_add_recurring_pause_fields_to_cleaning_bookings_table.php \
             database/migrations/2026_09_06_000001_add_recurring_worker_scope_to_cleaning_bookings_table.php \
+            database/migrations/2026_09_06_000020_add_delivery_view_state_to_notifications_table.php \
+            config/cleaning_recurring_notification_types.php \
             app/Jobs/NotifyEligibleWorkersNewOrderJob.php \
+            app/Http/Controllers/API/UserNotificationController.php \
+            app/Http/Resources/UserNotificationResource.php \
+            app/Notifications/Cleaning/BookingLifecycleNotification.php \
+            app/Notifications/Core/NotificationFeedNormalizer.php \
+            app/Notifications/Core/NotificationTypeRegistry.php \
             Modules/Cleaning/app/Enums/CleaningBookingSessionStatus.php \
             Modules/Cleaning/app/Models/CleaningBooking.php \
             Modules/Cleaning/app/Models/CleaningBookingSession.php \
@@ -137,10 +166,12 @@ jobs:
             Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php \
             Modules/Cleaning/app/Services/CleaningBookingSessionAcceptanceService.php \
             Modules/Cleaning/app/Services/CleaningBookingSessionCancellationService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionCoverageService.php \
             Modules/Cleaning/app/Services/CleaningBookingSessionFinancialAggregationService.php \
             Modules/Cleaning/app/Services/CleaningBookingSessionWorkerChangeService.php \
             Modules/Cleaning/app/Services/CleaningBookingSessionWorkerEligibilityService.php \
             Modules/Cleaning/app/Services/CleaningPreferredWorkerFallbackService.php \
+            Modules/Cleaning/app/Services/RecurringCleaningCoverageNotificationService.php \
             Modules/Cleaning/app/Services/RecurringCleaningPauseService.php \
             Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLifecycleController.php \
             Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionWorkerChangeController.php \
@@ -161,11 +192,13 @@ jobs:
             Modules/User/app/Services/UserCleaningOrderService.php \
             Modules/User/routes/api.php \
             tests/Feature/Cleaning/CleaningNewOrderDispatchTest.php \
+            tests/Feature/Cleaning/RecurringCleaningCoverageNotificationTest.php \
             tests/Feature/Cleaning/RecurringCleaningPreferredWorkerFallbackTest.php \
             tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php \
             tests/Feature/Cleaning/RecurringCleaningWorkerScopeTest.php \
             tests/Feature/UserModule/RecurringCleaningScheduleTest.php \
-            tests/Feature/UserModule/RecurringCleaningScheduleRevisionTest.php
+            tests/Feature/UserModule/RecurringCleaningScheduleRevisionTest.php \
+            tests/Feature/UserModule/UserNotificationInteractionStateTest.php
 
       - name: Run recurring cleaning tests
         env:
@@ -175,6 +208,8 @@ jobs:
         run: |
           set -o pipefail
           php artisan test \
+            tests/Feature/UserModule/UserNotificationInteractionStateTest.php \
+            tests/Feature/Cleaning/RecurringCleaningCoverageNotificationTest.php \
             tests/Feature/UserModule/RecurringCleaningScheduleRevisionTest.php \
             tests/Feature/UserModule/RecurringCleaningScheduleTest.php \
             tests/Feature/Cleaning/RecurringCleaningWorkerScopeTest.php \
