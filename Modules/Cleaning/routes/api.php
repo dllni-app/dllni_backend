@@ -36,6 +36,7 @@ use Modules\Cleaning\Http\Controllers\API\WorkerStatisticsController;
 use Modules\Cleaning\Http\Controllers\API\WorkerTransactionsController;
 use Modules\Cleaning\Http\Controllers\API\WorkerWorkingHoursController;
 use Modules\Cleaning\Http\Controllers\API\WorkerWorkAreasController;
+use Modules\Cleaning\Http\Middleware\RedactCleaningCustomerContactForUnacceptedWorker;
 
 Route::prefix('v1')->group(function () {
     Route::apiResource('cleaning-services', CleaningServiceController::class)->only(['index', 'show']);
@@ -92,23 +93,26 @@ Route::prefix('v1')->group(function () {
             Route::get('{worker}/transactions', [DepositManagementController::class, 'getTransactions']);
         });
 
-        Route::post('cleaning-bookings/{cleaning_booking}/delivery-fee', CleaningBookingDeliveryFeeController::class)->name('cleaning-bookings.delivery-fee');
-        Route::post('cleaning-bookings/{cleaning_booking}/accept', [CleaningBookingController::class, 'accept'])->name('cleaning-bookings.accept');
-        Route::post('cleaning-bookings/{cleaning_booking}/rooms/claim', [CleaningBookingController::class, 'claimRooms'])->name('cleaning-bookings.rooms.claim');
-        Route::post('cleaning-bookings/{cleaning_booking}/reject', [CleaningBookingController::class, 'reject'])->name('cleaning-bookings.reject');
-        Route::get('cleaning-bookings/{cleaning_booking}/security-code', CleaningBookingSecurityCodeController::class)->name('cleaning-bookings.security-code');
-        Route::post('cleaning-bookings/{cleaning_booking}/sos', [CleaningBookingController::class, 'sos'])->name('cleaning-bookings.sos');
-        Route::post('cleaning-bookings/{cleaning_booking}/start-travel', CleaningBookingStartTravelController::class)->name('cleaning-bookings.start-travel');
-        Route::post('cleaning-bookings/{cleaning_booking}/location', CleaningBookingLocationController::class)->name('cleaning-bookings.location');
-        Route::get('cleaning-bookings/{cleaning_booking}/worker-locations', CleaningBookingWorkerLocationsController::class)->name('cleaning-bookings.worker-locations');
-        Route::post('cleaning-bookings/{cleaning_booking}/arrive', CleaningBookingArriveController::class)->name('cleaning-bookings.arrive');
-        Route::post('cleaning-bookings/{cleaning_booking}/price-adjustment-requests', [CleaningBookingPriceAdjustmentRequestController::class, 'store'])->name('cleaning-bookings.price-adjustment-requests.store');
-        Route::post('cleaning-bookings/{cleaning_booking}/start-work', CleaningBookingStartWorkController::class)->name('cleaning-bookings.start-work');
-        Route::post('cleaning-bookings/{cleaning_booking}/complete', CleaningBookingCompleteController::class)->name('cleaning-bookings.complete');
-        Route::post('cleaning-bookings/{cleaning_booking}/finish', [CleaningBookingController::class, 'finish'])->name('cleaning-bookings.finish');
-        Route::post('cleaning-bookings/{cleaning_booking}/cancel', [CleaningBookingController::class, 'cancel'])->name('cleaning-bookings.cancel');
-        Route::get('cleaning-bookings/{cleaning_booking}', CleaningBookingShowController::class)->name('cleaning-bookings.show');
-        Route::apiResource('cleaning-bookings', CleaningBookingController::class)->except(['show']);
+        Route::middleware(RedactCleaningCustomerContactForUnacceptedWorker::class)->group(function (): void {
+            Route::post('cleaning-bookings/{cleaning_booking}/delivery-fee', CleaningBookingDeliveryFeeController::class)->name('cleaning-bookings.delivery-fee');
+            Route::post('cleaning-bookings/{cleaning_booking}/accept', [CleaningBookingController::class, 'accept'])->name('cleaning-bookings.accept');
+            Route::post('cleaning-bookings/{cleaning_booking}/rooms/claim', [CleaningBookingController::class, 'claimRooms'])->name('cleaning-bookings.rooms.claim');
+            Route::post('cleaning-bookings/{cleaning_booking}/reject', [CleaningBookingController::class, 'reject'])->name('cleaning-bookings.reject');
+            Route::get('cleaning-bookings/{cleaning_booking}/security-code', CleaningBookingSecurityCodeController::class)->name('cleaning-bookings.security-code');
+            Route::post('cleaning-bookings/{cleaning_booking}/sos', [CleaningBookingController::class, 'sos'])->name('cleaning-bookings.sos');
+            Route::post('cleaning-bookings/{cleaning_booking}/start-travel', CleaningBookingStartTravelController::class)->name('cleaning-bookings.start-travel');
+            Route::post('cleaning-bookings/{cleaning_booking}/location', CleaningBookingLocationController::class)->name('cleaning-bookings.location');
+            Route::get('cleaning-bookings/{cleaning_booking}/worker-locations', CleaningBookingWorkerLocationsController::class)->name('cleaning-bookings.worker-locations');
+            Route::post('cleaning-bookings/{cleaning_booking}/arrive', CleaningBookingArriveController::class)->name('cleaning-bookings.arrive');
+            Route::post('cleaning-bookings/{cleaning_booking}/price-adjustment-requests', [CleaningBookingPriceAdjustmentRequestController::class, 'store'])->name('cleaning-bookings.price-adjustment-requests.store');
+            Route::post('cleaning-bookings/{cleaning_booking}/start-work', CleaningBookingStartWorkController::class)->name('cleaning-bookings.start-work');
+            Route::post('cleaning-bookings/{cleaning_booking}/complete', CleaningBookingCompleteController::class)->name('cleaning-bookings.complete');
+            Route::post('cleaning-bookings/{cleaning_booking}/finish', [CleaningBookingController::class, 'finish'])->name('cleaning-bookings.finish');
+            Route::post('cleaning-bookings/{cleaning_booking}/cancel', [CleaningBookingController::class, 'cancel'])->name('cleaning-bookings.cancel');
+            Route::get('cleaning-bookings/{cleaning_booking}', CleaningBookingShowController::class)->name('cleaning-bookings.show');
+            Route::apiResource('cleaning-bookings', CleaningBookingController::class)->except(['show']);
+        });
+
         Route::apiResource('event-bookings', EventBookingController::class);
 
         Route::post('cleaning-time-warnings/{cleaning_time_warning}/accept', [CleaningTimeWarningController::class, 'accept'])->name('cleaning-time-warnings.accept');

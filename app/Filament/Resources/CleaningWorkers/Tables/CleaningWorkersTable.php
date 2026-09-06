@@ -20,6 +20,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
+use Modules\Cleaning\Models\CleaningNeighborhood;
 use Modules\Cleaning\Services\WorkerFinancialAccountStatusService;
 use Modules\Cleaning\Services\WorkerOrderSolvencyService;
 
@@ -28,12 +29,24 @@ final class CleaningWorkersTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->searchPlaceholder('ابحث باسم العامل، المستخدم أو رقم الهاتف')
+            ->searchPlaceholder('ابحث باسم العامل، المستخدم، رقم الهاتف أو الحي')
             ->columns([
                 TextColumn::make('id')->label(__('cleaning_admin.workers.fields.id'))->sortable(),
                 TextColumn::make('first_name')->label(__('cleaning_admin.workers.fields.first_name'))->searchable()->wrap(),
                 TextColumn::make('user.name')->label(__('cleaning_admin.workers.fields.user_name'))->searchable()->wrap(),
                 TextColumn::make('user.phone')->label(__('cleaning_admin.workers.fields.phone'))->copyable(),
+                TextColumn::make('neighborhood_names')
+                    ->label('الأحياء')
+                    ->state(fn (Worker $record): string => $record->zones
+                        ->map(fn ($zone): ?string => $zone->neighborhood?->name_ar ?: $zone->neighborhood?->name_en)
+                        ->filter()
+                        ->unique()
+                        ->values()
+                        ->join('، '))
+                    ->placeholder('-')
+                    ->wrap()
+                    ->searchable(query: fn (Builder $query, string $search): Builder => self::applyNeighborhoodSearch($query, $search))
+                    ->toggleable(),
                 TextColumn::make('gender')
                     ->label(__('cleaning_admin.workers.fields.gender'))
                     ->formatStateUsing(fn (?string $state): string => self::genderLabel($state))
@@ -113,6 +126,26 @@ final class CleaningWorkersTable
                         'male' => __('cleaning_admin.workers.gender_options.male'),
                         'female' => __('cleaning_admin.workers.gender_options.female'),
                     ]),
+                SelectFilter::make('neighborhood_id')
+                    ->label('الحي')
+                    ->searchable()
+                    ->preload()
+                    ->options(fn (): array => CleaningNeighborhood::query()
+                        ->active()
+                        ->orderBy('sort_order')
+                        ->orderBy('name_ar')
+                        ->get(['id', 'name_ar', 'name_en'])
+                        ->mapWithKeys(fn (CleaningNeighborhood $neighborhood): array => [
+                            $neighborhood->id => $neighborhood->name_ar ?: $neighborhood->name_en ?: '#'.$neighborhood->id,
+                        ])
+                        ->all())
+                    ->query(function (Builder $query, array $data): Builder {
+                        $neighborhoodId = $data['value'] ?? null;
+
+                        return filled($neighborhoodId)
+                            ? $query->whereHas('zones', fn (Builder $zoneQuery): Builder => $zoneQuery->where('neighborhood_id', $neighborhoodId))
+                            : $query;
+                    }),
                 TernaryFilter::make('is_suspended')->label(__('cleaning_admin.workers.fields.suspended')),
                 SelectFilter::make('financial_account_status')
                     ->label('حالة مبلغ التأمين')
@@ -185,6 +218,23 @@ final class CleaningWorkersTable
     private static function capacity(Worker $worker): array
     {
         return app(WorkerOrderSolvencyService::class)->workerCapacitySummary($worker);
+    }
+
+    private static function applyNeighborhoodSearch(Builder $query, string $search): Builder
+    {
+        $term = trim($search);
+        if ($term === '') {
+            return $query;
+        }
+
+        return $query->whereHas('zones.neighborhood', function (Builder $neighborhoodQuery) use ($term): void {
+            $neighborhoodQuery->where(function (Builder $nameQuery) use ($term): void {
+                $nameQuery
+                    ->where('name_ar', 'like', "%{$term}%")
+                    ->orWhere('name_en', 'like', "%{$term}%")
+                    ->orWhere('normalized_name', 'like', "%{$term}%");
+            });
+        });
     }
 
     private static function applyFinancialStatusFilter(Builder $query, string $status): Builder

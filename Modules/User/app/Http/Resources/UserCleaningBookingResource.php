@@ -23,6 +23,29 @@ final class UserCleaningBookingResource extends JsonResource
         $bookingBasePrice = max(0.0, (float) ($this->base_price ?? 0));
         $bookingAdminMargin = max(0.0, (float) ($this->admin_margin_amount ?? 0));
 
+        // Keep the legacy propertyDetails address synchronized with the structured
+        // address object. Current Flutter screens can therefore render the saved
+        // user address immediately while newer clients consume payload.address
+        // directly without falling back to stale property_details text.
+        $structuredAddress = is_array($payload['address'] ?? null)
+            ? $payload['address']
+            : [];
+        $fullAddress = trim((string) ($structuredAddress['fullAddress'] ?? $structuredAddress['full_address'] ?? ''));
+        if ($fullAddress !== '') {
+            $propertyDetails = is_array($payload['propertyDetails'] ?? null)
+                ? $payload['propertyDetails']
+                : [];
+            $propertyDetails['address'] = $fullAddress;
+            $propertyDetails['locationName'] = $structuredAddress['locationName']
+                ?? $structuredAddress['location_name']
+                ?? $propertyDetails['locationName']
+                ?? $propertyDetails['location_name']
+                ?? null;
+            $propertyDetails['location_name'] = $propertyDetails['locationName'];
+            $payload['propertyDetails'] = $propertyDetails;
+            $payload['property_details'] = $propertyDetails;
+        }
+
         // The user app intentionally presents the administration margin inside
         // "قيمة الخدمة" rather than as a separate line. Keep order details
         // consistent with the estimate/confirmation screen. Coupon and extension
