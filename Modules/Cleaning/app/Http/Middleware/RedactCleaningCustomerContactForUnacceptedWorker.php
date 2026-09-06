@@ -7,6 +7,7 @@ namespace Modules\Cleaning\Http\Middleware;
 use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -68,32 +69,62 @@ final class RedactCleaningCustomerContactForUnacceptedWorker
 
     private function workerHasAcceptedBooking(array $booking, int $workerId): bool
     {
-        $directWorkerId = $booking['workerId'] ?? $booking['worker_id'] ?? null;
-        if ((int) $directWorkerId === $workerId && $directWorkerId !== null) {
-            return true;
-        }
+        $myAssignment = $booking['myAssignment'] ?? $booking['my_assignment'] ?? $booking['worker_assignment'] ?? null;
+        if (is_array($myAssignment)) {
+            $myWorkerId = $myAssignment['workerId'] ?? $myAssignment['worker_id'] ?? $workerId;
+            $myStatus = (string) ($myAssignment['status'] ?? '');
 
-        $assignments = $booking['workerAssignments'] ?? $booking['worker_assignments'] ?? [];
-        if (! is_array($assignments)) {
-            return false;
-        }
-
-        foreach ($assignments as $assignment) {
-            if (! is_array($assignment)) {
-                continue;
-            }
-
-            $assignmentWorkerId = $assignment['workerId'] ?? $assignment['worker_id'] ?? null;
-            if ((int) $assignmentWorkerId !== $workerId) {
-                continue;
-            }
-
-            $status = (string) ($assignment['status'] ?? '');
-            if ($status === '' || in_array($status, CleaningBookingWorkerAssignmentStatus::acceptedValues(), true)) {
+            if ((int) $myWorkerId === $workerId
+                && in_array($myStatus, CleaningBookingWorkerAssignmentStatus::acceptedValues(), true)) {
                 return true;
             }
         }
 
-        return false;
+        $assignments = $booking['workerAssignments'] ?? $booking['worker_assignments'] ?? [];
+        if (is_array($assignments)) {
+            foreach ($assignments as $assignment) {
+                if (! is_array($assignment)) {
+                    continue;
+                }
+
+                $assignmentWorkerId = $assignment['workerId'] ?? $assignment['worker_id'] ?? null;
+                if ((int) $assignmentWorkerId !== $workerId) {
+                    continue;
+                }
+
+                $status = (string) ($assignment['status'] ?? '');
+                if (in_array($status, CleaningBookingWorkerAssignmentStatus::acceptedValues(), true)) {
+                    return true;
+                }
+            }
+        }
+
+        // Legacy one-worker bookings can use worker_id without an assignment row.
+        // Do not treat worker_id itself as acceptance: pending/dedicated offers can
+        // already know the worker. Require a lifecycle state that is only reached
+        // after the worker has committed to the booking.
+        $directWorkerId = $booking['workerId'] ?? $booking['worker_id'] ?? null;
+        if ($directWorkerId === null || (int) $directWorkerId !== $workerId) {
+            return false;
+        }
+
+        $bookingStatus = (string) (
+            $booking['globalStatus']
+            ?? $booking['global_status']
+            ?? $booking['order_status']
+            ?? $booking['status']
+            ?? ''
+        );
+
+        return in_array($bookingStatus, [
+            CleaningBookingStatus::WorkerAssigned->value,
+            CleaningBookingStatus::AwaitingStartVerification->value,
+            CleaningBookingStatus::AwaitingWorkerStartConfirmation->value,
+            CleaningBookingStatus::InProgress->value,
+            CleaningBookingStatus::AwaitingCustomerCompletion->value,
+            CleaningBookingStatus::TimeExtensionRequested->value,
+            CleaningBookingStatus::UnderDispute->value,
+            CleaningBookingStatus::Completed->value,
+        ], true);
     }
 }
