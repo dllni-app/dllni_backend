@@ -66,6 +66,15 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             ...$this->eventAssistanceScheduleRules($isEventAssistance),
             'serviceIds' => $isEventAssistance ? ['prohibited'] : ['sometimes', 'array', 'min:1'],
             'serviceIds.*' => $isEventAssistance ? ['prohibited'] : ['integer', 'distinct', 'exists:cleaning_services,id'],
+            'requestMaterials' => ['sometimes', 'boolean'],
+            'specialServices' => ['sometimes', 'array', 'max:10'],
+            'specialServices.*' => ['array:specialServiceId,quantity,dirtinessLevel,notes'],
+            'specialServices.*.specialServiceId' => ['required', 'integer', 'distinct', 'exists:cleaning_special_services,id'],
+            'specialServices.*.quantity' => ['required', 'numeric', 'gt:0', 'max:10000'],
+            'specialServices.*.dirtinessLevel' => ['required', 'string', 'max:32'],
+            'specialServices.*.notes' => ['nullable', 'string', 'max:2000'],
+            'openTime' => ['sometimes', 'array:workerCount'],
+            'openTime.workerCount' => ['required_with:openTime', 'integer', 'min:1', 'max:20'],
             'addressId' => ['nullable', 'integer', Rule::exists('user_addresses', 'id')->where('user_id', (int) ($this->user()?->id ?? 0))],
             'addressLatitude' => ['nullable', 'numeric', 'between:-90,90'],
             'addressLongitude' => ['nullable', 'numeric', 'between:-180,180'],
@@ -87,6 +96,7 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             $this->validateEventAssistanceSchedule($validator);
             $this->validateRecurringWorkerScope($validator);
             $this->validateWorkerRoomAssignments($validator);
+            $this->validateNewServiceScope($validator);
         });
     }
 
@@ -118,6 +128,11 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
         }
 
         $addressId = $this->input('addressId');
+        $openTime = $this->input('openTime');
+        if (is_array($openTime) && is_numeric($openTime['workerCount'] ?? null)) {
+            $merge['numberOfWorkers'] = max(1, (int) $openTime['workerCount']);
+            $merge['assignmentMode'] = 'open_count';
+        }
         if (is_numeric($addressId) && $this->user() !== null) {
             $address = UserAddress::query()
                 ->whereKey((int) $addressId)
@@ -166,6 +181,22 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
     private function isEventAssistanceRequested(): bool
     {
         return mb_strtolower((string) $this->input('propertyType')) === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE;
+    }
+
+    private function validateNewServiceScope(Validator $validator): void
+    {
+        $hasMaterials = (bool) $this->input('requestMaterials');
+        $hasSpecialServices = is_array($this->input('specialServices')) && $this->input('specialServices') !== [];
+        $hasOpenTime = is_array($this->input('openTime'));
+        $isRepeated = mb_strtolower((string) $this->input('schedule.mode')) === 'recurring';
+
+        if (($hasMaterials || $hasSpecialServices || $hasOpenTime) && ($this->isEventAssistanceRequested() || $isRepeated)) {
+            $validator->errors()->add('schedule', 'New Cleaning Suite services are currently available for one-time cleaning bookings only.');
+        }
+
+        if ($hasOpenTime && ($hasMaterials || $hasSpecialServices)) {
+            $validator->errors()->add('openTime', 'Open-Time requests cannot be combined with materials or special services.');
+        }
     }
 
     private function validateSelectedAddressCompleteness(Validator $validator): void

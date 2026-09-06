@@ -71,6 +71,7 @@ final class CleaningBooking extends Model
         'billing_policy_id',
         'booking_number',
         'status',
+        'booking_kind',
         'property_type',
         'property_details',
         'cleaning_services',
@@ -84,6 +85,13 @@ final class CleaningBooking extends Model
         'scheduled_time',
         'total_hours',
         'base_price',
+        'open_time_hourly_rate',
+        'open_time_minimum_minutes',
+        'open_time_rounding_minutes',
+        'open_time_actual_minutes',
+        'open_time_billable_minutes',
+        'open_time_final_amount',
+        'open_time_finalized_at',
         'addons_total',
         'extension_fee_total',
         'travel_fee',
@@ -181,6 +189,16 @@ final class CleaningBooking extends Model
         return $this->hasMany(BookingAddon::class);
     }
 
+    public function materials(): HasMany
+    {
+        return $this->hasMany(CleaningBookingMaterial::class, 'cleaning_booking_id');
+    }
+
+    public function specialServices(): HasMany
+    {
+        return $this->hasMany(CleaningBookingSpecialService::class, 'cleaning_booking_id');
+    }
+
     public function timeWarnings(): MorphMany
     {
         return $this->morphMany(CleaningTimeWarning::class, 'booking');
@@ -244,6 +262,13 @@ final class CleaningBooking extends Model
             'scheduled_date' => 'date',
             'total_hours' => 'decimal:2',
             'base_price' => 'integer',
+            'open_time_hourly_rate' => 'float',
+            'open_time_minimum_minutes' => 'integer',
+            'open_time_rounding_minutes' => 'integer',
+            'open_time_actual_minutes' => 'integer',
+            'open_time_billable_minutes' => 'integer',
+            'open_time_final_amount' => 'float',
+            'open_time_finalized_at' => 'datetime',
             'addons_total' => 'integer',
             'extension_fee_total' => 'integer',
             'travel_fee' => 'integer',

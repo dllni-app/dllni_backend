@@ -8,6 +8,10 @@ use App\Models\Worker;
 use Illuminate\Support\Arr;
 use InvalidArgumentException;
 use Modules\Cleaning\Services\CleaningPricingCalculator;
+use Modules\Cleaning\Services\CleaningMaterialQuoteService;
+use Modules\Cleaning\Services\CleaningOpenTimeBillingService;
+use Modules\Cleaning\Services\CleaningSpecialServiceQuoteService;
+use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Support\CleaningFinancialDefaults;
 use Modules\Cleaning\Support\CleaningRuntimeSettings;
 
@@ -27,7 +31,12 @@ final class UserCleaningOrderEstimationService
 
     private const ROOM_SIZE_BREAKDOWN_TYPES = CleaningFinancialDefaults::ROOM_TYPES;
 
-    public function __construct(private readonly CleaningPricingCalculator $pricingCalculator) {}
+    public function __construct(
+        private readonly CleaningPricingCalculator $pricingCalculator,
+        private readonly CleaningMaterialQuoteService $materialQuoteService,
+        private readonly CleaningSpecialServiceQuoteService $specialServiceQuoteService,
+        private readonly CleaningOpenTimeBillingService $openTimeBillingService,
+    ) {}
 
     public function algorithmVersion(): string
     {
@@ -172,6 +181,8 @@ final class UserCleaningOrderEstimationService
         mixed $addressLongitude,
         mixed $preferredWorkerId = null,
         ?array $serviceIds = null,
+        bool $requestMaterials = false,
+        array $specialServices = [],
     ): array {
         $input = $this->pricingSnapshotInput(
             $propertyType,
@@ -183,6 +194,13 @@ final class UserCleaningOrderEstimationService
         );
         $regularCalculation = null;
 
+        $materialQuote = $requestMaterials
+            ? $this->materialQuoteService->quote($input['propertyDetails'])
+            : ['lines' => [], 'total' => 0.0];
+        $specialServiceQuote = $specialServices !== []
+            ? $this->specialServiceQuoteService->quote($specialServices)
+            : ['lines' => [], 'total' => 0.0];
+
         if ($this->isEventAssistanceType($input['propertyType'])) {
             $hourlyRate = $this->eventOrderHourlyRate();
             $eventHours = max(1.0, $this->roundToHalfHour((float) ($input['propertyDetails']['hours'] ?? 1.0)));
@@ -192,15 +210,15 @@ final class UserCleaningOrderEstimationService
                 (int) ($input['propertyDetails']['worker_count'] ?? $this->suggestedEventTeamSize($eventGuestCount)),
             );
             $basePrice = $this->pricingCalculator->roundMoney($hourlyRate * $eventHours * $eventWorkerCount);
-            $lines = [];
-            $addonsTotal = 0.0;
+            $lines = $specialServiceQuote['lines'];
+            $addonsTotal = (float) $materialQuote['total'] + (float) $specialServiceQuote['total'];
             $estimation = $this->estimate($input['propertyType'], $input['propertyDetails']);
         } else {
             $regularCalculation = $this->calculateRegularCleaningFromSettings($input['propertyDetails']);
             $basePrice = $this->pricingCalculator->roundMoney((float) $regularCalculation['basePrice']);
             $estimation = ['recommendation' => null];
-            $lines = [];
-            $addonsTotal = 0.0;
+            $lines = $specialServiceQuote['lines'];
+            $addonsTotal = (float) $materialQuote['total'] + (float) $specialServiceQuote['total'];
         }
 
         if ($input['preferredWorkerId'] === null) {
@@ -230,6 +248,8 @@ final class UserCleaningOrderEstimationService
             'totalPrice' => $pricing['totalPrice'],
             'currency' => (string) config('app.currency', 'SYP'),
             'serviceLines' => $lines,
+            'materials' => $materialQuote['lines'],
+            'specialServices' => $specialServiceQuote['lines'],
             'roomPricingLines' => $regularCalculation['roomPricingLines'] ?? [],
             'pricingAlgorithm' => $regularCalculation !== null ? [
                 'baseUnitPrice' => $regularCalculation['baseUnitPrice'],
@@ -244,6 +264,73 @@ final class UserCleaningOrderEstimationService
             'eventHours' => $eventHours ?? null,
             'eventWorkerCount' => $eventWorkerCount ?? null,
             'recommendation' => $estimation['recommendation'] ?? null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function priceOpenTime(
+        string $propertyType,
+        array $propertyDetails,
+        mixed $addressLatitude,
+        mixed $addressLongitude,
+        mixed $preferredWorkerId,
+        int $workerCount,
+    ): array {
+        if ($this->isEventAssistanceType($propertyType)) {
+            throw new InvalidArgumentException('Open-Time requests are not available for event assistance.');
+        }
+
+        $standardEstimate = $this->estimate($propertyType, $propertyDetails);
+        $standardPricing = $this->price(
+            $propertyType,
+            $propertyDetails,
+            $addressLatitude,
+            $addressLongitude,
+            $preferredWorkerId,
+        );
+        $hourlyRate = $this->pricingCalculator->roundMoney(
+            max(0.0, (float) $standardPricing['basePrice'])
+            / max(1.0, (float) $standardEstimate['estimatedHours']),
+        );
+        $policy = CleaningBillingPolicy::query()
+            ->where('is_active', true)
+            ->where('billing_mode', 'actual_working_time')
+            ->orderByDesc('is_default')
+            ->first();
+        $openTime = $this->openTimeBillingService->preliminary($hourlyRate, $workerCount, $policy);
+        $basePrice = (float) $openTime['preliminaryAmount'];
+
+        if ($preferredWorkerId === null) {
+            $pricing = $this->pricingCalculator->provisional($basePrice, 0.0);
+        } else {
+            $worker = Worker::query()->find($preferredWorkerId);
+            if (! $worker) {
+                throw new InvalidArgumentException('Selected worker is not available.');
+            }
+            $pricing = $this->pricingCalculator->finalizedForWorker(
+                $basePrice,
+                0.0,
+                $addressLatitude,
+                $addressLongitude,
+                $worker,
+            );
+        }
+
+        return [
+            ...$standardPricing,
+            'basePrice' => $basePrice,
+            'addonsTotal' => 0.0,
+            'travelFee' => $pricing['travelFee'],
+            'distanceKm' => $pricing['distanceKm'],
+            'adminMargin' => $pricing['adminMargin'],
+            'isPricingFinal' => $pricing['isPricingFinal'],
+            'totalPrice' => $pricing['totalPrice'],
+            'materials' => [],
+            'specialServices' => [],
+            'serviceLines' => [],
+            'openTime' => $openTime,
         ];
     }
 
