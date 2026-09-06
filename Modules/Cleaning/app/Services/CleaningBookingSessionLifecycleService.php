@@ -25,6 +25,10 @@ final class CleaningBookingSessionLifecycleService
 
     private const MAX_SECURITY_CODE_ATTEMPTS = 5;
 
+    public function __construct(
+        private readonly DepositService $depositService,
+    ) {}
+
     public function startTravel(
         CleaningBooking $booking,
         CleaningBookingSession $session,
@@ -303,13 +307,15 @@ final class CleaningBookingSessionLifecycleService
                 ])
                 ->count();
 
+            $readyForCustomer = $readyCount >= $locked->requiredWorkerCount();
             $locked->forceFill([
-                'status' => $readyCount >= $locked->requiredWorkerCount()
+                'status' => $readyForCustomer
                     ? CleaningBookingSessionStatus::AwaitingCustomerCompletion
                     : CleaningBookingSessionStatus::InProgress,
-                'work_finished_at' => $readyCount >= $locked->requiredWorkerCount()
+                'work_finished_at' => $readyForCustomer
                     ? ($locked->work_finished_at ?? now())
                     : null,
+                'payment_status' => $readyForCustomer ? 'ready' : ($locked->payment_status ?: 'pending'),
             ])->save();
 
             $this->syncParentStatus($booking);
@@ -349,10 +355,31 @@ final class CleaningBookingSessionLifecycleService
                     'updated_at' => $completedAt,
                 ]);
 
+            $assignments = CleaningBookingSessionWorkerAssignment::query()
+                ->with('worker.deposit')
+                ->where('cleaning_booking_session_id', $locked->id)
+                ->where('status', CleaningBookingWorkerAssignmentStatus::Completed->value)
+                ->get();
+
+            foreach ($assignments as $assignment) {
+                $worker = $assignment->worker;
+                $adminFee = (float) $assignment->admin_margin_amount;
+                if ($worker instanceof Worker && $adminFee > 0) {
+                    $this->depositService->recordSessionAdminFeeDebit(
+                        $worker,
+                        $booking,
+                        $locked,
+                        $adminFee,
+                    );
+                }
+            }
+
             $locked->forceFill([
                 'status' => CleaningBookingSessionStatus::Completed,
                 'work_finished_at' => $locked->work_finished_at ?? $completedAt,
                 'customer_completed_at' => $locked->customer_completed_at ?? $completedAt,
+                'payment_status' => 'settled',
+                'payment_settled_at' => $locked->payment_settled_at ?? $completedAt,
             ])->save();
 
             $this->syncParentStatus($booking);

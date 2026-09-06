@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Models;
 
+use App\Models\Dispute;
+use App\Models\WorkerCustomerRating;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
@@ -40,6 +42,8 @@ final class CleaningBookingSession extends Model
         'cancellation_fee',
         'total_price',
         'is_pricing_final',
+        'payment_status',
+        'payment_settled_at',
         'pricing_snapshot',
         'version',
         'started_travel_at',
@@ -64,6 +68,16 @@ final class CleaningBookingSession extends Model
     public function workerAssignments(): HasMany
     {
         return $this->hasMany(CleaningBookingSessionWorkerAssignment::class, 'cleaning_booking_session_id');
+    }
+
+    public function ratings(): HasMany
+    {
+        return $this->hasMany(WorkerCustomerRating::class, 'cleaning_booking_session_id');
+    }
+
+    public function disputes(): HasMany
+    {
+        return $this->hasMany(Dispute::class, 'cleaning_booking_session_id');
     }
 
     public function activeWorkerAssignments(): HasMany
@@ -98,6 +112,7 @@ final class CleaningBookingSession extends Model
             'cancellation_fee' => 'float',
             'total_price' => 'float',
             'is_pricing_final' => 'boolean',
+            'payment_settled_at' => 'datetime',
             'pricing_snapshot' => 'array',
             'version' => 'integer',
             'started_travel_at' => 'datetime',

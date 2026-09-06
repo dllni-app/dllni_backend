@@ -14,6 +14,7 @@ use InvalidArgumentException;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use RuntimeException;
 
@@ -135,6 +136,32 @@ final class DepositService
         }
 
         $reference = CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.hash('sha256', $worker->id.':'.$booking->id);
+        if (CleaningDepositTransaction::query()->where('worker_id', $worker->id)->where('reference', $reference)->exists()) {
+            return null;
+        }
+
+        return $this->recordCharge($worker, $amount, 'commission', $reference, null, $createdByAdminId);
+    }
+
+    public function recordSessionAdminFeeDebit(
+        Worker $worker,
+        CleaningBooking $booking,
+        CleaningBookingSession $session,
+        float $amount,
+        ?int $createdByAdminId = null,
+    ): ?CleaningDepositTransaction {
+        if ($amount <= 0) {
+            return null;
+        }
+
+        if ((int) $session->cleaning_booking_id !== (int) $booking->id) {
+            throw new InvalidArgumentException('Session does not belong to this booking.');
+        }
+
+        $reference = CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.hash(
+            'sha256',
+            $worker->id.':'.$booking->id.':session:'.$session->id,
+        );
         if (CleaningDepositTransaction::query()->where('worker_id', $worker->id)->where('reference', $reference)->exists()) {
             return null;
         }

@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Services;
 
+use App\Enums\DisputeStatus;
+use App\Enums\WorkerCustomerRatingType;
+use App\Models\Dispute;
 use App\Models\Worker;
 use Carbon\CarbonImmutable;
 use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
@@ -20,7 +23,7 @@ final class CleaningBookingSchedulePresenter
         $sessions = CleaningBookingSession::query()
             ->where('cleaning_booking_id', $booking->id)
             ->where('status', '!=', CleaningBookingSessionStatus::Superseded->value)
-            ->with(['workerAssignments.worker.user'])
+            ->with(['workerAssignments.worker.user', 'ratings', 'disputes'])
             ->orderBy('sequence')
             ->get();
 
@@ -181,6 +184,39 @@ final class CleaningBookingSchedulePresenter
         $canSendSos = ! $session->isTerminal()
             && $status !== CleaningBookingSessionStatus::Paused->value
             && ($isCustomerView || $hasMyActiveAssignment);
+        $reviewedWorkerIds = $session->ratings
+            ->filter(static fn ($rating): bool => (string) ($rating->rating_type?->value ?? $rating->rating_type)
+                === WorkerCustomerRatingType::CustomerToWorker->value)
+            ->pluck('worker_id')
+            ->map(static fn ($workerId): int => (int) $workerId)
+            ->unique()
+            ->values();
+        $reviewableWorkerIds = $acceptedAssignments
+            ->filter(static fn (CleaningBookingSessionWorkerAssignment $assignment): bool => (string) ($assignment->status?->value ?? $assignment->status) === 'completed')
+            ->pluck('worker_id')
+            ->map(static fn ($workerId): int => (int) $workerId)
+            ->diff($reviewedWorkerIds)
+            ->values();
+        $activeDispute = $session->disputes->first(static function (Dispute $dispute): bool {
+            $disputeStatus = $dispute->status instanceof DisputeStatus
+                ? $dispute->status
+                : DisputeStatus::tryFrom((string) $dispute->status);
+
+            return $disputeStatus !== null && ! $disputeStatus->isTerminal();
+        });
+        $canOpenDispute = $isCustomerView
+            && in_array($status, [
+                CleaningBookingSessionStatus::Completed->value,
+                CleaningBookingSessionStatus::Cancelled->value,
+            ], true)
+            && ! $activeDispute instanceof Dispute;
+        $paymentStatus = in_array($status, [
+            CleaningBookingSessionStatus::Cancelled->value,
+            CleaningBookingSessionStatus::Skipped->value,
+            CleaningBookingSessionStatus::Superseded->value,
+        ], true)
+            ? 'not_required'
+            : ((string) ($session->payment_status ?: 'pending'));
 
         return [
             'id' => (int) $session->id,
@@ -218,6 +254,25 @@ final class CleaningBookingSchedulePresenter
             'acceptedWorkers' => $session->acceptedWorkerCount(),
             'remainingWorkers' => $session->remainingWorkerCount(),
             'isFullyCovered' => $session->isFullyCovered(),
+            'paymentStatus' => $paymentStatus,
+            'paymentSettledAt' => $session->payment_settled_at?->toIso8601String(),
+            'payment' => [
+                'status' => $paymentStatus,
+                'amount' => (float) $session->total_price,
+                'currency' => (string) config('app.currency', 'SYP'),
+                'settledAt' => $session->payment_settled_at?->toIso8601String(),
+                'isInternalSettlement' => true,
+            ],
+            'canReview' => $isCustomerView && $status === CleaningBookingSessionStatus::Completed->value && $reviewableWorkerIds->isNotEmpty(),
+            'hasReview' => $reviewedWorkerIds->isNotEmpty(),
+            'reviewedWorkerIds' => $reviewedWorkerIds->all(),
+            'reviewableWorkerIds' => $reviewableWorkerIds->all(),
+            'canOpenDispute' => $canOpenDispute,
+            'hasOpenDispute' => $activeDispute instanceof Dispute,
+            'disputeId' => $activeDispute instanceof Dispute ? (int) $activeDispute->id : null,
+            'disputeStatus' => $activeDispute instanceof Dispute
+                ? ($activeDispute->status?->value ?? (string) $activeDispute->status)
+                : null,
             'pricing' => [
                 'basePrice' => (float) $session->base_price,
                 'addonsTotal' => (float) $session->addons_total,

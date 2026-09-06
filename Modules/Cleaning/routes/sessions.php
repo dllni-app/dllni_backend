@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingScheduleController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionAcceptanceController;
+use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionInteractionController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionLifecycleController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionLocationController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionWorkerChangeController;
@@ -92,6 +93,16 @@ Route::prefix('v1')
             'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/skip',
             [CleaningBookingSessionLifecycleController::class, 'skip'],
         )->name('cleaning-bookings.sessions.skip');
+
+        Route::post(
+            'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/review',
+            [CleaningBookingSessionInteractionController::class, 'review'],
+        )->name('cleaning-bookings.sessions.review');
+
+        Route::post(
+            'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/disputes',
+            [CleaningBookingSessionInteractionController::class, 'openDispute'],
+        )->name('cleaning-bookings.sessions.disputes.store');
 
         Route::post(
             'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/sos',

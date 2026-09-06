@@ -302,6 +302,10 @@ final class CleaningBookingObserver
     private function chargeAdminCommission(CleaningBooking $booking): void
     {
         try {
+            if ($booking->sessions()->exists()) {
+                return;
+            }
+
             $depositService = app(DepositService::class);
             $assignments = $booking->acceptedWorkerAssignments()->with('worker.deposit')->get();
 
