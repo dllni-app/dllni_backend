@@ -1,0 +1,120 @@
+name: Apply Recurring Worker Scope Once
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/cleaning-suite-main
+    paths:
+      - '.github/workflows/apply-recurring-worker-scope-once.yml'
+      - 'scripts/apply_recurring_worker_scope_patch.py'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: feature/cleaning-suite-main
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, bcmath, intl, gd
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Apply recurring worker-scope patch
+        run: python3 scripts/apply_recurring_worker_scope_patch.py
+
+      - name: Format
+        run: |
+          vendor/bin/pint \
+            database/migrations/2026_09_06_000001_add_recurring_worker_scope_to_cleaning_bookings_table.php \
+            Modules/User/app/Http/Requests/Concerns/ValidatesRecurringWorkerScope.php \
+            Modules/User/app/Http/Requests/UserCleaningOrderStoreRequest.php \
+            Modules/User/app/Http/Requests/UserCleaningOrderEstimatePriceRequest.php \
+            Modules/User/app/Http/Controllers/API/UserCleaningOrderEstimatePriceController.php \
+            Modules/User/app/Http/Resources/UserCleaningBookingResource.php \
+            Modules/User/app/Services/UserCleaningOrderService.php \
+            Modules/User/app/Services/RecurringCleaningScheduleService.php \
+            Modules/User/app/Services/RecurringCleaningScheduleRevisionService.php \
+            Modules/Cleaning/app/Models/CleaningBooking.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionWorkerEligibilityService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php \
+            Modules/Cleaning/app/Traits/FilterQueries/CleaningBookingFilterQuery.php \
+            app/Jobs/NotifyEligibleWorkersNewOrderJob.php \
+            tests/Feature/UserModule/RecurringCleaningScheduleTest.php \
+            tests/Feature/Cleaning/RecurringCleaningWorkerScopeTest.php
+
+      - name: Prepare application
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        run: |
+          cp .env.example .env
+          touch database/database.sqlite
+          php artisan key:generate
+          php artisan migrate:fresh --force
+
+      - name: Run recurring worker-scope and regression tests
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        shell: bash
+        run: |
+          set -o pipefail
+          php artisan test \
+            tests/Feature/UserModule/RecurringCleaningScheduleTest.php \
+            tests/Feature/Cleaning/RecurringCleaningWorkerScopeTest.php \
+            tests/Feature/Cleaning/RecurringCleaningPreferredWorkerFallbackTest.php \
+            tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php \
+            tests/Feature/Cleaning/CleaningBookingAssignedToCurrentWorkerFilterTest.php \
+            tests/Feature/Cleaning/CleaningNewOrderDispatchTest.php \
+            tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php \
+            2>&1 | tee recurring-worker-scope-test.log
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: recurring-worker-scope-diagnostics
+          path: recurring-worker-scope-test.log
+          if-no-files-found: ignore
+
+      - name: Commit implementation
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add \
+            database/migrations/2026_09_06_000001_add_recurring_worker_scope_to_cleaning_bookings_table.php \
+            Modules/User/app/Http/Requests/Concerns/ValidatesRecurringWorkerScope.php \
+            Modules/User/app/Http/Requests/UserCleaningOrderStoreRequest.php \
+            Modules/User/app/Http/Requests/UserCleaningOrderEstimatePriceRequest.php \
+            Modules/User/app/Http/Controllers/API/UserCleaningOrderEstimatePriceController.php \
+            Modules/User/app/Http/Resources/UserCleaningBookingResource.php \
+            Modules/User/app/Services/UserCleaningOrderService.php \
+            Modules/User/app/Services/RecurringCleaningScheduleService.php \
+            Modules/User/app/Services/RecurringCleaningScheduleRevisionService.php \
+            Modules/Cleaning/app/Models/CleaningBooking.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionWorkerEligibilityService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php \
+            Modules/Cleaning/app/Traits/FilterQueries/CleaningBookingFilterQuery.php \
+            app/Jobs/NotifyEligibleWorkersNewOrderJob.php \
+            tests/Feature/UserModule/RecurringCleaningScheduleTest.php \
+            tests/Feature/Cleaning/RecurringCleaningWorkerScopeTest.php
+          if git diff --cached --quiet; then
+            echo 'No feature changes to commit.'
+            exit 0
+          fi
+          git commit -m 'feat(cleaning): enforce recurring worker scope'
+          git push origin HEAD:feature/cleaning-suite-main
