@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Services;
 
+use App\Notifications\CleaningMaterialLowStockDashboardNotification;
+use App\Support\DashboardAdminRecipients;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use InvalidArgumentException;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingMaterial;
@@ -31,12 +34,15 @@ final class CleaningMaterialInventoryService
 
             $material = CleaningMaterial::query()->whereKey($bookingMaterial->cleaning_material_id)->lockForUpdate()->firstOrFail();
             $quantity = (float) $bookingMaterial->quantity;
-            if ((float) $material->stock_quantity < $quantity) {
+            $stockBefore = (float) $material->stock_quantity;
+            if ($stockBefore < $quantity) {
                 throw new InvalidArgumentException("Insufficient stock for {$material->name}.");
             }
 
-            $material->forceFill(['stock_quantity' => round((float) $material->stock_quantity - $quantity, 3)])->save();
+            $stockAfter = round($stockBefore - $quantity, 3);
+            $material->forceFill(['stock_quantity' => $stockAfter])->save();
             $this->record($bookingMaterial, CleaningMaterialInventoryMovement::RESERVED, -$quantity);
+            $this->scheduleLowStockNotificationIfThresholdCrossed($material, $stockBefore, $stockAfter);
         });
     }
 
@@ -87,5 +93,31 @@ final class CleaningMaterialInventoryService
                 'reference_id' => $bookingMaterial->cleaning_booking_id,
             ],
         );
+    }
+
+    private function scheduleLowStockNotificationIfThresholdCrossed(
+        CleaningMaterial $material,
+        float $stockBefore,
+        float $stockAfter,
+    ): void {
+        $threshold = max(0.0, (float) $material->low_stock_threshold);
+        if ($stockBefore <= $threshold || $stockAfter > $threshold) {
+            return;
+        }
+
+        $materialId = (int) $material->id;
+        DB::afterCommit(static function () use ($materialId): void {
+            $fresh = CleaningMaterial::query()->find($materialId);
+            if (! $fresh instanceof CleaningMaterial || ! $fresh->isLowStock()) {
+                return;
+            }
+
+            $recipients = DashboardAdminRecipients::all();
+            if ($recipients->isEmpty()) {
+                return;
+            }
+
+            Notification::send($recipients, new CleaningMaterialLowStockDashboardNotification($fresh));
+        });
     }
 }
