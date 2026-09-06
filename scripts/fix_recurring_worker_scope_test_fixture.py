@@ -55,6 +55,17 @@ if old not in text:
     raise SystemExit('expected worker helper header')
 text = text.replace(old, new, 1)
 
+old = '''        'trust_score' => 100,
+        'default_working_hours' => $workingHours,
+'''
+new = '''        'trust_score' => 100,
+        'preferred_work_type' => 'both',
+        'default_working_hours' => $workingHours,
+'''
+if old not in text:
+    raise SystemExit('expected worker preference fixture')
+text = text.replace(old, new, 1)
+
 old = '''        'current_balance' => 100000,
         'deposited_total' => 100000,
         'withdrawn_total' => 0,
@@ -72,6 +83,23 @@ new = '''        'current_balance' => 100000,
 '''
 if old not in text:
     raise SystemExit('expected deposit fixture')
+text = text.replace(old, new, 1)
+
+old = '''        'worker_scope' => CleaningBooking::WORKER_SCOPE_SPECIFIC,
+        'specific_worker_ids' => $specificWorkerIds,
+        'number_of_workers' => count($specificWorkerIds),
+        'status' => CleaningBookingStatus::Pending->value,
+'''
+new = '''        'worker_scope' => CleaningBooking::WORKER_SCOPE_SPECIFIC,
+        'specific_worker_ids' => $specificWorkerIds,
+        'number_of_workers' => count($specificWorkerIds),
+        'property_type' => 'apartment',
+        'neighborhood_id' => null,
+        'neighborhood_name' => null,
+        'status' => CleaningBookingStatus::Pending->value,
+'''
+if old not in text:
+    raise SystemExit('expected recurring booking scope fixture')
 text = text.replace(old, new, 1)
 
 # Make the real eligibility prerequisites part of the test contract so a future
@@ -131,8 +159,14 @@ new = '''    [$booking] = makeRecurringSpecificScopeBooking([
         (int) $secondWorker->id,
     ]);
 
+    $bookingStartsAt = \\Carbon\\Carbon::parse(
+        $booking->scheduled_date->format('Y-m-d').' '.mb_trim((string) $booking->scheduled_time),
+        config('app.timezone'),
+    );
     expect(app(\\Modules\\Cleaning\\Services\\DepositService::class)->isWorkerEligibleForDispatch($firstWorker->fresh(['user', 'deposit'])))->toBeTrue()
-        ->and(app(\\Modules\\Cleaning\\Services\\DepositService::class)->isWorkerEligibleForDispatch($secondWorker->fresh(['user', 'deposit'])))->toBeTrue();
+        ->and(app(\\Modules\\Cleaning\\Services\\DepositService::class)->isWorkerEligibleForDispatch($secondWorker->fresh(['user', 'deposit'])))->toBeTrue()
+        ->and($firstWorker->fresh()->isAvailableAt($bookingStartsAt))->toBeTrue()
+        ->and($secondWorker->fresh()->isAvailableAt($bookingStartsAt))->toBeTrue();
 
     (new NotifyEligibleWorkersNewOrderJob((int) $booking->id))->handle();
 '''
@@ -141,4 +175,4 @@ if old not in text:
 text = text.replace(old, new, 1)
 
 path.write_text(text)
-print('worker scope membership and test fixture adjusted')
+print('worker scope membership and deterministic fixtures adjusted')
