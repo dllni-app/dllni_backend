@@ -35,7 +35,11 @@ final class CleaningAgentBOperationalObserver
         }
 
         if (
-            $booking->status === CleaningBookingStatus::AwaitingCustomerCompletion
+            in_array($booking->status, [
+                CleaningBookingStatus::AwaitingCustomerCompletion,
+                CleaningBookingStatus::Completed,
+                CleaningBookingStatus::UnderDispute,
+            ], true)
             && $booking->booking_kind === 'open_time'
             && $booking->open_time_finalized_at === null
             && $booking->work_finished_at !== null
