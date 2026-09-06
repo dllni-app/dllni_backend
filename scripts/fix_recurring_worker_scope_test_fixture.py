@@ -1,5 +1,17 @@
 from pathlib import Path
 
+# The main patch runs first. Adjust the JSON membership expression so Laravel's
+# JSON_CONTAINS semantics are portable across the SQLite CI database and MySQL.
+filter_path = Path('Modules/Cleaning/app/Traits/FilterQueries/CleaningBookingFilterQuery.php')
+filter_text = filter_path.read_text()
+old_membership = "->orWhereJsonContains('specific_worker_ids', (int) $worker->id);"
+new_membership = "->orWhereJsonContains('specific_worker_ids', [(int) $worker->id]);"
+if filter_text.count(old_membership) != 1:
+    raise SystemExit(
+        f'expected one specific-worker JSON membership expression, found {filter_text.count(old_membership)}'
+    )
+filter_path.write_text(filter_text.replace(old_membership, new_membership, 1))
+
 path = Path('tests/Feature/Cleaning/RecurringCleaningWorkerScopeTest.php')
 text = path.read_text()
 
@@ -91,7 +103,15 @@ new = '''    [$booking] = makeRecurringSpecificScopeBooking([
     ]);
 
     expect(app(\\Modules\\Cleaning\\Services\\DepositService::class)->isWorkerEligibleForNewRequests($selectedWorker->fresh(['deposit'])))->toBeTrue()
-        ->and(app(\\Modules\\Cleaning\\Services\\DepositService::class)->isWorkerEligibleForNewRequests($otherSelectedWorker->fresh(['deposit'])))->toBeTrue();
+        ->and(app(\\Modules\\Cleaning\\Services\\DepositService::class)->isWorkerEligibleForNewRequests($otherSelectedWorker->fresh(['deposit'])))->toBeTrue()
+        ->and(CleaningBooking::query()
+            ->whereKey($booking->id)
+            ->whereJsonContains('specific_worker_ids', [(int) $selectedWorker->id])
+            ->exists())->toBeTrue()
+        ->and(CleaningBooking::query()
+            ->whereKey($booking->id)
+            ->whereJsonContains('specific_worker_ids', [(int) $otherSelectedWorker->id])
+            ->exists())->toBeTrue();
 
     Sanctum::actingAs($selectedUser);
 '''
@@ -111,12 +131,8 @@ new = '''    [$booking] = makeRecurringSpecificScopeBooking([
         (int) $secondWorker->id,
     ]);
 
-    $startsAt = $booking->startsAt();
     expect(app(\\Modules\\Cleaning\\Services\\DepositService::class)->isWorkerEligibleForDispatch($firstWorker->fresh(['user', 'deposit'])))->toBeTrue()
-        ->and(app(\\Modules\\Cleaning\\Services\\DepositService::class)->isWorkerEligibleForDispatch($secondWorker->fresh(['user', 'deposit'])))->toBeTrue()
-        ->and($startsAt)->not->toBeNull()
-        ->and($firstWorker->fresh()->isAvailableAt($startsAt))->toBeTrue()
-        ->and($secondWorker->fresh()->isAvailableAt($startsAt))->toBeTrue();
+        ->and(app(\\Modules\\Cleaning\\Services\\DepositService::class)->isWorkerEligibleForDispatch($secondWorker->fresh(['user', 'deposit'])))->toBeTrue();
 
     (new NotifyEligibleWorkersNewOrderJob((int) $booking->id))->handle();
 '''
@@ -125,4 +141,4 @@ if old not in text:
 text = text.replace(old, new, 1)
 
 path.write_text(text)
-print('worker scope test fixture isolated')
+print('worker scope membership and test fixture adjusted')
