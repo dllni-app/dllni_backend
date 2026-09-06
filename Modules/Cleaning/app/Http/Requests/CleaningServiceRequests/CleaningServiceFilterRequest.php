@@ -19,7 +19,7 @@ final class CleaningServiceFilterRequest extends FormRequest
         return [
             'perPage' => 'sometimes|integer|min:1|max:100',
             'filter.isActive' => 'sometimes|boolean',
-            'filter.category' => 'sometimes|string|in:'.ServiceCategory::Cleaning->value.','.ServiceCategory::EventAssistance->value,
+            'filter.category' => 'sometimes|string|in:'.ServiceCategory::Cleaning->value.','.ServiceCategory::EventAssistance->value.',special_service',
             'filter.search' => 'sometimes|string|max:255',
             'sort' => 'sometimes|string|in:name,-name,category,-category,createdAt,-createdAt',
         ];
