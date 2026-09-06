@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Services;
 
+use BackedEnum;
 use Illuminate\Support\Collection;
 use Modules\Cleaning\Enums\CleaningBookingSessionCoverageStatus;
 use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
@@ -110,7 +111,7 @@ final class RecurringCleaningCoverageNotificationService
             return;
         }
 
-        $status = $booking->status instanceof \BackedEnum
+        $status = $booking->status instanceof BackedEnum
             ? (string) $booking->status->value
             : (string) $booking->status;
 
