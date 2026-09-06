@@ -7,11 +7,20 @@ namespace Modules\Cleaning\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 final class CleaningSpecialService extends Model
 {
-    protected $fillable = ['name', 'slug', 'image_url', 'pricing_unit', 'base_unit_price', 'is_active'];
+    protected $fillable = [
+        'name',
+        'slug',
+        'image_url',
+        'image_path',
+        'pricing_unit',
+        'base_unit_price',
+        'is_active',
+    ];
 
     protected static function booted(): void
     {
@@ -38,6 +47,20 @@ final class CleaningSpecialService extends Model
     public function bookingLines(): HasMany
     {
         return $this->hasMany(CleaningBookingSpecialService::class);
+    }
+
+    public function imageUrl(): ?string
+    {
+        $imagePath = trim((string) $this->image_path);
+        if ($imagePath !== '') {
+            $url = Storage::disk('public')->url($imagePath);
+
+            return Str::startsWith($url, ['http://', 'https://']) ? $url : url($url);
+        }
+
+        $externalUrl = trim((string) $this->image_url);
+
+        return $externalUrl !== '' ? $externalUrl : null;
     }
 
     public function casts(): array
