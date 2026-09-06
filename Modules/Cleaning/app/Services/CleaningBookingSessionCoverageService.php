@@ -11,6 +11,10 @@ use Modules\Cleaning\Models\CleaningBookingSession;
 
 final class CleaningBookingSessionCoverageService
 {
+    public function __construct(
+        private readonly RecurringCleaningCoverageNotificationService $recurringCoverageNotifications,
+    ) {}
+
     public function refresh(CleaningBookingSession $session): CleaningBookingSession
     {
         return DB::transaction(function () use ($session): CleaningBookingSession {
@@ -31,11 +35,21 @@ final class CleaningBookingSessionCoverageService
                 $acceptedCount < $requiredCount => CleaningBookingSessionCoverageStatus::PartiallyCovered,
                 default => CleaningBookingSessionCoverageStatus::FullyCovered,
             };
+            $previousCoverage = $locked->coverage_status instanceof CleaningBookingSessionCoverageStatus
+                ? $locked->coverage_status
+                : CleaningBookingSessionCoverageStatus::tryFrom((string) $locked->coverage_status);
 
-            if ($locked->coverage_status !== $coverage) {
+            if ($previousCoverage !== $coverage) {
                 $locked->forceFill([
                     'coverage_status' => $coverage->value,
                 ])->save();
+
+                $refreshed = $locked->fresh(['booking.customer', 'workerAssignments']) ?? $locked;
+                $this->recurringCoverageNotifications->notifyCoverageChanged(
+                    session: $refreshed,
+                    previousCoverage: $previousCoverage,
+                    currentCoverage: $coverage,
+                );
             }
 
             return $locked->fresh(['workerAssignments']) ?? $locked;

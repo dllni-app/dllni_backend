@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace App\Notifications\Core;
 
+use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Illuminate\Notifications\DatabaseNotification;
 use InvalidArgumentException;
+use Throwable;
 
 final class NotificationFeedNormalizer
 {
@@ -23,10 +26,16 @@ final class NotificationFeedNormalizer
         $data = is_array($notification->data) ? $notification->data : [];
 
         $normalized = $this->normalizeData($data, $notification->type);
+        $deliveredAt = $this->timestampAttribute($notification, 'delivered_at');
+        $viewedAt = $this->timestampAttribute($notification, 'viewed_at');
 
         return [
             'id' => $notification->id,
             ...$normalized,
+            'deliveredAt' => $deliveredAt,
+            'delivered_at' => $deliveredAt,
+            'viewedAt' => $viewedAt,
+            'viewed_at' => $viewedAt,
             'readAt' => $notification->read_at?->toIso8601String(),
             'read_at' => $notification->read_at?->toIso8601String(),
             'createdAt' => $notification->created_at?->toIso8601String(),
@@ -240,5 +249,24 @@ final class NotificationFeedNormalizer
         }
 
         return $data;
+    }
+
+    private function timestampAttribute(DatabaseNotification $notification, string $attribute): ?string
+    {
+        $value = $notification->getAttribute($attribute);
+
+        if ($value instanceof CarbonInterface) {
+            return $value->toIso8601String();
+        }
+
+        if (! is_string($value) || mb_trim($value) === '') {
+            return null;
+        }
+
+        try {
+            return CarbonImmutable::parse($value)->toIso8601String();
+        } catch (Throwable) {
+            return null;
+        }
     }
 }
