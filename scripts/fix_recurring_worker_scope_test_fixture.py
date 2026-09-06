@@ -102,8 +102,6 @@ if old not in text:
     raise SystemExit('expected recurring booking scope fixture')
 text = text.replace(old, new, 1)
 
-# Make the real eligibility prerequisites part of the test contract so a future
-# failure points at the prerequisite instead of a downstream missing row/event.
 old = '''    [$booking, $session] = makeRecurringSpecificScopeBooking([(int) $selectedWorker->id]);
 
     $result = app(CleaningBookingSessionWorkerEligibilityService::class)
@@ -118,48 +116,23 @@ if old not in text:
     raise SystemExit('expected eligibility test insertion point')
 text = text.replace(old, new, 1)
 
-old = '''    [$booking] = makeRecurringSpecificScopeBooking([
-        (int) $selectedWorker->id,
-        (int) $otherSelectedWorker->id,
-    ]);
-
-    Sanctum::actingAs($selectedUser);
+old = '''    Sanctum::actingAs($selectedUser);
+    $selectedIds = collect(getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending')
 '''
-new = '''    [$booking] = makeRecurringSpecificScopeBooking([
-        (int) $selectedWorker->id,
-        (int) $otherSelectedWorker->id,
-    ]);
-
-    expect(app(\\Modules\\Cleaning\\Services\\DepositService::class)->isWorkerEligibleForNewRequests($selectedWorker->fresh(['deposit'])))->toBeTrue()
-        ->and(app(\\Modules\\Cleaning\\Services\\DepositService::class)->isWorkerEligibleForNewRequests($otherSelectedWorker->fresh(['deposit'])))->toBeTrue()
-        ->and(CleaningBooking::query()
-            ->whereKey($booking->id)
-            ->whereJsonContains('specific_worker_ids', [(int) $selectedWorker->id])
-            ->exists())->toBeTrue()
-        ->and(CleaningBooking::query()
-            ->whereKey($booking->id)
-            ->whereJsonContains('specific_worker_ids', [(int) $otherSelectedWorker->id])
-            ->exists())->toBeTrue();
-
-    Sanctum::actingAs($selectedUser);
+new = '''    Sanctum::actingAs($selectedUser);
+    expect(CleaningBooking::query()->forCurrentWorker(true)->whereKey($booking->id)->exists())->toBeTrue();
+    $selectedSolvency = app(\\Modules\\Cleaning\\Services\\WorkerOrderSolvencyService::class)
+        ->solvencyPayloadForBooking($selectedWorker->fresh(['user', 'deposit']), $booking->fresh());
+    if (! (bool) ($selectedSolvency['canReceiveOrder'] ?? false)) {
+        throw new \\RuntimeException('selected scope solvency: '.json_encode($selectedSolvency));
+    }
+    $selectedIds = collect(getJson('/api/v1/cleaning-bookings?filter[forCurrentWorker]=1&filter[status]=pending')
 '''
 if old not in text:
-    raise SystemExit('expected filter test insertion point')
+    raise SystemExit('expected selected listing diagnostic insertion point')
 text = text.replace(old, new, 1)
 
-old = '''    [$booking] = makeRecurringSpecificScopeBooking([
-        (int) $firstWorker->id,
-        (int) $secondWorker->id,
-    ]);
-
-    (new NotifyEligibleWorkersNewOrderJob((int) $booking->id))->handle();
-'''
-new = '''    [$booking] = makeRecurringSpecificScopeBooking([
-        (int) $firstWorker->id,
-        (int) $secondWorker->id,
-    ]);
-
-    $bookingStartsAt = \\Carbon\\Carbon::parse(
+old = '''    $bookingStartsAt = \\Carbon\\Carbon::parse(
         $booking->scheduled_date->format('Y-m-d').' '.mb_trim((string) $booking->scheduled_time),
         config('app.timezone'),
     );
@@ -170,9 +143,27 @@ new = '''    [$booking] = makeRecurringSpecificScopeBooking([
 
     (new NotifyEligibleWorkersNewOrderJob((int) $booking->id))->handle();
 '''
+new = '''    $bookingStartsAt = \\Carbon\\Carbon::parse(
+        $booking->scheduled_date->format('Y-m-d').' '.mb_trim((string) $booking->scheduled_time),
+        config('app.timezone'),
+    );
+    expect(app(\\Modules\\Cleaning\\Services\\DepositService::class)->isWorkerEligibleForDispatch($firstWorker->fresh(['user', 'deposit'])))->toBeTrue()
+        ->and(app(\\Modules\\Cleaning\\Services\\DepositService::class)->isWorkerEligibleForDispatch($secondWorker->fresh(['user', 'deposit'])))->toBeTrue()
+        ->and($firstWorker->fresh()->isAvailableAt($bookingStartsAt))->toBeTrue()
+        ->and($secondWorker->fresh()->isAvailableAt($bookingStartsAt))->toBeTrue();
+    foreach ([$firstWorker, $secondWorker] as $candidate) {
+        $candidateSolvency = app(\\Modules\\Cleaning\\Services\\WorkerOrderSolvencyService::class)
+            ->solvencyPayloadForBooking($candidate->fresh(['user', 'deposit']), $booking->fresh());
+        if (! (bool) ($candidateSolvency['canReceiveOrder'] ?? false)) {
+            throw new \\RuntimeException('dispatch scope solvency: '.json_encode($candidateSolvency));
+        }
+    }
+
+    (new NotifyEligibleWorkersNewOrderJob((int) $booking->id))->handle();
+'''
 if old not in text:
-    raise SystemExit('expected dispatch test insertion point')
+    raise SystemExit('expected dispatch diagnostic insertion point')
 text = text.replace(old, new, 1)
 
 path.write_text(text)
-print('worker scope membership and deterministic fixtures adjusted')
+print('worker scope diagnostics and deterministic fixtures adjusted')
