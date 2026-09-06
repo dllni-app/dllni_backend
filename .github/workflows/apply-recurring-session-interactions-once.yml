@@ -1,0 +1,103 @@
+name: Apply Recurring Session Interactions Once
+
+on:
+  push:
+    branches:
+      - feature/cleaning-suite-main
+    paths:
+      - 'scripts/apply_recurring_session_interactions_patch.py'
+      - '.github/workflows/apply-recurring-session-interactions-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, bcmath, intl, gd
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Apply bounded patch
+        run: python3 scripts/apply_recurring_session_interactions_patch.py
+
+      - name: Format changed PHP
+        run: |
+          vendor/bin/pint \
+            Modules/Cleaning/database/migrations/2026_09_06_000030_add_interaction_state_to_cleaning_booking_sessions.php \
+            Modules/Cleaning/app/Models/CleaningBookingSession.php \
+            app/Models/WorkerCustomerRating.php \
+            app/Models/Dispute.php \
+            app/Data/DisputeData.php \
+            app/Http/Requests/DisputeRequest.php \
+            app/Http/Resources/DisputeResource.php \
+            app/Http/Controllers/API/DisputeController.php \
+            Modules/Cleaning/app/Services/DepositService.php \
+            Modules/Cleaning/app/Observers/CleaningBookingObserver.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionLifecycleService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionInteractionService.php \
+            Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionInteractionController.php \
+            Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php \
+            Modules/Cleaning/routes/sessions.php \
+            tests/Feature/Cleaning/RecurringCleaningSessionInteractionsTest.php
+
+      - name: Prepare application
+        run: |
+          cp .env.example .env
+          touch database/database.sqlite
+          php artisan key:generate
+
+      - name: Migrate database
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        run: php artisan migrate --force
+
+      - name: Run session interaction and regression tests
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        run: |
+          php artisan test \
+            tests/Feature/Cleaning/RecurringCleaningSessionInteractionsTest.php \
+            tests/Feature/UserModule/RecurringCleaningScheduleTest.php \
+            tests/Feature/UserModule/RecurringCleaningScheduleRevisionTest.php \
+            tests/Feature/Cleaning/RecurringCleaningWorkerScopeTest.php \
+            tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php
+
+      - name: Commit verified feature files
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            Modules/Cleaning/database/migrations/2026_09_06_000030_add_interaction_state_to_cleaning_booking_sessions.php \
+            Modules/Cleaning/app/Models/CleaningBookingSession.php \
+            app/Models/WorkerCustomerRating.php \
+            app/Models/Dispute.php \
+            app/Data/DisputeData.php \
+            app/Http/Requests/DisputeRequest.php \
+            app/Http/Resources/DisputeResource.php \
+            app/Http/Controllers/API/DisputeController.php \
+            Modules/Cleaning/app/Services/DepositService.php \
+            Modules/Cleaning/app/Observers/CleaningBookingObserver.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionLifecycleService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionInteractionService.php \
+            Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionInteractionController.php \
+            Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php \
+            Modules/Cleaning/routes/sessions.php \
+            tests/Feature/Cleaning/RecurringCleaningSessionInteractionsTest.php
+          git diff --cached --quiet && exit 1
+          git commit -m 'feat(cleaning): add per-session settlement review and disputes'
+          git push origin HEAD:feature/cleaning-suite-main
