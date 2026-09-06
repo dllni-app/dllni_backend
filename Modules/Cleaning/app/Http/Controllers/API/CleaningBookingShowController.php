@@ -8,16 +8,16 @@ use App\Models\Worker;
 use Illuminate\Support\Facades\Auth;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
-use Modules\Cleaning\Http\Resources\CleaningBookingResource;
+use Modules\Cleaning\Http\Resources\CleaningBookingOperationalResource;
 use Modules\Cleaning\Models\CleaningBooking;
 
 final class CleaningBookingShowController
 {
-    public function __invoke(CleaningBooking $cleaning_booking): CleaningBookingResource
+    public function __invoke(CleaningBooking $cleaning_booking): CleaningBookingOperationalResource
     {
         $this->ensureWorkerCanViewBooking($cleaning_booking);
 
-        return CleaningBookingResource::make($cleaning_booking->load([
+        return CleaningBookingOperationalResource::make($cleaning_booking->load([
             'customer',
             'worker.user',
             'preferredWorker.user',
@@ -27,6 +27,9 @@ final class CleaningBookingShowController
             'billingPolicy',
             'timeWarnings',
             'disputes',
+            'materials.material',
+            'materials.unit',
+            'specialServices.specialService',
         ]));
     }
 
