@@ -41,7 +41,13 @@ final class CleaningBookingSessionLifecycleService
 
             if ($assignment->started_travel_at === null) {
                 $startedAt = now();
-                $assignment->forceFill(['started_travel_at' => $startedAt])->save();
+                $attendanceResolvedAt = ($assignment->late_reported_at !== null || $assignment->no_travel_reported_at !== null)
+                    ? ($assignment->attendance_resolved_at ?? $startedAt)
+                    : $assignment->attendance_resolved_at;
+                $assignment->forceFill([
+                    'started_travel_at' => $startedAt,
+                    'attendance_resolved_at' => $attendanceResolvedAt,
+                ])->save();
                 if ($locked->started_travel_at === null) {
                     $locked->forceFill(['started_travel_at' => $startedAt])->save();
                 }

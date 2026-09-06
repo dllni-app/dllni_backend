@@ -105,6 +105,11 @@ Route::prefix('v1')
         )->name('cleaning-bookings.sessions.disputes.store');
 
         Route::post(
+            'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/attendance',
+            [CleaningBookingSessionLifecycleController::class, 'attendance'],
+        )->name('cleaning-bookings.sessions.attendance');
+
+        Route::post(
             'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/sos',
             [CleaningBookingSessionLifecycleController::class, 'sos'],
         )->name('cleaning-bookings.sessions.sos');

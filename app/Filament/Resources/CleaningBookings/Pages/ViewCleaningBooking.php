@@ -8,6 +8,7 @@ use App\Enums\WorkerCustomerRatingType;
 use App\Filament\Resources\CleaningBookings\CleaningBookingResource;
 use App\Filament\Resources\Disputes\DisputeResource;
 use App\Models\WorkerCustomerRating;
+use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Infolists\Components\RepeatableEntry;
@@ -36,6 +37,7 @@ final class ViewCleaningBooking extends ViewRecord
             'ratings.worker.user',
             'timeWarnings.booking',
             'timeWarnings.worker.user',
+            'sessions.workerAssignments.worker.user',
         ]);
 
         // ViewRecord schemas use a multi-column root layout by default. The
@@ -47,6 +49,44 @@ final class ViewCleaningBooking extends ViewRecord
 
         return $schema->components([
             ...$existingComponents,
+            Section::make('تقارير التأخر وعدم التنقل')
+                ->description('سجل بلاغات العميل لكل زيارة دورية وعامل، مع الإجراء الذي اختاره ووقت إغلاق الحالة.')
+                ->schema([
+                    RepeatableEntry::make('attendance_incidents')
+                        ->hiddenLabel()
+                        ->getStateUsing(fn (CleaningBooking $record): array => self::attendanceIncidents($record))
+                        ->schema([
+                            TextEntry::make('session')
+                                ->label('الزيارة'),
+                            TextEntry::make('worker')
+                                ->label('العامل')
+                                ->placeholder('-'),
+                            TextEntry::make('issue')
+                                ->label('البلاغ')
+                                ->badge()
+                                ->color(fn (string $state): string => $state === 'عدم بدء التنقل' ? 'danger' : 'warning'),
+                            TextEntry::make('action')
+                                ->label('قرار العميل')
+                                ->badge(),
+                            TextEntry::make('reported_at')
+                                ->label('وقت البلاغ')
+                                ->placeholder('-'),
+                            TextEntry::make('resolved_at')
+                                ->label('وقت الإغلاق')
+                                ->placeholder('مفتوح'),
+                            TextEntry::make('note')
+                                ->label('ملاحظة العميل')
+                                ->placeholder('لا توجد ملاحظة')
+                                ->columnSpanFull(),
+                        ])
+                        ->columns([
+                            'default' => 1,
+                            'md' => 2,
+                            'xl' => 3,
+                        ]),
+                ])
+                ->visible(fn (CleaningBooking $record): bool => self::attendanceIncidents($record) !== [])
+                ->columnSpanFull(),
             Section::make('تقييم العميل ومراجعته')
                 ->description('يعرض تقييم العميل المرتبط بهذا الحجز وتعليقه لكل عامل تم تقييمه من تطبيق العميل.')
                 ->schema([
@@ -182,6 +222,47 @@ final class ViewCleaningBooking extends ViewRecord
      *     created_at:string
      * }>
      */
+    /** @return array<int, array<string, string|null>> */
+    private static function attendanceIncidents(CleaningBooking $record): array
+    {
+        return $record->sessions
+            ->flatMap(function ($session): array {
+                return $session->workerAssignments
+                    ->filter(fn ($assignment): bool => $assignment->late_reported_at !== null || $assignment->no_travel_reported_at !== null)
+                    ->map(function ($assignment) use ($session): array {
+                        $isNoTravel = $assignment->no_travel_reported_at !== null;
+                        $reportedAt = $isNoTravel ? $assignment->no_travel_reported_at : $assignment->late_reported_at;
+
+                        return [
+                            'session' => sprintf(
+                                'زيارة %d — %s %s',
+                                (int) $session->sequence,
+                                $session->scheduled_date?->format('Y-m-d') ?? '-',
+                                (string) $session->scheduled_time,
+                            ),
+                            'worker' => $assignment->worker?->user?->name ?? $assignment->worker?->first_name ?? '-',
+                            'issue' => $isNoTravel ? 'عدم بدء التنقل' : 'تأخر',
+                            'action' => self::attendanceActionLabel($assignment->attendance_action),
+                            'reported_at' => $reportedAt?->format('Y-m-d h:i A'),
+                            'resolved_at' => $assignment->attendance_resolved_at?->format('Y-m-d h:i A'),
+                            'note' => filled($assignment->attendance_note) ? (string) $assignment->attendance_note : null,
+                        ];
+                    })->values()->all();
+            })
+            ->values()
+            ->all();
+    }
+
+    private static function attendanceActionLabel(?string $action): string
+    {
+        return match ($action) {
+            'wait' => 'انتظار العامل',
+            'replace' => 'طلب استبدال العامل',
+            'cancel' => 'إلغاء الزيارة دون غرامة',
+            default => 'لم يحدد إجراء',
+        };
+    }
+
     private static function customerWorkerRatings(CleaningBooking $record): array
     {
         $ratings = $record->relationLoaded('ratings')
@@ -276,7 +357,7 @@ final class ViewCleaningBooking extends ViewRecord
 
     private static function enumValue(mixed $value): ?string
     {
-        if ($value instanceof \BackedEnum) {
+        if ($value instanceof BackedEnum) {
             return (string) $value->value;
         }
 
@@ -294,7 +375,7 @@ final class ViewCleaningBooking extends ViewRecord
         }
 
         $formatted = number_format((float) $amount, 0, '.', ',');
-        $currency = strtoupper(trim((string) $currency));
+        $currency = mb_strtoupper(mb_trim((string) $currency));
 
         return $currency === '' || $currency === 'SYP'
             ? $formatted.' ل.س'

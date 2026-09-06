@@ -14,6 +14,7 @@ use Modules\Cleaning\Http\Requests\CleaningBookingSosRequest;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Services\CleaningBookingSchedulePresenter;
+use Modules\Cleaning\Services\CleaningBookingSessionAttendanceService;
 use Modules\Cleaning\Services\CleaningBookingSessionCancellationService;
 use Modules\Cleaning\Services\CleaningBookingSessionLifecycleService;
 use Modules\Cleaning\Services\CleaningBookingSessionSosService;
@@ -22,6 +23,7 @@ final class CleaningBookingSessionLifecycleController
 {
     public function __construct(
         private readonly CleaningBookingSessionLifecycleService $lifecycle,
+        private readonly CleaningBookingSessionAttendanceService $attendance,
         private readonly CleaningBookingSessionCancellationService $cancellation,
         private readonly CleaningBookingSessionSosService $sos,
         private readonly CleaningBookingSchedulePresenter $presenter,
@@ -217,6 +219,38 @@ final class CleaningBookingSessionLifecycleController
                 $cleaning_booking_session,
                 (int) $user->id,
                 (string) $validated['reason'],
+            );
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
+        }
+
+        return $this->payload($cleaning_booking, $session);
+    }
+
+    public function attendance(
+        Request $request,
+        CleaningBooking $cleaning_booking,
+        CleaningBookingSession $cleaning_booking_session,
+    ): JsonResponse {
+        $validated = $request->validate([
+            'workerIds' => ['required', 'array', 'min:1'],
+            'workerIds.*' => ['required', 'integer', 'distinct', 'exists:workers,id'],
+            'action' => ['required', 'string', 'in:wait,replace,cancel'],
+            'note' => ['sometimes', 'nullable', 'string', 'max:1000'],
+        ]);
+        $user = $request->user();
+        if ($user === null || (int) $cleaning_booking->customer_id !== (int) $user->id) {
+            abort(403, 'Only the booking customer can use attendance options.');
+        }
+
+        try {
+            $session = $this->attendance->handle(
+                booking: $cleaning_booking,
+                session: $cleaning_booking_session,
+                customerId: (int) $user->id,
+                workerIds: array_map('intval', $validated['workerIds']),
+                action: (string) $validated['action'],
+                note: isset($validated['note']) ? (string) $validated['note'] : null,
             );
         } catch (InvalidArgumentException $e) {
             throw ValidationException::withMessages(['status' => [$e->getMessage()]]);

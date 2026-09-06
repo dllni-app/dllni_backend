@@ -217,6 +217,55 @@ final class CleaningBookingSchedulePresenter
         ], true)
             ? 'not_required'
             : ((string) ($session->payment_status ?: 'pending'));
+        $lateGraceMinutes = max(0, (int) config('cleaning_attendance.late_grace_minutes', 15));
+        $noTravelGraceMinutes = max($lateGraceMinutes, (int) config('cleaning_attendance.no_travel_grace_minutes', 30));
+        $minutesPastStart = $startsAt !== null && $startsAt->lte($now)
+            ? (int) floor($startsAt->diffInMinutes($now))
+            : 0;
+        $attendanceEligibleAssignments = $session->workerAssignments
+            ->filter(static fn (CleaningBookingSessionWorkerAssignment $assignment): bool => $assignment->isActive()
+                && $assignment->started_travel_at === null
+                && $assignment->arrived_at === null
+                && $assignment->work_started_at === null)
+            ->values();
+        $lateWorkerIds = $minutesPastStart >= $lateGraceMinutes
+            ? $attendanceEligibleAssignments->pluck('worker_id')->map(static fn ($id): int => (int) $id)->values()
+            : collect();
+        $noTravelWorkerIds = $minutesPastStart >= $noTravelGraceMinutes
+            ? $attendanceEligibleAssignments->pluck('worker_id')->map(static fn ($id): int => (int) $id)->values()
+            : collect();
+        $reportableLateWorkerIds = $minutesPastStart >= $lateGraceMinutes
+            ? $attendanceEligibleAssignments->filter(static fn (CleaningBookingSessionWorkerAssignment $assignment): bool => $assignment->late_reported_at === null)
+                ->pluck('worker_id')->map(static fn ($id): int => (int) $id)->values()
+            : collect();
+        $reportableNoTravelWorkerIds = $minutesPastStart >= $noTravelGraceMinutes
+            ? $attendanceEligibleAssignments->filter(static fn (CleaningBookingSessionWorkerAssignment $assignment): bool => $assignment->no_travel_reported_at === null)
+                ->pluck('worker_id')->map(static fn ($id): int => (int) $id)->values()
+            : collect();
+        $attendanceIncidents = $session->workerAssignments
+            ->filter(static fn (CleaningBookingSessionWorkerAssignment $assignment): bool => $assignment->late_reported_at !== null
+                || $assignment->no_travel_reported_at !== null)
+            ->map(function (CleaningBookingSessionWorkerAssignment $assignment): array {
+                $worker = $assignment->worker;
+                $user = $worker?->user;
+
+                return [
+                    'workerId' => (int) $assignment->worker_id,
+                    'workerName' => $worker?->first_name ?: $user?->name,
+                    'lateReportedAt' => $assignment->late_reported_at?->toIso8601String(),
+                    'noTravelReportedAt' => $assignment->no_travel_reported_at?->toIso8601String(),
+                    'action' => $assignment->attendance_action,
+                    'resolvedAt' => $assignment->attendance_resolved_at?->toIso8601String(),
+                    'note' => $assignment->attendance_note,
+                ];
+            })->values();
+        $canUseAttendanceActions = $isCustomerView
+            && (string) $session->session_type === CleaningBookingSession::TYPE_RECURRING_CLEANING
+            && in_array($status, [
+                CleaningBookingSessionStatus::Scheduled->value,
+                CleaningBookingSessionStatus::WorkerAssigned->value,
+            ], true)
+            && ! $session->isTerminal();
 
         return [
             'id' => (int) $session->id,
@@ -254,6 +303,18 @@ final class CleaningBookingSchedulePresenter
             'acceptedWorkers' => $session->acceptedWorkerCount(),
             'remainingWorkers' => $session->remainingWorkerCount(),
             'isFullyCovered' => $session->isFullyCovered(),
+            'canReportLate' => $canUseAttendanceActions && $reportableLateWorkerIds->isNotEmpty(),
+            'canReportNoTravel' => $canUseAttendanceActions && $reportableNoTravelWorkerIds->isNotEmpty(),
+            'lateWorkerIds' => $lateWorkerIds->all(),
+            'noTravelWorkerIds' => $noTravelWorkerIds->all(),
+            'reportableLateWorkerIds' => $reportableLateWorkerIds->all(),
+            'reportableNoTravelWorkerIds' => $reportableNoTravelWorkerIds->all(),
+            'attendance' => [
+                'lateGraceMinutes' => $lateGraceMinutes,
+                'noTravelGraceMinutes' => $noTravelGraceMinutes,
+                'minutesPastStart' => $minutesPastStart,
+                'incidents' => $attendanceIncidents->all(),
+            ],
             'paymentStatus' => $paymentStatus,
             'paymentSettledAt' => $session->payment_settled_at?->toIso8601String(),
             'payment' => [
@@ -349,6 +410,11 @@ final class CleaningBookingSchedulePresenter
             'workerName' => $worker?->first_name ?: $user?->name,
             'status' => $assignment->status?->value ?? (string) $assignment->status,
             'acceptedAt' => $assignment->accepted_at?->toIso8601String(),
+            'lateReportedAt' => $assignment->late_reported_at?->toIso8601String(),
+            'noTravelReportedAt' => $assignment->no_travel_reported_at?->toIso8601String(),
+            'attendanceAction' => $assignment->attendance_action,
+            'attendanceResolvedAt' => $assignment->attendance_resolved_at?->toIso8601String(),
+            'attendanceNote' => $assignment->attendance_note,
             'startedTravelAt' => $assignment->started_travel_at?->toIso8601String(),
             'arrivedAt' => $assignment->arrived_at?->toIso8601String(),
             'locationUpdatedAt' => $assignment->location_updated_at?->toIso8601String(),

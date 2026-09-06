@@ -159,6 +159,24 @@ final class CleaningBookingsTable
                     ->color('info')
                     ->tooltip(fn (CleaningBooking $record): string => self::workerPayoutFormula($record))
                     ->toggleable(),
+                TextColumn::make('late_sessions_count')
+                    ->label(self::headerLabel('زيارات أُبلغ عن تأخرها', 'عدد الزيارات التي سجل العميل فيها تأخر عامل قبل بدء التنقل.'))
+                    ->getStateUsing(fn (CleaningBooking $record): int => $record->sessions
+                        ->filter(fn ($session): bool => $session->workerAssignments->contains(
+                            fn ($assignment): bool => $assignment->late_reported_at !== null,
+                        ))->count())
+                    ->badge()
+                    ->color(fn ($state): string => (int) $state > 0 ? 'warning' : 'gray')
+                    ->toggleable(),
+                TextColumn::make('no_travel_sessions_count')
+                    ->label(self::headerLabel('زيارات عدم التنقل', 'عدد الزيارات التي بلغ فيها العميل أن العامل لم يبدأ التنقل بعد مهلة عدم التنقل.'))
+                    ->getStateUsing(fn (CleaningBooking $record): int => $record->sessions
+                        ->filter(fn ($session): bool => $session->workerAssignments->contains(
+                            fn ($assignment): bool => $assignment->no_travel_reported_at !== null,
+                        ))->count())
+                    ->badge()
+                    ->color(fn ($state): string => (int) $state > 0 ? 'danger' : 'gray')
+                    ->toggleable(),
                 TextColumn::make('disputes_count')
                     ->getStateUsing(fn (CleaningBooking $record): int => (int) ($record->disputes_count ?? 0))
                     ->label(self::headerLabel('عدد النزاعات', 'عدد النزاعات المرتبطة بالحجز.')),
@@ -171,7 +189,7 @@ final class CleaningBookingsTable
                     'rooms.assignedWorker.user',
                     'rooms.plannedPreferredWorker.user',
                     'workerAssignments.worker.user',
-                    'sessions',
+                    'sessions.workerAssignments.worker.user',
                 ])
                 ->withCount([
                     'disputes',
@@ -187,6 +205,18 @@ final class CleaningBookingsTable
                 Filter::make('has_dispute')
                     ->label('يوجد نزاع')
                     ->query(fn (Builder $query): Builder => $query->whereHas('disputes')),
+                Filter::make('has_late_session')
+                    ->label('يوجد بلاغ تأخر')
+                    ->query(fn (Builder $query): Builder => $query->whereHas(
+                        'sessions.workerAssignments',
+                        fn (Builder $assignmentQuery): Builder => $assignmentQuery->whereNotNull('late_reported_at'),
+                    )),
+                Filter::make('has_no_travel_session')
+                    ->label('يوجد بلاغ عدم تنقل')
+                    ->query(fn (Builder $query): Builder => $query->whereHas(
+                        'sessions.workerAssignments',
+                        fn (Builder $assignmentQuery): Builder => $assignmentQuery->whereNotNull('no_travel_reported_at'),
+                    )),
                 Filter::make('scheduled_today')
                     ->label('مجدول اليوم')
                     ->query(fn (Builder $query): Builder => $query->whereDate('scheduled_date', today())),
