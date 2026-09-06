@@ -60,6 +60,9 @@ old = '''        'trust_score' => 100,
 '''
 new = '''        'trust_score' => 100,
         'preferred_work_type' => 'both',
+        'home_address' => 'Scope test worker home',
+        'home_latitude' => 36.2000,
+        'home_longitude' => 37.1500,
         'default_working_hours' => $workingHours,
 '''
 if old not in text:
@@ -96,6 +99,8 @@ new = '''        'worker_scope' => CleaningBooking::WORKER_SCOPE_SPECIFIC,
         'property_type' => 'apartment',
         'neighborhood_id' => null,
         'neighborhood_name' => null,
+        'address_latitude' => 36.2100,
+        'address_longitude' => 37.1600,
         'status' => CleaningBookingStatus::Pending->value,
 '''
 if old not in text:
@@ -167,4 +172,4 @@ if old not in text:
 text = text.replace(old, new, 1)
 
 path.write_text(text)
-print('worker scope diagnostics and deterministic fixtures adjusted')
+print('worker scope pricing, diagnostics, and deterministic fixtures adjusted')
