@@ -1,0 +1,128 @@
+from pathlib import Path
+
+path = Path('tests/Feature/Cleaning/RecurringCleaningWorkerScopeTest.php')
+text = path.read_text()
+
+before = '''beforeEach(function (): void {
+    CleaningDepositSetting::query()->delete();
+    CleaningDepositSetting::query()->create([
+        'minimum_deposit_amount' => 0,
+        'default_max_negative_balance' => 100000,
+        'restriction_threshold_percent' => 100,
+        'allowance_warning_threshold_percent' => 10,
+        'is_enabled' => true,
+        'trust_reject_after_accept_penalty' => 10,
+        'trust_minimum_for_dispatch' => 0,
+    ]);
+});
+
+'''
+if before not in text:
+    raise SystemExit('expected global worker-scope beforeEach fixture')
+text = text.replace(before, '', 1)
+
+old = '''function makeRecurringScopeEligibleWorker(string $email): array
+{
+    $user = User::factory()->create(['email' => $email, 'is_active' => true]);
+'''
+new = '''function makeRecurringScopeEligibleWorker(string $email): array
+{
+    CleaningDepositSetting::query()->firstOrCreate([], [
+        'minimum_deposit_amount' => 0,
+        'default_max_negative_balance' => 100000,
+        'restriction_threshold_percent' => 100,
+        'allowance_warning_threshold_percent' => 10,
+        'is_enabled' => true,
+        'trust_reject_after_accept_penalty' => 10,
+        'trust_minimum_for_dispatch' => 0,
+    ]);
+
+    $user = User::factory()->create(['email' => $email, 'is_active' => true]);
+'''
+if old not in text:
+    raise SystemExit('expected worker helper header')
+text = text.replace(old, new, 1)
+
+old = '''        'current_balance' => 100000,
+        'deposited_total' => 100000,
+        'withdrawn_total' => 0,
+        'minimum_required' => 0,
+        'max_negative_balance' => 100000,
+        'is_active' => true,
+'''
+new = '''        'current_balance' => 100000,
+        'debt_balance' => 0,
+        'deposited_total' => 100000,
+        'withdrawn_total' => 0,
+        'minimum_required' => 0,
+        'max_negative_balance' => 100000,
+        'is_active' => true,
+'''
+if old not in text:
+    raise SystemExit('expected deposit fixture')
+text = text.replace(old, new, 1)
+
+# Make the real eligibility prerequisites part of the test contract so a future
+# failure points at the prerequisite instead of a downstream missing row/event.
+old = '''    [$booking, $session] = makeRecurringSpecificScopeBooking([(int) $selectedWorker->id]);
+
+    $result = app(CleaningBookingSessionWorkerEligibilityService::class)
+'''
+new = '''    [$booking, $session] = makeRecurringSpecificScopeBooking([(int) $selectedWorker->id]);
+
+    expect(app(\\Modules\\Cleaning\\Services\\DepositService::class)->isWorkerEligibleForNewRequests($selectedWorker->fresh(['deposit'])))->toBeTrue();
+
+    $result = app(CleaningBookingSessionWorkerEligibilityService::class)
+'''
+if old not in text:
+    raise SystemExit('expected eligibility test insertion point')
+text = text.replace(old, new, 1)
+
+old = '''    [$booking] = makeRecurringSpecificScopeBooking([
+        (int) $selectedWorker->id,
+        (int) $otherSelectedWorker->id,
+    ]);
+
+    Sanctum::actingAs($selectedUser);
+'''
+new = '''    [$booking] = makeRecurringSpecificScopeBooking([
+        (int) $selectedWorker->id,
+        (int) $otherSelectedWorker->id,
+    ]);
+
+    expect(app(\\Modules\\Cleaning\\Services\\DepositService::class)->isWorkerEligibleForNewRequests($selectedWorker->fresh(['deposit'])))->toBeTrue()
+        ->and(app(\\Modules\\Cleaning\\Services\\DepositService::class)->isWorkerEligibleForNewRequests($otherSelectedWorker->fresh(['deposit'])))->toBeTrue();
+
+    Sanctum::actingAs($selectedUser);
+'''
+if old not in text:
+    raise SystemExit('expected filter test insertion point')
+text = text.replace(old, new, 1)
+
+old = '''    [$booking] = makeRecurringSpecificScopeBooking([
+        (int) $firstWorker->id,
+        (int) $secondWorker->id,
+    ]);
+
+    (new NotifyEligibleWorkersNewOrderJob((int) $booking->id))->handle();
+'''
+new = '''    [$booking] = makeRecurringSpecificScopeBooking([
+        (int) $firstWorker->id,
+        (int) $secondWorker->id,
+    ]);
+
+    $startsAt = $booking->startsAt();
+    expect(app(\\Modules\\Cleaning\\Services\\DepositService::class)->isWorkerEligibleForDispatch($firstWorker->fresh(['user', 'deposit'])))->toBeTrue()
+        ->and(app(\\Modules\\Cleaning\\Services\\DepositService::class)->isWorkerEligibleForDispatch($secondWorker->fresh(['user', 'deposit'])))->toBeTrue()
+        ->and($startsAt)->not->toBeNull()
+        ->and($firstWorker->fresh()->isAvailableAt($startsAt))->toBeTrue()
+        ->and($secondWorker->fresh()->isAvailableAt($startsAt))->toBeTrue();
+
+    (new NotifyEligibleWorkersNewOrderJob((int) $booking->id))->handle();
+'''
+if old not in text:
+    raise SystemExit('expected dispatch test insertion point')
+text = text.replace(old, new, 1)
+
+path.write_text(text)
+print('worker scope test fixture isolated')
