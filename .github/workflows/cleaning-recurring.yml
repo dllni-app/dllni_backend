@@ -1,3 +1,4 @@
+# Check-only recurring cleaning verification. This workflow must never modify repository content.
 name: Cleaning Recurring
 
 on:
@@ -7,14 +8,18 @@ on:
       - feature/cleaning-suite-main
     paths:
       - 'database/migrations/2026_09_05_000010_add_recurring_pause_fields_to_cleaning_bookings_table.php'
+      - 'database/migrations/2026_09_06_000001_add_recurring_worker_scope_to_cleaning_bookings_table.php'
+      - 'app/Jobs/NotifyEligibleWorkersNewOrderJob.php'
       - 'Modules/Cleaning/app/Enums/CleaningBookingSessionStatus.php'
       - 'Modules/Cleaning/app/Models/CleaningBooking.php'
       - 'Modules/Cleaning/app/Models/CleaningBookingSession.php'
+      - 'Modules/Cleaning/app/Traits/FilterQueries/CleaningBookingFilterQuery.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionAcceptanceService.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionCancellationService.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionFinancialAggregationService.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionWorkerChangeService.php'
+      - 'Modules/Cleaning/app/Services/CleaningBookingSessionWorkerEligibilityService.php'
       - 'Modules/Cleaning/app/Services/CleaningPreferredWorkerFallbackService.php'
       - 'Modules/Cleaning/app/Services/RecurringCleaningPauseService.php'
       - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLifecycleController.php'
@@ -25,27 +30,38 @@ on:
       - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderStoreController.php'
       - 'Modules/User/app/Http/Controllers/API/UserRecurringCleaningScheduleRevisionController.php'
       - 'Modules/User/app/Http/Requests/Concerns/ValidatesEventAssistanceSchedule.php'
+      - 'Modules/User/app/Http/Requests/Concerns/ValidatesRecurringWorkerScope.php'
+      - 'Modules/User/app/Http/Requests/UserCleaningOrderEstimatePriceRequest.php'
+      - 'Modules/User/app/Http/Requests/UserCleaningOrderStoreRequest.php'
       - 'Modules/User/app/Http/Requests/UserRecurringCleaningScheduleRevisionRequest.php'
+      - 'Modules/User/app/Http/Resources/UserCleaningBookingResource.php'
       - 'Modules/User/app/Services/RecurringCleaningScheduleService.php'
       - 'Modules/User/app/Services/RecurringCleaningScheduleRevisionService.php'
       - 'Modules/User/app/Services/UserCleaningOrderEstimationService.php'
+      - 'Modules/User/app/Services/UserCleaningOrderService.php'
       - 'Modules/User/routes/api.php'
+      - 'tests/Feature/Cleaning/CleaningNewOrderDispatchTest.php'
       - 'tests/Feature/Cleaning/RecurringCleaningPreferredWorkerFallbackTest.php'
       - 'tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php'
+      - 'tests/Feature/Cleaning/RecurringCleaningWorkerScopeTest.php'
       - 'tests/Feature/UserModule/RecurringCleaningScheduleTest.php'
       - 'tests/Feature/UserModule/RecurringCleaningScheduleRevisionTest.php'
       - '.github/workflows/cleaning-recurring.yml'
   pull_request:
     paths:
       - 'database/migrations/2026_09_05_000010_add_recurring_pause_fields_to_cleaning_bookings_table.php'
+      - 'database/migrations/2026_09_06_000001_add_recurring_worker_scope_to_cleaning_bookings_table.php'
+      - 'app/Jobs/NotifyEligibleWorkersNewOrderJob.php'
       - 'Modules/Cleaning/app/Enums/CleaningBookingSessionStatus.php'
       - 'Modules/Cleaning/app/Models/CleaningBooking.php'
       - 'Modules/Cleaning/app/Models/CleaningBookingSession.php'
+      - 'Modules/Cleaning/app/Traits/FilterQueries/CleaningBookingFilterQuery.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionAcceptanceService.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionCancellationService.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionFinancialAggregationService.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionWorkerChangeService.php'
+      - 'Modules/Cleaning/app/Services/CleaningBookingSessionWorkerEligibilityService.php'
       - 'Modules/Cleaning/app/Services/CleaningPreferredWorkerFallbackService.php'
       - 'Modules/Cleaning/app/Services/RecurringCleaningPauseService.php'
       - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLifecycleController.php'
@@ -56,13 +72,20 @@ on:
       - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderStoreController.php'
       - 'Modules/User/app/Http/Controllers/API/UserRecurringCleaningScheduleRevisionController.php'
       - 'Modules/User/app/Http/Requests/Concerns/ValidatesEventAssistanceSchedule.php'
+      - 'Modules/User/app/Http/Requests/Concerns/ValidatesRecurringWorkerScope.php'
+      - 'Modules/User/app/Http/Requests/UserCleaningOrderEstimatePriceRequest.php'
+      - 'Modules/User/app/Http/Requests/UserCleaningOrderStoreRequest.php'
       - 'Modules/User/app/Http/Requests/UserRecurringCleaningScheduleRevisionRequest.php'
+      - 'Modules/User/app/Http/Resources/UserCleaningBookingResource.php'
       - 'Modules/User/app/Services/RecurringCleaningScheduleService.php'
       - 'Modules/User/app/Services/RecurringCleaningScheduleRevisionService.php'
       - 'Modules/User/app/Services/UserCleaningOrderEstimationService.php'
+      - 'Modules/User/app/Services/UserCleaningOrderService.php'
       - 'Modules/User/routes/api.php'
+      - 'tests/Feature/Cleaning/CleaningNewOrderDispatchTest.php'
       - 'tests/Feature/Cleaning/RecurringCleaningPreferredWorkerFallbackTest.php'
       - 'tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php'
+      - 'tests/Feature/Cleaning/RecurringCleaningWorkerScopeTest.php'
       - 'tests/Feature/UserModule/RecurringCleaningScheduleTest.php'
       - 'tests/Feature/UserModule/RecurringCleaningScheduleRevisionTest.php'
       - '.github/workflows/cleaning-recurring.yml'
@@ -105,14 +128,18 @@ jobs:
         run: |
           vendor/bin/pint --test \
             database/migrations/2026_09_05_000010_add_recurring_pause_fields_to_cleaning_bookings_table.php \
+            database/migrations/2026_09_06_000001_add_recurring_worker_scope_to_cleaning_bookings_table.php \
+            app/Jobs/NotifyEligibleWorkersNewOrderJob.php \
             Modules/Cleaning/app/Enums/CleaningBookingSessionStatus.php \
             Modules/Cleaning/app/Models/CleaningBooking.php \
             Modules/Cleaning/app/Models/CleaningBookingSession.php \
+            Modules/Cleaning/app/Traits/FilterQueries/CleaningBookingFilterQuery.php \
             Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php \
             Modules/Cleaning/app/Services/CleaningBookingSessionAcceptanceService.php \
             Modules/Cleaning/app/Services/CleaningBookingSessionCancellationService.php \
             Modules/Cleaning/app/Services/CleaningBookingSessionFinancialAggregationService.php \
             Modules/Cleaning/app/Services/CleaningBookingSessionWorkerChangeService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionWorkerEligibilityService.php \
             Modules/Cleaning/app/Services/CleaningPreferredWorkerFallbackService.php \
             Modules/Cleaning/app/Services/RecurringCleaningPauseService.php \
             Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLifecycleController.php \
@@ -123,13 +150,20 @@ jobs:
             Modules/User/app/Http/Controllers/API/UserCleaningOrderStoreController.php \
             Modules/User/app/Http/Controllers/API/UserRecurringCleaningScheduleRevisionController.php \
             Modules/User/app/Http/Requests/Concerns/ValidatesEventAssistanceSchedule.php \
+            Modules/User/app/Http/Requests/Concerns/ValidatesRecurringWorkerScope.php \
+            Modules/User/app/Http/Requests/UserCleaningOrderEstimatePriceRequest.php \
+            Modules/User/app/Http/Requests/UserCleaningOrderStoreRequest.php \
             Modules/User/app/Http/Requests/UserRecurringCleaningScheduleRevisionRequest.php \
+            Modules/User/app/Http/Resources/UserCleaningBookingResource.php \
             Modules/User/app/Services/RecurringCleaningScheduleService.php \
             Modules/User/app/Services/RecurringCleaningScheduleRevisionService.php \
             Modules/User/app/Services/UserCleaningOrderEstimationService.php \
+            Modules/User/app/Services/UserCleaningOrderService.php \
             Modules/User/routes/api.php \
+            tests/Feature/Cleaning/CleaningNewOrderDispatchTest.php \
             tests/Feature/Cleaning/RecurringCleaningPreferredWorkerFallbackTest.php \
             tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php \
+            tests/Feature/Cleaning/RecurringCleaningWorkerScopeTest.php \
             tests/Feature/UserModule/RecurringCleaningScheduleTest.php \
             tests/Feature/UserModule/RecurringCleaningScheduleRevisionTest.php
 
@@ -143,8 +177,10 @@ jobs:
           php artisan test \
             tests/Feature/UserModule/RecurringCleaningScheduleRevisionTest.php \
             tests/Feature/UserModule/RecurringCleaningScheduleTest.php \
+            tests/Feature/Cleaning/RecurringCleaningWorkerScopeTest.php \
             tests/Feature/Cleaning/RecurringCleaningPreferredWorkerFallbackTest.php \
             tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php \
+            tests/Feature/Cleaning/CleaningNewOrderDispatchTest.php \
             tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php \
             2>&1 | tee recurring-cleaning-test.log
 
