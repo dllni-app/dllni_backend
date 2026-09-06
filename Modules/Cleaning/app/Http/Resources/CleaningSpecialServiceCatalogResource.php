@@ -18,7 +18,7 @@ final class CleaningSpecialServiceCatalogResource extends JsonResource
             'name' => $this->name,
             'category' => 'special_service',
             'isActive' => (bool) $this->is_active,
-            'image' => $this->image_url,
+            'image' => $this->imageUrl(),
             'pricingUnit' => $this->pricing_unit,
             'baseUnitPrice' => (float) $this->base_unit_price,
             'dirtinessRules' => $this->whenLoaded('dirtinessRules', fn () => $this->dirtinessRules->map(static fn ($rule): array => [
