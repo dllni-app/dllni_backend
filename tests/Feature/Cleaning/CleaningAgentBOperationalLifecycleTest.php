@@ -2,9 +2,15 @@
 
 declare(strict_types=1);
 
+use App\Models\CleaningDepositSetting;
+use App\Models\CleaningFinancialSetting;
+use App\Models\CleaningWorkerDeposit;
+use App\Models\Worker;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingMaterial;
+use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Models\CleaningMaterial;
 use Modules\Cleaning\Models\CleaningMaterialInventoryMovement;
 use Modules\Cleaning\Models\CleaningMaterialType;
@@ -133,4 +139,115 @@ it('finalizes open-time billing from authoritative booking timestamps', function
     $booking->forceFill(['updated_at' => now()->addSecond()])->save();
 
     expect($booking->refresh()->open_time_finalized_at?->equalTo($finalizedAt))->toBeTrue();
+});
+
+it('reprices multi-worker open-time shares before completed commission settlement', function (): void {
+    CleaningFinancialSetting::query()->updateOrCreate(
+        ['id' => 1],
+        [
+            'default_commission_rate' => 25,
+            'commission_type' => 'percent',
+            'commission_fixed_amount' => null,
+            'travel_per_km' => 10,
+            'travel_distance_start_point' => 'worker_home',
+        ],
+    );
+    CleaningDepositSetting::query()->updateOrCreate(
+        ['id' => CleaningDepositSetting::query()->orderBy('id')->value('id') ?? 1],
+        [
+            'minimum_deposit_amount' => 0,
+            'restriction_threshold_percent' => 100,
+            'allowance_warning_threshold_percent' => 10,
+            'trust_reject_after_accept_penalty' => 10,
+            'trust_minimum_for_dispatch' => 50,
+        ],
+    );
+
+    $startedAt = now()->subMinutes(90)->startOfSecond();
+    $finishedAt = now()->startOfSecond();
+    $booking = CleaningBooking::factory()->create([
+        'status' => CleaningBookingStatus::InProgress,
+        'booking_kind' => 'open_time',
+        'assignment_mode' => 'open_count',
+        'number_of_workers' => 2,
+        'open_time_hourly_rate' => 100,
+        'open_time_minimum_minutes' => 60,
+        'open_time_rounding_minutes' => 30,
+        'work_started_at' => $startedAt,
+        'base_price' => 200,
+        'addons_total' => 0,
+        'address_latitude' => 36.2,
+        'address_longitude' => 37.1,
+        'is_pricing_final' => false,
+    ]);
+
+    $workers = collect([1, 2])->map(function (): Worker {
+        $worker = Worker::factory()->create([
+            'trust_score' => 80,
+            'home_address' => 'Same location',
+            'home_latitude' => 36.2,
+            'home_longitude' => 37.1,
+        ]);
+        CleaningWorkerDeposit::query()->updateOrCreate(
+            ['worker_id' => $worker->id],
+            [
+                'current_balance' => 1000,
+                'debt_balance' => 0,
+                'deposited_total' => 1000,
+                'withdrawn_total' => 0,
+                'minimum_required' => 0,
+                'max_negative_balance' => 1000,
+            ],
+        );
+
+        return $worker;
+    });
+
+    foreach ($workers as $worker) {
+        CleaningBookingWorkerAssignment::query()->create([
+            'cleaning_booking_id' => $booking->id,
+            'worker_id' => $worker->id,
+            'status' => CleaningBookingWorkerAssignmentStatus::InProgress->value,
+            'accepted_at' => now()->subHours(2),
+            'work_started_at' => $startedAt,
+            'room_count' => 0,
+            'rooms_weight' => 0,
+            'service_share_amount' => 100,
+            'travel_fee' => 10,
+            'admin_margin_amount' => 25,
+            'worker_amount' => 110,
+            'currency' => 'SYP',
+        ]);
+    }
+
+    // This deliberately uses the direct terminal path. The Completed observer
+    // performs commission settlement, so the assertion proves Open-Time repricing
+    // happened before the debit rather than in a later `updated` observer.
+    $booking->update([
+        'status' => CleaningBookingStatus::Completed,
+        'work_finished_at' => $finishedAt,
+    ]);
+
+    $booking->refresh();
+    $assignments = CleaningBookingWorkerAssignment::query()
+        ->where('cleaning_booking_id', $booking->id)
+        ->orderBy('id')
+        ->get();
+
+    expect((float) $booking->open_time_final_amount)->toBe(300.0)
+        ->and($booking->open_time_actual_minutes)->toBe(90)
+        ->and($booking->open_time_billable_minutes)->toBe(90)
+        ->and((float) $assignments[0]->service_share_amount)->toBe(150.0)
+        ->and((float) $assignments[1]->service_share_amount)->toBe(150.0)
+        ->and((float) $assignments[0]->admin_margin_amount)->toBe(38.0)
+        ->and((float) $assignments[1]->admin_margin_amount)->toBe(38.0)
+        ->and((float) $booking->admin_margin_amount)->toBe(76.0)
+        ->and((float) $booking->travel_fee)->toBe(20.0)
+        ->and((float) $booking->total_price)->toBe(396.0);
+
+    foreach ($workers as $worker) {
+        $deposit = $worker->fresh()->deposit;
+        expect((float) $deposit->current_balance)->toBe(962.0)
+            ->and((float) $deposit->debt_balance)->toBe(0.0);
+    }
 });
