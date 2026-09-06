@@ -132,18 +132,19 @@ if old not in text:
     raise SystemExit('expected selected listing diagnostic insertion point')
 text = text.replace(old, new, 1)
 
-old = '''    $bookingStartsAt = \\Carbon\\Carbon::parse(
-        $booking->scheduled_date->format('Y-m-d').' '.mb_trim((string) $booking->scheduled_time),
-        config('app.timezone'),
-    );
-    expect(app(\\Modules\\Cleaning\\Services\\DepositService::class)->isWorkerEligibleForDispatch($firstWorker->fresh(['user', 'deposit'])))->toBeTrue()
-        ->and(app(\\Modules\\Cleaning\\Services\\DepositService::class)->isWorkerEligibleForDispatch($secondWorker->fresh(['user', 'deposit'])))->toBeTrue()
-        ->and($firstWorker->fresh()->isAvailableAt($bookingStartsAt))->toBeTrue()
-        ->and($secondWorker->fresh()->isAvailableAt($bookingStartsAt))->toBeTrue();
+old = '''    [$booking] = makeRecurringSpecificScopeBooking([
+        (int) $firstWorker->id,
+        (int) $secondWorker->id,
+    ]);
 
     (new NotifyEligibleWorkersNewOrderJob((int) $booking->id))->handle();
 '''
-new = '''    $bookingStartsAt = \\Carbon\\Carbon::parse(
+new = '''    [$booking] = makeRecurringSpecificScopeBooking([
+        (int) $firstWorker->id,
+        (int) $secondWorker->id,
+    ]);
+
+    $bookingStartsAt = \\Carbon\\Carbon::parse(
         $booking->scheduled_date->format('Y-m-d').' '.mb_trim((string) $booking->scheduled_time),
         config('app.timezone'),
     );
