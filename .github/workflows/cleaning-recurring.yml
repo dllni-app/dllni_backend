@@ -7,34 +7,7 @@ on:
     branches:
       - feature/cleaning-suite-main
     paths:
-      - 'database/migrations/2026_09_05_000010_add_recurring_pause_fields_to_cleaning_bookings_table.php'
-      - 'database/migrations/2026_09_06_000001_add_recurring_worker_scope_to_cleaning_bookings_table.php'
-      - 'database/migrations/2026_09_06_000020_add_delivery_view_state_to_notifications_table.php'
-      - 'config/cleaning_recurring_notification_types.php'
-      - 'app/Jobs/NotifyEligibleWorkersNewOrderJob.php'
-      - 'app/Http/Controllers/API/UserNotificationController.php'
-      - 'app/Http/Resources/UserNotificationResource.php'
-      - 'app/Notifications/Cleaning/BookingLifecycleNotification.php'
-      - 'app/Notifications/Core/NotificationFeedNormalizer.php'
-      - 'app/Notifications/Core/NotificationTypeRegistry.php'
-      - 'Modules/Cleaning/app/Enums/CleaningBookingSessionStatus.php'
-      - 'Modules/Cleaning/app/Models/CleaningBooking.php'
-      - 'Modules/Cleaning/app/Models/CleaningBookingSession.php'
-      - 'Modules/Cleaning/app/Traits/FilterQueries/CleaningBookingFilterQuery.php'
-      - 'Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php'
-      - 'Modules/Cleaning/app/Services/CleaningBookingSessionAcceptanceService.php'
-      - 'Modules/Cleaning/app/Services/CleaningBookingSessionCancellationService.php'
-      - 'Modules/Cleaning/app/Services/CleaningBookingSessionCoverageService.php'
-      - 'Modules/Cleaning/app/Services/CleaningBookingSessionFinancialAggregationService.php'
-      - 'Modules/Cleaning/app/Services/CleaningBookingSessionWorkerChangeService.php'
-      - 'Modules/Cleaning/app/Services/CleaningBookingSessionWorkerEligibilityService.php'
-      - 'Modules/Cleaning/app/Services/CleaningPreferredWorkerFallbackService.php'
-      - 'Modules/Cleaning/app/Services/RecurringCleaningCoverageNotificationService.php'
-      - 'Modules/Cleaning/app/Services/RecurringCleaningPauseService.php'
-      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLifecycleController.php'
-      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionWorkerChangeController.php'
-      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningRecurringSeriesController.php'
-      - 'Modules/Cleaning/routes/sessions.php'
+      - 'Modules/Cleaning/**'
       - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderEstimatePriceController.php'
       - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderStoreController.php'
       - 'Modules/User/app/Http/Controllers/API/UserRecurringCleaningScheduleRevisionController.php'
@@ -49,7 +22,23 @@ on:
       - 'Modules/User/app/Services/UserCleaningOrderEstimationService.php'
       - 'Modules/User/app/Services/UserCleaningOrderService.php'
       - 'Modules/User/routes/api.php'
-      - 'tests/Feature/Cleaning/CleaningNewOrderDispatchTest.php'
+      - 'app/Data/DisputeData.php'
+      - 'app/Http/Controllers/API/DisputeController.php'
+      - 'app/Http/Controllers/API/UserNotificationController.php'
+      - 'app/Http/Requests/DisputeRequest.php'
+      - 'app/Http/Resources/DisputeResource.php'
+      - 'app/Http/Resources/UserNotificationResource.php'
+      - 'app/Jobs/NotifyEligibleWorkersNewOrderJob.php'
+      - 'app/Models/Dispute.php'
+      - 'app/Models/WorkerCustomerRating.php'
+      - 'app/Notifications/Cleaning/BookingLifecycleNotification.php'
+      - 'app/Notifications/Core/NotificationFeedNormalizer.php'
+      - 'app/Notifications/Core/NotificationTypeRegistry.php'
+      - 'config/cleaning_recurring_notification_types.php'
+      - 'database/migrations/2026_09_05_000010_add_recurring_pause_fields_to_cleaning_bookings_table.php'
+      - 'database/migrations/2026_09_06_000001_add_recurring_worker_scope_to_cleaning_bookings_table.php'
+      - 'database/migrations/2026_09_06_000020_add_delivery_view_state_to_notifications_table.php'
+      - 'tests/Feature/Cleaning/RecurringCleaningSessionInteractionsTest.php'
       - 'tests/Feature/Cleaning/RecurringCleaningCoverageNotificationTest.php'
       - 'tests/Feature/Cleaning/RecurringCleaningPreferredWorkerFallbackTest.php'
       - 'tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php'
@@ -60,34 +49,7 @@ on:
       - '.github/workflows/cleaning-recurring.yml'
   pull_request:
     paths:
-      - 'database/migrations/2026_09_05_000010_add_recurring_pause_fields_to_cleaning_bookings_table.php'
-      - 'database/migrations/2026_09_06_000001_add_recurring_worker_scope_to_cleaning_bookings_table.php'
-      - 'database/migrations/2026_09_06_000020_add_delivery_view_state_to_notifications_table.php'
-      - 'config/cleaning_recurring_notification_types.php'
-      - 'app/Jobs/NotifyEligibleWorkersNewOrderJob.php'
-      - 'app/Http/Controllers/API/UserNotificationController.php'
-      - 'app/Http/Resources/UserNotificationResource.php'
-      - 'app/Notifications/Cleaning/BookingLifecycleNotification.php'
-      - 'app/Notifications/Core/NotificationFeedNormalizer.php'
-      - 'app/Notifications/Core/NotificationTypeRegistry.php'
-      - 'Modules/Cleaning/app/Enums/CleaningBookingSessionStatus.php'
-      - 'Modules/Cleaning/app/Models/CleaningBooking.php'
-      - 'Modules/Cleaning/app/Models/CleaningBookingSession.php'
-      - 'Modules/Cleaning/app/Traits/FilterQueries/CleaningBookingFilterQuery.php'
-      - 'Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php'
-      - 'Modules/Cleaning/app/Services/CleaningBookingSessionAcceptanceService.php'
-      - 'Modules/Cleaning/app/Services/CleaningBookingSessionCancellationService.php'
-      - 'Modules/Cleaning/app/Services/CleaningBookingSessionCoverageService.php'
-      - 'Modules/Cleaning/app/Services/CleaningBookingSessionFinancialAggregationService.php'
-      - 'Modules/Cleaning/app/Services/CleaningBookingSessionWorkerChangeService.php'
-      - 'Modules/Cleaning/app/Services/CleaningBookingSessionWorkerEligibilityService.php'
-      - 'Modules/Cleaning/app/Services/CleaningPreferredWorkerFallbackService.php'
-      - 'Modules/Cleaning/app/Services/RecurringCleaningCoverageNotificationService.php'
-      - 'Modules/Cleaning/app/Services/RecurringCleaningPauseService.php'
-      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLifecycleController.php'
-      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionWorkerChangeController.php'
-      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningRecurringSeriesController.php'
-      - 'Modules/Cleaning/routes/sessions.php'
+      - 'Modules/Cleaning/**'
       - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderEstimatePriceController.php'
       - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderStoreController.php'
       - 'Modules/User/app/Http/Controllers/API/UserRecurringCleaningScheduleRevisionController.php'
@@ -102,7 +64,23 @@ on:
       - 'Modules/User/app/Services/UserCleaningOrderEstimationService.php'
       - 'Modules/User/app/Services/UserCleaningOrderService.php'
       - 'Modules/User/routes/api.php'
-      - 'tests/Feature/Cleaning/CleaningNewOrderDispatchTest.php'
+      - 'app/Data/DisputeData.php'
+      - 'app/Http/Controllers/API/DisputeController.php'
+      - 'app/Http/Controllers/API/UserNotificationController.php'
+      - 'app/Http/Requests/DisputeRequest.php'
+      - 'app/Http/Resources/DisputeResource.php'
+      - 'app/Http/Resources/UserNotificationResource.php'
+      - 'app/Jobs/NotifyEligibleWorkersNewOrderJob.php'
+      - 'app/Models/Dispute.php'
+      - 'app/Models/WorkerCustomerRating.php'
+      - 'app/Notifications/Cleaning/BookingLifecycleNotification.php'
+      - 'app/Notifications/Core/NotificationFeedNormalizer.php'
+      - 'app/Notifications/Core/NotificationTypeRegistry.php'
+      - 'config/cleaning_recurring_notification_types.php'
+      - 'database/migrations/2026_09_05_000010_add_recurring_pause_fields_to_cleaning_bookings_table.php'
+      - 'database/migrations/2026_09_06_000001_add_recurring_worker_scope_to_cleaning_bookings_table.php'
+      - 'database/migrations/2026_09_06_000020_add_delivery_view_state_to_notifications_table.php'
+      - 'tests/Feature/Cleaning/RecurringCleaningSessionInteractionsTest.php'
       - 'tests/Feature/Cleaning/RecurringCleaningCoverageNotificationTest.php'
       - 'tests/Feature/Cleaning/RecurringCleaningPreferredWorkerFallbackTest.php'
       - 'tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php'
@@ -149,49 +127,29 @@ jobs:
       - name: Check formatting
         run: |
           vendor/bin/pint --test \
-            database/migrations/2026_09_05_000010_add_recurring_pause_fields_to_cleaning_bookings_table.php \
-            database/migrations/2026_09_06_000001_add_recurring_worker_scope_to_cleaning_bookings_table.php \
-            database/migrations/2026_09_06_000020_add_delivery_view_state_to_notifications_table.php \
-            config/cleaning_recurring_notification_types.php \
-            app/Jobs/NotifyEligibleWorkersNewOrderJob.php \
+            Modules/Cleaning/database/migrations/2026_09_06_000030_add_interaction_state_to_cleaning_booking_sessions.php \
+            Modules/Cleaning/app/Models/CleaningBookingSession.php \
+            Modules/Cleaning/app/Observers/CleaningBookingObserver.php \
+            Modules/Cleaning/app/Services/DepositService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionLifecycleService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionInteractionService.php \
+            Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionInteractionController.php \
+            Modules/Cleaning/routes/sessions.php \
+            app/Models/WorkerCustomerRating.php \
+            app/Models/Dispute.php \
+            app/Data/DisputeData.php \
+            app/Http/Requests/DisputeRequest.php \
+            app/Http/Resources/DisputeResource.php \
+            app/Http/Controllers/API/DisputeController.php \
             app/Http/Controllers/API/UserNotificationController.php \
             app/Http/Resources/UserNotificationResource.php \
             app/Notifications/Cleaning/BookingLifecycleNotification.php \
             app/Notifications/Core/NotificationFeedNormalizer.php \
             app/Notifications/Core/NotificationTypeRegistry.php \
-            Modules/Cleaning/app/Enums/CleaningBookingSessionStatus.php \
-            Modules/Cleaning/app/Models/CleaningBooking.php \
-            Modules/Cleaning/app/Models/CleaningBookingSession.php \
-            Modules/Cleaning/app/Traits/FilterQueries/CleaningBookingFilterQuery.php \
-            Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php \
-            Modules/Cleaning/app/Services/CleaningBookingSessionAcceptanceService.php \
-            Modules/Cleaning/app/Services/CleaningBookingSessionCancellationService.php \
             Modules/Cleaning/app/Services/CleaningBookingSessionCoverageService.php \
-            Modules/Cleaning/app/Services/CleaningBookingSessionFinancialAggregationService.php \
-            Modules/Cleaning/app/Services/CleaningBookingSessionWorkerChangeService.php \
-            Modules/Cleaning/app/Services/CleaningBookingSessionWorkerEligibilityService.php \
-            Modules/Cleaning/app/Services/CleaningPreferredWorkerFallbackService.php \
             Modules/Cleaning/app/Services/RecurringCleaningCoverageNotificationService.php \
-            Modules/Cleaning/app/Services/RecurringCleaningPauseService.php \
-            Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLifecycleController.php \
-            Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionWorkerChangeController.php \
-            Modules/Cleaning/app/Http/Controllers/API/CleaningRecurringSeriesController.php \
-            Modules/Cleaning/routes/sessions.php \
-            Modules/User/app/Http/Controllers/API/UserCleaningOrderEstimatePriceController.php \
-            Modules/User/app/Http/Controllers/API/UserCleaningOrderStoreController.php \
-            Modules/User/app/Http/Controllers/API/UserRecurringCleaningScheduleRevisionController.php \
-            Modules/User/app/Http/Requests/Concerns/ValidatesEventAssistanceSchedule.php \
-            Modules/User/app/Http/Requests/Concerns/ValidatesRecurringWorkerScope.php \
-            Modules/User/app/Http/Requests/UserCleaningOrderEstimatePriceRequest.php \
-            Modules/User/app/Http/Requests/UserCleaningOrderStoreRequest.php \
-            Modules/User/app/Http/Requests/UserRecurringCleaningScheduleRevisionRequest.php \
-            Modules/User/app/Http/Resources/UserCleaningBookingResource.php \
-            Modules/User/app/Services/RecurringCleaningScheduleService.php \
-            Modules/User/app/Services/RecurringCleaningScheduleRevisionService.php \
-            Modules/User/app/Services/UserCleaningOrderEstimationService.php \
-            Modules/User/app/Services/UserCleaningOrderService.php \
-            Modules/User/routes/api.php \
-            tests/Feature/Cleaning/CleaningNewOrderDispatchTest.php \
+            tests/Feature/Cleaning/RecurringCleaningSessionInteractionsTest.php \
             tests/Feature/Cleaning/RecurringCleaningCoverageNotificationTest.php \
             tests/Feature/Cleaning/RecurringCleaningPreferredWorkerFallbackTest.php \
             tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php \
@@ -208,6 +166,7 @@ jobs:
         run: |
           set -o pipefail
           php artisan test \
+            tests/Feature/Cleaning/RecurringCleaningSessionInteractionsTest.php \
             tests/Feature/UserModule/UserNotificationInteractionStateTest.php \
             tests/Feature/Cleaning/RecurringCleaningCoverageNotificationTest.php \
             tests/Feature/UserModule/RecurringCleaningScheduleRevisionTest.php \
