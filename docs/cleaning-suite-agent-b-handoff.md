@@ -1,20 +1,25 @@
-# Cleaning Suite — Agent B Continuation Handoff
+# Cleaning Suite — Agent B Final Implementation Handoff
 
-Date: 2026-09-06
+Date: 2026-09-07
 
 ## Scope
 
-This handoff covers the Agent B continuation work for:
+Agent B owns the bounded Cleaning Suite implementation for:
 
-- Laravel backend + Filament dashboard
-- Flutter User app main-line continuation
-- Flutter User app dev continuation
-- Flutter Worker app main-line continuation
-- Flutter Worker app dev continuation
+- Initial Cleaning Materials
+- Special Services
+- Open-Time Worker Requests
+- Laravel backend integration
+- Filament configuration/operational resources
+- Flutter User main/dev continuation branches
+- Flutter Worker main/dev continuation branches
+- feature-specific regression coverage and Agent A handoff
 
-The implementation intentionally preserves newer branch-specific work. No blind main-to-dev merge was used for the Flutter dev ports.
+This work intentionally preserves branch-specific Agent A / recurring / multi-day work. No blind Flutter main-to-dev merge was used.
 
-## Branch Coverage
+---
+
+## Branches and Verified Implementation Heads
 
 ### Backend
 
@@ -22,9 +27,9 @@ Repository: `dllni-app/dllni_backend`
 
 Branch: `feature/cleaning-suite-agent-b-continue`
 
-Last implementation commit before this handoff document:
+Last source implementation/test commit before this handoff update:
 
-`864464783766f36399d692993b378b00905bd988`
+`9062cb2613da9626f184507f31af56c3b305c0a0`
 
 ### User App — Main Continuation
 
@@ -32,9 +37,9 @@ Repository: `dllni-app/dllni-user-app`
 
 Branch: `feature/cleaning-suite-agent-b-main-continue`
 
-Verified head during handoff preparation:
+Verified head:
 
-`896fdb32278c30bbc23fe31717f15d37d45d732a`
+`d5432ad5e9e6479f8e2f60e649759a0706f2ad11`
 
 ### User App — Dev Continuation
 
@@ -42,9 +47,9 @@ Repository: `dllni-app/dllni-user-app`
 
 Branch: `feature/cleaning-suite-agent-b-dev-continue`
 
-Verified head during handoff preparation:
+Verified head:
 
-`1a9104a5e02d47f38121666bd4d6e46189a98fea`
+`44a1e297430a4dd67a3afab13f7e0501161d83ab`
 
 ### Worker App — Main Continuation
 
@@ -52,9 +57,9 @@ Repository: `dllni-app/dllni_cleaning_owner_app`
 
 Branch: `feature/cleaning-suite-agent-b-main-continue`
 
-Verified head during handoff preparation:
+Verified head:
 
-`21d15a5aaef9eb2d5b67013d211553317ddb9f81`
+`eae6f4d41e6bfd5e4984597e9cc06e610af064f8`
 
 ### Worker App — Dev Continuation
 
@@ -62,261 +67,488 @@ Repository: `dllni-app/dllni_cleaning_owner_app`
 
 Branch: `feature/cleaning-suite-agent-b-dev-continue`
 
-Verified head during handoff preparation:
+Verified head:
 
-`093f9690a82e5f11c677432b1cec8cb4d5763186`
+`defa5c95dd2273fbf53afe4dc5107ae345e509df`
 
-## Implemented Business Behavior
+---
 
-### Materials
+# Implemented Features
 
-- Material quantities are derived from configured quantity rules.
-- Reservation reduces available stock exactly once.
-- Moving a booking to `in_progress` consumes reserved lines exactly once.
-- Cancelling before consumption releases reserved stock.
-- Cancelling after consumption does **not** restore already consumed stock.
-- Inventory movement history remains the audit source for reserve / consume / release transitions.
+## 1. Cleaning Materials
 
-### Special Services
+Implemented behavior:
 
-- Active services are exposed through the cleaning service catalog.
-- Pricing is based on configured pricing unit, base unit price, quantity, and dirtiness multiplier.
-- Dirtiness rules are server-driven.
-- Required equipment and notes are included in operational snapshots.
-- Duplicate or inactive Special Service requests are rejected by backend quoting logic.
-- Flutter User main/dev no longer assume only `light / medium / heavy`.
-- Legacy `light / medium / heavy` exists only as a fallback when the backend returns no configured rules.
-- Invalid dirtiness values are normalized before estimate/create requests are sent.
+1. Server derives required quantities from configured material quantity rules.
+2. Booking creation reserves material stock.
+3. Reservation is idempotent and cannot decrement the same booking-material line twice.
+4. Insufficient stock fails before a reservation movement can be committed.
+5. When work enters `in_progress`, reserved lines become consumed exactly once.
+6. Cancelling before consumption releases the reservation and restores reserved stock.
+7. Cancelling after consumption does not restore already consumed stock.
+8. Inventory movement history remains the audit source for reserve / release / consume transitions.
+9. Low-stock notification logic triggers only when inventory crosses from above the configured threshold to at-or-below it.
+10. Additional reservations while inventory is already below the threshold do not create another threshold-crossing notification decision.
+
+Low-stock threshold evaluation is isolated in:
+
+`Modules/Cleaning/app/Services/CleaningMaterialLowStockPolicy.php`
+
+The existing post-commit dashboard notification delivery architecture remains unchanged.
+
+---
+
+## 2. Special Services
+
+Implemented behavior:
+
+- Dedicated Agent B Special Service catalog.
+- Active/inactive service support.
+- Configurable pricing unit.
+- Configurable base unit price.
+- Per-service server-configured dirtiness rules.
+- Dirtiness multiplier pricing.
+- Required equipment relations.
+- Optional customer notes.
+- Immutable booking financial/operational snapshots.
+- Duplicate request rejection.
+- Inactive service rejection.
+- Uploaded image support through Filament.
 
 ### Special Service Images
 
-Filament now supports actual file upload instead of relying only on a manually entered URL.
+Filament supports actual image upload:
 
-New behavior:
-
-- Uploaded files use the `public` disk.
-- Directory: `cleaning-special-services`.
-- New nullable DB field: `cleaning_special_services.image_path`.
-- Existing `image_url` remains supported as a backward-compatible external URL fallback.
-- Uploaded image takes precedence over legacy external URL.
-- The API continues exposing a single `image` field containing the resolved absolute URL.
+- disk: `public`
+- directory: `cleaning-special-services`
+- field: `cleaning_special_services.image_path`
 
 Migration:
 
 `Modules/Cleaning/database/migrations/2026_09_06_190000_add_image_path_to_cleaning_special_services_table.php`
 
-### Open-Time Pricing
+Backward compatibility is retained through the legacy external `image_url` field.
 
-Open-Time billing is finalized from authoritative server timestamps:
+Resolution rule:
 
-- `work_started_at`
-- final/finish timestamp
+1. uploaded `image_path`
+2. legacy external `image_url`
+3. `null`
+
+The resolved image is now used consistently in:
+
+- Special Service catalog responses
+- Special Service estimate/quote lines
+- persisted User cleaning order details/list responses
+
+This closes the earlier mismatch where uploaded Filament images could appear in the catalog but quote/order payloads still read the legacy URL directly.
+
+### Immutable Booking Snapshot
+
+Once a Special Service is booked, changes made later by an administrator to:
+
+- service name
+- catalog base unit price
+- dirtiness multiplier
+- required equipment names
+
+must not mutate the historical booking snapshot used for that order.
+
+---
+
+## 3. Open-Time Worker Requests
+
+Open-Time billing remains server authoritative.
+
+Authoritative inputs:
+
+- server `work_started_at`
+- server finish timestamp
 - configured hourly rate
 - requested worker count
-- minimum billable duration
-- rounding interval
+- configured minimum billable minutes
+- configured rounding interval
 
-Final pricing occurs before terminal settlement observers can debit worker/admin balances.
+### Preliminary Pricing
 
-This fixes the previous ordering risk where a `Completed` observer could settle using provisional Open-Time pricing.
+The preliminary amount is calculated from the configured server policy and requested worker count.
 
-### Multi-Worker Open-Time Settlement
+It is an estimate only. Flutter does not convert this into a final guaranteed bill.
 
-Open-Time does not introduce a second worker allocation formula.
+### Final Pricing
+
+Final Open-Time pricing is prepared before terminal settlement observers can debit commissions/deposits.
+
+Correct sequence:
+
+```text
+work finishes
+→ authoritative duration resolved
+→ minimum/rounding applied
+→ final Open-Time labor amount calculated
+→ canonical worker assignment snapshots repriced
+→ travel/admin margin recomputed
+→ canonical coupon allocator reapplied when applicable
+→ final booking pricing persisted
+→ terminal settlement/commission logic sees final values
+```
+
+This prevents the previous risk of a `Completed` observer settling from a preliminary Open-Time amount and repricing afterward.
+
+### Multi-Worker
+
+Open-Time does not own a second worker payout formula.
 
 The implementation:
 
-1. Uses existing worker assignment service-share proportions produced by canonical team pricing.
-2. Scales those canonical shares to the final Open-Time service subtotal.
-3. Uses `CleaningPricingCalculator` for per-worker travel and admin margin.
-4. Updates assignment snapshots before terminal settlement.
+1. keeps the canonical team-pricing assignment proportions,
+2. scales those shares to the final Open-Time service subtotal,
+3. obtains per-worker travel/admin values from `CleaningPricingCalculator`,
+4. writes final assignment snapshots before settlement.
 
-### Coupons
+Required regression case is covered for:
 
-The canonical cleaning coupon rule is reused after final Open-Time repricing:
+```text
+hourly rate = 100
+workers = 2
+actual duration = 90 minutes
+labor base = 300
+```
 
-1. Calculate the customer discount from the configured coupon.
-2. Fund the discount from administration margin first.
-3. Only after administration reaches zero may the remainder reduce service share.
-4. Travel remains a separate undiscounted component.
-5. Worker service share therefore remains unchanged while the coupon fits entirely inside administration margin.
+### Customer Completion
 
-No client-side Flutter billing formula was added.
+Open-Time finalization occurs when the worker completion path establishes the authoritative finish time. A later customer confirmation must not recalculate or mutate the finalized Open-Time values.
 
-## Flutter User App
+### Cancellation
+
+Cancellation before an authoritative finish time does not synthesize a final Open-Time price.
+
+Covered paths include:
+
+- before work starts
+- after work starts but before finish
+
+Materials retain their own independent reservation/consumption cancellation rules.
+
+---
+
+# Financial Rules
+
+## Coupons
+
+Agent B reuses the canonical Cleaning coupon allocator.
+
+Order of funding:
+
+1. Administration margin first.
+2. Only a remaining coupon amount after admin reaches zero can reduce service value.
+3. Travel is never discounted.
+
+Example:
+
+```text
+service = 960
+admin = 240
+total = 1200
+10% coupon = 120
+
+customer total = 1080
+admin = 120
+worker service share = 960
+```
+
+The same rule is reapplied after Open-Time actual-duration repricing.
+
+Regression coverage includes both:
+
+- coupon fully absorbed by admin margin
+- coupon larger than final admin margin, where only the excess reduces service
+
+## Worker Settlement
+
+Worker amount is based on the canonical worker service share plus worker travel according to the existing financial architecture. Admin margin is not deducted a second time from worker service share.
+
+## Admin Settlement
+
+Terminal commission/deposit handling receives the finalized Open-Time assignment/admin snapshots because Open-Time final repricing runs before terminal settlement observers.
+
+---
+
+# Flutter User App
+
+Implemented on both main-derived and dev-derived continuation branches:
+
+- Request Cleaning Materials toggle.
+- Backend calculated material estimate.
+- Special Service selection.
+- Server-driven dirtiness choices.
+- Quantity and optional notes.
+- Open-Time toggle and worker count.
+- Preliminary Open-Time estimate presentation.
+- Read-only Agent B booking details.
+- Canonical Open-Time final payload parsing.
+- Loading/error/empty/retry behavior retained.
+- No client-side final Open-Time billing formula.
+
+## Special Service Catalog Preview
+
+The remaining visual/configuration gap is now implemented.
+
+When a Special Service is selected, User App now presents the available backend catalog metadata:
+
+- image, when available
+- pricing unit
+- backend-provided base unit price
+- required equipment
+
+The preview is informational. Actual booking total continues to come from the backend estimate.
+
+New localization keys were added in Arabic and English for the preview metadata.
+
+## Dirtiness Rules
+
+The app prefers each selected service's active server-defined dirtiness rules.
+
+Legacy fallback:
+
+```text
+light / medium / heavy
+```
+
+is used only if the server returns no configured rules.
+
+When the selected service changes, invalid dirtiness values are normalized to a valid server-provided level before the next estimate/create request.
+
+## Dev Port
+
+The remaining preview and test changes were selectively reproduced on the dev continuation branch.
+
+Dev-specific existing translations and recurring behavior were preserved.
+
+No main-to-dev merge was performed.
+
+---
+
+# Flutter Worker App
 
 Implemented on both continuation branches:
 
-- Materials request UI and estimate presentation.
-- Special Service selection and estimate presentation.
-- Open-Time request and estimate presentation.
-- Server-authoritative pricing data.
-- Dynamic Special Service catalog fields:
-  - image
-  - pricing unit
-  - base unit price
-  - dirtiness rules
-  - required equipment
-- Active dirtiness-rule filtering.
-- Dirtiness normalization when changing Special Service.
-- Safe default dirtiness when adding a Special Service.
-- Dev changes were selectively ported without overwriting newer recurring-booking/dev work.
-
-## Flutter Worker App
-
-Implemented on both continuation branches:
-
-- Operational Materials details.
-- Operational Special Service details.
-- Required equipment and notes presentation.
+- Material name / quantity / unit.
+- Special Service name / quantity / dirtiness.
+- Required equipment.
+- Customer notes.
 - Open-Time operational state.
-- Open-Time timer/presentation is based on backend timestamps rather than client billing calculations.
-- Main implementation was selectively ported to dev without a main-to-dev merge.
+- Timer presentation anchored to the backend start timestamp.
+- Finalized Open-Time state from refreshed backend payload.
+- Actual duration.
+- Billable duration.
+- Final amount/state representation already supported by the operational model.
 
-## Filament Dashboard
+The existing Finish Work workflow remains authoritative and already refreshes order details/list data after successful completion.
 
-Agent B resources are present for the operational configuration surface, including:
+Regression coverage was extended at the stable order-details mapper boundary to prove that a completion refresh:
+
+- preserves Materials when the refreshed detail payload omits them,
+- preserves Special Services when omitted,
+- replaces running Open-Time metadata with the finalized server state.
+
+The repository's old Bloc realtime hydration test file remains intentionally disabled, and no new mocking framework was introduced only for Agent B.
+
+---
+
+# Filament Dashboard
+
+Native Agent B Filament configuration/resources are present for:
 
 - Cleaning Materials
-- Material inventory/movements
+- Material Units
+- Material Types
+- Material quantity rules
+- Inventory movements
 - Special Services
 - Dirtiness rules
 - Equipment
-- Billing policies
-- Pricing configuration
+- Billing policies / pricing configuration
 
-Static source review confirmed permissions are routed through existing cleaning pricing permissions for Agent B pricing/configuration resources.
+Special Service image upload now uses native Filament file upload rather than only a URL text field.
 
-The Special Service resource now includes image upload and legacy URL fallback.
+Agent B resource access continues to use the existing Cleaning pricing/admin permission architecture rather than broadening dashboard access.
 
-### Runtime QA Still Required
+## Runtime QA Still Required
 
-The following cannot be signed off from GitHub source inspection alone and must be tested in a running dashboard session:
+The following require a running Filament browser session and cannot be signed off from GitHub source inspection alone:
 
-- login and navigation visibility
-- role/permission access
+- login/navigation visibility
+- permission matrix under real roles
 - create/edit/delete flows
-- validation failures
-- image upload + image preview
-- public storage URL availability
-- Arabic/RTL rendering
+- validation feedback
+- actual image upload/preview over deployed storage
+- Arabic/RTL visual rendering
 - responsive behavior
-- browser console errors
-- network request failures
+- browser console/network errors
 - keyboard/accessibility behavior
 
-## Tests Added / Extended
+---
 
-### Backend
+# Cross-Repository Contract Audit
 
-Existing Agent B tests include:
+A static Backend ↔ User ↔ Worker contract audit was completed after the final source changes.
 
-- material quantity-rule specificity
-- Special Service dirtiness/equipment quote snapshots
-- duplicate/inactive Special Service rejection
-- reserved material consumption exactly once
-- cancellation releasing reserved material
-- Open-Time finalization from authoritative timestamps
-- multi-worker Open-Time repricing before completed commission settlement
+## Materials
 
-Added during continuation:
+User response contains customer-facing material information and pricing totals where appropriate.
 
-`tests/Feature/Cleaning/CleaningAgentBRegressionMatrixTest.php`
-
-Covers:
-
-- consumed material is not restored by a later cancellation
-- Open-Time actual-duration pricing occurs before coupon allocation
-- admin-first coupon funding after Open-Time finalization
-- travel remains undiscounted
-- worker service share remains gross while discount fits inside admin margin
-
-`tests/Unit/Cleaning/CleaningSpecialServiceImageTest.php`
-
-Covers:
-
-- legacy external image URL compatibility
-- uploaded public-disk image precedence and URL resolution
-
-### User App
-
-Added/ported tests cover:
-
-- Special Service catalog parsing
-- active/inactive dirtiness rules
-- invalid dirtiness normalization
-- fallback behavior when rules are absent
-- repeated rule deduplication
-- equipment/base-price/pricing-unit parsing
-
-### Worker App
-
-Ported Agent B tests cover:
-
-- cleaning booking operational payload parsing
-- order-details mapping
-- Open-Time presentation behavior
-
-## API Contract Notes
-
-### Special Service Catalog
-
-Backend response remains compatible with Flutter:
+Worker operational response intentionally exposes operational data only:
 
 ```json
 {
-  "id": 17,
-  "name": "Sofa cleaning",
-  "category": "special_service",
-  "isActive": true,
-  "image": "https://host/storage/cleaning-special-services/example.png",
-  "pricingUnit": "sofa",
-  "baseUnitPrice": 100,
-  "dirtinessRules": [
-    {
-      "level": "heavy",
-      "priceMultiplier": 1.5,
-      "isActive": true
-    }
-  ],
-  "equipment": [
-    {
-      "id": 4,
-      "name": "Extractor"
-    }
-  ],
-  "pricing": []
+  "materialId": 1,
+  "name": "...",
+  "quantity": 1.5,
+  "unit": "...",
+  "unitLabel": "...",
+  "inventoryStatus": "..."
 }
 ```
 
-### User Special Service Request
+## Special Services
+
+Canonical semantic information is compatible across the API clients:
 
 ```json
 {
-  "specialServiceId": 17,
+  "serviceId": 1,
+  "name": "...",
+  "image": "...",
+  "pricingUnit": "...",
   "quantity": 2,
-  "dirtinessLevel": "heavy",
-  "notes": "Optional notes"
+  "dirtinessLevel": "...",
+  "equipment": [],
+  "notes": "..."
 }
 ```
 
-Flutter does not submit a calculated Special Service price.
+Estimate lines may use `imageUrl`; User parsing supports the existing aliases.
 
-### Open-Time Request
+Worker payload intentionally does not expose unnecessary customer/admin pricing fields.
+
+## Open-Time
+
+Canonical server semantics:
 
 ```json
 {
-  "workerCount": 2
+  "isOpenTime": true,
+  "hourlyRate": 0,
+  "requestedWorkerCount": 2,
+  "minimumBillableMinutes": 60,
+  "roundingMinutes": 30,
+  "workStartedAt": "...",
+  "workFinishedAt": "...",
+  "actualDurationMinutes": 90,
+  "billableDurationMinutes": 90,
+  "finalAmount": 0,
+  "isFinalized": true
 }
 ```
 
-Final duration and final monetary amount remain server authoritative.
+User and Worker parsers consume the canonical semantic fields and supported aliases without calculating final billing locally.
 
-## Quality Gates — Not Yet Executed in This GitHub-Only Session
+---
 
-Do **not** interpret committed tests as a claim that they passed.
+# Regression Coverage Added / Audited
 
-Backend commands still required in an executable Laravel environment:
+## Backend — Materials
+
+Coverage now includes:
+
+1. quantity-rule specificity
+2. configured unit
+3. reservation behavior
+4. insufficient stock atomic failure
+5. Start Work consumes reservation
+6. duplicate update does not consume twice
+7. pre-work cancellation releases reservation
+8. post-consumption cancellation does not restore consumed inventory
+9. low-stock threshold crossing policy
+10. no repeated threshold decision while already low
+
+## Backend — Special Services
+
+Coverage now includes:
+
+1. active services returned
+2. inactive filtering/rejection
+3. dirtiness multiplier
+4. invalid dirtiness rejection
+5. equipment snapshot
+6. duplicate request rejection
+7. booking snapshot immutability after later catalog edits
+8. uploaded image precedence
+9. uploaded image resolution in quote payload
+10. uploaded image resolution in persisted user order payload
+
+## Backend — Open-Time
+
+Coverage now includes:
+
+1. preliminary estimate
+2. requested worker count
+3. authoritative start timestamp
+4. authoritative finish timestamp
+5. minimum duration
+6. rounding
+7. actual duration
+8. final amount
+9. idempotent finalization
+10. multi-worker repricing
+11. direct terminal/legacy completion ordering
+12. normal awaiting-customer completion path
+13. customer confirmation preserves finalized pricing
+14. cancellation before finish
+15. final worker assignment shares
+16. final admin margin
+17. commission/deposit settlement ordering
+18. coupon absorbed by sufficient admin margin
+19. coupon exceeding admin margin
+20. final User API representation
+
+## User Flutter
+
+Coverage now includes:
+
+- Agent B request serialization
+- optional notes/open-time omission
+- Material response parsing
+- Special Service catalog parsing
+- dynamic dirtiness rules
+- equipment/base-price/pricing-unit parsing
+- canonical and persisted alias parsing
+- preliminary Open-Time payload
+- finalized Open-Time payload
+- minute-to-hour presentation conversion
+
+## Worker Flutter
+
+Coverage includes:
+
+- Material parsing
+- Special Service/equipment parsing
+- Open-Time parsing
+- server-anchored running timer presentation
+- finalized state presentation
+- order-detail fallback preservation
+- completion refresh preserving Agent B operational data while accepting final Open-Time state
+
+---
+
+# Quality Gates / CI Evidence
+
+No local executable shell was available in this GitHub-only implementation session.
+
+Therefore the following commands have **not** been claimed as passed:
+
+## Backend
 
 ```bash
 composer install
@@ -327,7 +559,7 @@ vendor/bin/pint --test
 vendor/bin/phpstan analyse
 ```
 
-Flutter commands still required for User main/dev and Worker main/dev:
+## User App — both continuation branches
 
 ```bash
 flutter pub get
@@ -336,37 +568,65 @@ flutter analyze
 flutter test
 ```
 
-The new Special Service image migration must also be applied in the target environment before testing dashboard upload.
+## Worker App — both continuation branches
 
-## Merge / Port Notes
+```bash
+flutter pub get
+dart format --set-exit-if-changed .
+flutter analyze
+flutter test
+```
 
-- Do not replace the User dev branch with User main.
-- Do not replace the Worker dev branch with Worker main.
-- Dev ports were selective because the dev branches contain newer or branch-specific work.
-- Preserve recurring-booking work already present in User dev.
-- Preserve any later feature commits that may have landed after the SHA snapshot in this document.
-- Re-audit branch heads immediately before a final merge/cherry-pick sequence.
+GitHub commit statuses/workflow runs must be checked against the final heads separately. Absence of a status/workflow is not a passing result.
 
-## Known Remaining Risks
+---
 
-1. Backend/Flutter tests were written or ported but not executed from this session.
-2. Exact monetary assertions must be confirmed by the real Laravel test suite, especially rounding and observer interactions.
-3. Filament runtime CRUD, permissions, upload, RTL, responsive, console, and accessibility QA remains open.
-4. `storage:link` / public disk serving must be configured in the deployed Laravel environment for uploaded Special Service images.
-5. The new `image_path` migration must run before the Filament upload field is used.
+# Deployment / Runtime Requirements
 
-## Completion State
+Before release:
 
-Implementation status at handoff-document creation:
+1. Run the new Special Service image-path migration.
+2. Ensure Laravel public storage serving / `storage:link` is configured.
+3. Execute backend quality gates.
+4. Execute User main/dev Flutter gates independently.
+5. Execute Worker main/dev Flutter gates independently.
+6. Perform Filament runtime QA with real admin roles and upload flow.
+7. Fix any Agent B-specific failures found by those checks on the same continuation branches.
 
-- Backend business implementation: substantially complete
-- Backend regression coverage: expanded, execution pending
-- User main implementation: complete for Agent B scope, execution pending
-- User dev implementation: complete for Agent B scope, execution pending
-- Worker main implementation: complete for Agent B scope, execution pending
-- Worker dev implementation: complete for Agent B scope, execution pending
-- Filament source implementation: Agent B resources present; Special Service image upload completed
-- Filament runtime QA: pending
-- Full quality gates: pending
+---
 
-Agent B should only be marked fully complete after executable backend/Flutter quality gates and Filament runtime QA pass, with any failures fixed on the same continuation branches.
+# Integration Notes for Agent A
+
+- Do not replace User dev with User main; the dev lineage contains newer branch-specific work.
+- Do not replace Worker dev with Worker main.
+- Agent B dev ports were selective.
+- Do not introduce another Open-Time pricing or completion endpoint.
+- Consume the backend Open-Time finalization ordering as the shared financial behavior.
+- Preserve the canonical admin-first coupon allocator.
+- Preserve the `image_path` migration and resolved Special Service image contract.
+- Preserve the low-stock threshold policy and existing after-commit notification delivery architecture.
+- Re-audit branch heads immediately before cherry-pick/merge integration.
+
+---
+
+# Final Source-Implementation Assessment
+
+No known Agent B **source implementation** blocker remains after the final static business, Laravel, Flutter, UI/UX, and cross-repository contract audit.
+
+However, by the plan's Definition of Done, Agent B must **not** be labeled fully production-complete until:
+
+- backend tests/static/format checks execute successfully,
+- User main/dev Flutter analyzer/tests/format execute successfully,
+- Worker main/dev Flutter analyzer/tests/format execute successfully,
+- Filament runtime QA passes,
+- any failures discovered by those executable checks are fixed.
+
+Current classification:
+
+- Backend source implementation: complete; executable verification pending
+- User main source implementation: complete; executable verification pending
+- User dev source implementation: complete; executable verification pending
+- Worker main source implementation: complete; executable verification pending
+- Worker dev source implementation: complete; executable verification pending
+- Filament source implementation: complete; runtime QA pending
+- Agent B overall: verification pending
