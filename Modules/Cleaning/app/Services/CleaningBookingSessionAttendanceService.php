@@ -125,12 +125,38 @@ final class CleaningBookingSessionAttendanceService
             $affectedWorkerIds = $workerIds;
 
             if ($action === self::ACTION_WAIT) {
+                $isNoTravelIncident = $now->gte($startsAt->addMinutes($noTravelGrace));
+                $hasMeaningfulTransition = false;
+
                 foreach ($selected as $assignment) {
+                    $lateWasMissing = $assignment->late_reported_at === null;
+                    $noTravelWasMissing = $isNoTravelIncident && $assignment->no_travel_reported_at === null;
+                    $actionChanged = $assignment->attendance_action !== self::ACTION_WAIT;
+                    $hasMeaningfulTransition = $hasMeaningfulTransition
+                        || $lateWasMissing
+                        || $noTravelWasMissing
+                        || $actionChanged;
+
                     $assignment->forceFill([
                         'late_reported_at' => $assignment->late_reported_at ?? $reportedAt,
+                        'no_travel_reported_at' => $isNoTravelIncident
+                            ? ($assignment->no_travel_reported_at ?? $reportedAt)
+                            : $assignment->no_travel_reported_at,
                         'attendance_action' => self::ACTION_WAIT,
-                        'attendance_note' => $note,
-                    ])->save();
+                        'attendance_note' => $note ?? $assignment->attendance_note,
+                    ]);
+
+                    if ($assignment->isDirty()) {
+                        $assignment->save();
+                    }
+                }
+
+                // Repeating the same wait decision is intentionally idempotent. The
+                // existing incident remains the source of truth and workers are not
+                // re-notified unless the attendance state actually progressed (for
+                // example, late -> no-travel).
+                if (! $hasMeaningfulTransition) {
+                    $affectedWorkerIds = [];
                 }
 
                 return $locked->fresh(['workerAssignments.worker.user']) ?? $locked;
