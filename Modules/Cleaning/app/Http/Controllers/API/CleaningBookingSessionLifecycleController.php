@@ -18,6 +18,7 @@ use Modules\Cleaning\Services\CleaningBookingSessionAttendanceService;
 use Modules\Cleaning\Services\CleaningBookingSessionCancellationService;
 use Modules\Cleaning\Services\CleaningBookingSessionLifecycleService;
 use Modules\Cleaning\Services\CleaningBookingSessionSosService;
+use Modules\Cleaning\Services\CleaningBookingWorkerScheduleService;
 
 final class CleaningBookingSessionLifecycleController
 {
@@ -27,6 +28,7 @@ final class CleaningBookingSessionLifecycleController
         private readonly CleaningBookingSessionCancellationService $cancellation,
         private readonly CleaningBookingSessionSosService $sos,
         private readonly CleaningBookingSchedulePresenter $presenter,
+        private readonly CleaningBookingWorkerScheduleService $workerSchedules,
     ) {}
 
     public function startTravel(
@@ -277,6 +279,9 @@ final class CleaningBookingSessionLifecycleController
 
         $worker = $request->user()?->worker;
         $freshBooking = $cleaning_booking->fresh();
+        $schedule = $worker instanceof Worker
+            ? $this->workerSchedules->present($freshBooking, $worker)
+            : $this->presenter->present($freshBooking);
 
         return response()->json([
             'success' => true,
@@ -285,10 +290,7 @@ final class CleaningBookingSessionLifecycleController
                 'bookingId' => (int) $freshBooking->id,
                 'bookingNumber' => $freshBooking->booking_number,
                 'status' => $freshBooking->status?->value ?? (string) $freshBooking->status,
-                'schedule' => $this->presenter->present(
-                    $freshBooking,
-                    $worker instanceof Worker ? $worker : null,
-                ),
+                'schedule' => $schedule,
                 'sos' => [
                     'id' => (int) $alert->id,
                     'status' => $alert->status?->value ?? (string) $alert->status,
@@ -324,6 +326,9 @@ final class CleaningBookingSessionLifecycleController
         ?Worker $viewerWorker = null,
     ): JsonResponse {
         $freshBooking = $booking->fresh();
+        $schedule = $viewerWorker instanceof Worker
+            ? $this->workerSchedules->present($freshBooking, $viewerWorker)
+            : $this->presenter->present($freshBooking);
 
         return response()->json([
             'success' => true,
@@ -334,7 +339,7 @@ final class CleaningBookingSessionLifecycleController
                 'status' => $freshBooking->status?->value ?? (string) $freshBooking->status,
                 'totalPrice' => (float) $freshBooking->total_price,
                 'currency' => (string) config('app.currency', 'SYP'),
-                'schedule' => $this->presenter->present($freshBooking, $viewerWorker),
+                'schedule' => $schedule,
             ],
             'sessionId' => (int) $session->id,
         ]);
