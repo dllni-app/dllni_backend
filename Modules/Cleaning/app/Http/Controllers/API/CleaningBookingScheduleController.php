@@ -71,7 +71,7 @@ final class CleaningBookingScheduleController
      * capabilities and other workers' incident details are stripped from the
      * worker response.
      *
-     * @param array<string, mixed> $schedule
+     * @param  array<string, mixed>  $schedule
      * @return array<string, mixed>
      */
     private function withWorkerAttendanceNotice(array $schedule, Worker $worker): array
