@@ -66,11 +66,10 @@ final class CleaningBookingScheduleController
     }
 
     /**
-     * Keep attendance policy server-authoritative while making an unresolved
-     * customer report visible in the existing worker visit UI. The worker
-     * client already renders `statusLabel`, so this is backward compatible;
-     * `workerAttendanceNotice` is an additive read-only contract for newer
-     * clients and deliberately exposes no customer-only actions.
+     * Keep attendance policy server-authoritative while making the current
+     * worker's own incident visible in the existing visit UI. Customer-only
+     * capabilities and other workers' incident details are stripped from the
+     * worker response.
      *
      * @param array<string, mixed> $schedule
      * @return array<string, mixed>
@@ -83,16 +82,43 @@ final class CleaningBookingScheduleController
             }
 
             $incidents = data_get($value, 'attendance.incidents', []);
-            if (! is_array($incidents)) {
-                return $value;
-            }
-
-            $incident = collect($incidents)->first(
+            $incidents = is_array($incidents) ? $incidents : [];
+            $ownIncidents = array_values(array_filter(
+                $incidents,
                 static fn (mixed $item): bool => is_array($item)
                     && (int) ($item['workerId'] ?? 0) === (int) $worker->id,
-            );
+            ));
+            $incident = $ownIncidents[0] ?? null;
+
+            // These fields are customer capabilities. A worker must never infer
+            // or receive actionable worker lists from the shared session DTO.
+            $value['canReportLate'] = false;
+            $value['canReportNoTravel'] = false;
+            $value['lateWorkerIds'] = [];
+            $value['noTravelWorkerIds'] = [];
+            $value['reportableLateWorkerIds'] = [];
+            $value['reportableNoTravelWorkerIds'] = [];
+            $value['allowedAttendanceActions'] = [];
+            $value['attendanceActionWorkerIds'] = [
+                'wait' => [],
+                'replace' => [],
+                'cancel' => [],
+            ];
+
+            $attendance = $value['attendance'] ?? [];
+            $attendance = is_array($attendance) ? $attendance : [];
+            $attendance['allowedActions'] = [];
+            $attendance['actionWorkerIds'] = [
+                'wait' => [],
+                'replace' => [],
+                'cancel' => [],
+            ];
+            $attendance['incidents'] = $ownIncidents;
+            $value['attendance'] = $attendance;
 
             if (! is_array($incident)) {
+                $value['workerAttendanceNotice'] = null;
+
                 return $value;
             }
 
@@ -114,6 +140,8 @@ final class CleaningBookingScheduleController
                 'isResolved' => $isResolved,
             ];
 
+            // Existing worker clients already display this field, providing a
+            // read-only incident surface without adding any client-side policy.
             if (! $isResolved) {
                 $value['statusLabel'] = $message;
             }
