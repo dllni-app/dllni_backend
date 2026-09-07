@@ -103,7 +103,7 @@ final class UserCleaningBookingResource extends JsonResource
         return $lines->map(static fn (CleaningBookingSpecialService $line): array => [
             'specialServiceId' => (int) $line->cleaning_special_service_id,
             'name' => (string) $line->service_name,
-            'image' => $line->specialService?->image_url,
+            'image' => $line->specialService?->imageUrl(),
             'pricingUnit' => (string) $line->pricing_unit,
             'dirtinessLevel' => (string) $line->dirtiness_level,
             'quantity' => (float) $line->quantity,
