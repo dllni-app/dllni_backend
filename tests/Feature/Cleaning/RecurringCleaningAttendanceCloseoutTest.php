@@ -66,6 +66,25 @@ function makeRecurringAttendanceCloseoutVisit(int $minutesPastStart): array
     return [$customer, $worker, $booking, $session, $assignment];
 }
 
+it('exposes only wait during the late-only grace window', function (): void {
+    config()->set('cleaning_attendance.late_grace_minutes', 15);
+    config()->set('cleaning_attendance.no_travel_grace_minutes', 30);
+    [$customer, $worker, $booking, $session] = makeRecurringAttendanceCloseoutVisit(20);
+
+    Sanctum::actingAs($customer);
+
+    postJson("/api/v1/cleaning-bookings/{$booking->id}/sessions/{$session->id}/attendance", [
+        'workerIds' => [$worker->id],
+        'action' => 'wait',
+    ])->assertOk()
+        ->assertJsonPath('data.schedule.sessions.0.canReportLate', false)
+        ->assertJsonPath('data.schedule.sessions.0.canReportNoTravel', false)
+        ->assertJsonPath('data.schedule.sessions.0.attendance.allowedActions', ['wait'])
+        ->assertJsonPath('data.schedule.sessions.0.attendance.actionWorkerIds.wait', [$worker->id])
+        ->assertJsonPath('data.schedule.sessions.0.attendance.actionWorkerIds.replace', [])
+        ->assertJsonPath('data.schedule.sessions.0.attendance.actionWorkerIds.cancel', []);
+});
+
 it('records wait as a no-travel incident once the no-travel grace has elapsed', function (): void {
     config()->set('cleaning_attendance.late_grace_minutes', 15);
     config()->set('cleaning_attendance.no_travel_grace_minutes', 30);
@@ -80,6 +99,11 @@ it('records wait as a no-travel incident once the no-travel grace has elapsed', 
     ])->assertOk()
         ->assertJsonPath('data.schedule.sessions.0.canReportLate', false)
         ->assertJsonPath('data.schedule.sessions.0.canReportNoTravel', false)
+        ->assertJsonPath('data.schedule.sessions.0.allowedAttendanceActions', ['wait', 'replace', 'cancel'])
+        ->assertJsonPath('data.schedule.sessions.0.attendance.allowedActions', ['wait', 'replace', 'cancel'])
+        ->assertJsonPath('data.schedule.sessions.0.attendance.actionWorkerIds.wait', [$worker->id])
+        ->assertJsonPath('data.schedule.sessions.0.attendance.actionWorkerIds.replace', [$worker->id])
+        ->assertJsonPath('data.schedule.sessions.0.attendance.actionWorkerIds.cancel', [$worker->id])
         ->assertJsonPath('data.schedule.sessions.0.attendance.incidents.0.action', 'wait');
 
     $noTravelReportedAt = $first->json('data.schedule.sessions.0.attendance.incidents.0.noTravelReportedAt');
