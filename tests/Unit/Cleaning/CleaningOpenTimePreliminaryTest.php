@@ -9,7 +9,7 @@ use Modules\Cleaning\Services\CleaningOpenTimeBillingService;
 it('calculates the preliminary open-time amount from worker count minimum duration and rounding', function (): void {
     $policy = CleaningBillingPolicy::query()->create([
         'name' => 'Agent B preliminary policy',
-        'billing_mode' => CleaningBillingMode::Hourly,
+        'billing_mode' => CleaningBillingMode::ActualWorkingTime,
         'rules' => [
             'min_billable_minutes' => 60,
             'rounding_minutes' => 30,
