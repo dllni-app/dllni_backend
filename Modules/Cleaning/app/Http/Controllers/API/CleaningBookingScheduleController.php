@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Services\CleaningBookingSchedulePresenter;
+use Modules\Cleaning\Services\CleaningBookingWorkerScheduleService;
 use Modules\User\Services\EventAssistanceReviewService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
@@ -17,6 +18,7 @@ final class CleaningBookingScheduleController
 {
     public function __construct(
         private readonly CleaningBookingSchedulePresenter $presenter,
+        private readonly CleaningBookingWorkerScheduleService $workerSchedules,
         private readonly EventAssistanceReviewService $eventReviewService,
     ) {}
 
@@ -25,8 +27,9 @@ final class CleaningBookingScheduleController
         $user = $request->user();
         $worker = $user?->worker;
         $isCustomer = $user !== null && (int) $cleaning_booking->customer_id === (int) $user->id;
+        $viewerWorker = ! $isCustomer && $worker instanceof Worker ? $worker : null;
 
-        if (! $isCustomer && ! $worker instanceof Worker) {
+        if (! $isCustomer && ! $viewerWorker instanceof Worker) {
             abort(403, 'You are not allowed to view this cleaning booking schedule.');
         }
 
@@ -40,14 +43,9 @@ final class CleaningBookingScheduleController
             && $isEvent
             && $cleaning_booking->status === CleaningBookingStatus::Completed
             && ! $hasReview;
-        $schedule = $this->presenter->present(
-            $cleaning_booking,
-            $worker instanceof Worker ? $worker : null,
-        );
-
-        if ($worker instanceof Worker) {
-            $schedule = $this->withWorkerAttendanceNotice($schedule, $worker);
-        }
+        $schedule = $viewerWorker instanceof Worker
+            ? $this->workerSchedules->present($cleaning_booking, $viewerWorker)
+            : $this->presenter->present($cleaning_booking);
 
         return response()->json([
             'success' => true,
@@ -63,101 +61,5 @@ final class CleaningBookingScheduleController
                 'schedule' => $schedule,
             ],
         ]);
-    }
-
-    /**
-     * Keep attendance policy server-authoritative while making the current
-     * worker's own incident visible in the existing visit UI. Customer-only
-     * capabilities and other workers' incident details are stripped from the
-     * worker response.
-     *
-     * @param  array<string, mixed>  $schedule
-     * @return array<string, mixed>
-     */
-    private function withWorkerAttendanceNotice(array $schedule, Worker $worker): array
-    {
-        $decorate = function (mixed $value) use ($worker): mixed {
-            if (! is_array($value)) {
-                return $value;
-            }
-
-            $incidents = data_get($value, 'attendance.incidents', []);
-            $incidents = is_array($incidents) ? $incidents : [];
-            $ownIncidents = array_values(array_filter(
-                $incidents,
-                static fn (mixed $item): bool => is_array($item)
-                    && (int) ($item['workerId'] ?? 0) === (int) $worker->id,
-            ));
-            $incident = $ownIncidents[0] ?? null;
-
-            // These fields are customer capabilities. A worker must never infer
-            // or receive actionable worker lists from the shared session DTO.
-            $value['canReportLate'] = false;
-            $value['canReportNoTravel'] = false;
-            $value['lateWorkerIds'] = [];
-            $value['noTravelWorkerIds'] = [];
-            $value['reportableLateWorkerIds'] = [];
-            $value['reportableNoTravelWorkerIds'] = [];
-            $value['allowedAttendanceActions'] = [];
-            $value['attendanceActionWorkerIds'] = [
-                'wait' => [],
-                'replace' => [],
-                'cancel' => [],
-            ];
-
-            $attendance = $value['attendance'] ?? [];
-            $attendance = is_array($attendance) ? $attendance : [];
-            $attendance['allowedActions'] = [];
-            $attendance['actionWorkerIds'] = [
-                'wait' => [],
-                'replace' => [],
-                'cancel' => [],
-            ];
-            $attendance['incidents'] = $ownIncidents;
-            $value['attendance'] = $attendance;
-
-            if (! is_array($incident)) {
-                $value['workerAttendanceNotice'] = null;
-
-                return $value;
-            }
-
-            $resolvedAt = $incident['resolvedAt'] ?? null;
-            $isResolved = filled($resolvedAt);
-            $isNoTravel = filled($incident['noTravelReportedAt'] ?? null);
-            $message = $isResolved
-                ? 'تمت معالجة بلاغ الحضور.'
-                : ($isNoTravel
-                    ? 'أبلغ العميل عن عدم بدء التوجه. ابدأ التوجه الآن لتحديث الحالة.'
-                    : 'أبلغ العميل عن تأخر بدء التوجه. ابدأ التوجه الآن لتحديث الحالة.');
-
-            $value['workerAttendanceNotice'] = [
-                'type' => $isNoTravel ? 'no_travel' : 'late',
-                'message' => $message,
-                'action' => $incident['action'] ?? null,
-                'note' => $incident['note'] ?? null,
-                'resolvedAt' => $resolvedAt,
-                'isResolved' => $isResolved,
-            ];
-
-            // Existing worker clients already display this field, providing a
-            // read-only incident surface without adding any client-side policy.
-            if (! $isResolved) {
-                $value['statusLabel'] = $message;
-            }
-
-            return $value;
-        };
-
-        $sessions = $schedule['sessions'] ?? [];
-        if (is_array($sessions)) {
-            $schedule['sessions'] = array_map($decorate, $sessions);
-        }
-
-        if (array_key_exists('nextSession', $schedule) && $schedule['nextSession'] !== null) {
-            $schedule['nextSession'] = $decorate($schedule['nextSession']);
-        }
-
-        return $schedule;
     }
 }
