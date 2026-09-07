@@ -16,6 +16,10 @@ use Modules\Cleaning\Models\CleaningMaterialInventoryMovement;
 
 final class CleaningMaterialInventoryService
 {
+    public function __construct(
+        private readonly CleaningMaterialLowStockPolicy $lowStockPolicy,
+    ) {}
+
     public function reserve(CleaningBookingMaterial $bookingMaterial): void
     {
         DB::transaction(function () use ($bookingMaterial): void {
@@ -100,8 +104,7 @@ final class CleaningMaterialInventoryService
         float $stockBefore,
         float $stockAfter,
     ): void {
-        $threshold = max(0.0, (float) $material->low_stock_threshold);
-        if ($stockBefore <= $threshold || $stockAfter > $threshold) {
+        if (! $this->lowStockPolicy->shouldNotify($material, $stockBefore, $stockAfter)) {
             return;
         }
 
