@@ -13,6 +13,7 @@ use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
 
+use function Pest\Laravel\getJson;
 use function Pest\Laravel\postJson;
 
 /** @return array{0:User,1:Worker,2:CleaningBooking,3:CleaningBookingSession,4:CleaningBookingSessionWorkerAssignment} */
@@ -125,6 +126,106 @@ it('records wait as a no-travel incident once the no-travel grace has elapsed', 
             'data.schedule.sessions.0.attendance.incidents.0.noTravelReportedAt',
             $noTravelReportedAt,
         );
+});
+
+it('allows replacement after an earlier wait decision once no-travel grace elapsed', function (): void {
+    config()->set('cleaning_attendance.late_grace_minutes', 15);
+    config()->set('cleaning_attendance.no_travel_grace_minutes', 30);
+    [$customer, $worker, $booking, $session, $assignment] = makeRecurringAttendanceCloseoutVisit(40);
+
+    Sanctum::actingAs($customer);
+
+    postJson("/api/v1/cleaning-bookings/{$booking->id}/sessions/{$session->id}/attendance", [
+        'workerIds' => [$worker->id],
+        'action' => 'wait',
+    ])->assertOk();
+
+    postJson("/api/v1/cleaning-bookings/{$booking->id}/sessions/{$session->id}/attendance", [
+        'workerIds' => [$worker->id],
+        'action' => 'replace',
+        'note' => 'أريد عاملاً بديلاً',
+    ])->assertOk()
+        ->assertJsonPath('data.schedule.sessions.0.status', CleaningBookingSessionStatus::Scheduled->value)
+        ->assertJsonPath('data.schedule.sessions.0.coverageStatus', CleaningBookingSessionCoverageStatus::Searching->value);
+
+    $assignment->refresh();
+    expect($assignment->status)->toBe(CleaningBookingWorkerAssignmentStatus::Cancelled)
+        ->and($assignment->attendance_action)->toBe('replace')
+        ->and($assignment->attendance_resolved_at)->not->toBeNull()
+        ->and($assignment->released_at)->not->toBeNull();
+});
+
+it('rejects attendance escalation from a non-owning customer', function (): void {
+    config()->set('cleaning_attendance.late_grace_minutes', 15);
+    config()->set('cleaning_attendance.no_travel_grace_minutes', 30);
+    [, $worker, $booking, $session] = makeRecurringAttendanceCloseoutVisit(40);
+    $otherCustomer = User::factory()->create(['is_active' => true]);
+
+    Sanctum::actingAs($otherCustomer);
+
+    postJson("/api/v1/cleaning-bookings/{$booking->id}/sessions/{$session->id}/attendance", [
+        'workerIds' => [$worker->id],
+        'action' => 'replace',
+    ])->assertForbidden();
+});
+
+it('scopes attendance incidents to the current worker and removes customer controls', function (): void {
+    config()->set('cleaning_attendance.late_grace_minutes', 15);
+    config()->set('cleaning_attendance.no_travel_grace_minutes', 30);
+    [$customer, $worker, $booking, $session] = makeRecurringAttendanceCloseoutVisit(40);
+
+    Sanctum::actingAs($customer);
+    postJson("/api/v1/cleaning-bookings/{$booking->id}/sessions/{$session->id}/attendance", [
+        'workerIds' => [$worker->id],
+        'action' => 'wait',
+        'note' => 'بانتظار بدء التوجه',
+    ])->assertOk();
+
+    Sanctum::actingAs($worker->user);
+    getJson("/api/v1/cleaning-bookings/{$booking->id}/schedule")
+        ->assertOk()
+        ->assertJsonCount(1, 'data.schedule.sessions.0.attendance.incidents')
+        ->assertJsonPath('data.schedule.sessions.0.attendance.incidents.0.workerId', $worker->id)
+        ->assertJsonPath('data.schedule.sessions.0.workerAttendanceNotice.type', 'no_travel')
+        ->assertJsonPath('data.schedule.sessions.0.workerAttendanceNotice.isResolved', false)
+        ->assertJsonPath(
+            'data.schedule.sessions.0.statusLabel',
+            'أبلغ العميل عن عدم بدء التوجه. ابدأ التوجه الآن لتحديث الحالة.',
+        )
+        ->assertJsonPath('data.schedule.sessions.0.canReportLate', false)
+        ->assertJsonPath('data.schedule.sessions.0.canReportNoTravel', false)
+        ->assertJsonPath('data.schedule.sessions.0.allowedAttendanceActions', [])
+        ->assertJsonPath('data.schedule.sessions.0.attendance.allowedActions', [])
+        ->assertJsonPath('data.schedule.sessions.0.attendance.actionWorkerIds.wait', [])
+        ->assertJsonPath('data.schedule.sessions.0.attendance.actionWorkerIds.replace', [])
+        ->assertJsonPath('data.schedule.sessions.0.attendance.actionWorkerIds.cancel', []);
+});
+
+it('automatically resolves an attendance incident when the worker starts travel', function (): void {
+    config()->set('cleaning_attendance.late_grace_minutes', 15);
+    config()->set('cleaning_attendance.no_travel_grace_minutes', 30);
+    [$customer, $worker, $booking, $session, $assignment] = makeRecurringAttendanceCloseoutVisit(40);
+
+    Sanctum::actingAs($customer);
+    postJson("/api/v1/cleaning-bookings/{$booking->id}/sessions/{$session->id}/attendance", [
+        'workerIds' => [$worker->id],
+        'action' => 'wait',
+    ])->assertOk();
+
+    expect($assignment->fresh()->attendance_resolved_at)->toBeNull();
+
+    Sanctum::actingAs($worker->user);
+    postJson("/api/v1/cleaning-bookings/{$booking->id}/sessions/{$session->id}/start-travel")
+        ->assertOk();
+
+    $assignment->refresh();
+    expect($assignment->started_travel_at)->not->toBeNull()
+        ->and($assignment->attendance_resolved_at)->not->toBeNull();
+
+    getJson("/api/v1/cleaning-bookings/{$booking->id}/schedule")
+        ->assertOk()
+        ->assertJsonPath('data.schedule.sessions.0.workerAttendanceNotice.isResolved', true)
+        ->assertJsonPath('data.schedule.sessions.0.allowedAttendanceActions', []);
 });
 
 it('cancels only the affected recurring visit after no travel and preserves future visits', function (): void {
