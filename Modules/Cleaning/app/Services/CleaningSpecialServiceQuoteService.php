@@ -64,7 +64,7 @@ final class CleaningSpecialServiceQuoteService
             $lines[] = [
                 'specialServiceId' => (int) $service->id,
                 'name' => $service->name,
-                'imageUrl' => $service->image_url,
+                'imageUrl' => $service->imageUrl(),
                 'pricingUnit' => $service->pricing_unit,
                 'dirtinessLevel' => $rule->dirtiness_level,
                 'quantity' => round($quantity, 3),
