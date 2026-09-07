@@ -40,6 +40,14 @@ final class CleaningBookingScheduleController
             && $isEvent
             && $cleaning_booking->status === CleaningBookingStatus::Completed
             && ! $hasReview;
+        $schedule = $this->presenter->present(
+            $cleaning_booking,
+            $worker instanceof Worker ? $worker : null,
+        );
+
+        if ($worker instanceof Worker) {
+            $schedule = $this->withWorkerAttendanceNotice($schedule, $worker);
+        }
 
         return response()->json([
             'success' => true,
@@ -52,11 +60,76 @@ final class CleaningBookingScheduleController
                 'status' => $cleaning_booking->status?->value ?? (string) $cleaning_booking->status,
                 'hasReview' => $hasReview,
                 'canReview' => $canReview,
-                'schedule' => $this->presenter->present(
-                    $cleaning_booking,
-                    $worker instanceof Worker ? $worker : null,
-                ),
+                'schedule' => $schedule,
             ],
         ]);
+    }
+
+    /**
+     * Keep attendance policy server-authoritative while making an unresolved
+     * customer report visible in the existing worker visit UI. The worker
+     * client already renders `statusLabel`, so this is backward compatible;
+     * `workerAttendanceNotice` is an additive read-only contract for newer
+     * clients and deliberately exposes no customer-only actions.
+     *
+     * @param array<string, mixed> $schedule
+     * @return array<string, mixed>
+     */
+    private function withWorkerAttendanceNotice(array $schedule, Worker $worker): array
+    {
+        $decorate = function (mixed $value) use ($worker): mixed {
+            if (! is_array($value)) {
+                return $value;
+            }
+
+            $incidents = data_get($value, 'attendance.incidents', []);
+            if (! is_array($incidents)) {
+                return $value;
+            }
+
+            $incident = collect($incidents)->first(
+                static fn (mixed $item): bool => is_array($item)
+                    && (int) ($item['workerId'] ?? 0) === (int) $worker->id,
+            );
+
+            if (! is_array($incident)) {
+                return $value;
+            }
+
+            $resolvedAt = $incident['resolvedAt'] ?? null;
+            $isResolved = filled($resolvedAt);
+            $isNoTravel = filled($incident['noTravelReportedAt'] ?? null);
+            $message = $isResolved
+                ? 'تمت معالجة بلاغ الحضور.'
+                : ($isNoTravel
+                    ? 'أبلغ العميل عن عدم بدء التوجه. ابدأ التوجه الآن لتحديث الحالة.'
+                    : 'أبلغ العميل عن تأخر بدء التوجه. ابدأ التوجه الآن لتحديث الحالة.');
+
+            $value['workerAttendanceNotice'] = [
+                'type' => $isNoTravel ? 'no_travel' : 'late',
+                'message' => $message,
+                'action' => $incident['action'] ?? null,
+                'note' => $incident['note'] ?? null,
+                'resolvedAt' => $resolvedAt,
+                'isResolved' => $isResolved,
+            ];
+
+            if (! $isResolved) {
+                $value['statusLabel'] = $message;
+            }
+
+            return $value;
+        };
+
+        $sessions = $schedule['sessions'] ?? [];
+        if (is_array($sessions)) {
+            $schedule['sessions'] = array_map($decorate, $sessions);
+        }
+
+        if (array_key_exists('nextSession', $schedule) && $schedule['nextSession'] !== null) {
+            $schedule['nextSession'] = $decorate($schedule['nextSession']);
+        }
+
+        return $schedule;
     }
 }
