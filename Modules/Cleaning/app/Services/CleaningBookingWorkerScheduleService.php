@@ -19,6 +19,16 @@ final class CleaningBookingWorkerScheduleService
         return $this->sanitize($this->presenter->present($booking, $worker), $worker);
     }
 
+    /** @return array{wait: array<int>, replace: array<int>, cancel: array<int>} */
+    private static function emptyActionWorkerIds(): array
+    {
+        return [
+            CleaningBookingSessionAttendanceService::ACTION_WAIT => [],
+            CleaningBookingSessionAttendanceService::ACTION_REPLACE => [],
+            CleaningBookingSessionAttendanceService::ACTION_CANCEL => [],
+        ];
+    }
+
     /**
      * @param  array<string, mixed>  $schedule
      * @return array<string, mixed>
@@ -96,15 +106,5 @@ final class CleaningBookingWorkerScheduleService
         }
 
         return $schedule;
-    }
-
-    /** @return array{wait: array<int>, replace: array<int>, cancel: array<int>} */
-    private static function emptyActionWorkerIds(): array
-    {
-        return [
-            CleaningBookingSessionAttendanceService::ACTION_WAIT => [],
-            CleaningBookingSessionAttendanceService::ACTION_REPLACE => [],
-            CleaningBookingSessionAttendanceService::ACTION_CANCEL => [],
-        ];
     }
 }
