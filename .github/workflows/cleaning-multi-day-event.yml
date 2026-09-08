@@ -21,10 +21,12 @@ on:
       - 'Modules/Cleaning/routes/sessions.php'
       - 'Modules/User/app/Services/EventAssistanceScheduleService.php'
       - 'Modules/User/app/Services/EventAssistanceSessionRescheduleService.php'
+      - 'app/Filament/Resources/CleaningBookings/RelationManagers/SessionsRelationManager.php'
       - 'tests/Feature/Cleaning/MultiDayEventAssistanceCloseoutTest.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionCancellationAndSosTest.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionWorkerChangeTest.php'
       - 'tests/Feature/Cleaning/CleaningBookingWorkerScheduleVisibilityTest.php'
+      - 'tests/Feature/Filament/CleaningBookingSessionsRelationManagerTest.php'
       - 'tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php'
       - '.github/workflows/cleaning-multi-day-event.yml'
   pull_request:
@@ -44,10 +46,12 @@ on:
       - 'Modules/Cleaning/routes/sessions.php'
       - 'Modules/User/app/Services/EventAssistanceScheduleService.php'
       - 'Modules/User/app/Services/EventAssistanceSessionRescheduleService.php'
+      - 'app/Filament/Resources/CleaningBookings/RelationManagers/SessionsRelationManager.php'
       - 'tests/Feature/Cleaning/MultiDayEventAssistanceCloseoutTest.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionCancellationAndSosTest.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionWorkerChangeTest.php'
       - 'tests/Feature/Cleaning/CleaningBookingWorkerScheduleVisibilityTest.php'
+      - 'tests/Feature/Filament/CleaningBookingSessionsRelationManagerTest.php'
       - 'tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php'
       - '.github/workflows/cleaning-multi-day-event.yml'
 
@@ -100,8 +104,10 @@ jobs:
             Modules/Cleaning/routes/sessions.php \
             Modules/User/app/Services/EventAssistanceScheduleService.php \
             Modules/User/app/Services/EventAssistanceSessionRescheduleService.php \
+            app/Filament/Resources/CleaningBookings/RelationManagers/SessionsRelationManager.php \
             tests/Feature/Cleaning/MultiDayEventAssistanceCloseoutTest.php \
-            tests/Feature/Cleaning/CleaningBookingWorkerScheduleVisibilityTest.php
+            tests/Feature/Cleaning/CleaningBookingWorkerScheduleVisibilityTest.php \
+            tests/Feature/Filament/CleaningBookingSessionsRelationManagerTest.php
 
       - name: Run A3 regression tests
         env:
@@ -113,4 +119,5 @@ jobs:
             tests/Feature/Cleaning/CleaningBookingWorkerScheduleVisibilityTest.php \
             tests/Feature/Cleaning/CleaningBookingSessionCancellationAndSosTest.php \
             tests/Feature/Cleaning/CleaningBookingSessionWorkerChangeTest.php \
+            tests/Feature/Filament/CleaningBookingSessionsRelationManagerTest.php \
             tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php
