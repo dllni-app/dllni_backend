@@ -23,6 +23,10 @@ final class UserCleaningOrderShowController
                 'disputes',
                 'addons',
                 'billingPolicy',
+                'materials.material',
+                'materials.materialType',
+                'materials.unit',
+                'specialServices.specialService',
             ])
             ->findOrFail($order);
 

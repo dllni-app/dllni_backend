@@ -9,6 +9,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Http\Resources\CleaningBookingResource;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingMaterial;
+use Modules\Cleaning\Models\CleaningBookingSpecialService;
+use Modules\Cleaning\Services\CleaningOpenTimeBillingService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 /** @mixin CleaningBooking */
@@ -23,11 +26,6 @@ final class UserCleaningBookingResource extends JsonResource
         $bookingBasePrice = max(0.0, (float) ($this->base_price ?? 0));
         $bookingAdminMargin = max(0.0, (float) ($this->admin_margin_amount ?? 0));
 
-        // The user app intentionally presents the administration margin inside
-        // "قيمة الخدمة" rather than as a separate line. Keep order details
-        // consistent with the estimate/confirmation screen. Coupon and extension
-        // flows keep their existing breakdown until their dedicated rows are
-        // rendered by clients.
         if ($discountAmount <= 0.0 && $extensionFeeTotal <= 0.0) {
             $displayServicePrice = round($bookingBasePrice + $bookingAdminMargin, 2);
             $payload['basePrice'] = $displayServicePrice;
@@ -42,11 +40,6 @@ final class UserCleaningBookingResource extends JsonResource
         $bookingTotalHours = (float) ($this->total_hours ?? $bookingEstimatedHours ?? 0);
         $isEventAssistance = (string) $this->property_type === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE;
 
-        // Regular cleaning estimation is calculated as the total sequential work
-        // for all rooms. When multiple workers execute the order in parallel, the
-        // customer-facing elapsed duration is the estimated time divided by the
-        // number of workers. Event assistance is different: its configured hours
-        // are the actual event duration, so they must not be divided.
         if (! $isEventAssistance && $workerCount > 1) {
             if ($bookingEstimatedHours !== null) {
                 $payload['estimatedHours'] = round($bookingEstimatedHours / $workerCount, 2);
@@ -55,6 +48,9 @@ final class UserCleaningBookingResource extends JsonResource
         }
 
         $canEdit = $this->canEdit();
+        $materials = $this->materialsPayload();
+        $specialServices = $this->specialServicesPayload();
+        $openTime = app(CleaningOpenTimeBillingService::class)->presentation($this->resource);
 
         $payload['bookingEstimatedHours'] = $bookingEstimatedHours;
         $payload['bookingTotalHours'] = $bookingTotalHours;
@@ -68,8 +64,55 @@ final class UserCleaningBookingResource extends JsonResource
         $payload['specificWorkerIds'] = $this->resolvedWorkerScope() === CleaningBooking::WORKER_SCOPE_SPECIFIC
             ? $this->specificWorkerIds()
             : [];
+        $payload['bookingKind'] = (string) ($this->booking_kind ?? 'standard');
+        $payload['requestMaterials'] = $materials !== [];
+        $payload['materials'] = $materials;
+        $payload['materialsTotal'] = round(array_sum(array_column($materials, 'totalPrice')), 2);
+        $payload['specialServices'] = $specialServices;
+        $payload['specialServicesTotal'] = round(array_sum(array_column($specialServices, 'totalPrice')), 2);
+        $payload['openTime'] = $openTime;
 
         return $payload;
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function materialsPayload(): array
+    {
+        $lines = $this->relationLoaded('materials') ? $this->materials : $this->materials()->with(['material', 'materialType', 'unit'])->get();
+
+        return $lines->map(static fn (CleaningBookingMaterial $line): array => [
+            'materialId' => (int) $line->cleaning_material_id,
+            'name' => (string) ($line->material?->name ?? $line->materialType?->name ?? ''),
+            'materialTypeId' => (int) $line->cleaning_material_type_id,
+            'quantity' => (float) $line->quantity,
+            'unitId' => (int) $line->cleaning_material_unit_id,
+            'unit' => $line->unit?->name,
+            'unitCode' => $line->unit?->code,
+            'unitSymbol' => $line->unit?->symbol,
+            'unitPrice' => (float) $line->unit_price,
+            'totalPrice' => (float) $line->total_price,
+            'inventoryStatus' => (string) $line->inventory_status,
+        ])->values()->all();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function specialServicesPayload(): array
+    {
+        $lines = $this->relationLoaded('specialServices') ? $this->specialServices : $this->specialServices()->with('specialService')->get();
+
+        return $lines->map(static fn (CleaningBookingSpecialService $line): array => [
+            'specialServiceId' => (int) $line->cleaning_special_service_id,
+            'name' => (string) $line->service_name,
+            'image' => $line->specialService?->imageUrl(),
+            'pricingUnit' => (string) $line->pricing_unit,
+            'dirtinessLevel' => (string) $line->dirtiness_level,
+            'quantity' => (float) $line->quantity,
+            'baseUnitPrice' => (float) $line->base_unit_price,
+            'priceMultiplier' => (float) $line->price_multiplier,
+            'totalPrice' => (float) $line->total_price,
+            'equipment' => is_array($line->equipment_snapshot) ? $line->equipment_snapshot : [],
+            'notes' => $line->notes,
+        ])->values()->all();
     }
 
     private function canEdit(): bool
@@ -78,9 +121,6 @@ final class UserCleaningBookingResource extends JsonResource
             ? $this->status->value
             : (string) $this->status;
 
-        // Keep this aligned with the terminal-status guard in
-        // UserCleaningOrderService::update(). Field-level restrictions are still
-        // enforced by the update endpoint (for example after a worker accepts).
         return ! in_array($status, [
             CleaningBookingStatus::InProgress->value,
             CleaningBookingStatus::Completed->value,
