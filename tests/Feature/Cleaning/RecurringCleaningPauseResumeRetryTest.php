@@ -109,6 +109,74 @@ it('treats a repeated recurring resume request as a no-op against canonical resu
         ->and($booking->fresh()->recurring_pause_reason)->toBeNull();
 });
 
+it('pauses only eligible future visits when another recurring visit has already started travel', function (): void {
+    [$customer, $worker, $booking] = makeRecurringPauseRetryScenario();
+    $inFlightSession = makeRecurringPauseRetrySession($booking, 1);
+    $futureSession = makeRecurringPauseRetrySession($booking, 2);
+    $inFlightAssignment = makeRecurringPauseRetryAssignment($inFlightSession, $worker);
+    $futureAssignment = makeRecurringPauseRetryAssignment($futureSession, $worker);
+    $inFlightAssignment->forceFill(['started_travel_at' => now()])->save();
+
+    Sanctum::actingAs($customer);
+
+    $this->postJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/recurring/pause",
+        ['reason' => 'إيقاف الزيارات القادمة فقط'],
+    )
+        ->assertOk()
+        ->assertJsonPath('data.seriesAction.pausedSessionIds.0', $futureSession->id)
+        ->assertJsonCount(1, 'data.seriesAction.pausedSessionIds')
+        ->assertJsonPath('data.schedule.isPaused', true);
+
+    expect($inFlightSession->fresh()->status)->toBe(CleaningBookingSessionStatus::WorkerAssigned)
+        ->and($inFlightAssignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart)
+        ->and($futureSession->fresh()->status)->toBe(CleaningBookingSessionStatus::Paused)
+        ->and($futureAssignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::Cancelled);
+
+    $this->postJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/recurring/resume",
+    )
+        ->assertOk()
+        ->assertJsonPath('data.seriesAction.resumedSessionIds.0', $futureSession->id)
+        ->assertJsonCount(1, 'data.seriesAction.resumedSessionIds');
+
+    expect($inFlightSession->fresh()->status)->toBe(CleaningBookingSessionStatus::WorkerAssigned)
+        ->and($inFlightAssignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart)
+        ->and($futureSession->fresh()->status)->toBe(CleaningBookingSessionStatus::Scheduled);
+});
+
+it('forbids another customer from pausing or resuming the recurring series', function (): void {
+    [$customer, $worker, $booking] = makeRecurringPauseRetryScenario();
+    $session = makeRecurringPauseRetrySession($booking, 1);
+    $assignment = makeRecurringPauseRetryAssignment($session, $worker);
+    $otherCustomer = User::factory()->create(['is_active' => true]);
+
+    Sanctum::actingAs($otherCustomer);
+
+    $this->postJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/recurring/pause",
+        ['reason' => 'محاولة غير مصرح بها'],
+    )->assertForbidden();
+
+    expect($booking->fresh()->recurring_paused_at)->toBeNull()
+        ->and($session->fresh()->status)->toBe(CleaningBookingSessionStatus::WorkerAssigned)
+        ->and($assignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart);
+
+    Sanctum::actingAs($customer);
+    $this->postJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/recurring/pause",
+        ['reason' => 'توقف شرعي'],
+    )->assertOk();
+
+    Sanctum::actingAs($otherCustomer);
+    $this->postJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/recurring/resume",
+    )->assertForbidden();
+
+    expect($booking->fresh()->recurring_paused_at)->not->toBeNull()
+        ->and($session->fresh()->status)->toBe(CleaningBookingSessionStatus::Paused);
+});
+
 /** @return array{0:User,1:Worker,2:CleaningBooking} */
 function makeRecurringPauseRetryScenario(): array
 {
