@@ -26,6 +26,50 @@ final class CleaningBookingSessionAcceptanceService
     ) {}
 
     /**
+     * Read-only acceptance decision used by discovery/schedule visibility.
+     *
+     * This deliberately reuses the same validation path as the write-side
+     * acceptance flow so worker discovery never becomes a weaker security gate.
+     */
+    public function canAcceptSession(
+        CleaningBooking $booking,
+        CleaningBookingSession $session,
+        Worker $worker,
+    ): bool {
+        if ($this->workerAlreadyAccepted($session, $worker)) {
+            return true;
+        }
+
+        return $this->validateOne($booking, $session, $worker) === null;
+    }
+
+    /**
+     * Read-only equivalent of the event/accept-all preflight.
+     */
+    public function canAcceptAllAvailableSessions(CleaningBooking $booking, Worker $worker): bool
+    {
+        $sessions = CleaningBookingSession::query()
+            ->where('cleaning_booking_id', $booking->id)
+            ->whereIn('status', [
+                CleaningBookingSessionStatus::Scheduled->value,
+                CleaningBookingSessionStatus::WorkerAssigned->value,
+            ])
+            ->orderBy('sequence')
+            ->get()
+            ->filter(
+                fn (CleaningBookingSession $session): bool => ! $this->workerAlreadyAccepted($session, $worker)
+                    && $session->remainingWorkerCount() > 0,
+            )
+            ->values();
+
+        if ($sessions->isEmpty()) {
+            return false;
+        }
+
+        return $this->preflightAll($booking, $sessions, $worker) === [];
+    }
+
+    /**
      * Accept every currently open session for a parent booking or accept none.
      *
      * @return array{allAccepted:bool,acceptedSessionIds:array<int,int>,rejected:array<int,array{sessionId:int,reasonCode:string,message:string}>}
