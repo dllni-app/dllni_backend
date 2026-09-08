@@ -9,11 +9,14 @@ on:
       - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingScheduleController.php'
       - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionScheduleController.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingCustomerScheduleService.php'
+      - 'Modules/Cleaning/app/Services/CleaningBookingSessionAcceptanceService.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionCapabilityService.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionFinancialAggregationService.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionParentStateService.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionCancellationService.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionWorkerChangeService.php'
+      - 'Modules/Cleaning/app/Services/CleaningBookingWorkerScheduleService.php'
+      - 'Modules/Cleaning/app/Services/CleaningBookingWorkerSessionVisibilityService.php'
       - 'Modules/Cleaning/app/Services/WorkerBookingScheduleConflictService.php'
       - 'Modules/Cleaning/routes/sessions.php'
       - 'Modules/User/app/Services/EventAssistanceScheduleService.php'
@@ -21,6 +24,7 @@ on:
       - 'tests/Feature/Cleaning/MultiDayEventAssistanceCloseoutTest.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionCancellationAndSosTest.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionWorkerChangeTest.php'
+      - 'tests/Feature/Cleaning/CleaningBookingWorkerScheduleVisibilityTest.php'
       - 'tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php'
       - '.github/workflows/cleaning-multi-day-event.yml'
   pull_request:
@@ -28,11 +32,14 @@ on:
       - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingScheduleController.php'
       - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionScheduleController.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingCustomerScheduleService.php'
+      - 'Modules/Cleaning/app/Services/CleaningBookingSessionAcceptanceService.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionCapabilityService.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionFinancialAggregationService.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionParentStateService.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionCancellationService.php'
       - 'Modules/Cleaning/app/Services/CleaningBookingSessionWorkerChangeService.php'
+      - 'Modules/Cleaning/app/Services/CleaningBookingWorkerScheduleService.php'
+      - 'Modules/Cleaning/app/Services/CleaningBookingWorkerSessionVisibilityService.php'
       - 'Modules/Cleaning/app/Services/WorkerBookingScheduleConflictService.php'
       - 'Modules/Cleaning/routes/sessions.php'
       - 'Modules/User/app/Services/EventAssistanceScheduleService.php'
@@ -40,6 +47,7 @@ on:
       - 'tests/Feature/Cleaning/MultiDayEventAssistanceCloseoutTest.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionCancellationAndSosTest.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionWorkerChangeTest.php'
+      - 'tests/Feature/Cleaning/CleaningBookingWorkerScheduleVisibilityTest.php'
       - 'tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php'
       - '.github/workflows/cleaning-multi-day-event.yml'
 
@@ -80,16 +88,20 @@ jobs:
             Modules/Cleaning/app/Http/Controllers/API/CleaningBookingScheduleController.php \
             Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionScheduleController.php \
             Modules/Cleaning/app/Services/CleaningBookingCustomerScheduleService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionAcceptanceService.php \
             Modules/Cleaning/app/Services/CleaningBookingSessionCapabilityService.php \
             Modules/Cleaning/app/Services/CleaningBookingSessionFinancialAggregationService.php \
             Modules/Cleaning/app/Services/CleaningBookingSessionParentStateService.php \
             Modules/Cleaning/app/Services/CleaningBookingSessionCancellationService.php \
             Modules/Cleaning/app/Services/CleaningBookingSessionWorkerChangeService.php \
+            Modules/Cleaning/app/Services/CleaningBookingWorkerScheduleService.php \
+            Modules/Cleaning/app/Services/CleaningBookingWorkerSessionVisibilityService.php \
             Modules/Cleaning/app/Services/WorkerBookingScheduleConflictService.php \
             Modules/Cleaning/routes/sessions.php \
             Modules/User/app/Services/EventAssistanceScheduleService.php \
             Modules/User/app/Services/EventAssistanceSessionRescheduleService.php \
-            tests/Feature/Cleaning/MultiDayEventAssistanceCloseoutTest.php
+            tests/Feature/Cleaning/MultiDayEventAssistanceCloseoutTest.php \
+            tests/Feature/Cleaning/CleaningBookingWorkerScheduleVisibilityTest.php
 
       - name: Run A3 regression tests
         env:
@@ -98,6 +110,7 @@ jobs:
         run: |
           php artisan test \
             tests/Feature/Cleaning/MultiDayEventAssistanceCloseoutTest.php \
+            tests/Feature/Cleaning/CleaningBookingWorkerScheduleVisibilityTest.php \
             tests/Feature/Cleaning/CleaningBookingSessionCancellationAndSosTest.php \
             tests/Feature/Cleaning/CleaningBookingSessionWorkerChangeTest.php \
             tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php
