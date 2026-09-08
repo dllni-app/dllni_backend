@@ -8,6 +8,7 @@ use App\Models\Worker;
 use Illuminate\Support\Collection;
 use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingSession;
 
 final class CleaningBookingWorkerScheduleService
 {
@@ -17,15 +18,67 @@ final class CleaningBookingWorkerScheduleService
     ) {}
 
     /** @return array<string, mixed> */
-    public function present(CleaningBooking $booking, Worker $worker): array
-    {
+    public function present(
+        CleaningBooking $booking,
+        Worker $worker,
+        ?CleaningBookingSession $includeHistoricalSession = null,
+    ): array {
         $schedule = $this->presenter->present($booking, $worker);
         $visibleSessions = $this->visibility->visibleSessions($booking, $worker);
+        $visibleSessions = $this->includeHistoricalMutationSession(
+            $booking,
+            $worker,
+            $visibleSessions,
+            $includeHistoricalSession,
+        );
 
         return $this->sanitize(
             $this->scopeToWorker($schedule, $visibleSessions),
             $worker,
         );
+    }
+
+    /**
+     * Mutation responses must contain the session that was just changed so the
+     * worker client can reconcile the authoritative post-mutation state even
+     * when normal visibility rules immediately remove a released assignment.
+     * Subsequent schedule refetches continue to use the regular scoped view.
+     *
+     * @param  Collection<int, CleaningBookingSession>  $visibleSessions
+     * @return Collection<int, CleaningBookingSession>
+     */
+    private function includeHistoricalMutationSession(
+        CleaningBooking $booking,
+        Worker $worker,
+        Collection $visibleSessions,
+        ?CleaningBookingSession $session,
+    ): Collection {
+        if (! $session instanceof CleaningBookingSession
+            || (int) $session->cleaning_booking_id !== (int) $booking->id
+            || $visibleSessions->contains(
+                static fn (CleaningBookingSession $visible): bool => (int) $visible->id === (int) $session->id,
+            )) {
+            return $visibleSessions;
+        }
+
+        $historicalSession = CleaningBookingSession::query()
+            ->whereKey($session->id)
+            ->where('cleaning_booking_id', $booking->id)
+            ->whereHas(
+                'workerAssignments',
+                static fn ($query) => $query->where('worker_id', $worker->id),
+            )
+            ->first();
+
+        if (! $historicalSession instanceof CleaningBookingSession) {
+            return $visibleSessions;
+        }
+
+        return $visibleSessions
+            ->push($historicalSession)
+            ->unique(static fn (CleaningBookingSession $item): int => (int) $item->id)
+            ->sortBy(static fn (CleaningBookingSession $item): int => (int) $item->sequence)
+            ->values();
     }
 
     /** @return array{wait: array<int>, replace: array<int>, cancel: array<int>} */
@@ -40,7 +93,7 @@ final class CleaningBookingWorkerScheduleService
 
     /**
      * @param  array<string, mixed>  $schedule
-     * @param  Collection<int, \Modules\Cleaning\Models\CleaningBookingSession>  $visibleSessions
+     * @param  Collection<int, CleaningBookingSession>  $visibleSessions
      * @return array<string, mixed>
      */
     private function scopeToWorker(array $schedule, Collection $visibleSessions): array
