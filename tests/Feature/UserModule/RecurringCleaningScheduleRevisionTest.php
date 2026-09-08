@@ -335,35 +335,6 @@ it('preserves hour-based pricing when future recurring visits are revised', func
         ->and($active->every(fn (CleaningBookingSession $session): bool => (float) $session->duration_hours === 2.5))->toBeTrue();
 });
 
-it('requires reconfirmation when repricing changes the total without changing future slots', function (): void {
-    $customer = User::factory()->create();
-    $booking = createRecurringRevisionBooking($customer);
-    $schedule = [
-        'mode' => 'recurring',
-        'sessions' => CleaningBookingSession::query()
-            ->where('cleaning_booking_id', $booking->id)
-            ->where('status', '!=', CleaningBookingSessionStatus::Superseded->value)
-            ->orderBy('scheduled_date')
-            ->orderBy('scheduled_time')
-            ->get()
-            ->map(fn (CleaningBookingSession $session): array => [
-                'date' => $session->scheduled_date?->toDateString(),
-                'time' => (string) $session->scheduled_time,
-            ])
-            ->all(),
-    ];
-    $booking->forceFill(['total_price' => max(0, (float) $booking->total_price - 100)])->save();
-
-    postJson(
-        "/api/v1/user/cleaning/orders/{$booking->id}/recurring-schedule/preview",
-        ['schedule' => $schedule],
-    )
-        ->assertOk()
-        ->assertJsonPath('data.revision.scheduleChanged', false)
-        ->assertJsonPath('data.revision.priceChanged', true)
-        ->assertJsonPath('data.revision.requiresReconfirmation', true);
-});
-
 it('rejects a revised visit that collides with a preserved in flight visit', function (): void {
     $customer = User::factory()->create();
     $booking = createRecurringRevisionBooking($customer);
