@@ -33,7 +33,7 @@ final class CleaningBookingWorkerSessionVisibilityService
         // A released/replaced worker may refetch the parent after a realtime
         // update so the client can remove stale session state. The historical
         // assignment is a legitimate booking relationship, but it does not make
-        // the released session visible again.
+        // the released Event Assistance day visible again.
         return $this->hasSessionAssignmentHistory($sessions, $worker);
     }
 
@@ -83,16 +83,20 @@ final class CleaningBookingWorkerSessionVisibilityService
         $assignedOrHistorical = $sessions
             ->filter(fn (CleaningBookingSession $session): bool => $this->hasAcceptedAssignment($session, $worker))
             ->values();
+        $hasAssignmentHistory = $this->hasSessionAssignmentHistory($sessions, $worker);
+        $isEventAssistance = (string) $booking->property_type === 'event_assistance';
 
-        // Once the worker has participated in this booking, assignment rows are
-        // the authoritative operational scope. In particular, a released event
-        // day must not become visible again simply because a seat reopened.
-        if ($this->hasSessionAssignmentHistory($sessions, $worker)) {
+        // For Event Assistance, once the worker has participated in this
+        // booking, assignment rows are the authoritative operational scope.
+        // A released/replaced event day must not become visible again simply
+        // because that seat reopened. Other session products retain their
+        // established discovery behavior and are handled by the per-session
+        // acceptance decision below.
+        if ($isEventAssistance && $hasAssignmentHistory) {
             return $assignedOrHistorical;
         }
 
-        $isMultiDayEvent = (string) $booking->property_type === 'event_assistance'
-            && $sessions->count() > 1;
+        $isMultiDayEvent = $isEventAssistance && $sessions->count() > 1;
 
         if ($isMultiDayEvent) {
             if (! $this->acceptanceService->canAcceptAllAvailableSessions($booking, $worker)) {
