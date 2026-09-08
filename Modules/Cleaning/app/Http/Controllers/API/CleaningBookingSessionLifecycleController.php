@@ -327,7 +327,7 @@ final class CleaningBookingSessionLifecycleController
     ): JsonResponse {
         $freshBooking = $booking->fresh();
         $schedule = $viewerWorker instanceof Worker
-            ? $this->workerSchedules->present($freshBooking, $viewerWorker)
+            ? $this->workerSchedules->present($freshBooking, $viewerWorker, $session)
             : $this->presenter->present($freshBooking);
 
         return response()->json([
