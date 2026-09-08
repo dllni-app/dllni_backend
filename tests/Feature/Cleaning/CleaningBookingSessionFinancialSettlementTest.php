@@ -284,7 +284,6 @@ function makeFinancialSettlementBooking(array $overrides = []): CleaningBooking
         'discount_amount' => 0,
         'subtotal_before_discount' => null,
         'total_price' => 0,
-        'address' => 'Financial Settlement Test Address',
         'address_latitude' => 36.21,
         'address_longitude' => 37.16,
         ...$overrides,
