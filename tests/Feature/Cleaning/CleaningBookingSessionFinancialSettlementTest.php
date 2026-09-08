@@ -163,8 +163,16 @@ it('allocates multi-worker session entitlement by seat without deducting admin m
         totalPrice: 1200,
         requiredWorkers: 2,
     );
-    $firstWorker = Worker::factory()->create();
-    $secondWorker = Worker::factory()->create();
+    $firstWorker = Worker::factory()->create([
+        'home_address' => 'Worker A Home',
+        'home_latitude' => 36.20,
+        'home_longitude' => 37.15,
+    ]);
+    $secondWorker = Worker::factory()->create([
+        'home_address' => 'Worker B Home',
+        'home_latitude' => 36.22,
+        'home_longitude' => 37.17,
+    ]);
     $pricing = app(CleaningBookingSessionWorkerPricingService::class);
 
     $first = $pricing->quoteForNextSeat($session, $firstWorker, 0);
@@ -276,6 +284,9 @@ function makeFinancialSettlementBooking(array $overrides = []): CleaningBooking
         'discount_amount' => 0,
         'subtotal_before_discount' => null,
         'total_price' => 0,
+        'address' => 'Financial Settlement Test Address',
+        'address_latitude' => 36.21,
+        'address_longitude' => 37.16,
         ...$overrides,
     ]);
 }
