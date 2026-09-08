@@ -48,14 +48,11 @@ final class CleaningBookingSessionCapabilityService
 
         $session->loadMissing('workerAssignments');
 
+        // Multi-day Event Assistance keeps the existing all-days acceptance
+        // semantics. Once a worker has accepted a day, customer schedule edits
+        // are locked instead of silently mutating work the worker committed to.
         return ! $session->workerAssignments->contains(
-            static fn (CleaningBookingSessionWorkerAssignment $assignment): bool => $assignment->isActive()
-                && (
-                    $assignment->started_travel_at !== null
-                    || $assignment->arrived_at !== null
-                    || $assignment->start_approved_at !== null
-                    || $assignment->work_started_at !== null
-                ),
+            static fn (CleaningBookingSessionWorkerAssignment $assignment): bool => $assignment->isAccepted(),
         );
     }
 
