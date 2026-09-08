@@ -8,7 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
-use Modules\Cleaning\Services\CleaningBookingSchedulePresenter;
+use Modules\Cleaning\Services\CleaningBookingCustomerScheduleService;
 use Modules\User\Services\EventAssistanceSessionRescheduleService;
 
 final class CleaningBookingSessionScheduleController
@@ -18,7 +18,7 @@ final class CleaningBookingSessionScheduleController
         CleaningBooking $cleaning_booking,
         CleaningBookingSession $cleaning_booking_session,
         EventAssistanceSessionRescheduleService $service,
-        CleaningBookingSchedulePresenter $presenter,
+        CleaningBookingCustomerScheduleService $customerSchedules,
     ): JsonResponse {
         $today = now(config('app.timezone'))->toDateString();
         $validated = $request->validate([
@@ -45,7 +45,7 @@ final class CleaningBookingSessionScheduleController
                 'totalPrice' => (float) $freshBooking->total_price,
                 'currency' => (string) config('app.currency', 'SYP'),
                 'updatedSessionId' => (int) $updatedSession->id,
-                'schedule' => $presenter->present($freshBooking),
+                'schedule' => $customerSchedules->present($freshBooking),
             ],
         ]);
     }
