@@ -21,6 +21,8 @@ use Throwable;
 
 final class RecurringCleaningScheduleRevisionService
 {
+    private const MAX_WINDOW_DAYS = 30;
+
     public function __construct(
         private readonly UserCleaningOrderEstimationService $estimationService,
         private readonly CleaningBookingSessionFinancialAggregationService $financialAggregation,
@@ -220,6 +222,8 @@ final class RecurringCleaningScheduleRevisionService
         $visibleWithoutEditable = $sessions->reject(
             fn (CleaningBookingSession $session): bool => $editable->contains('id', $session->id),
         )->values();
+        $this->assertCombinedScheduleInvariants($visibleWithoutEditable, $proposedSessions);
+
         if ($visibleWithoutEditable->count() + count($proposedSessions) < 2) {
             throw ValidationException::withMessages([
                 'schedule.sessions' => ['يجب أن يبقى الحجز الدوري مكوّناً من زيارتين على الأقل إجمالاً.'],
@@ -281,6 +285,7 @@ final class RecurringCleaningScheduleRevisionService
         $newTotal = round($newGrossTotal - $discount, 2);
         $oldTotal = round((float) $booking->total_price, 2);
         $priceDelta = round($newTotal - $oldTotal, 2);
+        $priceChanged = abs($priceDelta) >= 0.01;
         $currentFuture = $editable->map(fn (CleaningBookingSession $session): array => [
             'date' => $session->scheduled_date?->toDateString(),
             'time' => (string) $session->scheduled_time,
@@ -307,9 +312,9 @@ final class RecurringCleaningScheduleRevisionService
 
         $preview = [
             'revisionToken' => $revisionToken,
-            'requiresReconfirmation' => $scheduleChanged,
+            'requiresReconfirmation' => $scheduleChanged || $priceChanged,
             'scheduleChanged' => $scheduleChanged,
-            'priceChanged' => abs($priceDelta) >= 0.01,
+            'priceChanged' => $priceChanged,
             'oldTotal' => $oldTotal,
             'newTotal' => $newTotal,
             'priceDelta' => $priceDelta,
@@ -404,6 +409,54 @@ final class RecurringCleaningScheduleRevisionService
         usort($normalized, static fn (array $left, array $right): int => [$left['date'], $left['time']] <=> [$right['date'], $right['time']]);
 
         return $normalized;
+    }
+
+    /**
+     * @param Collection<int,CleaningBookingSession> $preservedSessions
+     * @param array<int,array{date:string,time:string}> $proposedSessions
+     */
+    private function assertCombinedScheduleInvariants(Collection $preservedSessions, array $proposedSessions): void
+    {
+        $slots = [];
+        $dates = [];
+
+        foreach ($preservedSessions as $session) {
+            $date = $session->scheduled_date?->toDateString();
+            $time = mb_trim((string) $session->scheduled_time);
+            if ($date === null || $time === '') {
+                continue;
+            }
+
+            $slots[$date.'|'.$time] = true;
+            $dates[] = CarbonImmutable::parse($date, config('app.timezone'))->startOfDay();
+        }
+
+        foreach ($proposedSessions as $index => $session) {
+            $slot = $session['date'].'|'.$session['time'];
+            if (isset($slots[$slot])) {
+                throw ValidationException::withMessages([
+                    "schedule.sessions.{$index}.time" => ['تتعارض الزيارة المعدلة مع زيارة محفوظة في نفس التاريخ والوقت.'],
+                ]);
+            }
+
+            $slots[$slot] = true;
+            $dates[] = CarbonImmutable::parse($session['date'], config('app.timezone'))->startOfDay();
+        }
+
+        if (count($dates) < 2) {
+            return;
+        }
+
+        usort(
+            $dates,
+            static fn (CarbonImmutable $left, CarbonImmutable $right): int => $left->getTimestamp() <=> $right->getTimestamp(),
+        );
+
+        if ($dates[0]->diffInDays($dates[count($dates) - 1]) > self::MAX_WINDOW_DAYS) {
+            throw ValidationException::withMessages([
+                'schedule.sessions' => ['يجب أن تقع جميع زيارات الحجز الدوري، بما فيها الزيارات المحفوظة، ضمن فترة لا تتجاوز 30 يوماً.'],
+            ]);
+        }
     }
 
     private function resequenceVisibleSessions(CleaningBooking $booking): void
