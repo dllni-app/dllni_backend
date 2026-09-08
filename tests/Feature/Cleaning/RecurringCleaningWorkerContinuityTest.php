@@ -78,23 +78,55 @@ it('treats worker absence as a single recurring visit withdrawal and keeps the s
 
     Sanctum::actingAs($workerUser);
 
-    $this->postJson(
+    $response = $this->postJson(
         "/api/v1/cleaning-bookings/{$booking->id}/sessions/{$firstSession->id}/cancel",
         ['reason' => 'لن أستطيع الحضور لهذه الزيارة'],
-    )
-        ->assertOk()
+    )->assertOk();
+
+    $this->assertDatabaseHas('cleaning_booking_sessions', [
+        'id' => $firstSession->id,
+        'status' => CleaningBookingSessionStatus::Scheduled->value,
+        'coverage_status' => CleaningBookingSessionCoverageStatus::Searching->value,
+    ]);
+    $this->assertDatabaseHas('cleaning_booking_sessions', [
+        'id' => $secondSession->id,
+        'status' => CleaningBookingSessionStatus::WorkerAssigned->value,
+        'coverage_status' => CleaningBookingSessionCoverageStatus::FullyCovered->value,
+    ]);
+    $this->assertDatabaseHas('cleaning_booking_session_worker_assignments', [
+        'id' => $firstAssignment->id,
+        'status' => CleaningBookingWorkerAssignmentStatus::Cancelled->value,
+    ]);
+    $this->assertDatabaseHas('cleaning_booking_session_worker_assignments', [
+        'id' => $secondAssignment->id,
+        'status' => CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart->value,
+    ]);
+
+    $affectedAcceptedWorkers = CleaningBookingSessionWorkerAssignment::query()
+        ->where('cleaning_booking_session_id', $firstSession->id)
+        ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
+        ->count();
+
+    expect($affectedAcceptedWorkers)->toBe(0)
+        ->and($firstAssignment->fresh()->released_at)->not->toBeNull()
+        ->and($firstAssignment->fresh()->released_reason)->not->toBeNull()
+        ->and($firstAssignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::Cancelled)
+        ->and($secondAssignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart)
+        ->and($firstSession->fresh()->status)->toBe(CleaningBookingSessionStatus::Scheduled)
+        ->and($firstSession->fresh()->coverage_status)->toBe(CleaningBookingSessionCoverageStatus::Searching)
+        ->and($secondSession->fresh()->status)->toBe(CleaningBookingSessionStatus::WorkerAssigned)
+        ->and($secondSession->fresh()->coverage_status)->toBe(CleaningBookingSessionCoverageStatus::FullyCovered)
+        ->and($booking->fresh()->status)->toBe(CleaningBookingStatus::WorkerAssigned)
+        ->and((int) $worker->fresh()->trust_score)->toBeLessThan($trustBefore);
+
+    $response
         ->assertJsonPath('data.schedule.sessions.0.sessionType', 'recurring_cleaning')
         ->assertJsonPath('data.schedule.sessions.0.status', CleaningBookingSessionStatus::Scheduled->value)
         ->assertJsonPath('data.schedule.sessions.0.coverageStatus', CleaningBookingSessionCoverageStatus::Searching->value)
+        ->assertJsonPath('data.schedule.sessions.0.acceptedWorkers', 0)
         ->assertJsonPath('data.schedule.sessions.1.status', CleaningBookingSessionStatus::WorkerAssigned->value)
+        ->assertJsonPath('data.schedule.sessions.1.coverageStatus', CleaningBookingSessionCoverageStatus::FullyCovered->value)
         ->assertJsonPath('data.schedule.sessions.1.acceptedWorkers', 1);
-
-    expect($firstAssignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::Cancelled)
-        ->and($secondAssignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart)
-        ->and($firstSession->fresh()->status)->toBe(CleaningBookingSessionStatus::Scheduled)
-        ->and($secondSession->fresh()->status)->toBe(CleaningBookingSessionStatus::WorkerAssigned)
-        ->and($booking->fresh()->status)->not->toBe(CleaningBookingStatus::Cancelled)
-        ->and((int) $worker->fresh()->trust_score)->toBeLessThan($trustBefore);
 });
 
 it('keeps worker replacement unavailable for ordinary non-recurring cleaning sessions', function (): void {
