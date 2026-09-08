@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Services;
 
+use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
 
@@ -22,6 +23,14 @@ final class CleaningBookingCustomerScheduleService
         if (! $booking->isEventAssistanceBooking() || ! is_array($schedule['sessions'] ?? null)) {
             return $schedule;
         }
+
+        // The presenter owns the legacy whole-schedule replacement flag. Keep it
+        // separate from the newer per-session capability so an accepted worker
+        // can remain attached to a moved future day without reopening bulk
+        // schedule replacement before the event has started.
+        $legacyBulkReschedule = collect($schedule['sessions'])
+            ->contains(static fn ($payload): bool => is_array($payload)
+                && (bool) ($payload['canReschedule'] ?? false));
 
         $sessions = CleaningBookingSession::query()
             ->where('cleaning_booking_id', $booking->id)
@@ -53,6 +62,25 @@ final class CleaningBookingCustomerScheduleService
             $anyReschedulable = $anyReschedulable || $canRescheduleSession;
         }
 
+        $hasHistoricalExecution = $sessions->contains(static function (CleaningBookingSession $session): bool {
+            $status = $session->status?->value ?? (string) $session->status;
+
+            return in_array($status, [
+                CleaningBookingSessionStatus::Completed->value,
+                CleaningBookingSessionStatus::Cancelled->value,
+                CleaningBookingSessionStatus::Skipped->value,
+            ], true);
+        });
+
+        // Existing Flutter builds use `canReschedule` as one booking-level entry
+        // point repeated on each day. Before execution starts, preserve the old
+        // rule: any accepted worker locks bulk schedule replacement. Once the
+        // event has execution history, expose that entry point again when at
+        // least one remaining day can be moved individually. The exact editable
+        // day is always expressed by `canRescheduleSession`.
+        $legacyRescheduleEntryPoint = $legacyBulkReschedule
+            || ($hasHistoricalExecution && $anyReschedulable);
+
         foreach ($schedule['sessions'] as $index => $payload) {
             if (! is_array($payload)) {
                 continue;
@@ -64,10 +92,7 @@ final class CleaningBookingCustomerScheduleService
                 'canChangeDuration' => false,
             ];
 
-            // Backward compatibility: existing Flutter versions interpret
-            // `canReschedule` as a booking-level flag repeated on every day and
-            // use every(...) before exposing the edit entry point.
-            $schedule['sessions'][$index]['canReschedule'] = $anyReschedulable;
+            $schedule['sessions'][$index]['canReschedule'] = $legacyRescheduleEntryPoint;
             $schedule['sessions'][$index]['canRescheduleSession'] = $capability['canRescheduleSession'];
             $schedule['sessions'][$index]['canChangeDuration'] = $capability['canChangeDuration'];
         }
@@ -78,12 +103,12 @@ final class CleaningBookingCustomerScheduleService
                 'canRescheduleSession' => false,
                 'canChangeDuration' => false,
             ];
-            $schedule['nextSession']['canReschedule'] = $anyReschedulable;
+            $schedule['nextSession']['canReschedule'] = $legacyRescheduleEntryPoint;
             $schedule['nextSession']['canRescheduleSession'] = $capability['canRescheduleSession'];
             $schedule['nextSession']['canChangeDuration'] = $capability['canChangeDuration'];
         }
 
-        $schedule['canReschedule'] = $anyReschedulable;
+        $schedule['canReschedule'] = $legacyRescheduleEntryPoint;
 
         return $schedule;
     }
