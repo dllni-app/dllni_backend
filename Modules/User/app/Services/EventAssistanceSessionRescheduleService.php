@@ -13,6 +13,7 @@ use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
+use Modules\Cleaning\Services\CleaningBookingSessionCapabilityService;
 use Modules\Cleaning\Services\CleaningBookingSessionFinancialAggregationService;
 use Modules\Cleaning\Services\WorkerBookingScheduleConflictService;
 
@@ -22,6 +23,7 @@ final class EventAssistanceSessionRescheduleService
         private readonly EventAssistanceScheduleService $eventSchedule,
         private readonly WorkerBookingScheduleConflictService $scheduleConflicts,
         private readonly CleaningBookingSessionFinancialAggregationService $financialAggregation,
+        private readonly CleaningBookingSessionCapabilityService $capabilities,
     ) {}
 
     /**
@@ -72,7 +74,11 @@ final class EventAssistanceSessionRescheduleService
             }
 
             $now = CarbonImmutable::now(config('app.timezone'));
-            $this->assertSessionCanBeRescheduled($lockedSession, $now);
+            if (! $this->capabilities->canCustomerRescheduleEventSession($lockedBooking, $lockedSession, $now)) {
+                throw ValidationException::withMessages([
+                    'session' => ['Only a future event day that has not entered travel or execution can be rescheduled.'],
+                ]);
+            }
 
             $date = CarbonImmutable::parse((string) $input['date'], config('app.timezone'))->toDateString();
             $time = mb_trim((string) $input['time']);
@@ -89,7 +95,7 @@ final class EventAssistanceSessionRescheduleService
 
             if (CleaningBookingSession::query()
                 ->where('cleaning_booking_id', $lockedBooking->id)
-                ->whereKeyNot($lockedSession->id)
+                ->where('id', '!=', $lockedSession->id)
                 ->where('status', '!=', CleaningBookingSessionStatus::Superseded->value)
                 ->whereDate('scheduled_date', $date)
                 ->where('scheduled_time', $time)
@@ -108,7 +114,10 @@ final class EventAssistanceSessionRescheduleService
                 ->values();
 
             $durationChanged = abs($hours - (float) $lockedSession->duration_hours) > 0.0001;
-            if ($durationChanged && $activeAssignments->isNotEmpty()) {
+            if (
+                $durationChanged
+                && ! $this->capabilities->canCustomerChangeEventSessionDuration($lockedBooking, $lockedSession, $now)
+            ) {
                 throw ValidationException::withMessages([
                     'hours' => ['Session duration cannot be changed after a worker has accepted this event day.'],
                 ]);
@@ -166,50 +175,6 @@ final class EventAssistanceSessionRescheduleService
         }
 
         return $updated;
-    }
-
-    private function assertSessionCanBeRescheduled(
-        CleaningBookingSession $session,
-        CarbonImmutable $now,
-    ): void {
-        $status = $session->status?->value ?? (string) $session->status;
-
-        if (! in_array($status, [
-            CleaningBookingSessionStatus::Scheduled->value,
-            CleaningBookingSessionStatus::WorkerAssigned->value,
-        ], true)) {
-            throw ValidationException::withMessages([
-                'session' => ['Only a future event day that has not entered execution can be rescheduled.'],
-            ]);
-        }
-
-        $startsAt = $session->startsAt();
-        if ($startsAt === null || ! $startsAt->gt($now)) {
-            throw ValidationException::withMessages([
-                'session' => ['Past or already-started event days cannot be rescheduled.'],
-            ]);
-        }
-
-        if (
-            $session->started_travel_at !== null
-            || $session->arrived_at !== null
-            || $session->customer_confirmed_at !== null
-            || $session->work_started_at !== null
-            || $session->work_finished_at !== null
-            || $session->workerAssignments->contains(
-                static fn (CleaningBookingSessionWorkerAssignment $assignment): bool => $assignment->isActive()
-                    && (
-                        $assignment->started_travel_at !== null
-                        || $assignment->arrived_at !== null
-                        || $assignment->start_approved_at !== null
-                        || $assignment->work_started_at !== null
-                    ),
-            )
-        ) {
-            throw ValidationException::withMessages([
-                'session' => ['This event day already entered travel or execution and cannot be rescheduled.'],
-            ]);
-        }
     }
 
     private function repriceUnassignedSession(
