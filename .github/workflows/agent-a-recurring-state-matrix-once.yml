@@ -1,0 +1,72 @@
+name: Agent A Recurring State Matrix Once
+
+on:
+  push:
+    branches:
+      - feature/cleaning-suite-agent-a-closeout
+    paths:
+      - '.github/workflows/agent-a-recurring-state-matrix-once.yml'
+
+jobs:
+  recurring-withdrawal-state:
+    name: ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: agent-a-head
+            ref: feature/cleaning-suite-agent-a-closeout
+          - label: base-main
+            ref: feature/cleaning-suite-main
+          - label: pr-merge
+            ref: refs/pull/202/merge
+
+    steps:
+      - name: Checkout state
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.ref }}
+          fetch-depth: 0
+
+      - name: Use the same diagnostic regression test in every state
+        run: |
+          git fetch origin feature/cleaning-suite-agent-a-closeout --depth=1
+          git show FETCH_HEAD:tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php > tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php
+
+      - name: Record tested state
+        run: |
+          echo "label=${{ matrix.label }}"
+          echo "requested_ref=${{ matrix.ref }}"
+          echo "tested_sha=$(git rev-parse HEAD)"
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, bcmath, intl, gd
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare application
+        run: |
+          cp .env.example .env
+          touch database/database.sqlite
+          php artisan key:generate
+
+      - name: Migrate database
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        run: php artisan migrate --force
+
+      - name: Run recurring worker-withdrawal diagnostic
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        run: |
+          php artisan test tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php \
+            --filter='treats worker absence as a single recurring visit withdrawal and keeps the series alive'
