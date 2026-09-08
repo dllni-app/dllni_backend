@@ -53,11 +53,13 @@ final class CleaningBookingWorkerScheduleService
         Collection $visibleSessions,
         ?CleaningBookingSession $session,
     ): Collection {
-        if (! $session instanceof CleaningBookingSession
+        if (
+            ! $session instanceof CleaningBookingSession
             || (int) $session->cleaning_booking_id !== (int) $booking->id
             || $visibleSessions->contains(
                 static fn (CleaningBookingSession $visible): bool => (int) $visible->id === (int) $session->id,
-            )) {
+            )
+        ) {
             return $visibleSessions;
         }
 
