@@ -266,6 +266,23 @@ final class CleaningBookingSchedulePresenter
                 CleaningBookingSessionStatus::WorkerAssigned->value,
             ], true)
             && ! $session->isTerminal();
+        $allowedAttendanceActions = [];
+        $attendanceActionWorkerIds = [
+            CleaningBookingSessionAttendanceService::ACTION_WAIT => [],
+            CleaningBookingSessionAttendanceService::ACTION_REPLACE => [],
+            CleaningBookingSessionAttendanceService::ACTION_CANCEL => [],
+        ];
+
+        if ($canUseAttendanceActions && $lateWorkerIds->isNotEmpty()) {
+            $allowedAttendanceActions[] = CleaningBookingSessionAttendanceService::ACTION_WAIT;
+            $attendanceActionWorkerIds[CleaningBookingSessionAttendanceService::ACTION_WAIT] = $lateWorkerIds->all();
+        }
+        if ($canUseAttendanceActions && $noTravelWorkerIds->isNotEmpty()) {
+            $allowedAttendanceActions[] = CleaningBookingSessionAttendanceService::ACTION_REPLACE;
+            $allowedAttendanceActions[] = CleaningBookingSessionAttendanceService::ACTION_CANCEL;
+            $attendanceActionWorkerIds[CleaningBookingSessionAttendanceService::ACTION_REPLACE] = $noTravelWorkerIds->all();
+            $attendanceActionWorkerIds[CleaningBookingSessionAttendanceService::ACTION_CANCEL] = $noTravelWorkerIds->all();
+        }
 
         return [
             'id' => (int) $session->id,
@@ -309,10 +326,14 @@ final class CleaningBookingSchedulePresenter
             'noTravelWorkerIds' => $noTravelWorkerIds->all(),
             'reportableLateWorkerIds' => $reportableLateWorkerIds->all(),
             'reportableNoTravelWorkerIds' => $reportableNoTravelWorkerIds->all(),
+            'allowedAttendanceActions' => $allowedAttendanceActions,
+            'attendanceActionWorkerIds' => $attendanceActionWorkerIds,
             'attendance' => [
                 'lateGraceMinutes' => $lateGraceMinutes,
                 'noTravelGraceMinutes' => $noTravelGraceMinutes,
                 'minutesPastStart' => $minutesPastStart,
+                'allowedActions' => $allowedAttendanceActions,
+                'actionWorkerIds' => $attendanceActionWorkerIds,
                 'incidents' => $attendanceIncidents->all(),
             ],
             'paymentStatus' => $paymentStatus,

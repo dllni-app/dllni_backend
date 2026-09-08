@@ -9,14 +9,18 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
-use Modules\Cleaning\Services\CleaningBookingSchedulePresenter;
+use Modules\Cleaning\Services\CleaningBookingCustomerScheduleService;
+use Modules\Cleaning\Services\CleaningBookingWorkerScheduleService;
+use Modules\Cleaning\Services\CleaningBookingWorkerSessionVisibilityService;
 use Modules\User\Services\EventAssistanceReviewService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class CleaningBookingScheduleController
 {
     public function __construct(
-        private readonly CleaningBookingSchedulePresenter $presenter,
+        private readonly CleaningBookingCustomerScheduleService $customerSchedules,
+        private readonly CleaningBookingWorkerScheduleService $workerSchedules,
+        private readonly CleaningBookingWorkerSessionVisibilityService $workerVisibility,
         private readonly EventAssistanceReviewService $eventReviewService,
     ) {}
 
@@ -25,8 +29,16 @@ final class CleaningBookingScheduleController
         $user = $request->user();
         $worker = $user?->worker;
         $isCustomer = $user !== null && (int) $cleaning_booking->customer_id === (int) $user->id;
+        $viewerWorker = ! $isCustomer && $worker instanceof Worker ? $worker : null;
 
-        if (! $isCustomer && ! $worker instanceof Worker) {
+        if (! $isCustomer && ! $viewerWorker instanceof Worker) {
+            abort(403, 'You are not allowed to view this cleaning booking schedule.');
+        }
+
+        if (
+            $viewerWorker instanceof Worker
+            && ! $this->workerVisibility->canViewBooking($cleaning_booking, $viewerWorker)
+        ) {
             abort(403, 'You are not allowed to view this cleaning booking schedule.');
         }
 
@@ -40,6 +52,9 @@ final class CleaningBookingScheduleController
             && $isEvent
             && $cleaning_booking->status === CleaningBookingStatus::Completed
             && ! $hasReview;
+        $schedule = $viewerWorker instanceof Worker
+            ? $this->workerSchedules->present($cleaning_booking, $viewerWorker)
+            : $this->customerSchedules->present($cleaning_booking);
 
         return response()->json([
             'success' => true,
@@ -52,10 +67,7 @@ final class CleaningBookingScheduleController
                 'status' => $cleaning_booking->status?->value ?? (string) $cleaning_booking->status,
                 'hasReview' => $hasReview,
                 'canReview' => $canReview,
-                'schedule' => $this->presenter->present(
-                    $cleaning_booking,
-                    $worker instanceof Worker ? $worker : null,
-                ),
+                'schedule' => $schedule,
             ],
         ]);
     }

@@ -334,3 +334,55 @@ it('preserves hour-based pricing when future recurring visits are revised', func
         ->and($active->every(fn (CleaningBookingSession $session): bool => $session->calculation_mode === 'hours'))->toBeTrue()
         ->and($active->every(fn (CleaningBookingSession $session): bool => (float) $session->duration_hours === 2.5))->toBeTrue();
 });
+
+it('rejects a revised visit that collides with a preserved in flight visit', function (): void {
+    $customer = User::factory()->create();
+    $booking = createRecurringRevisionBooking($customer);
+    $preserved = CleaningBookingSession::query()
+        ->where('cleaning_booking_id', $booking->id)
+        ->orderBy('sequence')
+        ->firstOrFail();
+    $preserved->forceFill(['started_travel_at' => now()])->save();
+
+    postJson(
+        "/api/v1/user/cleaning/orders/{$booking->id}/recurring-schedule/preview",
+        [
+            'schedule' => [
+                'mode' => 'recurring',
+                'sessions' => [
+                    [
+                        'date' => $preserved->scheduled_date?->toDateString(),
+                        'time' => (string) $preserved->scheduled_time,
+                    ],
+                    [
+                        'date' => now(config('app.timezone'))->addDays(10)->toDateString(),
+                        'time' => '11:00',
+                    ],
+                ],
+            ],
+        ],
+    )
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('schedule.sessions.0.time');
+});
+
+it('enforces the thirty day window across preserved history and proposed future visits', function (): void {
+    $customer = User::factory()->create();
+    $booking = createRecurringRevisionBooking($customer);
+    $preserved = CleaningBookingSession::query()
+        ->where('cleaning_booking_id', $booking->id)
+        ->orderBy('sequence')
+        ->firstOrFail();
+    $preserved->forceFill([
+        'status' => CleaningBookingSessionStatus::Completed,
+        'work_started_at' => now()->subHours(2),
+        'work_finished_at' => now()->subHour(),
+    ])->save();
+
+    postJson(
+        "/api/v1/user/cleaning/orders/{$booking->id}/recurring-schedule/preview",
+        ['schedule' => revisionSchedule([10, 33])],
+    )
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('schedule.sessions');
+});
