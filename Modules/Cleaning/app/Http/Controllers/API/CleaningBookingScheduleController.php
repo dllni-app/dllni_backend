@@ -9,7 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
-use Modules\Cleaning\Services\CleaningBookingSchedulePresenter;
+use Modules\Cleaning\Services\CleaningBookingCustomerScheduleService;
 use Modules\Cleaning\Services\CleaningBookingWorkerScheduleService;
 use Modules\User\Services\EventAssistanceReviewService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
@@ -17,7 +17,7 @@ use Modules\User\Services\UserCleaningOrderEstimationService;
 final class CleaningBookingScheduleController
 {
     public function __construct(
-        private readonly CleaningBookingSchedulePresenter $presenter,
+        private readonly CleaningBookingCustomerScheduleService $customerSchedules,
         private readonly CleaningBookingWorkerScheduleService $workerSchedules,
         private readonly EventAssistanceReviewService $eventReviewService,
     ) {}
@@ -45,7 +45,7 @@ final class CleaningBookingScheduleController
             && ! $hasReview;
         $schedule = $viewerWorker instanceof Worker
             ? $this->workerSchedules->present($cleaning_booking, $viewerWorker)
-            : $this->presenter->present($cleaning_booking);
+            : $this->customerSchedules->present($cleaning_booking);
 
         return response()->json([
             'success' => true,
