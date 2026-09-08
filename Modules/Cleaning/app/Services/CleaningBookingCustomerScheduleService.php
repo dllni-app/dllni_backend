@@ -28,9 +28,10 @@ final class CleaningBookingCustomerScheduleService
             ->with('workerAssignments')
             ->get()
             ->keyBy('id');
+        $sessionCapabilities = [];
         $anyReschedulable = false;
 
-        foreach ($schedule['sessions'] as $index => $payload) {
+        foreach ($schedule['sessions'] as $payload) {
             if (! is_array($payload)) {
                 continue;
             }
@@ -38,28 +39,48 @@ final class CleaningBookingCustomerScheduleService
             $sessionId = (int) ($payload['sessionId'] ?? $payload['id'] ?? 0);
             $session = $sessions->get($sessionId);
             if (! $session instanceof CleaningBookingSession) {
-                $schedule['sessions'][$index]['canReschedule'] = false;
-                $schedule['sessions'][$index]['canChangeDuration'] = false;
-
                 continue;
             }
 
-            $canReschedule = $this->capabilities->canCustomerRescheduleEventSession($booking, $session);
-            $canChangeDuration = $this->capabilities->canCustomerChangeEventSessionDuration($booking, $session);
-            $schedule['sessions'][$index]['canReschedule'] = $canReschedule;
-            $schedule['sessions'][$index]['canChangeDuration'] = $canChangeDuration;
-            $anyReschedulable = $anyReschedulable || $canReschedule;
+            $canRescheduleSession = $this->capabilities
+                ->canCustomerRescheduleEventSession($booking, $session);
+            $canChangeDuration = $this->capabilities
+                ->canCustomerChangeEventSessionDuration($booking, $session);
+            $sessionCapabilities[$sessionId] = [
+                'canRescheduleSession' => $canRescheduleSession,
+                'canChangeDuration' => $canChangeDuration,
+            ];
+            $anyReschedulable = $anyReschedulable || $canRescheduleSession;
+        }
+
+        foreach ($schedule['sessions'] as $index => $payload) {
+            if (! is_array($payload)) {
+                continue;
+            }
+
+            $sessionId = (int) ($payload['sessionId'] ?? $payload['id'] ?? 0);
+            $capability = $sessionCapabilities[$sessionId] ?? [
+                'canRescheduleSession' => false,
+                'canChangeDuration' => false,
+            ];
+
+            // Backward compatibility: existing Flutter versions interpret
+            // `canReschedule` as a booking-level flag repeated on every day and
+            // use every(...) before exposing the edit entry point.
+            $schedule['sessions'][$index]['canReschedule'] = $anyReschedulable;
+            $schedule['sessions'][$index]['canRescheduleSession'] = $capability['canRescheduleSession'];
+            $schedule['sessions'][$index]['canChangeDuration'] = $capability['canChangeDuration'];
         }
 
         if (is_array($schedule['nextSession'] ?? null)) {
             $nextId = (int) ($schedule['nextSession']['sessionId'] ?? $schedule['nextSession']['id'] ?? 0);
-            $next = $sessions->get($nextId);
-            if ($next instanceof CleaningBookingSession) {
-                $schedule['nextSession']['canReschedule'] = $this->capabilities
-                    ->canCustomerRescheduleEventSession($booking, $next);
-                $schedule['nextSession']['canChangeDuration'] = $this->capabilities
-                    ->canCustomerChangeEventSessionDuration($booking, $next);
-            }
+            $capability = $sessionCapabilities[$nextId] ?? [
+                'canRescheduleSession' => false,
+                'canChangeDuration' => false,
+            ];
+            $schedule['nextSession']['canReschedule'] = $anyReschedulable;
+            $schedule['nextSession']['canRescheduleSession'] = $capability['canRescheduleSession'];
+            $schedule['nextSession']['canChangeDuration'] = $capability['canChangeDuration'];
         }
 
         $schedule['canReschedule'] = $anyReschedulable;
