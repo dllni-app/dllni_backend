@@ -40,8 +40,10 @@ it('reschedules one future event day after an earlier day completed without touc
     $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/schedule")
         ->assertOk()
         ->assertJsonPath('data.schedule.canReschedule', true)
-        ->assertJsonPath('data.schedule.sessions.0.canReschedule', false)
+        ->assertJsonPath('data.schedule.sessions.0.canReschedule', true)
+        ->assertJsonPath('data.schedule.sessions.0.canRescheduleSession', false)
         ->assertJsonPath('data.schedule.sessions.1.canReschedule', true)
+        ->assertJsonPath('data.schedule.sessions.1.canRescheduleSession', true)
         ->assertJsonPath('data.schedule.sessions.1.canChangeDuration', false);
 
     $newDate = now()->addDays(5)->toDateString();
@@ -57,10 +59,11 @@ it('reschedules one future event day after an earlier day completed without touc
         ->assertJsonPath('data.updatedSessionId', $future->id)
         ->assertJsonPath('data.schedule.sessions.0.sessionId', $completed->id)
         ->assertJsonPath('data.schedule.sessions.0.status', CleaningBookingSessionStatus::Completed->value)
+        ->assertJsonPath('data.schedule.sessions.0.canRescheduleSession', false)
         ->assertJsonPath('data.schedule.sessions.1.sessionId', $future->id)
         ->assertJsonPath('data.schedule.sessions.1.scheduledDate', $newDate)
         ->assertJsonPath('data.schedule.sessions.1.scheduledTime', '14:30')
-        ->assertJsonPath('data.schedule.sessions.1.canReschedule', true);
+        ->assertJsonPath('data.schedule.sessions.1.canRescheduleSession', true);
 
     expect($completed->fresh()->scheduled_date?->toDateString())->toBe(now()->subDay()->toDateString())
         ->and((string) $completed->fresh()->scheduled_time)->toBe('10:00')
@@ -69,11 +72,14 @@ it('reschedules one future event day after an earlier day completed without touc
         ->and($assignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart)
         ->and($booking->fresh()->status)->toBe(CleaningBookingStatus::WorkerAssigned);
 
-    Event::assertDispatched(CleaningBookingTrackingUpdated::class, function (CleaningBookingTrackingUpdated $event) use ($booking, $future): bool {
-        return $event->cleaningBookingId === (int) $booking->id
-            && ($event->tracking['action'] ?? null) === 'event_session_rescheduled'
-            && (int) ($event->tracking['sessionId'] ?? 0) === (int) $future->id;
-    });
+    Event::assertDispatched(
+        CleaningBookingTrackingUpdated::class,
+        function (CleaningBookingTrackingUpdated $event) use ($booking, $future): bool {
+            return $event->cleaningBookingId === (int) $booking->id
+                && ($event->tracking['action'] ?? null) === 'event_session_rescheduled'
+                && (int) ($event->tracking['sessionId'] ?? 0) === (int) $future->id;
+        },
+    );
 });
 
 it('does not allow changing event day duration after a worker accepted that day', function (): void {
@@ -118,7 +124,9 @@ it('stops exposing the event day edit action after assigned worker travel begins
 
     $this->getJson("/api/v1/cleaning-bookings/{$booking->id}/schedule")
         ->assertOk()
+        ->assertJsonPath('data.schedule.canReschedule', false)
         ->assertJsonPath('data.schedule.sessions.0.canReschedule', false)
+        ->assertJsonPath('data.schedule.sessions.0.canRescheduleSession', false)
         ->assertJsonPath('data.schedule.sessions.0.canChangeDuration', false);
 
     $this->patchJson(
@@ -173,6 +181,30 @@ it('rejects a future day edit that would double book an accepted worker', functi
 
     expect($future->fresh()->scheduled_date?->toDateString())->toBe(now()->addDays(3)->toDateString())
         ->and((string) $future->fresh()->scheduled_time)->toBe('10:00');
+});
+
+it('forbids another customer from rescheduling an event day', function (): void {
+    [$customer, $worker, $booking] = makeMultiDayEventCloseoutScenario();
+    $future = makeMultiDayEventCloseoutSession(
+        $booking,
+        sequence: 1,
+        date: now()->addDays(3)->toDateString(),
+        status: CleaningBookingSessionStatus::WorkerAssigned,
+    );
+    makeMultiDayEventCloseoutAssignment($future, $worker);
+    $otherCustomer = User::factory()->create(['is_active' => true]);
+
+    Sanctum::actingAs($otherCustomer);
+
+    $this->patchJson(
+        "/api/v1/cleaning-bookings/{$booking->id}/sessions/{$future->id}/schedule",
+        [
+            'date' => now()->addDays(5)->toDateString(),
+            'time' => '12:00',
+        ],
+    )->assertForbidden();
+
+    expect($future->fresh()->scheduled_date?->toDateString())->toBe(now()->addDays(3)->toDateString());
 });
 
 /** @return array{0:User,1:Worker,2:CleaningBooking} */
