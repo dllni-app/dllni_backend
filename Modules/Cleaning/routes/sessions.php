@@ -8,6 +8,7 @@ use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionAcceptanceContro
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionInteractionController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionLifecycleController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionLocationController;
+use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionScheduleController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionWorkerChangeController;
 use Modules\Cleaning\Http\Controllers\API\CleaningRecurringSeriesController;
 
@@ -43,6 +44,11 @@ Route::prefix('v1')
             'cleaning-bookings/{cleaning_booking}/sessions/change-workers',
             CleaningBookingSessionWorkerChangeController::class,
         )->name('cleaning-bookings.sessions.change-workers');
+
+        Route::patch(
+            'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/schedule',
+            CleaningBookingSessionScheduleController::class,
+        )->name('cleaning-bookings.sessions.schedule.update');
 
         Route::post(
             'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/start-travel',

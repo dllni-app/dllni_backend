@@ -46,6 +46,7 @@ on:
       - 'tests/Feature/Cleaning/RecurringCleaningCoverageNotificationTest.php'
       - 'tests/Feature/Cleaning/RecurringCleaningPreferredWorkerFallbackTest.php'
       - 'tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php'
+      - 'tests/Feature/Cleaning/RecurringCleaningPauseResumeRetryTest.php'
       - 'tests/Feature/Cleaning/RecurringCleaningWorkerScopeTest.php'
       - 'tests/Feature/UserModule/RecurringCleaningScheduleTest.php'
       - 'tests/Feature/UserModule/RecurringCleaningScheduleRevisionTest.php'
@@ -92,6 +93,7 @@ on:
       - 'tests/Feature/Cleaning/RecurringCleaningCoverageNotificationTest.php'
       - 'tests/Feature/Cleaning/RecurringCleaningPreferredWorkerFallbackTest.php'
       - 'tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php'
+      - 'tests/Feature/Cleaning/RecurringCleaningPauseResumeRetryTest.php'
       - 'tests/Feature/Cleaning/RecurringCleaningWorkerScopeTest.php'
       - 'tests/Feature/UserModule/RecurringCleaningScheduleTest.php'
       - 'tests/Feature/UserModule/RecurringCleaningScheduleRevisionTest.php'
@@ -169,6 +171,7 @@ jobs:
             tests/Feature/Cleaning/RecurringCleaningCoverageNotificationTest.php \
             tests/Feature/Cleaning/RecurringCleaningPreferredWorkerFallbackTest.php \
             tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php \
+            tests/Feature/Cleaning/RecurringCleaningPauseResumeRetryTest.php \
             tests/Feature/Cleaning/RecurringCleaningWorkerScopeTest.php \
             tests/Feature/UserModule/RecurringCleaningScheduleTest.php \
             tests/Feature/UserModule/RecurringCleaningScheduleRevisionTest.php \
@@ -191,6 +194,7 @@ jobs:
             tests/Feature/Cleaning/RecurringCleaningWorkerScopeTest.php \
             tests/Feature/Cleaning/RecurringCleaningPreferredWorkerFallbackTest.php \
             tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php \
+            tests/Feature/Cleaning/RecurringCleaningPauseResumeRetryTest.php \
             tests/Feature/Cleaning/CleaningNewOrderDispatchTest.php \
             tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php \
             2>&1 | tee recurring-cleaning-test.log

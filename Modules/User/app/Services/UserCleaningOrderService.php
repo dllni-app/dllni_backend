@@ -870,7 +870,7 @@ final class UserCleaningOrderService
     }
 
     /**
-     * @param array<string, mixed> $pricing
+     * @param  array<string, mixed>  $pricing
      */
     private function replaceNewServiceLines(
         CleaningBooking $booking,

@@ -255,6 +255,7 @@ final class CleaningBookingSessionCancellationService
 
             $acceptedCount = CleaningBookingSessionWorkerAssignment::query()
                 ->where('cleaning_booking_session_id', $locked->id)
+                ->whereKeyNot($assignment->getKey())
                 ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
                 ->count();
             $requiredCount = $locked->requiredWorkerCount();

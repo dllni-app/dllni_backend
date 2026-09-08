@@ -95,9 +95,11 @@ it('lets a worker withdraw from one future session without cancelling the custom
         ['reason' => 'تعذر الالتزام بهذا اليوم'],
     )
         ->assertOk()
-        ->assertJsonPath('data.schedule.sessions.0.status', CleaningBookingSessionStatus::Scheduled->value)
-        ->assertJsonPath('data.schedule.sessions.0.coverageStatus', CleaningBookingSessionCoverageStatus::Searching->value)
-        ->assertJsonPath('data.schedule.sessions.0.canCancel', false);
+        ->assertJsonPath('data.schedule.bookingDaysCount', 2)
+        ->assertJsonPath('data.schedule.daysCount', 0)
+        ->assertJsonPath('data.schedule.mySessionsCount', 0)
+        ->assertJsonPath('data.schedule.nextSession', null)
+        ->assertJsonCount(0, 'data.schedule.sessions');
 
     expect($assignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::Cancelled)
         ->and($session->fresh()->status)->toBe(CleaningBookingSessionStatus::Scheduled)

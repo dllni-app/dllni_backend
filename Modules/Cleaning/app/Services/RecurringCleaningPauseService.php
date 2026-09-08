@@ -37,8 +37,27 @@ final class RecurringCleaningPauseService
         ): void {
             $lockedBooking = CleaningBooking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
             $this->assertRecurring($lockedBooking);
+
             if ($lockedBooking->recurring_paused_at !== null) {
-                throw new InvalidArgumentException('Recurring cleaning series is already paused.');
+                $pausedSessionIds = CleaningBookingSession::query()
+                    ->where('cleaning_booking_id', $lockedBooking->id)
+                    ->where('session_type', CleaningBookingSession::TYPE_RECURRING_CLEANING)
+                    ->where('status', CleaningBookingSessionStatus::Paused->value)
+                    ->orderBy('sequence')
+                    ->lockForUpdate()
+                    ->pluck('id')
+                    ->map(static fn ($id): int => (int) $id)
+                    ->values()
+                    ->all();
+
+                if ($pausedSessionIds === []) {
+                    throw new InvalidArgumentException('Recurring cleaning series is marked as paused but has no paused visits.');
+                }
+
+                // Treat a repeated pause request as a successful state assertion. This
+                // keeps mobile retries safe without releasing workers or incrementing
+                // session versions a second time.
+                return;
             }
 
             $sessions = CleaningBookingSession::query()
@@ -146,8 +165,23 @@ final class RecurringCleaningPauseService
         ): void {
             $lockedBooking = CleaningBooking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
             $this->assertRecurring($lockedBooking);
+
             if ($lockedBooking->recurring_paused_at === null) {
-                throw new InvalidArgumentException('Recurring cleaning series is not paused.');
+                $hasPausedSessions = CleaningBookingSession::query()
+                    ->where('cleaning_booking_id', $lockedBooking->id)
+                    ->where('session_type', CleaningBookingSession::TYPE_RECURRING_CLEANING)
+                    ->where('status', CleaningBookingSessionStatus::Paused->value)
+                    ->lockForUpdate()
+                    ->exists();
+
+                if ($hasPausedSessions) {
+                    throw new InvalidArgumentException('Recurring cleaning series has paused visits but is not marked as paused.');
+                }
+
+                // Resume is an "ensure resumed" command. Returning the current
+                // canonical state makes a retry after a successful response loss a
+                // no-op rather than a false validation failure.
+                return;
             }
 
             $sessions = CleaningBookingSession::query()
