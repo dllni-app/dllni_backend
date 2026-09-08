@@ -34,6 +34,16 @@ it('reschedules one future event day after an earlier day completed without touc
         status: CleaningBookingSessionStatus::WorkerAssigned,
     );
     $assignment = makeMultiDayEventCloseoutAssignment($future, $worker);
+    $completedPriceBefore = (float) $completed->total_price;
+    $futureBaseBefore = (float) $future->base_price;
+    $futureAdminBefore = (float) $future->admin_margin_amount;
+    $futureTravelBefore = (float) $future->travel_fee;
+    $futureExtensionBefore = (float) $future->extension_fee_total;
+    $futurePriceBefore = (float) $future->total_price;
+    $parentBaseBefore = (float) $booking->base_price;
+    $parentAdminBefore = (float) $booking->admin_margin_amount;
+    $parentTravelBefore = (float) $booking->travel_fee;
+    $parentTotalBefore = (float) $booking->total_price;
 
     Sanctum::actingAs($customer);
 
@@ -67,8 +77,19 @@ it('reschedules one future event day after an earlier day completed without touc
 
     expect($completed->fresh()->scheduled_date?->toDateString())->toBe(now()->subDay()->toDateString())
         ->and((string) $completed->fresh()->scheduled_time)->toBe('10:00')
+        ->and((float) $completed->fresh()->total_price)->toBe($completedPriceBefore)
         ->and($future->fresh()->scheduled_date?->toDateString())->toBe($newDate)
         ->and((string) $future->fresh()->scheduled_time)->toBe('14:30')
+        ->and((float) $future->fresh()->duration_hours)->toBe(2.0)
+        ->and((float) $future->fresh()->base_price)->toBe($futureBaseBefore)
+        ->and((float) $future->fresh()->admin_margin_amount)->toBe($futureAdminBefore)
+        ->and((float) $future->fresh()->travel_fee)->toBe($futureTravelBefore)
+        ->and((float) $future->fresh()->extension_fee_total)->toBe($futureExtensionBefore)
+        ->and((float) $future->fresh()->total_price)->toBe($futurePriceBefore)
+        ->and((float) $booking->fresh()->base_price)->toBe($parentBaseBefore)
+        ->and((float) $booking->fresh()->admin_margin_amount)->toBe($parentAdminBefore)
+        ->and((float) $booking->fresh()->travel_fee)->toBe($parentTravelBefore)
+        ->and((float) $booking->fresh()->total_price)->toBe($parentTotalBefore)
         ->and($assignment->fresh()->status)->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart)
         ->and($booking->fresh()->status)->toBe(CleaningBookingStatus::WorkerAssigned);
 
@@ -91,6 +112,15 @@ it('does not allow changing event day duration after a worker accepted that day'
         status: CleaningBookingSessionStatus::WorkerAssigned,
     );
     makeMultiDayEventCloseoutAssignment($future, $worker);
+    $originalDate = $future->scheduled_date?->toDateString();
+    $originalTime = (string) $future->scheduled_time;
+    $sessionBaseBefore = (float) $future->base_price;
+    $sessionAdminBefore = (float) $future->admin_margin_amount;
+    $sessionTotalBefore = (float) $future->total_price;
+    $parentBaseBefore = (float) $booking->base_price;
+    $parentAdminBefore = (float) $booking->admin_margin_amount;
+    $parentHoursBefore = (float) $booking->total_hours;
+    $parentTotalBefore = (float) $booking->total_price;
 
     Sanctum::actingAs($customer);
 
@@ -106,7 +136,15 @@ it('does not allow changing event day duration after a worker accepted that day'
         ->assertJsonValidationErrors('hours');
 
     expect((float) $future->fresh()->duration_hours)->toBe(2.0)
-        ->and((string) $future->fresh()->scheduled_time)->toBe('10:00');
+        ->and($future->fresh()->scheduled_date?->toDateString())->toBe($originalDate)
+        ->and((string) $future->fresh()->scheduled_time)->toBe($originalTime)
+        ->and((float) $future->fresh()->base_price)->toBe($sessionBaseBefore)
+        ->and((float) $future->fresh()->admin_margin_amount)->toBe($sessionAdminBefore)
+        ->and((float) $future->fresh()->total_price)->toBe($sessionTotalBefore)
+        ->and((float) $booking->fresh()->base_price)->toBe($parentBaseBefore)
+        ->and((float) $booking->fresh()->admin_margin_amount)->toBe($parentAdminBefore)
+        ->and((float) $booking->fresh()->total_hours)->toBe($parentHoursBefore)
+        ->and((float) $booking->fresh()->total_price)->toBe($parentTotalBefore);
 });
 
 it('stops exposing the event day edit action after assigned worker travel begins', function (): void {

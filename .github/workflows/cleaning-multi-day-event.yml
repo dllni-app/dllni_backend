@@ -23,6 +23,7 @@ on:
       - 'Modules/User/app/Services/EventAssistanceSessionRescheduleService.php'
       - 'app/Filament/Resources/CleaningBookings/RelationManagers/SessionsRelationManager.php'
       - 'tests/Feature/Cleaning/MultiDayEventAssistanceCloseoutTest.php'
+      - 'tests/Feature/Cleaning/CleaningBookingSessionFinancialSettlementTest.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionCancellationAndSosTest.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionWorkerChangeTest.php'
       - 'tests/Feature/Cleaning/CleaningBookingWorkerScheduleVisibilityTest.php'
@@ -48,6 +49,7 @@ on:
       - 'Modules/User/app/Services/EventAssistanceSessionRescheduleService.php'
       - 'app/Filament/Resources/CleaningBookings/RelationManagers/SessionsRelationManager.php'
       - 'tests/Feature/Cleaning/MultiDayEventAssistanceCloseoutTest.php'
+      - 'tests/Feature/Cleaning/CleaningBookingSessionFinancialSettlementTest.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionCancellationAndSosTest.php'
       - 'tests/Feature/Cleaning/CleaningBookingSessionWorkerChangeTest.php'
       - 'tests/Feature/Cleaning/CleaningBookingWorkerScheduleVisibilityTest.php'
@@ -106,6 +108,7 @@ jobs:
             Modules/User/app/Services/EventAssistanceSessionRescheduleService.php \
             app/Filament/Resources/CleaningBookings/RelationManagers/SessionsRelationManager.php \
             tests/Feature/Cleaning/MultiDayEventAssistanceCloseoutTest.php \
+            tests/Feature/Cleaning/CleaningBookingSessionFinancialSettlementTest.php \
             tests/Feature/Cleaning/CleaningBookingWorkerScheduleVisibilityTest.php \
             tests/Feature/Filament/CleaningBookingSessionsRelationManagerTest.php
 
@@ -116,6 +119,7 @@ jobs:
         run: |
           php artisan test \
             tests/Feature/Cleaning/MultiDayEventAssistanceCloseoutTest.php \
+            tests/Feature/Cleaning/CleaningBookingSessionFinancialSettlementTest.php \
             tests/Feature/Cleaning/CleaningBookingWorkerScheduleVisibilityTest.php \
             tests/Feature/Cleaning/CleaningBookingSessionCancellationAndSosTest.php \
             tests/Feature/Cleaning/CleaningBookingSessionWorkerChangeTest.php \
