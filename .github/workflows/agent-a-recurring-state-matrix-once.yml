@@ -70,3 +70,27 @@ jobs:
         run: |
           php artisan test tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php \
             --filter='treats worker absence as a single recurring visit withdrawal and keeps the series alive'
+
+  pint-probe:
+    name: pint-probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Agent A head
+        uses: actions/checkout@v4
+        with:
+          ref: feature/cleaning-suite-agent-a-closeout
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Show exact Pint rewrite
+        run: |
+          vendor/bin/pint Modules/Cleaning/app/Services/CleaningBookingWorkerScheduleService.php
+          git diff -- Modules/Cleaning/app/Services/CleaningBookingWorkerScheduleService.php
