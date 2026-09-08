@@ -11,6 +11,7 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Services\CleaningBookingCustomerScheduleService;
 use Modules\Cleaning\Services\CleaningBookingWorkerScheduleService;
+use Modules\Cleaning\Services\CleaningBookingWorkerSessionVisibilityService;
 use Modules\User\Services\EventAssistanceReviewService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
@@ -19,6 +20,7 @@ final class CleaningBookingScheduleController
     public function __construct(
         private readonly CleaningBookingCustomerScheduleService $customerSchedules,
         private readonly CleaningBookingWorkerScheduleService $workerSchedules,
+        private readonly CleaningBookingWorkerSessionVisibilityService $workerVisibility,
         private readonly EventAssistanceReviewService $eventReviewService,
     ) {}
 
@@ -30,6 +32,13 @@ final class CleaningBookingScheduleController
         $viewerWorker = ! $isCustomer && $worker instanceof Worker ? $worker : null;
 
         if (! $isCustomer && ! $viewerWorker instanceof Worker) {
+            abort(403, 'You are not allowed to view this cleaning booking schedule.');
+        }
+
+        if (
+            $viewerWorker instanceof Worker
+            && ! $this->workerVisibility->canViewBooking($cleaning_booking, $viewerWorker)
+        ) {
             abort(403, 'You are not allowed to view this cleaning booking schedule.');
         }
 
