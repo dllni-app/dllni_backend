@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\User\Http\Controllers\API;
 
 use App\Http\Resources\UserResource;
+use App\Jobs\DispatchAvailablePlatformCouponNotificationsToUser;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
@@ -28,6 +29,7 @@ final class VerifyAccountController
         );
 
         $user = User::query()->where('phone', $request->validated('phone'))->firstOrFail();
+        $wasUnverified = $user->phone_verified_at === null;
         $user->forceFill(['phone_verified_at' => CarbonImmutable::now()])->save();
 
         if (! (bool) ($user->is_active ?? true)) {
@@ -36,6 +38,10 @@ final class VerifyAccountController
 
         $user->tokens()->where('name', 'user-api')->delete();
         $token = $user->createToken('user-api')->plainTextToken;
+
+        if ($wasUnverified) {
+            DispatchAvailablePlatformCouponNotificationsToUser::dispatch((int) $user->id)->afterCommit();
+        }
 
         return response()->json([
             'user' => UserResource::make($user),
