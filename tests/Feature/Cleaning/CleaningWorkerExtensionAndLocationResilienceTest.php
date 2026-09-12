@@ -31,9 +31,9 @@ it('treats repeated extension acceptance as an idempotent success', function ():
     Event::fake([CompletionDecisionMade::class]);
 
     $primaryUser = User::factory()->create(['email' => 'extension-primary@example.com']);
-    $primaryWorker = Worker::factory()->create(['user_id' => $primaryUser->id]);
+    $primaryWorker = Worker::factory()->financiallyEligible()->create(['user_id' => $primaryUser->id]);
     $respondingUser = User::factory()->create(['email' => 'extension-responder@example.com']);
-    $respondingWorker = Worker::factory()->create(['user_id' => $respondingUser->id]);
+    $respondingWorker = Worker::factory()->financiallyEligible()->create(['user_id' => $respondingUser->id]);
 
     $booking = CleaningBooking::factory()->create([
         'worker_id' => $primaryWorker->id,
@@ -107,9 +107,9 @@ it('treats repeated extension rejection as an idempotent success', function (): 
     Event::fake([CompletionDecisionMade::class]);
 
     $primaryUser = User::factory()->create(['email' => 'extension-reject-primary@example.com']);
-    $primaryWorker = Worker::factory()->create(['user_id' => $primaryUser->id]);
+    $primaryWorker = Worker::factory()->financiallyEligible()->create(['user_id' => $primaryUser->id]);
     $respondingUser = User::factory()->create(['email' => 'extension-reject-responder@example.com']);
-    $respondingWorker = Worker::factory()->create(['user_id' => $respondingUser->id]);
+    $respondingWorker = Worker::factory()->financiallyEligible()->create(['user_id' => $respondingUser->id]);
 
     $booking = CleaningBooking::factory()->create([
         'worker_id' => $primaryWorker->id,
@@ -175,9 +175,9 @@ it('silently ignores stale multi-worker location updates outside the travel wind
     Event::fake([WorkerLocationUpdated::class]);
 
     $primaryUser = User::factory()->create(['email' => 'location-primary@example.com']);
-    $primaryWorker = Worker::factory()->create(['user_id' => $primaryUser->id]);
+    $primaryWorker = Worker::factory()->financiallyEligible()->create(['user_id' => $primaryUser->id]);
     $travellingUser = User::factory()->create(['email' => 'location-team-worker@example.com']);
-    $travellingWorker = Worker::factory()->create(['user_id' => $travellingUser->id]);
+    $travellingWorker = Worker::factory()->financiallyEligible()->create(['user_id' => $travellingUser->id]);
 
     $booking = CleaningBooking::factory()->create([
         'worker_id' => $primaryWorker->id,

@@ -236,6 +236,9 @@ final class CleaningExtendedTimePricingService
 
         $effectiveRate = $bookingAdminMargin / $serviceSubtotal;
 
-        return $this->pricingCalculator->roundMoney($baseAmount * $effectiveRate);
+        // Extension quotes preserve the booking's effective proportional
+        // margin snapshot to two decimals; rounding each component to a whole
+        // lira would distort small configured extension ranges.
+        return round($baseAmount * $effectiveRate, 2);
     }
 }

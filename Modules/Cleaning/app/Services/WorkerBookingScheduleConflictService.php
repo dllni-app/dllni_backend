@@ -19,11 +19,6 @@ use Throwable;
 
 final class WorkerBookingScheduleConflictService
 {
-    /**
-     * @var array<int, array<int, array{bookingId:int,sessionId:?int,start:CarbonImmutable,end:CarbonImmutable}>>
-     */
-    private array $busyIntervalsByWorker = [];
-
     public function hasConflict(Worker $worker, CleaningBooking $candidate): bool
     {
         return $this->conflictsForBooking($worker, $candidate) !== [];
@@ -101,8 +96,10 @@ final class WorkerBookingScheduleConflictService
 
     public function forgetWorker(Worker|int $worker): void
     {
-        $workerId = $worker instanceof Worker ? (int) $worker->id : (int) $worker;
-        unset($this->busyIntervalsByWorker[$workerId]);
+        // Kept for source compatibility. Conflict intervals are intentionally
+        // read fresh so schedule changes, extension approvals and transaction
+        // rollbacks cannot leave stale worker availability in long-lived
+        // controller/container instances.
     }
 
     /**
@@ -153,10 +150,6 @@ final class WorkerBookingScheduleConflictService
     {
         $workerId = (int) $worker->id;
 
-        if (array_key_exists($workerId, $this->busyIntervalsByWorker)) {
-            return $this->busyIntervalsByWorker[$workerId];
-        }
-
         $sessionBookingIds = [];
         if (Schema::hasTable('cleaning_booking_sessions')) {
             $sessionBookingIds = CleaningBookingSession::query()
@@ -194,6 +187,8 @@ final class WorkerBookingScheduleConflictService
                 'scheduled_time',
                 'total_hours',
                 'estimated_hours',
+                'booking_kind',
+                'open_time_expected_max_minutes',
             ]);
 
         $intervals = [];
@@ -207,7 +202,7 @@ final class WorkerBookingScheduleConflictService
 
         if (Schema::hasTable('cleaning_booking_session_worker_assignments')) {
             $sessionAssignments = CleaningBookingSessionWorkerAssignment::query()
-                ->with('session:id,cleaning_booking_id,scheduled_date,scheduled_time,duration_hours,status')
+                ->with('session:id,cleaning_booking_id,session_type,scheduled_date,scheduled_time,duration_hours,open_time_expected_max_minutes,status')
                 ->where('worker_id', $workerId)
                 ->whereIn('status', CleaningBookingWorkerAssignmentStatus::activeValues())
                 ->get();
@@ -233,7 +228,7 @@ final class WorkerBookingScheduleConflictService
             }
         }
 
-        return $this->busyIntervalsByWorker[$workerId] = $intervals;
+        return $intervals;
     }
 
     /**
@@ -269,10 +264,14 @@ final class WorkerBookingScheduleConflictService
             ? $session->scheduled_date->toDateString()
             : mb_trim((string) $session->scheduled_date);
 
+        $durationHours = $session->session_type === 'open_time'
+            ? max(0.25, (float) ($session->open_time_expected_max_minutes ?? 480) / 60)
+            : (float) $session->duration_hours;
+
         return $this->intervalFromParts(
             $date,
             (string) $session->scheduled_time,
-            (float) $session->duration_hours,
+            $durationHours,
             (int) $session->cleaning_booking_id,
             (int) $session->id,
         );
@@ -284,7 +283,9 @@ final class WorkerBookingScheduleConflictService
         $date = $booking->scheduled_date instanceof CarbonInterface
             ? $booking->scheduled_date->toDateString()
             : mb_trim((string) $booking->scheduled_date);
-        $durationHours = (float) ($booking->total_hours ?? 0);
+        $durationHours = $booking->booking_kind === 'open_time'
+            ? max(0.25, (float) ($booking->open_time_expected_max_minutes ?? 480) / 60)
+            : (float) ($booking->total_hours ?? 0);
 
         if ($durationHours <= 0) {
             $durationHours = (float) ($booking->estimated_hours ?? 0);

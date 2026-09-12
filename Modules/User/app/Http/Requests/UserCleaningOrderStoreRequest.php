@@ -8,6 +8,7 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 use Modules\User\Http\Requests\Concerns\ValidatesEventAssistanceSchedule;
+use Modules\User\Http\Requests\Concerns\ValidatesDynamicCleaningEvent;
 use Modules\User\Http\Requests\Concerns\ValidatesRecurringWorkerScope;
 use Modules\User\Http\Requests\Concerns\ValidatesWorkerRoomAssignments;
 use Modules\User\Models\UserAddress;
@@ -17,6 +18,7 @@ use Modules\User\Services\UserCleaningOrderEstimationService;
 final class UserCleaningOrderStoreRequest extends FormRequest
 {
     use ValidatesEventAssistanceSchedule;
+    use ValidatesDynamicCleaningEvent;
     use ValidatesRecurringWorkerScope;
     use ValidatesWorkerRoomAssignments;
 
@@ -35,7 +37,7 @@ final class UserCleaningOrderStoreRequest extends FormRequest
 
         return [
             'propertyType' => ['required', 'string', Rule::in(UserCleaningOrderEstimationService::PROPERTY_TYPES)],
-            'propertyDetails' => ['required', 'array:address,location_name,bedrooms,rooms,bathrooms,toilets,kitchens,balconies,sheds,living_room_size,cleaning_mode,room_size_breakdown,eventType,guestCount,venueType,customService,hours,specialRequirement,notes'],
+            'propertyDetails' => ['required', 'array:address,location_name,bedrooms,rooms,bathrooms,toilets,kitchens,balconies,sheds,living_room_size,cleaning_mode,room_size_breakdown,eventType,eventTypeId,dynamicAnswers,guestCount,venueType,customService,hours,specialRequirement,notes'],
             'propertyDetails.address' => ['required', 'string', 'max:500'],
             'propertyDetails.location_name' => ['nullable', 'string', 'max:255'],
             'propertyDetails.bedrooms' => ['nullable', 'integer', 'min:0', 'max:100'],
@@ -59,7 +61,7 @@ final class UserCleaningOrderStoreRequest extends FormRequest
             'propertyDetails.room_size_breakdown.*.small' => ['sometimes', 'integer', 'min:0'],
             'propertyDetails.room_size_breakdown.*.medium' => ['sometimes', 'integer', 'min:0'],
             'propertyDetails.room_size_breakdown.*.large' => ['sometimes', 'integer', 'min:0'],
-            'propertyDetails.eventType' => [Rule::requiredIf($isEventAssistance), 'string', Rule::in(UserCleaningOrderEstimationService::EVENT_TYPES)],
+            'propertyDetails.eventType' => [Rule::requiredIf($isEventAssistance && ! $this->filled('event.eventTypeId')), 'nullable', 'string', 'max:64'],
             'propertyDetails.guestCount' => [Rule::requiredIf($isEventAssistance), 'integer', 'min:1', 'max:5000'],
             'propertyDetails.venueType' => [Rule::requiredIf($isEventAssistance), 'string', Rule::in($this->availableVenueTypes())],
             'propertyDetails.customService' => [Rule::requiredIf($isEventAssistance), Rule::prohibitedIf(! $isEventAssistance), 'string', 'max:255'],
@@ -68,17 +70,44 @@ final class UserCleaningOrderStoreRequest extends FormRequest
             'propertyDetails.notes' => ['nullable', 'string', 'max:2000'],
             'cleaning_services' => ['sometimes', 'nullable', 'array'],
             'cleaning_services.*' => ['string', 'max:255'],
+            'bookingKind' => ['sometimes', 'string', Rule::in(['standard', 'special_service', 'open_time'])],
+            'event' => ['sometimes', 'array:eventTypeId,dynamicAnswers'],
+            'event.eventTypeId' => ['required_with:event', 'integer', Rule::exists('cleaning_event_types', 'id')->where('is_active', true)],
+            'event.dynamicAnswers' => ['sometimes', 'array'],
             'serviceIds' => ['prohibited'],
             'serviceIds.*' => ['prohibited'],
             'requestMaterials' => ['sometimes', 'boolean'],
+            'materials' => ['sometimes', 'array:providedByPlatform'],
+            'materials.providedByPlatform' => ['required_with:materials', 'boolean'],
             'specialServices' => ['sometimes', 'array', 'max:10'],
-            'specialServices.*' => ['array:specialServiceId,quantity,dirtinessLevel,notes'],
-            'specialServices.*.specialServiceId' => ['required', 'integer', 'distinct', 'exists:cleaning_special_services,id'],
-            'specialServices.*.quantity' => ['required', 'numeric', 'gt:0', 'max:10000'],
-            'specialServices.*.dirtinessLevel' => ['required', 'string', 'max:32'],
+            'specialServices.*' => ['array:specialServiceId,serviceId,quantity,dirtinessLevel,notes,sessionIds,items'],
+            'specialServices.*.specialServiceId' => ['required_without:specialServices.*.serviceId', 'integer', 'exists:cleaning_special_services,id'],
+            'specialServices.*.serviceId' => ['required_without:specialServices.*.specialServiceId', 'integer', 'exists:cleaning_special_services,id'],
+            'specialServices.*.quantity' => ['required_without:specialServices.*.items', 'numeric', 'gt:0', 'max:10000'],
+            'specialServices.*.dirtinessLevel' => ['nullable', 'string', 'max:64'],
             'specialServices.*.notes' => ['nullable', 'string', 'max:2000'],
-            'openTime' => ['sometimes', 'array:workerCount'],
+            'specialServices.*.sessionIds' => ['sometimes', 'array', 'max:30'],
+            'specialServices.*.sessionIds.*' => ['integer', 'min:1', 'distinct'],
+            'specialServices.*.items' => ['sometimes', 'array', 'min:1', 'max:50'],
+            'specialServices.*.items.*' => ['array:quantity,dirtinessLevelId,dirtinessLevel,notes,attachments,beforeImages,afterImages'],
+            'specialServices.*.items.*.quantity' => ['required', 'numeric', 'gt:0', 'max:10000'],
+            'specialServices.*.items.*.dirtinessLevelId' => ['nullable', 'integer', 'exists:cleaning_dirtiness_levels,id'],
+            'specialServices.*.items.*.dirtinessLevel' => ['nullable', 'string', 'max:64'],
+            'specialServices.*.items.*.notes' => ['nullable', 'string', 'max:2000'],
+            'specialServices.*.items.*.attachments' => ['sometimes', 'array', 'max:10'],
+            'specialServices.*.items.*.attachments.*' => ['string', 'max:2048'],
+            'specialServices.*.items.*.beforeImages' => ['sometimes', 'array', 'max:10'],
+            'specialServices.*.items.*.beforeImages.*' => ['string', 'max:2048'],
+            'specialServices.*.items.*.afterImages' => ['sometimes', 'array', 'max:10'],
+            'specialServices.*.items.*.afterImages.*' => ['string', 'max:2048'],
+            'openTime' => ['sometimes', 'array:workerCount,expectedMaxMinutes,sessions'],
             'openTime.workerCount' => ['required_with:openTime', 'integer', 'min:1', 'max:20'],
+            'openTime.expectedMaxMinutes' => ['sometimes', 'integer', 'min:15', 'max:480', 'multiple_of:15'],
+            'openTime.sessions' => ['sometimes', 'array', 'min:1', 'max:30'],
+            'openTime.sessions.*' => ['array:date,time,expectedMaxMinutes'],
+            'openTime.sessions.*.date' => ['required', 'date', 'after_or_equal:'.$today],
+            'openTime.sessions.*.time' => ['required', 'date_format:H:i'],
+            'openTime.sessions.*.expectedMaxMinutes' => ['sometimes', 'integer', 'min:15', 'max:480', 'multiple_of:15'],
             'scheduledDate' => ['required', 'date', 'after_or_equal:'.$today],
             'scheduledTime' => ['required', 'date_format:H:i'],
             ...$this->eventAssistanceScheduleRules($isEventAssistance),
@@ -117,6 +146,7 @@ final class UserCleaningOrderStoreRequest extends FormRequest
         $validator->after(function (Validator $validator): void {
             $this->validateSelectedAddressCompleteness($validator);
             $this->validateEventAssistanceSchedule($validator);
+            $this->validateDynamicCleaningEvent($validator);
             $this->validateRecurringWorkerScope($validator);
 
             if ($this->requiresFemaleWorkerSafetyConfirmation()) {
@@ -141,6 +171,15 @@ final class UserCleaningOrderStoreRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $merge = [];
+
+        $materials = $this->input('materials');
+        if (is_array($materials) && array_key_exists('providedByPlatform', $materials)) {
+            $merge['requestMaterials'] = filter_var(
+                $materials['providedByPlatform'],
+                FILTER_VALIDATE_BOOL,
+                FILTER_NULL_ON_FAILURE,
+            ) ?? $materials['providedByPlatform'];
+        }
 
         $preferredWorkerIds = $this->normalizePreferredWorkerIds(
             $this->input('preferredWorkerIds', $this->input('preferredWorkerId'))
@@ -168,6 +207,10 @@ final class UserCleaningOrderStoreRequest extends FormRequest
         $addressId = $this->input('addressId');
         $openTime = $this->input('openTime');
         if (is_array($openTime) && is_numeric($openTime['workerCount'] ?? null)) {
+            if (! is_numeric($openTime['expectedMaxMinutes'] ?? null)) {
+                $openTime['expectedMaxMinutes'] = 480;
+                $merge['openTime'] = $openTime;
+            }
             $merge['numberOfWorkers'] = max(1, (int) $openTime['workerCount']);
             $merge['assignmentMode'] = 'open_count';
         }
@@ -306,12 +349,17 @@ final class UserCleaningOrderStoreRequest extends FormRequest
         $hasOpenTime = is_array($this->input('openTime'));
         $isRepeated = mb_strtolower((string) $this->input('schedule.mode')) === 'recurring';
 
-        if (($hasMaterials || $hasSpecialServices || $hasOpenTime) && ($this->isEventAssistanceRequested() || $isRepeated)) {
-            $validator->errors()->add('schedule', 'New Cleaning Suite services are currently available for one-time cleaning bookings only.');
-        }
-
         if ($hasOpenTime && ($hasMaterials || $hasSpecialServices)) {
             $validator->errors()->add('openTime', 'Open-Time requests cannot be combined with materials or special services.');
+        }
+
+
+        if ($hasOpenTime && $isRepeated) {
+            $validator->errors()->add('schedule', 'Use openTime.sessions for multi-day Open-Time requests.');
+        }
+
+        if ((string) $this->input('bookingKind') === 'special_service' && ! $hasSpecialServices) {
+            $validator->errors()->add('specialServices', 'A standalone special-service order requires at least one service.');
         }
     }
 

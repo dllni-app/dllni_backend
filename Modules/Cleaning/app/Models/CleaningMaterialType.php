@@ -22,6 +22,11 @@ final class CleaningMaterialType extends Model
         return $this->hasMany(CleaningMaterial::class);
     }
 
+    public function quantityRules(): HasMany
+    {
+        return $this->hasMany(CleaningMaterialTypeQuantityRule::class);
+    }
+
     public function casts(): array
     {
         return ['price_per_unit' => 'float', 'is_active' => 'boolean'];

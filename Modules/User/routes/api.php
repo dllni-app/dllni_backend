@@ -63,6 +63,8 @@ use Modules\User\Http\Controllers\API\UserCleaningOrderEstimateSizeController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderReviewController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderRoomAssignmentsController;
 use Modules\User\Http\Controllers\API\UserCleaningOrdersController;
+use Modules\User\Http\Controllers\API\UserCleaningOpenTimeController;
+use Modules\User\Http\Controllers\API\UserCleaningScheduleChangeController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderShowController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderSosController;
 use Modules\User\Http\Controllers\API\UserCleaningOrderStartVerificationConfirmController;
@@ -260,6 +262,15 @@ Route::prefix('v1/user')->group(function (): void {
         Route::post('cleaning/orders/{order}/completion/confirm', UserCleaningOrderCompletionConfirmController::class);
         Route::post('cleaning/orders/{order}/completion/reject', UserCleaningOrderCompletionRejectController::class);
         Route::post('cleaning/orders/{order}/completion/extend-time', UserCleaningOrderCompletionExtendTimeController::class);
+        Route::get('cleaning/orders/{order}/open-time/meter', [UserCleaningOpenTimeController::class, 'meter']);
+        Route::post('cleaning/orders/{order}/open-time/extensions', [UserCleaningOpenTimeController::class, 'extend']);
+        Route::post('cleaning/orders/{order}/open-time/end', [UserCleaningOpenTimeController::class, 'end']);
+        Route::get('cleaning/orders/{order}/sessions/{session}/open-time/meter', [UserCleaningOpenTimeController::class, 'sessionMeter']);
+        Route::post('cleaning/orders/{order}/sessions/{session}/open-time/extensions', [UserCleaningOpenTimeController::class, 'extendSession']);
+        Route::post('cleaning/orders/{order}/sessions/{session}/open-time/end', [UserCleaningOpenTimeController::class, 'endSession']);
+        Route::get('cleaning/schedule-change-requests/{changeRequest}', [UserCleaningScheduleChangeController::class, 'show']);
+        Route::get('cleaning/schedule-change-requests/{changeRequest}/replacement-options', [UserCleaningScheduleChangeController::class, 'replacementOptions']);
+        Route::post('cleaning/schedule-change-requests/{changeRequest}/resolve', [UserCleaningScheduleChangeController::class, 'resolve']);
         Route::post('cleaning/orders/{order}/review', UserCleaningOrderReviewController::class);
 
         Route::get('orders', UserOrdersIndexController::class);

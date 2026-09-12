@@ -38,6 +38,7 @@ final class CleaningAgentBOperationalObserver
                 CleaningBookingStatus::UnderDispute,
             ], true)
             && $booking->booking_kind === 'open_time'
+            && ! $booking->sessions()->exists()
             && $booking->open_time_finalized_at === null
             && $booking->work_finished_at !== null
         ) {
@@ -73,6 +74,7 @@ final class CleaningAgentBOperationalObserver
                 CleaningBookingStatus::UnderDispute,
             ], true)
             && $booking->booking_kind === 'open_time'
+            && ! $booking->sessions()->exists()
             && $booking->open_time_finalized_at === null
             && $booking->work_finished_at !== null
         ) {

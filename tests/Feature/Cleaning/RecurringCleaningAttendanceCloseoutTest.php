@@ -21,7 +21,7 @@ function makeRecurringAttendanceCloseoutVisit(int $minutesPastStart): array
 {
     $customer = User::factory()->create(['is_active' => true]);
     $workerUser = User::factory()->create(['is_active' => true]);
-    $worker = Worker::factory()->create([
+    $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'is_active' => true,
         'is_suspended' => false,
@@ -267,7 +267,7 @@ it('cancels only the affected recurring visit after no travel and preserves futu
         'note' => 'العامل لم يبدأ التنقل',
     ])->assertOk()
         ->assertJsonPath('data.schedule.sessions.0.status', CleaningBookingSessionStatus::Cancelled->value)
-        ->assertJsonPath('data.schedule.sessions.0.pricing.cancellationFee', 0.0)
+        ->assertJsonPath('data.schedule.sessions.0.pricing.cancellationFee', 0)
         ->assertJsonPath('data.schedule.sessions.1.status', CleaningBookingSessionStatus::WorkerAssigned->value);
 
     expect($session->fresh()->status)->toBe(CleaningBookingSessionStatus::Cancelled)

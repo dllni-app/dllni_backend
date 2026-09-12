@@ -12,6 +12,7 @@ use Modules\Cleaning\Support\WorkerRoomAssignmentPlanner;
 use Modules\User\Http\Requests\UserCleaningOrderEstimatePriceRequest;
 use Modules\User\Models\UserAddress;
 use Modules\User\Services\EventAssistanceScheduleService;
+use Modules\User\Services\OpenTimeScheduleService;
 use Modules\User\Services\FemaleWorkerSafetyPolicyService;
 use Modules\User\Services\RecurringCleaningScheduleService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
@@ -24,13 +25,17 @@ final class UserCleaningOrderEstimatePriceController
         UserCleaningOrderEstimationService $service,
         EventAssistanceScheduleService $eventSchedule,
         RecurringCleaningScheduleService $recurringSchedule,
+        OpenTimeScheduleService $openTimeSchedule,
         CleaningExtendedTimePricingService $extendedTimePricing,
     ): JsonResponse {
         $validated = $request->validated();
         [$addressLatitude, $addressLongitude] = $this->resolveAddressCoordinates($validated, (int) $request->user()->id);
         $isEventAssistance = $service->isEventAssistanceType((string) $validated['propertyType']);
         $eventPlan = $isEventAssistance ? $eventSchedule->resolve($validated) : null;
-        $recurringPlan = ! $isEventAssistance ? $recurringSchedule->resolve($validated) : null;
+        $openTimePlan = ! $isEventAssistance ? $openTimeSchedule->resolve($validated) : null;
+        $recurringPlan = ! $isEventAssistance && $openTimePlan === null
+            ? $recurringSchedule->resolve($validated)
+            : null;
 
         try {
             $estimation = $service->estimate(
@@ -80,14 +85,19 @@ final class UserCleaningOrderEstimatePriceController
             $workerScope = $this->resolveWorkerScope($validated, $assignmentMode);
             $specificWorkerIds = $this->resolveSpecificWorkerIds($validated, $workerScope);
 
-            $capacityHours = $eventPlan !== null
+            $capacityHours = $openTimePlan !== null
+                ? max(array_map(
+                    static fn (array $session): float => (float) $session['expectedMaxMinutes'] / 60,
+                    $openTimePlan['sessions'],
+                ))
+                : ($eventPlan !== null
                 ? max(array_map(
                     static fn (array $session): float => (float) $session['hours'],
                     $eventPlan['sessions'],
                 ))
                 : ($recurringPlan !== null
                     ? $recurringSessionHours
-                    : (float) $estimation['estimatedHours']);
+                    : (float) $estimation['estimatedHours']));
             $capacity = CleaningWorkerCapacity::payload($capacityHours);
 
             $pricingPropertyDetails = (array) $validated['propertyDetails'];
@@ -106,9 +116,22 @@ final class UserCleaningOrderEstimatePriceController
                         ? ($validated['preferredWorkerId'] ?? null)
                         : null,
                     requiredWorkers: $requestedWorkers,
+                    requestMaterials: (bool) ($validated['requestMaterials'] ?? false),
+                    specialServices: is_array($validated['specialServices'] ?? null) ? $validated['specialServices'] : [],
                 );
             } else {
-                $pricing = $recurringPlan !== null
+                $isOpenTime = is_array($validated['openTime'] ?? null);
+                $pricing = $isOpenTime
+                    ? $service->priceOpenTime(
+                        (string) $validated['propertyType'],
+                        $pricingPropertyDetails,
+                        $addressLatitude,
+                        $addressLongitude,
+                        $assignmentMode === 'preferred_worker' ? ($validated['preferredWorkerId'] ?? null) : null,
+                        max(1, (int) ($validated['openTime']['workerCount'] ?? $requestedWorkers)),
+                        max(15, (int) ($validated['openTime']['expectedMaxMinutes'] ?? 480)),
+                    )
+                    : ($recurringPlan !== null
                     && (string) ($recurringPlan['calculationMode'] ?? RecurringCleaningScheduleService::CALCULATION_TASK) === RecurringCleaningScheduleService::CALCULATION_HOURS
                         ? $service->priceRecurringHours(
                             (string) $validated['propertyType'],
@@ -118,6 +141,8 @@ final class UserCleaningOrderEstimatePriceController
                             $assignmentMode === 'preferred_worker' ? ($validated['preferredWorkerId'] ?? null) : null,
                             $recurringSessionHours,
                             $requestedWorkers,
+                            (bool) ($validated['requestMaterials'] ?? false),
+                            is_array($validated['specialServices'] ?? null) ? $validated['specialServices'] : [],
                         )
                         : $service->price(
                             (string) $validated['propertyType'],
@@ -126,9 +151,16 @@ final class UserCleaningOrderEstimatePriceController
                             $addressLongitude,
                             $assignmentMode === 'preferred_worker' ? ($validated['preferredWorkerId'] ?? null) : null,
                             isset($validated['serviceIds']) ? (array) $validated['serviceIds'] : null,
-                        );
+                            (bool) ($validated['requestMaterials'] ?? false),
+                            is_array($validated['specialServices'] ?? null) ? $validated['specialServices'] : [],
+                        ));
 
-                if ($recurringPlan !== null) {
+                if ($isOpenTime && $openTimePlan !== null) {
+                    $pricing = $openTimeSchedule->quote($openTimePlan, $pricing);
+                    $estimation['estimatedHours'] = round(((int) $openTimePlan['totalExpectedMinutes']) / 60, 2);
+                }
+
+                if ($recurringPlan !== null && ! $isOpenTime) {
                     $pricing = $recurringSchedule->quote(
                         $recurringPlan,
                         $pricing,
@@ -183,7 +215,7 @@ final class UserCleaningOrderEstimatePriceController
                 'sizeTier' => $estimation['sizeTier'],
             ],
             'pricing' => $pricing,
-            'schedule' => ($eventPlan !== null || $recurringPlan !== null) ? $pricing['schedule'] : null,
+            'schedule' => ($eventPlan !== null || $recurringPlan !== null || $openTimePlan !== null) ? $pricing['schedule'] : null,
             'assignmentMode' => $assignmentMode,
             'workerScope' => $workerScope,
             'specificWorkerIds' => $specificWorkerIds,

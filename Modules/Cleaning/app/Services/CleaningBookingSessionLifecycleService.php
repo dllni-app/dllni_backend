@@ -6,6 +6,7 @@ namespace Modules\Cleaning\Services;
 
 use App\Models\Worker;
 use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
@@ -27,6 +28,7 @@ final class CleaningBookingSessionLifecycleService
 
     public function __construct(
         private readonly DepositService $depositService,
+        private readonly CleaningBookingSessionWorkerPricingService $pricingService,
     ) {}
 
     public function startTravel(
@@ -259,7 +261,13 @@ final class CleaningBookingSessionLifecycleService
                 ])->save();
 
                 if ($locked->work_started_at === null) {
-                    $locked->forceFill(['work_started_at' => $startedAt])->save();
+                    $updates = ['work_started_at' => $startedAt];
+                    if ((string) $locked->session_type === CleaningBookingSession::TYPE_OPEN_TIME) {
+                        $updates['open_time_ceiling_ends_at'] = $startedAt->copy()->addMinutes(
+                            max(15, (int) ($locked->open_time_expected_max_minutes ?? 480)),
+                        );
+                    }
+                    $locked->forceFill($updates)->save();
                 }
             }
 
@@ -349,6 +357,7 @@ final class CleaningBookingSessionLifecycleService
             }
 
             $completedAt = now();
+            $this->finalizeOpenTimeSession($booking, $locked, $completedAt);
             CleaningBookingSessionWorkerAssignment::query()
                 ->where('cleaning_booking_session_id', $locked->id)
                 ->whereIn('status', [
@@ -388,6 +397,8 @@ final class CleaningBookingSessionLifecycleService
                 'payment_settled_at' => $locked->payment_settled_at ?? $completedAt,
             ])->save();
 
+            $this->refreshOpenTimeParentPricing($booking, $completedAt);
+
             $this->syncParentStatus($booking);
 
             $bookingId = (int) $booking->id;
@@ -404,6 +415,117 @@ final class CleaningBookingSessionLifecycleService
 
             return $this->freshSession($locked);
         });
+    }
+
+    private function finalizeOpenTimeSession(
+        CleaningBooking $booking,
+        CleaningBookingSession $session,
+        CarbonInterface $completedAt,
+    ): void {
+        if ((string) $session->session_type !== CleaningBookingSession::TYPE_OPEN_TIME) {
+            return;
+        }
+        if ($session->work_started_at === null) {
+            throw new InvalidArgumentException('Open-Time session billing requires an authoritative work start time.');
+        }
+
+        $snapshot = is_array($session->pricing_snapshot) ? $session->pricing_snapshot : [];
+        if (isset($snapshot['finalizedAt'])) {
+            return;
+        }
+
+        $finishedAt = $session->work_finished_at ?? $completedAt;
+        // Carbon 3 returns fractional units. Bill every started minute before
+        // applying the session minimum and configured rounding interval.
+        $actualMinutes = max(0, (int) ceil(
+            $session->work_started_at->diffInSeconds($finishedAt) / 60
+        ));
+        $minimumMinutes = max(1, (int) ($snapshot['minimumBillableMinutes'] ?? 60));
+        $roundingMinutes = max(1, (int) ($snapshot['roundingMinutes'] ?? 15));
+        $billableMinutes = (int) (ceil(max($actualMinutes, $minimumMinutes) / $roundingMinutes) * $roundingMinutes);
+        $hourlyRate = max(0.0, (float) ($snapshot['hourlyRate'] ?? 0));
+        $workerCount = max(1, (int) ($snapshot['workerCount'] ?? $session->requiredWorkerCount()));
+        $finalAmount = round($hourlyRate * $workerCount * ($billableMinutes / 60), 2);
+
+        $session->forceFill([
+            'base_price' => $finalAmount,
+            'is_pricing_final' => true,
+        ])->save();
+
+        $travelFee = 0.0;
+        $adminMargin = 0.0;
+        $assignments = CleaningBookingSessionWorkerAssignment::query()
+            ->where('cleaning_booking_session_id', $session->id)
+            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
+            ->with('worker')
+            ->orderBy('accepted_at')
+            ->orderBy('id')
+            ->get();
+
+        foreach ($assignments as $index => $assignment) {
+            if (! $assignment->worker instanceof Worker) {
+                continue;
+            }
+            $quote = $this->pricingService->quoteForNextSeat($session->fresh() ?? $session, $assignment->worker, $index);
+            $assignment->forceFill([
+                'service_share_amount' => $quote['serviceShareAmount'],
+                'travel_fee' => $quote['travelFee'],
+                'admin_margin_amount' => $quote['adminMarginAmount'],
+                'worker_amount' => $quote['workerAmount'],
+                'currency' => $quote['currency'],
+            ])->save();
+            $travelFee += (float) $quote['travelFee'];
+            $adminMargin += (float) $quote['adminMarginAmount'];
+        }
+
+        $snapshot['actualDurationMinutes'] = $actualMinutes;
+        $snapshot['billableDurationMinutes'] = $billableMinutes;
+        $snapshot['finalAmount'] = $finalAmount;
+        $snapshot['finalizedAt'] = $finishedAt->toIso8601String();
+        $session->forceFill([
+            'travel_fee' => round($travelFee, 2),
+            'admin_margin_amount' => round($adminMargin, 2),
+            'total_price' => round($finalAmount + (float) $session->addons_total + $travelFee + $adminMargin, 2),
+            'pricing_snapshot' => $snapshot,
+        ])->save();
+    }
+
+    private function refreshOpenTimeParentPricing(CleaningBooking $booking, CarbonInterface $completedAt): void
+    {
+        if ((string) $booking->booking_kind !== 'open_time') {
+            return;
+        }
+
+        $sessions = CleaningBookingSession::query()
+            ->where('cleaning_booking_id', $booking->id)
+            ->where('session_type', CleaningBookingSession::TYPE_OPEN_TIME)
+            ->get();
+        if ($sessions->isEmpty()) {
+            return;
+        }
+
+        $actualMinutes = 0;
+        $billableMinutes = 0;
+        $allTerminal = true;
+        foreach ($sessions as $session) {
+            $snapshot = is_array($session->pricing_snapshot) ? $session->pricing_snapshot : [];
+            $actualMinutes += (int) ($snapshot['actualDurationMinutes'] ?? 0);
+            $billableMinutes += (int) ($snapshot['billableDurationMinutes'] ?? 0);
+            $allTerminal = $allTerminal && $session->isTerminal();
+        }
+
+        $booking->forceFill([
+            'base_price' => round((float) $sessions->sum('base_price'), 2),
+            'travel_fee' => round((float) $sessions->sum('travel_fee'), 2),
+            'admin_margin_amount' => round((float) $sessions->sum('admin_margin_amount'), 2),
+            'total_price' => round((float) $sessions->sum('total_price'), 2),
+            'total_hours' => round($actualMinutes / 60, 2),
+            'open_time_actual_minutes' => $allTerminal ? $actualMinutes : null,
+            'open_time_billable_minutes' => $allTerminal ? $billableMinutes : null,
+            'open_time_final_amount' => $allTerminal ? round((float) $sessions->sum('base_price'), 2) : null,
+            'open_time_finalized_at' => $allTerminal ? $completedAt : null,
+            'is_pricing_final' => $allTerminal,
+        ])->saveQuietly();
     }
 
     private function lockSession(

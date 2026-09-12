@@ -36,7 +36,7 @@ final class WorkerTransactionsController
                     ->orWhereHas('workerAssignments', function (Builder $assignments) use ($worker): void {
                         $assignments
                             ->where('worker_id', $worker->id)
-                            ->where('status', CleaningBookingWorkerAssignmentStatus::Accepted->value);
+                            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
                     });
             })
             ->with([
@@ -44,7 +44,7 @@ final class WorkerTransactionsController
                 'workerAssignments' => function ($assignments) use ($worker): void {
                     $assignments
                         ->where('worker_id', $worker->id)
-                        ->where('status', CleaningBookingWorkerAssignmentStatus::Accepted->value);
+                        ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
                 },
             ])
             ->orderByDesc('scheduled_date')
@@ -59,7 +59,7 @@ final class WorkerTransactionsController
                     ->orWhereHas('workerAssignments', function (Builder $assignments) use ($worker): void {
                         $assignments
                             ->where('worker_id', $worker->id)
-                            ->where('status', CleaningBookingWorkerAssignmentStatus::Accepted->value);
+                            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
                     });
             })
             ->where('status', CleaningBookingStatus::Completed)
@@ -67,7 +67,7 @@ final class WorkerTransactionsController
                 'workerAssignments' => function ($assignments) use ($worker): void {
                     $assignments
                         ->where('worker_id', $worker->id)
-                        ->where('status', CleaningBookingWorkerAssignmentStatus::Accepted->value);
+                        ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
                 },
             ])
             ->get()

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Database\Factories;
 
 use App\Enums\WorkerPreferredWorkType;
+use App\Models\CleaningWorkerDeposit;
 use App\Models\User;
 use App\Models\Worker;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -38,5 +39,27 @@ final class WorkerFactory extends Factory
             'home_longitude' => fake()->optional()->longitude(),
             'default_working_hours' => null,
         ];
+    }
+
+    /**
+     * Give a worker an explicit cleaning allowance for scenarios that exercise
+     * dispatch or booking acceptance rather than financial eligibility itself.
+     */
+    public function financiallyEligible(
+        float $balance = 100000,
+        float $maxNegativeBalance = 100000,
+    ): static {
+        return $this->afterCreating(function (Worker $worker) use ($balance, $maxNegativeBalance): void {
+            CleaningWorkerDeposit::query()->updateOrCreate(
+                ['worker_id' => $worker->id],
+                [
+                    'current_balance' => $balance,
+                    'deposited_total' => max($balance, 0),
+                    'withdrawn_total' => 0,
+                    'minimum_required' => 0,
+                    'max_negative_balance' => $maxNegativeBalance,
+                ],
+            );
+        });
     }
 }

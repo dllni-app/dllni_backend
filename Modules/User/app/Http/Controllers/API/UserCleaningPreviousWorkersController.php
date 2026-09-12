@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\User\Http\Controllers\API;
 
+use App\Enums\WorkerPreferredWorkType;
 use App\Models\Worker;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -29,6 +30,7 @@ final class UserCleaningPreviousWorkersController
     {
         $userId = Auth::id();
         $validated = $request->validated();
+        $propertyType = $validated['propertyType'] ?? null;
         $genderPreference = $validated['genderPreference'] ?? null;
         $scheduleDefinitions = $this->scheduleDefinitions($validated['schedule']['sessions'] ?? null);
         $scheduledAt = $this->scheduledAt(
@@ -98,6 +100,13 @@ final class UserCleaningPreviousWorkersController
                 is_string($genderPreference) && $genderPreference !== 'any',
                 fn ($query) => $query->where('gender', $genderPreference),
             )
+            ->when(is_string($propertyType) && $propertyType !== '', function ($query) use ($propertyType): void {
+                $preferredTypes = $propertyType === 'event_assistance'
+                    ? [WorkerPreferredWorkType::Events->value, WorkerPreferredWorkType::Both->value]
+                    : [WorkerPreferredWorkType::Cleaning->value, WorkerPreferredWorkType::Both->value];
+
+                $query->whereIn('preferred_work_type', $preferredTypes);
+            })
             ->get()
             ->filter(fn (Worker $worker): bool => $this->isWorkerEligible(
                 $worker,
@@ -151,7 +160,10 @@ final class UserCleaningPreviousWorkersController
 
         if (
             $scheduleDefinitions !== []
-            && $this->scheduleConflictService->hasConflictForDefinitions($worker, $scheduleDefinitions)
+            && (
+                ! $this->isAvailableForDefinitions($worker, $scheduleDefinitions)
+                || $this->scheduleConflictService->hasConflictForDefinitions($worker, $scheduleDefinitions)
+            )
         ) {
             return false;
         }
@@ -159,9 +171,35 @@ final class UserCleaningPreviousWorkersController
         if (
             $scheduleDefinitions === []
             && $scheduleCandidate !== null
-            && $this->scheduleConflictService->hasConflict($worker, $scheduleCandidate)
+            && (
+                ! $worker->isAvailableForBooking($scheduleCandidate)
+                || $this->scheduleConflictService->hasConflict($worker, $scheduleCandidate)
+            )
         ) {
             return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * @param  array<int, array{date:string,time:string,hours:float}>  $scheduleDefinitions
+     */
+    private function isAvailableForDefinitions(Worker $worker, array $scheduleDefinitions): bool
+    {
+        foreach ($scheduleDefinitions as $definition) {
+            try {
+                $startsAt = Carbon::parse(
+                    $definition['date'].' '.$definition['time'],
+                    config('app.timezone'),
+                );
+            } catch (Throwable) {
+                return false;
+            }
+
+            if (! $worker->isAvailableAt($startsAt)) {
+                return false;
+            }
         }
 
         return true;

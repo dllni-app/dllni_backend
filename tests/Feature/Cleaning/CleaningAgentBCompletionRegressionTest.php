@@ -162,7 +162,7 @@ it('keeps persisted special-service pricing and equipment snapshots immutable af
         ->and((float) $line->price_multiplier)->toBe(1.5)
         ->and((float) $line->total_price)->toBe(300.0)
         ->and($line->equipment_snapshot)->toBe([
-            ['id' => $equipment->id, 'name' => 'Snapshot extractor'],
+            ['id' => $equipment->id, 'name' => 'Snapshot extractor', 'assetCode' => null],
         ])
         ->and($line->notes)->toBe('Original note');
 });

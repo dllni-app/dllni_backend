@@ -15,6 +15,7 @@ return new class extends Migration
             $table->string('name');
             $table->string('slug')->unique();
             $table->string('image_url', 2048)->nullable();
+            $table->string('image_path')->nullable();
             $table->string('pricing_unit', 32);
             $table->decimal('base_unit_price', 12, 2)->default(0);
             $table->boolean('is_active')->default(true);
@@ -42,7 +43,12 @@ return new class extends Migration
         Schema::create('cleaning_special_service_equipment_map', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('cleaning_special_service_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('cleaning_special_service_equipment_id')->constrained()->cascadeOnDelete();
+            // The catalog intentionally keeps its legacy singular table name.
+            // Laravel's inferred plural name points at a non-existent table on
+            // SQLite/MySQL, so keep the foreign target explicit.
+            $table->foreignId('cleaning_special_service_equipment_id')
+                ->constrained('cleaning_special_service_equipment')
+                ->cascadeOnDelete();
             $table->timestamps();
             $table->unique(['cleaning_special_service_id', 'cleaning_special_service_equipment_id'], 'clean_special_equipment_unique');
         });

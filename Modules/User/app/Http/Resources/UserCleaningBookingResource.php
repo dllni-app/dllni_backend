@@ -68,9 +68,21 @@ final class UserCleaningBookingResource extends JsonResource
         $payload['requestMaterials'] = $materials !== [];
         $payload['materials'] = $materials;
         $payload['materialsTotal'] = round(array_sum(array_column($materials, 'totalPrice')), 2);
+        $payload['materialKit'] = $this->materialKitPayload();
         $payload['specialServices'] = $specialServices;
         $payload['specialServicesTotal'] = round(array_sum(array_column($specialServices, 'totalPrice')), 2);
         $payload['openTime'] = $openTime;
+        $payload['scheduleChangeRequest'] = $this->scheduleChangeRequestPayload();
+        $payload['schemaVersion'] = max(1, (int) ($this->capability_schema_version ?? 1));
+        $payload['capabilities'] = [
+            'materialKits' => true,
+            'specialServiceItems' => true,
+            'dynamicEventTypes' => true,
+            'openTimeExtensions' => true,
+            'scheduleChangeApprovals' => true,
+        ];
+        $payload['eventTypeId'] = $this->cleaning_event_type_id !== null ? (int) $this->cleaning_event_type_id : null;
+        $payload['eventDynamicAnswers'] = $this->event_dynamic_answers ?? [];
 
         return $payload;
     }
@@ -80,19 +92,23 @@ final class UserCleaningBookingResource extends JsonResource
     {
         $lines = $this->relationLoaded('materials') ? $this->materials : $this->materials()->with(['material', 'materialType', 'unit'])->get();
 
-        return $lines->map(static fn (CleaningBookingMaterial $line): array => [
-            'materialId' => (int) $line->cleaning_material_id,
-            'name' => (string) ($line->material?->name ?? $line->materialType?->name ?? ''),
-            'materialTypeId' => (int) $line->cleaning_material_type_id,
-            'quantity' => (float) $line->quantity,
-            'unitId' => (int) $line->cleaning_material_unit_id,
-            'unit' => $line->unit?->name,
-            'unitCode' => $line->unit?->code,
-            'unitSymbol' => $line->unit?->symbol,
-            'unitPrice' => (float) $line->unit_price,
-            'totalPrice' => (float) $line->total_price,
-            'inventoryStatus' => (string) $line->inventory_status,
-        ])->values()->all();
+        return $lines->groupBy('cleaning_material_type_id')->map(static function ($allocations): array {
+            /** @var CleaningBookingMaterial $line */
+            $line = $allocations->first();
+
+            return [
+                'materialTypeId' => (int) $line->cleaning_material_type_id,
+                'name' => (string) ($line->materialType?->name ?? ''),
+                'quantity' => round((float) $allocations->sum('quantity'), 3),
+                'unitId' => (int) $line->cleaning_material_unit_id,
+                'unit' => $line->unit?->name,
+                'unitCode' => $line->unit?->code,
+                'unitSymbol' => $line->unit?->symbol,
+                'unitPrice' => (float) $line->unit_price,
+                'totalPrice' => round((float) $allocations->sum('total_price'), 2),
+                'inventoryStatus' => $allocations->contains(fn ($item) => $item->inventory_status === 'reserved') ? 'reserved' : (string) $line->inventory_status,
+            ];
+        })->values()->all();
     }
 
     /** @return array<int, array<string, mixed>> */
@@ -112,7 +128,71 @@ final class UserCleaningBookingResource extends JsonResource
             'totalPrice' => (float) $line->total_price,
             'equipment' => is_array($line->equipment_snapshot) ? $line->equipment_snapshot : [],
             'notes' => $line->notes,
+            'sessionIds' => $line->sessions()->pluck('cleaning_booking_sessions.id')->map(fn ($id) => (int) $id)->values()->all(),
+            'executionStatus' => (string) $line->execution_status,
+            'unableReason' => $line->unable_reason,
+            'assignedWorkerId' => $line->assigned_worker_id !== null ? (int) $line->assigned_worker_id : null,
+            'items' => $line->items()->get()->map(static fn ($item): array => [
+                'id' => (int) $item->id,
+                'dirtinessLevelId' => $item->cleaning_dirtiness_level_id !== null ? (int) $item->cleaning_dirtiness_level_id : null,
+                'dirtinessLevel' => $item->dirtiness_level,
+                'quantity' => (float) $item->quantity,
+                'priceMultiplier' => (float) $item->price_multiplier,
+                'baseUnitPrice' => (float) $item->base_unit_price,
+                'totalPrice' => (float) $item->total_price,
+                'notes' => $item->notes,
+                'beforeImages' => $item->before_images ?? [],
+                'afterImages' => $item->after_images ?? [],
+            ])->values()->all(),
         ])->values()->all();
+    }
+
+    private function materialKitPayload(): ?array
+    {
+        $kit = $this->materialKit()->first();
+        if ($kit === null) {
+            return null;
+        }
+
+        return [
+            'status' => (string) $kit->status,
+            'preparedAt' => $kit->prepared_at?->toIso8601String(),
+            'receivedAt' => $kit->received_at?->toIso8601String(),
+            'receivedByWorkerId' => $kit->received_by_worker_id !== null ? (int) $kit->received_by_worker_id : null,
+        ];
+    }
+
+    /** @return array<string,mixed>|null */
+    private function scheduleChangeRequestPayload(): ?array
+    {
+        $change = $this->scheduleChangeRequests()
+            ->whereIn('status', ['pending', 'rejected'])
+            ->with('decisions.worker.user')
+            ->latest('id')
+            ->first();
+        if ($change === null) {
+            return null;
+        }
+
+        return [
+            'id' => (int) $change->id,
+            'bookingId' => (int) $change->cleaning_booking_id,
+            'status' => (string) $change->status,
+            'changeType' => (string) $change->change_type,
+            'affectedSessionIds' => array_map('intval', (array) $change->affected_session_ids),
+            'beforeSnapshot' => (array) $change->before_snapshot,
+            'proposedSnapshot' => (array) $change->proposed_snapshot,
+            'priceDelta' => round((float) $change->price_delta, 2),
+            'customerResolution' => $change->customer_resolution,
+            'createdAt' => $change->created_at?->toIso8601String(),
+            'decisions' => $change->decisions->map(static fn ($decision): array => [
+                'workerId' => (int) $decision->worker_id,
+                'workerName' => $decision->worker?->user?->name ?? $decision->worker?->first_name,
+                'decision' => (string) $decision->decision,
+                'reason' => $decision->reason,
+                'decidedAt' => $decision->decided_at?->toIso8601String(),
+            ])->values()->all(),
+        ];
     }
 
     private function canEdit(): bool

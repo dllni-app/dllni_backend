@@ -6,6 +6,7 @@ namespace Modules\Cleaning\Services;
 
 use App\Enums\GenderPreference;
 use App\Models\Worker;
+use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
 
@@ -30,6 +31,31 @@ final class CleaningBookingSessionWorkerEligibilityService
                 'worker_not_in_scope',
                 'This recurring booking is limited to workers selected by the customer.',
             );
+        }
+
+        $specialServices = $booking->specialServices()
+            ->with('specialService')
+            ->where(function ($query) use ($session): void {
+                $query->whereDoesntHave('sessions')
+                    ->orWhereHas('sessions', fn ($sessions) => $sessions->whereKey($session->id));
+            })
+            ->get();
+        foreach ($specialServices as $line) {
+            $service = $line->specialService;
+            if ($service === null) {
+                continue;
+            }
+            if (filled($service->gender_constraint) && (string) $service->gender_constraint !== (string) $worker->gender) {
+                return $this->blocked('special_service_gender_mismatch', 'Worker gender does not match a selected special service.');
+            }
+            $hasSkills = DB::table('cleaning_worker_special_service_skills')
+                ->where('cleaning_special_service_id', $service->id)->exists();
+            $qualified = DB::table('cleaning_worker_special_service_skills')
+                ->where('cleaning_special_service_id', $service->id)
+                ->where('worker_id', $worker->id)->where('is_active', true)->exists();
+            if ($hasSkills && ! $qualified) {
+                return $this->blocked('special_service_skill_missing', 'Worker is not qualified for a selected special service.');
+            }
         }
 
         $worker->loadMissing(['user', 'deposit']);

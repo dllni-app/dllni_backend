@@ -211,14 +211,19 @@ final class EventAssistanceSessionRescheduleService
             ? $pricing['schedule']['sessions'][0]
             : [];
         $snapshot = is_array($session->pricing_snapshot) ? $session->pricing_snapshot : [];
+        $preservedAddons = round((float) $session->addons_total, 2);
+        $preservedMaterials = round((float) $session->materials_total, 2);
+        $preservedSpecialServices = round((float) $session->special_services_total, 2);
 
         $session->forceFill([
             'base_price' => (float) ($sessionPricing['basePrice'] ?? 0),
-            'addons_total' => 0,
+            'addons_total' => $preservedAddons,
+            'materials_total' => $preservedMaterials,
+            'special_services_total' => $preservedSpecialServices,
             'travel_fee' => (float) ($sessionPricing['travelFee'] ?? 0),
             'travel_distance_km' => isset($pricing['distanceKm']) ? (float) $pricing['distanceKm'] : null,
             'admin_margin_amount' => (float) ($sessionPricing['adminMargin'] ?? 0),
-            'total_price' => (float) ($sessionPricing['totalPrice'] ?? 0),
+            'total_price' => round((float) ($sessionPricing['totalPrice'] ?? 0) + $preservedAddons, 2),
             'is_pricing_final' => (bool) ($pricing['isPricingFinal'] ?? false),
             'pricing_snapshot' => [
                 ...$snapshot,
@@ -226,6 +231,11 @@ final class EventAssistanceSessionRescheduleService
                 'requiredWorkers' => max(1, (int) ($session->required_workers ?? 1)),
                 'currency' => (string) ($pricing['currency'] ?? config('app.currency', 'SYP')),
                 'rescheduledAt' => now()->toIso8601String(),
+                'preservedAddonSnapshot' => [
+                    'addonsTotal' => $preservedAddons,
+                    'materialsTotal' => $preservedMaterials,
+                    'specialServicesTotal' => $preservedSpecialServices,
+                ],
             ],
         ]);
     }

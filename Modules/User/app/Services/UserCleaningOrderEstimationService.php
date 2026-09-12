@@ -249,7 +249,9 @@ final class UserCleaningOrderEstimationService
             'currency' => (string) config('app.currency', 'SYP'),
             'serviceLines' => $lines,
             'materials' => $materialQuote['lines'],
+            'materialsTotal' => (float) $materialQuote['total'],
             'specialServices' => $specialServiceQuote['lines'],
+            'specialServicesTotal' => (float) $specialServiceQuote['total'],
             'roomPricingLines' => $regularCalculation['roomPricingLines'] ?? [],
             'pricingAlgorithm' => $regularCalculation !== null ? [
                 'baseUnitPrice' => $regularCalculation['baseUnitPrice'],
@@ -277,6 +279,7 @@ final class UserCleaningOrderEstimationService
         mixed $addressLongitude,
         mixed $preferredWorkerId,
         int $workerCount,
+        int $expectedMaxMinutes = 480,
     ): array {
         if ($this->isEventAssistanceType($propertyType)) {
             throw new InvalidArgumentException('Open-Time requests are not available for event assistance.');
@@ -299,7 +302,7 @@ final class UserCleaningOrderEstimationService
             ->where('billing_mode', 'actual_working_time')
             ->orderByDesc('is_default')
             ->first();
-        $openTime = $this->openTimeBillingService->preliminary($hourlyRate, $workerCount, $policy);
+        $openTime = $this->openTimeBillingService->preliminary($hourlyRate, $workerCount, $policy, $expectedMaxMinutes);
         $basePrice = (float) $openTime['preliminaryAmount'];
 
         if ($preferredWorkerId === null) {
@@ -349,6 +352,8 @@ final class UserCleaningOrderEstimationService
         mixed $preferredWorkerId,
         float $hoursPerVisit,
         int $workerCount,
+        bool $requestMaterials = false,
+        array $specialServices = [],
     ): array {
         $input = $this->pricingSnapshotInput(
             $propertyType,
@@ -370,7 +375,13 @@ final class UserCleaningOrderEstimationService
         $basePrice = $this->pricingCalculator->roundMoney(
             $hourlyRatePerWorker * $normalizedHours * $normalizedWorkers,
         );
-        $addonsTotal = 0.0;
+        $materialQuote = $requestMaterials
+            ? $this->materialQuoteService->quote($input['propertyDetails'])
+            : ['lines' => [], 'total' => 0.0];
+        $specialServiceQuote = $specialServices !== []
+            ? $this->specialServiceQuoteService->quote($specialServices)
+            : ['lines' => [], 'total' => 0.0];
+        $addonsTotal = (float) $materialQuote['total'] + (float) $specialServiceQuote['total'];
 
         if ($input['preferredWorkerId'] === null) {
             $pricing = $this->pricingCalculator->provisional($basePrice, $addonsTotal);
@@ -399,6 +410,10 @@ final class UserCleaningOrderEstimationService
             'totalPrice' => $pricing['totalPrice'],
             'currency' => (string) config('app.currency', 'SYP'),
             'serviceLines' => [],
+            'materials' => $materialQuote['lines'],
+            'materialsTotal' => (float) $materialQuote['total'],
+            'specialServices' => $specialServiceQuote['lines'],
+            'specialServicesTotal' => (float) $specialServiceQuote['total'],
             'roomPricingLines' => $regularCalculation['roomPricingLines'] ?? [],
             'pricingAlgorithm' => [
                 'mode' => 'hours',

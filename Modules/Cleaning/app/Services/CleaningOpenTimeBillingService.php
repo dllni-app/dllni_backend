@@ -11,6 +11,7 @@ use InvalidArgumentException;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Support\CleaningRuntimeSettings;
 
@@ -22,10 +23,23 @@ final class CleaningOpenTimeBillingService
     ) {}
 
     /** @return array<string, float|int> */
-    public function preliminary(float $hourlyRate, int $workerCount, ?CleaningBillingPolicy $policy = null): array
+    public function preliminary(
+        float $hourlyRate,
+        int $workerCount,
+        ?CleaningBillingPolicy $policy = null,
+        int $expectedMaxMinutes = 480,
+    ): array
     {
         $minimumMinutes = $this->minimumMinutes($policy);
         $roundingMinutes = $this->roundingMinutes($policy);
+        $rules = is_array($policy?->rules) ? $policy->rules : [];
+        $hardMaxMinutes = max(15, min(1440, (int) ($rules['hard_max_minutes'] ?? 480)));
+        $expectedMaxMinutes = max(15, min($hardMaxMinutes, $expectedMaxMinutes));
+        $warningMinutes = max(5, min($expectedMaxMinutes, (int) ($rules['warning_minutes'] ?? 30)));
+        $extensionOptions = array_values(array_unique(array_filter(
+            array_map('intval', (array) ($rules['extension_options'] ?? [15, 30, 60])),
+            static fn (int $minutes): bool => $minutes > 0 && $minutes <= 240,
+        )));
         $billableMinutes = $this->roundUp(max($minimumMinutes, 1), $roundingMinutes);
         $amount = $this->amount($hourlyRate, $workerCount, $billableMinutes);
 
@@ -34,8 +48,13 @@ final class CleaningOpenTimeBillingService
             'requestedWorkerCount' => max(1, $workerCount),
             'minimumBillableMinutes' => $minimumMinutes,
             'roundingMinutes' => $roundingMinutes,
+            'expectedMaxMinutes' => $expectedMaxMinutes,
+            'hardMaxMinutes' => $hardMaxMinutes,
+            'warningMinutes' => $warningMinutes,
+            'extensionOptions' => $extensionOptions,
             'preliminaryBillableMinutes' => $billableMinutes,
             'preliminaryAmount' => $amount,
+            'maximumEstimatedAmount' => $this->amount($hourlyRate, $workerCount, $expectedMaxMinutes),
         ];
     }
 
@@ -92,7 +111,10 @@ final class CleaningOpenTimeBillingService
             throw new InvalidArgumentException('Open-Time billing requires an authoritative work start time.');
         }
 
-        $actualMinutes = max(0, $booking->work_started_at->diffInMinutes($finishedAt));
+        // Carbon 3 returns fractional minutes. Count any started minute before
+        // applying the configured billing interval so sub-minute work is never
+        // silently discarded from the authoritative duration snapshot.
+        $actualMinutes = max(0, (int) ceil($booking->work_started_at->diffInSeconds($finishedAt) / 60));
         $minimumMinutes = max(1, (int) $booking->open_time_minimum_minutes);
         $roundingMinutes = max(1, (int) $booking->open_time_rounding_minutes);
         $billableMinutes = $this->roundUp(max($actualMinutes, $minimumMinutes), $roundingMinutes);
@@ -132,18 +154,135 @@ final class CleaningOpenTimeBillingService
     /** @return array<string, mixed> */
     public function presentation(CleaningBooking $booking): array
     {
+        $now = now();
+        $sessionsCount = $booking->sessions()
+            ->where('session_type', CleaningBookingSession::TYPE_OPEN_TIME)
+            ->count();
+        $actualMinutes = $booking->work_started_at === null
+            ? 0
+            : max(0, (int) ceil(
+                $booking->work_started_at->diffInSeconds($booking->work_finished_at ?? $now) / 60
+            ));
+        $minimumMinutes = max(1, (int) ($booking->open_time_minimum_minutes ?? 60));
+        $roundingMinutes = max(1, (int) ($booking->open_time_rounding_minutes ?? 15));
+        $liveBillableMinutes = $this->roundUp(max($actualMinutes, $minimumMinutes), $roundingMinutes);
+        $liveAmount = $booking->open_time_hourly_rate === null
+            ? null
+            : $this->amount(
+                (float) $booking->open_time_hourly_rate,
+                max(1, (int) $booking->number_of_workers),
+                $liveBillableMinutes,
+            );
+        $ceilingEndsAt = $booking->open_time_ceiling_ends_at
+            ?? ($booking->work_started_at?->copy()->addMinutes((int) ($booking->open_time_expected_max_minutes ?? 480)));
+        $pendingExtension = $booking->openTimeExtensions()
+            ->where('status', 'pending')
+            ->latest('id')
+            ->first();
+
         return [
             'isOpenTime' => $booking->booking_kind === 'open_time',
+            'isMultiSession' => $sessionsCount > 1,
+            'sessionsCount' => $sessionsCount,
             'hourlyRate' => $booking->open_time_hourly_rate !== null ? (float) $booking->open_time_hourly_rate : null,
             'requestedWorkerCount' => max(1, (int) $booking->number_of_workers),
             'minimumBillableMinutes' => $booking->open_time_minimum_minutes,
             'roundingMinutes' => $booking->open_time_rounding_minutes,
+            'expectedMaxMinutes' => $booking->open_time_expected_max_minutes,
+            'hardMaxMinutes' => $booking->open_time_hard_max_minutes,
+            'warningMinutes' => $booking->open_time_warning_minutes,
+            'extensionOptions' => $booking->open_time_extension_options ?? [],
+            'ceilingEndsAt' => $ceilingEndsAt?->toIso8601String(),
+            'remainingMinutes' => $ceilingEndsAt === null ? null : max(0, $now->diffInMinutes($ceilingEndsAt, false)),
+            'remainingToCeilingMinutes' => $ceilingEndsAt === null ? null : max(0, $now->diffInMinutes($ceilingEndsAt, false)),
+            'serverNow' => $now->toIso8601String(),
             'workStartedAt' => $booking->work_started_at?->toIso8601String(),
             'workFinishedAt' => $booking->work_finished_at?->toIso8601String(),
             'actualDurationMinutes' => $booking->open_time_actual_minutes,
             'billableDurationMinutes' => $booking->open_time_billable_minutes,
+            'liveDurationMinutes' => $actualMinutes,
+            'liveBillableMinutes' => $booking->open_time_finalized_at === null ? $liveBillableMinutes : $booking->open_time_billable_minutes,
+            'liveAmount' => $booking->open_time_finalized_at === null ? $liveAmount : (float) $booking->open_time_final_amount,
+            'endStatus' => $booking->open_time_end_status,
+            'endRequestedAt' => $booking->open_time_end_requested_at?->toIso8601String(),
+            'terminatedAt' => $booking->open_time_terminated_at?->toIso8601String(),
+            'terminationReason' => $booking->open_time_termination_reason,
+            'pendingExtension' => $pendingExtension === null ? null : [
+                'id' => (int) $pendingExtension->id,
+                'requestedMinutes' => (int) $pendingExtension->requested_minutes,
+                'status' => (string) $pendingExtension->status,
+                'workerId' => $pendingExtension->worker_id !== null ? (int) $pendingExtension->worker_id : null,
+                'createdAt' => $pendingExtension->created_at?->toIso8601String(),
+            ],
             'finalAmount' => $booking->open_time_final_amount !== null ? (float) $booking->open_time_final_amount : null,
             'isFinalized' => $booking->open_time_finalized_at !== null,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public function sessionPresentation(CleaningBookingSession $session): array
+    {
+        if ((string) $session->session_type !== CleaningBookingSession::TYPE_OPEN_TIME) {
+            throw new InvalidArgumentException('Only Open-Time sessions have a live meter.');
+        }
+
+        $now = now();
+        $snapshot = is_array($session->pricing_snapshot) ? $session->pricing_snapshot : [];
+        $expectedMinutes = max(15, (int) ($session->open_time_expected_max_minutes ?? $snapshot['expectedMaxMinutes'] ?? 480));
+        $minimumMinutes = max(1, (int) ($snapshot['minimumBillableMinutes'] ?? 60));
+        $roundingMinutes = max(1, (int) ($snapshot['roundingMinutes'] ?? 15));
+        $startedAt = $session->work_started_at;
+        $finishedAt = $session->work_finished_at;
+        $elapsedMinutes = $startedAt === null
+            ? 0
+            : max(0, (int) ceil($startedAt->diffInSeconds($finishedAt ?? $now) / 60));
+        $billableMinutes = $this->roundUp(max($elapsedMinutes, $minimumMinutes), $roundingMinutes);
+        $hourlyRate = max(0.0, (float) ($snapshot['hourlyRate'] ?? 0));
+        $workerCount = max(1, (int) ($snapshot['workerCount'] ?? $session->requiredWorkerCount()));
+        $liveAmount = $this->amount($hourlyRate, $workerCount, $billableMinutes);
+        $ceilingEndsAt = $session->open_time_ceiling_ends_at
+            ?? $startedAt?->copy()->addMinutes($expectedMinutes);
+        $pendingExtension = $session->openTimeExtensions()
+            ->where('status', 'pending')
+            ->latest('id')
+            ->first();
+
+        return [
+            'isOpenTime' => true,
+            'sessionId' => (int) $session->id,
+            'hourlyRate' => $hourlyRate,
+            'requestedWorkerCount' => $workerCount,
+            'minimumBillableMinutes' => $minimumMinutes,
+            'roundingMinutes' => $roundingMinutes,
+            'expectedMaxMinutes' => $expectedMinutes,
+            'hardMaxMinutes' => max($expectedMinutes, (int) ($session->open_time_hard_max_minutes ?? $snapshot['hardMaxMinutes'] ?? 480)),
+            'warningMinutes' => max(1, (int) ($snapshot['warningMinutes'] ?? 30)),
+            'extensionOptions' => array_values((array) ($snapshot['extensionOptions'] ?? [15, 30, 60])),
+            'ceilingEndsAt' => $ceilingEndsAt?->toIso8601String(),
+            'remainingMinutes' => $ceilingEndsAt === null ? null : max(0, (int) $now->diffInMinutes($ceilingEndsAt, false)),
+            'remainingToCeilingMinutes' => $ceilingEndsAt === null ? null : max(0, (int) $now->diffInMinutes($ceilingEndsAt, false)),
+            'serverNow' => $now->toIso8601String(),
+            'workStartedAt' => $startedAt?->toIso8601String(),
+            'workFinishedAt' => $finishedAt?->toIso8601String(),
+            'liveDurationMinutes' => $elapsedMinutes,
+            'liveBillableMinutes' => isset($snapshot['finalizedAt'])
+                ? (int) ($snapshot['billableDurationMinutes'] ?? $billableMinutes)
+                : $billableMinutes,
+            'liveAmount' => (float) ($snapshot['finalAmount'] ?? $liveAmount),
+            'actualDurationMinutes' => isset($snapshot['actualDurationMinutes']) ? (int) $snapshot['actualDurationMinutes'] : null,
+            'billableDurationMinutes' => isset($snapshot['billableDurationMinutes']) ? (int) $snapshot['billableDurationMinutes'] : null,
+            'finalAmount' => isset($snapshot['finalAmount']) ? (float) $snapshot['finalAmount'] : null,
+            'isFinalized' => isset($snapshot['finalizedAt']),
+            'endStatus' => $session->open_time_end_status,
+            'endRequestedAt' => $session->open_time_end_requested_at?->toIso8601String(),
+            'terminationReason' => $session->open_time_termination_reason,
+            'pendingExtension' => $pendingExtension === null ? null : [
+                'id' => (int) $pendingExtension->id,
+                'requestedMinutes' => (int) $pendingExtension->requested_minutes,
+                'status' => (string) $pendingExtension->status,
+                'workerId' => $pendingExtension->worker_id !== null ? (int) $pendingExtension->worker_id : null,
+                'createdAt' => $pendingExtension->created_at?->toIso8601String(),
+            ],
         ];
     }
 
@@ -255,7 +394,7 @@ final class CleaningOpenTimeBillingService
     {
         $rules = is_array($policy?->rules) ? $policy->rules : [];
 
-        return max(1, min(120, (int) ($rules['rounding_minutes'] ?? 30)));
+        return max(1, min(120, (int) ($rules['rounding_minutes'] ?? 15)));
     }
 
     private function roundUp(int $minutes, int $roundingMinutes): int

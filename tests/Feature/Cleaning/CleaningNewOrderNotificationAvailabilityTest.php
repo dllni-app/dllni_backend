@@ -69,7 +69,7 @@ beforeEach(function (): void {
 
     $this->createWorker = static function (string $email, float $latitude): array {
         $user = User::factory()->create(['email' => $email]);
-        $worker = Worker::factory()->create([
+        $worker = Worker::factory()->financiallyEligible()->create([
             'user_id' => $user->id,
             'home_address' => 'Worker home',
             'home_latitude' => $latitude,

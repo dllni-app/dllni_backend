@@ -20,6 +20,8 @@ final class CleaningBookingSession extends Model
 {
     public const TYPE_RECURRING_CLEANING = 'recurring_cleaning';
 
+    public const TYPE_OPEN_TIME = 'open_time';
+
     protected $fillable = [
         'cleaning_booking_id',
         'sequence',
@@ -28,6 +30,12 @@ final class CleaningBookingSession extends Model
         'scheduled_date',
         'scheduled_time',
         'duration_hours',
+        'open_time_expected_max_minutes',
+        'open_time_hard_max_minutes',
+        'open_time_ceiling_ends_at',
+        'open_time_end_requested_at',
+        'open_time_end_status',
+        'open_time_termination_reason',
         'required_workers',
         'coverage_status',
         'status',
@@ -36,6 +44,8 @@ final class CleaningBookingSession extends Model
         'materials_total',
         'special_services_total',
         'travel_fee',
+        'travel_fee_mode',
+        'travel_fee_value',
         'travel_distance_km',
         'admin_margin_amount',
         'extension_fee_total',
@@ -75,6 +85,11 @@ final class CleaningBookingSession extends Model
         return $this->hasMany(WorkerCustomerRating::class, 'cleaning_booking_session_id');
     }
 
+    public function openTimeExtensions(): HasMany
+    {
+        return $this->hasMany(CleaningOpenTimeExtension::class, 'cleaning_booking_session_id');
+    }
+
     public function disputes(): HasMany
     {
         return $this->hasMany(Dispute::class, 'cleaning_booking_session_id');
@@ -98,6 +113,10 @@ final class CleaningBookingSession extends Model
             'sequence' => 'integer',
             'scheduled_date' => 'date',
             'duration_hours' => 'float',
+            'open_time_expected_max_minutes' => 'integer',
+            'open_time_hard_max_minutes' => 'integer',
+            'open_time_ceiling_ends_at' => 'datetime',
+            'open_time_end_requested_at' => 'datetime',
             'required_workers' => 'integer',
             'coverage_status' => CleaningBookingSessionCoverageStatus::class,
             'status' => CleaningBookingSessionStatus::class,
@@ -106,6 +125,7 @@ final class CleaningBookingSession extends Model
             'materials_total' => 'float',
             'special_services_total' => 'float',
             'travel_fee' => 'float',
+            'travel_fee_value' => 'float',
             'travel_distance_km' => 'float',
             'admin_margin_amount' => 'float',
             'extension_fee_total' => 'float',

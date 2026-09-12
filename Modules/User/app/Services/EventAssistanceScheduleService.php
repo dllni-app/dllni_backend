@@ -93,6 +93,8 @@ final class EventAssistanceScheduleService
         mixed $addressLongitude,
         mixed $preferredWorkerId,
         int $requiredWorkers,
+        bool $requestMaterials = false,
+        array $specialServices = [],
     ): array {
         $basePrice = 0.0;
         $addonsTotal = 0.0;
@@ -105,7 +107,9 @@ final class EventAssistanceScheduleService
         $eventHourlyRate = null;
         $scheduleSessions = [];
 
-        foreach ($plan['sessions'] as $session) {
+        $materialLines = [];
+        $specialServiceLines = [];
+        foreach ($plan['sessions'] as $sessionIndex => $session) {
             $sessionDetails = $propertyDetails;
             $sessionDetails['hours'] = (float) $session['hours'];
             $sessionDetails['workerCount'] = max(1, $requiredWorkers);
@@ -116,6 +120,9 @@ final class EventAssistanceScheduleService
                 $addressLatitude,
                 $addressLongitude,
                 $preferredWorkerId,
+                null,
+                $requestMaterials && $sessionIndex === 0,
+                $this->specialServicesForSession($specialServices, (int) $session['sequence']),
             );
 
             $sessionBase = (float) ($pricing['basePrice'] ?? 0);
@@ -133,6 +140,10 @@ final class EventAssistanceScheduleService
             $eventHourlyRate ??= isset($pricing['eventHourlyRate']) ? (float) $pricing['eventHourlyRate'] : null;
             $currency = (string) ($pricing['currency'] ?? $currency);
             $isPricingFinal = $isPricingFinal && (bool) ($pricing['isPricingFinal'] ?? false);
+            if ($sessionIndex === 0) {
+                $materialLines = (array) ($pricing['materials'] ?? []);
+            }
+            $specialServiceLines = array_merge($specialServiceLines, (array) ($pricing['specialServices'] ?? []));
 
             $scheduleSessions[] = [
                 'sequence' => (int) $session['sequence'],
@@ -140,6 +151,9 @@ final class EventAssistanceScheduleService
                 'time' => (string) $session['time'],
                 'hours' => (float) $session['hours'],
                 'basePrice' => round($sessionBase, 2),
+                'addonsTotal' => round($sessionAddons, 2),
+                'materialsTotal' => round((float) ($pricing['materialsTotal'] ?? 0), 2),
+                'specialServicesTotal' => round((float) ($pricing['specialServicesTotal'] ?? 0), 2),
                 'travelFee' => round($sessionTravel, 2),
                 'adminMargin' => round($sessionAdmin, 2),
                 'totalPrice' => round($sessionTotal, 2),
@@ -156,6 +170,10 @@ final class EventAssistanceScheduleService
             'totalPrice' => round($totalPrice, 2),
             'currency' => $currency,
             'serviceLines' => [],
+            'materials' => $materialLines,
+            'materialsTotal' => round(array_sum(array_map(static fn (array $line): float => (float) ($line['totalPrice'] ?? 0), $materialLines)), 2),
+            'specialServices' => $specialServiceLines,
+            'specialServicesTotal' => round(array_sum(array_map(static fn (array $line): float => (float) ($line['totalPrice'] ?? 0), $specialServiceLines)), 2),
             'roomPricingLines' => [],
             'pricingAlgorithm' => null,
             'eventHourlyRate' => $eventHourlyRate,
@@ -224,9 +242,9 @@ final class EventAssistanceScheduleService
                 'coverage_status' => CleaningBookingSessionCoverageStatus::Searching,
                 'status' => CleaningBookingSessionStatus::Scheduled,
                 'base_price' => (float) ($sessionPricing['basePrice'] ?? 0),
-                'addons_total' => 0,
-                'materials_total' => 0,
-                'special_services_total' => 0,
+                'addons_total' => (float) ($sessionPricing['addonsTotal'] ?? 0),
+                'materials_total' => (float) ($sessionPricing['materialsTotal'] ?? 0),
+                'special_services_total' => (float) ($sessionPricing['specialServicesTotal'] ?? 0),
                 'travel_fee' => (float) ($sessionPricing['travelFee'] ?? 0),
                 'travel_distance_km' => $booking->travel_distance_km,
                 'admin_margin_amount' => (float) ($sessionPricing['adminMargin'] ?? 0),
@@ -327,6 +345,30 @@ final class EventAssistanceScheduleService
                 requiredWorkers: max(1, (int) $locked->number_of_workers),
             );
 
+            // A schedule-only edit must never silently drop extras that were
+            // already purchased. Keep their immutable booking snapshots and
+            // attach them to the first replacement execution session.
+            $preservedMaterials = round((float) $locked->materials()->sum('total_price'), 2);
+            $preservedSpecialServices = round((float) $locked->specialServices()->sum('total_price'), 2);
+            $preservedOtherAddons = round(max(
+                0.0,
+                (float) $locked->addons_total - $preservedMaterials - $preservedSpecialServices,
+            ), 2);
+            $preservedAddons = round($preservedMaterials + $preservedSpecialServices + $preservedOtherAddons, 2);
+            if ($preservedAddons > 0 && isset($pricing['schedule']['sessions'][0])) {
+                $pricing['addonsTotal'] = round((float) $pricing['addonsTotal'] + $preservedAddons, 2);
+                $pricing['materialsTotal'] = $preservedMaterials;
+                $pricing['specialServicesTotal'] = $preservedSpecialServices;
+                $pricing['totalPrice'] = round((float) $pricing['totalPrice'] + $preservedAddons, 2);
+                $pricing['schedule']['sessions'][0]['addonsTotal'] = $preservedAddons;
+                $pricing['schedule']['sessions'][0]['materialsTotal'] = $preservedMaterials;
+                $pricing['schedule']['sessions'][0]['specialServicesTotal'] = $preservedSpecialServices;
+                $pricing['schedule']['sessions'][0]['totalPrice'] = round(
+                    (float) $pricing['schedule']['sessions'][0]['totalPrice'] + $preservedAddons,
+                    2,
+                );
+            }
+
             $grossTotal = round((float) $pricing['totalPrice'], 2);
             $discount = min(
                 $grossTotal,
@@ -369,5 +411,20 @@ final class EventAssistanceScheduleService
     private function normalizeHours(float $hours): float
     {
         return ceil(max(1.0, $hours) * 2) / 2;
+    }
+
+    /** @param array<int, mixed> $specialServices */
+    private function specialServicesForSession(array $specialServices, int $sequence): array
+    {
+        return array_values(array_filter($specialServices, static function (mixed $line) use ($sequence): bool {
+            if (! is_array($line)) {
+                return false;
+            }
+            $selected = array_values(array_filter(array_map('intval', (array) ($line['sessionIds'] ?? []))));
+
+            // Legacy payloads had no session selection and represented a single
+            // booking-level extra; keep charging it once on the first visit.
+            return $selected === [] ? $sequence === 1 : in_array($sequence, $selected, true);
+        }));
     }
 }

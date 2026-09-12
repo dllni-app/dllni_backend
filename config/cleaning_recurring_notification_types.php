@@ -4,6 +4,23 @@ declare(strict_types=1);
 
 return [
     'types' => [
+        'cleaning.recurring.change_requested' => [
+            'legacy_type' => 'recurring_change_requested',
+            'module' => 'cleaning',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'طلب موافقة على تعديل الحجز الدوري',
+                    'body' => 'يوجد تعديل مقترح على الحجز رقم :booking_number ويحتاج إلى قرارك.',
+                ],
+                'en' => [
+                    'title' => 'Recurring booking change approval',
+                    'body' => 'A proposed change to booking :booking_number requires your decision.',
+                ],
+            ],
+        ],
         'cleaning.booking.recurring_coverage_progress' => [
             'legacy_type' => 'recurring_coverage_progress',
             'module' => 'cleaning',

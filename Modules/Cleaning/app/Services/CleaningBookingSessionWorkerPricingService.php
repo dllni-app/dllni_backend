@@ -53,6 +53,20 @@ final class CleaningBookingSessionWorkerPricingService
 
     private function travelForWorker(CleaningBooking $booking, float $serviceShare, Worker $worker): float
     {
+        if (
+            $booking->address_latitude === null
+            || $booking->address_longitude === null
+            || blank($worker->home_address)
+            || $worker->home_latitude === null
+            || $worker->home_longitude === null
+        ) {
+            // Legacy bookings and workers can predate mandatory geocoding. Their
+            // session can still be settled safely; only transport pricing is
+            // unavailable, so preserve the zero-travel snapshot instead of
+            // failing the whole Open-Time completion transaction.
+            return 0.0;
+        }
+
         $pricing = $this->pricingCalculator->finalizedForWorker(
             $serviceShare,
             0.0,

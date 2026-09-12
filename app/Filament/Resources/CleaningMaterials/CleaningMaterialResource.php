@@ -8,7 +8,7 @@ use App\Filament\Resources\CleaningMaterials\Pages\CreateCleaningMaterial;
 use App\Filament\Resources\CleaningMaterials\Pages\EditCleaningMaterial;
 use App\Filament\Resources\CleaningMaterials\Pages\ListCleaningMaterials;
 use BackedEnum;
-use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -37,17 +37,17 @@ final class CleaningMaterialResource extends Resource
     {
         return $schema->components([
             TextInput::make('name')->required()->maxLength(255),
+            FileUpload::make('image_path')
+                ->label('Product image')
+                ->disk('public')
+                ->directory('cleaning-materials')
+                ->image()
+                ->imageEditor()
+                ->maxSize(5120),
             Select::make('cleaning_material_type_id')->label('Material Type')->relationship('materialType', 'name')->searchable()->preload()->required(),
             TextInput::make('stock_quantity')->label('Current Stock')->numeric()->minValue(0)->required()->suffix('configured unit'),
             TextInput::make('low_stock_threshold')->label('Low-stock Threshold')->numeric()->minValue(0)->required(),
             Toggle::make('is_active')->default(true),
-            Repeater::make('quantityRules')->relationship()->label('Quantity Rules')->schema([
-                Select::make('room_type')->options(['bedroom'=>'Bedroom','bathroom'=>'Bathroom','kitchen'=>'Kitchen','living_room'=>'Living Room','balcony'=>'Balcony','hall'=>'Hall','corridor'=>'Corridor','other'=>'Other'])->nullable(),
-                Select::make('room_size')->options(['small'=>'Small','medium'=>'Medium','large'=>'Large'])->nullable(),
-                Select::make('cleaning_mode')->options(['regular'=>'Regular','deep'=>'Deep'])->nullable(),
-                TextInput::make('quantity_per_room')->numeric()->minValue(0.001)->required(),
-                Toggle::make('is_active')->default(true),
-            ])->columns(2)->collapsible(),
         ])->columns(2);
     }
 
@@ -56,6 +56,7 @@ final class CleaningMaterialResource extends Resource
         return $table->columns([
             TextColumn::make('name')->searchable()->sortable(),
             TextColumn::make('materialType.name')->label('Type')->searchable(),
+            TextColumn::make('image_path')->label('Image')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
             TextColumn::make('materialType.unit.symbol')->label('Unit')->placeholder('—'),
             TextColumn::make('stock_quantity')->label('Stock')->numeric(decimalPlaces: 3)->sortable(),
             TextColumn::make('low_stock_threshold')->label('Low-stock At')->numeric(decimalPlaces: 3)->toggleable(),

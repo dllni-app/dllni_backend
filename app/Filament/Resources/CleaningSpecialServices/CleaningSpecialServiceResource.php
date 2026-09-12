@@ -9,7 +9,6 @@ use App\Filament\Resources\CleaningSpecialServices\Pages\EditCleaningSpecialServ
 use App\Filament\Resources\CleaningSpecialServices\Pages\ListCleaningSpecialServices;
 use BackedEnum;
 use Filament\Forms\Components\FileUpload;
-use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -45,6 +44,12 @@ final class CleaningSpecialServiceResource extends Resource
     {
         return $schema->components([
             TextInput::make('name')->required()->maxLength(255),
+            Select::make('cleaning_special_service_category_id')
+                ->label('Category')
+                ->relationship('category', 'name')
+                ->searchable()
+                ->preload(),
+            TextInput::make('description')->columnSpanFull(),
             FileUpload::make('image_path')
                 ->label(app()->isLocale('ar') ? 'صورة الخدمة' : 'Service Image')
                 ->disk('public')
@@ -72,7 +77,34 @@ final class CleaningSpecialServiceResource extends Resource
                 'carpet' => 'Carpet',
                 'solar_panel' => 'Solar panel',
             ]),
+            Select::make('input_type')->required()->options([
+                'quantity' => 'Quantity',
+                'decimal' => 'Decimal measurement',
+                'area' => 'Area',
+                'length' => 'Length',
+            ])->default('quantity'),
+            TextInput::make('unit_code')->maxLength(32),
             TextInput::make('base_unit_price')->numeric()->minValue(0)->required(),
+            Toggle::make('supports_dirtiness')->default(true),
+            Select::make('dirtinessLevels')
+                ->relationship('dirtinessLevels', 'name')
+                ->multiple()
+                ->searchable()
+                ->preload()
+                ->label('Allowed dirtiness levels'),
+            Select::make('gender_constraint')->options([
+                'male' => 'Male worker',
+                'female' => 'Female worker',
+            ])->nullable(),
+            TextInput::make('estimated_duration_minutes')->numeric()->minValue(1)->required()->default(60)->suffix('min'),
+            Select::make('worker_pay_mode')->required()->options(['flat'=>'Flat','percentage'=>'Percentage','per_unit'=>'Per unit'])->default('percentage'),
+            TextInput::make('worker_pay_value')->numeric()->minValue(0)->required()->default(0),
+            Select::make('operating_cost_mode')->required()->options(['flat'=>'Flat','percentage'=>'Percentage','per_unit'=>'Per unit'])->default('flat'),
+            TextInput::make('operating_cost_value')->numeric()->minValue(0)->required()->default(0),
+            Select::make('travel_fee_mode')->required()->options(['flat'=>'Flat','percentage'=>'Percentage','per_km'=>'Per km'])->default('flat'),
+            TextInput::make('travel_fee_value')->numeric()->minValue(0)->required()->default(0),
+            Toggle::make('requires_before_image')->label('Require before image')->default(false),
+            Toggle::make('requires_after_image')->label('Require after image')->default(false),
             Toggle::make('is_active')->default(true),
             Select::make('equipment')
                 ->relationship('equipment', 'name')
@@ -80,15 +112,6 @@ final class CleaningSpecialServiceResource extends Resource
                 ->searchable()
                 ->preload()
                 ->label('Required Equipment'),
-            Repeater::make('dirtinessRules')
-                ->relationship()
-                ->label('Dirtiness Rules')
-                ->schema([
-                    TextInput::make('dirtiness_level')->required()->maxLength(32),
-                    TextInput::make('price_multiplier')->numeric()->minValue(0.001)->required()->default(1),
-                    Toggle::make('is_active')->default(true),
-                ])
-                ->columns(3),
         ])->columns(2);
     }
 
@@ -98,6 +121,8 @@ final class CleaningSpecialServiceResource extends Resource
             ->columns([
                 TextColumn::make('name')->searchable()->sortable(),
                 TextColumn::make('pricing_unit')->badge()->sortable(),
+                TextColumn::make('category.name')->label('Category')->placeholder('—')->sortable(),
+                TextColumn::make('estimated_duration_minutes')->label('Duration')->suffix(' min')->sortable(),
                 TextColumn::make('base_unit_price')->money(config('app.currency', 'SYP'))->sortable(),
                 TextColumn::make('equipment.name')
                     ->label('Equipment')

@@ -72,8 +72,11 @@ final class CleaningBooking extends Model
         'booking_number',
         'status',
         'booking_kind',
+        'capability_schema_version',
         'property_type',
+        'cleaning_event_type_id',
         'property_details',
+        'event_dynamic_answers',
         'cleaning_services',
         'address_latitude',
         'address_longitude',
@@ -88,6 +91,16 @@ final class CleaningBooking extends Model
         'open_time_hourly_rate',
         'open_time_minimum_minutes',
         'open_time_rounding_minutes',
+        'open_time_expected_max_minutes',
+        'open_time_hard_max_minutes',
+        'open_time_warning_minutes',
+        'open_time_extension_options',
+        'open_time_ceiling_ends_at',
+        'open_time_end_requested_at',
+        'open_time_end_status',
+        'open_time_terminated_at',
+        'open_time_terminated_by_id',
+        'open_time_termination_reason',
         'open_time_actual_minutes',
         'open_time_billable_minutes',
         'open_time_final_amount',
@@ -199,6 +212,26 @@ final class CleaningBooking extends Model
         return $this->hasMany(CleaningBookingSpecialService::class, 'cleaning_booking_id');
     }
 
+    public function materialKit(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(CleaningBookingMaterialKit::class, 'cleaning_booking_id');
+    }
+
+    public function eventType(): BelongsTo
+    {
+        return $this->belongsTo(CleaningEventType::class, 'cleaning_event_type_id');
+    }
+
+    public function openTimeExtensions(): HasMany
+    {
+        return $this->hasMany(CleaningOpenTimeExtension::class, 'cleaning_booking_id');
+    }
+
+    public function scheduleChangeRequests(): HasMany
+    {
+        return $this->hasMany(CleaningScheduleChangeRequest::class, 'cleaning_booking_id');
+    }
+
     public function timeWarnings(): MorphMany
     {
         return $this->morphMany(CleaningTimeWarning::class, 'booking');
@@ -254,6 +287,7 @@ final class CleaningBooking extends Model
             'number_of_workers' => 'integer',
             'neighborhood_id' => 'integer',
             'property_details' => 'array',
+            'event_dynamic_answers' => 'array',
             'cleaning_services' => 'array',
             'worker_finished_cleaning_services' => 'array',
             'worker_finished_property_rooms' => 'array',
@@ -261,22 +295,29 @@ final class CleaningBooking extends Model
             'estimated_hours' => 'decimal:2',
             'scheduled_date' => 'date',
             'total_hours' => 'decimal:2',
-            'base_price' => 'integer',
+            'base_price' => 'float',
             'open_time_hourly_rate' => 'float',
             'open_time_minimum_minutes' => 'integer',
             'open_time_rounding_minutes' => 'integer',
+            'open_time_expected_max_minutes' => 'integer',
+            'open_time_hard_max_minutes' => 'integer',
+            'open_time_warning_minutes' => 'integer',
+            'open_time_extension_options' => 'array',
+            'open_time_ceiling_ends_at' => 'datetime',
+            'open_time_end_requested_at' => 'datetime',
+            'open_time_terminated_at' => 'datetime',
             'open_time_actual_minutes' => 'integer',
             'open_time_billable_minutes' => 'integer',
             'open_time_final_amount' => 'float',
             'open_time_finalized_at' => 'datetime',
-            'addons_total' => 'integer',
-            'extension_fee_total' => 'integer',
-            'travel_fee' => 'integer',
+            'addons_total' => 'float',
+            'extension_fee_total' => 'float',
+            'travel_fee' => 'float',
             'travel_distance_km' => 'decimal:3',
-            'admin_margin_amount' => 'integer',
+            'admin_margin_amount' => 'float',
             'is_pricing_final' => 'boolean',
-            'cancellation_fee' => 'integer',
-            'total_price' => 'integer',
+            'cancellation_fee' => 'float',
+            'total_price' => 'float',
             'terms_accepted' => 'boolean',
             'female_worker_safety_pledge_accepted' => 'boolean',
             'female_worker_safety_pledge_accepted_at' => 'datetime',
@@ -422,11 +463,11 @@ final class CleaningBooking extends Model
 
         if ($this->relationLoaded('workerAssignments')) {
             $count = $this->workerAssignments
-                ->filter(fn (CleaningBookingWorkerAssignment $assignment): bool => (string) ($assignment->status?->value ?? $assignment->status) === CleaningBookingWorkerAssignmentStatus::StartApproved->value)
+                ->filter(fn (CleaningBookingWorkerAssignment $assignment): bool => $assignment->start_approved_at !== null)
                 ->count();
         } else {
             $count = $this->workerAssignments()
-                ->where('status', CleaningBookingWorkerAssignmentStatus::StartApproved->value)
+                ->whereNotNull('start_approved_at')
                 ->count();
         }
 

@@ -210,7 +210,7 @@ final class WorkerOrderSolvencyService
                 'acceptedAt' => $assignment->accepted_at?->toIso8601String(),
                 'roomCount' => (int) $assignment->room_count,
                 'roomsWeight' => (float) $assignment->rooms_weight,
-                'workerSlot' => null,
+                'workerSlot' => $nextSlot,
                 'totalHours' => $totalHours,
                 'serviceShareAmount' => $serviceShare,
                 'travelFee' => $travelFee,
@@ -229,13 +229,25 @@ final class WorkerOrderSolvencyService
         $preview = $this->previewServiceShare($booking, $assignment);
         $totalHours = $this->workerDurationHours($booking, (float) $preview['roomsWeight']);
         $serviceShare = $preview['serviceShareAmount'];
-        $pricing = $this->pricingCalculator->finalizedForWorker(
-            $serviceShare,
-            0.0,
-            $booking->address_latitude !== null ? (float) $booking->address_latitude : null,
-            $booking->address_longitude !== null ? (float) $booking->address_longitude : null,
-            $worker,
-        );
+        $hasCompleteRoute = $booking->address_latitude !== null
+            && $booking->address_longitude !== null
+            && $worker->home_address !== null
+            && mb_trim((string) $worker->home_address) !== ''
+            && $worker->home_latitude !== null
+            && $worker->home_longitude !== null;
+
+        // A pending order may legitimately be listed before either side of the
+        // route is geocoded. Its solvency check still has a reliable provisional
+        // administration margin; transport is finalized only during acceptance.
+        $pricing = $hasCompleteRoute
+            ? $this->pricingCalculator->finalizedForWorker(
+                $serviceShare,
+                0.0,
+                (float) $booking->address_latitude,
+                (float) $booking->address_longitude,
+                $worker,
+            )
+            : $this->pricingCalculator->provisional($serviceShare, 0.0);
         $travelFee = (float) $pricing['travelFee'];
         $adminMargin = $preview['adminMarginAmount'];
         $grossWorkerTotal = $this->grossWorkerTotal($serviceShare, $travelFee);
@@ -364,7 +376,7 @@ final class WorkerOrderSolvencyService
                 'adminMarginAmount' => $this->allocatedMarginForSlot($targetAdminMargin, $equalShares, $nextSlot),
                 'roomCount' => 0,
                 'roomsWeight' => 0.0,
-                'workerSlot' => null,
+                'workerSlot' => $nextSlot,
                 'roomIds' => [],
             ];
         }
@@ -394,7 +406,7 @@ final class WorkerOrderSolvencyService
                 'adminMarginAmount' => $this->allocatedMarginForSlot($targetAdminMargin, $equalShares, $nextSlot),
                 'roomCount' => 0,
                 'roomsWeight' => 0.0,
-                'workerSlot' => null,
+                'workerSlot' => $nextSlot,
                 'roomIds' => [],
             ];
         }

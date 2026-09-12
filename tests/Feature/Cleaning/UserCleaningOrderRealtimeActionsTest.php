@@ -36,7 +36,7 @@ it('confirms start verification with a 4-digit code and waits for worker start c
 
     $customer = User::factory()->create(['email' => 'customer-start-verify@example.com']);
     $workerUser = User::factory()->create(['email' => 'worker-start-verify@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($customer);
 
     $booking = CleaningBooking::factory()->create([
@@ -92,7 +92,7 @@ it('confirms completion for a waiting booking', function () {
 
     $customer = User::factory()->create(['email' => 'customer-complete-confirm@example.com']);
     $workerUser = User::factory()->create(['email' => 'worker-complete-confirm@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($customer);
 
     $booking = CleaningBooking::factory()->create([
@@ -130,7 +130,7 @@ it('rejects completion and reopens the booking', function () {
 
     $customer = User::factory()->create(['email' => 'customer-complete-reject@example.com']);
     $workerUser = User::factory()->create(['email' => 'worker-complete-reject@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($customer);
 
     $booking = CleaningBooking::factory()->create([
@@ -166,7 +166,7 @@ it('requests a completion extension', function () {
 
     $customer = User::factory()->create(['email' => 'customer-complete-extend@example.com']);
     $workerUser = User::factory()->create(['email' => 'worker-complete-extend@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($customer);
 
     $booking = CleaningBooking::factory()->create([
@@ -190,7 +190,7 @@ it('requests a completion extension', function () {
         'endMinutes' => 30,
         'label' => 'من 16 إلى 30 دقيقة',
     ]);
-    expect((float) $response->json('extensionPricing.calculatedExtensionPrice'))->toBe(4500.0);
+    expect((float) $response->json('extensionPricing.calculatedExtensionPrice'))->toBe(25.0);
     expect((float) $response->json('data.extensionFeeTotal'))->toBe(0.0);
     $this->assertDatabaseHas('cleaning_bookings', [
         'id' => $booking->id,
@@ -200,7 +200,7 @@ it('requests a completion extension', function () {
         'booking_id' => $booking->id,
         'customer_response' => 'extend_time',
         'additional_minutes' => 30,
-        'quoted_amount' => 4500.00,
+        'quoted_amount' => 25.00,
         'quoted_currency' => (string) config('app.currency', 'SYP'),
     ]);
 
@@ -214,7 +214,7 @@ it('requests a completion extension', function () {
         return $event->cleaningBookingId === $booking->id
             && $event->workerId === $worker->id
             && $event->requestedMinutes === 30
-            && $event->additionalAmount === 4500.0
+            && $event->additionalAmount === 25.0
             && $event->currency === (string) config('app.currency', 'SYP');
     });
 });
@@ -222,7 +222,7 @@ it('requests a completion extension', function () {
 it('rejects completion extension requests above 90 minutes', function () {
     $customer = User::factory()->create(['email' => 'customer-complete-extend-too-long@example.com']);
     $workerUser = User::factory()->create(['email' => 'worker-complete-extend-too-long@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($customer);
 
     $booking = CleaningBooking::factory()->create([

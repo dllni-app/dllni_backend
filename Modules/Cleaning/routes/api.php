@@ -17,9 +17,13 @@ use Modules\Cleaning\Http\Controllers\API\CleaningBookingShowController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingStartTravelController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingStartWorkController;
 use Modules\Cleaning\Http\Controllers\API\CleaningBookingWorkerLocationsController;
+use Modules\Cleaning\Http\Controllers\API\CleaningOpenTimeController;
+use Modules\Cleaning\Http\Controllers\API\CleaningOperationalExtrasController;
+use Modules\Cleaning\Http\Controllers\API\CleaningScheduleChangeController;
 use Modules\Cleaning\Http\Controllers\API\CleaningNeighborhoodController;
 use Modules\Cleaning\Http\Controllers\API\CleaningServiceController;
 use Modules\Cleaning\Http\Controllers\API\CleaningTimeWarningController;
+use Modules\Cleaning\Http\Controllers\API\CleaningSuiteConfigController;
 use Modules\Cleaning\Http\Controllers\API\DashboardOverviewController;
 use Modules\Cleaning\Http\Controllers\API\DepositManagementController;
 use Modules\Cleaning\Http\Controllers\API\EventBookingController;
@@ -41,6 +45,7 @@ Route::prefix('v1')->group(function () {
     Route::apiResource('cleaning-services', CleaningServiceController::class)->only(['index', 'show']);
     Route::apiResource('cleaning-services.pricing', ServicePricingController::class)->only(['index', 'show'])->scoped();
     Route::apiResource('cleaning-billing-policies', CleaningBillingPolicyController::class)->only(['index', 'show']);
+    Route::get('cleaning/suite-config', CleaningSuiteConfigController::class);
 
     Route::middleware(['auth:sanctum'])->group(function (): void {
         Route::get('cleaning/neighborhoods', [CleaningNeighborhoodController::class, 'index']);
@@ -108,6 +113,18 @@ Route::prefix('v1')->group(function () {
         Route::post('cleaning-bookings/{cleaning_booking}/finish', [CleaningBookingController::class, 'finish'])->name('cleaning-bookings.finish');
         Route::post('cleaning-bookings/{cleaning_booking}/cancel', [CleaningBookingController::class, 'cancel'])->name('cleaning-bookings.cancel');
         Route::get('cleaning-bookings/{cleaning_booking}', CleaningBookingShowController::class)->name('cleaning-bookings.show');
+        Route::get('cleaning-bookings/{cleaning_booking}/open-time/meter', [CleaningOpenTimeController::class, 'meter'])->name('cleaning-bookings.open-time.meter');
+        Route::post('cleaning-bookings/open-time/extensions/{extension}/decision', [CleaningOpenTimeController::class, 'decideExtension'])->name('cleaning-bookings.open-time.extensions.decision');
+        Route::post('cleaning-bookings/{cleaning_booking}/open-time/end/decision', [CleaningOpenTimeController::class, 'decideEnd'])->name('cleaning-bookings.open-time.end.decision');
+        Route::get('cleaning-bookings/{cleaning_booking}/sessions/{session}/open-time/meter', [CleaningOpenTimeController::class, 'sessionMeter'])->name('cleaning-bookings.sessions.open-time.meter');
+        Route::post('cleaning-bookings/{cleaning_booking}/sessions/{session}/open-time/end/decision', [CleaningOpenTimeController::class, 'decideSessionEnd'])->name('cleaning-bookings.sessions.open-time.end.decision');
+        Route::post('cleaning-bookings/{cleaning_booking}/materials/receive', [CleaningOperationalExtrasController::class, 'receiveKit'])->name('cleaning-bookings.materials.receive');
+        Route::post('cleaning-booking-special-services/{bookingService}/start', [CleaningOperationalExtrasController::class, 'startService'])->name('cleaning-booking-special-services.start');
+        Route::post('cleaning-booking-special-services/{bookingService}/finish', [CleaningOperationalExtrasController::class, 'finishService'])->name('cleaning-booking-special-services.finish');
+        Route::post('cleaning-equipment-reservations/{reservation}/acknowledge', [CleaningOperationalExtrasController::class, 'acknowledgeEquipment'])->name('cleaning-equipment-reservations.acknowledge');
+        Route::post('cleaning-equipment-reservations/{reservation}/return', [CleaningOperationalExtrasController::class, 'returnEquipment'])->name('cleaning-equipment-reservations.return');
+        Route::get('cleaning/schedule-change-requests', [CleaningScheduleChangeController::class, 'index'])->name('cleaning.schedule-change-requests.index');
+        Route::post('cleaning/schedule-change-requests/{changeRequest}/decision', [CleaningScheduleChangeController::class, 'decide'])->name('cleaning.schedule-change-requests.decision');
         Route::apiResource('cleaning-bookings', CleaningBookingController::class)->except(['show']);
         Route::apiResource('event-bookings', EventBookingController::class);
 

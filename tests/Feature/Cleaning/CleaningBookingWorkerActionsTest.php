@@ -32,7 +32,7 @@ it('accepts a cleaning booking when status is pending (worker takes order)', fun
     Event::fake([CleaningBookingTrackingUpdated::class]);
 
     $workerUser = User::factory()->create(['email' => 'worker-accept@example.com']);
-    $worker = Worker::factory()->create([
+    $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'home_address' => 'Worker Home',
         'home_latitude' => 33.6,
@@ -79,7 +79,7 @@ it('accepts a cleaning booking when status is pending (worker takes order)', fun
 
 it('returns 422 when accept from non-pending status', function () {
     $workerUser = User::factory()->create(['email' => 'worker-take@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -112,8 +112,8 @@ it('returns 403 when user has no worker on accept', function () {
 
 it('returns 403 when booking is assigned to another worker on accept', function () {
     $workerUser = User::factory()->create(['email' => 'worker1@example.com']);
-    Worker::factory()->create(['user_id' => $workerUser->id]);
-    $otherWorker = Worker::factory()->create(['user_id' => User::factory()->create()->id]);
+    Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
+    $otherWorker = Worker::factory()->financiallyEligible()->create(['user_id' => User::factory()->create()->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -129,7 +129,7 @@ it('returns 403 when booking is assigned to another worker on accept', function 
 
 it('rejects a cleaning booking', function () {
     $workerUser = User::factory()->create(['email' => 'worker-reject@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -163,7 +163,7 @@ it('starts travel for a cleaning booking (sets started_travel_at, status stays w
     Event::fake([CleaningBookingTrackingUpdated::class]);
 
     $workerUser = User::factory()->create(['email' => 'worker-travel@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -197,7 +197,7 @@ it('completes a cleaning booking', function () {
     Event::fake([CleaningBookingTrackingUpdated::class, CleaningOrderAwaitingCustomerCompletion::class]);
 
     $workerUser = User::factory()->create(['email' => 'worker-complete@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -225,7 +225,7 @@ it('completes a cleaning booking', function () {
 
 it('returns 422 when completing booking not in progress', function () {
     $workerUser = User::factory()->create(['email' => 'worker-complete-fail@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -245,7 +245,7 @@ it('cancels a cleaning booking', function () {
     Event::fake([CleaningBookingTrackingUpdated::class]);
 
     $workerUser = User::factory()->create(['email' => 'worker-cancel@example.com']);
-    $worker = Worker::factory()->create([
+    $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'trust_score' => 100,
     ]);
@@ -284,7 +284,7 @@ it('cancels a cleaning booking', function () {
 
 it('deducts trust score when worker cancels a confirmed cleaning booking', function (): void {
     $workerUser = User::factory()->create(['email' => 'worker-cancel-confirmed@example.com']);
-    $worker = Worker::factory()->create([
+    $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'trust_score' => 100,
     ]);
@@ -312,8 +312,8 @@ it('deducts trust score when worker cancels a confirmed cleaning booking', funct
 
 it('returns 403 when worker tries to cancel booking not assigned to them', function () {
     $workerUser = User::factory()->create(['email' => 'worker-cancel-other@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
-    $otherWorker = Worker::factory()->create(['user_id' => User::factory()->create()->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
+    $otherWorker = Worker::factory()->financiallyEligible()->create(['user_id' => User::factory()->create()->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -329,7 +329,7 @@ it('returns 403 when worker tries to cancel booking not assigned to them', funct
 
 it('rejects a cleaning booking without reason (uses default)', function () {
     $workerUser = User::factory()->create(['email' => 'worker-reject-no-reason@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -357,7 +357,7 @@ it('rejects a cleaning booking without reason (uses default)', function () {
 
 it('allows worker to reject a pending unassigned booking', function () {
     $workerUser = User::factory()->create(['email' => 'worker-reject-pending@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -387,7 +387,7 @@ it('allows worker to reject a pending unassigned booking', function () {
 
 it('cancels a cleaning booking without reason', function () {
     $workerUser = User::factory()->create(['email' => 'worker-cancel-no-reason@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -408,7 +408,7 @@ it('cancels a cleaning booking without reason', function () {
 
 it('returns 404 when booking does not exist on accept', function () {
     $workerUser = User::factory()->create(['email' => 'worker-404@example.com']);
-    Worker::factory()->create(['user_id' => $workerUser->id]);
+    Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $response = $this->postJson('/api/v1/cleaning-bookings/99999/accept');
@@ -418,7 +418,7 @@ it('returns 404 when booking does not exist on accept', function () {
 
 it('returns 422 when start-travel from invalid status', function () {
     $workerUser = User::factory()->create(['email' => 'worker-travel-invalid@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -434,7 +434,7 @@ it('returns 422 when start-travel from invalid status', function () {
 
 it('returns 422 when reject from completed booking', function () {
     $workerUser = User::factory()->create(['email' => 'worker-reject-completed@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -450,7 +450,7 @@ it('returns 422 when reject from completed booking', function () {
 
 it('returns 422 when cancel from completed booking', function () {
     $workerUser = User::factory()->create(['email' => 'worker-cancel-completed@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -466,7 +466,7 @@ it('returns 422 when cancel from completed booking', function () {
 
 it('returns 403 when worker tries start-travel on booking not assigned to them', function () {
     $workerUser = User::factory()->create(['email' => 'worker-travel-other@example.com']);
-    $otherWorker = Worker::factory()->create(['user_id' => User::factory()->create()->id]);
+    $otherWorker = Worker::factory()->financiallyEligible()->create(['user_id' => User::factory()->create()->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -482,7 +482,7 @@ it('returns 403 when worker tries start-travel on booking not assigned to them',
 
 it('returns 403 when worker tries complete on booking not assigned to them', function () {
     $workerUser = User::factory()->create(['email' => 'worker-complete-other@example.com']);
-    $otherWorker = Worker::factory()->create(['user_id' => User::factory()->create()->id]);
+    $otherWorker = Worker::factory()->financiallyEligible()->create(['user_id' => User::factory()->create()->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -498,7 +498,7 @@ it('returns 403 when worker tries complete on booking not assigned to them', fun
 
 it('starts work for a cleaning booking (worker_assigned → in_progress)', function () {
     $workerUser = User::factory()->create(['email' => 'worker-startwork@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -521,7 +521,7 @@ it('starts work for a cleaning booking (worker_assigned → in_progress)', funct
 
 it('returns 422 when start-work from non-worker_assigned status', function () {
     $workerUser = User::factory()->create(['email' => 'worker-startwork-invalid@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -539,7 +539,7 @@ it('starts work only after the customer verified the security code', function ()
     Event::fake([CleaningBookingTrackingUpdated::class]);
 
     $workerUser = User::factory()->create(['email' => 'worker-start-after-code@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -582,7 +582,7 @@ it('starts work only after the customer verified the security code', function ()
 
 it('returns security code for assigned booking', function () {
     $workerUser = User::factory()->create(['email' => 'worker-security@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -610,7 +610,7 @@ it('returns security code for assigned booking', function () {
 
 it('returns a valid security code on a second request', function () {
     $workerUser = User::factory()->create(['email' => 'worker-security2@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -629,7 +629,7 @@ it('returns a valid security code on a second request', function () {
 
 it('issues a security code from the current worker assignment rather than the aggregate booking status', function () {
     $workerUser = User::factory()->create(['email' => 'worker-security-assignment@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -662,7 +662,7 @@ it('issues a security code from the current worker assignment rather than the ag
 
 it('returns 422 for security code when booking is pending', function () {
     $workerUser = User::factory()->create(['email' => 'worker-security-pending@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -678,8 +678,8 @@ it('returns 422 for security code when booking is pending', function () {
 
 it('returns 403 for security code when booking belongs to another worker', function () {
     $workerUser = User::factory()->create(['email' => 'worker-security-other@example.com']);
-    Worker::factory()->create(['user_id' => $workerUser->id]);
-    $otherWorker = Worker::factory()->create(['user_id' => User::factory()->create()->id]);
+    Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
+    $otherWorker = Worker::factory()->financiallyEligible()->create(['user_id' => User::factory()->create()->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -697,7 +697,7 @@ it('updates worker location and broadcasts when worker has started travel', func
     Event::fake([WorkerLocationUpdated::class]);
 
     $workerUser = User::factory()->create(['email' => 'worker-location@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -722,9 +722,11 @@ it('updates worker location and broadcasts when worker has started travel', func
     });
 });
 
-it('returns 422 when update location before start travel', function () {
+it('silently ignores a stale location update before travel starts', function () {
+    Event::fake([WorkerLocationUpdated::class]);
+
     $workerUser = User::factory()->create(['email' => 'worker-location-notravel@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -739,14 +741,15 @@ it('returns 422 when update location before start travel', function () {
         'longitude' => 36.2765,
     ]);
 
-    $response->assertUnprocessable();
+    $response->assertOk()->assertJsonPath('data.ok', true);
+    Event::assertNotDispatched(WorkerLocationUpdated::class);
 });
 
 it('marks worker arrived and broadcasts', function () {
     Event::fake([WorkerArrived::class, CleaningOrderAwaitingStartVerification::class]);
 
     $workerUser = User::factory()->create(['email' => 'worker-arrive@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -774,7 +777,7 @@ it('marks worker arrived and broadcasts', function () {
 
 it('returns 422 when arrive before start travel', function () {
     $workerUser = User::factory()->create(['email' => 'worker-arrive-notravel@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -795,7 +798,7 @@ it('hides active work timer after worker completes the booking', function () {
     Event::fake([CleaningBookingTrackingUpdated::class, CleaningOrderAwaitingCustomerCompletion::class]);
 
     $workerUser = User::factory()->create(['email' => 'worker-complete-timer@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([

@@ -83,6 +83,7 @@ final class CleaningTimeWarningController
     {
         $this->ensureWorkerOwnsWarning($cleaning_time_warning);
         $fromStatus = $this->warningStatus($cleaning_time_warning);
+        $alreadyResponded = $cleaning_time_warning->worker_responded_at !== null;
 
         try {
             $warning = $this->cleaningTimeWarningService->accept(
@@ -93,7 +94,9 @@ final class CleaningTimeWarningController
             throw ValidationException::withMessages(['warning' => [$e->getMessage()]]);
         }
 
-        $this->workerNotificationService->accepted($warning, $fromStatus);
+        if (! $alreadyResponded) {
+            $this->workerNotificationService->accepted($warning, $fromStatus);
+        }
 
         return CleaningTimeWarningResource::make($warning->load(['booking']));
     }
@@ -103,6 +106,7 @@ final class CleaningTimeWarningController
     {
         $this->ensureWorkerOwnsWarning($cleaning_time_warning);
         $fromStatus = $this->warningStatus($cleaning_time_warning);
+        $alreadyResponded = $cleaning_time_warning->worker_responded_at !== null;
 
         try {
             $warning = $this->cleaningTimeWarningService->reject(
@@ -113,7 +117,9 @@ final class CleaningTimeWarningController
             throw ValidationException::withMessages(['warning' => [$e->getMessage()]]);
         }
 
-        $this->workerNotificationService->declined($warning, $fromStatus, $request->validated('message'));
+        if (! $alreadyResponded) {
+            $this->workerNotificationService->declined($warning, $fromStatus, $request->validated('message'));
+        }
 
         return CleaningTimeWarningResource::make($warning->load(['booking']));
     }

@@ -32,6 +32,12 @@ it('only returns a previous worker when the worker is free for every requested e
         'is_suspended' => false,
         'trust_score' => 90,
         'security_deposit_status' => 'active',
+        // Previous-worker suggestions honour the worker's configured schedule.
+        // Keep this fixture available for the requested future event day.
+        'default_working_hours' => array_fill_keys(
+            ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
+            ['available' => true, 'data' => [['from' => '00:00', 'to' => '23:59']]],
+        ),
     ]);
 
     CleaningWorkerDeposit::query()->updateOrCreate(

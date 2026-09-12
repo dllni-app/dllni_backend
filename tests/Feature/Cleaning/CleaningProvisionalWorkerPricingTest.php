@@ -55,7 +55,7 @@ it('keeps a provisional equal service share for an accepted worker before rooms 
         ]);
     }
 
-    $worker = Worker::factory()->create([
+    $worker = Worker::factory()->financiallyEligible()->create([
         'home_address' => 'Same location',
         'home_latitude' => 36.2,
         'home_longitude' => 37.1,
@@ -118,7 +118,7 @@ it('repairs the worker offer view for an existing provisional assignment stored 
         ]);
     }
 
-    $worker = Worker::factory()->create([
+    $worker = Worker::factory()->financiallyEligible()->create([
         'home_address' => 'Same location',
         'home_latitude' => 36.2,
         'home_longitude' => 37.1,

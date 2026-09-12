@@ -23,7 +23,7 @@ function eventVisibilityBillingPolicy(): CleaningBillingPolicy
 
 it('returns pending event assistance bookings without neighborhood to event workers', function (): void {
     $workerUser = User::factory()->create(['email' => 'event-visibility-worker@example.com']);
-    Worker::factory()->create([
+    Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'preferred_work_type' => WorkerPreferredWorkType::Events,
         'is_active' => true,
@@ -54,7 +54,7 @@ it('returns pending event assistance bookings without neighborhood to event work
 
 it('returns pending cleaning bookings without neighborhood to cleaning workers', function (): void {
     $workerUser = User::factory()->create(['email' => 'cleaning-visibility-worker@example.com']);
-    Worker::factory()->create([
+    Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'preferred_work_type' => WorkerPreferredWorkType::Cleaning,
         'is_active' => true,
@@ -85,7 +85,7 @@ it('returns pending cleaning bookings without neighborhood to cleaning workers',
 
 it('counts pending event assistance bookings without neighborhood on worker homepage', function (): void {
     $workerUser = User::factory()->create(['email' => 'event-homepage-worker@example.com']);
-    Worker::factory()->create([
+    Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'preferred_work_type' => WorkerPreferredWorkType::Events,
         'is_active' => true,
@@ -114,7 +114,7 @@ it('counts pending event assistance bookings without neighborhood on worker home
 
 it('counts pending cleaning bookings without neighborhood on worker homepage', function (): void {
     $workerUser = User::factory()->create(['email' => 'cleaning-homepage-worker@example.com']);
-    Worker::factory()->create([
+    Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'preferred_work_type' => WorkerPreferredWorkType::Cleaning,
         'is_active' => true,

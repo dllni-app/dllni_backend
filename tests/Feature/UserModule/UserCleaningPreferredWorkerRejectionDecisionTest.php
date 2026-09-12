@@ -62,7 +62,7 @@ function preferredWorkerDecisionBooking(User $customer, Worker $worker, array $o
 it('returns pending preferred worker rejection decisions for the current customer only', function (): void {
     $customer = User::factory()->create();
     $otherCustomer = User::factory()->create();
-    $worker = Worker::factory()->create(['user_id' => User::factory()->create()->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => User::factory()->create()->id]);
 
     $pending = preferredWorkerDecisionBooking($customer, $worker);
     preferredWorkerDecisionBooking($otherCustomer, $worker);
@@ -85,7 +85,7 @@ it('converts a pending preferred worker rejection decision to an open cleaning r
     Queue::fake([NotifyEligibleWorkersNewOrderJob::class]);
 
     $customer = User::factory()->create();
-    $worker = Worker::factory()->create(['user_id' => User::factory()->create()->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => User::factory()->create()->id]);
     $booking = preferredWorkerDecisionBooking($customer, $worker);
 
     Sanctum::actingAs($customer);
@@ -121,7 +121,7 @@ it('converts a pending preferred worker rejection decision to an open cleaning r
 
 it('cancels a pending preferred worker rejection decision without fees', function (): void {
     $customer = User::factory()->create();
-    $worker = Worker::factory()->create(['user_id' => User::factory()->create()->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => User::factory()->create()->id]);
     $booking = preferredWorkerDecisionBooking($customer, $worker, [
         'cancellation_fee' => 5000,
     ]);
@@ -148,7 +148,7 @@ it('cancels a pending preferred worker rejection decision without fees', functio
 
 it('rejects duplicate preferred worker rejection decisions', function (): void {
     $customer = User::factory()->create();
-    $worker = Worker::factory()->create(['user_id' => User::factory()->create()->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => User::factory()->create()->id]);
     $booking = preferredWorkerDecisionBooking($customer, $worker);
 
     Sanctum::actingAs($customer);
@@ -165,7 +165,7 @@ it('rejects duplicate preferred worker rejection decisions', function (): void {
 it('does not allow another customer to decide the preferred worker rejection', function (): void {
     $customer = User::factory()->create();
     $otherCustomer = User::factory()->create();
-    $worker = Worker::factory()->create(['user_id' => User::factory()->create()->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => User::factory()->create()->id]);
     $booking = preferredWorkerDecisionBooking($customer, $worker);
 
     Sanctum::actingAs($otherCustomer);

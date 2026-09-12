@@ -26,8 +26,8 @@ final class CleaningSpecialServiceEquipmentResource extends Resource
     protected static ?int $navigationSort=28;
     public static function getNavigationGroup(): ?string { return __('cleaning_admin.nav_groups.settings'); }
     public static function getNavigationLabel(): string { return 'Special Service Equipment'; }
-    public static function form(Schema $schema): Schema { return $schema->components([TextInput::make('name')->required(),Toggle::make('is_active')->default(true)]); }
-    public static function table(Table $table): Table { return $table->columns([TextColumn::make('name')->searchable()->sortable(),IconColumn::make('is_active')->boolean()])->defaultSort('name'); }
+    public static function form(Schema $schema): Schema { return $schema->components([TextInput::make('name')->required(),TextInput::make('asset_code')->label('Asset code')->unique(ignoreRecord: true)->maxLength(64),Select::make('status')->required()->options(['available'=>'Available','reserved'=>'Reserved','handed_over'=>'Handed over','maintenance'=>'Maintenance','broken'=>'Broken'])->default('available'),TextInput::make('buffer_before_minutes')->numeric()->minValue(0)->default(0),TextInput::make('buffer_after_minutes')->numeric()->minValue(0)->default(0),Toggle::make('is_active')->default(true)]); }
+    public static function table(Table $table): Table { return $table->columns([TextColumn::make('name')->searchable()->sortable(),TextColumn::make('asset_code')->searchable(),TextColumn::make('status')->badge()->sortable(),TextColumn::make('buffer_before_minutes')->suffix(' min'),TextColumn::make('buffer_after_minutes')->suffix(' min'),IconColumn::make('is_active')->boolean()])->defaultSort('name'); }
     public static function getPages(): array { return ['index'=>ListCleaningSpecialServiceEquipment::route('/'),'create'=>CreateCleaningSpecialServiceEquipment::route('/create'),'edit'=>EditCleaningSpecialServiceEquipment::route('/{record}/edit')]; }
     public static function canViewAny(): bool { return self::allowed('pricing.view'); }
     public static function canCreate(): bool { return self::allowed('pricing.create'); }

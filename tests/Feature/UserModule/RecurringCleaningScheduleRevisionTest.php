@@ -13,6 +13,7 @@ use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
+use Modules\Cleaning\Models\CleaningScheduleChangeRequest;
 
 use function Pest\Laravel\getJson;
 use function Pest\Laravel\postJson;
@@ -233,7 +234,7 @@ it('preserves historical sessions while replacing only editable future visits', 
         ->and($preserved?->scheduled_date?->toDateString())->toBe($firstDate);
 });
 
-it('releases accepted future workers when the customer confirms a schedule revision', function (): void {
+it('keeps accepted future workers assigned until every affected worker approves a schedule revision', function (): void {
     $customer = User::factory()->create();
     $booking = createRecurringRevisionBooking($customer);
     $worker = Worker::factory()->create();
@@ -267,10 +268,28 @@ it('releases accepted future workers when the customer confirms a schedule revis
         ],
     )->assertOk();
 
+    $changeRequest = CleaningScheduleChangeRequest::query()
+        ->where('cleaning_booking_id', $booking->id)
+        ->with('decisions')
+        ->firstOrFail();
+
     $assignment->refresh();
-    expect($assignment->status)->toBe(CleaningBookingWorkerAssignmentStatus::Cancelled)
-        ->and($assignment->released_at)->not->toBeNull()
-        ->and((string) $assignment->released_reason)->toContain('schedule revision');
+    expect($changeRequest->status)->toBe('pending')
+        ->and($changeRequest->decisions)->toHaveCount(1)
+        ->and($changeRequest->decisions->first()?->decision)->toBe('pending')
+        ->and($assignment->status)->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart)
+        ->and($assignment->released_at)->toBeNull();
+
+    Sanctum::actingAs($worker->user);
+    postJson(
+        "/api/v1/cleaning/schedule-change-requests/{$changeRequest->id}/decision",
+        ['decision' => 'accepted'],
+    )->assertOk()->assertJsonPath('data.changeRequest.status', 'applied');
+
+    $assignment->refresh();
+    expect($assignment->status)->toBe(CleaningBookingWorkerAssignmentStatus::AcceptedWaitingForOrderStart)
+        ->and($assignment->released_at)->toBeNull()
+        ->and($session->fresh()?->scheduled_date?->toDateString())->toBe($schedule['sessions'][0]['date']);
 });
 
 it('blocks revisions while a recurring series is paused and enforces the thirty day future window', function (): void {

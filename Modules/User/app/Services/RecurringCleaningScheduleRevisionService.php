@@ -14,6 +14,8 @@ use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Models\CleaningBookingSessionWorkerAssignment;
+use Modules\Cleaning\Models\CleaningScheduleChangeDecision;
+use Modules\Cleaning\Models\CleaningScheduleChangeRequest;
 use Modules\Cleaning\Services\CleaningBookingSessionFinancialAggregationService;
 use Modules\Cleaning\Services\CleaningBookingSessionParentStateService;
 use Modules\Cleaning\Services\CleaningLifecycleNotificationService;
@@ -47,6 +49,7 @@ final class RecurringCleaningScheduleRevisionService
         $supersededSessionIds = [];
         $createdSessionIds = [];
         $confirmedPreview = [];
+        $pendingChangeRequest = null;
 
         DB::transaction(function () use (
             $booking,
@@ -56,6 +59,7 @@ final class RecurringCleaningScheduleRevisionService
             &$supersededSessionIds,
             &$createdSessionIds,
             &$confirmedPreview,
+            &$pendingChangeRequest,
         ): void {
             $lockedBooking = CleaningBooking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
             $built = $this->build($lockedBooking, $schedule, true);
@@ -69,6 +73,49 @@ final class RecurringCleaningScheduleRevisionService
 
             /** @var Collection<int,CleaningBookingSession> $editable */
             $editable = $built['editable'];
+            $activeAssignments = CleaningBookingSessionWorkerAssignment::query()
+                ->whereIn('cleaning_booking_session_id', $editable->pluck('id'))
+                ->whereIn('status', CleaningBookingWorkerAssignmentStatus::activeValues())
+                ->lockForUpdate()
+                ->get();
+
+            if ($activeAssignments->isNotEmpty()) {
+                $pendingChangeRequest = CleaningScheduleChangeRequest::query()->firstOrCreate(
+                    ['revision_token' => $confirmedPreview['revisionToken']],
+                    [
+                        'cleaning_booking_id' => $lockedBooking->id,
+                        'customer_id' => $lockedBooking->customer_id,
+                        'change_type' => 'recurring_schedule',
+                        'status' => 'pending',
+                        'affected_session_ids' => $editable->pluck('id')->map(fn ($id) => (int) $id)->all(),
+                        'before_snapshot' => [
+                            'sessions' => $editable->map(fn (CleaningBookingSession $session): array => [
+                                'id' => (int) $session->id,
+                                'date' => $session->scheduled_date?->toDateString(),
+                                'time' => (string) $session->scheduled_time,
+                                'version' => (int) $session->version,
+                            ])->all(),
+                        ],
+                        'proposed_snapshot' => $confirmedPreview,
+                        'price_delta' => (float) $confirmedPreview['priceDelta'],
+                    ],
+                );
+
+                foreach ($activeAssignments->unique('worker_id') as $assignment) {
+                    CleaningScheduleChangeDecision::query()->firstOrCreate([
+                        'cleaning_schedule_change_request_id' => $pendingChangeRequest->id,
+                        'worker_id' => $assignment->worker_id,
+                    ], [
+                        'cleaning_booking_session_worker_assignment_id' => $assignment->id,
+                        'decision' => 'pending',
+                    ]);
+                }
+                $confirmedPreview['applied'] = false;
+                $confirmedPreview['requiresWorkerApproval'] = true;
+                $confirmedPreview['changeRequestId'] = (int) $pendingChangeRequest->id;
+                return;
+            }
+
             $releasedAt = now();
             $maxSequence = max(0, (int) CleaningBookingSession::query()
                 ->where('cleaning_booking_id', $lockedBooking->id)
@@ -173,6 +220,26 @@ final class RecurringCleaningScheduleRevisionService
                 'is_pricing_final' => (bool) $built['singleVisitPricing']['isPricingFinal'],
             ])->saveQuietly();
         }, 3);
+
+        if ($pendingChangeRequest instanceof CleaningScheduleChangeRequest) {
+            $fresh = $booking->fresh(['customer']) ?? $booking;
+            foreach ($pendingChangeRequest->decisions()->pluck('worker_id')->map(fn ($id) => (int) $id)->all() as $workerId) {
+                $this->notifications->notifyWorkerById(
+                    booking: $fresh,
+                    workerId: $workerId,
+                    canonicalType: 'cleaning.recurring.change_requested',
+                    action: 'recurring_change_requested',
+                    actorRole: 'customer',
+                    occurredAt: now()->toIso8601String(),
+                    extraData: ['changeRequestId' => (int) $pendingChangeRequest->id],
+                );
+            }
+
+            return [
+                'booking' => $fresh,
+                'revision' => $confirmedPreview,
+            ];
+        }
 
         $this->parentState->refresh($booking);
         $fresh = $booking->fresh(['customer']) ?? $booking;

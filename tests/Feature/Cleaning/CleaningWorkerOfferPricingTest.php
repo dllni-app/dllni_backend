@@ -24,7 +24,7 @@ it('returns the current worker complete pricing before accepting the cleaning or
     );
 
     $workerUser = User::factory()->create();
-    $worker = Worker::factory()->create([
+    $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'home_address' => 'Worker home',
         'home_latitude' => 33.5,
@@ -89,7 +89,7 @@ it('calculates the cleaning worker offer time and service share from the planned
     );
 
     $workerUser = User::factory()->create();
-    Worker::factory()->create([
+    Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'home_address' => 'Worker home',
         'home_latitude' => 33.5,
@@ -163,7 +163,7 @@ it('keeps every event worker on the full event duration and preserves the worker
     );
 
     $workerUser = User::factory()->create();
-    $worker = Worker::factory()->create([
+    $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'home_address' => 'Worker home',
         'home_latitude' => 33.5,
@@ -243,7 +243,7 @@ it('uses the discounted admin margin in pending worker api offers without reduci
     ]);
 
     $workerUser = User::factory()->create();
-    Worker::factory()->create([
+    Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'home_address' => 'Worker home',
         'home_latitude' => 33.5,
@@ -318,7 +318,7 @@ it('reduces pending worker service share only by coupon excess above admin margi
     ]);
 
     $workerUser = User::factory()->create();
-    Worker::factory()->create([
+    Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'home_address' => 'Worker home',
         'home_latitude' => 33.5,

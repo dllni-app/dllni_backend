@@ -19,7 +19,10 @@ final class CleaningBookingAcceptRequest extends FormRequest
 
     public function rules(): array
     {
-        return [];
+        return [
+            'roomIds' => ['sometimes', 'array', 'min:1'],
+            'roomIds.*' => ['integer', 'distinct', 'exists:cleaning_booking_rooms,id'],
+        ];
     }
 
     /** @return array<int, callable(Validator): void> */

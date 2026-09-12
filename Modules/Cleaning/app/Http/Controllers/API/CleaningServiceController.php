@@ -25,7 +25,12 @@ final class CleaningServiceController
     public function index(CleaningServiceFilterRequest $request): AnonymousResourceCollection
     {
         if ($request->input('filter.category') === 'special_service') {
-            $query = CleaningSpecialService::query()->with(['dirtinessRules', 'equipment']);
+            $query = CleaningSpecialService::query()->with([
+                'category',
+                'dirtinessRules',
+                'dirtinessLevels' => fn ($levels) => $levels->where('is_active', true)->orderBy('sort_order'),
+                'equipment' => fn ($equipment) => $equipment->where('is_active', true),
+            ]);
 
             if ($request->has('filter.isActive')) {
                 $query->where('is_active', $request->boolean('filter.isActive'));

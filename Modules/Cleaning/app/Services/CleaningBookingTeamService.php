@@ -158,7 +158,11 @@ final class CleaningBookingTeamService
                 $this->claimRoomsForWorker($booking, $worker->id, $roomIds, CleaningBookingRoomAssignmentSource::Worker);
             }
 
-            $booking = $this->recalculateBookingTeam($booking, finalizeBooking: $this->isTeamFulfilled($booking));
+            $booking = $this->recalculateBookingTeam(
+                $booking,
+                finalizeBooking: $this->isTeamFulfilled($booking),
+                applyPlannedAssignments: $roomIds === null,
+            );
 
             return $booking->fresh([
                 'customer',
@@ -196,7 +200,11 @@ final class CleaningBookingTeamService
                 CleaningBookingRoomAssignmentSource::Worker,
             );
 
-            $booking = $this->recalculateBookingTeam($booking, finalizeBooking: $this->isTeamFulfilled($booking));
+            $booking = $this->recalculateBookingTeam(
+                $booking,
+                finalizeBooking: $this->isTeamFulfilled($booking),
+                applyPlannedAssignments: $roomIds === null,
+            );
 
             return $booking->fresh([
                 'customer',
@@ -339,7 +347,11 @@ final class CleaningBookingTeamService
         });
     }
 
-    public function recalculateBookingTeam(CleaningBooking $booking, bool $finalizeBooking = false): CleaningBooking
+    public function recalculateBookingTeam(
+        CleaningBooking $booking,
+        bool $finalizeBooking = false,
+        bool $applyPlannedAssignments = true,
+    ): CleaningBooking
     {
         $booking = $this->lockBooking($booking->id);
         $this->repairMissingRoomPlan($booking);
@@ -357,7 +369,7 @@ final class CleaningBookingTeamService
         $acceptedAssignments = $assignmentQuery->get()->values();
         $totalRoomWeight = round((float) $rooms->sum(fn (CleaningBookingRoom $room): float => (float) $room->weight), 2);
 
-        if ($acceptedAssignments->isNotEmpty()) {
+        if ($applyPlannedAssignments && $acceptedAssignments->isNotEmpty()) {
             $this->applyPlannedAssignmentsToAcceptedWorkers($booking, $rooms, $acceptedAssignments);
             $rooms = CleaningBookingRoom::query()
                 ->where('cleaning_booking_id', $booking->id)
@@ -624,6 +636,19 @@ final class CleaningBookingTeamService
         }
 
         if (
+            $this->resolveAssignmentMode($booking) === CleaningAssignmentMode::OpenCount->value
+            && $booking->neighborhood_id !== null
+            && ! Worker::query()
+                ->whereKey($worker->id)
+                ->coversNeighborhood((int) $booking->neighborhood_id)
+                ->exists()
+        ) {
+            throw ValidationException::withMessages([
+                'worker' => ['This booking is outside the worker\'s active neighborhoods.'],
+            ]);
+        }
+
+        if (
             $booking->gender_preference !== null
             && (string) $booking->gender_preference->value !== 'any'
             && $worker->gender !== $booking->gender_preference->value
@@ -698,12 +723,27 @@ final class CleaningBookingTeamService
      */
     private function claimRoomsForWorker(CleaningBooking $booking, int $workerId, ?array $roomIds, CleaningBookingRoomAssignmentSource $source): void
     {
+        if ($roomIds !== null) {
+            $roomIds = array_values(array_unique(array_map('intval', $roomIds)));
+
+            // An explicit worker selection replaces only previous automatic
+            // suggestions. Customer/admin choices remain untouched.
+            CleaningBookingRoom::query()
+                ->where('cleaning_booking_id', $booking->id)
+                ->where('assigned_worker_id', $workerId)
+                ->where('assignment_source', CleaningBookingRoomAssignmentSource::Auto->value)
+                ->whereNotIn('id', $roomIds)
+                ->update([
+                    'assigned_worker_id' => null,
+                    'assignment_source' => null,
+                ]);
+        }
+
         $query = CleaningBookingRoom::query()
             ->where('cleaning_booking_id', $booking->id)
             ->lockForUpdate();
 
         if ($roomIds !== null) {
-            $roomIds = array_values(array_unique(array_map('intval', $roomIds)));
             $query->whereIn('id', $roomIds);
         } else {
             $query->whereNull('assigned_worker_id');

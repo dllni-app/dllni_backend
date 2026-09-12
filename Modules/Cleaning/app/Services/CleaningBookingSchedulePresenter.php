@@ -17,6 +17,10 @@ use Throwable;
 
 final class CleaningBookingSchedulePresenter
 {
+    public function __construct(
+        private readonly CleaningOpenTimeBillingService $openTimeBilling,
+    ) {}
+
     /** @return array<string, mixed> */
     public function present(CleaningBooking $booking, ?Worker $viewerWorker = null): array
     {
@@ -52,6 +56,9 @@ final class CleaningBookingSchedulePresenter
         $isRecurring = $sessions->contains(
             fn (CleaningBookingSession $session): bool => (string) $session->session_type === CleaningBookingSession::TYPE_RECURRING_CLEANING,
         );
+        $isOpenTime = $sessions->contains(
+            fn (CleaningBookingSession $session): bool => (string) $session->session_type === CleaningBookingSession::TYPE_OPEN_TIME,
+        );
         $isRecurringPaused = $isRecurring && $booking->recurring_paused_at !== null;
         $isCustomerView = ! $viewerWorker instanceof Worker;
         $canPauseRecurring = $isCustomerView
@@ -70,6 +77,7 @@ final class CleaningBookingSchedulePresenter
             // new meaning and permits the same contract to serve recurring work.
             'mode' => $sessions->count() > 1 ? 'multi_day' : 'single_day',
             'isRecurring' => $isRecurring,
+            'isOpenTime' => $isOpenTime,
             'isPaused' => $isRecurringPaused,
             'workerScope' => $booking->resolvedWorkerScope(),
             'specificWorkerIds' => $booking->resolvedWorkerScope() === CleaningBooking::WORKER_SCOPE_SPECIFIC
@@ -144,7 +152,23 @@ final class CleaningBookingSchedulePresenter
         $canStartWork = $hasMyActiveAssignment
             && $status === CleaningBookingSessionStatus::AwaitingWorkerStartConfirmation->value;
         $canComplete = $hasMyActiveAssignment
+            && (string) $session->session_type !== CleaningBookingSession::TYPE_OPEN_TIME
             && $status === CleaningBookingSessionStatus::InProgress->value;
+        $openTime = $this->openTimePayload($session);
+        $openTimeIsRunning = $openTime !== null
+            && ($openTime['workStartedAt'] ?? null) !== null
+            && ($openTime['workFinishedAt'] ?? null) === null
+            && ! (bool) ($openTime['isFinalized'] ?? false);
+        $canRequestOpenTimeExtension = $isCustomerView
+            && $openTimeIsRunning
+            && ($openTime['pendingExtension'] ?? null) === null
+            && (int) ($openTime['expectedMaxMinutes'] ?? 0) < (int) ($openTime['hardMaxMinutes'] ?? 0);
+        $canRequestOpenTimeEnd = $isCustomerView
+            && $openTimeIsRunning
+            && (string) ($openTime['endStatus'] ?? '') !== 'pending';
+        $canDecideOpenTimeEnd = $hasMyActiveAssignment
+            && $openTimeIsRunning
+            && (string) ($openTime['endStatus'] ?? '') === 'pending';
         $canCancel = $isCustomerView
             ? ! $session->isTerminal()
                 && $session->work_started_at === null
@@ -310,7 +334,11 @@ final class CleaningBookingSchedulePresenter
             'canConfirmStartVerification' => $canConfirmStartVerification,
             'canConfirmCompletion' => $canConfirmCompletion,
             'canSendSos' => $canSendSos,
-            'canExtend' => false,
+            'canExtend' => $canRequestOpenTimeExtension,
+            'canRequestOpenTimeExtension' => $canRequestOpenTimeExtension,
+            'canRequestOpenTimeEnd' => $canRequestOpenTimeEnd,
+            'canDecideOpenTimeEnd' => $canDecideOpenTimeEnd,
+            'openTime' => $openTime,
             'canCancel' => $canCancel,
             'canSkip' => $canSkip,
             'canReschedule' => $isCustomerView && $canReschedule,
@@ -388,6 +416,16 @@ final class CleaningBookingSchedulePresenter
             'myAssignment' => $myAssignmentPayload,
             'workerAssignmentState' => $myAssignmentPayload,
         ];
+    }
+
+    /** @return array<string, mixed>|null */
+    private function openTimePayload(CleaningBookingSession $session): ?array
+    {
+        if ((string) $session->session_type !== CleaningBookingSession::TYPE_OPEN_TIME) {
+            return null;
+        }
+
+        return $this->openTimeBilling->sessionPresentation($session);
     }
 
     private function canPauseRecurringSession(CleaningBookingSession $session): bool

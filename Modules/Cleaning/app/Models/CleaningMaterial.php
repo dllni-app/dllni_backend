@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 final class CleaningMaterial extends Model
 {
-    protected $fillable = ['name', 'cleaning_material_type_id', 'stock_quantity', 'low_stock_threshold', 'is_active'];
+    protected $fillable = ['name', 'image_path', 'cleaning_material_type_id', 'stock_quantity', 'low_stock_threshold', 'is_active'];
 
     public function materialType(): BelongsTo
     {

@@ -59,6 +59,17 @@ final class CleaningBookingObserver
 
     public function updating(CleaningBooking $booking): void
     {
+        if (
+            $booking->booking_kind === 'open_time'
+            && $booking->isDirty('work_started_at')
+            && $booking->work_started_at !== null
+            && $booking->open_time_ceiling_ends_at === null
+        ) {
+            $booking->open_time_ceiling_ends_at = $booking->work_started_at
+                ->copy()
+                ->addMinutes(max(15, (int) ($booking->open_time_expected_max_minutes ?? 480)));
+        }
+
         if ($booking->isDirty('gender_preference')) {
             $this->applyWorkEnvironmentSnapshot($booking);
         }

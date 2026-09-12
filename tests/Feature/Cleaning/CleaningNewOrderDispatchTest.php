@@ -277,6 +277,11 @@ it('does not dispatch a multi-day event when the worker conflicts on only one ev
         'accepted_at' => now(),
     ]);
 
+    // Ignore creation-observer dispatches; this assertion targets the explicit
+    // multi-session eligibility evaluation below.
+    Notification::fake();
+    Event::fake([CleaningBookingCreated::class]);
+
     (new NotifyEligibleWorkersNewOrderJob((int) $candidate->id))->handle();
 
     Notification::assertNotSentTo($workerUser, NewOrderRequestNotification::class);
