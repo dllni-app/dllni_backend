@@ -4,34 +4,67 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Models;
 
+use App\Models\Dispute;
+use App\Models\WorkerCustomerRating;
+use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Modules\Cleaning\Enums\CleaningBookingSessionCoverageStatus;
 use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
+use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
+use Throwable;
 
 final class CleaningBookingSession extends Model
 {
+    public const TYPE_RECURRING_CLEANING = 'recurring_cleaning';
+
+    public const TYPE_OPEN_TIME = 'open_time';
+
     protected $fillable = [
         'cleaning_booking_id',
         'sequence',
+        'session_type',
+        'calculation_mode',
         'scheduled_date',
         'scheduled_time',
         'duration_hours',
+        'open_time_expected_max_minutes',
+        'open_time_hard_max_minutes',
+        'open_time_ceiling_ends_at',
+        'open_time_end_requested_at',
+        'open_time_end_status',
+        'open_time_termination_reason',
+        'required_workers',
+        'coverage_status',
         'status',
         'base_price',
+        'addons_total',
+        'materials_total',
+        'special_services_total',
         'travel_fee',
+        'travel_fee_mode',
+        'travel_fee_value',
         'travel_distance_km',
         'admin_margin_amount',
         'extension_fee_total',
         'cancellation_fee',
         'total_price',
         'is_pricing_final',
+        'payment_status',
+        'payment_settled_at',
+        'pricing_snapshot',
+        'version',
         'started_travel_at',
         'arrived_at',
         'customer_confirmed_at',
         'work_started_at',
         'work_finished_at',
+        'customer_completed_at',
+        'skipped_at',
+        'skip_source',
+        'skip_reason',
         'cancelled_at',
         'cancellation_reason',
         'cancelled_by_role',
@@ -47,9 +80,31 @@ final class CleaningBookingSession extends Model
         return $this->hasMany(CleaningBookingSessionWorkerAssignment::class, 'cleaning_booking_session_id');
     }
 
+    public function ratings(): HasMany
+    {
+        return $this->hasMany(WorkerCustomerRating::class, 'cleaning_booking_session_id');
+    }
+
+    public function openTimeExtensions(): HasMany
+    {
+        return $this->hasMany(CleaningOpenTimeExtension::class, 'cleaning_booking_session_id');
+    }
+
+    public function disputes(): HasMany
+    {
+        return $this->hasMany(Dispute::class, 'cleaning_booking_session_id');
+    }
+
     public function activeWorkerAssignments(): HasMany
     {
-        return $this->workerAssignments()->whereNotIn('status', ['rejected', 'withdrawn', 'cancelled']);
+        return $this->workerAssignments()
+            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::activeValues());
+    }
+
+    public function acceptedWorkerAssignments(): HasMany
+    {
+        return $this->workerAssignments()
+            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
     }
 
     public function casts(): array
@@ -58,40 +113,106 @@ final class CleaningBookingSession extends Model
             'sequence' => 'integer',
             'scheduled_date' => 'date',
             'duration_hours' => 'float',
+            'open_time_expected_max_minutes' => 'integer',
+            'open_time_hard_max_minutes' => 'integer',
+            'open_time_ceiling_ends_at' => 'datetime',
+            'open_time_end_requested_at' => 'datetime',
+            'required_workers' => 'integer',
+            'coverage_status' => CleaningBookingSessionCoverageStatus::class,
             'status' => CleaningBookingSessionStatus::class,
             'base_price' => 'float',
+            'addons_total' => 'float',
+            'materials_total' => 'float',
+            'special_services_total' => 'float',
             'travel_fee' => 'float',
+            'travel_fee_value' => 'float',
             'travel_distance_km' => 'float',
             'admin_margin_amount' => 'float',
             'extension_fee_total' => 'float',
             'cancellation_fee' => 'float',
             'total_price' => 'float',
             'is_pricing_final' => 'boolean',
+            'payment_settled_at' => 'datetime',
+            'pricing_snapshot' => 'array',
+            'version' => 'integer',
             'started_travel_at' => 'datetime',
             'arrived_at' => 'datetime',
             'customer_confirmed_at' => 'datetime',
             'work_started_at' => 'datetime',
             'work_finished_at' => 'datetime',
+            'customer_completed_at' => 'datetime',
+            'skipped_at' => 'datetime',
             'cancelled_at' => 'datetime',
         ];
     }
 
-    public function startsAt(): ?CarbonInterface
+    public function startsAt(): ?CarbonImmutable
     {
-        if ($this->scheduled_date === null || $this->scheduled_time === null) {
+        $date = $this->scheduled_date instanceof CarbonInterface
+            ? $this->scheduled_date->toDateString()
+            : mb_trim((string) $this->scheduled_date);
+        $time = mb_trim((string) $this->scheduled_time);
+
+        if ($date === '' || $time === '') {
             return null;
         }
 
-        return $this->scheduled_date->copy()->setTimeFromTimeString((string) $this->scheduled_time);
+        try {
+            return CarbonImmutable::parse("{$date} {$time}", config('app.timezone'));
+        } catch (Throwable) {
+            return null;
+        }
     }
 
-    public function isCancelled(): bool
+    public function endsAt(): ?CarbonImmutable
     {
-        return $this->status === CleaningBookingSessionStatus::Cancelled;
+        $start = $this->startsAt();
+
+        if ($start === null) {
+            return null;
+        }
+
+        $minutes = max(1, (int) ceil(max((float) $this->duration_hours, 0.01) * 60));
+
+        return $start->addMinutes($minutes);
     }
 
-    public function isCompleted(): bool
+    public function requiredWorkerCount(): int
     {
-        return $this->status === CleaningBookingSessionStatus::Completed;
+        return max(1, (int) ($this->required_workers ?? 1));
+    }
+
+    public function acceptedWorkerCount(): int
+    {
+        if ($this->relationLoaded('workerAssignments')) {
+            return $this->workerAssignments
+                ->filter(fn (CleaningBookingSessionWorkerAssignment $assignment): bool => in_array(
+                    (string) ($assignment->status?->value ?? $assignment->status),
+                    CleaningBookingWorkerAssignmentStatus::acceptedValues(),
+                    true,
+                ))
+                ->count();
+        }
+
+        return $this->acceptedWorkerAssignments()->count();
+    }
+
+    public function remainingWorkerCount(): int
+    {
+        return max(0, $this->requiredWorkerCount() - $this->acceptedWorkerCount());
+    }
+
+    public function isFullyCovered(): bool
+    {
+        return $this->remainingWorkerCount() === 0;
+    }
+
+    public function isTerminal(): bool
+    {
+        $status = $this->status instanceof CleaningBookingSessionStatus
+            ? $this->status
+            : CleaningBookingSessionStatus::tryFrom((string) $this->status);
+
+        return $status?->isTerminal() ?? false;
     }
 }

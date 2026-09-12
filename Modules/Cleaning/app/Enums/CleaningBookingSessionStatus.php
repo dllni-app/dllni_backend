@@ -16,22 +16,9 @@ enum CleaningBookingSessionStatus: string
     case UnderDispute = 'under_dispute';
     case Completed = 'completed';
     case Cancelled = 'cancelled';
-
-    public function label(): string
-    {
-        return match ($this) {
-            self::Scheduled => 'مجدولة',
-            self::WorkerAssigned => 'تم تعيين العامل',
-            self::AwaitingStartVerification => 'بانتظار تحقق البدء',
-            self::AwaitingWorkerStartConfirmation => 'بانتظار تأكيد العامل',
-            self::InProgress => 'قيد التنفيذ',
-            self::AwaitingCustomerCompletion => 'بانتظار تأكيد العميل',
-            self::TimeExtensionRequested => 'طلب تمديد وقت',
-            self::UnderDispute => 'قيد النزاع',
-            self::Completed => 'مكتملة',
-            self::Cancelled => 'ملغاة',
-        };
-    }
+    case Skipped = 'skipped';
+    case Paused = 'paused';
+    case Superseded = 'superseded';
 
     /** @return array<int, string> */
     public static function activeValues(): array
@@ -44,11 +31,42 @@ enum CleaningBookingSessionStatus: string
             self::InProgress->value,
             self::AwaitingCustomerCompletion->value,
             self::TimeExtensionRequested->value,
+            self::UnderDispute->value,
         ];
+    }
+
+    /** @return array<int, string> */
+    public static function terminalValues(): array
+    {
+        return [
+            self::Completed->value,
+            self::Cancelled->value,
+            self::Skipped->value,
+            self::Superseded->value,
+        ];
+    }
+
+    public function label(): string
+    {
+        return match ($this) {
+            self::Scheduled => 'مجدولة',
+            self::WorkerAssigned => 'تم تعيين العمال',
+            self::AwaitingStartVerification => 'بانتظار تحقق البدء',
+            self::AwaitingWorkerStartConfirmation => 'بانتظار تأكيد العامل',
+            self::InProgress => 'قيد التنفيذ',
+            self::AwaitingCustomerCompletion => 'بانتظار تأكيد العميل',
+            self::TimeExtensionRequested => 'طلب تمديد وقت',
+            self::UnderDispute => 'قيد النزاع',
+            self::Completed => 'مكتملة',
+            self::Cancelled => 'ملغاة',
+            self::Skipped => 'متخطاة',
+            self::Paused => 'متوقفة مؤقتاً',
+            self::Superseded => 'مستبدلة بتعديل أحدث',
+        };
     }
 
     public function isTerminal(): bool
     {
-        return in_array($this, [self::Completed, self::Cancelled], true);
+        return in_array($this->value, self::terminalValues(), true);
     }
 }
