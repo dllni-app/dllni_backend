@@ -177,7 +177,7 @@ it('deletes a cleaning booking', function () {
 
 it('filters cleaning bookings by forCurrentWorker and scheduledDate', function () {
     $workerUser = User::factory()->create(['email' => 'worker@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
@@ -211,7 +211,7 @@ it('filters cleaning bookings by forCurrentWorker and scheduledDate', function (
 
 it('returns pending unassigned bookings for worker when forCurrentWorker and status pending', function () {
     $workerUser = User::factory()->create(['email' => 'worker-new-requests@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $neighborhood = createCleaningNeighborhoodCoverage($worker, 'Pending Coverage');
@@ -249,7 +249,7 @@ it('returns pending unassigned bookings for worker when forCurrentWorker and sta
 
 it('returns only cleaning available bookings for cleaning preferred workers', function () {
     $workerUser = User::factory()->create(['email' => 'worker-cleaning-preference@example.com']);
-    $worker = Worker::factory()->create([
+    $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'preferred_work_type' => WorkerPreferredWorkType::Cleaning,
     ]);
@@ -294,7 +294,7 @@ it('returns only cleaning available bookings for cleaning preferred workers', fu
 
 it('returns only event available bookings for events preferred workers', function () {
     $workerUser = User::factory()->create(['email' => 'worker-events-preference@example.com']);
-    $worker = Worker::factory()->create([
+    $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'preferred_work_type' => WorkerPreferredWorkType::Events,
     ]);
@@ -339,7 +339,7 @@ it('returns only event available bookings for events preferred workers', functio
 
 it('returns cleaning and event available bookings for both preferred workers', function () {
     $workerUser = User::factory()->create(['email' => 'worker-both-preference@example.com']);
-    $worker = Worker::factory()->create([
+    $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'preferred_work_type' => WorkerPreferredWorkType::Both,
     ]);
@@ -384,7 +384,7 @@ it('returns cleaning and event available bookings for both preferred workers', f
 
 it('filters cleaning bookings by multiple statuses for current worker', function () {
     $workerUser = User::factory()->create(['email' => 'worker-multi-status@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
@@ -453,7 +453,7 @@ it('filters cleaning bookings by property type', function () {
 
 it('returns worker profile when user has worker', function () {
     $workerUser = User::factory()->create(['email' => 'profile-worker@example.com', 'phone' => '+963991234567']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id, 'first_name' => 'Ahmed']);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id, 'first_name' => 'Ahmed']);
     Sanctum::actingAs($workerUser);
 
     $response = $this->getJson('/api/v1/cleaning/worker/profile');
@@ -492,7 +492,7 @@ it('returns 403 for worker profile when user has no worker', function () {
 
 it('updates worker profile home location fields', function () {
     $workerUser = User::factory()->create(['email' => 'worker-profile-update@example.com']);
-    Worker::factory()->create([
+    Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'is_active' => true,
         'home_address' => 'Old Home',
@@ -515,7 +515,7 @@ it('updates worker profile home location fields', function () {
 
 it('updates worker birthday from worker profile and returns it in the response', function () {
     $workerUser = User::factory()->create(['email' => 'worker-profile-birthday-update@example.com']);
-    $worker = Worker::factory()->create([
+    $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'is_active' => true,
         'home_address' => 'Worker Home',
@@ -541,7 +541,7 @@ it('updates worker birthday from worker profile and returns it in the response',
 
 it('updates worker preferred work type from worker profile', function () {
     $workerUser = User::factory()->create(['email' => 'worker-profile-preference-update@example.com']);
-    Worker::factory()->create([
+    Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'preferred_work_type' => WorkerPreferredWorkType::Both,
         'is_active' => true,
@@ -561,7 +561,7 @@ it('updates worker preferred work type from worker profile', function () {
 
 it('rejects invalid worker preferred work type from worker profile', function () {
     $workerUser = User::factory()->create(['email' => 'worker-profile-preference-invalid@example.com']);
-    Worker::factory()->create([
+    Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'is_active' => true,
         'home_address' => 'Worker Home',
@@ -591,7 +591,7 @@ it('finalizes provisional pricing when worker accepts booking', function () {
     );
 
     $workerUser = User::factory()->create(['email' => 'worker-accept-finalize@example.com']);
-    $worker = Worker::factory()->create([
+    $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'home_address' => 'Worker Home',
         'home_latitude' => 33.6,
@@ -636,7 +636,7 @@ it('finalizes provisional pricing when worker accepts booking', function () {
 
 it('fails booking accept when worker home location is missing', function () {
     $workerUser = User::factory()->create(['email' => 'worker-accept-missing-home@example.com']);
-    Worker::factory()->create([
+    Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'home_address' => null,
         'home_latitude' => null,
@@ -660,7 +660,7 @@ it('fails booking accept when worker home location is missing', function () {
 
 it('returns worker homepage stats for authenticated worker', function () {
     $workerUser = User::factory()->create(['email' => 'worker-homepage@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
@@ -675,12 +675,20 @@ it('returns worker homepage stats for authenticated worker', function () {
         'worker_id' => $worker->id,
         'billing_policy_id' => $billingPolicy->id,
         'status' => CleaningBookingStatus::Completed,
+        'base_price' => 100,
+        'addons_total' => 0,
+        'travel_fee' => 0,
+        'admin_margin_amount' => 0,
         'total_price' => 100,
     ]);
     CleaningBooking::factory()->create([
         'worker_id' => $worker->id,
         'billing_policy_id' => $billingPolicy->id,
         'status' => CleaningBookingStatus::Completed,
+        'base_price' => 50,
+        'addons_total' => 0,
+        'travel_fee' => 0,
+        'admin_margin_amount' => 0,
         'total_price' => 50,
     ]);
     CleaningBooking::factory()->create([
@@ -722,7 +730,7 @@ it('returns zeros for worker homepage when user has no worker', function () {
 
 it('returns worker homepage with todayEarnings newOrdersCount and pendingExtensionRequestsCount', function () {
     $workerUser = User::factory()->create(['email' => 'worker-homepage-extended@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $neighborhood = createCleaningNeighborhoodCoverage($worker, 'Homepage Coverage');
@@ -787,7 +795,7 @@ it('returns worker homepage with todayEarnings newOrdersCount and pendingExtensi
 
 it('returns worker homepage chart and amount summary blocks for the owner dashboard screen', function () {
     $workerUser = User::factory()->create(['email' => 'worker-homepage-owner-dashboard@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $billingPolicy = CleaningBillingPolicy::first() ?? CleaningBillingPolicy::create([
@@ -822,7 +830,7 @@ it('returns worker homepage chart and amount summary blocks for the owner dashbo
     $response = $this->getJson('/api/v1/cleaning/worker/homepage');
 
     $response->assertOk();
-    expect((float) $response->json('amountSummary.workerAmount'))->toBe(800.0);
+    expect((float) $response->json('amountSummary.workerAmount'))->toBe(1000.0);
     expect((float) $response->json('amountSummary.adminAmount'))->toBe(200.0);
     expect((float) $response->json('amountSummary.grossInvoicesAmount'))->toBe(1000.0);
 
@@ -839,7 +847,7 @@ it('returns worker homepage chart and amount summary blocks for the owner dashbo
 
 it('returns working hours for authenticated worker', function () {
     $workerUser = User::factory()->create(['email' => 'worker-hours@example.com']);
-    $worker = Worker::factory()->create([
+    $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'default_working_hours' => [
             'sunday' => ['available' => true, 'data' => [['09:00' => '17:00']]],
@@ -874,7 +882,7 @@ it('returns 403 for working hours when user has no worker', function () {
 
 it('updates working hours for authenticated worker', function () {
     $workerUser = User::factory()->create(['email' => 'worker-update-hours@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $payload = [
@@ -899,7 +907,7 @@ it('updates working hours for authenticated worker', function () {
 
 it('returns worker account work areas and updates them', function () {
     $workerUser = User::factory()->create(['email' => 'worker-areas@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $worker->zones()->createMany([
@@ -974,7 +982,7 @@ it('returns worker account work areas and updates them', function () {
 
 it('returns worker account transactions for authenticated worker', function () {
     $workerUser = User::factory()->create(['email' => 'worker-transactions@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $customer = User::factory()->create(['email' => 'customer-transactions@example.com']);
@@ -991,6 +999,10 @@ it('returns worker account transactions for authenticated worker', function () {
         'customer_id' => $customer->id,
         'billing_policy_id' => $billingPolicy->id,
         'status' => CleaningBookingStatus::Completed,
+        'base_price' => 145,
+        'addons_total' => 0,
+        'travel_fee' => 0,
+        'admin_margin_amount' => 0,
         'total_price' => 145,
     ]);
 
@@ -1003,7 +1015,7 @@ it('returns worker account transactions for authenticated worker', function () {
 
 it('returns worker account status and updates active flag', function () {
     $workerUser = User::factory()->create(['email' => 'worker-status@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id, 'is_active' => true]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id, 'is_active' => true]);
     Sanctum::actingAs($workerUser);
 
     $showResponse = $this->getJson('/api/v1/cleaning/worker/account/status');
@@ -1022,7 +1034,7 @@ it('returns worker account status and updates active flag', function () {
 
 it('rejects activating worker account status without home location', function () {
     $workerUser = User::factory()->create(['email' => 'worker-status-home-required@example.com']);
-    Worker::factory()->create([
+    Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'is_active' => false,
         'home_address' => null,

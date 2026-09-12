@@ -8,12 +8,14 @@ use App\Enums\WorkerCustomerRatingType;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Modules\Cleaning\Models\CleaningBookingSession;
 
 final class WorkerCustomerRating extends Model
 {
     protected $fillable = [
         'booking_id',
         'booking_type',
+        'cleaning_booking_session_id',
         'worker_id',
         'customer_id',
         'rating_type',
@@ -24,6 +26,11 @@ final class WorkerCustomerRating extends Model
     public function booking(): MorphTo
     {
         return $this->morphTo(__FUNCTION__, 'booking_type', 'booking_id');
+    }
+
+    public function session(): BelongsTo
+    {
+        return $this->belongsTo(CleaningBookingSession::class, 'cleaning_booking_session_id');
     }
 
     public function worker(): BelongsTo

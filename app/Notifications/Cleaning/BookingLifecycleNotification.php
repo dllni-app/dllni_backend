@@ -90,8 +90,13 @@ final class BookingLifecycleNotification extends Notification implements ShouldQ
         $resolvedAction = $this->action ?? str_replace('cleaning.booking.', '', $this->canonicalType);
         $resolvedDeepLinkTarget = $this->resolvedDeepLinkTarget();
         $bookingType = $this->bookingType();
+        $notificationId = isset($this->id) && is_string($this->id) && $this->id !== ''
+            ? $this->id
+            : null;
 
         return array_filter(array_merge([
+            'notificationId' => $notificationId,
+            'notification_id' => $notificationId,
             'bookingId' => (int) $this->booking->id,
             'orderId' => (int) $this->booking->id,
             'status' => $this->statusValue(),

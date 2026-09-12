@@ -7,6 +7,9 @@ namespace Modules\User\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
+use Modules\User\Http\Requests\Concerns\ValidatesEventAssistanceSchedule;
+use Modules\User\Http\Requests\Concerns\ValidatesDynamicCleaningEvent;
+use Modules\User\Http\Requests\Concerns\ValidatesRecurringWorkerScope;
 use Modules\User\Http\Requests\Concerns\ValidatesWorkerRoomAssignments;
 use Modules\User\Models\UserAddress;
 use Modules\User\Services\FemaleWorkerSafetyPolicyService;
@@ -14,6 +17,9 @@ use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrderStoreRequest extends FormRequest
 {
+    use ValidatesEventAssistanceSchedule;
+    use ValidatesDynamicCleaningEvent;
+    use ValidatesRecurringWorkerScope;
     use ValidatesWorkerRoomAssignments;
 
     private const INCOMPLETE_ADDRESS_MESSAGE = 'يرجى تحديث العنوان المختار وإضافة الحي والإحداثيات قبل إنشاء الطلب.';
@@ -23,15 +29,167 @@ final class UserCleaningOrderStoreRequest extends FormRequest
         return true;
     }
 
+    public function rules(): array
+    {
+        $isEventAssistance = $this->isEventAssistanceRequested();
+        $requiresFemaleWorkerSafetyConfirmation = $this->requiresFemaleWorkerSafetyConfirmation();
+        $today = now(config('app.timezone'))->toDateString();
+
+        return [
+            'propertyType' => ['required', 'string', Rule::in(UserCleaningOrderEstimationService::PROPERTY_TYPES)],
+            'propertyDetails' => ['required', 'array:address,location_name,bedrooms,rooms,bathrooms,toilets,kitchens,balconies,sheds,living_room_size,cleaning_mode,room_size_breakdown,eventType,eventTypeId,dynamicAnswers,guestCount,venueType,customService,hours,specialRequirement,notes'],
+            'propertyDetails.address' => ['required', 'string', 'max:500'],
+            'propertyDetails.location_name' => ['nullable', 'string', 'max:255'],
+            'propertyDetails.bedrooms' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'propertyDetails.rooms' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'propertyDetails.bathrooms' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'propertyDetails.toilets' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'propertyDetails.kitchens' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'propertyDetails.balconies' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'propertyDetails.sheds' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'propertyDetails.living_room_size' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::LIVING_ROOM_SIZES)],
+            'propertyDetails.cleaning_mode' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::CLEANING_MODES)],
+            'propertyDetails.room_size_breakdown' => ['nullable', 'array:bedroom,bathroom,toilet,kitchen,living_room,balcony,corridor,shed'],
+            'propertyDetails.room_size_breakdown.bedroom' => ['sometimes', 'array:small,medium,large'],
+            'propertyDetails.room_size_breakdown.bathroom' => ['sometimes', 'array:small,medium,large'],
+            'propertyDetails.room_size_breakdown.toilet' => ['sometimes', 'array:small,medium,large'],
+            'propertyDetails.room_size_breakdown.kitchen' => ['sometimes', 'array:small,medium,large'],
+            'propertyDetails.room_size_breakdown.living_room' => ['sometimes', 'array:small,medium,large'],
+            'propertyDetails.room_size_breakdown.balcony' => ['sometimes', 'array:small,medium,large'],
+            'propertyDetails.room_size_breakdown.corridor' => ['sometimes', 'array:small,medium,large'],
+            'propertyDetails.room_size_breakdown.shed' => ['sometimes', 'array:small,medium,large'],
+            'propertyDetails.room_size_breakdown.*.small' => ['sometimes', 'integer', 'min:0'],
+            'propertyDetails.room_size_breakdown.*.medium' => ['sometimes', 'integer', 'min:0'],
+            'propertyDetails.room_size_breakdown.*.large' => ['sometimes', 'integer', 'min:0'],
+            'propertyDetails.eventType' => [Rule::requiredIf($isEventAssistance && ! $this->filled('event.eventTypeId')), 'nullable', 'string', 'max:64'],
+            'propertyDetails.guestCount' => [Rule::requiredIf($isEventAssistance), 'integer', 'min:1', 'max:5000'],
+            'propertyDetails.venueType' => [Rule::requiredIf($isEventAssistance), 'string', Rule::in($this->availableVenueTypes())],
+            'propertyDetails.customService' => [Rule::requiredIf($isEventAssistance), Rule::prohibitedIf(! $isEventAssistance), 'string', 'max:255'],
+            'propertyDetails.hours' => [Rule::requiredIf($isEventAssistance), Rule::prohibitedIf(! $isEventAssistance), 'numeric', 'min:1', 'max:24'],
+            'propertyDetails.specialRequirement' => ['nullable', 'string', 'max:255'],
+            'propertyDetails.notes' => ['nullable', 'string', 'max:2000'],
+            'cleaning_services' => ['sometimes', 'nullable', 'array'],
+            'cleaning_services.*' => ['string', 'max:255'],
+            'bookingKind' => ['sometimes', 'string', Rule::in(['standard', 'special_service', 'open_time'])],
+            'event' => ['sometimes', 'array:eventTypeId,dynamicAnswers'],
+            'event.eventTypeId' => ['required_with:event', 'integer', Rule::exists('cleaning_event_types', 'id')->where('is_active', true)],
+            'event.dynamicAnswers' => ['sometimes', 'array'],
+            'serviceIds' => ['prohibited'],
+            'serviceIds.*' => ['prohibited'],
+            'requestMaterials' => ['sometimes', 'boolean'],
+            'materials' => ['sometimes', 'array:providedByPlatform'],
+            'materials.providedByPlatform' => ['required_with:materials', 'boolean'],
+            'specialServices' => ['sometimes', 'array', 'max:10'],
+            'specialServices.*' => ['array:specialServiceId,serviceId,quantity,dirtinessLevel,notes,sessionIds,items'],
+            'specialServices.*.specialServiceId' => ['required_without:specialServices.*.serviceId', 'integer', 'exists:cleaning_special_services,id'],
+            'specialServices.*.serviceId' => ['required_without:specialServices.*.specialServiceId', 'integer', 'exists:cleaning_special_services,id'],
+            'specialServices.*.quantity' => ['required_without:specialServices.*.items', 'numeric', 'gt:0', 'max:10000'],
+            'specialServices.*.dirtinessLevel' => ['nullable', 'string', 'max:64'],
+            'specialServices.*.notes' => ['nullable', 'string', 'max:2000'],
+            'specialServices.*.sessionIds' => ['sometimes', 'array', 'max:30'],
+            'specialServices.*.sessionIds.*' => ['integer', 'min:1', 'distinct'],
+            'specialServices.*.items' => ['sometimes', 'array', 'min:1', 'max:50'],
+            'specialServices.*.items.*' => ['array:quantity,dirtinessLevelId,dirtinessLevel,notes,attachments,beforeImages,afterImages'],
+            'specialServices.*.items.*.quantity' => ['required', 'numeric', 'gt:0', 'max:10000'],
+            'specialServices.*.items.*.dirtinessLevelId' => ['nullable', 'integer', 'exists:cleaning_dirtiness_levels,id'],
+            'specialServices.*.items.*.dirtinessLevel' => ['nullable', 'string', 'max:64'],
+            'specialServices.*.items.*.notes' => ['nullable', 'string', 'max:2000'],
+            'specialServices.*.items.*.attachments' => ['sometimes', 'array', 'max:10'],
+            'specialServices.*.items.*.attachments.*' => ['string', 'max:2048'],
+            'specialServices.*.items.*.beforeImages' => ['sometimes', 'array', 'max:10'],
+            'specialServices.*.items.*.beforeImages.*' => ['string', 'max:2048'],
+            'specialServices.*.items.*.afterImages' => ['sometimes', 'array', 'max:10'],
+            'specialServices.*.items.*.afterImages.*' => ['string', 'max:2048'],
+            'openTime' => ['sometimes', 'array:workerCount,expectedMaxMinutes,sessions'],
+            'openTime.workerCount' => ['required_with:openTime', 'integer', 'min:1', 'max:20'],
+            'openTime.expectedMaxMinutes' => ['sometimes', 'integer', 'min:15', 'max:480', 'multiple_of:15'],
+            'openTime.sessions' => ['sometimes', 'array', 'min:1', 'max:30'],
+            'openTime.sessions.*' => ['array:date,time,expectedMaxMinutes'],
+            'openTime.sessions.*.date' => ['required', 'date', 'after_or_equal:'.$today],
+            'openTime.sessions.*.time' => ['required', 'date_format:H:i'],
+            'openTime.sessions.*.expectedMaxMinutes' => ['sometimes', 'integer', 'min:15', 'max:480', 'multiple_of:15'],
+            'scheduledDate' => ['required', 'date', 'after_or_equal:'.$today],
+            'scheduledTime' => ['required', 'date_format:H:i'],
+            ...$this->eventAssistanceScheduleRules($isEventAssistance),
+            'addressId' => ['nullable', 'integer', Rule::exists('user_addresses', 'id')->where('user_id', (int) ($this->user()?->id ?? 0))],
+            'addressLatitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'addressLongitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'neighborhoodId' => ['sometimes', 'nullable', 'integer', Rule::exists('cleaning_neighborhoods', 'id')->where('is_active', true)],
+            'neighborhood' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'preferredWorkerIds' => ['nullable', 'array', 'max:20'],
+            'preferredWorkerIds.*' => ['integer', 'distinct', Rule::exists('workers', 'id')],
+            'preferredWorkerId' => ['nullable', 'exists:workers,id'],
+            ...$this->recurringWorkerScopeRules(),
+            'assignmentMode' => ['nullable', 'string', Rule::in(['preferred_worker', 'open_count'])],
+            'numberOfWorkers' => ['nullable', 'integer', 'min:1', 'max:20'],
+            ...$this->workerRoomAssignmentRules(),
+            'genderPreference' => ['nullable', 'string', Rule::in(['any', 'male', 'female'])],
+            'workEnvironmentConfirmation' => [Rule::excludeIf(! $requiresFemaleWorkerSafetyConfirmation), Rule::requiredIf($requiresFemaleWorkerSafetyConfirmation), 'array:beneficiaryPresence,pledgeAccepted,pledgeVersion'],
+            'workEnvironmentConfirmation.beneficiaryPresence' => [Rule::excludeIf(! $requiresFemaleWorkerSafetyConfirmation), Rule::requiredIf($requiresFemaleWorkerSafetyConfirmation), 'string', Rule::in([FemaleWorkerSafetyPolicyService::BENEFICIARY_FEMALE_PRESENT, FemaleWorkerSafetyPolicyService::BENEFICIARY_MALE_ALONE])],
+            'workEnvironmentConfirmation.pledgeAccepted' => [Rule::excludeIf(! $requiresFemaleWorkerSafetyConfirmation), Rule::requiredIf($requiresFemaleWorkerSafetyConfirmation), 'accepted'],
+            'workEnvironmentConfirmation.pledgeVersion' => [Rule::excludeIf(! $requiresFemaleWorkerSafetyConfirmation), Rule::requiredIf($requiresFemaleWorkerSafetyConfirmation), 'string', 'max:100'],
+            'estimatedSqm' => ['prohibited'],
+            'estimatedHours' => ['prohibited'],
+            'totalHours' => ['prohibited'],
+            'basePrice' => ['prohibited'],
+            'travelFee' => ['prohibited'],
+            'addonsTotal' => ['prohibited'],
+            'totalPrice' => ['prohibited'],
+            'cancellationPolicyId' => ['nullable', 'exists:cancellation_policies,id'],
+            'billingPolicyId' => ['nullable', 'exists:cleaning_billing_policies,id'],
+            'termsAccepted' => ['required', 'accepted'],
+        ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            $this->validateSelectedAddressCompleteness($validator);
+            $this->validateEventAssistanceSchedule($validator);
+            $this->validateDynamicCleaningEvent($validator);
+            $this->validateRecurringWorkerScope($validator);
+
+            if ($this->requiresFemaleWorkerSafetyConfirmation()) {
+                $policy = app(FemaleWorkerSafetyPolicyService::class);
+                $beneficiaryPresence = (string) $this->input('workEnvironmentConfirmation.beneficiaryPresence');
+                $pledgeVersion = (string) $this->input('workEnvironmentConfirmation.pledgeVersion');
+
+                if ($beneficiaryPresence === FemaleWorkerSafetyPolicyService::BENEFICIARY_MALE_ALONE) {
+                    $validator->errors()->add('workEnvironmentConfirmation.beneficiaryPresence', $policy->blockedMessage());
+                }
+
+                if ($pledgeVersion !== '' && $pledgeVersion !== $policy->version()) {
+                    $validator->errors()->add('workEnvironmentConfirmation.pledgeVersion', 'Invalid pledge version. Please refresh the confirmation screen and try again.');
+                }
+            }
+
+            $this->validateWorkerRoomAssignments($validator);
+            $this->validateNewServiceScope($validator);
+        });
+    }
+
     protected function prepareForValidation(): void
     {
         $merge = [];
+
+        $materials = $this->input('materials');
+        if (is_array($materials) && array_key_exists('providedByPlatform', $materials)) {
+            $merge['requestMaterials'] = filter_var(
+                $materials['providedByPlatform'],
+                FILTER_VALIDATE_BOOL,
+                FILTER_NULL_ON_FAILURE,
+            ) ?? $materials['providedByPlatform'];
+        }
 
         $preferredWorkerIds = $this->normalizePreferredWorkerIds(
             $this->input('preferredWorkerIds', $this->input('preferredWorkerId'))
         );
 
-        if ($preferredWorkerIds !== [] || $this->has('preferredWorkerIds')) {
+        $workerScopeMerge = $this->recurringWorkerScopeMerge($preferredWorkerIds);
+        if ($workerScopeMerge !== []) {
+            $merge = array_merge($merge, $workerScopeMerge);
+        } elseif ($preferredWorkerIds !== [] || $this->has('preferredWorkerIds')) {
+            // Legacy behavior is intentionally preserved when workerScope is absent.
             $merge['preferredWorkerIds'] = $preferredWorkerIds;
             $merge['preferredWorkerId'] = $preferredWorkerIds[0] ?? null;
 
@@ -47,6 +205,15 @@ final class UserCleaningOrderStoreRequest extends FormRequest
         }
 
         $addressId = $this->input('addressId');
+        $openTime = $this->input('openTime');
+        if (is_array($openTime) && is_numeric($openTime['workerCount'] ?? null)) {
+            if (! is_numeric($openTime['expectedMaxMinutes'] ?? null)) {
+                $openTime['expectedMaxMinutes'] = 480;
+                $merge['openTime'] = $openTime;
+            }
+            $merge['numberOfWorkers'] = max(1, (int) $openTime['workerCount']);
+            $merge['assignmentMode'] = 'open_count';
+        }
         if (is_numeric($addressId) && $this->user() !== null) {
             $address = UserAddress::query()
                 ->whereKey((int) $addressId)
@@ -83,103 +250,6 @@ final class UserCleaningOrderStoreRequest extends FormRequest
         if ($merge !== []) {
             $this->merge($merge);
         }
-    }
-
-    public function rules(): array
-    {
-        $isEventAssistance = $this->isEventAssistanceRequested();
-        $requiresFemaleWorkerSafetyConfirmation = $this->requiresFemaleWorkerSafetyConfirmation();
-        $today = now(config('app.timezone'))->toDateString();
-
-        return [
-            'propertyType' => ['required', 'string', Rule::in(UserCleaningOrderEstimationService::PROPERTY_TYPES)],
-            'propertyDetails' => ['required', 'array:address,location_name,bedrooms,rooms,bathrooms,toilets,kitchens,balconies,sheds,living_room_size,cleaning_mode,room_size_breakdown,eventType,guestCount,venueType,customService,hours,specialRequirement,notes'],
-            'propertyDetails.address' => ['required', 'string', 'max:500'],
-            'propertyDetails.location_name' => ['nullable', 'string', 'max:255'],
-            'propertyDetails.bedrooms' => ['nullable', 'integer', 'min:0', 'max:100'],
-            'propertyDetails.rooms' => ['nullable', 'integer', 'min:0', 'max:100'],
-            'propertyDetails.bathrooms' => ['nullable', 'integer', 'min:0', 'max:100'],
-            'propertyDetails.toilets' => ['nullable', 'integer', 'min:0', 'max:100'],
-            'propertyDetails.kitchens' => ['nullable', 'integer', 'min:0', 'max:100'],
-            'propertyDetails.balconies' => ['nullable', 'integer', 'min:0', 'max:100'],
-            'propertyDetails.sheds' => ['nullable', 'integer', 'min:0', 'max:100'],
-            'propertyDetails.living_room_size' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::LIVING_ROOM_SIZES)],
-            'propertyDetails.cleaning_mode' => ['nullable', 'string', Rule::in(UserCleaningOrderEstimationService::CLEANING_MODES)],
-            'propertyDetails.room_size_breakdown' => ['nullable', 'array:bedroom,bathroom,toilet,kitchen,living_room,balcony,corridor,shed'],
-            'propertyDetails.room_size_breakdown.bedroom' => ['sometimes', 'array:small,medium,large'],
-            'propertyDetails.room_size_breakdown.bathroom' => ['sometimes', 'array:small,medium,large'],
-            'propertyDetails.room_size_breakdown.toilet' => ['sometimes', 'array:small,medium,large'],
-            'propertyDetails.room_size_breakdown.kitchen' => ['sometimes', 'array:small,medium,large'],
-            'propertyDetails.room_size_breakdown.living_room' => ['sometimes', 'array:small,medium,large'],
-            'propertyDetails.room_size_breakdown.balcony' => ['sometimes', 'array:small,medium,large'],
-            'propertyDetails.room_size_breakdown.corridor' => ['sometimes', 'array:small,medium,large'],
-            'propertyDetails.room_size_breakdown.shed' => ['sometimes', 'array:small,medium,large'],
-            'propertyDetails.room_size_breakdown.*.small' => ['sometimes', 'integer', 'min:0'],
-            'propertyDetails.room_size_breakdown.*.medium' => ['sometimes', 'integer', 'min:0'],
-            'propertyDetails.room_size_breakdown.*.large' => ['sometimes', 'integer', 'min:0'],
-            'propertyDetails.eventType' => [Rule::requiredIf($isEventAssistance), 'string', Rule::in(UserCleaningOrderEstimationService::EVENT_TYPES)],
-            'propertyDetails.guestCount' => [Rule::requiredIf($isEventAssistance), 'integer', 'min:1', 'max:5000'],
-            'propertyDetails.venueType' => [Rule::requiredIf($isEventAssistance), 'string', Rule::in($this->availableVenueTypes())],
-            'propertyDetails.customService' => [Rule::requiredIf($isEventAssistance), Rule::prohibitedIf(! $isEventAssistance), 'string', 'max:255'],
-            'propertyDetails.hours' => [Rule::requiredIf($isEventAssistance), Rule::prohibitedIf(! $isEventAssistance), 'numeric', 'min:1', 'max:24'],
-            'propertyDetails.specialRequirement' => ['nullable', 'string', 'max:255'],
-            'propertyDetails.notes' => ['nullable', 'string', 'max:2000'],
-            'cleaning_services' => ['sometimes', 'nullable', 'array'],
-            'cleaning_services.*' => ['string', 'max:255'],
-            'serviceIds' => ['prohibited'],
-            'serviceIds.*' => ['prohibited'],
-            'scheduledDate' => ['required', 'date', 'after_or_equal:'.$today],
-            'scheduledTime' => ['required', 'date_format:H:i'],
-            'addressId' => ['nullable', 'integer', Rule::exists('user_addresses', 'id')->where('user_id', (int) ($this->user()?->id ?? 0))],
-            'addressLatitude' => ['nullable', 'numeric', 'between:-90,90'],
-            'addressLongitude' => ['nullable', 'numeric', 'between:-180,180'],
-            'neighborhoodId' => ['sometimes', 'nullable', 'integer', Rule::exists('cleaning_neighborhoods', 'id')->where('is_active', true)],
-            'neighborhood' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'preferredWorkerIds' => ['nullable', 'array', 'max:20'],
-            'preferredWorkerIds.*' => ['integer', 'distinct', Rule::exists('workers', 'id')],
-            'preferredWorkerId' => ['nullable', 'exists:workers,id'],
-            'assignmentMode' => ['nullable', 'string', Rule::in(['preferred_worker', 'open_count'])],
-            'numberOfWorkers' => ['nullable', 'integer', 'min:1', 'max:20'],
-            ...$this->workerRoomAssignmentRules(),
-            'genderPreference' => ['nullable', 'string', Rule::in(['any', 'male', 'female'])],
-            'workEnvironmentConfirmation' => [Rule::excludeIf(! $requiresFemaleWorkerSafetyConfirmation), Rule::requiredIf($requiresFemaleWorkerSafetyConfirmation), 'array:beneficiaryPresence,pledgeAccepted,pledgeVersion'],
-            'workEnvironmentConfirmation.beneficiaryPresence' => [Rule::excludeIf(! $requiresFemaleWorkerSafetyConfirmation), Rule::requiredIf($requiresFemaleWorkerSafetyConfirmation), 'string', Rule::in([FemaleWorkerSafetyPolicyService::BENEFICIARY_FEMALE_PRESENT, FemaleWorkerSafetyPolicyService::BENEFICIARY_MALE_ALONE])],
-            'workEnvironmentConfirmation.pledgeAccepted' => [Rule::excludeIf(! $requiresFemaleWorkerSafetyConfirmation), Rule::requiredIf($requiresFemaleWorkerSafetyConfirmation), 'accepted'],
-            'workEnvironmentConfirmation.pledgeVersion' => [Rule::excludeIf(! $requiresFemaleWorkerSafetyConfirmation), Rule::requiredIf($requiresFemaleWorkerSafetyConfirmation), 'string', 'max:100'],
-            'estimatedSqm' => ['prohibited'],
-            'estimatedHours' => ['prohibited'],
-            'totalHours' => ['prohibited'],
-            'basePrice' => ['prohibited'],
-            'travelFee' => ['prohibited'],
-            'addonsTotal' => ['prohibited'],
-            'totalPrice' => ['prohibited'],
-            'cancellationPolicyId' => ['nullable', 'exists:cancellation_policies,id'],
-            'billingPolicyId' => ['nullable', 'exists:cleaning_billing_policies,id'],
-            'termsAccepted' => ['required', 'accepted'],
-        ];
-    }
-
-    public function withValidator(Validator $validator): void
-    {
-        $validator->after(function (Validator $validator): void {
-            $this->validateSelectedAddressCompleteness($validator);
-
-            if ($this->requiresFemaleWorkerSafetyConfirmation()) {
-                $policy = app(FemaleWorkerSafetyPolicyService::class);
-                $beneficiaryPresence = (string) $this->input('workEnvironmentConfirmation.beneficiaryPresence');
-                $pledgeVersion = (string) $this->input('workEnvironmentConfirmation.pledgeVersion');
-
-                if ($beneficiaryPresence === FemaleWorkerSafetyPolicyService::BENEFICIARY_MALE_ALONE) {
-                    $validator->errors()->add('workEnvironmentConfirmation.beneficiaryPresence', $policy->blockedMessage());
-                }
-
-                if ($pledgeVersion !== '' && $pledgeVersion !== $policy->version()) {
-                    $validator->errors()->add('workEnvironmentConfirmation.pledgeVersion', 'Invalid pledge version. Please refresh the confirmation screen and try again.');
-                }
-            }
-
-            $this->validateWorkerRoomAssignments($validator);
-        });
     }
 
     /**
@@ -270,6 +340,27 @@ final class UserCleaningOrderStoreRequest extends FormRequest
     private function isEventAssistanceRequested(): bool
     {
         return mb_strtolower((string) $this->input('propertyType')) === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE;
+    }
+
+    private function validateNewServiceScope(Validator $validator): void
+    {
+        $hasMaterials = (bool) $this->input('requestMaterials');
+        $hasSpecialServices = is_array($this->input('specialServices')) && $this->input('specialServices') !== [];
+        $hasOpenTime = is_array($this->input('openTime'));
+        $isRepeated = mb_strtolower((string) $this->input('schedule.mode')) === 'recurring';
+
+        if ($hasOpenTime && ($hasMaterials || $hasSpecialServices)) {
+            $validator->errors()->add('openTime', 'Open-Time requests cannot be combined with materials or special services.');
+        }
+
+
+        if ($hasOpenTime && $isRepeated) {
+            $validator->errors()->add('schedule', 'Use openTime.sessions for multi-day Open-Time requests.');
+        }
+
+        if ((string) $this->input('bookingKind') === 'special_service' && ! $hasSpecialServices) {
+            $validator->errors()->add('specialServices', 'A standalone special-service order requires at least one service.');
+        }
     }
 
     private function requiresFemaleWorkerSafetyConfirmation(): bool

@@ -59,6 +59,17 @@ final class CleaningBookingObserver
 
     public function updating(CleaningBooking $booking): void
     {
+        if (
+            $booking->booking_kind === 'open_time'
+            && $booking->isDirty('work_started_at')
+            && $booking->work_started_at !== null
+            && $booking->open_time_ceiling_ends_at === null
+        ) {
+            $booking->open_time_ceiling_ends_at = $booking->work_started_at
+                ->copy()
+                ->addMinutes(max(15, (int) ($booking->open_time_expected_max_minutes ?? 480)));
+        }
+
         if ($booking->isDirty('gender_preference')) {
             $this->applyWorkEnvironmentSnapshot($booking);
         }
@@ -302,6 +313,10 @@ final class CleaningBookingObserver
     private function chargeAdminCommission(CleaningBooking $booking): void
     {
         try {
+            if ($booking->sessions()->exists()) {
+                return;
+            }
+
             $depositService = app(DepositService::class);
             $assignments = $booking->acceptedWorkerAssignments()->with('worker.deposit')->get();
 

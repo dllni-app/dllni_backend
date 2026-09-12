@@ -36,18 +36,19 @@ it('keeps team booking waiting until every worker starts their own assignment', 
 
     createTeamAssignment($booking, $workerOne, CleaningBookingWorkerAssignmentStatus::AwaitingStartVerification);
     createTeamAssignment($booking, $workerTwo, CleaningBookingWorkerAssignmentStatus::AwaitingStartVerification);
-    createConsumedSecurityCode($booking);
+    createConsumedSecurityCode($booking, $workerOne);
+    createConsumedSecurityCode($booking, $workerTwo);
 
     Sanctum::actingAs($workerOneUser);
     $firstResponse = $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/start-work");
 
     $firstResponse->assertOk();
-    $firstResponse->assertJsonPath('data.order_status', CleaningBookingStatus::AwaitingWorkerStartConfirmation->value);
+    $firstResponse->assertJsonPath('data.order_status', CleaningBookingStatus::AwaitingStartVerification->value);
     $firstResponse->assertJsonPath('data.worker_order_status', CleaningBookingWorkerAssignmentStatus::InProgress->value);
 
     $this->assertDatabaseHas('cleaning_bookings', [
         'id' => $booking->id,
-        'status' => CleaningBookingStatus::AwaitingWorkerStartConfirmation->value,
+        'status' => CleaningBookingStatus::AwaitingStartVerification->value,
     ]);
     $this->assertDatabaseHas('cleaning_booking_worker_assignments', [
         'cleaning_booking_id' => $booking->id,
@@ -152,6 +153,7 @@ it('keeps team booking active until every worker completes their own assignment'
     ]);
 
     $firstResponse->assertOk();
+    $firstResponse->assertJsonPath('data.status', CleaningBookingStatus::AwaitingCustomerCompletion->value);
     $firstResponse->assertJsonPath('data.order_status', CleaningBookingStatus::InProgress->value);
     $firstResponse->assertJsonPath('data.worker_order_status', CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion->value);
 
@@ -188,7 +190,7 @@ it('keeps team booking active until every worker completes their own assignment'
 function createCleaningWorker(string $email): array
 {
     $user = User::factory()->create(['email' => $email]);
-    $worker = Worker::factory()->create([
+    $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $user->id,
         'home_address' => 'Worker Home',
         'home_latitude' => 33.6,
@@ -227,11 +229,12 @@ function createTeamAssignment(
     ], $overrides));
 }
 
-function createConsumedSecurityCode(CleaningBooking $booking): void
+function createConsumedSecurityCode(CleaningBooking $booking, Worker $worker): void
 {
     DB::table('booking_security_codes')->insert([
         'booking_id' => $booking->id,
         'booking_type' => $booking->getMorphClass(),
+        'worker_id' => $worker->id,
         'code' => hash_hmac('sha256', '1234', (string) config('app.key')),
         'code_hash' => hash_hmac('sha256', '1234', (string) config('app.key')),
         'attempts' => 1,

@@ -1,0 +1,3 @@
+<?php
+
+declare(strict_types=1); namespace App\Filament\Resources\CleaningMaterialKits\Pages; use App\Filament\Resources\CleaningMaterialKits\CleaningMaterialKitResource; use Filament\Resources\Pages\EditRecord; final class EditCleaningMaterialKit extends EditRecord { protected static string $resource=CleaningMaterialKitResource::class; protected function mutateFormDataBeforeSave(array $data): array { if (($data['status'] ?? null)==='ready' && empty($data['prepared_at'])) { $data['prepared_at']=now(); } if (($data['status'] ?? null)==='ready') { $data['prepared_by_id']=auth()->id(); } return $data; } }

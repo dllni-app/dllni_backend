@@ -47,7 +47,7 @@ trait CleaningBookingFilterQuery
         $statuses = [];
         foreach ($values as $value) {
             foreach (explode(',', $value) as $status) {
-                $normalized = trim($status);
+                $normalized = mb_trim($status);
                 if ($normalized === '') {
                     continue;
                 }
@@ -132,6 +132,11 @@ trait CleaningBookingFilterQuery
                     $pending->where('status', CleaningBookingStatus::Pending)
                         ->whereNull('worker_id')
                         ->whereNull('preferred_worker_id')
+                        ->where(function (Builder $scope) use ($worker): void {
+                            $scope->whereNull('worker_scope')
+                                ->orWhere('worker_scope', '!=', CleaningBooking::WORKER_SCOPE_SPECIFIC)
+                                ->orWhereJsonContains('specific_worker_ids', [(int) $worker->id]);
+                        })
                         ->when(
                             $preferredWorkType === WorkerPreferredWorkType::Cleaning,
                             fn (Builder $query): Builder => $query->where('property_type', '!=', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)

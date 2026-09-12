@@ -10,7 +10,9 @@ use Modules\Cleaning\Data\CleaningServiceData;
 use Modules\Cleaning\Http\Requests\CleaningServiceRequest;
 use Modules\Cleaning\Http\Requests\CleaningServiceRequests\CleaningServiceFilterRequest;
 use Modules\Cleaning\Http\Resources\CleaningServiceResource;
+use Modules\Cleaning\Http\Resources\CleaningSpecialServiceCatalogResource;
 use Modules\Cleaning\Models\CleaningService;
+use Modules\Cleaning\Models\CleaningSpecialService;
 use Modules\Cleaning\Services\CleaningServiceService;
 use Throwable;
 
@@ -22,6 +24,30 @@ final class CleaningServiceController
 
     public function index(CleaningServiceFilterRequest $request): AnonymousResourceCollection
     {
+        if ($request->input('filter.category') === 'special_service') {
+            $query = CleaningSpecialService::query()->with([
+                'category',
+                'dirtinessRules',
+                'dirtinessLevels' => fn ($levels) => $levels->where('is_active', true)->orderBy('sort_order'),
+                'equipment' => fn ($equipment) => $equipment->where('is_active', true),
+            ]);
+
+            if ($request->has('filter.isActive')) {
+                $query->where('is_active', $request->boolean('filter.isActive'));
+            } else {
+                $query->where('is_active', true);
+            }
+
+            $search = trim((string) $request->input('filter.search', ''));
+            if ($search !== '') {
+                $query->where('name', 'like', '%'.$search.'%');
+            }
+
+            $services = $query->orderBy('name')->paginate($request->integer('perPage', 100));
+
+            return CleaningSpecialServiceCatalogResource::collection($services);
+        }
+
         $services = CleaningService::getQuery()
             ->with(['pricing'])
             ->paginate($request->get('perPage', 20));

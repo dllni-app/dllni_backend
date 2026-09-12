@@ -24,6 +24,10 @@ final class UserCleaningOrdersController
                 'disputes',
                 'addons',
                 'billingPolicy',
+                'materials.material',
+                'materials.materialType',
+                'materials.unit',
+                'specialServices.specialService',
             ])
             ->paginate((int) $request->validated('perPage', 20));
 

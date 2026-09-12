@@ -24,8 +24,8 @@ beforeEach(function () {
 
 it('defaults worker extension warning list to current worker pending requests', function () {
     $workerUser = User::factory()->create(['email' => 'worker-scope-current@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
-    $otherWorker = Worker::factory()->create(['user_id' => User::factory()->create(['email' => 'worker-scope-other@example.com'])->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
+    $otherWorker = Worker::factory()->financiallyEligible()->create(['user_id' => User::factory()->create(['email' => 'worker-scope-other@example.com'])->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -83,7 +83,7 @@ it('defaults worker extension warning list to current worker pending requests', 
 
 it('resolves an extension warning and removes it from the default worker pending list after reject', function () {
     $workerUser = User::factory()->create(['email' => 'worker-scope-reject@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -114,7 +114,8 @@ it('resolves an extension warning and removes it from the default worker pending
     expect($booking->fresh()->status)->toBe(CleaningBookingStatus::Completed);
 
     $secondResponse = $this->postJson("/api/v1/cleaning-time-warnings/{$warning->id}/reject", []);
-    $secondResponse->assertUnprocessable();
+    $secondResponse->assertOk()
+        ->assertJsonPath('data.workerResponse', 'commit_current_time');
 
     $listResponse = $this->getJson('/api/v1/cleaning-time-warnings');
     $ids = array_column($listResponse->json('data'), 'id');
@@ -123,7 +124,7 @@ it('resolves an extension warning and removes it from the default worker pending
 
 it('allows accepted team workers without legacy worker id to reject extension warnings', function () {
     $workerUser = User::factory()->create(['email' => 'worker-scope-assignment@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([

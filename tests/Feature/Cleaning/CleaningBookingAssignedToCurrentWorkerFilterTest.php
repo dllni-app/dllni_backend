@@ -15,7 +15,7 @@ use function Pest\Laravel\getJson;
 
 it('shows accepted pending multi-worker bookings in the current worker orders filter', function (): void {
     $workerUser = User::factory()->create(['email' => 'assigned-filter-worker@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     $customer = User::factory()->create(['email' => 'assigned-filter-customer@example.com']);
 
     $acceptedPendingBooking = CleaningBooking::factory()->create([
@@ -50,7 +50,7 @@ it('shows accepted pending multi-worker bookings in the current worker orders fi
         'status' => CleaningBookingStatus::Pending->value,
     ]);
 
-    $otherWorker = Worker::factory()->create(['user_id' => User::factory()->create()->id]);
+    $otherWorker = Worker::factory()->financiallyEligible()->create(['user_id' => User::factory()->create()->id]);
     $otherWorkerBooking = CleaningBooking::factory()->create([
         'customer_id' => $customer->id,
         'worker_id' => null,
@@ -90,7 +90,7 @@ it('shows accepted pending multi-worker bookings in the current worker orders fi
 
 it('does not show preferred-worker decision-required booking again to the worker who rejected it', function (): void {
     $workerUser = User::factory()->create(['email' => 'preferred-reject-filter-worker@example.com']);
-    $worker = Worker::factory()->create([
+    $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'trust_score' => 80,
     ]);
@@ -122,7 +122,7 @@ it('does not show preferred-worker decision-required booking again to the worker
 it('does not show converted preferred-worker booking again to the worker who rejected it after customer decision', function (): void {
     $customer = User::factory()->create(['email' => 'preferred-reject-convert-customer@example.com']);
     $workerUser = User::factory()->create(['email' => 'preferred-reject-convert-worker@example.com']);
-    $worker = Worker::factory()->create([
+    $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'trust_score' => 80,
     ]);

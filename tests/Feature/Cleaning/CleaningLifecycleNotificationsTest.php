@@ -24,7 +24,7 @@ beforeEach(function (): void {
 it('sends worker-started-travel canonical notification to customer with standard keys', function (): void {
     $customer = User::factory()->create();
     $workerUser = User::factory()->create();
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -66,7 +66,7 @@ it('sends worker-started-travel canonical notification to customer with standard
 it('sends worker-confirmed canonical notification to customer when a worker accepts but the booking is not yet fulfilled', function (): void {
     $customer = User::factory()->create();
     $workerUser = User::factory()->create();
-    $worker = Worker::factory()->create([
+    $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'home_address' => 'Worker Home',
         'home_latitude' => 33.6,
@@ -113,7 +113,7 @@ it('sends worker-confirmed canonical notification to customer when a worker acce
 it('marks preferred-worker booking as decision-required and notifies customer when preferred worker rejects a cleaning booking', function (): void {
     $customer = User::factory()->create();
     $workerUser = User::factory()->create();
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -219,7 +219,7 @@ it('marks preferred-worker booking as decision-required and notifies customer wh
 it('sends preferred-worker decision-required notification to customer when preferred worker rejects an event assistance booking', function (): void {
     $customer = User::factory()->create();
     $workerUser = User::factory()->create();
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -266,7 +266,7 @@ it('sends preferred-worker decision-required notification to customer when prefe
 it('does not notify customer when an unassigned open-count worker rejects a public pending booking', function (): void {
     $customer = User::factory()->create();
     $workerUser = User::factory()->create();
-    Worker::factory()->create(['user_id' => $workerUser->id]);
+    Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -293,7 +293,7 @@ it('does not notify customer when an unassigned open-count worker rejects a publ
 it('sends completion-approved canonical notification to worker with standard keys', function (): void {
     $customer = User::factory()->create();
     $workerUser = User::factory()->create();
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($customer);
 
     $booking = CleaningBooking::factory()->create([

@@ -6,6 +6,7 @@ use App\Enums\WorkerCustomerRatingType;
 use App\Enums\WorkerPreferredWorkType;
 use App\Models\CancellationPolicy;
 use App\Models\CleaningFinancialSetting;
+use App\Models\PlatformCoupon;
 use App\Models\User;
 use App\Models\Worker;
 use App\Models\WorkerCustomerRating;
@@ -22,6 +23,7 @@ use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Models\CleaningService;
+use Modules\Cleaning\Services\CleaningPricingCalculator;
 use Modules\Cleaning\Models\ServicePricing;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
@@ -109,9 +111,107 @@ it('creates a cleaning order for authenticated user', function (): void {
         'startMinutes' => 16,
         'endMinutes' => 30,
         'label' => 'من 16 إلى 30 دقيقة',
-        'price' => 4500.0,
+        'price' => 25,
         'currency' => 'SYP',
     ]);
+});
+
+it('creates an open cleaning order with coupon deducted from provisional admin margin before worker share', function (): void {
+    CleaningFinancialSetting::query()->updateOrCreate(
+        ['id' => 1],
+        [
+            'default_commission_rate' => 25,
+            'commission_type' => 'percent',
+            'commission_fixed_amount' => null,
+            'travel_per_km' => 0,
+            'travel_distance_start_point' => 'worker_home',
+        ],
+    );
+
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $coupon = PlatformCoupon::query()->create([
+        'code' => 'USERCREATE10',
+        'title_ar' => 'خصم تنظيف',
+        'title_en' => 'Cleaning discount',
+        'description_ar' => 'اختبار',
+        'description_en' => 'Test',
+        'section' => PlatformCoupon::SECTION_CLEANING,
+        'discount_type' => PlatformCoupon::DISCOUNT_PERCENTAGE,
+        'discount_value' => 10,
+        'audience_type' => PlatformCoupon::AUDIENCE_ALL_USERS,
+        'is_active' => true,
+        'starts_at' => now()->subMinute(),
+        'expires_at' => now()->addDay(),
+    ]);
+
+    $response = postJson('/api/v1/user/cleaning/orders', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => [
+            'address' => 'Damascus - Mazzeh',
+            'location_name' => 'Home',
+            'rooms' => 2,
+            'bedrooms' => 1,
+            'bathrooms' => 1,
+            'living_room_size' => 'small',
+        ],
+        'assignmentMode' => 'open_count',
+        'numberOfWorkers' => 1,
+        'scheduledDate' => now()->addDay()->format('Y-m-d'),
+        'scheduledTime' => '09:00',
+        'addressLatitude' => 33.5138,
+        'addressLongitude' => 36.2765,
+        'couponCode' => $coupon->code,
+        'termsAccepted' => true,
+    ])->assertCreated();
+
+    $serviceAmount = (float) $response->json('order.basePrice')
+        + (float) $response->json('order.addonsTotal');
+    $grossAdminMargin = (float) app(CleaningPricingCalculator::class)
+        ->provisional($serviceAmount, 0.0)['adminMargin'];
+    $expectedGrossTotal = round($serviceAmount + $grossAdminMargin, 2);
+    $expectedDiscount = round($expectedGrossTotal * 0.10, 2);
+    $expectedAdminMargin = round(max(0.0, $grossAdminMargin - $expectedDiscount), 2);
+    $expectedServiceAmount = round(
+        max(0.0, $serviceAmount - max(0.0, $expectedDiscount - $grossAdminMargin)),
+        2,
+    );
+    $expectedTotal = round($expectedServiceAmount + $expectedAdminMargin, 2);
+
+    expect((float) $response->json('order.discountAmount'))->toBe($expectedDiscount)
+        ->and((float) $response->json('order.subtotalBeforeDiscount'))->toBe($expectedGrossTotal)
+        ->and((float) $response->json('order.adminMargin'))->toBe($expectedAdminMargin)
+        ->and((float) $response->json('order.totalPrice'))->toBe($expectedTotal)
+        ->and((float) $response->json('order.basePrice'))->toBe((float) $response->json('order.bookingBasePrice'))
+        ->and($response->json('order.couponApplied'))->toBeTrue()
+        ->and($response->json('order.couponCode'))->toBe('USERCREATE10');
+
+    $booking = CleaningBooking::query()->findOrFail((int) $response->json('order.id'));
+    expect((float) $booking->base_price)->toBe((float) $response->json('order.basePrice'))
+        ->and((float) $booking->admin_margin_amount)->toBe($expectedAdminMargin)
+        ->and((float) $booking->discount_amount)->toBe($expectedDiscount)
+        ->and((float) $booking->subtotal_before_discount)->toBe($expectedGrossTotal)
+        ->and((float) $booking->total_price)->toBe($expectedTotal);
+
+    $workerUser = User::factory()->create();
+    Worker::factory()->financiallyEligible()->create([
+        'user_id' => $workerUser->id,
+        'home_address' => 'Worker home',
+        'home_latitude' => 33.5,
+        'home_longitude' => 36.3,
+    ]);
+    Sanctum::actingAs($workerUser);
+
+    $workerResponse = getJson("/api/v1/cleaning-bookings/{$booking->id}")
+        ->assertOk();
+
+    expect((float) $workerResponse->json('data.serviceShareAmount'))->toBe($expectedServiceAmount)
+        ->and((float) $workerResponse->json('data.adminMargin'))->toBe($expectedAdminMargin)
+        ->and((float) $workerResponse->json('data.workerOffer.serviceShareAmount'))->toBe($expectedServiceAmount)
+        ->and((float) $workerResponse->json('data.workerOffer.adminMarginAmount'))->toBe($expectedAdminMargin)
+        ->and((float) $workerResponse->json('data.discountAmount'))->toBe($expectedDiscount)
+        ->and((float) $workerResponse->json('data.subtotalBeforeDiscount'))->toBe($expectedGrossTotal);
 });
 
 it('creates a deep cleaning order and persists the mode in the response payload', function (): void {
@@ -247,7 +347,7 @@ it('shows own cleaning order and returns not found for another user order', func
         ->assertJsonPath('data.extendedTimeRanges.1.startMinutes', 16)
         ->assertJsonPath('data.extendedTimeRanges.1.endMinutes', 30);
 
-    expect((float) $response->json('data.extendedTimeRanges.1.price'))->toBe(4500.0);
+    expect((float) $response->json('data.extendedTimeRanges.1.price'))->toBe(25.0);
 
     getJson("/api/v1/user/cleaning/orders/{$other->id}")
         ->assertNotFound();
@@ -307,15 +407,15 @@ it('returns estimated size and time for cleaning order wizard', function (): voi
         ],
     ]);
 
-    expect((float) $response->json('size.estimatedSqm'))->toBe(171.0);
-    expect((string) $response->json('size.sizeTier'))->toBe('large');
-    expect((float) $response->json('estimation.estimatedHours'))->toBe(5.5);
-    expect((int) $response->json('estimation.estimatedMinutes'))->toBe(330);
+    expect((float) $response->json('size.estimatedSqm'))->toBe(72.5);
+    expect((string) $response->json('size.sizeTier'))->toBe('small');
+    expect((float) $response->json('estimation.estimatedHours'))->toBe(3.0);
+    expect((int) $response->json('estimation.estimatedMinutes'))->toBe(180);
     expect($response->json('extendedTimeRanges.0'))->toMatchArray([
         'startMinutes' => 0,
         'endMinutes' => 15,
         'label' => 'من 0 إلى 15 دقيقة',
-        'price' => 2250.0,
+        'price' => 10,
         'currency' => 'SYP',
     ]);
 });
@@ -363,7 +463,7 @@ it('returns previously worked cleaning workers for current user', function (): v
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
-    $worker = Worker::factory()->create();
+    $worker = Worker::factory()->financiallyEligible()->create();
 
     CleaningBooking::factory()->create([
         'customer_id' => $user->id,
@@ -382,10 +482,10 @@ it('filters previous workers by booking type so cleaning-only workers do not app
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
-    $cleaningWorker = Worker::factory()->create([
+    $cleaningWorker = Worker::factory()->financiallyEligible()->create([
         'preferred_work_type' => WorkerPreferredWorkType::Cleaning,
     ]);
-    $eventWorker = Worker::factory()->create([
+    $eventWorker = Worker::factory()->financiallyEligible()->create([
         'preferred_work_type' => WorkerPreferredWorkType::Events,
     ]);
 
@@ -410,10 +510,10 @@ it('filters previous workers by regular cleaning type so event-only workers do n
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
-    $cleaningWorker = Worker::factory()->create([
+    $cleaningWorker = Worker::factory()->financiallyEligible()->create([
         'preferred_work_type' => WorkerPreferredWorkType::Cleaning,
     ]);
-    $eventWorker = Worker::factory()->create([
+    $eventWorker = Worker::factory()->financiallyEligible()->create([
         'preferred_work_type' => WorkerPreferredWorkType::Events,
     ]);
 
@@ -459,21 +559,21 @@ it('returns estimated cleaning price from backend algorithm', function (): void 
         'algorithmVersion',
     ]);
 
-    expect((float) $response->json('size.estimatedSqm'))->toBe(115.0);
-    expect((float) $response->json('size.estimatedHours'))->toBe(4.0);
-    expect((string) $response->json('size.sizeTier'))->toBe('medium');
-    expect((float) $response->json('pricing.basePrice'))->toBe(920.0);
+    expect((float) $response->json('size.estimatedSqm'))->toBe(50.5);
+    expect((float) $response->json('size.estimatedHours'))->toBe(2.5);
+    expect((string) $response->json('size.sizeTier'))->toBe('small');
+    expect((float) $response->json('pricing.basePrice'))->toBe(275.0);
     expect($response->json('pricing.distanceKm'))->toBeNull();
     expect((float) $response->json('pricing.travelFee'))->toBe(0.0);
     expect((float) $response->json('pricing.addonsTotal'))->toBe(0.0);
     expect((float) $response->json('pricing.adminMargin'))->toBe(0.0);
     expect((bool) $response->json('pricing.isPricingFinal'))->toBeFalse();
-    expect((float) $response->json('pricing.totalPrice'))->toBe(920.0);
+    expect((float) $response->json('pricing.totalPrice'))->toBe(275.0);
     expect($response->json('extendedTimeRanges.1'))->toMatchArray([
         'startMinutes' => 16,
         'endMinutes' => 30,
         'label' => 'من 16 إلى 30 دقيقة',
-        'price' => 4500.0,
+        'price' => 25,
         'currency' => 'SYP',
     ]);
     expect((string) $response->json('algorithmVersion'))->toBe(UserCleaningOrderEstimationService::ALGORITHM_VERSION);
@@ -552,7 +652,7 @@ it('accepts preferred worker room assignments on estimate-price', function (): v
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
-    $preferredWorker = Worker::factory()->create([
+    $preferredWorker = Worker::factory()->financiallyEligible()->create([
         'home_address' => 'Preferred Worker Home',
         'home_latitude' => 33.55,
         'home_longitude' => 36.31,
@@ -617,10 +717,10 @@ it('prefers room_size_breakdown for estimate-price when provided', function (): 
     ]);
 
     $response->assertOk();
-    expect((float) $response->json('size.estimatedSqm'))->toBe(302.0);
-    expect((float) $response->json('size.estimatedHours'))->toBe(10.0);
-    expect((string) $response->json('size.sizeTier'))->toBe('very_large');
-    expect((float) $response->json('pricing.basePrice'))->toBe(2416.0);
+    expect((float) $response->json('size.estimatedSqm'))->toBe(108.5);
+    expect((float) $response->json('size.estimatedHours'))->toBe(5.0);
+    expect((string) $response->json('size.sizeTier'))->toBe('medium');
+    expect((float) $response->json('pricing.basePrice'))->toBe(625.0);
 });
 
 it('creates order with room_size_breakdown and persists normalized breakdown-derived values', function (): void {
@@ -663,7 +763,7 @@ it('accepts partial room_size_breakdown for estimate-price and treats missing co
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
-    $preferredWorker = Worker::factory()->create([
+    $preferredWorker = Worker::factory()->financiallyEligible()->create([
         'home_address' => 'Preferred Worker Home',
         'home_latitude' => 36.205,
         'home_longitude' => 37.12,
@@ -812,7 +912,7 @@ it('creates preferred worker order with worker room assignments', function (): v
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
-    $preferredWorker = Worker::factory()->create([
+    $preferredWorker = Worker::factory()->financiallyEligible()->create([
         'home_address' => 'Preferred Worker Home',
         'home_latitude' => 33.55,
         'home_longitude' => 36.31,
@@ -957,7 +1057,7 @@ it('rejects invalid cleaning mode values in user cleaning requests', function ()
     ]);
 });
 
-it('returns regular cleaning estimate with selected cleaning services in addons', function (): void {
+it('keeps legacy managed cleaning services informational and out of regular pricing', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
@@ -1005,13 +1105,13 @@ it('returns regular cleaning estimate with selected cleaning services in addons'
     ]);
 
     $response->assertOk();
-    expect((float) $response->json('pricing.basePrice'))->toBe(920.0);
-    expect((float) $response->json('pricing.addonsTotal'))->toBe(180.0);
-    expect((float) $response->json('pricing.totalPrice'))->toBe(1100.0);
-    expect($response->json('pricing.serviceLines'))->toHaveCount(2);
+    expect((float) $response->json('pricing.basePrice'))->toBe(275.0);
+    expect((float) $response->json('pricing.addonsTotal'))->toBe(0.0);
+    expect((float) $response->json('pricing.totalPrice'))->toBe(275.0);
+    expect($response->json('pricing.serviceLines'))->toHaveCount(0);
 });
 
-it('returns deep cleaning estimate with selected services while keeping add-ons unchanged', function (): void {
+it('keeps legacy managed cleaning services informational and out of deep pricing', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
@@ -1060,10 +1160,10 @@ it('returns deep cleaning estimate with selected services while keeping add-ons 
     ]);
 
     $response->assertOk();
-    expect((float) $response->json('pricing.basePrice'))->toBe(4600.0);
-    expect((float) $response->json('pricing.addonsTotal'))->toBe(180.0);
-    expect((float) $response->json('pricing.totalPrice'))->toBe(4780.0);
-    expect($response->json('pricing.serviceLines'))->toHaveCount(2);
+    expect((float) $response->json('pricing.basePrice'))->toBe(1100.0);
+    expect((float) $response->json('pricing.addonsTotal'))->toBe(0.0);
+    expect((float) $response->json('pricing.totalPrice'))->toBe(1100.0);
+    expect($response->json('pricing.serviceLines'))->toHaveCount(0);
 });
 
 it('returns finalized pricing when preferred worker is selected in estimate endpoint', function (): void {
@@ -1081,7 +1181,7 @@ it('returns finalized pricing when preferred worker is selected in estimate endp
         ]
     );
 
-    $worker = Worker::factory()->create([
+    $worker = Worker::factory()->financiallyEligible()->create([
         'home_address' => 'Worker Home',
         'home_latitude' => 33.6,
         'home_longitude' => 36.3,
@@ -1103,9 +1203,9 @@ it('returns finalized pricing when preferred worker is selected in estimate endp
     $response->assertOk();
     expect((bool) $response->json('pricing.isPricingFinal'))->toBeTrue();
     expect((float) $response->json('pricing.distanceKm'))->toBe(11.119);
-    expect((float) $response->json('pricing.travelFee'))->toBe(111.19);
-    expect((float) $response->json('pricing.adminMargin'))->toBe(103.12);
-    expect((float) $response->json('pricing.totalPrice'))->toBe(1134.31);
+    expect((float) $response->json('pricing.travelFee'))->toBe(112.0);
+    expect((float) $response->json('pricing.adminMargin'))->toBe(28.0);
+    expect((float) $response->json('pricing.totalPrice'))->toBe(415.0);
 });
 
 it('creates a cleaning order with totals matching a prior estimate for the same inputs', function (): void {
@@ -1185,7 +1285,7 @@ it('creates regular cleaning order with selected service names', function (): vo
 
     expect($response->json('order.cleaning_services'))->toBe(['Balcony cleaning', 'Window cleaning']);
     expect((float) $response->json('order.addonsTotal'))->toBe(0.0);
-    expect((float) $response->json('order.totalPrice'))->toBe(920.0);
+    expect((float) $response->json('order.totalPrice'))->toBe(275.0);
 
     $booking = CleaningBooking::query()->findOrFail($orderId);
     expect($booking->cleaning_services)->toBe(['Balcony cleaning', 'Window cleaning']);
@@ -1384,8 +1484,8 @@ it('submits editable worker-specific reviews before every worker completes', fun
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
-    $workerOne = Worker::factory()->create();
-    $workerTwo = Worker::factory()->create();
+    $workerOne = Worker::factory()->financiallyEligible()->create();
+    $workerTwo = Worker::factory()->financiallyEligible()->create();
     $order = CleaningBooking::factory()->create([
         'customer_id' => $user->id,
         'status' => CleaningBookingStatus::InProgress->value,
@@ -1450,7 +1550,7 @@ it('rejects a review for a worker whose work is not confirmed', function (): voi
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
-    $worker = Worker::factory()->create();
+    $worker = Worker::factory()->financiallyEligible()->create();
     $order = CleaningBooking::factory()->create([
         'customer_id' => $user->id,
         'status' => CleaningBookingStatus::InProgress->value,
@@ -1471,13 +1571,13 @@ it('rejects a review for a worker whose work is not confirmed', function (): voi
 
 it('allows worker-specific ratings for event assistance bookings', function (): void {
     $user = User::factory()->create();
-    $worker = Worker::factory()->create();
+    $worker = Worker::factory()->financiallyEligible()->create();
     Sanctum::actingAs($user);
 
     $order = CleaningBooking::factory()->create([
         'customer_id' => $user->id,
         'property_type' => 'event_assistance',
-        'status' => CleaningBookingStatus::InProgress->value,
+        'status' => CleaningBookingStatus::Completed->value,
     ]);
     createReviewableAssignment(
         $order,
@@ -1486,8 +1586,10 @@ it('allows worker-specific ratings for event assistance bookings', function (): 
     );
 
     postJson("/api/v1/user/cleaning/orders/{$order->id}/review", [
-        'workerId' => $worker->id,
-        'rating' => 5,
+        'reviews' => [[
+            'workerId' => $worker->id,
+            'rating' => 5,
+        ]],
     ])->assertOk();
 
     $this->assertDatabaseHas('worker_customer_ratings', [
@@ -1536,8 +1638,8 @@ it('estimates event assistance pricing from selected hours instead of selected s
     ]);
 
     $response->assertOk();
-    expect((float) $response->json('pricing.basePrice'))->toBe(1200.0);
-    expect((float) $response->json('pricing.totalPrice'))->toBe(1200.0);
+    expect((float) $response->json('pricing.basePrice'))->toBe(6000.0);
+    expect((float) $response->json('pricing.totalPrice'))->toBe(6000.0);
     expect((float) $response->json('pricing.eventHourlyRate'))->toBe(300.0);
     expect((float) $response->json('pricing.eventHours'))->toBe(4.0);
     expect((float) $response->json('size.estimatedHours'))->toBe(4.0);
@@ -1583,7 +1685,7 @@ it('creates event assistance order with custom service and does not sync booking
     expect($response->json('order.numberOfWorkers'))->toBe(4);
     expect($response->json('order.propertyDetails.custom_service'))->toBe('Manual hospitality support');
     expect((float) $response->json('order.propertyDetails.hours'))->toBe(5.0);
-    expect((float) $response->json('order.basePrice'))->toBe(1500.0);
+    expect((float) $response->json('order.basePrice'))->toBe(6000.0);
     expect((float) $response->json('order.totalHours'))->toBe(5.0);
 
     $this->assertDatabaseHas('cleaning_bookings', [
@@ -1634,7 +1736,7 @@ it('updates event assistance hours and custom service without service-based pric
     ]);
 
     $update->assertOk();
-    expect((float) $update->json('order.basePrice'))->toBe(1800.0);
+    expect((float) $update->json('order.basePrice'))->toBe(5400.0);
     expect((float) $update->json('order.totalHours'))->toBe(6.0);
     expect($update->json('order.propertyDetails.event_type'))->toBe('large_gathering');
     expect($update->json('order.propertyDetails.guest_count'))->toBe(60);

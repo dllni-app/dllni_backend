@@ -1,0 +1,122 @@
+<?php
+
+declare(strict_types=1);
+
+use Illuminate\Support\Facades\Route;
+use Modules\Cleaning\Http\Controllers\API\CleaningBookingScheduleController;
+use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionAcceptanceController;
+use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionInteractionController;
+use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionLifecycleController;
+use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionLocationController;
+use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionScheduleController;
+use Modules\Cleaning\Http\Controllers\API\CleaningBookingSessionWorkerChangeController;
+use Modules\Cleaning\Http\Controllers\API\CleaningRecurringSeriesController;
+
+Route::prefix('v1')
+    ->middleware(['auth:sanctum'])
+    ->group(function (): void {
+        Route::get(
+            'cleaning-bookings/{cleaning_booking}/schedule',
+            CleaningBookingScheduleController::class,
+        )->name('cleaning-bookings.schedule');
+
+        Route::post(
+            'cleaning-bookings/{cleaning_booking}/recurring/pause',
+            [CleaningRecurringSeriesController::class, 'pause'],
+        )->name('cleaning-bookings.recurring.pause');
+
+        Route::post(
+            'cleaning-bookings/{cleaning_booking}/recurring/resume',
+            [CleaningRecurringSeriesController::class, 'resume'],
+        )->name('cleaning-bookings.recurring.resume');
+
+        Route::post(
+            'cleaning-bookings/{cleaning_booking}/sessions/accept-all',
+            [CleaningBookingSessionAcceptanceController::class, 'acceptAll'],
+        )->name('cleaning-bookings.sessions.accept-all');
+
+        Route::post(
+            'cleaning-bookings/{cleaning_booking}/sessions/accept-selected',
+            [CleaningBookingSessionAcceptanceController::class, 'acceptSelected'],
+        )->name('cleaning-bookings.sessions.accept-selected');
+
+        Route::post(
+            'cleaning-bookings/{cleaning_booking}/sessions/change-workers',
+            CleaningBookingSessionWorkerChangeController::class,
+        )->name('cleaning-bookings.sessions.change-workers');
+
+        Route::patch(
+            'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/schedule',
+            CleaningBookingSessionScheduleController::class,
+        )->name('cleaning-bookings.sessions.schedule.update');
+
+        Route::post(
+            'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/start-travel',
+            [CleaningBookingSessionLifecycleController::class, 'startTravel'],
+        )->name('cleaning-bookings.sessions.start-travel');
+
+        Route::post(
+            'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/location',
+            CleaningBookingSessionLocationController::class,
+        )->name('cleaning-bookings.sessions.location');
+
+        Route::post(
+            'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/arrive',
+            [CleaningBookingSessionLifecycleController::class, 'arrive'],
+        )->name('cleaning-bookings.sessions.arrive');
+
+        Route::get(
+            'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/security-code',
+            [CleaningBookingSessionLifecycleController::class, 'securityCode'],
+        )->name('cleaning-bookings.sessions.security-code');
+
+        Route::post(
+            'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/start-verification/confirm',
+            [CleaningBookingSessionLifecycleController::class, 'confirmStartVerification'],
+        )->name('cleaning-bookings.sessions.start-verification.confirm');
+
+        Route::post(
+            'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/start-work',
+            [CleaningBookingSessionLifecycleController::class, 'startWork'],
+        )->name('cleaning-bookings.sessions.start-work');
+
+        Route::post(
+            'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/complete',
+            [CleaningBookingSessionLifecycleController::class, 'complete'],
+        )->name('cleaning-bookings.sessions.complete');
+
+        Route::post(
+            'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/completion/confirm',
+            [CleaningBookingSessionLifecycleController::class, 'confirmCompletion'],
+        )->name('cleaning-bookings.sessions.completion.confirm');
+
+        Route::post(
+            'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/cancel',
+            [CleaningBookingSessionLifecycleController::class, 'cancel'],
+        )->name('cleaning-bookings.sessions.cancel');
+
+        Route::post(
+            'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/skip',
+            [CleaningBookingSessionLifecycleController::class, 'skip'],
+        )->name('cleaning-bookings.sessions.skip');
+
+        Route::post(
+            'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/review',
+            [CleaningBookingSessionInteractionController::class, 'review'],
+        )->name('cleaning-bookings.sessions.review');
+
+        Route::post(
+            'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/disputes',
+            [CleaningBookingSessionInteractionController::class, 'openDispute'],
+        )->name('cleaning-bookings.sessions.disputes.store');
+
+        Route::post(
+            'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/attendance',
+            [CleaningBookingSessionLifecycleController::class, 'attendance'],
+        )->name('cleaning-bookings.sessions.attendance');
+
+        Route::post(
+            'cleaning-bookings/{cleaning_booking}/sessions/{cleaning_booking_session}/sos',
+            [CleaningBookingSessionLifecycleController::class, 'sos'],
+        )->name('cleaning-bookings.sessions.sos');
+    });

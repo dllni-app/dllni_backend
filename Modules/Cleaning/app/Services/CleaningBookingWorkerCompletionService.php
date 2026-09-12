@@ -281,11 +281,6 @@ final class CleaningBookingWorkerCompletionService
                 : CleaningBookingStatus::tryFrom((string) $booking->status) ?? CleaningBookingStatus::Pending;
         }
 
-        $awaitingCustomer = $assignments->contains(fn (CleaningBookingWorkerAssignment $assignment): bool => $this->assignmentStatus($assignment) === CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion->value);
-        if ($awaitingCustomer) {
-            return CleaningBookingStatus::AwaitingCustomerCompletion;
-        }
-
         $hasExtension = $assignments->contains(fn (CleaningBookingWorkerAssignment $assignment): bool => $this->assignmentStatus($assignment) === CleaningBookingWorkerAssignmentStatus::TimeExtensionRequested->value);
         if ($hasExtension) {
             return CleaningBookingStatus::TimeExtensionRequested;
@@ -296,8 +291,21 @@ final class CleaningBookingWorkerCompletionService
             return CleaningBookingStatus::Completed;
         }
 
+        $awaitingCustomer = $assignments->filter(
+            fn (CleaningBookingWorkerAssignment $assignment): bool => $this->assignmentStatus($assignment) === CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion->value,
+        )->count();
+        if ($completed + $awaitingCustomer >= $requiredWorkers) {
+            return CleaningBookingStatus::AwaitingCustomerCompletion;
+        }
+
         $inProgress = $assignments->contains(fn (CleaningBookingWorkerAssignment $assignment): bool => $this->assignmentStatus($assignment) === CleaningBookingWorkerAssignmentStatus::InProgress->value && $assignment->work_started_at !== null);
         if ($inProgress) {
+            return CleaningBookingStatus::InProgress;
+        }
+
+        // A team remains operational while at least one worker has finished and
+        // another accepted assignment is still pending completion.
+        if ($awaitingCustomer > 0) {
             return CleaningBookingStatus::InProgress;
         }
 

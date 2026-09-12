@@ -19,7 +19,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Illuminate\Support\Str;
+use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingSession;
 use Spatie\QueryBuilder\QueryBuilder;
 use Throwable;
 
@@ -48,11 +50,36 @@ final class DisputeController
         $user = $request->user();
         $data = $request->validated();
 
+        $booking = null;
         if (! $this->isAdmin($user)) {
             abort_unless($data['bookingType'] === 'cleaning_booking', Response::HTTP_FORBIDDEN);
 
             $booking = CleaningBooking::query()->findOrFail((int) $data['bookingId']);
             abort_unless((int) $booking->customer_id === (int) $user->id, Response::HTTP_FORBIDDEN);
+        } elseif (($data['bookingType'] ?? null) === 'cleaning_booking') {
+            $booking = CleaningBooking::query()->findOrFail((int) $data['bookingId']);
+        }
+
+        $sessionId = (int) ($data['cleaningBookingSessionId'] ?? 0);
+        if ($sessionId > 0) {
+            abort_unless($booking instanceof CleaningBooking, Response::HTTP_UNPROCESSABLE_ENTITY, 'A cleaning session requires a cleaning booking.');
+
+            $session = CleaningBookingSession::query()
+                ->whereKey($sessionId)
+                ->where('cleaning_booking_id', $booking->id)
+                ->first();
+            abort_unless($session instanceof CleaningBookingSession, Response::HTTP_UNPROCESSABLE_ENTITY, 'Session does not belong to this booking.');
+
+            if (! $this->isAdmin($user)) {
+                $status = $session->status instanceof CleaningBookingSessionStatus
+                    ? $session->status
+                    : CleaningBookingSessionStatus::tryFrom((string) $session->status);
+                abort_unless(
+                    in_array($status, [CleaningBookingSessionStatus::Completed, CleaningBookingSessionStatus::Cancelled], true),
+                    Response::HTTP_UNPROCESSABLE_ENTITY,
+                    'A session dispute can only be opened after completion or cancellation.',
+                );
+            }
         }
 
         $data['ticketNumber'] ??= 'DSP-'.now()->format('Ymd').'-'.Str::upper(Str::random(6));

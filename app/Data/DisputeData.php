@@ -18,6 +18,7 @@ final class DisputeData extends Data
     public function __construct(
         public ?int $bookingId,
         public ?string $bookingType,
+        public ?int $cleaningBookingSessionId,
         public ?string $ticketNumber,
         public ?string $description,
         public ?string $category,

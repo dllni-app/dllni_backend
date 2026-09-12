@@ -19,6 +19,8 @@ final class DisputeResource extends JsonResource
             'id' => $this->id,
             'bookingId' => $this->booking_id,
             'bookingType' => $this->booking_type,
+            'cleaningBookingSessionId' => $this->cleaning_booking_session_id,
+            'sessionId' => $this->cleaning_booking_session_id,
             'ticketNumber' => $this->ticket_number,
             'category' => $this->category?->value ?? $this->category,
             'status' => $this->status?->value ?? $this->status,

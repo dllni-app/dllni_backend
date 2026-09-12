@@ -277,7 +277,7 @@ it('returns a worker after the customer confirms that worker while the team book
         ->toContain($worker->id);
 });
 
-it('ignores property type and neighborhood parameters while applying the optional schedule filter', function (): void {
+it('accepts a valid property type and ignores neighborhood while applying the optional schedule filter', function (): void {
     seedPreviousWorkerEligibilitySettings();
 
     $customer = User::factory()->create();
@@ -305,7 +305,7 @@ it('ignores property type and neighborhood parameters while applying the optiona
     createCompletedCleaningAssignment($customer, $unavailableWorker);
 
     $query = http_build_query([
-        'propertyType' => 'unsupported-property-type',
+        'propertyType' => 'apartment',
         'scheduledDate' => now()->toDateString(),
         'scheduledTime' => '12:00',
         'neighborhoodId' => 'not-a-neighborhood-id',

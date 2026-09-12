@@ -77,7 +77,7 @@ it('keeps the booking pending after the first worker accepts and finalizes when 
     $roomIds = collect($create->json('order.roomAssignments'))->pluck('id')->values()->all();
 
     $worker1User = User::factory()->create(['email' => 'multi-worker-1@example.com']);
-    $worker1 = Worker::factory()->create([
+    $worker1 = Worker::factory()->financiallyEligible()->create([
         'user_id' => $worker1User->id,
         'home_address' => 'Worker One Home',
         'home_latitude' => 33.5,
@@ -104,7 +104,7 @@ it('keeps the booking pending after the first worker accepts and finalizes when 
     expect($acceptOne->json('data.worker_assignment.roomIds'))->toEqualCanonicalizing([$roomIds[0]]);
 
     $worker2User = User::factory()->create(['email' => 'multi-worker-2@example.com']);
-    Worker::factory()->create([
+    Worker::factory()->financiallyEligible()->create([
         'user_id' => $worker2User->id,
         'home_address' => 'Worker Two Home',
         'home_latitude' => 33.6,
@@ -136,7 +136,7 @@ it('moves to in progress only after the customer verifies start and all accepted
     $orderId = (int) $create->json('order.id');
 
     $worker1User = User::factory()->create(['email' => 'start-approval-worker-1@example.com']);
-    $worker1 = Worker::factory()->create([
+    $worker1 = Worker::factory()->financiallyEligible()->create([
         'user_id' => $worker1User->id,
         'home_address' => 'Worker One Home',
         'home_latitude' => 33.5,
@@ -147,7 +147,7 @@ it('moves to in progress only after the customer verifies start and all accepted
     postJson("/api/v1/cleaning-bookings/{$orderId}/accept")->assertOk();
 
     $worker2User = User::factory()->create(['email' => 'start-approval-worker-2@example.com']);
-    Worker::factory()->create([
+    Worker::factory()->financiallyEligible()->create([
         'user_id' => $worker2User->id,
         'home_address' => 'Worker Two Home',
         'home_latitude' => 33.6,
@@ -160,13 +160,13 @@ it('moves to in progress only after the customer verifies start and all accepted
         ->assertJsonPath('data.status', CleaningBookingStatus::WorkerAssigned->value);
 
     Sanctum::actingAs($worker1User);
-    $code = getJson("/api/v1/cleaning-bookings/{$orderId}/security-code")
-        ->assertOk()
-        ->json('data.securityCode');
     postJson("/api/v1/cleaning-bookings/{$orderId}/start-travel")->assertOk();
     postJson("/api/v1/cleaning-bookings/{$orderId}/arrive")
         ->assertOk()
         ->assertJsonPath('data.status', CleaningBookingStatus::AwaitingStartVerification->value);
+    $code = getJson("/api/v1/cleaning-bookings/{$orderId}/security-code")
+        ->assertOk()
+        ->json('data.securityCode');
 
     Sanctum::actingAs($customer);
     postJson("/api/v1/user/cleaning/orders/{$orderId}/start-verification/confirm", [
@@ -174,16 +174,35 @@ it('moves to in progress only after the customer verifies start and all accepted
     ])
         ->assertOk()
         ->assertJsonPath('data.status', CleaningBookingStatus::AwaitingWorkerStartConfirmation->value)
-        ->assertJsonPath('data.start_approved_workers_count', 0)
-        ->assertJsonPath('data.not_start_approved_workers_count', 2);
+        ->assertJsonPath('data.start_approved_workers_count', 1)
+        ->assertJsonPath('data.not_start_approved_workers_count', 1);
 
     Sanctum::actingAs($worker1User);
     postJson("/api/v1/cleaning-bookings/{$orderId}/start-work")
         ->assertOk()
-        ->assertJsonPath('data.status', CleaningBookingStatus::AwaitingWorkerStartConfirmation->value)
-        ->assertJsonPath('data.worker_order_status', CleaningBookingWorkerAssignmentStatus::StartApproved->value)
+        ->assertJsonPath('data.status', CleaningBookingStatus::InProgress->value)
+        ->assertJsonPath('data.order_status', CleaningBookingStatus::AwaitingWorkerStartConfirmation->value)
+        ->assertJsonPath('data.worker_order_status', CleaningBookingWorkerAssignmentStatus::InProgress->value)
         ->assertJsonPath('data.start_approved_workers_count', 1)
         ->assertJsonPath('data.not_start_approved_workers_count', 1);
+
+    Sanctum::actingAs($worker2User);
+    postJson("/api/v1/cleaning-bookings/{$orderId}/start-travel")->assertOk();
+    postJson("/api/v1/cleaning-bookings/{$orderId}/arrive")
+        ->assertOk()
+        ->assertJsonPath('data.status', CleaningBookingStatus::AwaitingStartVerification->value);
+    $workerTwoCode = getJson("/api/v1/cleaning-bookings/{$orderId}/security-code")
+        ->assertOk()
+        ->json('data.securityCode');
+
+    Sanctum::actingAs($customer);
+    postJson("/api/v1/user/cleaning/orders/{$orderId}/start-verification/confirm", [
+        'code' => $workerTwoCode,
+    ])
+        ->assertOk()
+        ->assertJsonPath('data.status', CleaningBookingStatus::AwaitingWorkerStartConfirmation->value)
+        ->assertJsonPath('data.start_approved_workers_count', 2)
+        ->assertJsonPath('data.not_start_approved_workers_count', 0);
 
     Sanctum::actingAs($worker2User);
     postJson("/api/v1/cleaning-bookings/{$orderId}/start-work")
@@ -199,7 +218,7 @@ it('moves to in progress only after the customer verifies start and all accepted
     $this->assertDatabaseHas('cleaning_booking_worker_assignments', [
         'cleaning_booking_id' => $orderId,
         'worker_id' => $worker1->id,
-        'status' => CleaningBookingWorkerAssignmentStatus::StartApproved->value,
+        'status' => CleaningBookingWorkerAssignmentStatus::InProgress->value,
     ]);
 });
 
@@ -214,7 +233,7 @@ it('allows an accepted worker to claim rooms while the booking is still pending'
     $roomIds = collect($create->json('order.roomAssignments'))->pluck('id')->values()->all();
 
     $workerUser = User::factory()->create(['email' => 'claim-worker@example.com']);
-    Worker::factory()->create([
+    Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'home_address' => 'Claim Worker Home',
         'home_latitude' => 33.55,
@@ -273,46 +292,46 @@ it('applies planned worker room slots to accepted workers as the team fills', fu
     $orderId = (int) $create->json('order.id');
 
     $worker1User = User::factory()->create(['email' => 'planned-worker-1@example.com']);
-    $worker1 = Worker::factory()->create([
+    $worker1 = Worker::factory()->financiallyEligible()->create([
         'user_id' => $worker1User->id,
         'home_address' => 'Planned Worker One Home',
         'home_latitude' => 33.5,
         'home_longitude' => 36.3,
+        'trust_score' => 90,
     ]);
 
     Sanctum::actingAs($worker1User);
 
     $acceptOne = postJson("/api/v1/cleaning-bookings/{$orderId}/accept");
     $acceptOne->assertOk();
-    expect(collect($acceptOne->json('data.roomAssignments'))
-        ->where('plannedWorkerSlot', 1)
-        ->pluck('assignedWorkerId')
+    $firstAssignments = collect($acceptOne->json('data.roomAssignments'));
+    $workerOneSlots = $firstAssignments
+        ->where('assignedWorkerId', $worker1->id)
+        ->pluck('plannedWorkerSlot')
         ->unique()
-        ->values()
-        ->all())->toEqual([$worker1->id]);
-    expect(collect($acceptOne->json('data.roomAssignments'))
-        ->where('plannedWorkerSlot', 2)
-        ->pluck('assignedWorkerId')
-        ->filter()
-        ->values()
-        ->all())->toBeEmpty();
+        ->values();
+    expect($workerOneSlots)->toHaveCount(1);
+    expect($firstAssignments->whereNotNull('assignedWorkerId')->pluck('assignedWorkerId')->unique()->values()->all())
+        ->toEqual([$worker1->id]);
+    $workerOneSlot = (int) $workerOneSlots->first();
 
     $worker2User = User::factory()->create(['email' => 'planned-worker-2@example.com']);
-    $worker2 = Worker::factory()->create([
+    $worker2 = Worker::factory()->financiallyEligible()->create([
         'user_id' => $worker2User->id,
         'home_address' => 'Planned Worker Two Home',
         'home_latitude' => 33.6,
         'home_longitude' => 36.4,
+        'trust_score' => 80,
     ]);
 
     Sanctum::actingAs($worker2User);
 
     $acceptTwo = postJson("/api/v1/cleaning-bookings/{$orderId}/accept");
     $acceptTwo->assertOk();
-    expect(collect($acceptTwo->json('data.roomAssignments'))
-        ->where('plannedWorkerSlot', 2)
-        ->pluck('assignedWorkerId')
-        ->unique()
-        ->values()
-        ->all())->toEqual([$worker2->id]);
+    $finalAssignments = collect($acceptTwo->json('data.roomAssignments'));
+    expect($finalAssignments->pluck('assignedWorkerId'))->not->toContain(null);
+    expect($finalAssignments->pluck('assignedWorkerId')->unique()->values()->all())
+        ->toEqualCanonicalizing([$worker1->id, $worker2->id]);
+    expect($finalAssignments->where('plannedWorkerSlot', $workerOneSlot)->pluck('assignedWorkerId')->unique()->values()->all())
+        ->toEqual([$worker1->id]);
 });

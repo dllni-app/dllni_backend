@@ -5,20 +5,24 @@ declare(strict_types=1);
 namespace Modules\Cleaning\Models;
 
 use App\Models\Worker;
-use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
-use Modules\Cleaning\Observers\CleaningBookingSessionWorkerAssignmentObserver;
 
-#[ObservedBy([CleaningBookingSessionWorkerAssignmentObserver::class])]
 final class CleaningBookingSessionWorkerAssignment extends Model
 {
     protected $fillable = [
         'cleaning_booking_session_id',
-        'cleaning_booking_worker_assignment_id',
         'worker_id',
         'status',
+        'accepted_at',
+        'released_at',
+        'released_reason',
+        'late_reported_at',
+        'no_travel_reported_at',
+        'attendance_action',
+        'attendance_resolved_at',
+        'attendance_note',
         'started_travel_at',
         'arrived_at',
         'last_latitude',
@@ -40,11 +44,6 @@ final class CleaningBookingSessionWorkerAssignment extends Model
         return $this->belongsTo(CleaningBookingSession::class, 'cleaning_booking_session_id');
     }
 
-    public function parentAssignment(): BelongsTo
-    {
-        return $this->belongsTo(CleaningBookingWorkerAssignment::class, 'cleaning_booking_worker_assignment_id');
-    }
-
     public function worker(): BelongsTo
     {
         return $this->belongsTo(Worker::class);
@@ -54,6 +53,11 @@ final class CleaningBookingSessionWorkerAssignment extends Model
     {
         return [
             'status' => CleaningBookingWorkerAssignmentStatus::class,
+            'accepted_at' => 'datetime',
+            'released_at' => 'datetime',
+            'late_reported_at' => 'datetime',
+            'no_travel_reported_at' => 'datetime',
+            'attendance_resolved_at' => 'datetime',
             'started_travel_at' => 'datetime',
             'arrived_at' => 'datetime',
             'last_latitude' => 'float',
@@ -67,5 +71,23 @@ final class CleaningBookingSessionWorkerAssignment extends Model
             'admin_margin_amount' => 'float',
             'worker_amount' => 'float',
         ];
+    }
+
+    public function isActive(): bool
+    {
+        return in_array(
+            (string) ($this->status?->value ?? $this->status),
+            CleaningBookingWorkerAssignmentStatus::activeValues(),
+            true,
+        );
+    }
+
+    public function isAccepted(): bool
+    {
+        return in_array(
+            (string) ($this->status?->value ?? $this->status),
+            CleaningBookingWorkerAssignmentStatus::acceptedValues(),
+            true,
+        );
     }
 }

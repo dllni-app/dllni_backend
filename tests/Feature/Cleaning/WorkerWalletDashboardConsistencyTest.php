@@ -64,7 +64,7 @@ it('returns the same worker financial values used by the Filament dashboard', fu
         'service_share_amount' => 2000,
         'travel_fee' => 250,
         'admin_margin_amount' => 500,
-        'worker_amount' => 1750,
+        'worker_amount' => 2250,
         'currency' => 'SYP',
     ]);
 
@@ -86,13 +86,13 @@ it('returns the same worker financial values used by the Filament dashboard', fu
     $this->getJson('/api/v1/cleaning/worker/account/deposit')
         ->assertOk()
         ->assertJsonPath('workerId', $worker->id)
-        ->assertJsonPath('currentBalance', $expected['depositBalance'])
-        ->assertJsonPath('allowedDebtLimit', $expected['allowedDebtLimit'])
-        ->assertJsonPath('totalRevenue', $expected['totalRevenue'])
+        ->assertJsonPath('currentBalance', (int) $expected['depositBalance'])
+        ->assertJsonPath('allowedDebtLimit', (int) $expected['allowedDebtLimit'])
+        ->assertJsonPath('totalRevenue', (int) $expected['totalRevenue'])
         ->assertJsonPath('completedJobs', $expected['completedJobs'])
-        ->assertJsonPath('totalCommission', $expected['totalCommission'])
-        ->assertJsonPath('adminCommissionBalance', $expected['adminCommissionBalance'])
-        ->assertJsonPath('grossInvoicesAmount', round(
+        ->assertJsonPath('totalCommission', (int) $expected['totalCommission'])
+        ->assertJsonPath('adminCommissionBalance', (int) $expected['adminCommissionBalance'])
+        ->assertJsonPath('grossInvoicesAmount', (int) round(
             (float) $expected['totalRevenue'] + (float) $expected['totalCommission'],
             2,
         ));

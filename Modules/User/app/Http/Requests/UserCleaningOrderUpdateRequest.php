@@ -9,11 +9,14 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\User\Http\Requests\Concerns\ValidatesEventAssistanceSchedule;
 use Modules\User\Services\FemaleWorkerSafetyPolicyService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrderUpdateRequest extends FormRequest
 {
+    use ValidatesEventAssistanceSchedule;
+
     public function authorize(): bool
     {
         return true;
@@ -56,15 +59,24 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
             'propertyDetails.guestCount' => [Rule::requiredIf($eventPayloadRequested), 'integer', 'min:1', 'max:5000'],
             'propertyDetails.venueType' => [Rule::requiredIf($eventPayloadRequested), 'string', Rule::in($this->availableVenueTypes())],
             'propertyDetails.customService' => [Rule::requiredIf($eventPayloadRequested), Rule::prohibitedIf(! $isEventAssistance), 'string', 'max:255'],
-            'propertyDetails.hours' => [Rule::requiredIf($eventPayloadRequested), Rule::prohibitedIf(! $isEventAssistance), 'numeric', 'min:1', 'max:744'],
+            'propertyDetails.hours' => [Rule::requiredIf($eventPayloadRequested), Rule::prohibitedIf(! $isEventAssistance), 'numeric', 'min:1', 'max:24'],
             'propertyDetails.specialRequirement' => ['nullable', 'string', 'max:255'],
             'propertyDetails.notes' => ['nullable', 'string', 'max:2000'],
             'cleaning_services' => ['sometimes', 'nullable', 'array'],
             'cleaning_services.*' => ['string', 'max:255'],
             'serviceIds' => ['prohibited'],
             'serviceIds.*' => ['prohibited'],
+            'requestMaterials' => ['sometimes', 'boolean'],
+            'specialServices' => ['sometimes', 'array', 'max:10'],
+            'specialServices.*' => ['array:specialServiceId,quantity,dirtinessLevel,notes'],
+            'specialServices.*.specialServiceId' => ['required', 'integer', 'distinct', 'exists:cleaning_special_services,id'],
+            'specialServices.*.quantity' => ['required', 'numeric', 'gt:0', 'max:10000'],
+            'specialServices.*.dirtinessLevel' => ['required', 'string', 'max:32'],
+            'specialServices.*.notes' => ['nullable', 'string', 'max:2000'],
+            'openTime' => ['prohibited'],
             'scheduledDate' => ['sometimes', 'date', 'after_or_equal:'.$today],
             'scheduledTime' => ['sometimes', 'date_format:H:i'],
+            ...$this->eventAssistanceScheduleRules($isEventAssistance),
             'addressLatitude' => ['sometimes', 'numeric', 'between:-90,90'],
             'addressLongitude' => ['sometimes', 'numeric', 'between:-180,180'],
             'neighborhoodId' => ['sometimes', 'nullable', 'integer', Rule::exists('cleaning_neighborhoods', 'id')->where('is_active', true)],
@@ -90,6 +102,8 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
+            $this->validateEventAssistanceSchedule($validator);
+
             $assignmentMode = $this->normalizedAssignmentMode();
             $preferredWorkerId = $this->input('preferredWorkerId');
 
@@ -135,11 +149,14 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
         }
 
         $bookingId = $this->route('order');
-        if (is_numeric($bookingId)) {
-            return CleaningBooking::query()
+        if (
+            is_numeric($bookingId)
+            && CleaningBooking::query()
                 ->whereKey((int) $bookingId)
                 ->where('property_type', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
-                ->exists();
+                ->exists()
+        ) {
+            return true;
         }
 
         return $this->shouldValidateEventPayload();
@@ -154,7 +171,8 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
         return $this->has('propertyDetails.eventType')
             || $this->has('propertyDetails.guestCount')
             || $this->has('propertyDetails.venueType')
-            || $this->has('propertyDetails.customService');
+            || $this->has('propertyDetails.customService')
+            || $this->has('propertyDetails.hours');
     }
 
     private function requiresFemaleWorkerSafetyConfirmation(): bool
@@ -174,7 +192,7 @@ final class UserCleaningOrderUpdateRequest extends FormRequest
         $hasAcceptedAssignments = CleaningBooking::query()
             ->whereKey((int) $bookingId)
             ->whereHas('workerAssignments', static function ($query): void {
-                $query->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
+                $query->where('status', CleaningBookingWorkerAssignmentStatus::Accepted->value);
             })
             ->exists();
 

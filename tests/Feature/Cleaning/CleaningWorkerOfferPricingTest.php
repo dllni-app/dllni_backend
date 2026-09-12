@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\CleaningFinancialSetting;
+use App\Models\PlatformCoupon;
 use App\Models\User;
 use App\Models\Worker;
 use Laravel\Sanctum\Sanctum;
@@ -23,7 +24,7 @@ it('returns the current worker complete pricing before accepting the cleaning or
     );
 
     $workerUser = User::factory()->create();
-    $worker = Worker::factory()->create([
+    $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'home_address' => 'Worker home',
         'home_latitude' => 33.5,
@@ -55,8 +56,8 @@ it('returns the current worker complete pricing before accepting the cleaning or
         ->assertJsonPath('data.basePrice', 5000)
         ->assertJsonPath('data.travelFee', 11120)
         ->assertJsonPath('data.adminMargin', 500)
-        ->assertJsonPath('data.workerAmount', 15620)
-        ->assertJsonPath('data.totalPrice', 15620)
+        ->assertJsonPath('data.workerAmount', 16120)
+        ->assertJsonPath('data.totalPrice', 16120)
         ->assertJsonPath('data.isPricingFinal', false)
         ->assertJsonPath('data.totalHours', 2)
         ->assertJsonPath('data.bookingTotalHours', 4)
@@ -67,8 +68,8 @@ it('returns the current worker complete pricing before accepting the cleaning or
         ->assertJsonPath('data.myAssignment.serviceShareAmount', 5000)
         ->assertJsonPath('data.myAssignment.travelFee', 11120)
         ->assertJsonPath('data.myAssignment.adminMarginAmount', 500)
-        ->assertJsonPath('data.myAssignment.workerAmount', 15620)
-        ->assertJsonPath('data.myAssignment.totalPrice', 15620)
+        ->assertJsonPath('data.myAssignment.workerAmount', 16120)
+        ->assertJsonPath('data.myAssignment.totalPrice', 16120)
         ->assertJsonPath('data.myAssignment.grossTotalPrice', 16120)
         ->assertJsonPath('data.myAssignment.totalHours', 2)
         ->assertJsonPath('data.myAssignment.isPreview', true)
@@ -88,7 +89,7 @@ it('calculates the cleaning worker offer time and service share from the planned
     );
 
     $workerUser = User::factory()->create();
-    Worker::factory()->create([
+    Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'home_address' => 'Worker home',
         'home_latitude' => 33.5,
@@ -162,7 +163,7 @@ it('keeps every event worker on the full event duration and preserves the worker
     );
 
     $workerUser = User::factory()->create();
-    $worker = Worker::factory()->create([
+    $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'home_address' => 'Worker home',
         'home_latitude' => 33.5,
@@ -212,4 +213,147 @@ it('keeps every event worker on the full event duration and preserves the worker
         'worker_id' => $worker->id,
         'service_share_amount' => 1440,
     ]);
+});
+
+it('uses the discounted admin margin in pending worker api offers without reducing service share', function (): void {
+    CleaningFinancialSetting::query()->updateOrCreate(
+        ['id' => 1],
+        [
+            'default_commission_rate' => 25,
+            'commission_type' => 'percent',
+            'commission_fixed_amount' => null,
+            'travel_per_km' => 0,
+            'travel_distance_start_point' => 'worker_home',
+        ],
+    );
+
+    $coupon = PlatformCoupon::query()->create([
+        'code' => 'WORKER10',
+        'title_ar' => 'خصم تنظيف',
+        'title_en' => 'Cleaning discount',
+        'description_ar' => 'اختبار',
+        'description_en' => 'Test',
+        'section' => PlatformCoupon::SECTION_CLEANING,
+        'discount_type' => PlatformCoupon::DISCOUNT_PERCENTAGE,
+        'discount_value' => 10,
+        'audience_type' => PlatformCoupon::AUDIENCE_ALL_USERS,
+        'is_active' => true,
+        'starts_at' => now()->subMinute(),
+        'expires_at' => now()->addDay(),
+    ]);
+
+    $workerUser = User::factory()->create();
+    Worker::factory()->financiallyEligible()->create([
+        'user_id' => $workerUser->id,
+        'home_address' => 'Worker home',
+        'home_latitude' => 33.5,
+        'home_longitude' => 36.3,
+    ]);
+
+    $booking = CleaningBooking::withoutEvents(fn (): CleaningBooking => CleaningBooking::factory()->create([
+        'customer_id' => User::factory()->create()->id,
+        'worker_id' => null,
+        'status' => CleaningBookingStatus::Pending,
+        'number_of_workers' => 1,
+        'base_price' => 960,
+        'addons_total' => 0,
+        'travel_fee' => 0,
+        'admin_margin_amount' => 120,
+        'subtotal_before_discount' => 1200,
+        'discount_amount' => 120,
+        'total_price' => 1080,
+        'platform_coupon_id' => $coupon->id,
+        'platform_coupon_code' => $coupon->code,
+        'is_pricing_final' => false,
+        'estimated_hours' => 2,
+        'total_hours' => 2,
+        'address_latitude' => 33.6,
+        'address_longitude' => 36.3,
+    ]));
+
+    Sanctum::actingAs($workerUser);
+
+    $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}");
+
+    $response->assertOk()
+        ->assertJsonPath('data.basePrice', 960)
+        ->assertJsonPath('data.serviceShareAmount', 960)
+        ->assertJsonPath('data.adminMargin', 120)
+        ->assertJsonPath('data.workerOffer.serviceShareAmount', 960)
+        ->assertJsonPath('data.workerOffer.adminMarginAmount', 120)
+        ->assertJsonPath('data.myAssignment.serviceShareAmount', 960)
+        ->assertJsonPath('data.myAssignment.adminMarginAmount', 120)
+        ->assertJsonPath('data.myAssignment.workerAmount', 960)
+        ->assertJsonPath('data.couponApplied', true)
+        ->assertJsonPath('data.couponCode', 'WORKER10')
+        ->assertJsonPath('data.discountAmount', 120)
+        ->assertJsonPath('data.subtotalBeforeDiscount', 1200);
+});
+
+it('reduces pending worker service share only by coupon excess above admin margin', function (): void {
+    CleaningFinancialSetting::query()->updateOrCreate(
+        ['id' => 1],
+        [
+            'default_commission_rate' => 10,
+            'commission_type' => 'percent',
+            'commission_fixed_amount' => null,
+            'travel_per_km' => 0,
+            'travel_distance_start_point' => 'worker_home',
+        ],
+    );
+
+    $coupon = PlatformCoupon::query()->create([
+        'code' => 'WORKER15EXCESS',
+        'title_ar' => 'خصم تنظيف',
+        'title_en' => 'Cleaning discount',
+        'description_ar' => 'اختبار',
+        'description_en' => 'Test',
+        'section' => PlatformCoupon::SECTION_CLEANING,
+        'discount_type' => PlatformCoupon::DISCOUNT_PERCENTAGE,
+        'discount_value' => 15,
+        'audience_type' => PlatformCoupon::AUDIENCE_ALL_USERS,
+        'is_active' => true,
+        'starts_at' => now()->subMinute(),
+        'expires_at' => now()->addDay(),
+    ]);
+
+    $workerUser = User::factory()->create();
+    Worker::factory()->financiallyEligible()->create([
+        'user_id' => $workerUser->id,
+        'home_address' => 'Worker home',
+        'home_latitude' => 33.5,
+        'home_longitude' => 36.3,
+    ]);
+
+    $booking = CleaningBooking::withoutEvents(fn (): CleaningBooking => CleaningBooking::factory()->create([
+        'customer_id' => User::factory()->create()->id,
+        'worker_id' => null,
+        'status' => CleaningBookingStatus::Pending,
+        'number_of_workers' => 1,
+        'base_price' => 1000,
+        'addons_total' => 0,
+        'travel_fee' => 0,
+        'admin_margin_amount' => 0,
+        'subtotal_before_discount' => 1100,
+        'discount_amount' => 165,
+        'total_price' => 935,
+        'platform_coupon_id' => $coupon->id,
+        'platform_coupon_code' => $coupon->code,
+        'is_pricing_final' => false,
+        'estimated_hours' => 2,
+        'total_hours' => 2,
+        'address_latitude' => 33.6,
+        'address_longitude' => 36.3,
+    ]));
+
+    Sanctum::actingAs($workerUser);
+
+    $response = $this->getJson("/api/v1/cleaning-bookings/{$booking->id}");
+
+    $response->assertOk()
+        ->assertJsonPath('data.basePrice', 935)
+        ->assertJsonPath('data.serviceShareAmount', 935)
+        ->assertJsonPath('data.adminMargin', 0)
+        ->assertJsonPath('data.workerOffer.serviceShareAmount', 935)
+        ->assertJsonPath('data.workerOffer.adminMarginAmount', 0);
 });

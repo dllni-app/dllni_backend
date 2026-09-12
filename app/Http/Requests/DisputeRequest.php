@@ -24,6 +24,7 @@ final class DisputeRequest extends FormRequest
         return [
             'bookingId' => ['required', 'integer'],
             'bookingType' => ['required', 'string', Rule::in(['cleaning_booking', 'event_booking'])],
+            'cleaningBookingSessionId' => ['nullable', 'integer', 'exists:cleaning_booking_sessions,id'],
             'ticketNumber' => [
                 'nullable',
                 'string',
@@ -44,7 +45,7 @@ final class DisputeRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         if ($this->has('description') && is_string($this->input('description'))) {
-            $this->merge(['description' => trim((string) $this->input('description'))]);
+            $this->merge(['description' => mb_trim((string) $this->input('description'))]);
         }
     }
 }

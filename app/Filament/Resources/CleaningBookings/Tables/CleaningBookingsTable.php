@@ -28,10 +28,8 @@ use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
-use Modules\Cleaning\Services\CleaningBookingMultiDayTeamService;
 use Modules\Cleaning\Services\CleaningBookingTeamService;
 use Modules\Cleaning\Services\CleaningLifecycleNotificationService;
-use Modules\Cleaning\Services\WorkerBookingScheduleConflictService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 use Throwable;
 
@@ -55,33 +53,42 @@ final class CleaningBookingsTable
                     ->getStateUsing(fn (CleaningBooking $record): string => $record->dashboardKindLabel())
                     ->badge()
                     ->color(fn (CleaningBooking $record): string => $record->dashboardKindColor()),
-                TextColumn::make('event_days')
-                    ->label(self::headerLabel('عدد الأيام', 'عدد جلسات التنفيذ المسجلة للمناسبة.'))
-                    ->getStateUsing(fn (CleaningBooking $record): string => self::isEventAssistance($record) ? self::integer($record->sessions_count ?? $record->sessionsCount()) : '-')
-                    ->badge()
-                    ->color('info')
-                    ->toggleable(),
                 TextColumn::make('event_progress')
-                    ->label(self::headerLabel('التقدم', 'الأيام المكتملة من إجمالي أيام المناسبة.'))
+                    ->label(self::headerLabel('تقدم المناسبة', 'عدد أيام المناسبة المكتملة من إجمالي أيام التنفيذ.'))
                     ->getStateUsing(function (CleaningBooking $record): string {
-                        if (! self::isEventAssistance($record) || (int) ($record->sessions_count ?? 0) <= 0) {
+                        if (! $record->isEventAssistanceBooking() || $record->sessions->isEmpty()) {
                             return '-';
                         }
 
-                        return sprintf('%d / %d', (int) ($record->completed_sessions_count ?? 0), (int) $record->sessions_count);
+                        $completed = $record->sessions->filter(
+                            fn ($session): bool => ($session->status?->value ?? (string) $session->status)
+                                === CleaningBookingSessionStatus::Completed->value,
+                        )->count();
+
+                        return $completed.' / '.$record->sessions->count();
                     })
                     ->badge()
-                    ->color(fn (CleaningBooking $record): string => (int) ($record->completed_sessions_count ?? 0) >= (int) ($record->sessions_count ?? 0) && (int) ($record->sessions_count ?? 0) > 0 ? 'success' : 'warning')
+                    ->color('info')
                     ->toggleable(),
-                TextColumn::make('next_session')
-                    ->label(self::headerLabel('الجلسة القادمة', 'أقرب يوم تنفيذ لم يكتمل أو يُلغَ.'))
-                    ->getStateUsing(fn (CleaningBooking $record): string => self::nextSessionLabel($record))
-                    ->placeholder('-')
-                    ->toggleable(),
-                TextColumn::make('event_date_range')
-                    ->label(self::headerLabel('فترة المناسبة', 'من أول يوم تنفيذ إلى آخر يوم.'))
-                    ->getStateUsing(fn (CleaningBooking $record): string => self::dateRangeLabel($record))
-                    ->placeholder('-')
+                TextColumn::make('event_next_appointment')
+                    ->label(self::headerLabel('موعد المناسبة القادم', 'أقرب يوم تنفيذ غير منتهٍ ضمن نفس رقم الحجز.'))
+                    ->getStateUsing(function (CleaningBooking $record): string {
+                        if (! $record->isEventAssistanceBooking()) {
+                            return '-';
+                        }
+
+                        $next = $record->sessions->first(function ($session): bool {
+                            $status = $session->status?->value ?? (string) $session->status;
+
+                            return ! in_array($status, CleaningBookingSessionStatus::terminalValues(), true);
+                        });
+
+                        if ($next === null) {
+                            return '-';
+                        }
+
+                        return $next->scheduled_date?->format('Y-m-d').' '.self::time($next->scheduled_time);
+                    })
                     ->toggleable(),
                 TextColumn::make('cancelled_by_role')
                     ->label(self::headerLabel('مصدر الإلغاء', 'يوضح الجهة التي ألغت الحجز.'))
@@ -126,33 +133,49 @@ final class CleaningBookingsTable
                     ->placeholder('-')
                     ->toggleable(),
                 TextColumn::make('scheduled_date')
-                    ->label(self::headerLabel('التاريخ', 'التاريخ الأول للحجز؛ للمناسبات متعددة الأيام استخدم الجلسة القادمة/الفترة.'))
+                    ->label(self::headerLabel('التاريخ', 'تاريخ تنفيذ الخدمة.'))
                     ->date('Y-m-d')
-                    ->sortable()
-                    ->toggleable(),
+                    ->sortable(),
                 TextColumn::make('scheduled_time')
-                    ->label(self::headerLabel('الوقت', 'وقت بداية أول جلسة للتوافق مع الحجوزات القديمة.'))
-                    ->formatStateUsing(fn ($state): string => self::time($state))
-                    ->toggleable(),
+                    ->label(self::headerLabel('الوقت', 'وقت بداية الخدمة بنظام 12 ساعة.'))
+                    ->formatStateUsing(fn ($state): string => self::time($state)),
                 TextColumn::make('room_coverage')
                     ->label(self::headerLabel('تغطية الغرف', 'عدد الغرف المخصصة من إجمالي الغرف، ولا ينطبق على المناسبات.'))
                     ->getStateUsing(fn (CleaningBooking $record): string => self::roomCoverageLabel($record))
                     ->badge()
                     ->color(fn (CleaningBooking $record): string => self::roomCoverageColor($record)),
                 TextColumn::make('total_price')
-                    ->label(self::headerLabel('الإجمالي', 'المبلغ الإجمالي المجمع لجميع جلسات المناسبة.'))
+                    ->label(self::headerLabel('الإجمالي', 'المبلغ الإجمالي بأرقام صحيحة.'))
                     ->formatStateUsing(fn ($state): string => self::money($state))
                     ->weight(FontWeight::Bold)
                     ->color('success')
                     ->tooltip(fn (CleaningBooking $record): string => self::priceFormula($record))
                     ->sortable(),
                 TextColumn::make('worker_payout')
-                    ->label(self::headerLabel('مستحقات العامل', 'إجمالي المستحقات المحسوبة للعاملين عبر جميع الجلسات.'))
+                    ->label(self::headerLabel('مستحقات العامل', 'إجمالي المستحقات المحسوبة للعاملين.'))
                     ->getStateUsing(fn (CleaningBooking $record): float => self::workerPayoutAmount($record))
                     ->formatStateUsing(fn ($state): string => self::money($state))
                     ->weight(FontWeight::Bold)
                     ->color('info')
                     ->tooltip(fn (CleaningBooking $record): string => self::workerPayoutFormula($record))
+                    ->toggleable(),
+                TextColumn::make('late_sessions_count')
+                    ->label(self::headerLabel('زيارات أُبلغ عن تأخرها', 'عدد الزيارات التي سجل العميل فيها تأخر عامل قبل بدء التنقل.'))
+                    ->getStateUsing(fn (CleaningBooking $record): int => $record->sessions
+                        ->filter(fn ($session): bool => $session->workerAssignments->contains(
+                            fn ($assignment): bool => $assignment->late_reported_at !== null,
+                        ))->count())
+                    ->badge()
+                    ->color(fn ($state): string => (int) $state > 0 ? 'warning' : 'gray')
+                    ->toggleable(),
+                TextColumn::make('no_travel_sessions_count')
+                    ->label(self::headerLabel('زيارات عدم التنقل', 'عدد الزيارات التي بلغ فيها العميل أن العامل لم يبدأ التنقل بعد مهلة عدم التنقل.'))
+                    ->getStateUsing(fn (CleaningBooking $record): int => $record->sessions
+                        ->filter(fn ($session): bool => $session->workerAssignments->contains(
+                            fn ($assignment): bool => $assignment->no_travel_reported_at !== null,
+                        ))->count())
+                    ->badge()
+                    ->color(fn ($state): string => (int) $state > 0 ? 'danger' : 'gray')
                     ->toggleable(),
                 TextColumn::make('disputes_count')
                     ->getStateUsing(fn (CleaningBooking $record): int => (int) ($record->disputes_count ?? 0))
@@ -171,9 +194,6 @@ final class CleaningBookingsTable
                 ->withCount([
                     'disputes',
                     'rooms',
-                    'sessions',
-                    'completedSessions',
-                    'cancelledSessions',
                     'acceptedWorkerAssignments',
                     'rooms as assigned_rooms_count' => fn (Builder $roomsQuery): Builder => $roomsQuery->whereNotNull('assigned_worker_id'),
                     'rooms as unassigned_rooms_count' => fn (Builder $roomsQuery): Builder => $roomsQuery->whereNull('assigned_worker_id'),
@@ -185,31 +205,29 @@ final class CleaningBookingsTable
                 Filter::make('has_dispute')
                     ->label('يوجد نزاع')
                     ->query(fn (Builder $query): Builder => $query->whereHas('disputes')),
+                Filter::make('has_late_session')
+                    ->label('يوجد بلاغ تأخر')
+                    ->query(fn (Builder $query): Builder => $query->whereHas(
+                        'sessions.workerAssignments',
+                        fn (Builder $assignmentQuery): Builder => $assignmentQuery->whereNotNull('late_reported_at'),
+                    )),
+                Filter::make('has_no_travel_session')
+                    ->label('يوجد بلاغ عدم تنقل')
+                    ->query(fn (Builder $query): Builder => $query->whereHas(
+                        'sessions.workerAssignments',
+                        fn (Builder $assignmentQuery): Builder => $assignmentQuery->whereNotNull('no_travel_reported_at'),
+                    )),
                 Filter::make('scheduled_today')
                     ->label('مجدول اليوم')
-                    ->query(fn (Builder $query): Builder => $query->scheduledOn(today())),
-                Filter::make('multi_day_event')
-                    ->label('مناسبة متعددة الأيام')
-                    ->query(fn (Builder $query): Builder => $query
-                        ->where('property_type', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
-                        ->has('sessions', '>', 1)),
-                Filter::make('partially_completed')
-                    ->label('منفذ جزئياً')
-                    ->query(fn (Builder $query): Builder => $query->where('status', CleaningBookingStatus::PartiallyCompleted->value)),
-                Filter::make('has_cancelled_sessions')
-                    ->label('يوجد أيام ملغاة')
-                    ->query(fn (Builder $query): Builder => $query->whereHas('sessions', fn (Builder $sessions): Builder => $sessions->where('status', CleaningBookingSessionStatus::Cancelled->value))),
+                    ->query(fn (Builder $query): Builder => $query->whereDate('scheduled_date', today())),
                 Filter::make('partial_team')
                     ->label('فريق جزئي')
                     ->query(fn (Builder $query): Builder => $query
-                        ->whereIn('status', [CleaningBookingStatus::Pending->value, CleaningBookingStatus::PartiallyCompleted->value])
+                        ->where('status', CleaningBookingStatus::Pending->value)
                         ->whereHas('acceptedWorkerAssignments')),
                 Filter::make('fulfilled_team')
                     ->label('فريق مكتمل')
-                    ->query(fn (Builder $query): Builder => $query->whereIn('status', [
-                        CleaningBookingStatus::WorkerAssigned->value,
-                        CleaningBookingStatus::PartiallyCompleted->value,
-                    ])),
+                    ->query(fn (Builder $query): Builder => $query->where('status', CleaningBookingStatus::WorkerAssigned->value)),
                 Filter::make('unassigned_rooms')
                     ->label('غرف غير مخصصة')
                     ->query(fn (Builder $query): Builder => $query
@@ -231,14 +249,14 @@ final class CleaningBookingsTable
                     ->label('إضافة عامل')
                     ->icon('heroicon-o-user-plus')
                     ->color('success')
-                    ->visible(fn (CleaningBooking $record): bool => in_array($record->status, [CleaningBookingStatus::Pending, CleaningBookingStatus::WorkerAssigned, CleaningBookingStatus::PartiallyCompleted], true)
+                    ->visible(fn (CleaningBooking $record): bool => in_array($record->status, [CleaningBookingStatus::Pending, CleaningBookingStatus::WorkerAssigned], true)
                         && $record->acceptedWorkerCount() < max(1, (int) ($record->number_of_workers ?? 1)))
                     ->modalHeading('إضافة عامل')
                     ->form([
                         Select::make('worker_id')
                             ->label('العامل')
                             ->options(fn (?CleaningBooking $record): array => self::activeWorkerOptions($record))
-                            ->helperText('للمناسبات متعددة الأيام تظهر فقط العمال المتاحون في جميع الجلسات القادمة، إضافة إلى شروط الجنس والحي والحساب المالي.')
+                            ->helperText('تظهر فقط الحسابات والعاملون النشطون المطابقون لجنس الحجز وتغطية الحي ووقت الحجز، مع عنوان وإحداثيات منزل مكتملة.')
                             ->searchable()
                             ->required(),
                         CheckboxList::make('room_ids')
@@ -258,8 +276,8 @@ final class CleaningBookingsTable
                             $worker = Worker::query()->with('user')->findOrFail((int) $data['worker_id']);
                             self::assertDashboardWorkerEligibility($record, $worker);
                             $roomIds = array_values(array_filter(array_map('intval', (array) ($data['room_ids'] ?? []))));
-                            $updated = app(CleaningBookingMultiDayTeamService::class)->acceptWorker(
-                                $record->fresh(['sessions', 'rooms.assignedWorker.user', 'workerAssignments.worker.user']),
+                            $updated = app(CleaningBookingTeamService::class)->acceptWorker(
+                                $record->fresh(['rooms.assignedWorker.user', 'workerAssignments.worker.user']),
                                 $worker,
                                 $roomIds !== [] ? $roomIds : null,
                             );
@@ -277,21 +295,14 @@ final class CleaningBookingsTable
                         $record->setRawAttributes($updated->getAttributes(), true);
                         self::notifyAdminWorkerAssignment($updated, $worker, $fromStatus);
 
-                        Notification::make()
-                            ->title('تمت إضافة العامل')
-                            ->body($updated->isMultiDayEventAssistance() ? 'تم تعيين العامل لجميع أيام المناسبة القادمة.' : null)
-                            ->success()
-                            ->send();
+                        Notification::make()->title('تمت إضافة العامل')->success()->send();
                     }),
                 Action::make('release_worker')
                     ->label('إلغاء تعيين العامل')
                     ->icon('heroicon-o-user-minus')
                     ->color('warning')
-                    ->visible(fn (CleaningBooking $record): bool => in_array($record->status, [CleaningBookingStatus::Pending, CleaningBookingStatus::WorkerAssigned, CleaningBookingStatus::PartiallyCompleted], true) && $record->acceptedWorkerCount() > 0)
+                    ->visible(fn (CleaningBooking $record): bool => in_array($record->status, [CleaningBookingStatus::Pending, CleaningBookingStatus::WorkerAssigned], true) && $record->acceptedWorkerCount() > 0)
                     ->modalHeading('إلغاء تعيين العامل')
-                    ->modalDescription(fn (CleaningBooking $record): ?string => $record->isMultiDayEventAssistance()
-                        ? 'سيتم إلغاء تعيين العامل من الأيام القادمة فقط، مع الاحتفاظ بسجل الأيام المنفذة.'
-                        : null)
                     ->form([
                         Select::make('worker_id')
                             ->label('العامل')
@@ -302,8 +313,8 @@ final class CleaningBookingsTable
                     ])
                     ->action(function (CleaningBooking $record, array $data): void {
                         $worker = Worker::query()->with('user')->findOrFail((int) $data['worker_id']);
-                        $updated = app(CleaningBookingMultiDayTeamService::class)->releaseWorker(
-                            $record->fresh(['sessions.workerAssignments', 'rooms.assignedWorker.user', 'workerAssignments.worker.user']),
+                        $updated = app(CleaningBookingTeamService::class)->rejectWorker(
+                            $record->fresh(['rooms.assignedWorker.user', 'workerAssignments.worker.user']),
                             $worker,
                             filled($data['reason'] ?? null) ? (string) $data['reason'] : null,
                         );
@@ -358,12 +369,6 @@ final class CleaningBookingsTable
             throw new InvalidArgumentException('Worker user account is inactive.');
         }
 
-        if (app(WorkerBookingScheduleConflictService::class)->hasConflict($worker, $booking)) {
-            throw new InvalidArgumentException($booking->isMultiDayEventAssistance()
-                ? 'Worker is not available for all event days.'
-                : 'Worker is not available at booking schedule.');
-        }
-
         if (! $worker->isAvailableForBooking($booking)) {
             throw new InvalidArgumentException('Worker is not available at booking schedule.');
         }
@@ -390,7 +395,6 @@ final class CleaningBookingsTable
             'requiredWorkers' => $requiredWorkers,
             'acceptedWorkers' => $acceptedWorkers,
             'remainingWorkers' => $remainingWorkers,
-            'daysCount' => $booking->sessionsCount(),
         ];
         $templateContext = [
             'required_workers' => $requiredWorkers,
@@ -480,32 +484,6 @@ final class CleaningBookingsTable
         return $names->filter(fn ($name): bool => filled($name))->unique()->values()->all();
     }
 
-    private static function nextSessionLabel(CleaningBooking $record): string
-    {
-        if (! self::isEventAssistance($record)) {
-            return '-';
-        }
-
-        $session = $record->nextActiveSession();
-        if ($session === null) {
-            return 'لا توجد جلسة قادمة';
-        }
-
-        return sprintf('%s — %s', $session->scheduled_date?->format('Y-m-d') ?? '-', self::time($session->scheduled_time));
-    }
-
-    private static function dateRangeLabel(CleaningBooking $record): string
-    {
-        if (! self::isEventAssistance($record) || $record->sessionsCount() === 0) {
-            return '-';
-        }
-
-        $first = $record->firstSession()?->scheduled_date?->format('Y-m-d');
-        $last = $record->lastSession()?->scheduled_date?->format('Y-m-d');
-
-        return $first === $last ? (string) $first : sprintf('%s → %s', $first ?? '-', $last ?? '-');
-    }
-
     private static function statusLabel(CleaningBookingStatus|string|null $status): string
     {
         return self::normalizeStatus($status)?->label() ?? '-';
@@ -520,7 +498,6 @@ final class CleaningBookingsTable
             CleaningBookingStatus::AwaitingWorkerStartConfirmation => 'info',
             CleaningBookingStatus::InProgress,
             CleaningBookingStatus::TimeExtensionRequested => 'primary',
-            CleaningBookingStatus::PartiallyCompleted => 'warning',
             CleaningBookingStatus::AwaitingCustomerCompletion,
             CleaningBookingStatus::UnderDispute => 'gray',
             CleaningBookingStatus::Completed => 'success',
@@ -545,7 +522,6 @@ final class CleaningBookingsTable
         return match ((string) $value) {
             'customer' => 'ألغاه العميل',
             'worker' => 'ألغاه العامل',
-            'admin' => 'ألغاه المدير',
             default => '-',
         };
     }
@@ -556,7 +532,7 @@ final class CleaningBookingsTable
 
         return match ((string) $value) {
             'customer' => 'danger',
-            'worker', 'admin' => 'warning',
+            'worker' => 'warning',
             default => 'gray',
         };
     }
@@ -600,11 +576,10 @@ final class CleaningBookingsTable
     private static function priceFormula(CleaningBooking $record): string
     {
         return sprintf(
-            'الأساسي %s + الإضافات %s + التنقل %s + التمديد %s + الإلغاء %s + هامش الإدارة %s = الإجمالي %s',
+            'الأساسي %s + الإضافات %s + التنقل %s + الإلغاء %s + هامش الإدارة %s = الإجمالي %s',
             self::money($record->base_price),
             self::money($record->addons_total),
             self::money($record->travel_fee),
-            self::money($record->extension_fee_total),
             self::money($record->cancellation_fee),
             self::money($record->admin_margin_amount),
             self::money($record->total_price),
@@ -643,21 +618,6 @@ final class CleaningBookingsTable
 
     private static function workerPayoutAmount(CleaningBooking $record): float
     {
-        if (self::isEventAssistance($record) && $record->sessionsCount() > 0) {
-            return (float) $record->sessions
-                ->flatMap(fn ($session) => $session->workerAssignments)
-                ->filter(static fn ($assignment): bool => ! in_array(
-                    (string) ($assignment->status?->value ?? $assignment->status),
-                    [
-                        CleaningBookingWorkerAssignmentStatus::Rejected->value,
-                        CleaningBookingWorkerAssignmentStatus::Withdrawn->value,
-                        CleaningBookingWorkerAssignmentStatus::Cancelled->value,
-                    ],
-                    true,
-                ))
-                ->sum('worker_amount');
-        }
-
         $assignments = $record->relationLoaded('workerAssignments')
             ? $record->workerAssignments
             : $record->workerAssignments()->get();
@@ -683,10 +643,6 @@ final class CleaningBookingsTable
 
     private static function workerPayoutFormula(CleaningBooking $record): string
     {
-        if (self::isEventAssistance($record) && $record->sessionsCount() > 0) {
-            return 'إجمالي مستحقات العاملين هو مجموع snapshots المحفوظة لكل يوم تنفيذ.';
-        }
-
         $assignments = $record->relationLoaded('workerAssignments')
             ? $record->workerAssignments
             : $record->workerAssignments()->get();
@@ -757,13 +713,11 @@ final class CleaningBookingsTable
             $query->whereNotIn('id', $acceptedWorkerIds);
         }
 
-        $conflicts = app(WorkerBookingScheduleConflictService::class);
-
         return $query
             ->orderByDesc('trust_score')
             ->orderBy('first_name')
             ->get()
-            ->filter(fn (Worker $worker): bool => ! $conflicts->hasConflict($worker, $record) && $worker->isAvailableForBooking($record))
+            ->filter(fn (Worker $worker): bool => $worker->isAvailableForBooking($record))
             ->mapWithKeys(fn (Worker $worker): array => [$worker->id => self::workerLabel($worker)])
             ->all();
     }
@@ -838,13 +792,11 @@ final class CleaningBookingsTable
             'Worker is not eligible to accept new requests.' => 'العامل غير مؤهل لاستقبال طلبات جديدة بسبب حالة الحساب أو التأمين.',
             'Worker user account is inactive.' => 'حساب المستخدم المرتبط بالعامل غير نشط.',
             'Worker is not available at booking schedule.' => 'العامل غير متاح في تاريخ ووقت الحجز المحدد.',
-            'Worker is not available for all event days.' => 'تعذر إضافة العامل لأنه غير متاح في جميع أيام المناسبة.',
             'Worker does not cover booking neighborhood.' => 'العامل لا يغطي الحي المحدد لهذا الحجز.',
             'Worker has already accepted this booking.' => 'العامل مضاف إلى هذا الحجز مسبقاً.',
             'Booking already has the required number of workers.' => 'اكتمل العدد المطلوب من العاملين لهذا الحجز.',
             'Booking is reserved for a different preferred worker.' => 'الحجز محجوز لعامل مفضل آخر.',
             'Booking cannot be accepted in current status.' => 'لا يمكن إضافة عامل في الحالة الحالية للحجز.',
-            'Booking has no remaining event sessions.' => 'لا توجد أيام متبقية في المناسبة يمكن تعيين العامل لها.',
             default => 'تعذر إضافة العامل بسبب عدم استيفاء شروط الحجز. راجع بيانات العامل والحجز ثم أعد المحاولة.',
         };
     }

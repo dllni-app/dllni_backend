@@ -9,11 +9,13 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 use Modules\Cleaning\Http\Requests\WorkerAccountStatusRequest;
 use Modules\Cleaning\Services\DepositService;
+use Modules\Cleaning\Services\WorkerDispatchEligibilityService;
 
 final class WorkerAccountStatusController
 {
     public function __construct(
         private readonly DepositService $depositService,
+        private readonly WorkerDispatchEligibilityService $dispatchEligibility,
     ) {}
 
     public function show(): JsonResponse
@@ -25,16 +27,9 @@ final class WorkerAccountStatusController
         }
 
         $worker->loadMissing('deposit');
-        $depositSummary = $this->depositService->depositStatusPayload($worker);
-        $canReceive = (bool) $depositSummary['isEligibleForNewRequests'];
-        $reasonCode = $this->reasonCode($worker, $depositSummary, $canReceive);
-        $gate = [
-            'canReceiveNewRequests' => $canReceive,
-            'canAcceptNewBookings' => $canReceive,
-            'reasonCode' => $reasonCode,
-            'message' => $this->messageFor($reasonCode),
-            'depositSummary' => $depositSummary,
-        ];
+        $gate = $this->dispatchEligibility->forNewRequests($worker);
+        $depositSummary = $gate['depositSummary'];
+        $canReceive = $gate['canReceiveNewRequests'];
 
         return response()->json([
             'isActive' => (bool) $worker->is_active,
@@ -66,49 +61,4 @@ final class WorkerAccountStatusController
         return auth()->user()?->worker;
     }
 
-    /** @param array<string, mixed> $depositSummary */
-    private function reasonCode(Worker $worker, array $depositSummary, bool $canReceive): string
-    {
-        if (! $worker->is_active) {
-            return 'worker_inactive';
-        }
-
-        if ($worker->is_suspended) {
-            return 'worker_suspended';
-        }
-
-        if ($canReceive) {
-            return 'eligible';
-        }
-
-        if ((bool) ($depositSummary['isAllowanceLimitExhausted'] ?? false)) {
-            return 'allowance_limit_exhausted';
-        }
-
-        if (($depositSummary['exceedanceAmount'] ?? null) !== null) {
-            return 'deposit_below_allowed_balance';
-        }
-
-        $currentBalance = (float) ($depositSummary['currentBalance'] ?? 0);
-        $minimumRequired = (float) ($depositSummary['minimumRequired'] ?? 0);
-        if ($currentBalance > 0 && $minimumRequired > 0 && $currentBalance < $minimumRequired) {
-            return 'deposit_required_before_start';
-        }
-
-        return 'trust_score_too_low';
-    }
-
-    private function messageFor(string $reasonCode): string
-    {
-        return match ($reasonCode) {
-            'eligible' => 'Your account can receive and accept new requests.',
-            'worker_inactive' => 'Your account is inactive. Reactivate your account to receive new requests.',
-            'worker_suspended' => 'Your account is suspended. Please contact support for more details.',
-            'allowance_limit_exhausted' => 'Your allowance limit has reached zero. Settle the administration margin before receiving new requests.',
-            'deposit_below_allowed_balance' => 'Your indebtedness exceeds the worker allowance limit. Settle the outstanding amount before receiving new requests.',
-            'deposit_required_before_start' => 'Your deposit balance is below the minimum required amount.',
-            'trust_score_too_low' => 'Your trust score is below the minimum required to receive new requests.',
-            default => 'Your account cannot receive new requests right now.',
-        };
-    }
 }

@@ -66,6 +66,7 @@ final class NotificationTypeRegistry
         return array_replace(
             $this->typesFromConfigAndFile('notification_types', 'notification_types.php'),
             $this->typesFromConfigAndFile('notification_type_extensions', 'notification_type_extensions.php'),
+            $this->typesFromConfigAndFile('cleaning_recurring_notification_types', 'cleaning_recurring_notification_types.php'),
             $this->typesFromConfigAndFile('cleaning_repeated_notification_types', 'cleaning_repeated_notification_types.php'),
             $this->typesFromConfigAndFile('platform_coupon_notification_types', 'platform_coupon_notification_types.php'),
         );
