@@ -8,78 +8,66 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    private const string TABLE = 'cleaning_booking_session_financial_penalties';
-
     public function up(): void
     {
-        if (! Schema::hasTable(self::TABLE)) {
-            $this->createTable();
+        $tableName = 'cleaning_booking_session_financial_penalties';
+
+        if (! Schema::hasTable($tableName)) {
+            Schema::create($tableName, function (Blueprint $table): void {
+                $table->id();
+                $table->foreignId('cleaning_booking_id');
+                $table->foreignId('cleaning_booking_session_id');
+                $table->foreignId('worker_id')->nullable();
+                $table->foreignId('customer_id')->nullable();
+                $table->foreignId('financial_transaction_id')->nullable();
+                $table->string('reference_key', 160);
+                $table->string('penalized_role', 20);
+                $table->string('financial_source', 30);
+                $table->decimal('amount', 12, 2);
+                $table->string('status', 20)->default('active');
+                $table->text('reason_snapshot')->nullable();
+                $table->timestamp('applied_at');
+                $table->timestamps();
+
+                $table->unique('reference_key', 'cleaning_session_penalty_reference_unique');
+                $table->index(
+                    ['cleaning_booking_session_id', 'penalized_role', 'status'],
+                    'cleaning_session_penalty_session_role_idx',
+                );
+                $table->index(
+                    ['cleaning_booking_id', 'status'],
+                    'cleaning_session_penalty_booking_status_idx',
+                );
+                $table->index(['worker_id', 'status'], 'cleaning_session_penalty_worker_status_idx');
+                $table->index(['customer_id', 'status'], 'cleaning_session_penalty_customer_status_idx');
+
+                $table->foreign('cleaning_booking_id', 'cleaning_session_penalty_booking_fk')
+                    ->references('id')
+                    ->on('cleaning_bookings')
+                    ->cascadeOnDelete();
+                $table->foreign('cleaning_booking_session_id', 'cleaning_session_penalty_session_fk')
+                    ->references('id')
+                    ->on('cleaning_booking_sessions')
+                    ->cascadeOnDelete();
+                $table->foreign('worker_id', 'cleaning_session_penalty_worker_fk')
+                    ->references('id')
+                    ->on('workers')
+                    ->nullOnDelete();
+                $table->foreign('customer_id', 'cleaning_session_penalty_customer_fk')
+                    ->references('id')
+                    ->on('users')
+                    ->nullOnDelete();
+                $table->foreign('financial_transaction_id', 'cleaning_session_penalty_transaction_fk')
+                    ->references('id')
+                    ->on('cleaning_deposit_transactions')
+                    ->nullOnDelete();
+            });
 
             return;
         }
 
-        // MySQL may leave the table behind when a later ALTER TABLE command
-        // fails. Reconcile that partially-created table instead of trying to
-        // create it again or dropping data that may already exist.
-        $this->ensureIndexes();
-        $this->ensureForeignKeys();
-    }
-
-    private function createTable(): void
-    {
-        Schema::create(self::TABLE, function (Blueprint $table): void {
-            $table->id();
-            $table->foreignId('cleaning_booking_id');
-            $table->foreignId('cleaning_booking_session_id');
-            $table->foreignId('worker_id')->nullable();
-            $table->foreignId('customer_id')->nullable();
-            $table->foreignId('financial_transaction_id')->nullable();
-            $table->string('reference_key', 160);
-            $table->string('penalized_role', 20);
-            $table->string('financial_source', 30);
-            $table->decimal('amount', 12, 2);
-            $table->string('status', 20)->default('active');
-            $table->text('reason_snapshot')->nullable();
-            $table->timestamp('applied_at');
-            $table->timestamps();
-
-            $table->unique('reference_key', 'cleaning_session_penalty_reference_unique');
-            $table->index(
-                ['cleaning_booking_session_id', 'penalized_role', 'status'],
-                'cleaning_session_penalty_session_role_idx',
-            );
-            $table->index(
-                ['cleaning_booking_id', 'status'],
-                'cleaning_session_penalty_booking_status_idx',
-            );
-            $table->index(['worker_id', 'status'], 'cleaning_session_penalty_worker_status_idx');
-            $table->index(['customer_id', 'status'], 'cleaning_session_penalty_customer_status_idx');
-
-            $table->foreign('cleaning_booking_id', 'cleaning_session_penalty_booking_fk')
-                ->references('id')
-                ->on('cleaning_bookings')
-                ->cascadeOnDelete();
-            $table->foreign('cleaning_booking_session_id', 'cleaning_session_penalty_session_fk')
-                ->references('id')
-                ->on('cleaning_booking_sessions')
-                ->cascadeOnDelete();
-            $table->foreign('worker_id', 'cleaning_session_penalty_worker_fk')
-                ->references('id')
-                ->on('workers')
-                ->nullOnDelete();
-            $table->foreign('customer_id', 'cleaning_session_penalty_customer_fk')
-                ->references('id')
-                ->on('users')
-                ->nullOnDelete();
-            $table->foreign('financial_transaction_id', 'cleaning_session_penalty_transaction_fk')
-                ->references('id')
-                ->on('cleaning_deposit_transactions')
-                ->nullOnDelete();
-        });
-    }
-
-    private function ensureIndexes(): void
-    {
+        // MySQL may persist CREATE TABLE even when a following ALTER TABLE
+        // fails. Complete that partially-created table without dropping it.
         $indexes = [
             'cleaning_session_penalty_reference_unique' => [
                 'columns' => ['reference_key'],
@@ -104,11 +92,11 @@ return new class extends Migration
         ];
 
         foreach ($indexes as $name => $definition) {
-            if (Schema::hasIndex(self::TABLE, $name)) {
+            if (Schema::hasIndex($tableName, $name)) {
                 continue;
             }
 
-            Schema::table(self::TABLE, function (Blueprint $table) use ($name, $definition): void {
+            Schema::table($tableName, function (Blueprint $table) use ($name, $definition): void {
                 if ($definition['unique']) {
                     $table->unique($definition['columns'], $name);
 
@@ -118,10 +106,11 @@ return new class extends Migration
                 $table->index($definition['columns'], $name);
             });
         }
-    }
 
-    private function ensureForeignKeys(): void
-    {
+        $existingForeignKeyColumns = collect(Schema::getForeignKeys($tableName))
+            ->flatMap(static fn (array $foreignKey): array => $foreignKey['columns'] ?? [])
+            ->all();
+
         $foreignKeys = [
             'cleaning_booking_id' => [
                 'name' => 'cleaning_session_penalty_booking_fk',
@@ -151,11 +140,11 @@ return new class extends Migration
         ];
 
         foreach ($foreignKeys as $column => $definition) {
-            if ($this->hasForeignKey($column)) {
+            if (in_array($column, $existingForeignKeyColumns, true)) {
                 continue;
             }
 
-            Schema::table(self::TABLE, function (Blueprint $table) use ($column, $definition): void {
+            Schema::table($tableName, function (Blueprint $table) use ($column, $definition): void {
                 $foreign = $table->foreign($column, $definition['name'])
                     ->references('id')
                     ->on($definition['table']);
@@ -171,19 +160,8 @@ return new class extends Migration
         }
     }
 
-    private function hasForeignKey(string $column): bool
-    {
-        foreach (Schema::getForeignKeys(self::TABLE) as $foreignKey) {
-            if (in_array($column, $foreignKey['columns'] ?? [], true)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     public function down(): void
     {
-        Schema::dropIfExists(self::TABLE);
+        Schema::dropIfExists('cleaning_booking_session_financial_penalties');
     }
 };
