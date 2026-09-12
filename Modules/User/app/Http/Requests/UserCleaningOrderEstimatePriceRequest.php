@@ -8,12 +8,18 @@ use App\Enums\GenderPreference;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
+use Modules\User\Http\Requests\Concerns\ValidatesEventAssistanceSchedule;
+use Modules\User\Http\Requests\Concerns\ValidatesDynamicCleaningEvent;
+use Modules\User\Http\Requests\Concerns\ValidatesRecurringWorkerScope;
 use Modules\User\Http\Requests\Concerns\ValidatesWorkerRoomAssignments;
 use Modules\User\Models\UserAddress;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 final class UserCleaningOrderEstimatePriceRequest extends FormRequest
 {
+    use ValidatesEventAssistanceSchedule;
+    use ValidatesDynamicCleaningEvent;
+    use ValidatesRecurringWorkerScope;
     use ValidatesWorkerRoomAssignments;
 
     private const INCOMPLETE_ADDRESS_MESSAGE = 'يرجى تحديث العنوان المختار وإضافة الحي والإحداثيات قبل إنشاء الطلب.';
@@ -23,54 +29,12 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
         return true;
     }
 
-    protected function prepareForValidation(): void
-    {
-        $merge = [];
-
-        $preferredWorkerIds = $this->normalizePreferredWorkerIds(
-            $this->input('preferredWorkerIds', $this->input('preferredWorkerId'))
-        );
-
-        if ($preferredWorkerIds !== [] || $this->has('preferredWorkerIds')) {
-            $merge['preferredWorkerIds'] = $preferredWorkerIds;
-            $merge['preferredWorkerId'] = $preferredWorkerIds[0] ?? null;
-
-            if (count($preferredWorkerIds) > 1) {
-                if (! $this->filled('numberOfWorkers')) {
-                    $merge['numberOfWorkers'] = count($preferredWorkerIds);
-                }
-
-                if (! $this->filled('assignmentMode')) {
-                    $merge['assignmentMode'] = 'open_count';
-                }
-            }
-        }
-
-        $addressId = $this->input('addressId');
-        if (is_numeric($addressId) && $this->user() !== null) {
-            $address = UserAddress::query()
-                ->whereKey((int) $addressId)
-                ->where('user_id', (int) $this->user()->id)
-                ->first();
-
-            if ($address instanceof UserAddress) {
-                $merge['addressLatitude'] = $address->latitude !== null ? (float) $address->latitude : null;
-                $merge['addressLongitude'] = $address->longitude !== null ? (float) $address->longitude : null;
-            }
-        }
-
-        if ($merge !== []) {
-            $this->merge($merge);
-        }
-    }
-
     /**
      * @return array<string, mixed>
      */
     public function rules(): array
     {
         $isEventAssistance = $this->isEventAssistanceRequested();
-        $today = now(config('app.timezone'))->toDateString();
 
         return [
             'propertyType' => ['required', 'string', Rule::in(UserCleaningOrderEstimationService::PROPERTY_TYPES)],
@@ -96,26 +60,56 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
             'propertyDetails.room_size_breakdown.*.small' => ['sometimes', 'integer', 'min:0'],
             'propertyDetails.room_size_breakdown.*.medium' => ['sometimes', 'integer', 'min:0'],
             'propertyDetails.room_size_breakdown.*.large' => ['sometimes', 'integer', 'min:0'],
-            'propertyDetails.eventType' => [Rule::requiredIf($isEventAssistance), 'string', Rule::in(UserCleaningOrderEstimationService::EVENT_TYPES)],
+            'propertyDetails.eventType' => [Rule::requiredIf($isEventAssistance && ! $this->filled('event.eventTypeId')), 'nullable', 'string', 'max:64'],
             'propertyDetails.guestCount' => [Rule::requiredIf($isEventAssistance), 'integer', 'min:1', 'max:5000'],
             'propertyDetails.venueType' => [Rule::requiredIf($isEventAssistance), 'string', Rule::in($this->availableVenueTypes())],
             'propertyDetails.customService' => [Rule::requiredIf($isEventAssistance), Rule::prohibitedIf(! $isEventAssistance), 'string', 'max:255'],
             'propertyDetails.hours' => [Rule::requiredIf($isEventAssistance), Rule::prohibitedIf(! $isEventAssistance), 'numeric', 'min:1', 'max:24'],
-            'schedule' => [$isEventAssistance ? 'sometimes' : 'prohibited', 'array:mode,sessions'],
-            'schedule.mode' => ['sometimes', 'string', Rule::in(['single_day', 'multi_day'])],
-            'schedule.sessions' => ['sometimes', 'array', 'min:1', 'max:31'],
-            'schedule.sessions.*' => ['array:date,time,hours'],
-            'schedule.sessions.*.date' => ['required_with:schedule.sessions', 'date', 'after_or_equal:'.$today],
-            'schedule.sessions.*.time' => ['required_with:schedule.sessions', 'date_format:H:i'],
-            'schedule.sessions.*.hours' => ['required_with:schedule.sessions', 'numeric', 'min:1', 'max:24'],
+            ...$this->eventAssistanceScheduleRules($isEventAssistance),
             'serviceIds' => $isEventAssistance ? ['prohibited'] : ['sometimes', 'array', 'min:1'],
             'serviceIds.*' => $isEventAssistance ? ['prohibited'] : ['integer', 'distinct', 'exists:cleaning_services,id'],
+            'requestMaterials' => ['sometimes', 'boolean'],
+            'materials' => ['sometimes', 'array:providedByPlatform'],
+            'materials.providedByPlatform' => ['required_with:materials', 'boolean'],
+            'bookingKind' => ['sometimes', 'string', Rule::in(['standard', 'special_service', 'open_time'])],
+            'event' => ['sometimes', 'array:eventTypeId,dynamicAnswers'],
+            'event.eventTypeId' => ['required_with:event', 'integer', Rule::exists('cleaning_event_types', 'id')->where('is_active', true)],
+            'event.dynamicAnswers' => ['sometimes', 'array'],
+            'specialServices' => ['sometimes', 'array', 'max:10'],
+            'specialServices.*' => ['array:specialServiceId,serviceId,quantity,dirtinessLevel,notes,sessionIds,items'],
+            'specialServices.*.specialServiceId' => ['required_without:specialServices.*.serviceId', 'integer', 'exists:cleaning_special_services,id'],
+            'specialServices.*.serviceId' => ['required_without:specialServices.*.specialServiceId', 'integer', 'exists:cleaning_special_services,id'],
+            'specialServices.*.quantity' => ['required_without:specialServices.*.items', 'numeric', 'gt:0', 'max:10000'],
+            'specialServices.*.dirtinessLevel' => ['nullable', 'string', 'max:64'],
+            'specialServices.*.notes' => ['nullable', 'string', 'max:2000'],
+            'specialServices.*.sessionIds' => ['sometimes', 'array', 'max:30'],
+            'specialServices.*.sessionIds.*' => ['integer', 'min:1', 'distinct'],
+            'specialServices.*.items' => ['sometimes', 'array', 'min:1', 'max:50'],
+            'specialServices.*.items.*' => ['array:quantity,dirtinessLevelId,dirtinessLevel,notes,attachments,beforeImages,afterImages'],
+            'specialServices.*.items.*.quantity' => ['required', 'numeric', 'gt:0', 'max:10000'],
+            'specialServices.*.items.*.dirtinessLevelId' => ['nullable', 'integer', 'exists:cleaning_dirtiness_levels,id'],
+            'specialServices.*.items.*.dirtinessLevel' => ['nullable', 'string', 'max:64'],
+            'specialServices.*.items.*.attachments' => ['sometimes', 'array', 'max:10'],
+            'specialServices.*.items.*.attachments.*' => ['string', 'max:2048'],
+            'specialServices.*.items.*.beforeImages' => ['sometimes', 'array', 'max:10'],
+            'specialServices.*.items.*.beforeImages.*' => ['string', 'max:2048'],
+            'specialServices.*.items.*.afterImages' => ['sometimes', 'array', 'max:10'],
+            'specialServices.*.items.*.afterImages.*' => ['string', 'max:2048'],
+            'openTime' => ['sometimes', 'array:workerCount,expectedMaxMinutes,sessions'],
+            'openTime.workerCount' => ['required_with:openTime', 'integer', 'min:1', 'max:20'],
+            'openTime.expectedMaxMinutes' => ['sometimes', 'integer', 'min:15', 'max:480', 'multiple_of:15'],
+            'openTime.sessions' => ['sometimes', 'array', 'min:1', 'max:30'],
+            'openTime.sessions.*' => ['array:date,time,expectedMaxMinutes'],
+            'openTime.sessions.*.date' => ['required', 'date', 'after_or_equal:'.now()->toDateString()],
+            'openTime.sessions.*.time' => ['required', 'date_format:H:i'],
+            'openTime.sessions.*.expectedMaxMinutes' => ['sometimes', 'integer', 'min:15', 'max:480', 'multiple_of:15'],
             'addressId' => ['nullable', 'integer', Rule::exists('user_addresses', 'id')->where('user_id', (int) ($this->user()?->id ?? 0))],
             'addressLatitude' => ['nullable', 'numeric', 'between:-90,90'],
             'addressLongitude' => ['nullable', 'numeric', 'between:-180,180'],
             'preferredWorkerIds' => ['nullable', 'array', 'max:20'],
             'preferredWorkerIds.*' => ['integer', 'distinct', Rule::exists('workers', 'id')],
             'preferredWorkerId' => ['nullable', 'exists:workers,id'],
+            ...$this->recurringWorkerScopeRules(),
             'assignmentMode' => ['nullable', 'string', Rule::in(['preferred_worker', 'open_count'])],
             'numberOfWorkers' => ['nullable', 'integer', 'min:1', 'max:20'],
             'genderPreference' => ['nullable', 'string', Rule::in(array_column(GenderPreference::cases(), 'value'))],
@@ -127,11 +121,80 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
     {
         $validator->after(function (Validator $validator): void {
             $this->validateSelectedAddressCompleteness($validator);
+            $this->validateEventAssistanceSchedule($validator);
+            $this->validateDynamicCleaningEvent($validator);
+            $this->validateRecurringWorkerScope($validator);
             $this->validateWorkerRoomAssignments($validator);
+            $this->validateNewServiceScope($validator);
         });
     }
 
-    /** @return array<int, int> */
+    protected function prepareForValidation(): void
+    {
+        $merge = [];
+
+        $materials = $this->input('materials');
+        if (is_array($materials) && array_key_exists('providedByPlatform', $materials)) {
+            $merge['requestMaterials'] = filter_var(
+                $materials['providedByPlatform'],
+                FILTER_VALIDATE_BOOL,
+                FILTER_NULL_ON_FAILURE,
+            ) ?? $materials['providedByPlatform'];
+        }
+
+        $preferredWorkerIds = $this->normalizePreferredWorkerIds(
+            $this->input('preferredWorkerIds', $this->input('preferredWorkerId'))
+        );
+
+        $workerScopeMerge = $this->recurringWorkerScopeMerge($preferredWorkerIds);
+        if ($workerScopeMerge !== []) {
+            $merge = array_merge($merge, $workerScopeMerge);
+        } elseif ($preferredWorkerIds !== [] || $this->has('preferredWorkerIds')) {
+            // Legacy behavior is intentionally preserved when workerScope is absent.
+            $merge['preferredWorkerIds'] = $preferredWorkerIds;
+            $merge['preferredWorkerId'] = $preferredWorkerIds[0] ?? null;
+
+            if (count($preferredWorkerIds) > 1) {
+                if (! $this->filled('numberOfWorkers')) {
+                    $merge['numberOfWorkers'] = count($preferredWorkerIds);
+                }
+
+                if (! $this->filled('assignmentMode')) {
+                    $merge['assignmentMode'] = 'open_count';
+                }
+            }
+        }
+
+        $addressId = $this->input('addressId');
+        $openTime = $this->input('openTime');
+        if (is_array($openTime) && is_numeric($openTime['workerCount'] ?? null)) {
+            if (! is_numeric($openTime['expectedMaxMinutes'] ?? null)) {
+                $openTime['expectedMaxMinutes'] = 480;
+                $merge['openTime'] = $openTime;
+            }
+            $merge['numberOfWorkers'] = max(1, (int) $openTime['workerCount']);
+            $merge['assignmentMode'] = 'open_count';
+        }
+        if (is_numeric($addressId) && $this->user() !== null) {
+            $address = UserAddress::query()
+                ->whereKey((int) $addressId)
+                ->where('user_id', (int) $this->user()->id)
+                ->first();
+
+            if ($address instanceof UserAddress) {
+                $merge['addressLatitude'] = $address->latitude !== null ? (float) $address->latitude : null;
+                $merge['addressLongitude'] = $address->longitude !== null ? (float) $address->longitude : null;
+            }
+        }
+
+        if ($merge !== []) {
+            $this->merge($merge);
+        }
+    }
+
+    /**
+     * @return array<int, int>
+     */
     private function normalizePreferredWorkerIds(mixed $value): array
     {
         if ($value === null || $value === '') {
@@ -160,6 +223,26 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
     private function isEventAssistanceRequested(): bool
     {
         return mb_strtolower((string) $this->input('propertyType')) === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE;
+    }
+
+    private function validateNewServiceScope(Validator $validator): void
+    {
+        $hasMaterials = (bool) $this->input('requestMaterials');
+        $hasSpecialServices = is_array($this->input('specialServices')) && $this->input('specialServices') !== [];
+        $hasOpenTime = is_array($this->input('openTime'));
+        $isRepeated = mb_strtolower((string) $this->input('schedule.mode')) === 'recurring';
+
+        if ($hasOpenTime && ($hasMaterials || $hasSpecialServices)) {
+            $validator->errors()->add('openTime', 'Open-Time requests cannot be combined with materials or special services.');
+        }
+
+        if ($hasOpenTime && $isRepeated) {
+            $validator->errors()->add('schedule', 'Use openTime.sessions for multi-day Open-Time requests.');
+        }
+
+        if ((string) $this->input('bookingKind') === 'special_service' && ! $hasSpecialServices) {
+            $validator->errors()->add('specialServices', 'A standalone special-service order requires at least one service.');
+        }
     }
 
     private function validateSelectedAddressCompleteness(Validator $validator): void
@@ -219,7 +302,9 @@ final class UserCleaningOrderEstimatePriceRequest extends FormRequest
         return mb_substr((string) $address->label, 0, 500);
     }
 
-    /** @return array<int, string> */
+    /**
+     * @return array<int, string>
+     */
     private function availableVenueTypes(): array
     {
         return array_values(array_filter(

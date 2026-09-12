@@ -10,11 +10,12 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
-use Modules\Cleaning\Services\CleaningBookingScheduleService;
-use Modules\Cleaning\Services\CleaningBookingSessionPricingService;
+use Modules\Cleaning\Services\CleaningPricingCalculator;
 use Modules\User\Http\Requests\UserCleaningOrderStoreRequest;
 use Modules\User\Http\Resources\UserCleaningBookingResource;
-use Modules\User\Services\UserCleaningMultiDayEventPricingService;
+use Modules\User\Services\EventAssistanceScheduleService;
+use Modules\User\Services\OpenTimeScheduleService;
+use Modules\User\Services\RecurringCleaningScheduleService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 use Modules\User\Services\UserCleaningOrderService;
 use Modules\User\Support\CleaningWorkerCapacity;
@@ -25,10 +26,11 @@ final class UserCleaningOrderStoreController
         UserCleaningOrderStoreRequest $request,
         UserCleaningOrderService $service,
         UserCleaningOrderEstimationService $estimationService,
-        UserCleaningMultiDayEventPricingService $multiDayPricing,
+        EventAssistanceScheduleService $eventSchedule,
+        RecurringCleaningScheduleService $recurringSchedule,
+        OpenTimeScheduleService $openTimeSchedule,
         PlatformCouponRedemptionService $platformCoupons,
-        CleaningBookingScheduleService $scheduleService,
-        CleaningBookingSessionPricingService $sessionPricing,
+        CleaningPricingCalculator $pricingCalculator,
     ): JsonResponse {
         $couponCode = $request->input('couponCode');
         Validator::make(['couponCode' => $couponCode], [
@@ -37,55 +39,168 @@ final class UserCleaningOrderStoreController
         $validated = $this->normalizeWorkerCount($request->validated());
         $validated = $this->withEventWorkerCount($validated);
         $this->assertWorkerCapacity($validated, $estimationService);
-        $scheduleInput = $request->input('schedule');
+        $isEventAssistance = $estimationService->isEventAssistanceType((string) ($validated['propertyType'] ?? ''));
+        $eventPlan = $isEventAssistance
+            ? $eventSchedule->resolve($validated)
+            : null;
+        $openTimePlan = ! $isEventAssistance
+            ? $openTimeSchedule->resolve($validated)
+            : null;
+        $recurringPlan = ! $isEventAssistance && $openTimePlan === null
+            ? $recurringSchedule->resolve($validated)
+            : null;
 
-        $order = DB::transaction(function () use ($request, $service, $multiDayPricing, $platformCoupons, $couponCode, $validated, $scheduleInput, $scheduleService, $sessionPricing) {
+        $order = DB::transaction(function () use (
+            $request,
+            $service,
+            $estimationService,
+            $eventSchedule,
+            $eventPlan,
+            $recurringSchedule,
+            $recurringPlan,
+            $openTimeSchedule,
+            $openTimePlan,
+            $platformCoupons,
+            $pricingCalculator,
+            $couponCode,
+            $validated,
+        ) {
             $order = $service->store($request->user(), $validated);
 
-            if ($order->isEventAssistanceBooking()) {
-                $order = $scheduleService->sync($order, array_merge($validated, [
-                    'schedule' => is_array($scheduleInput) ? $scheduleInput : null,
-                ]));
-
-                $sessions = $order->sessions()->orderBy('sequence')->get()
-                    ->map(static fn ($session): array => [
-                        'date' => $session->scheduled_date->toDateString(),
-                        'time' => (string) $session->scheduled_time,
-                        'hours' => (float) $session->duration_hours,
-                    ])->all();
-
-                $quote = $multiDayPricing->quote(
-                    propertyDetails: (array) $validated['propertyDetails'],
-                    sessions: $sessions,
-                    workerCount: max(1, (int) $order->number_of_workers),
+            if ($eventPlan !== null) {
+                $eventPricing = $eventSchedule->quote(
+                    plan: $eventPlan,
+                    propertyType: (string) $order->property_type,
+                    propertyDetails: (array) ($order->property_details ?? []),
                     addressLatitude: $order->address_latitude,
                     addressLongitude: $order->address_longitude,
-                    preferredWorkerId: null,
+                    preferredWorkerId: $order->resolvedAssignmentMode() === 'preferred_worker'
+                        ? $order->preferred_worker_id
+                        : null,
+                    requiredWorkers: max(1, (int) $order->number_of_workers),
+                    requestMaterials: (bool) ($validated['requestMaterials'] ?? false),
+                    specialServices: is_array($validated['specialServices'] ?? null) ? $validated['specialServices'] : [],
                 );
-                $propertyDetails = is_array($order->property_details) ? $order->property_details : [];
-                $propertyDetails['hours'] = (float) $quote['schedule']['totalHours'];
-                $order->forceFill([
-                    'property_details' => $propertyDetails,
-                    'estimated_hours' => (float) $quote['schedule']['totalHours'],
-                    'total_hours' => (float) $quote['schedule']['totalHours'],
-                    'base_price' => (float) $quote['pricing']['basePrice'],
-                    'addons_total' => (float) $quote['pricing']['addonsTotal'],
-                    'travel_fee' => 0,
-                    'travel_distance_km' => null,
-                    'admin_margin_amount' => (float) $quote['pricing']['adminMargin'],
-                    'is_pricing_final' => false,
-                    'total_price' => (float) $quote['pricing']['totalPrice'],
-                ])->saveQuietly();
 
-                $order = $sessionPricing->initializeFromParent($order->fresh(['sessions']));
+                $order->forceFill([
+                    'property_details' => $eventSchedule->withAggregateHours(
+                        (array) ($order->property_details ?? []),
+                        $eventPlan,
+                    ),
+                    'estimated_hours' => $eventPlan['totalHours'],
+                    'total_hours' => $eventPlan['totalHours'],
+                    'scheduled_date' => $eventPlan['firstDate'],
+                    'scheduled_time' => $eventPlan['firstTime'],
+                    'base_price' => $eventPricing['basePrice'],
+                    'addons_total' => $eventPricing['addonsTotal'],
+                    'travel_fee' => $eventPricing['travelFee'],
+                    'travel_distance_km' => $eventPricing['distanceKm'],
+                    'admin_margin_amount' => $eventPricing['adminMargin'],
+                    'is_pricing_final' => $eventPricing['isPricingFinal'],
+                    'total_price' => $eventPricing['totalPrice'],
+                ])->save();
+
+                $eventSchedule->createSessions($order->fresh(), $eventPlan, $eventPricing);
+                $order = $order->fresh();
+            } elseif ($openTimePlan !== null) {
+                $openTimePricing = $openTimeSchedule->quote($openTimePlan, [
+                    'basePrice' => (float) $order->base_price,
+                    'addonsTotal' => 0.0,
+                    'travelFee' => (float) $order->travel_fee,
+                    'distanceKm' => $order->travel_distance_km,
+                    'adminMargin' => (float) $order->admin_margin_amount,
+                    'isPricingFinal' => (bool) $order->is_pricing_final,
+                    'totalPrice' => (float) $order->total_price,
+                    'currency' => (string) config('app.currency', 'SYP'),
+                    'openTime' => [
+                        'hourlyRate' => (float) $order->open_time_hourly_rate,
+                        'requestedWorkerCount' => max(1, (int) $order->number_of_workers),
+                        'minimumBillableMinutes' => (int) $order->open_time_minimum_minutes,
+                        'roundingMinutes' => (int) $order->open_time_rounding_minutes,
+                        'expectedMaxMinutes' => (int) $order->open_time_expected_max_minutes,
+                        'hardMaxMinutes' => (int) $order->open_time_hard_max_minutes,
+                        'warningMinutes' => (int) $order->open_time_warning_minutes,
+                        'extensionOptions' => (array) $order->open_time_extension_options,
+                    ],
+                ]);
+                $order = $openTimeSchedule->materialize($order, $openTimePlan, $openTimePricing);
+            } elseif ($recurringPlan !== null) {
+                $sessionHours = (string) ($recurringPlan['calculationMode'] ?? RecurringCleaningScheduleService::CALCULATION_TASK) === RecurringCleaningScheduleService::CALCULATION_HOURS
+                    ? (float) ($recurringPlan['hoursPerVisit'] ?? $order->estimated_hours)
+                    : (float) $order->estimated_hours;
+                $singleVisitPricing = null;
+                if ((string) ($recurringPlan['calculationMode'] ?? RecurringCleaningScheduleService::CALCULATION_TASK) === RecurringCleaningScheduleService::CALCULATION_HOURS) {
+                    $hourPricing = $estimationService->priceRecurringHours(
+                        (string) $order->property_type,
+                        (array) ($order->property_details ?? []),
+                        $order->address_latitude,
+                        $order->address_longitude,
+                        $order->resolvedAssignmentMode() === 'preferred_worker' ? $order->preferred_worker_id : null,
+                        $sessionHours,
+                        max(1, (int) $order->number_of_workers),
+                        (bool) ($validated['requestMaterials'] ?? false),
+                        is_array($validated['specialServices'] ?? null) ? $validated['specialServices'] : [],
+                    );
+                    $storedHourPricing = $order->resolvedAssignmentMode() === 'preferred_worker'
+                        ? $hourPricing
+                        : [
+                            ...$hourPricing,
+                            'travelFee' => 0.0,
+                            'distanceKm' => null,
+                            'adminMargin' => 0.0,
+                            'isPricingFinal' => false,
+                            'totalPrice' => round((float) $hourPricing['basePrice'] + (float) $hourPricing['addonsTotal'], 2),
+                        ];
+                    $singleVisitPricing = $storedHourPricing;
+                    $order->forceFill([
+                        'estimated_hours' => $sessionHours,
+                        'total_hours' => $sessionHours,
+                        'base_price' => $storedHourPricing['basePrice'],
+                        'addons_total' => $storedHourPricing['addonsTotal'],
+                        'travel_fee' => $storedHourPricing['travelFee'],
+                        'travel_distance_km' => $storedHourPricing['distanceKm'],
+                        'admin_margin_amount' => $storedHourPricing['adminMargin'],
+                        'is_pricing_final' => $storedHourPricing['isPricingFinal'],
+                        'total_price' => $storedHourPricing['totalPrice'],
+                    ])->save();
+                    $order = $order->fresh();
+                } else {
+                    $singleVisitPricing = $estimationService->price(
+                        (string) $order->property_type,
+                        (array) ($order->property_details ?? []),
+                        $order->address_latitude,
+                        $order->address_longitude,
+                        $order->resolvedAssignmentMode() === 'preferred_worker' ? $order->preferred_worker_id : null,
+                        null,
+                        (bool) ($validated['requestMaterials'] ?? false),
+                        is_array($validated['specialServices'] ?? null) ? $validated['specialServices'] : [],
+                    );
+                }
+
+                $recurringPricing = $recurringSchedule->quote(
+                    $recurringPlan,
+                    (array) $singleVisitPricing,
+                    $sessionHours,
+                );
+                $order = $recurringSchedule->materialize($order, $recurringPlan, $recurringPricing);
             }
 
-            if (is_string($couponCode) && trim($couponCode) !== '') {
+            if (is_array($validated['specialServices'] ?? null) && $validated['specialServices'] !== []) {
+                $service->syncSpecialServiceSessions($order, $validated['specialServices']);
+            }
+
+            if (is_string($couponCode) && mb_trim($couponCode) !== '') {
+                $serviceSubtotal = round(
+                    (float) $order->base_price + (float) $order->addons_total,
+                    2,
+                );
+                $couponAdminMargin = (bool) $order->is_pricing_final
+                    ? max(0.0, (float) $order->admin_margin_amount)
+                    : (float) $pricingCalculator->provisional($serviceSubtotal, 0.0)['adminMargin'];
                 $subtotal = round(
-                    (float) $order->base_price
-                    + (float) $order->addons_total
+                    $serviceSubtotal
                     + (float) $order->travel_fee
-                    + (float) $order->admin_margin_amount,
+                    + $couponAdminMargin,
                     2,
                 );
                 $quote = $platformCoupons->quoteForPlacement(
@@ -96,7 +211,7 @@ final class UserCleaningOrderStoreController
                     context: [
                         'propertyType' => (string) $order->property_type,
                         'cleaningMode' => $order->property_details['cleaning_mode'] ?? null,
-                        'eventType' => $order->property_details['eventType'] ?? $order->property_details['event_type'] ?? null,
+                        'eventType' => $order->property_details['event_type'] ?? $order->property_details['eventType'] ?? null,
                     ],
                     required: true,
                 );
@@ -126,7 +241,6 @@ final class UserCleaningOrderStoreController
             'preferredWorker.user',
             'rooms.assignedWorker.user',
             'workerAssignments.worker.user',
-            'sessions.workerAssignments.worker.user',
             'timeWarnings',
             'disputes',
             'addons',
@@ -145,9 +259,15 @@ final class UserCleaningOrderStoreController
                 static fn (int $id): bool => $id > 0,
             )))
             : [];
-        $requestedWorkers = max(1, (int) ($validated['numberOfWorkers'] ?? 1));
-
-        $validated['numberOfWorkers'] = max($requestedWorkers, count($preferredWorkerIds));
+        if (array_key_exists('numberOfWorkers', $validated) && is_numeric($validated['numberOfWorkers'])) {
+            $validated['numberOfWorkers'] = max(
+                1,
+                (int) $validated['numberOfWorkers'],
+                count($preferredWorkerIds),
+            );
+        } elseif ($preferredWorkerIds !== []) {
+            $validated['numberOfWorkers'] = count($preferredWorkerIds);
+        }
 
         return $validated;
     }
@@ -156,7 +276,7 @@ final class UserCleaningOrderStoreController
     private function assertWorkerCapacity(array $validated, UserCleaningOrderEstimationService $estimationService): void
     {
         $propertyType = (string) ($validated['propertyType'] ?? '');
-        if ($estimationService->isEventAssistanceType($propertyType)) {
+        if ($estimationService->isEventAssistanceType($propertyType) || is_array($validated['openTime'] ?? null)) {
             return;
         }
 
@@ -164,7 +284,13 @@ final class UserCleaningOrderStoreController
             $propertyType,
             (array) ($validated['propertyDetails'] ?? []),
         );
-        $requiredWorkers = CleaningWorkerCapacity::requiredWorkers((float) $estimation['estimatedHours']);
+        $schedule = is_array($validated['schedule'] ?? null) ? $validated['schedule'] : [];
+        $calculationMode = mb_strtolower(mb_trim((string) ($schedule['calculationMode'] ?? RecurringCleaningScheduleService::CALCULATION_TASK)));
+        $capacityHours = mb_strtolower(mb_trim((string) ($schedule['mode'] ?? ''))) === 'recurring'
+            && $calculationMode === RecurringCleaningScheduleService::CALCULATION_HOURS
+                ? ceil(max(1.0, min(24.0, (float) ($schedule['hoursPerVisit'] ?? 0))) * 2) / 2
+                : (float) $estimation['estimatedHours'];
+        $requiredWorkers = CleaningWorkerCapacity::requiredWorkers($capacityHours);
         $requestedWorkers = max(1, (int) ($validated['numberOfWorkers'] ?? 1));
 
         if ($requestedWorkers >= $requiredWorkers) {

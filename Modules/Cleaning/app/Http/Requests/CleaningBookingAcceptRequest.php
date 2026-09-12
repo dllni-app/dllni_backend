@@ -19,7 +19,10 @@ final class CleaningBookingAcceptRequest extends FormRequest
 
     public function rules(): array
     {
-        return [];
+        return [
+            'roomIds' => ['sometimes', 'array', 'min:1'],
+            'roomIds.*' => ['integer', 'distinct', 'exists:cleaning_booking_rooms,id'],
+        ];
     }
 
     /** @return array<int, callable(Validator): void> */
@@ -34,22 +37,10 @@ final class CleaningBookingAcceptRequest extends FormRequest
                     return;
                 }
 
-                $conflicts = app(WorkerBookingScheduleConflictService::class)->conflictsForBooking($worker, $booking);
-                if ($conflicts === []) {
-                    return;
-                }
-
-                $validator->errors()->add(
-                    'schedule',
-                    $booking->isMultiDayEventAssistance()
-                        ? 'Worker is not available for all event days.'
-                        : 'This booking overlaps another confirmed booking in your schedule.'
-                );
-
-                foreach ($conflicts as $conflict) {
+                if (app(WorkerBookingScheduleConflictService::class)->hasConflict($worker, $booking)) {
                     $validator->errors()->add(
-                        'scheduleConflicts',
-                        sprintf('%s %s-%s', $conflict['date'], $conflict['start'], $conflict['end'])
+                        'schedule',
+                        'This booking overlaps another confirmed booking in your schedule.'
                     );
                 }
             },

@@ -48,7 +48,7 @@ final class Dispute extends Model implements HasMedia
         return $this->morphTo(__FUNCTION__, 'booking_type', 'booking_id');
     }
 
-    public function cleaningBookingSession(): BelongsTo
+    public function session(): BelongsTo
     {
         return $this->belongsTo(CleaningBookingSession::class, 'cleaning_booking_session_id');
     }
@@ -81,7 +81,6 @@ final class Dispute extends Model implements HasMedia
     public function casts(): array
     {
         return [
-            'cleaning_booking_session_id' => 'integer',
             'category' => DisputeCategory::class,
             'status' => DisputeStatus::class,
             'resolution' => DisputeResolution::class,

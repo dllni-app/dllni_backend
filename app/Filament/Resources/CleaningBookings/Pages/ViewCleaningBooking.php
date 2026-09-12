@@ -6,26 +6,20 @@ namespace App\Filament\Resources\CleaningBookings\Pages;
 
 use App\Enums\WorkerCustomerRatingType;
 use App\Filament\Resources\CleaningBookings\CleaningBookingResource;
-use App\Filament\Resources\CleaningBookings\Widgets\CleaningBookingTrackingWidget;
 use App\Filament\Resources\Disputes\DisputeResource;
 use App\Models\WorkerCustomerRating;
+use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
-use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Textarea;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
-use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningTimeWarningResponse;
 use Modules\Cleaning\Models\CleaningBooking;
-use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Models\CleaningTimeWarning;
-use Modules\Cleaning\Services\CleaningBookingSessionLifecycleService;
 
 final class ViewCleaningBooking extends ViewRecord
 {
@@ -46,11 +40,53 @@ final class ViewCleaningBooking extends ViewRecord
             'sessions.workerAssignments.worker.user',
         ]);
 
+        // ViewRecord schemas use a multi-column root layout by default. The
+        // existing cleaning booking infolist already owns its responsive grid,
+        // so keeping the root at one column prevents that grid from occupying
+        // only half of the available page and leaving a large empty area.
         $schema = parent::infolist($schema)->columns(1);
         $existingComponents = $schema->getComponents(withHidden: true, withOriginalKeys: true);
 
         return $schema->components([
             ...$existingComponents,
+            Section::make('تقارير التأخر وعدم التنقل')
+                ->description('سجل بلاغات العميل لكل زيارة دورية وعامل، مع الإجراء الذي اختاره ووقت إغلاق الحالة.')
+                ->schema([
+                    RepeatableEntry::make('attendance_incidents')
+                        ->hiddenLabel()
+                        ->getStateUsing(fn (CleaningBooking $record): array => self::attendanceIncidents($record))
+                        ->schema([
+                            TextEntry::make('session')
+                                ->label('الزيارة'),
+                            TextEntry::make('worker')
+                                ->label('العامل')
+                                ->placeholder('-'),
+                            TextEntry::make('issue')
+                                ->label('البلاغ')
+                                ->badge()
+                                ->color(fn (string $state): string => $state === 'عدم بدء التنقل' ? 'danger' : 'warning'),
+                            TextEntry::make('action')
+                                ->label('قرار العميل')
+                                ->badge(),
+                            TextEntry::make('reported_at')
+                                ->label('وقت البلاغ')
+                                ->placeholder('-'),
+                            TextEntry::make('resolved_at')
+                                ->label('وقت الإغلاق')
+                                ->placeholder('مفتوح'),
+                            TextEntry::make('note')
+                                ->label('ملاحظة العميل')
+                                ->placeholder('لا توجد ملاحظة')
+                                ->columnSpanFull(),
+                        ])
+                        ->columns([
+                            'default' => 1,
+                            'md' => 2,
+                            'xl' => 3,
+                        ]),
+                ])
+                ->visible(fn (CleaningBooking $record): bool => self::attendanceIncidents($record) !== [])
+                ->columnSpanFull(),
             Section::make('تقييم العميل ومراجعته')
                 ->description('يعرض تقييم العميل المرتبط بهذا الحجز وتعليقه لكل عامل تم تقييمه من تطبيق العميل.')
                 ->schema([
@@ -58,41 +94,105 @@ final class ViewCleaningBooking extends ViewRecord
                         ->hiddenLabel()
                         ->getStateUsing(fn (CleaningBooking $record): array => self::customerWorkerRatings($record))
                         ->schema([
-                            TextEntry::make('customer_name')->label('العميل')->placeholder('-'),
-                            TextEntry::make('worker_name')->label('العامل الذي تم تقييمه')->placeholder('-'),
-                            TextEntry::make('rating')->label('التقييم')->formatStateUsing(fn (mixed $state): string => self::formatRating((int) $state))->badge()->color(fn (mixed $state): string => self::reviewColor((int) $state)),
-                            TextEntry::make('created_at')->label('وقت التقييم')->placeholder('-'),
-                            TextEntry::make('comment')->label('مراجعة العميل')->placeholder('لم يكتب العميل تعليقاً.')->columnSpanFull(),
+                            TextEntry::make('customer_name')
+                                ->label('العميل')
+                                ->placeholder('-'),
+                            TextEntry::make('worker_name')
+                                ->label('العامل الذي تم تقييمه')
+                                ->placeholder('-'),
+                            TextEntry::make('rating')
+                                ->label('التقييم')
+                                ->formatStateUsing(fn (mixed $state): string => self::formatRating((int) $state))
+                                ->badge()
+                                ->color(fn (mixed $state): string => self::reviewColor((int) $state)),
+                            TextEntry::make('created_at')
+                                ->label('وقت التقييم')
+                                ->placeholder('-'),
+                            TextEntry::make('comment')
+                                ->label('مراجعة العميل')
+                                ->placeholder('لم يكتب العميل تعليقاً.')
+                                ->columnSpanFull(),
                         ])
-                        ->columns(['default' => 1, 'md' => 2, 'xl' => 4]),
+                        ->columns([
+                            'default' => 1,
+                            'md' => 2,
+                            'xl' => 4,
+                        ]),
                 ])
                 ->visible(fn (CleaningBooking $record): bool => self::customerWorkerRatings($record) !== [])
                 ->columnSpanFull(),
             Section::make('تمديدات الوقت')
-                ->description('سجل طلبات تمديد وقت العمل والمدة المطلوبة والمبلغ ورد العامل، مع تحديد يوم المناسبة المرتبط بالتمديد.')
+                ->description('سجل طلبات تمديد وقت العمل والمدة المطلوبة والمبلغ ورد العامل، بنفس بيانات تطبيق العميل والعامل.')
                 ->schema([
                     TextEntry::make('extension_fee_total')
                         ->label('إجمالي رسوم التمديد المضافة')
-                        ->state(fn (CleaningBooking $record): string => self::money($record->extension_fee_total, (string) config('app.currency', 'SYP')))
+                        ->state(fn (CleaningBooking $record): string => self::money(
+                            $record->extension_fee_total,
+                            (string) config('app.currency', 'SYP'),
+                        ))
                         ->weight('bold'),
                     RepeatableEntry::make('timeWarnings')
                         ->label('طلبات التمديد')
                         ->schema([
-                            TextEntry::make('cleaning_booking_session_id')->label('رقم الجلسة')->placeholder('حجز قديم'),
-                            TextEntry::make('extension_status')->label('الحالة')->state(fn (CleaningTimeWarning $record): string => self::extensionStatusLabel($record))->badge()->color(fn (CleaningTimeWarning $record): string => self::extensionStatusColor($record)),
-                            TextEntry::make('additional_minutes')->label('المدة المطلوبة')->state(fn (CleaningTimeWarning $record): string => $record->additional_minutes !== null ? sprintf('%d دقيقة', (int) $record->additional_minutes) : '-'),
-                            TextEntry::make('quoted_amount')->label('تكلفة التمديد')->state(fn (CleaningTimeWarning $record): string => self::money($record->quoted_amount, $record->quoted_currency)),
-                            TextEntry::make('worker.user.name')->label('العامل')->placeholder('-'),
-                            TextEntry::make('customer_response_display')->label('قرار العميل')->state(fn (CleaningTimeWarning $record): string => self::timeWarningResponseLabel($record->customer_response, false)),
-                            TextEntry::make('worker_response_display')->label('رد العامل')->state(fn (CleaningTimeWarning $record): string => self::timeWarningResponseLabel($record->worker_response, true)),
-                            TextEntry::make('sent_at')->label('وقت الطلب')->dateTime('Y-m-d h:i A')->placeholder('-'),
-                            TextEntry::make('worker_responded_at')->label('وقت رد العامل')->dateTime('Y-m-d h:i A')->placeholder('بانتظار رد العامل'),
-                            TextEntry::make('price_applied_at')->label('وقت إضافة الرسوم')->dateTime('Y-m-d h:i A')->placeholder('لم تتم إضافة الرسوم'),
-                            TextEntry::make('worker_reject_message')->label('سبب رفض العامل')->placeholder('لا يوجد')->visible(fn (CleaningTimeWarning $record): bool => filled($record->worker_reject_message))->columnSpanFull(),
+                            TextEntry::make('extension_status')
+                                ->label('الحالة')
+                                ->state(fn (CleaningTimeWarning $record): string => self::extensionStatusLabel($record))
+                                ->badge()
+                                ->color(fn (CleaningTimeWarning $record): string => self::extensionStatusColor($record)),
+                            TextEntry::make('additional_minutes')
+                                ->label('المدة المطلوبة')
+                                ->state(fn (CleaningTimeWarning $record): string => $record->additional_minutes !== null
+                                    ? sprintf('%d دقيقة', (int) $record->additional_minutes)
+                                    : '-'),
+                            TextEntry::make('quoted_amount')
+                                ->label('تكلفة التمديد')
+                                ->state(fn (CleaningTimeWarning $record): string => self::money(
+                                    $record->quoted_amount,
+                                    $record->quoted_currency,
+                                )),
+                            TextEntry::make('worker.user.name')
+                                ->label('العامل')
+                                ->placeholder('-'),
+                            TextEntry::make('customer_response_display')
+                                ->label('قرار العميل')
+                                ->state(fn (CleaningTimeWarning $record): string => self::timeWarningResponseLabel(
+                                    $record->customer_response,
+                                    false,
+                                )),
+                            TextEntry::make('worker_response_display')
+                                ->label('رد العامل')
+                                ->state(fn (CleaningTimeWarning $record): string => self::timeWarningResponseLabel(
+                                    $record->worker_response,
+                                    true,
+                                )),
+                            TextEntry::make('sent_at')
+                                ->label('وقت الطلب')
+                                ->dateTime('Y-m-d h:i A')
+                                ->placeholder('-'),
+                            TextEntry::make('worker_responded_at')
+                                ->label('وقت رد العامل')
+                                ->dateTime('Y-m-d h:i A')
+                                ->placeholder('بانتظار رد العامل'),
+                            TextEntry::make('price_applied_at')
+                                ->label('وقت إضافة الرسوم')
+                                ->dateTime('Y-m-d h:i A')
+                                ->placeholder('لم تتم إضافة الرسوم'),
+                            TextEntry::make('worker_reject_message')
+                                ->label('سبب رفض العامل')
+                                ->placeholder('لا يوجد')
+                                ->visible(fn (CleaningTimeWarning $record): bool => filled($record->worker_reject_message))
+                                ->columnSpanFull(),
                         ])
-                        ->columns(['default' => 1, 'md' => 2, 'xl' => 3]),
+                        ->columns([
+                            'default' => 1,
+                            'md' => 2,
+                            'xl' => 3,
+                        ]),
                 ])
-                ->columns(['default' => 1, 'xl' => 3])
+                ->columns([
+                    'default' => 1,
+                    'xl' => 3,
+                ])
                 ->visible(fn (CleaningBooking $record): bool => $record->timeWarnings->isNotEmpty())
                 ->columnSpanFull(),
         ]);
@@ -101,54 +201,6 @@ final class ViewCleaningBooking extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            Action::make('cancel_event_session')
-                ->label('إلغاء يوم من المناسبة')
-                ->icon('heroicon-o-calendar-days')
-                ->color('warning')
-                ->visible(fn (): bool => $this->record->isEventAssistanceBooking() && $this->cancellableSessions()->isNotEmpty())
-                ->modalHeading('إلغاء يوم محدد من المناسبة')
-                ->modalDescription('لن تتأثر الأيام المكتملة. سيتم تحديث حالة الحجز وتسعيره تلقائياً بعد الإلغاء.')
-                ->form([
-                    Select::make('session_id')
-                        ->label('يوم التنفيذ')
-                        ->options(fn (): array => $this->cancellableSessions()
-                            ->mapWithKeys(fn (CleaningBookingSession $session): array => [
-                                $session->id => sprintf('#%d — %s — %s', $session->sequence, $session->scheduled_date?->format('Y-m-d') ?? '-', (string) $session->scheduled_time),
-                            ])->all())
-                        ->required(),
-                    Textarea::make('reason')->label('سبب الإلغاء')->required()->maxLength(1000),
-                ])
-                ->action(function (array $data): void {
-                    $session = $this->record->sessions()->findOrFail((int) $data['session_id']);
-                    app(CleaningBookingSessionLifecycleService::class)->cancelSession(
-                        booking: $this->record,
-                        session: $session,
-                        role: 'admin',
-                        reason: (string) $data['reason'],
-                    );
-                    $this->record->refresh()->load(['sessions.workerAssignments.worker.user']);
-                    Notification::make()->title('تم إلغاء يوم المناسبة')->success()->send();
-                }),
-            Action::make('cancel_remaining_event_sessions')
-                ->label('إلغاء الأيام المتبقية')
-                ->icon('heroicon-o-calendar-x-mark')
-                ->color('danger')
-                ->requiresConfirmation()
-                ->visible(fn (): bool => $this->record->isMultiDayEventAssistance() && $this->cancellableSessions()->isNotEmpty())
-                ->modalHeading('إلغاء جميع الأيام المتبقية')
-                ->modalDescription('سيتم الاحتفاظ بالأيام المكتملة وسجل العاملين والتسعير التاريخي لها. الجلسة قيد التنفيذ لن تُلغى من هذا الإجراء.')
-                ->form([
-                    Textarea::make('reason')->label('سبب الإلغاء')->required()->maxLength(1000),
-                ])
-                ->action(function (array $data): void {
-                    app(CleaningBookingSessionLifecycleService::class)->cancelRemainingSessions(
-                        booking: $this->record,
-                        role: 'admin',
-                        reason: (string) $data['reason'],
-                    );
-                    $this->record->refresh()->load(['sessions.workerAssignments.worker.user']);
-                    Notification::make()->title('تم إلغاء الأيام المتبقية')->success()->send();
-                }),
             Action::make('view_dispute')
                 ->label('عرض النزاع')
                 ->url(fn () => $this->record->disputes()->first()
@@ -161,20 +213,56 @@ final class ViewCleaningBooking extends ViewRecord
         ];
     }
 
-    /** @return \Illuminate\Database\Eloquent\Collection<int, CleaningBookingSession> */
-    private function cancellableSessions(): \Illuminate\Database\Eloquent\Collection
+    /**
+     * @return array<int, array{
+     *     customer_name:string,
+     *     worker_name:string,
+     *     rating:int,
+     *     comment:?string,
+     *     created_at:string
+     * }>
+     */
+    /** @return array<int, array<string, string|null>> */
+    private static function attendanceIncidents(CleaningBooking $record): array
     {
-        return $this->record->sessions()
-            ->whereNotIn('status', [
-                CleaningBookingSessionStatus::Completed->value,
-                CleaningBookingSessionStatus::Cancelled->value,
-                CleaningBookingSessionStatus::InProgress->value,
-            ])
-            ->orderBy('sequence')
-            ->get();
+        return $record->sessions
+            ->flatMap(function ($session): array {
+                return $session->workerAssignments
+                    ->filter(fn ($assignment): bool => $assignment->late_reported_at !== null || $assignment->no_travel_reported_at !== null)
+                    ->map(function ($assignment) use ($session): array {
+                        $isNoTravel = $assignment->no_travel_reported_at !== null;
+                        $reportedAt = $isNoTravel ? $assignment->no_travel_reported_at : $assignment->late_reported_at;
+
+                        return [
+                            'session' => sprintf(
+                                'زيارة %d — %s %s',
+                                (int) $session->sequence,
+                                $session->scheduled_date?->format('Y-m-d') ?? '-',
+                                (string) $session->scheduled_time,
+                            ),
+                            'worker' => $assignment->worker?->user?->name ?? $assignment->worker?->first_name ?? '-',
+                            'issue' => $isNoTravel ? 'عدم بدء التنقل' : 'تأخر',
+                            'action' => self::attendanceActionLabel($assignment->attendance_action),
+                            'reported_at' => $reportedAt?->format('Y-m-d h:i A'),
+                            'resolved_at' => $assignment->attendance_resolved_at?->format('Y-m-d h:i A'),
+                            'note' => filled($assignment->attendance_note) ? (string) $assignment->attendance_note : null,
+                        ];
+                    })->values()->all();
+            })
+            ->values()
+            ->all();
     }
 
-    /** @return array<int, array{customer_name:string,worker_name:string,rating:int,comment:?string,created_at:string}> */
+    private static function attendanceActionLabel(?string $action): string
+    {
+        return match ($action) {
+            'wait' => 'انتظار العامل',
+            'replace' => 'طلب استبدال العامل',
+            'cancel' => 'إلغاء الزيارة دون غرامة',
+            default => 'لم يحدد إجراء',
+        };
+    }
+
     private static function customerWorkerRatings(CleaningBooking $record): array
     {
         $ratings = $record->relationLoaded('ratings')
@@ -228,7 +316,10 @@ final class ViewCleaningBooking extends ViewRecord
             ? $bookingStatus->value
             : (string) ($bookingStatus ?? '');
 
-        if (in_array($bookingStatusValue, [CleaningBookingStatus::Completed->value, CleaningBookingStatus::Cancelled->value], true)) {
+        if (in_array($bookingStatusValue, [
+            CleaningBookingStatus::Completed->value,
+            CleaningBookingStatus::Cancelled->value,
+        ], true)) {
             return 'مغلق';
         }
 
@@ -266,7 +357,7 @@ final class ViewCleaningBooking extends ViewRecord
 
     private static function enumValue(mixed $value): ?string
     {
-        if ($value instanceof \BackedEnum) {
+        if ($value instanceof BackedEnum) {
             return (string) $value->value;
         }
 
@@ -284,7 +375,7 @@ final class ViewCleaningBooking extends ViewRecord
         }
 
         $formatted = number_format((float) $amount, 0, '.', ',');
-        $currency = strtoupper(trim((string) $currency));
+        $currency = mb_strtoupper(mb_trim((string) $currency));
 
         return $currency === '' || $currency === 'SYP'
             ? $formatted.' ل.س'
