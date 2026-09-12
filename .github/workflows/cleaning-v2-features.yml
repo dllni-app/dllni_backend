@@ -1,0 +1,91 @@
+name: Cleaning v2 Feature Gates
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [v2]
+    paths:
+      - 'Modules/Cleaning/**'
+      - 'Modules/User/app/Http/**Cleaning**'
+      - 'Modules/User/app/Services/**Cleaning**'
+      - 'Modules/User/app/Services/EventAssistance**'
+      - 'Modules/User/app/Services/OpenTime**'
+      - 'Modules/User/routes/api.php'
+      - 'app/Filament/Resources/Cleaning**'
+      - 'app/Models/Worker.php'
+      - 'tests/Feature/Cleaning/**'
+      - 'tests/Feature/UserModule/**Cleaning**'
+      - 'tests/Feature/UserModule/OpenTime**'
+      - 'tests/Feature/UserModule/EventAssistance**'
+      - 'tests/Unit/Cleaning/**'
+      - '.github/workflows/cleaning-v2-features.yml'
+  pull_request:
+    branches: [v2]
+    paths:
+      - 'Modules/Cleaning/**'
+      - 'Modules/User/app/Http/**Cleaning**'
+      - 'Modules/User/app/Services/**Cleaning**'
+      - 'Modules/User/app/Services/EventAssistance**'
+      - 'Modules/User/app/Services/OpenTime**'
+      - 'Modules/User/routes/api.php'
+      - 'app/Filament/Resources/Cleaning**'
+      - 'app/Models/Worker.php'
+      - 'tests/Feature/Cleaning/**'
+      - 'tests/Feature/UserModule/**Cleaning**'
+      - 'tests/Feature/UserModule/OpenTime**'
+      - 'tests/Feature/UserModule/EventAssistance**'
+      - 'tests/Unit/Cleaning/**'
+      - '.github/workflows/cleaning-v2-features.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, bcmath, intl, gd
+          coverage: pcov
+      - name: Install locked dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Prepare SQLite application
+        run: |
+          cp .env.example .env
+          touch database/database.sqlite
+          php artisan key:generate
+      - name: Lint cleaning PHP sources
+        run: find Modules/Cleaning Modules/User/app/Http Modules/User/app/Services app/Filament/Resources/Cleaning* app/Models/Worker.php -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Verify compatible migrations
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        run: php artisan migrate:fresh --force
+      - name: Run complete cleaning v2 regression matrix
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        run: |
+          set -o pipefail
+          mapfile -t user_tests < <(find tests/Feature/UserModule -maxdepth 1 -type f \( -name '*Cleaning*Test.php' -o -name '*OpenTime*Test.php' -o -name '*EventAssistance*Test.php' \) | sort)
+          php artisan test \
+            tests/Unit/Cleaning \
+            tests/Feature/Cleaning \
+            tests/Feature/Filament/CleaningV2AdminResourcesTest.php \
+            "${user_tests[@]}" \
+            --coverage-clover cleaning-v2-coverage.xml \
+            --log-junit cleaning-v2-junit.xml 2>&1 | tee cleaning-v2-test.log
+      - name: Upload backend reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cleaning-v2-backend-reports
+          path: |
+            cleaning-v2-junit.xml
+            cleaning-v2-coverage.xml
+            cleaning-v2-test.log
+          if-no-files-found: ignore

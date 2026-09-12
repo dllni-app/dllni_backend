@@ -14,9 +14,12 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningNeighborhood;
+use Modules\Cleaning\Models\CleaningSpecialService;
+use Modules\Cleaning\Models\CleaningSpecialServiceEquipment;
 use Modules\Cleaning\Support\CleaningNeighborhoodNameNormalizer;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
@@ -141,6 +144,22 @@ final class Worker extends Model implements HasMedia
     public function cleaningBookings(): HasMany
     {
         return $this->hasMany(CleaningBooking::class);
+    }
+
+    public function cleaningSpecialServiceSkills(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            CleaningSpecialService::class,
+            'cleaning_worker_special_service_skills',
+        )->withPivot(['is_active', 'approved_by_id', 'approved_at'])->withTimestamps();
+    }
+
+    public function cleaningEquipmentAuthorizations(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            CleaningSpecialServiceEquipment::class,
+            'cleaning_worker_equipment_authorizations',
+        )->withPivot(['is_active', 'approved_by_id', 'approved_at'])->withTimestamps();
     }
 
     public function customerRatings(): HasMany

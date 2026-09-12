@@ -19,7 +19,7 @@ use Filament\Schemas\Schema;
 
 final class WorkerForm
 {
-    public static function configure(Schema $schema): Schema
+    public static function configure(Schema $schema, bool $includeCleaningQualifications = false): Schema
     {
         return $schema
             ->components([
@@ -180,6 +180,24 @@ final class WorkerForm
                             ->minLength(8)
                             ->dehydrated(false),
                     ]),
+                ...($includeCleaningQualifications ? [Section::make('Special-service qualifications')
+                    ->description('Only qualified workers can receive services and controlled equipment selected here.')
+                    ->columns(2)
+                    ->visible(fn (string $operation): bool => $operation === 'edit')
+                    ->schema([
+                        Select::make('cleaningSpecialServiceSkills')
+                            ->relationship('cleaningSpecialServiceSkills', 'name')
+                            ->multiple()
+                            ->searchable()
+                            ->preload()
+                            ->label('Approved special services'),
+                        Select::make('cleaningEquipmentAuthorizations')
+                            ->relationship('cleaningEquipmentAuthorizations', 'name')
+                            ->multiple()
+                            ->searchable()
+                            ->preload()
+                            ->label('Authorized equipment'),
+                    ])] : []),
             ]);
     }
 

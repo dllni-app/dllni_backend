@@ -17,7 +17,18 @@ final class BroadcastAfterResponse
     public static function send(ShouldBroadcast $event): void
     {
         try {
-            app()->terminating(static function () use ($event): void {
+            // The application container is reused across multiple HTTP requests
+            // in tests and may also be long-lived under Octane. Laravel retains
+            // terminating callbacks on that container, so make each callback
+            // one-shot to prevent an old realtime event being emitted again.
+            $sent = false;
+            app()->terminating(static function () use ($event, &$sent): void {
+                if ($sent) {
+                    return;
+                }
+
+                $sent = true;
+
                 try {
                     broadcast($event);
                 } catch (Throwable $e) {

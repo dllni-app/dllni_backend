@@ -30,7 +30,9 @@ it('prices event assistance per worker per booked hour', function (): void {
         ->assertJsonPath('pricing.eventHours', 2)
         ->assertJsonPath('pricing.eventWorkerCount', 3)
         ->assertJsonPath('pricing.basePrice', 2400)
-        ->assertJsonPath('pricing.totalPrice', 2400)
+        ->assertJsonPath('pricing.travelFee', 0)
+        ->assertJsonPath('pricing.adminMargin', 240)
+        ->assertJsonPath('pricing.totalPrice', 2640)
         ->assertJsonPath('workerAcceptance.required', 3);
 });
 

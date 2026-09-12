@@ -1,0 +1,430 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Modules\User\Services;
+
+use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+use Modules\Cleaning\Enums\CleaningBookingSessionCoverageStatus;
+use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
+use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
+use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingSession;
+
+final class EventAssistanceScheduleService
+{
+    public function __construct(
+        private readonly UserCleaningOrderEstimationService $estimationService,
+    ) {}
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array{mode:string,sessions:array<int, array{sequence:int,date:string,time:string,hours:float}>,daysCount:int,totalHours:float,firstDate:string,firstTime:string}|null
+     */
+    public function resolve(array $validated): ?array
+    {
+        $schedule = $validated['schedule'] ?? null;
+        if (! is_array($schedule) || ! is_array($schedule['sessions'] ?? null) || $schedule['sessions'] === []) {
+            return null;
+        }
+
+        $sessions = [];
+        foreach ($schedule['sessions'] as $session) {
+            if (! is_array($session)) {
+                continue;
+            }
+
+            $date = CarbonImmutable::parse((string) ($session['date'] ?? ''))->toDateString();
+            $time = mb_trim((string) ($session['time'] ?? ''));
+            $hours = $this->normalizeHours((float) ($session['hours'] ?? 1));
+
+            $sessions[] = [
+                'date' => $date,
+                'time' => $time,
+                'hours' => $hours,
+            ];
+        }
+
+        if ($sessions === []) {
+            return null;
+        }
+
+        usort($sessions, static function (array $left, array $right): int {
+            return [$left['date'], $left['time']] <=> [$right['date'], $right['time']];
+        });
+
+        $normalized = [];
+        foreach ($sessions as $index => $session) {
+            $normalized[] = [
+                'sequence' => $index + 1,
+                ...$session,
+            ];
+        }
+
+        $totalHours = round(array_sum(array_column($normalized, 'hours')), 2);
+        $first = $normalized[0];
+
+        return [
+            'mode' => count($normalized) > 1 ? 'multi_day' : 'single_day',
+            'sessions' => $normalized,
+            'daysCount' => count($normalized),
+            'totalHours' => $totalHours,
+            'firstDate' => $first['date'],
+            'firstTime' => $first['time'],
+        ];
+    }
+
+    /**
+     * Price every execution session independently and aggregate the parent
+     * booking from those immutable session quotes. This preserves the existing
+     * one-day pricing algorithm while charging transport for every visit.
+     *
+     * @param  array{mode:string,sessions:array<int, array{sequence:int,date:string,time:string,hours:float}>,daysCount:int,totalHours:float}  $plan
+     * @param  array<string, mixed>  $propertyDetails
+     * @return array<string, mixed>
+     */
+    public function quote(
+        array $plan,
+        string $propertyType,
+        array $propertyDetails,
+        mixed $addressLatitude,
+        mixed $addressLongitude,
+        mixed $preferredWorkerId,
+        int $requiredWorkers,
+        bool $requestMaterials = false,
+        array $specialServices = [],
+    ): array {
+        $basePrice = 0.0;
+        $addonsTotal = 0.0;
+        $travelFee = 0.0;
+        $adminMargin = 0.0;
+        $totalPrice = 0.0;
+        $distanceKm = null;
+        $isPricingFinal = true;
+        $currency = (string) config('app.currency', 'SYP');
+        $eventHourlyRate = null;
+        $scheduleSessions = [];
+
+        $materialLines = [];
+        $specialServiceLines = [];
+        foreach ($plan['sessions'] as $sessionIndex => $session) {
+            $sessionDetails = $propertyDetails;
+            $sessionDetails['hours'] = (float) $session['hours'];
+            $sessionDetails['workerCount'] = max(1, $requiredWorkers);
+
+            $pricing = $this->estimationService->price(
+                $propertyType,
+                $sessionDetails,
+                $addressLatitude,
+                $addressLongitude,
+                $preferredWorkerId,
+                null,
+                $requestMaterials && $sessionIndex === 0,
+                $this->specialServicesForSession($specialServices, (int) $session['sequence']),
+            );
+
+            $sessionBase = (float) ($pricing['basePrice'] ?? 0);
+            $sessionAddons = (float) ($pricing['addonsTotal'] ?? 0);
+            $sessionTravel = (float) ($pricing['travelFee'] ?? 0);
+            $sessionAdmin = (float) ($pricing['adminMargin'] ?? 0);
+            $sessionTotal = (float) ($pricing['totalPrice'] ?? 0);
+
+            $basePrice += $sessionBase;
+            $addonsTotal += $sessionAddons;
+            $travelFee += $sessionTravel;
+            $adminMargin += $sessionAdmin;
+            $totalPrice += $sessionTotal;
+            $distanceKm ??= isset($pricing['distanceKm']) ? (float) $pricing['distanceKm'] : null;
+            $eventHourlyRate ??= isset($pricing['eventHourlyRate']) ? (float) $pricing['eventHourlyRate'] : null;
+            $currency = (string) ($pricing['currency'] ?? $currency);
+            $isPricingFinal = $isPricingFinal && (bool) ($pricing['isPricingFinal'] ?? false);
+            if ($sessionIndex === 0) {
+                $materialLines = (array) ($pricing['materials'] ?? []);
+            }
+            $specialServiceLines = array_merge($specialServiceLines, (array) ($pricing['specialServices'] ?? []));
+
+            $scheduleSessions[] = [
+                'sequence' => (int) $session['sequence'],
+                'date' => (string) $session['date'],
+                'time' => (string) $session['time'],
+                'hours' => (float) $session['hours'],
+                'basePrice' => round($sessionBase, 2),
+                'addonsTotal' => round($sessionAddons, 2),
+                'materialsTotal' => round((float) ($pricing['materialsTotal'] ?? 0), 2),
+                'specialServicesTotal' => round((float) ($pricing['specialServicesTotal'] ?? 0), 2),
+                'travelFee' => round($sessionTravel, 2),
+                'adminMargin' => round($sessionAdmin, 2),
+                'totalPrice' => round($sessionTotal, 2),
+            ];
+        }
+
+        return [
+            'basePrice' => round($basePrice, 2),
+            'addonsTotal' => round($addonsTotal, 2),
+            'travelFee' => round($travelFee, 2),
+            'distanceKm' => $distanceKm,
+            'adminMargin' => round($adminMargin, 2),
+            'isPricingFinal' => $isPricingFinal,
+            'totalPrice' => round($totalPrice, 2),
+            'currency' => $currency,
+            'serviceLines' => [],
+            'materials' => $materialLines,
+            'materialsTotal' => round(array_sum(array_map(static fn (array $line): float => (float) ($line['totalPrice'] ?? 0), $materialLines)), 2),
+            'specialServices' => $specialServiceLines,
+            'specialServicesTotal' => round(array_sum(array_map(static fn (array $line): float => (float) ($line['totalPrice'] ?? 0), $specialServiceLines)), 2),
+            'roomPricingLines' => [],
+            'pricingAlgorithm' => null,
+            'eventHourlyRate' => $eventHourlyRate,
+            'eventHours' => (float) $plan['totalHours'],
+            'eventWorkerCount' => max(1, $requiredWorkers),
+            'eventExecutionVisits' => (int) $plan['daysCount'],
+            'recommendation' => null,
+            'schedule' => [
+                'mode' => $plan['mode'],
+                'daysCount' => $plan['daysCount'],
+                'totalHours' => $plan['totalHours'],
+                'sessions' => $scheduleSessions,
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $propertyDetails
+     * @param  array{totalHours:float}  $plan
+     * @return array<string, mixed>
+     */
+    public function withAggregateHours(array $propertyDetails, array $plan): array
+    {
+        $propertyDetails['hours'] = $plan['totalHours'];
+
+        return $propertyDetails;
+    }
+
+    /**
+     * @param  array{mode:string,sessions:array<int, array{sequence:int,date:string,time:string,hours:float}>,daysCount:int,totalHours:float}  $plan
+     * @param  array<string, mixed>  $pricing
+     */
+    public function createSessions(
+        CleaningBooking $booking,
+        array $plan,
+        array $pricing,
+    ): void {
+        $schedulePricing = is_array($pricing['schedule']['sessions'] ?? null)
+            ? $pricing['schedule']['sessions']
+            : [];
+        $pricingBySequence = [];
+
+        foreach ($schedulePricing as $sessionPricing) {
+            if (! is_array($sessionPricing)) {
+                continue;
+            }
+            $sequence = (int) ($sessionPricing['sequence'] ?? 0);
+            if ($sequence > 0) {
+                $pricingBySequence[$sequence] = $sessionPricing;
+            }
+        }
+
+        foreach ($plan['sessions'] as $session) {
+            $sequence = (int) $session['sequence'];
+            $sessionPricing = $pricingBySequence[$sequence] ?? [];
+
+            CleaningBookingSession::query()->create([
+                'cleaning_booking_id' => $booking->id,
+                'sequence' => $sequence,
+                'session_type' => UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE,
+                'calculation_mode' => 'hours',
+                'scheduled_date' => $session['date'],
+                'scheduled_time' => $session['time'],
+                'duration_hours' => $session['hours'],
+                'required_workers' => max(1, (int) $booking->number_of_workers),
+                'coverage_status' => CleaningBookingSessionCoverageStatus::Searching,
+                'status' => CleaningBookingSessionStatus::Scheduled,
+                'base_price' => (float) ($sessionPricing['basePrice'] ?? 0),
+                'addons_total' => (float) ($sessionPricing['addonsTotal'] ?? 0),
+                'materials_total' => (float) ($sessionPricing['materialsTotal'] ?? 0),
+                'special_services_total' => (float) ($sessionPricing['specialServicesTotal'] ?? 0),
+                'travel_fee' => (float) ($sessionPricing['travelFee'] ?? 0),
+                'travel_distance_km' => $booking->travel_distance_km,
+                'admin_margin_amount' => (float) ($sessionPricing['adminMargin'] ?? 0),
+                'extension_fee_total' => 0,
+                'cancellation_fee' => 0,
+                'total_price' => (float) ($sessionPricing['totalPrice'] ?? 0),
+                'is_pricing_final' => (bool) $booking->is_pricing_final,
+                'pricing_snapshot' => [
+                    'eventHourlyRate' => (float) ($pricing['eventHourlyRate'] ?? 0),
+                    'requiredWorkers' => max(1, (int) $booking->number_of_workers),
+                    'scheduleMode' => $plan['mode'],
+                    'parentBasePrice' => (float) $booking->base_price,
+                    'parentTravelFee' => (float) $booking->travel_fee,
+                    'parentAdminMargin' => (float) $booking->admin_margin_amount,
+                    'currency' => (string) ($pricing['currency'] ?? config('app.currency', 'SYP')),
+                ],
+            ]);
+        }
+    }
+
+    public function assertEditable(CleaningBooking $booking): void
+    {
+        if ((string) $booking->property_type !== UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE) {
+            throw ValidationException::withMessages([
+                'schedule' => ['Only event-assistance bookings can use an event execution schedule.'],
+            ]);
+        }
+
+        $parentStatus = $booking->status?->value ?? (string) $booking->status;
+        if ($parentStatus !== 'pending') {
+            throw ValidationException::withMessages([
+                'schedule' => ['Event days cannot be changed after worker acceptance or execution has begun.'],
+            ]);
+        }
+
+        if ($booking->workerAssignments()
+            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
+            ->exists()) {
+            throw ValidationException::withMessages([
+                'schedule' => ['Event days cannot be changed after a worker has accepted the booking.'],
+            ]);
+        }
+
+        $sessions = CleaningBookingSession::query()
+            ->where('cleaning_booking_id', $booking->id)
+            ->with('workerAssignments')
+            ->orderBy('sequence')
+            ->get();
+
+        foreach ($sessions as $session) {
+            $status = $session->status?->value ?? (string) $session->status;
+            $hasAcceptedWorker = $session->workerAssignments
+                ->contains(static fn ($assignment): bool => $assignment->isAccepted());
+
+            if (
+                $status !== CleaningBookingSessionStatus::Scheduled->value
+                || $hasAcceptedWorker
+                || $session->started_travel_at !== null
+                || $session->arrived_at !== null
+                || $session->customer_confirmed_at !== null
+                || $session->work_started_at !== null
+                || $session->work_finished_at !== null
+            ) {
+                throw ValidationException::withMessages([
+                    'schedule' => ['Event days cannot be changed after worker acceptance or execution has begun.'],
+                ]);
+            }
+        }
+    }
+
+    /** @param array<string, mixed> $validated */
+    public function replaceSchedule(CleaningBooking $booking, array $validated): CleaningBooking
+    {
+        return DB::transaction(function () use ($booking, $validated): CleaningBooking {
+            $locked = CleaningBooking::query()
+                ->whereKey($booking->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $this->assertEditable($locked);
+            $plan = $this->resolve($validated);
+
+            if ($plan === null) {
+                throw ValidationException::withMessages([
+                    'schedule' => ['At least one event execution day is required.'],
+                ]);
+            }
+
+            $pricing = $this->quote(
+                plan: $plan,
+                propertyType: (string) $locked->property_type,
+                propertyDetails: (array) ($locked->property_details ?? []),
+                addressLatitude: $locked->address_latitude,
+                addressLongitude: $locked->address_longitude,
+                preferredWorkerId: $locked->resolvedAssignmentMode() === 'preferred_worker'
+                    ? $locked->preferred_worker_id
+                    : null,
+                requiredWorkers: max(1, (int) $locked->number_of_workers),
+            );
+
+            // A schedule-only edit must never silently drop extras that were
+            // already purchased. Keep their immutable booking snapshots and
+            // attach them to the first replacement execution session.
+            $preservedMaterials = round((float) $locked->materials()->sum('total_price'), 2);
+            $preservedSpecialServices = round((float) $locked->specialServices()->sum('total_price'), 2);
+            $preservedOtherAddons = round(max(
+                0.0,
+                (float) $locked->addons_total - $preservedMaterials - $preservedSpecialServices,
+            ), 2);
+            $preservedAddons = round($preservedMaterials + $preservedSpecialServices + $preservedOtherAddons, 2);
+            if ($preservedAddons > 0 && isset($pricing['schedule']['sessions'][0])) {
+                $pricing['addonsTotal'] = round((float) $pricing['addonsTotal'] + $preservedAddons, 2);
+                $pricing['materialsTotal'] = $preservedMaterials;
+                $pricing['specialServicesTotal'] = $preservedSpecialServices;
+                $pricing['totalPrice'] = round((float) $pricing['totalPrice'] + $preservedAddons, 2);
+                $pricing['schedule']['sessions'][0]['addonsTotal'] = $preservedAddons;
+                $pricing['schedule']['sessions'][0]['materialsTotal'] = $preservedMaterials;
+                $pricing['schedule']['sessions'][0]['specialServicesTotal'] = $preservedSpecialServices;
+                $pricing['schedule']['sessions'][0]['totalPrice'] = round(
+                    (float) $pricing['schedule']['sessions'][0]['totalPrice'] + $preservedAddons,
+                    2,
+                );
+            }
+
+            $grossTotal = round((float) $pricing['totalPrice'], 2);
+            $discount = min(
+                $grossTotal,
+                max(0.0, (float) ($locked->discount_amount ?? 0)),
+            );
+
+            CleaningBookingSession::query()
+                ->where('cleaning_booking_id', $locked->id)
+                ->delete();
+
+            $locked->forceFill([
+                'property_details' => $this->withAggregateHours(
+                    (array) ($locked->property_details ?? []),
+                    $plan,
+                ),
+                'estimated_hours' => $plan['totalHours'],
+                'total_hours' => $plan['totalHours'],
+                'scheduled_date' => $plan['firstDate'],
+                'scheduled_time' => $plan['firstTime'],
+                'base_price' => $pricing['basePrice'],
+                'addons_total' => $pricing['addonsTotal'],
+                'travel_fee' => $pricing['travelFee'],
+                'travel_distance_km' => $pricing['distanceKm'],
+                'admin_margin_amount' => $pricing['adminMargin'],
+                'is_pricing_final' => $pricing['isPricingFinal'],
+                'subtotal_before_discount' => $discount > 0 || $locked->subtotal_before_discount !== null
+                    ? $grossTotal
+                    : null,
+                'discount_amount' => $discount,
+                'total_price' => round($grossTotal - $discount, 2),
+            ])->saveQuietly();
+
+            $locked = $locked->fresh() ?? $locked;
+            $this->createSessions($locked, $plan, $pricing);
+
+            return $locked->fresh() ?? $locked;
+        });
+    }
+
+    private function normalizeHours(float $hours): float
+    {
+        return ceil(max(1.0, $hours) * 2) / 2;
+    }
+
+    /** @param array<int, mixed> $specialServices */
+    private function specialServicesForSession(array $specialServices, int $sequence): array
+    {
+        return array_values(array_filter($specialServices, static function (mixed $line) use ($sequence): bool {
+            if (! is_array($line)) {
+                return false;
+            }
+            $selected = array_values(array_filter(array_map('intval', (array) ($line['sessionIds'] ?? []))));
+
+            // Legacy payloads had no session selection and represented a single
+            // booking-level extra; keep charging it once on the first visit.
+            return $selected === [] ? $sequence === 1 : in_array($sequence, $selected, true);
+        }));
+    }
+}

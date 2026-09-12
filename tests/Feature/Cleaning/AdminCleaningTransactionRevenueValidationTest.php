@@ -72,7 +72,7 @@ it('blocks administration loan creation from the dashboard service', function ()
 
     expect($snapshot['depositBalance'])->toBe(0.0)
         ->and($snapshot['debtBalance'])->toBe(0.0)
-        ->and($snapshot['totalRevenue'])->toBe(1750.0)
+        ->and($snapshot['totalRevenue'])->toBe(2250.0)
         ->and($service->validationMessage($freshWorker, 'debt', 5000))->not->toBeNull();
 
     expect(fn () => $service->create(

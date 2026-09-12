@@ -27,7 +27,7 @@ beforeEach(function () {
 
 it('accepts an extension request', function () {
     $workerUser = User::factory()->create(['email' => 'worker-ext-accept@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -73,7 +73,7 @@ it('accepts an extension request', function () {
 
 it('applies the extension breakdown to booking and worker accounting once', function () {
     $workerUser = User::factory()->create(['email' => 'worker-ext-breakdown@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -90,7 +90,7 @@ it('applies the extension breakdown to booking and worker accounting once', func
         'status' => 'time_extension_requested',
         'service_share_amount' => 10000,
         'admin_margin_amount' => 1000,
-        'worker_amount' => 9000,
+        'worker_amount' => 10000,
         'currency' => 'SYP',
     ]);
     $warning = CleaningTimeWarning::query()->create([
@@ -126,12 +126,12 @@ it('applies the extension breakdown to booking and worker accounting once', func
         ->and((float) $booking->total_price)->toBe(16000.0)
         ->and((float) $assignment->service_share_amount)->toBe(15000.0)
         ->and((float) $assignment->admin_margin_amount)->toBe(1500.0)
-        ->and((float) $assignment->worker_amount)->toBe(13500.0);
+        ->and((float) $assignment->worker_amount)->toBe(15000.0);
 });
 
 it('rejects an extension request with message', function () {
     $workerUser = User::factory()->create(['email' => 'worker-ext-reject@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -179,8 +179,8 @@ it('rejects an extension request with message', function () {
 
 it('returns 403 when extension request is not for worker booking', function () {
     $workerUser = User::factory()->create(['email' => 'worker-ext-other@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
-    $otherWorker = Worker::factory()->create(['user_id' => User::factory()->create()->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
+    $otherWorker = Worker::factory()->financiallyEligible()->create(['user_id' => User::factory()->create()->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -202,9 +202,9 @@ it('returns 403 when extension request is not for worker booking', function () {
     $response->assertForbidden();
 });
 
-it('returns 422 when extension request already responded', function () {
+it('returns the resolved extension request when the same response is retried', function () {
     $workerUser = User::factory()->create(['email' => 'worker-ext-done@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -223,12 +223,13 @@ it('returns 422 when extension request already responded', function () {
 
     $response = $this->postJson("/api/v1/cleaning-time-warnings/{$warning->id}/accept");
 
-    $response->assertUnprocessable();
+    $response->assertOk()
+        ->assertJsonPath('data.workerResponse', 'extend_time');
 });
 
 it('accepts an extension request without additionalMinutes', function () {
     $workerUser = User::factory()->create(['email' => 'worker-ext-accept-minimal@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -269,7 +270,7 @@ it('accepts an extension request without additionalMinutes', function () {
 
 it('does not double-apply extension quote when accept is retried', function () {
     $workerUser = User::factory()->create(['email' => 'worker-ext-accept-retry@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -300,7 +301,8 @@ it('does not double-apply extension quote when accept is retried', function () {
     expect((float) $booking->total_price)->toBe(1400.0);
 
     $secondResponse = $this->postJson("/api/v1/cleaning-time-warnings/{$warning->id}/accept", []);
-    $secondResponse->assertUnprocessable();
+    $secondResponse->assertOk()
+        ->assertJsonPath('data.workerResponse', 'extend_time');
 
     $booking->refresh();
     expect((float) $booking->extension_fee_total)->toBe(1200.0);
@@ -309,7 +311,7 @@ it('does not double-apply extension quote when accept is retried', function () {
 
 it('rejects an extension request without message', function () {
     $workerUser = User::factory()->create(['email' => 'worker-ext-reject-minimal@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -362,7 +364,7 @@ it('returns 403 when user has no worker on extension accept', function () {
 
 it('returns 404 when time warning does not exist', function () {
     $workerUser = User::factory()->create(['email' => 'worker-ext-404@example.com']);
-    Worker::factory()->create(['user_id' => $workerUser->id]);
+    Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $response = $this->postJson('/api/v1/cleaning-time-warnings/99999/accept');
@@ -372,7 +374,7 @@ it('returns 404 when time warning does not exist', function () {
 
 it('lists pending extension requests for current worker', function () {
     $workerUser = User::factory()->create(['email' => 'worker-ext-list@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([
@@ -401,7 +403,7 @@ it('dispatches worker extension notification when a time warning is created', fu
     Queue::fake();
 
     $workerUser = User::factory()->create(['email' => 'worker-ext-realtime@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
 
     $booking = CleaningBooking::factory()->create([
         'worker_id' => $worker->id,
@@ -428,7 +430,7 @@ it('notifies the customer when worker rejects an extension request', function ()
 
     $customer = User::factory()->create(['email' => 'customer-ext-reject-notify@example.com']);
     $workerUser = User::factory()->create(['email' => 'worker-ext-reject-notify@example.com']);
-    $worker = Worker::factory()->create(['user_id' => $workerUser->id]);
+    $worker = Worker::factory()->financiallyEligible()->create(['user_id' => $workerUser->id]);
     Sanctum::actingAs($workerUser);
 
     $booking = CleaningBooking::factory()->create([

@@ -187,16 +187,16 @@ final class CleaningBookingCompleteController
             return $this->assignmentStatus($assignment) === CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion->value;
         })->count();
 
-        if ($awaitingCustomer > 0) {
-            return CleaningBookingStatus::AwaitingCustomerCompletion;
-        }
-
         $completedWorkers = $assignments->filter(function (CleaningBookingWorkerAssignment $assignment): bool {
             return $this->assignmentStatus($assignment) === CleaningBookingWorkerAssignmentStatus::Completed->value;
         })->count();
 
         if ($completedWorkers >= $requiredWorkers) {
             return CleaningBookingStatus::Completed;
+        }
+
+        if ($completedWorkers + $awaitingCustomer >= $requiredWorkers) {
+            return CleaningBookingStatus::AwaitingCustomerCompletion;
         }
 
         $hasExtensionRequest = $assignments->contains(function (CleaningBookingWorkerAssignment $assignment): bool {
@@ -213,6 +213,10 @@ final class CleaningBookingCompleteController
         });
 
         if ($hasStartedWorker) {
+            return CleaningBookingStatus::InProgress;
+        }
+
+        if ($awaitingCustomer > 0) {
             return CleaningBookingStatus::InProgress;
         }
 

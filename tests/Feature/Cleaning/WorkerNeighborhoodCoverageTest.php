@@ -28,7 +28,7 @@ function neighborhoodCoverageAllDayHours(): array
 function createCoveredWorker(CleaningNeighborhood $neighborhood, array $attributes = []): array
 {
     $user = User::factory()->create();
-    $worker = Worker::factory()->create(array_merge([
+    $worker = Worker::factory()->financiallyEligible()->create(array_merge([
         'user_id' => $user->id,
         'gender' => 'male',
         'is_active' => true,
@@ -106,7 +106,7 @@ it('rejects inactive neighborhoods when updating worker work areas', function ()
         ->assertJsonValidationErrors(['zones.0.neighborhoodId']);
 });
 
-it('dispatches new orders regardless of worker neighborhood coverage', function (): void {
+it('dispatches new orders only to workers covering the booking neighborhood', function (): void {
     Notification::fake();
 
     $neighborhoodA = CleaningNeighborhood::factory()->create(['name_ar' => 'Aziziyah']);
@@ -126,7 +126,7 @@ it('dispatches new orders regardless of worker neighborhood coverage', function 
     (new NotifyEligibleWorkersNewOrderJob($booking->id))->handle();
 
     Notification::assertSentTo($userA, NewOrderRequestNotification::class);
-    Notification::assertSentTo($userB, NewOrderRequestNotification::class);
+    Notification::assertNotSentTo($userB, NewOrderRequestNotification::class);
 });
 
 it('shows current worker pending bookings regardless of neighborhood coverage', function (): void {

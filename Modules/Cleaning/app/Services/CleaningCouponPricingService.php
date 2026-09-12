@@ -12,41 +12,19 @@ use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 
 final class CleaningCouponPricingService
 {
-    private const FACTOR_EPSILON = 0.0001;
-
     public function __construct(
         private readonly PlatformCouponEligibilityService $couponEligibility,
+        private readonly CleaningPricingCalculator $pricingCalculator,
     ) {}
 
     /**
-     * Charge the coupon percentage to the administration percentage first.
-     * Only percentage points above the administration share reduce worker net
-     * earnings. The customer still receives the exact coupon discount that was
-     * already calculated for the order.
+     * Apply cleaning coupons against the full customer order total, then fund the
+     * discount from the administration margin first. Only the amount that remains
+     * after administration reaches zero may reduce the service share. Travel is
+     * never reduced as a component.
      *
-     * Fixed-value coupons keep the same amount-based fallback: administration
-     * absorbs the fixed discount first and the worker absorbs only the excess.
-     *
-     * @return array{
-     *     grossServiceAmount: float,
-     *     grossTravelFee: float,
-     *     grossAdminMargin: float,
-     *     grossTotal: float,
-     *     discountAmount: float,
-     *     discountRatio: float,
-     *     netFactor: float,
-     *     allocatedDiscountAmount: float,
-     *     platformSubsidyAmount: float,
-     *     adminDiscountAmount: float,
-     *     workerDiscountAmount: float,
-     *     customerWorkerNetFactor: float,
-     *     assignmentWorkerNetFactor: float,
-     *     adminNetFactor: float,
-     *     serviceAmount: float,
-     *     travelFee: float,
-     *     adminMargin: float,
-     *     totalPrice: float
-     * }
+     * Example: service 960 + admin 240 = order total 1,200. A 10% coupon is 120.
+     * Admin becomes 120, service remains 960, and the customer pays 1,080.
      */
     public function allocation(
         PlatformCoupon $coupon,
@@ -57,52 +35,33 @@ final class CleaningCouponPricingService
         $grossServiceAmount = round(max(0.0, $serviceAmount), 2);
         $grossTravelFee = round(max(0.0, $travelFee), 2);
         $grossAdminMargin = round(max(0.0, $adminMargin), 2);
-        $grossWorkerAmount = round($grossServiceAmount + $grossTravelFee, 2);
-        $grossTotal = round($grossWorkerAmount + $grossAdminMargin, 2);
-        $discountAmount = $grossTotal > 0
-            ? $this->couponEligibility->calculateDiscount($coupon, $grossTotal)
-            : 0.0;
-        $discountAmount = round(min(max(0.0, $discountAmount), $grossTotal), 2);
-        $discountRatio = $grossTotal > 0 ? min(1.0, $discountAmount / $grossTotal) : 0.0;
-        $netFactor = max(0.0, 1.0 - $discountRatio);
+        $grossTotal = round($grossServiceAmount + $grossTravelFee + $grossAdminMargin, 2);
 
-        $allocatedDiscountAmount = $this->allocatedDiscountAmount(
-            $coupon,
-            $grossServiceAmount,
-            $discountAmount,
-        );
-        $adminDiscountAmount = round(min($allocatedDiscountAmount, $grossAdminMargin), 2);
-        $workerDiscountAmount = round(max(0.0, $allocatedDiscountAmount - $adminDiscountAmount), 2);
-        $platformSubsidyAmount = round(max(0.0, $discountAmount - $allocatedDiscountAmount), 2);
+        $eligibleAmount = round($grossServiceAmount + $grossAdminMargin, 2);
+        if ($coupon->discount_type === PlatformCoupon::DISCOUNT_PERCENTAGE) {
+            // The advertised percentage is calculated from the full amount the
+            // customer would pay before the coupon (service + travel + admin).
+            $discountAmount = $this->couponEligibility->calculateDiscount($coupon, $grossTotal);
+        } else {
+            $discountAmount = min(max(0.0, (float) $coupon->discount_value), $grossTotal);
+        }
+
+        // The discount is funded by admin first, then service. Travel is never
+        // reduced, so the maximum fundable discount is admin + service.
+        $discountAmount = round(min(max(0.0, $discountAmount), $eligibleAmount), 2);
+
+        $adminDiscountAmount = round(min($discountAmount, $grossAdminMargin), 2);
+        $workerDiscountAmount = round(max(0.0, $discountAmount - $adminDiscountAmount), 2);
         $adminNet = round(max(0.0, $grossAdminMargin - $adminDiscountAmount), 2);
-
-        $customerWorkerNetFactor = $grossWorkerAmount > 0
-            ? max(0.0, min(1.0, ($grossWorkerAmount - $workerDiscountAmount) / $grossWorkerAmount))
+        $serviceNet = round(max(0.0, $grossServiceAmount - $workerDiscountAmount), 2);
+        $travelNet = $grossTravelFee;
+        $serviceNetFactor = $grossServiceAmount > 0.0
+            ? max(0.0, min(1.0, $serviceNet / $grossServiceAmount))
             : 1.0;
-        $assignmentWorkerNetFactor = $grossWorkerAmount > 0
-            ? max(0.0, min(1.0, ($grossWorkerAmount - $allocatedDiscountAmount) / $grossWorkerAmount))
-            : 1.0;
-        $adminNetFactor = $grossAdminMargin > 0
+        $adminNetFactor = $grossAdminMargin > 0.0
             ? max(0.0, min(1.0, $adminNet / $grossAdminMargin))
             : 1.0;
-
-        $serviceNet = round($grossServiceAmount * $customerWorkerNetFactor, 2);
-        $travelNet = round($grossTravelFee * $customerWorkerNetFactor, 2);
-        $allocatedComponentTotal = round(max(0.0, $grossTotal - $allocatedDiscountAmount), 2);
-
-        // Keep the administration/worker allocation exact after rounding. Any
-        // remaining customer discount is platform-funded and intentionally does
-        // not reduce either the administration percentage or worker earnings.
-        $roundingDelta = round($allocatedComponentTotal - ($serviceNet + $travelNet + $adminNet), 2);
-        if ($roundingDelta !== 0.0) {
-            if ($grossServiceAmount > 0) {
-                $serviceNet = round(max(0.0, $serviceNet + $roundingDelta), 2);
-            } elseif ($grossTravelFee > 0) {
-                $travelNet = round(max(0.0, $travelNet + $roundingDelta), 2);
-            } else {
-                $adminNet = round(max(0.0, $adminNet + $roundingDelta), 2);
-            }
-        }
+        $discountRatio = $grossTotal > 0.0 ? min(1.0, $discountAmount / $grossTotal) : 0.0;
 
         return [
             'grossServiceAmount' => $grossServiceAmount,
@@ -111,19 +70,61 @@ final class CleaningCouponPricingService
             'grossTotal' => $grossTotal,
             'discountAmount' => $discountAmount,
             'discountRatio' => $discountRatio,
-            'netFactor' => $netFactor,
-            'allocatedDiscountAmount' => $allocatedDiscountAmount,
-            'platformSubsidyAmount' => $platformSubsidyAmount,
+            'netFactor' => max(0.0, 1.0 - $discountRatio),
+            'allocatedDiscountAmount' => $discountAmount,
+            'platformSubsidyAmount' => 0.0,
             'adminDiscountAmount' => $adminDiscountAmount,
             'workerDiscountAmount' => $workerDiscountAmount,
-            'customerWorkerNetFactor' => $customerWorkerNetFactor,
-            'assignmentWorkerNetFactor' => $assignmentWorkerNetFactor,
+            'customerWorkerNetFactor' => $serviceNetFactor,
+            'assignmentWorkerNetFactor' => $serviceNetFactor,
             'adminNetFactor' => $adminNetFactor,
             'serviceAmount' => $serviceNet,
             'travelFee' => $travelNet,
             'adminMargin' => $adminNet,
-            'totalPrice' => round(max(0.0, $grossTotal - $discountAmount), 2),
+            'totalPrice' => round($serviceNet + $travelNet + $adminNet, 2),
         ];
+    }
+
+    /**
+     * Return the dashboard breakdown using the current admin-first coupon rule.
+     */
+    public function storedBreakdown(CleaningBooking $booking): ?array
+    {
+        $couponId = (int) ($booking->platform_coupon_id ?? 0);
+        if ($couponId <= 0) {
+            return null;
+        }
+
+        $coupon = PlatformCoupon::query()->find($couponId);
+        if (! $coupon instanceof PlatformCoupon) {
+            return null;
+        }
+
+        $grossServiceAmount = round(
+            max(0.0, (float) ($booking->base_price ?? 0))
+            + max(0.0, (float) ($booking->addons_total ?? 0)),
+            2,
+        );
+        $storedDiscount = max(0.0, (float) ($booking->discount_amount ?? 0));
+        $grossTotal = round(max(
+            0.0,
+            (float) ($booking->subtotal_before_discount
+                ?? ((float) ($booking->total_price ?? 0) + $storedDiscount)),
+        ), 2);
+        $grossTravelFee = round(max(0.0, (float) ($booking->travel_fee ?? 0)), 2);
+        $grossAdminMargin = round(max(0.0, $grossTotal - $grossServiceAmount - $grossTravelFee), 2);
+
+        if (! (bool) $booking->is_pricing_final && $grossAdminMargin <= 0.0) {
+            $grossAdminMargin = (float) $this->pricingCalculator
+                ->provisional($grossServiceAmount, 0.0)['adminMargin'];
+        }
+
+        return $this->allocation(
+            $coupon,
+            $grossServiceAmount,
+            $grossTravelFee,
+            $grossAdminMargin,
+        );
     }
 
     /**
@@ -145,10 +146,11 @@ final class CleaningCouponPricingService
         $previousFactors = $this->previousDiscountFactors($booking, $coupon);
         $couponWasJustAttached = $booking->isDirty('platform_coupon_id')
             || empty($booking->getOriginal('platform_coupon_id'));
-        $pricingWasRecalculated = $booking->isDirty([
+        $assignmentPricingWasRecalculated = $booking->isDirty([
+            'base_price',
+            'addons_total',
             'travel_fee',
             'admin_margin_amount',
-            'total_price',
             'is_pricing_final',
         ]);
 
@@ -159,18 +161,31 @@ final class CleaningCouponPricingService
             + max(0.0, (float) ($booking->addons_total ?? 0)),
             2,
         );
-        $grossTravelFee = $this->grossStoredComponent(
-            currentValue: (float) ($booking->travel_fee ?? 0),
-            fieldIsDirty: $booking->isDirty('travel_fee'),
-            previousNetFactor: $previousFactors['customerWorkerNetFactor'],
-            treatCurrentAsGross: $couponWasJustAttached || $pricingWasRecalculated,
-        );
-        $grossAdminMargin = $this->grossStoredComponent(
-            currentValue: (float) ($booking->admin_margin_amount ?? 0),
-            fieldIsDirty: $booking->isDirty('admin_margin_amount'),
-            previousNetFactor: $previousFactors['adminNetFactor'],
-            treatCurrentAsGross: $couponWasJustAttached || $pricingWasRecalculated,
-        );
+        $grossTravelFee = round(max(0.0, (float) ($booking->travel_fee ?? 0)), 2);
+        $currentAdminMargin = round(max(0.0, (float) ($booking->admin_margin_amount ?? 0)), 2);
+        if (! (bool) $booking->is_pricing_final && $currentAdminMargin <= 0.0) {
+            // Open-count bookings are initially stored without an admin margin
+            // until a worker is assigned. Coupons still consume the configured
+            // provisional administration margin first, otherwise the pending
+            // user/worker APIs would incorrectly deduct the coupon from service.
+            $grossAdminMargin = (float) $this->pricingCalculator
+                ->provisional($grossServiceAmount, 0.0)['adminMargin'];
+        } elseif ($couponWasJustAttached || $booking->isDirty('admin_margin_amount')) {
+            $grossAdminMargin = $currentAdminMargin;
+        } else {
+            // The subtotal snapshot is the reliable source for the original admin
+            // margin, including the case where the coupon reduced net admin to 0.
+            $originalGrossTotal = max(0.0, (float) ($booking->getOriginal('subtotal_before_discount') ?? 0));
+            $originalServiceAmount = round(
+                max(0.0, (float) ($booking->getOriginal('base_price') ?? 0))
+                + max(0.0, (float) ($booking->getOriginal('addons_total') ?? 0)),
+                2,
+            );
+            $originalTravelFee = round(max(0.0, (float) ($booking->getOriginal('travel_fee') ?? 0)), 2);
+            $grossAdminMargin = $originalGrossTotal > 0.0
+                ? round(max(0.0, $originalGrossTotal - $originalServiceAmount - $originalTravelFee), 2)
+                : $currentAdminMargin;
+        }
 
         $allocation = $this->allocation(
             $coupon,
@@ -185,7 +200,7 @@ final class CleaningCouponPricingService
             (float) $allocation['adminNetFactor'],
             $previousFactors['assignmentWorkerNetFactor'],
             $previousFactors['adminNetFactor'],
-            $couponWasJustAttached || $pricingWasRecalculated,
+            $couponWasJustAttached || $assignmentPricingWasRecalculated,
         );
 
         $booking->travel_fee = $allocation['travelFee'];
@@ -198,35 +213,14 @@ final class CleaningCouponPricingService
     }
 
     /**
-     * The order discount can include administration/travel markup because that
-     * is how the current customer total is quoted. For percentage coupons, the
-     * financial burden still follows percentage points on the gross service
-     * value: admin percentage first, then worker percentage. The difference is
-     * platform-funded so the customer-facing discount never changes.
-     */
-    private function allocatedDiscountAmount(
-        PlatformCoupon $coupon,
-        float $grossServiceAmount,
-        float $discountAmount,
-    ): float {
-        if ($coupon->discount_type !== PlatformCoupon::DISCOUNT_PERCENTAGE || $grossServiceAmount <= 0.0) {
-            return round($discountAmount, 2);
-        }
-
-        $percentageAmount = $grossServiceAmount * (max(0.0, (float) $coupon->discount_value) / 100);
-
-        return round(min($discountAmount, max(0.0, $percentageAmount)), 2);
-    }
-
-    /**
      * @return array{customerWorkerNetFactor: float, assignmentWorkerNetFactor: float, adminNetFactor: float}
      */
     private function previousDiscountFactors(CleaningBooking $booking, PlatformCoupon $coupon): array
     {
         $grossTotal = max(0.0, (float) ($booking->getOriginal('subtotal_before_discount') ?? 0));
-        $discount = max(0.0, (float) ($booking->getOriginal('discount_amount') ?? 0));
+        $storedDiscount = max(0.0, (float) ($booking->getOriginal('discount_amount') ?? 0));
 
-        if ($grossTotal <= 0.0 || $discount <= 0.0) {
+        if ($grossTotal <= 0.0 || $storedDiscount <= 0.0) {
             return $this->fullFactors();
         }
 
@@ -235,113 +229,98 @@ final class CleaningCouponPricingService
             + max(0.0, (float) ($booking->getOriginal('addons_total') ?? 0)),
             2,
         );
-        $netTravelFee = max(0.0, (float) ($booking->getOriginal('travel_fee') ?? 0));
-        $netAdminMargin = max(0.0, (float) ($booking->getOriginal('admin_margin_amount') ?? 0));
-
-        // Existing bookings may have been saved by the old proportional coupon
-        // allocator. Detect that shape once so the first recalculation after this
-        // deployment restores the original gross values correctly.
-        $legacyFactors = $this->legacyPreviousDiscountFactors(
-            $grossTotal,
-            $discount,
-            $grossServiceAmount,
-            $netTravelFee,
-            $netAdminMargin,
-        );
-        if ($legacyFactors !== null) {
-            return $legacyFactors;
-        }
-
-        $allocatedDiscountAmount = $this->allocatedDiscountAmount(
+        $grossTravelFee = round(max(0.0, (float) ($booking->getOriginal('travel_fee') ?? 0)), 2);
+        $netAdminMargin = round(max(0.0, (float) ($booking->getOriginal('admin_margin_amount') ?? 0)), 2);
+        $grossAdminMargin = round(max(0.0, $grossTotal - $grossServiceAmount - $grossTravelFee), 2);
+        $currentAllocation = $this->allocation(
             $coupon,
             $grossServiceAmount,
-            $discount,
+            $grossTravelFee,
+            $grossAdminMargin,
         );
-        $grossNonServiceAmount = max(0.0, $grossTotal - $grossServiceAmount);
 
-        if ($netAdminMargin > 0.0) {
-            // A remaining admin margin means the allocated coupon burden never
-            // reached the worker share.
-            $grossAdminMargin = min(
-                $grossNonServiceAmount,
-                $netAdminMargin + $allocatedDiscountAmount,
-            );
-        } else {
-            // When admin is exhausted, solve the previous gross admin amount
-            // from the stored net travel and the known allocated coupon burden.
-            $componentTotalAfterAllocation = max(0.0, $grossTotal - $allocatedDiscountAmount);
-            $denominator = $componentTotalAfterAllocation - $netTravelFee;
+        $assignmentFactor = (float) $currentAllocation['assignmentWorkerNetFactor'];
+        $expectedDiscount = (float) $currentAllocation['discountAmount'];
+        $expectedAdmin = (float) $currentAllocation['adminMargin'];
+        $expectedTotal = (float) $currentAllocation['totalPrice'];
+        $storedTotal = max(0.0, (float) ($booking->getOriginal('total_price') ?? 0));
 
-            if (abs($denominator) > self::FACTOR_EPSILON) {
-                $grossAdminMargin = (
-                    ($componentTotalAfterAllocation * $grossNonServiceAmount)
-                    - ($netTravelFee * $grossTotal)
-                ) / $denominator;
-            } else {
-                $grossAdminMargin = $grossNonServiceAmount - $netTravelFee;
-            }
+        $legacyFactor = $grossTotal > 0.0
+            ? max(0.0, min(1.0, ($grossTotal - $storedDiscount) / $grossTotal))
+            : 1.0;
 
-            $grossAdminMargin = min(
-                $grossNonServiceAmount,
-                max(0.0, $grossAdminMargin),
-            );
+        $bookingPricingDiffersFromCurrentRule =
+            abs($storedDiscount - $expectedDiscount) > 0.02
+            || abs($netAdminMargin - $expectedAdmin) > 0.02
+            || abs($storedTotal - $expectedTotal) > 0.02;
+
+        // Historical coupon versions reduced assignment service/travel by the
+        // customer's overall coupon factor. Restore that gross share only when
+        // the persisted row still looks legacy. This also keeps reruns idempotent.
+        if (
+            $legacyFactor < 1.0
+            && (
+                (
+                    abs($storedDiscount - $expectedDiscount) <= 0.02
+                    && $bookingPricingDiffersFromCurrentRule
+                )
+                || $this->assignmentsMatchLegacyServiceFactor(
+                    $booking,
+                    $grossServiceAmount,
+                    $legacyFactor,
+                    $assignmentFactor,
+                )
+            )
+        ) {
+            $assignmentFactor = $legacyFactor;
         }
 
-        $grossTravelFee = max(0.0, $grossNonServiceAmount - $grossAdminMargin);
-        $grossWorkerAmount = max(0.0, $grossServiceAmount + $grossTravelFee);
-        $adminDiscountAmount = min($allocatedDiscountAmount, $grossAdminMargin);
-        $workerDiscountAmount = max(0.0, $allocatedDiscountAmount - $adminDiscountAmount);
-        $adminNet = max(0.0, $grossAdminMargin - $adminDiscountAmount);
-
         return [
-            'customerWorkerNetFactor' => $grossWorkerAmount > 0.0
-                ? max(0.0, min(1.0, ($grossWorkerAmount - $workerDiscountAmount) / $grossWorkerAmount))
-                : 1.0,
-            'assignmentWorkerNetFactor' => $grossWorkerAmount > 0.0
-                ? max(0.0, min(1.0, ($grossWorkerAmount - $allocatedDiscountAmount) / $grossWorkerAmount))
-                : 1.0,
+            'customerWorkerNetFactor' => 1.0,
+            'assignmentWorkerNetFactor' => $assignmentFactor,
             'adminNetFactor' => $grossAdminMargin > 0.0
-                ? max(0.0, min(1.0, $adminNet / $grossAdminMargin))
+                ? max(0.0, min(1.0, $netAdminMargin / $grossAdminMargin))
                 : 1.0,
         ];
     }
 
-    /**
-     * @return array{customerWorkerNetFactor: float, assignmentWorkerNetFactor: float, adminNetFactor: float}|null
-     */
-    private function legacyPreviousDiscountFactors(
-        float $grossTotal,
-        float $discount,
+    private function assignmentsMatchLegacyServiceFactor(
+        CleaningBooking $booking,
         float $grossServiceAmount,
-        float $netTravelFee,
-        float $netAdminMargin,
-    ): ?array {
-        $legacyNetFactor = max(0.0, min(1.0, 1.0 - ($discount / $grossTotal)));
-        if ($legacyNetFactor <= self::FACTOR_EPSILON) {
-            if ($netTravelFee <= 0.01 && $netAdminMargin <= 0.01) {
-                return [
-                    'customerWorkerNetFactor' => 0.0,
-                    'assignmentWorkerNetFactor' => 0.0,
-                    'adminNetFactor' => 0.0,
-                ];
-            }
-
-            return null;
+        float $legacyFactor,
+        float $currentRuleFactor,
+    ): bool {
+        if (
+            $grossServiceAmount <= 0.0
+            || abs($legacyFactor - $currentRuleFactor) <= 0.0001
+        ) {
+            return false;
         }
 
-        $legacyGrossTravelFee = $netTravelFee / $legacyNetFactor;
-        $legacyGrossAdminMargin = max(0.0, $grossTotal - $grossServiceAmount - $legacyGrossTravelFee);
-        $expectedNetAdminMargin = round($legacyGrossAdminMargin * $legacyNetFactor, 2);
+        $assignments = CleaningBookingWorkerAssignment::query()
+            ->where('cleaning_booking_id', $booking->id)
+            ->get(['service_share_amount']);
 
-        if (abs($expectedNetAdminMargin - $netAdminMargin) > 0.02) {
-            return null;
+        if ($assignments->isEmpty()) {
+            return false;
         }
 
-        return [
-            'customerWorkerNetFactor' => $legacyNetFactor,
-            'assignmentWorkerNetFactor' => $legacyNetFactor,
-            'adminNetFactor' => $legacyNetFactor,
-        ];
+        // When the team is fully represented, the sum is a reliable fingerprint
+        // of the old global factor. For partial teams we avoid guessing.
+        $requiredWorkers = max(1, (int) ($booking->number_of_workers ?? 1));
+        if ($assignments->count() < $requiredWorkers) {
+            return false;
+        }
+
+        $storedServiceTotal = round((float) $assignments->sum(
+            static fn (CleaningBookingWorkerAssignment $assignment): float =>
+                max(0.0, (float) ($assignment->service_share_amount ?? 0)),
+        ), 2);
+        $legacyServiceTotal = round($grossServiceAmount * $legacyFactor, 2);
+        $currentServiceTotal = round($grossServiceAmount * $currentRuleFactor, 2);
+
+        return abs($storedServiceTotal - $legacyServiceTotal) <= 1.0
+            && abs($storedServiceTotal - $currentServiceTotal) > 1.0;
     }
 
     /** @return array{customerWorkerNetFactor: float, assignmentWorkerNetFactor: float, adminNetFactor: float} */
@@ -352,25 +331,6 @@ final class CleaningCouponPricingService
             'assignmentWorkerNetFactor' => 1.0,
             'adminNetFactor' => 1.0,
         ];
-    }
-
-    private function grossStoredComponent(
-        float $currentValue,
-        bool $fieldIsDirty,
-        float $previousNetFactor,
-        bool $treatCurrentAsGross,
-    ): float {
-        $currentValue = max(0.0, $currentValue);
-
-        if ($fieldIsDirty || $treatCurrentAsGross || $previousNetFactor >= 1.0) {
-            return round($currentValue, 2);
-        }
-
-        if ($previousNetFactor <= 0.0) {
-            return 0.0;
-        }
-
-        return round($currentValue / $previousNetFactor, 2);
     }
 
     private function applyToWorkerAssignments(
@@ -402,18 +362,20 @@ final class CleaningCouponPricingService
                 $currentAssignmentValuesAreGross,
             );
 
-            // Assignment gross is reduced by the allocated coupon percentage
-            // while admin margin is reduced by the admin-funded percentage. The
-            // difference is therefore exactly the worker-funded excess only.
+            // Keep service/travel at their gross worker share while the coupon
+            // fits inside the administration margin. Only the excess coupon
+            // reduces the service share; travel is never discounted.
             $serviceShare = round($grossServiceShare * $assignmentWorkerNetFactor, 2);
-            $travelFee = round($grossTravelFee * $assignmentWorkerNetFactor, 2);
+            $travelFee = round($grossTravelFee, 2);
             $adminMargin = round($grossAdminMargin * $adminNetFactor, 2);
 
             $assignment->forceFill([
                 'service_share_amount' => $serviceShare,
                 'travel_fee' => $travelFee,
                 'admin_margin_amount' => $adminMargin,
-                'worker_amount' => round(max(0.0, $serviceShare + $travelFee - $adminMargin), 2),
+                // Administration margin is added to the customer price separately;
+                // it is not deducted again from the worker's service/travel share.
+                'worker_amount' => round(max(0.0, $serviceShare + $travelFee), 2),
             ])->saveQuietly();
         }
     }

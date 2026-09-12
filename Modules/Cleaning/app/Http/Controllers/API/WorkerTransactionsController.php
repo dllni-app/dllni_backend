@@ -36,7 +36,7 @@ final class WorkerTransactionsController
                     ->orWhereHas('workerAssignments', function (Builder $assignments) use ($worker): void {
                         $assignments
                             ->where('worker_id', $worker->id)
-                            ->where('status', CleaningBookingWorkerAssignmentStatus::Accepted->value);
+                            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
                     });
             })
             ->with([
@@ -44,7 +44,7 @@ final class WorkerTransactionsController
                 'workerAssignments' => function ($assignments) use ($worker): void {
                     $assignments
                         ->where('worker_id', $worker->id)
-                        ->where('status', CleaningBookingWorkerAssignmentStatus::Accepted->value);
+                        ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
                 },
             ])
             ->orderByDesc('scheduled_date')
@@ -59,7 +59,7 @@ final class WorkerTransactionsController
                     ->orWhereHas('workerAssignments', function (Builder $assignments) use ($worker): void {
                         $assignments
                             ->where('worker_id', $worker->id)
-                            ->where('status', CleaningBookingWorkerAssignmentStatus::Accepted->value);
+                            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
                     });
             })
             ->where('status', CleaningBookingStatus::Completed)
@@ -67,7 +67,7 @@ final class WorkerTransactionsController
                 'workerAssignments' => function ($assignments) use ($worker): void {
                     $assignments
                         ->where('worker_id', $worker->id)
-                        ->where('status', CleaningBookingWorkerAssignmentStatus::Accepted->value);
+                        ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues());
                 },
             ])
             ->get()
@@ -105,7 +105,7 @@ final class WorkerTransactionsController
             return $this->assignmentNetAmount($assignment);
         }
 
-        return max(0.0, round($this->bookingGrossAmount($booking, $workerId) - (float) ($booking->admin_margin_amount ?? 0), 2));
+        return max(0.0, $this->bookingGrossAmount($booking, $workerId));
     }
 
     /**
@@ -174,6 +174,6 @@ final class WorkerTransactionsController
 
     private function assignmentNetAmount(CleaningBookingWorkerAssignment $assignment): float
     {
-        return max(0.0, round($this->assignmentGrossAmount($assignment) - (float) $assignment->admin_margin_amount, 2));
+        return max(0.0, $this->assignmentGrossAmount($assignment));
     }
 }

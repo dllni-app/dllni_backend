@@ -27,6 +27,7 @@ final class WorkerOrderSolvencyService
 
     public function __construct(
         private readonly CleaningPricingCalculator $pricingCalculator,
+        private readonly CleaningCouponPricingService $couponPricingService,
         private readonly DepositService $depositService,
         private readonly WorkerDebtService $debtService,
         private readonly WorkerBookingScheduleConflictService $scheduleConflictService,
@@ -209,7 +210,7 @@ final class WorkerOrderSolvencyService
                 'acceptedAt' => $assignment->accepted_at?->toIso8601String(),
                 'roomCount' => (int) $assignment->room_count,
                 'roomsWeight' => (float) $assignment->rooms_weight,
-                'workerSlot' => null,
+                'workerSlot' => $nextSlot,
                 'totalHours' => $totalHours,
                 'serviceShareAmount' => $serviceShare,
                 'travelFee' => $travelFee,
@@ -228,13 +229,25 @@ final class WorkerOrderSolvencyService
         $preview = $this->previewServiceShare($booking, $assignment);
         $totalHours = $this->workerDurationHours($booking, (float) $preview['roomsWeight']);
         $serviceShare = $preview['serviceShareAmount'];
-        $pricing = $this->pricingCalculator->finalizedForWorker(
-            $serviceShare,
-            0.0,
-            $booking->address_latitude !== null ? (float) $booking->address_latitude : null,
-            $booking->address_longitude !== null ? (float) $booking->address_longitude : null,
-            $worker,
-        );
+        $hasCompleteRoute = $booking->address_latitude !== null
+            && $booking->address_longitude !== null
+            && $worker->home_address !== null
+            && mb_trim((string) $worker->home_address) !== ''
+            && $worker->home_latitude !== null
+            && $worker->home_longitude !== null;
+
+        // A pending order may legitimately be listed before either side of the
+        // route is geocoded. Its solvency check still has a reliable provisional
+        // administration margin; transport is finalized only during acceptance.
+        $pricing = $hasCompleteRoute
+            ? $this->pricingCalculator->finalizedForWorker(
+                $serviceShare,
+                0.0,
+                (float) $booking->address_latitude,
+                (float) $booking->address_longitude,
+                $worker,
+            )
+            : $this->pricingCalculator->provisional($serviceShare, 0.0);
         $travelFee = (float) $pricing['travelFee'];
         $adminMargin = $preview['adminMarginAmount'];
         $grossWorkerTotal = $this->grossWorkerTotal($serviceShare, $travelFee);
@@ -298,11 +311,26 @@ final class WorkerOrderSolvencyService
         ?CleaningBookingWorkerAssignment $assignment = null,
     ): array {
         $workerCount = max(1, (int) ($booking->number_of_workers ?? 1));
-        $subtotal = round(
+        $grossServiceSubtotal = round(
             (float) ($booking->base_price ?? 0) + (float) ($booking->addons_total ?? 0),
             2,
         );
-        $targetAdminMargin = (float) $this->pricingCalculator->provisional($subtotal, 0.0)['adminMargin'];
+        $subtotal = $grossServiceSubtotal;
+        $targetAdminMargin = (float) $this->pricingCalculator->provisional($grossServiceSubtotal, 0.0)['adminMargin'];
+
+        // Pending worker offers must use the same coupon allocation already shown
+        // to the customer. If the coupon fits inside the administration margin,
+        // the worker service share stays unchanged and only admin margin drops.
+        // If the coupon exceeds the admin margin, only the excess reduces the
+        // service share. Travel remains outside the coupon calculation.
+        if ((int) ($booking->platform_coupon_id ?? 0) > 0) {
+            $couponBreakdown = $this->couponPricingService->storedBreakdown($booking);
+
+            if (is_array($couponBreakdown)) {
+                $subtotal = round(max(0.0, (float) ($couponBreakdown['serviceAmount'] ?? $grossServiceSubtotal)), 2);
+                $targetAdminMargin = round(max(0.0, (float) ($couponBreakdown['adminMargin'] ?? $targetAdminMargin)), 2);
+            }
+        }
 
         if ((string) $booking->property_type === 'event_assistance') {
             return [
@@ -348,7 +376,7 @@ final class WorkerOrderSolvencyService
                 'adminMarginAmount' => $this->allocatedMarginForSlot($targetAdminMargin, $equalShares, $nextSlot),
                 'roomCount' => 0,
                 'roomsWeight' => 0.0,
-                'workerSlot' => null,
+                'workerSlot' => $nextSlot,
                 'roomIds' => [],
             ];
         }
@@ -378,7 +406,7 @@ final class WorkerOrderSolvencyService
                 'adminMarginAmount' => $this->allocatedMarginForSlot($targetAdminMargin, $equalShares, $nextSlot),
                 'roomCount' => 0,
                 'roomsWeight' => 0.0,
-                'workerSlot' => null,
+                'workerSlot' => $nextSlot,
                 'roomIds' => [],
             ];
         }
@@ -477,6 +505,8 @@ final class WorkerOrderSolvencyService
 
     private function netWorkerAmount(float $serviceShare, float $travelFee, float $adminMargin): float
     {
-        return max(0.0, round($this->grossWorkerTotal($serviceShare, $travelFee) - $adminMargin, 2));
+        // Admin margin is a separate customer-side/platform amount. It must not
+        // be deducted from the worker earnings a second time.
+        return max(0.0, $this->grossWorkerTotal($serviceShare, $travelFee));
     }
 }

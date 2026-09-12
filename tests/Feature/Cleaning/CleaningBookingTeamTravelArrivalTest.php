@@ -173,7 +173,7 @@ it('requires a separate customer security confirmation for every arrived worker 
         ->assertOk()
         ->assertJsonPath('data.status', CleaningBookingStatus::AwaitingCustomerCompletion->value)
         ->assertJsonPath('data.worker_order_status', CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion->value)
-        ->assertJsonPath('data.order_status', CleaningBookingStatus::AwaitingCustomerCompletion->value);
+        ->assertJsonPath('data.order_status', CleaningBookingStatus::InProgress->value);
 
     $this->assertDatabaseHas('cleaning_booking_worker_assignments', [
         'cleaning_booking_id' => $booking->id,
@@ -185,7 +185,7 @@ it('requires a separate customer security confirmation for every arrived worker 
     $this->postJson("/api/v1/user/cleaning/orders/{$booking->id}/start-verification/confirm", [
         'code' => $workerTwoCode,
     ])->assertOk()
-        ->assertJsonPath('data.order_status', CleaningBookingStatus::AwaitingCustomerCompletion->value)
+        ->assertJsonPath('data.order_status', CleaningBookingStatus::InProgress->value)
         ->assertJsonCount(1, 'data.completionRequests')
         ->assertJsonPath('data.completionRequests.0.workerId', $workerOne->id);
 
@@ -193,7 +193,7 @@ it('requires a separate customer security confirmation for every arrived worker 
     $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/start-work")
         ->assertOk()
         ->assertJsonPath('data.status', CleaningBookingStatus::InProgress->value)
-        ->assertJsonPath('data.order_status', CleaningBookingStatus::AwaitingCustomerCompletion->value);
+        ->assertJsonPath('data.order_status', CleaningBookingStatus::InProgress->value);
 
     $this->postJson("/api/v1/cleaning-bookings/{$booking->id}/complete", [
         'completionMessage' => 'Worker two finished.',
@@ -319,7 +319,7 @@ it('targets completion extension requests to the selected worker only', function
     ]);
     $this->assertDatabaseHas('cleaning_bookings', [
         'id' => $booking->id,
-        'status' => CleaningBookingStatus::AwaitingCustomerCompletion->value,
+        'status' => CleaningBookingStatus::InProgress->value,
     ]);
 
     expect($workerOneUser)->toBeInstanceOf(User::class);

@@ -24,11 +24,15 @@ use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
 use Modules\Cleaning\Events\CompletionDecisionMade;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingSpecialService;
+use Modules\Cleaning\Models\CleaningBookingSpecialServiceItem;
+use Modules\Cleaning\Models\CleaningEventType;
 use Modules\Cleaning\Models\CleaningNeighborhood;
 use Modules\Cleaning\Models\CleaningTimeWarning;
 use Modules\Cleaning\Services\CleaningBookingTeamService;
 use Modules\Cleaning\Services\CleaningExtendedTimePricingService;
 use Modules\Cleaning\Services\CleaningLifecycleNotificationService;
+use Modules\Cleaning\Services\CleaningMaterialInventoryService;
 use Modules\Cleaning\Services\CleaningNeighborhoodResolver;
 use Modules\Cleaning\Services\DepositService;
 use Modules\Cleaning\Support\WorkerRoomAssignmentPlanner;
@@ -47,13 +51,25 @@ final class UserCleaningOrderService
         private CleaningExtendedTimePricingService $extendedTimePricing,
         private DepositService $depositService,
         private CleaningNeighborhoodResolver $neighborhoodResolver,
+        private CleaningMaterialInventoryService $materialInventory,
     ) {}
 
     public function store(User $user, array $validated): CleaningBooking
     {
         return DB::transaction(function () use ($user, $validated): CleaningBooking {
+            $isOpenTime = is_array($validated['openTime'] ?? null);
             $normalizedPropertyType = $this->estimationService->normalizePropertyType((string) $validated['propertyType']);
             $normalizedPropertyDetails = $this->estimationService->normalizePropertyDetailsForStorage($normalizedPropertyType, (array) $validated['propertyDetails']);
+            $eventPayload = is_array($validated['event'] ?? null) ? $validated['event'] : [];
+            $eventTypeId = (int) ($eventPayload['eventTypeId'] ?? $validated['propertyDetails']['eventTypeId'] ?? 0);
+            $eventType = $eventTypeId > 0
+                ? CleaningEventType::query()->where('is_active', true)->find($eventTypeId)
+                : null;
+            if ($eventType instanceof CleaningEventType) {
+                $normalizedPropertyDetails['event_type'] = $eventType->slug;
+            }
+            $explicitWorkerScope = $this->explicitWorkerScope($validated);
+            $specificWorkerIds = $this->normalizedSpecificWorkerIds($validated);
             $resolvedAssignmentMode = $this->resolveAssignmentMode($validated);
             $resolvedNeighborhood = $this->resolveNeighborhoodFromPayload($validated);
             $preferredWorkerPricing = $resolvedAssignmentMode === 'preferred_worker';
@@ -71,13 +87,26 @@ final class UserCleaningOrderService
                     $normalizedInput['propertyType'],
                     $normalizedInput['propertyDetails'],
                 );
-                $pricing = $this->estimationService->price(
-                    $normalizedInput['propertyType'],
-                    $normalizedInput['propertyDetails'],
-                    $normalizedInput['addressLatitude'],
-                    $normalizedInput['addressLongitude'],
-                    $pricingPreferredWorkerId,
-                );
+                $pricing = $isOpenTime
+                    ? $this->estimationService->priceOpenTime(
+                        $normalizedInput['propertyType'],
+                        $normalizedInput['propertyDetails'],
+                        $normalizedInput['addressLatitude'],
+                        $normalizedInput['addressLongitude'],
+                        $pricingPreferredWorkerId,
+                        max(1, (int) ($validated['openTime']['workerCount'] ?? 1)),
+                        max(15, (int) ($validated['openTime']['expectedMaxMinutes'] ?? 480)),
+                    )
+                    : $this->estimationService->price(
+                        $normalizedInput['propertyType'],
+                        $normalizedInput['propertyDetails'],
+                        $normalizedInput['addressLatitude'],
+                        $normalizedInput['addressLongitude'],
+                        $pricingPreferredWorkerId,
+                        null,
+                        (bool) ($validated['requestMaterials'] ?? false),
+                        is_array($validated['specialServices'] ?? null) ? $validated['specialServices'] : [],
+                    );
             } catch (InvalidArgumentException $exception) {
                 throw ValidationException::withMessages([
                     'pricing' => [$exception->getMessage()],
@@ -111,7 +140,9 @@ final class UserCleaningOrderService
                 'totalPrice' => round((float) $pricing['basePrice'] + (float) $pricing['addonsTotal'], 2),
             ];
 
-            if ($resolvedAssignmentMode === 'preferred_worker') {
+            if ($explicitWorkerScope === CleaningBooking::WORKER_SCOPE_SPECIFIC) {
+                $this->guardSpecificWorkerCoverage($specificWorkerIds, $resolvedNeighborhood);
+            } elseif ($resolvedAssignmentMode === 'preferred_worker') {
                 $this->guardPreferredWorkerCoverage(
                     $normalizedInput['preferredWorkerId'] !== null ? (int) $normalizedInput['preferredWorkerId'] : null,
                     $resolvedNeighborhood,
@@ -125,14 +156,24 @@ final class UserCleaningOrderService
                     ? $normalizedInput['preferredWorkerId']
                     : null,
                 'assignment_mode' => $resolvedAssignmentMode,
+                'worker_scope' => $explicitWorkerScope,
+                'specific_worker_ids' => $explicitWorkerScope === CleaningBooking::WORKER_SCOPE_SPECIFIC
+                    ? $specificWorkerIds
+                    : null,
                 'number_of_workers' => $requestedWorkers,
                 'gender_preference' => $validated['genderPreference'] ?? GenderPreference::Any->value,
                 'cancellation_policy_id' => $validated['cancellationPolicyId'] ?? $this->defaultCancellationPolicyId(),
                 'billing_policy_id' => $validated['billingPolicyId'] ?? $this->defaultBillingPolicyId(),
                 'booking_number' => $this->generateBookingNumber(),
                 'status' => CleaningBookingStatus::Pending,
+                'booking_kind' => $isOpenTime
+                    ? 'open_time'
+                    : ((string) ($validated['bookingKind'] ?? '') === 'special_service' ? 'special_service' : 'standard'),
+                'capability_schema_version' => 2,
                 'property_type' => $normalizedPropertyType,
+                'cleaning_event_type_id' => $eventType?->id,
                 'property_details' => $normalizedPropertyDetails,
+                'event_dynamic_answers' => (array) ($eventPayload['dynamicAnswers'] ?? $validated['propertyDetails']['dynamicAnswers'] ?? []),
                 'cleaning_services' => $this->normalizeCleaningServices($validated['cleaning_services'] ?? null),
                 'address_latitude' => $normalizedInput['addressLatitude'],
                 'address_longitude' => $normalizedInput['addressLongitude'],
@@ -144,6 +185,13 @@ final class UserCleaningOrderService
                 'scheduled_time' => $validated['scheduledTime'],
                 'total_hours' => $estimation['estimatedHours'],
                 'base_price' => $storedPricing['basePrice'],
+                'open_time_hourly_rate' => $isOpenTime ? ($pricing['openTime']['hourlyRate'] ?? null) : null,
+                'open_time_minimum_minutes' => $isOpenTime ? ($pricing['openTime']['minimumBillableMinutes'] ?? null) : null,
+                'open_time_rounding_minutes' => $isOpenTime ? ($pricing['openTime']['roundingMinutes'] ?? null) : null,
+                'open_time_expected_max_minutes' => $isOpenTime ? ($pricing['openTime']['expectedMaxMinutes'] ?? 480) : null,
+                'open_time_hard_max_minutes' => $isOpenTime ? ($pricing['openTime']['hardMaxMinutes'] ?? 480) : null,
+                'open_time_warning_minutes' => $isOpenTime ? ($pricing['openTime']['warningMinutes'] ?? 30) : null,
+                'open_time_extension_options' => $isOpenTime ? ($pricing['openTime']['extensionOptions'] ?? [15, 30, 60]) : null,
                 'addons_total' => $storedPricing['addonsTotal'],
                 'travel_fee' => $storedPricing['travelFee'],
                 'travel_distance_km' => $storedPricing['distanceKm'],
@@ -155,6 +203,7 @@ final class UserCleaningOrderService
             ]);
 
             $this->teamService->syncRooms($booking, $plannedWorkerRoomAssignments);
+            $this->persistNewServiceLines($booking, $pricing);
 
             return $booking->fresh();
         });
@@ -196,6 +245,7 @@ final class UserCleaningOrderService
 
             $updates = [];
             $pricingFieldsChanged = false;
+            $pricing = null;
             $resolvedNeighborhood = $this->resolveNeighborhoodForUpdate($booking, $validated);
 
             if (array_key_exists('propertyType', $validated)) {
@@ -273,6 +323,16 @@ final class UserCleaningOrderService
                 $updates['cleaning_services'] = $this->normalizeCleaningServices($validated['cleaning_services']);
             }
 
+            if (array_key_exists('requestMaterials', $validated) || array_key_exists('specialServices', $validated)) {
+                $pricingFieldsChanged = true;
+            }
+
+            if ($booking->booking_kind === 'open_time' && $pricingFieldsChanged) {
+                throw ValidationException::withMessages([
+                    'order' => ['Open-Time pricing inputs cannot be edited after the booking is created.'],
+                ]);
+            }
+
             if ($pricingFieldsChanged) {
                 $propertyType = (string) ($updates['property_type'] ?? $booking->property_type);
                 $propertyDetails = (array) ($updates['property_details'] ?? $booking->property_details ?? []);
@@ -292,12 +352,21 @@ final class UserCleaningOrderService
                         $normalizedInput['propertyType'],
                         $normalizedInput['propertyDetails'],
                     );
+                    $requestMaterials = array_key_exists('requestMaterials', $validated)
+                        ? (bool) $validated['requestMaterials']
+                        : $booking->materials()->exists();
+                    $specialServices = array_key_exists('specialServices', $validated)
+                        ? (array) $validated['specialServices']
+                        : $this->existingSpecialServiceRequests($booking);
                     $pricing = $this->estimationService->price(
                         $normalizedInput['propertyType'],
                         $normalizedInput['propertyDetails'],
                         $normalizedInput['addressLatitude'],
                         $normalizedInput['addressLongitude'],
                         $normalizedInput['preferredWorkerId'],
+                        null,
+                        $requestMaterials,
+                        $specialServices,
                     );
                 } catch (InvalidArgumentException $exception) {
                     throw ValidationException::withMessages([
@@ -358,6 +427,21 @@ final class UserCleaningOrderService
                 $booking->update($updates);
             }
 
+            if (is_array($pricing)) {
+                $shouldReplaceMaterials = array_key_exists('requestMaterials', $validated)
+                    || array_key_exists('propertyDetails', $validated)
+                    || array_key_exists('propertyType', $validated);
+                $shouldReplaceSpecialServices = array_key_exists('specialServices', $validated);
+                if ($shouldReplaceMaterials || $shouldReplaceSpecialServices) {
+                    $this->replaceNewServiceLines(
+                        $booking,
+                        $pricing,
+                        $shouldReplaceMaterials,
+                        $shouldReplaceSpecialServices,
+                    );
+                }
+            }
+
             if ($pricingFieldsChanged || array_key_exists('assignmentMode', $validated) || array_key_exists('numberOfWorkers', $validated) || array_key_exists('propertyDetails', $validated) || array_key_exists('propertyType', $validated)) {
                 $booking = $booking->fresh();
 
@@ -404,6 +488,7 @@ final class UserCleaningOrderService
             'cancelled_at' => now(),
             'cancellation_reason' => $reason,
         ]);
+        $this->materialInventory->releaseForBooking($booking);
 
         // TODO: add tag to order that cancelation is from the user if the CleaningBookingStatus::AwaitingStartVerification
         $updated = $booking->fresh();
@@ -747,6 +832,166 @@ final class UserCleaningOrderService
         return $review;
     }
 
+    /**
+     * @param  array<string, mixed>  $pricing
+     */
+    private function persistNewServiceLines(CleaningBooking $booking, array $pricing): void
+    {
+        $this->persistMaterialLines($booking, (array) ($pricing['materials'] ?? []));
+        $this->persistSpecialServiceLines($booking, (array) ($pricing['specialServices'] ?? []));
+    }
+
+    /** @param array<int, mixed> $lines */
+    private function persistMaterialLines(CleaningBooking $booking, array $lines): void
+    {
+        foreach ($lines as $line) {
+            if (! is_array($line)) {
+                continue;
+            }
+
+            $this->materialInventory->reserveTypeLine($booking, $line);
+        }
+
+    }
+
+    /** @param array<int, mixed> $lines */
+    private function persistSpecialServiceLines(CleaningBooking $booking, array $lines): void
+    {
+        foreach ($lines as $line) {
+            if (! is_array($line)) {
+                continue;
+            }
+
+            $bookingService = CleaningBookingSpecialService::query()->create([
+                'cleaning_booking_id' => $booking->id,
+                'cleaning_special_service_id' => (int) $line['specialServiceId'],
+                'service_name' => (string) $line['name'],
+                'pricing_unit' => (string) $line['pricingUnit'],
+                'dirtiness_level' => (string) $line['dirtinessLevel'],
+                'quantity' => (float) $line['quantity'],
+                'base_unit_price' => (float) $line['baseUnitPrice'],
+                'price_multiplier' => (float) $line['priceMultiplier'],
+                'total_price' => (float) $line['totalPrice'],
+                'equipment_snapshot' => (array) ($line['equipment'] ?? []),
+                'notes' => $line['notes'] ?? null,
+                'execution_status' => 'pending',
+                'financial_snapshot' => (array) ($line['financialSnapshot'] ?? []),
+            ]);
+
+            foreach ((array) ($line['items'] ?? []) as $item) {
+                if (! is_array($item)) {
+                    continue;
+                }
+                CleaningBookingSpecialServiceItem::query()->create([
+                    'cleaning_booking_special_service_id' => $bookingService->id,
+                    'cleaning_dirtiness_level_id' => $item['dirtinessLevelId'] ?? null,
+                    'quantity' => (float) ($item['quantity'] ?? 0),
+                    'dirtiness_level' => $item['dirtinessLevel'] ?? null,
+                    'price_multiplier' => (float) ($item['priceMultiplier'] ?? 1),
+                    'base_unit_price' => (float) ($item['baseUnitPrice'] ?? 0),
+                    'total_price' => (float) ($item['totalPrice'] ?? 0),
+                    'notes' => $item['notes'] ?? null,
+                    'before_images' => (array) ($item['beforeImages'] ?? []),
+                    'after_images' => (array) ($item['afterImages'] ?? []),
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Link requested special services to materialized recurring/event sessions.
+     * Session identifiers in a create payload are session sequence numbers; on
+     * update, persisted session ids are also accepted.
+     *
+     * @param array<int,mixed> $requestedLines
+     */
+    public function syncSpecialServiceSessions(CleaningBooking $booking, array $requestedLines): void
+    {
+        $requestedByService = [];
+        foreach ($requestedLines as $line) {
+            if (! is_array($line)) {
+                continue;
+            }
+            $serviceId = (int) ($line['serviceId'] ?? $line['specialServiceId'] ?? 0);
+            $requestedByService[$serviceId] = array_values(array_unique(array_filter(
+                array_map('intval', (array) ($line['sessionIds'] ?? [])),
+                static fn (int $id): bool => $id > 0,
+            )));
+        }
+
+        $sessions = $booking->sessions()->get(['id', 'sequence']);
+        foreach ($booking->specialServices()->get() as $bookingService) {
+            $requested = $requestedByService[(int) $bookingService->cleaning_special_service_id] ?? [];
+            if ($requested === []) {
+                continue;
+            }
+            $ids = $sessions
+                ->filter(static fn ($session): bool => in_array((int) $session->id, $requested, true)
+                    || in_array((int) $session->sequence, $requested, true))
+                ->pluck('id')
+                ->map(static fn (mixed $id): int => (int) $id)
+                ->all();
+            if ($ids === []) {
+                continue;
+            }
+
+            $sourceItems = $bookingService->items()->get();
+            foreach ($ids as $index => $sessionId) {
+                $line = $index === 0 ? $bookingService : $bookingService->replicate();
+                $line->cleaning_booking_session_id = $sessionId;
+                $line->execution_status = 'pending';
+                $line->assigned_worker_id = null;
+                $line->started_at = null;
+                $line->completed_at = null;
+                $line->save();
+                $line->sessions()->sync([$sessionId]);
+
+                if ($index > 0) {
+                    foreach ($sourceItems as $sourceItem) {
+                        $item = $sourceItem->replicate();
+                        $item->cleaning_booking_special_service_id = $line->id;
+                        $item->save();
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $pricing
+     */
+    private function replaceNewServiceLines(
+        CleaningBooking $booking,
+        array $pricing,
+        bool $replaceMaterials,
+        bool $replaceSpecialServices,
+    ): void {
+        if ($replaceMaterials) {
+            $this->materialInventory->releaseForBooking($booking);
+            $booking->materials()->delete();
+            $this->persistMaterialLines($booking, (array) ($pricing['materials'] ?? []));
+        }
+
+        if ($replaceSpecialServices) {
+            $booking->specialServices()->delete();
+            $this->persistSpecialServiceLines($booking, (array) ($pricing['specialServices'] ?? []));
+        }
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function existingSpecialServiceRequests(CleaningBooking $booking): array
+    {
+        return $booking->specialServices()
+            ->get()
+            ->map(static fn (CleaningBookingSpecialService $line): array => [
+                'specialServiceId' => (int) $line->cleaning_special_service_id,
+                'quantity' => (float) $line->quantity,
+                'dirtinessLevel' => $line->dirtiness_level,
+                'notes' => $line->notes,
+            ])
+            ->all();
+    }
+
     private function syncWorkerAverageRating(int $workerId): void
     {
         $average = WorkerCustomerRating::query()
@@ -757,6 +1002,41 @@ final class UserCleaningOrderService
         Worker::query()->whereKey($workerId)->update([
             'average_rating' => $average !== null ? round((float) $average, 2) : 0,
         ]);
+    }
+
+    /** @param array<string, mixed> $validated */
+    private function explicitWorkerScope(array $validated): ?string
+    {
+        if (! array_key_exists('workerScope', $validated) || ! is_string($validated['workerScope'])) {
+            return null;
+        }
+
+        $scope = mb_strtolower(mb_trim($validated['workerScope']));
+
+        return in_array($scope, [CleaningBooking::WORKER_SCOPE_ANY, CleaningBooking::WORKER_SCOPE_SPECIFIC], true)
+            ? $scope
+            : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<int, int>
+     */
+    private function normalizedSpecificWorkerIds(array $validated): array
+    {
+        $ids = [];
+        foreach (is_array($validated['preferredWorkerIds'] ?? null) ? $validated['preferredWorkerIds'] : [] as $value) {
+            if (! is_numeric($value)) {
+                continue;
+            }
+
+            $id = (int) $value;
+            if ($id > 0 && ! in_array($id, $ids, true)) {
+                $ids[] = $id;
+            }
+        }
+
+        return $ids;
     }
 
     private function normalizedAssignmentMode(mixed $assignmentMode): ?string
@@ -898,6 +1178,30 @@ final class UserCleaningOrderService
         }
 
         return null;
+    }
+
+    /** @param array<int, int> $specificWorkerIds */
+    private function guardSpecificWorkerCoverage(array $specificWorkerIds, ?CleaningNeighborhood $neighborhood): void
+    {
+        if ($specificWorkerIds === [] || $neighborhood === null) {
+            return;
+        }
+
+        $coveredIds = Worker::query()
+            ->whereIn('id', $specificWorkerIds)
+            ->coversNeighborhood((int) $neighborhood->id)
+            ->pluck('id')
+            ->map(static fn (mixed $id): int => (int) $id)
+            ->all();
+
+        $missing = array_values(array_diff($specificWorkerIds, $coveredIds));
+        if ($missing === []) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'preferredWorkerIds' => [self::PREFERRED_WORKER_NEIGHBORHOOD_MESSAGE],
+        ]);
     }
 
     private function guardPreferredWorkerCoverage(?int $preferredWorkerId, ?CleaningNeighborhood $neighborhood): void

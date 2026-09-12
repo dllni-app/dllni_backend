@@ -75,7 +75,7 @@ it('allows the customer to assign rooms to accepted workers while the booking is
     $roomIds = collect($create->json('order.roomAssignments'))->pluck('id')->values()->all();
 
     $workerUser = User::factory()->create(['email' => 'room-assignment-worker@example.com']);
-    $worker = Worker::factory()->create([
+    $worker = Worker::factory()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'home_address' => 'Worker Home',
         'home_latitude' => 33.52,
@@ -111,6 +111,6 @@ it('allows the customer to assign rooms to accepted workers while the booking is
 
     expect($roomAssignments->get($roomIds[0])['assignedWorkerId'])->toBe($worker->id);
     expect($roomAssignments->get($roomIds[1])['assignedWorkerId'])->toBe($worker->id);
-    expect($roomAssignments->get($roomIds[2])['assignedWorkerId'])->toBeNull();
+    expect($roomAssignments->get($roomIds[2])['assignedWorkerId'])->toBe($worker->id);
     expect($roomAssignments->get($roomIds[3])['assignedWorkerId'])->toBeNull();
 });

@@ -163,7 +163,7 @@ it('reactivates the financial account and redispatches pending preferred booking
         'is_active' => false,
     ]);
 
-    CleaningBooking::factory()->create([
+    CleaningBooking::withoutEvents(fn () => CleaningBooking::factory()->create([
         'worker_id' => null,
         'preferred_worker_id' => $worker->id,
         'assignment_mode' => 'preferred_worker',
@@ -174,7 +174,7 @@ it('reactivates the financial account and redispatches pending preferred booking
         'addons_total' => 0,
         'admin_margin_amount' => 6000,
         'total_price' => 66000,
-    ]);
+    ]));
 
     Queue::fake();
 

@@ -87,5 +87,5 @@ it('notifies an accepted linked worker when customer cancels a pending multi-wor
 
     expect($booking->fresh()->status)->toBe(CleaningBookingStatus::Cancelled)
         ->and($booking->workerAssignments()->where('worker_id', $worker->id)->value('status'))
-        ->toBe(CleaningBookingWorkerAssignmentStatus::Cancelled->value);
+        ->toBe(CleaningBookingWorkerAssignmentStatus::Cancelled);
 });

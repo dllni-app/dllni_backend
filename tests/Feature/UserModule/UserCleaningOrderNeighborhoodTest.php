@@ -78,7 +78,7 @@ it('allows preferred worker orders when the worker does not cover the selected n
 
     $requestedNeighborhood = CleaningNeighborhood::factory()->create(['name_ar' => 'Bustan al-Pasha']);
     $coveredNeighborhood = CleaningNeighborhood::factory()->create(['name_ar' => 'Jamiliyah']);
-    $worker = Worker::factory()->create([
+    $worker = Worker::factory()->financiallyEligible()->create([
         'home_address' => 'Worker Home',
         'home_latitude' => 36.20,
         'home_longitude' => 37.15,

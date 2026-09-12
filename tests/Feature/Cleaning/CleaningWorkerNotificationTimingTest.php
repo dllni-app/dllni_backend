@@ -13,7 +13,7 @@ use Modules\Cleaning\Events\CleaningBookingCreated;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningNeighborhood;
 
-it('notifies workers regardless of configured working hours', function (): void {
+it('notifies only workers available during configured working hours', function (): void {
     Carbon::setTestNow(Carbon::parse('2026-06-16 12:00:00'));
     Notification::fake();
     Event::fake([CleaningBookingCreated::class]);
@@ -24,7 +24,7 @@ it('notifies workers regardless of configured working hours', function (): void 
         $neighborhood = CleaningNeighborhood::factory()->create();
 
         $outsideUser = \App\Models\User::factory()->create(['email' => 'worker-outside-hours@example.com']);
-        $outsideWorker = Worker::factory()->create([
+        $outsideWorker = Worker::factory()->financiallyEligible()->create([
             'user_id' => $outsideUser->id,
             'default_working_hours' => [
                 $dayKey => ['available' => true, 'data' => [['09:00' => '11:00']]],
@@ -37,7 +37,7 @@ it('notifies workers regardless of configured working hours', function (): void 
         ]);
 
         $insideUser = \App\Models\User::factory()->create(['email' => 'worker-inside-hours@example.com']);
-        $insideWorker = Worker::factory()->create([
+        $insideWorker = Worker::factory()->financiallyEligible()->create([
             'user_id' => $insideUser->id,
             'default_working_hours' => [
                 $dayKey => ['available' => true, 'data' => [['14:00' => '18:00']]],
@@ -64,12 +64,12 @@ it('notifies workers regardless of configured working hours', function (): void 
         (new NotifyEligibleWorkersNewOrderJob($booking->id))->handle();
 
         Notification::assertSentTo($insideUser, NewOrderRequestNotification::class);
-        Notification::assertSentTo($outsideUser, NewOrderRequestNotification::class);
+        Notification::assertNotSentTo($outsideUser, NewOrderRequestNotification::class);
         Event::assertDispatched(CleaningBookingCreated::class, function (CleaningBookingCreated $event) use ($booking, $insideWorker): bool {
             return $event->cleaningBookingId === (int) $booking->id
                 && $event->workerId === (int) $insideWorker->id;
         });
-        Event::assertDispatched(CleaningBookingCreated::class, function (CleaningBookingCreated $event) use ($booking, $outsideWorker): bool {
+        Event::assertNotDispatched(CleaningBookingCreated::class, function (CleaningBookingCreated $event) use ($booking, $outsideWorker): bool {
             return $event->cleaningBookingId === (int) $booking->id
                 && $event->workerId === (int) $outsideWorker->id;
         });

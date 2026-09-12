@@ -106,7 +106,7 @@ it('prices regular cleaning worker previews from the next planned room slot', fu
         'service_share_amount' => 166.67,
         'travel_fee' => 10,
         'admin_margin_amount' => 42,
-        'worker_amount' => 134.67,
+        'worker_amount' => 176.67,
         'currency' => 'SYP',
     ]);
 

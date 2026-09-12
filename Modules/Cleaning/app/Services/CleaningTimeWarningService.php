@@ -71,7 +71,7 @@ final class CleaningTimeWarningService
                     $assignment->forceFill([
                         'service_share_amount' => $serviceShareAmount,
                         'admin_margin_amount' => $adminMarginAmount,
-                        'worker_amount' => max(0.0, round($serviceShareAmount + $travelFee - $adminMarginAmount, 2)),
+                        'worker_amount' => max(0.0, round($serviceShareAmount + $travelFee, 2)),
                     ]);
                 }
 

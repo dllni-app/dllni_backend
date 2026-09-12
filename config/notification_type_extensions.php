@@ -38,6 +38,23 @@ return [
                 ],
             ],
         ],
+        'cleaning.booking.worker_changed' => [
+            'legacy_type' => 'cleaning_worker_changed',
+            'module' => 'cleaning',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'تم تغيير تعيين العامل',
+                    'body' => 'طلب العميل تغيير العامل في إحدى جلسات الحجز رقم :booking_number، وتم تحرير تعيينك لهذه الجلسة.',
+                ],
+                'en' => [
+                    'title' => 'Worker assignment changed',
+                    'body' => 'The customer requested a worker change for one session of booking :booking_number. Your assignment to that session was released.',
+                ],
+            ],
+        ],
         'cleaning.booking.customer_upcoming_start_reminder' => [
             'legacy_type' => 'cleaning_customer_upcoming_start_reminder',
             'module' => 'cleaning',

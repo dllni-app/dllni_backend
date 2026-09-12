@@ -146,17 +146,9 @@ final class CleaningBookingStartWorkController
     {
         $activeAssignments = CleaningBookingWorkerAssignment::query()
             ->where('cleaning_booking_id', $booking->id)
-            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::activeValues())
+            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
             ->lockForUpdate()
             ->get();
-
-        $hasAwaitingCustomerCompletion = $activeAssignments->contains(function (CleaningBookingWorkerAssignment $assignment): bool {
-            return $this->assignmentStatus($assignment) === CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion->value;
-        });
-
-        if ($hasAwaitingCustomerCompletion) {
-            return CleaningBookingStatus::AwaitingCustomerCompletion;
-        }
 
         $hasExtensionRequest = $activeAssignments->contains(function (CleaningBookingWorkerAssignment $assignment): bool {
             return $this->assignmentStatus($assignment) === CleaningBookingWorkerAssignmentStatus::TimeExtensionRequested->value;
@@ -164,6 +156,22 @@ final class CleaningBookingStartWorkController
 
         if ($hasExtensionRequest) {
             return CleaningBookingStatus::TimeExtensionRequested;
+        }
+
+        $requiredWorkers = max(1, (int) ($booking->number_of_workers ?? 1));
+        $finishedWorkers = $activeAssignments->filter(function (CleaningBookingWorkerAssignment $assignment): bool {
+            return in_array($this->assignmentStatus($assignment), [
+                CleaningBookingWorkerAssignmentStatus::AwaitingCustomerCompletion->value,
+                CleaningBookingWorkerAssignmentStatus::Completed->value,
+            ], true);
+        })->count();
+
+        if ($finishedWorkers >= $requiredWorkers) {
+            return CleaningBookingStatus::AwaitingCustomerCompletion;
+        }
+
+        if ($finishedWorkers > 0) {
+            return CleaningBookingStatus::InProgress;
         }
 
         $hasArrivedWorkerWaitingForCode = $activeAssignments->contains(function (CleaningBookingWorkerAssignment $assignment): bool {
@@ -186,7 +194,7 @@ final class CleaningBookingStartWorkController
                 && $assignment->work_started_at !== null;
         })->count();
 
-        return $startedWorkers >= max(1, (int) ($booking->number_of_workers ?? 1))
+        return $startedWorkers >= $requiredWorkers
             ? CleaningBookingStatus::InProgress
             : CleaningBookingStatus::AwaitingWorkerStartConfirmation;
     }

@@ -105,6 +105,17 @@ final class CleaningBookingResource extends JsonResource
 
         return [
             'id' => $this->id,
+            // Additive v2 envelope fields let clients consume new snapshots
+            // without losing compatibility with the legacy booking shape.
+            'schemaVersion' => max(1, (int) ($this->capability_schema_version ?? 1)),
+            'serverNow' => now()->toIso8601String(),
+            'capabilities' => [
+                'materialKits' => true,
+                'specialServiceItems' => true,
+                'dynamicEventTypes' => true,
+                'openTimeExtensions' => true,
+                'scheduleChangeApprovals' => true,
+            ],
             'customerId' => $this->customer_id,
             'workerId' => $this->worker_id,
             'preferredWorkerId' => $this->preferred_worker_id,
@@ -197,6 +208,10 @@ final class CleaningBookingResource extends JsonResource
             'bookingTravelFee' => (float) $this->travel_fee,
             'bookingAdminMargin' => (float) ($this->admin_margin_amount ?? 0),
             'bookingTotalPrice' => (float) $this->total_price,
+            'couponApplied' => (int) ($this->platform_coupon_id ?? 0) > 0 && (float) ($this->discount_amount ?? 0) > 0,
+            'couponCode' => $this->platform_coupon_code,
+            'discountAmount' => max(0.0, (float) ($this->discount_amount ?? 0)),
+            'subtotalBeforeDiscount' => max(0.0, (float) ($this->subtotal_before_discount ?? 0)),
             'currency' => (string) config('app.currency', 'SYP'),
             'termsAccepted' => $this->terms_accepted,
             'workStartedAt' => $this->workerTimestamp($myAssignmentModel, 'work_started_at', $this->work_started_at, 'dateTime'),
@@ -453,7 +468,8 @@ final class CleaningBookingResource extends JsonResource
 
     private function netWorkerAmount(float $serviceShare, float $travelFee, float $adminMargin): float
     {
-        return max(0.0, round($serviceShare + $travelFee - $adminMargin, 2));
+        // The administration margin is charged on top of the worker share.
+        return max(0.0, round($serviceShare + $travelFee, 2));
     }
 
     /** @return array<int, CleaningBookingWorkerAssignment> */
@@ -662,11 +678,12 @@ final class CleaningBookingResource extends JsonResource
     private function workerDurationHours(?CleaningBookingWorkerAssignment $assignment = null): ?float
     {
         $details = is_array($this->property_details) ? $this->property_details : [];
-        $bookingHours = (float) (
-            $this->total_hours
-            ?: $this->estimated_hours
-            ?: Arr::get($details, 'hours', 0)
-        );
+        $totalHours = (float) ($this->total_hours ?? 0);
+        $estimatedHours = (float) ($this->estimated_hours ?? 0);
+        $detailsHours = (float) Arr::get($details, 'hours', 0);
+        $bookingHours = $totalHours > 0
+            ? $totalHours
+            : ($estimatedHours > 0 ? $estimatedHours : $detailsHours);
 
         if ($bookingHours <= 0) {
             return null;
@@ -700,13 +717,15 @@ final class CleaningBookingResource extends JsonResource
     private function workTimerPayload(string $status, ?CleaningBookingWorkerAssignment $assignment = null): array
     {
         $start = $assignment?->work_started_at ?? $this->work_started_at ?? $this->arrived_at;
+        $totalHours = (float) ($this->total_hours ?? 0);
+        $estimatedHours = (float) ($this->estimated_hours ?? 0);
         $hours = $assignment instanceof CleaningBookingWorkerAssignment
             ? (float) ($this->workerDurationHours($assignment) ?? 0)
-            : (float) ($this->total_hours ?: $this->estimated_hours ?: 0);
+            : ($totalHours > 0 ? $totalHours : $estimatedHours);
         if ($start === null || $hours <= 0) return ['timerStartAt' => $start?->toIso8601String(), 'expectedFinishAt' => null, 'durationHours' => $hours > 0 ? $hours : null, 'remainingWorkSeconds' => 0, 'overdueWorkSeconds' => 0, 'isWorkOverdue' => false, 'shouldShowWorkTimer' => false, 'source' => ['startField' => null, 'durationField' => null]];
         $expected = $start->copy()->addSeconds((int) round($hours * 3600));
         $diff = now()->diffInSeconds($expected, false);
         $show = in_array($status, [CleaningBookingStatus::InProgress->value, CleaningBookingStatus::TimeExtensionRequested->value], true);
-        return ['timerStartAt' => $start->toIso8601String(), 'expectedFinishAt' => $expected->toIso8601String(), 'durationHours' => $hours, 'remainingWorkSeconds' => $show ? max(0, $diff) : 0, 'overdueWorkSeconds' => $show ? max(0, -$diff) : 0, 'isWorkOverdue' => $show && $diff < 0, 'shouldShowWorkTimer' => $show, 'source' => ['startField' => $assignment?->work_started_at !== null ? 'assignment.work_started_at' : ($this->work_started_at !== null ? 'work_started_at' : 'arrived_at'), 'durationField' => $assignment instanceof CleaningBookingWorkerAssignment ? 'worker_total_hours' : ($this->total_hours ? 'total_hours' : 'estimated_hours')]];
+        return ['timerStartAt' => $start->toIso8601String(), 'expectedFinishAt' => $expected->toIso8601String(), 'durationHours' => $hours, 'remainingWorkSeconds' => $show ? max(0, $diff) : 0, 'overdueWorkSeconds' => $show ? max(0, -$diff) : 0, 'isWorkOverdue' => $show && $diff < 0, 'shouldShowWorkTimer' => $show, 'source' => ['startField' => $assignment?->work_started_at !== null ? 'assignment.work_started_at' : ($this->work_started_at !== null ? 'work_started_at' : 'arrived_at'), 'durationField' => $assignment instanceof CleaningBookingWorkerAssignment ? 'worker_total_hours' : ($totalHours > 0 ? 'total_hours' : 'estimated_hours')]];
     }
 }

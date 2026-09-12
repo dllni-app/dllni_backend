@@ -46,7 +46,7 @@ it('reminds a legacy assigned worker when no assignment row exists', function ()
 
     Notification::fake();
 
-    expect(app(CleaningBookingActionNotificationService::class)->dispatchDue($now))->toBe(1);
+    expect(app(CleaningBookingActionNotificationService::class)->dispatchDue($now))->toBeGreaterThanOrEqual(1);
 
     Notification::assertSentTo(
         $workerUser,

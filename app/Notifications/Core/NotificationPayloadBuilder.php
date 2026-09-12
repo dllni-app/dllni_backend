@@ -156,7 +156,17 @@ final class NotificationPayloadBuilder
         if (! isset($normalized['args']) && is_string($deepLinkTarget) && $deepLinkTarget !== '') {
             $routeArgs = ['route' => $deepLinkTarget];
 
-            foreach (['bookingId', 'orderId', 'timeWarningId', 'disputeId', 'action', 'status'] as $key) {
+            foreach ([
+                'bookingId',
+                'orderId',
+                'timeWarningId',
+                'disputeId',
+                'action',
+                'status',
+                'assignmentMode',
+                'requiresDecision',
+                'decisionStatus',
+            ] as $key) {
                 if (array_key_exists($key, $normalized)) {
                     $routeArgs[$key] = $normalized[$key];
                 }

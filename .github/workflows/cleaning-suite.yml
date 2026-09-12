@@ -1,0 +1,219 @@
+name: Cleaning Suite
+
+on:
+  push:
+    branches:
+      - feature/cleaning-suite-main
+    paths:
+      - 'app/Providers/AppServiceProvider.php'
+      - 'app/Filament/Resources/CleaningBookings/**'
+      - 'config/notification_type_extensions.php'
+      - 'Modules/Cleaning/app/Enums/CleaningBookingSession*.php'
+      - 'Modules/Cleaning/app/Models/CleaningBooking.php'
+      - 'Modules/Cleaning/app/Models/CleaningBookingSession*.php'
+      - 'Modules/Cleaning/app/Services/CleaningBookingSession*.php'
+      - 'Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php'
+      - 'Modules/Cleaning/app/Services/CleaningEventSessionNotificationService.php'
+      - 'Modules/Cleaning/app/Services/CleaningBookingActionNotificationService.php'
+      - 'Modules/Cleaning/app/Services/WorkerBookingScheduleConflictService.php'
+      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingScheduleController.php'
+      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionAcceptanceController.php'
+      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLifecycleController.php'
+      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLocationController.php'
+      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionWorkerChangeController.php'
+      - 'Modules/Cleaning/app/Providers/RouteServiceProvider.php'
+      - 'Modules/Cleaning/routes/sessions.php'
+      - 'Modules/Cleaning/database/migrations/*cleaning_booking_session*.php'
+      - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderEstimatePriceController.php'
+      - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderStoreController.php'
+      - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderReviewController.php'
+      - 'Modules/User/app/Http/Controllers/API/UserCleaningPreviousWorkersController.php'
+      - 'Modules/User/app/Http/Requests/Concerns/ValidatesEventAssistanceSchedule.php'
+      - 'Modules/User/app/Http/Requests/UserCleaningOrderEstimatePriceRequest.php'
+      - 'Modules/User/app/Http/Requests/UserCleaningOrderStoreRequest.php'
+      - 'Modules/User/app/Http/Requests/UserCleaningOrderReviewRequest.php'
+      - 'Modules/User/app/Http/Requests/UserCleaningPreviousWorkersRequest.php'
+      - 'Modules/User/app/Services/EventAssistanceScheduleService.php'
+      - 'Modules/User/app/Services/RecurringCleaningScheduleService.php'
+      - 'Modules/User/app/Services/UserCleaningOrderService.php'
+      - 'tests/Feature/Cleaning/CleaningBookingSessionAcceptanceTest.php'
+      - 'tests/Feature/Cleaning/CleaningBookingSessionLifecycleTest.php'
+      - 'tests/Feature/Cleaning/CleaningBookingSessionLocationTest.php'
+      - 'tests/Feature/Cleaning/CleaningBookingSessionCancellationAndSosTest.php'
+      - 'tests/Feature/Cleaning/CleaningBookingSessionWorkerChangeTest.php'
+      - 'tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php'
+      - 'tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php'
+      - 'tests/Feature/UserModule/EventAssistancePreviousWorkersScheduleTest.php'
+      - 'tests/Feature/UserModule/EventAssistanceReviewTest.php'
+      - 'tests/Feature/UserModule/RecurringCleaningScheduleTest.php'
+      - '.github/workflows/cleaning-suite.yml'
+  pull_request:
+    paths:
+      - 'app/Providers/AppServiceProvider.php'
+      - 'app/Filament/Resources/CleaningBookings/**'
+      - 'config/notification_type_extensions.php'
+      - 'Modules/Cleaning/app/Enums/CleaningBookingSession*.php'
+      - 'Modules/Cleaning/app/Models/CleaningBooking.php'
+      - 'Modules/Cleaning/app/Models/CleaningBookingSession*.php'
+      - 'Modules/Cleaning/app/Services/CleaningBookingSession*.php'
+      - 'Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php'
+      - 'Modules/Cleaning/app/Services/CleaningEventSessionNotificationService.php'
+      - 'Modules/Cleaning/app/Services/CleaningBookingActionNotificationService.php'
+      - 'Modules/Cleaning/app/Services/WorkerBookingScheduleConflictService.php'
+      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingScheduleController.php'
+      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionAcceptanceController.php'
+      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLifecycleController.php'
+      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLocationController.php'
+      - 'Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionWorkerChangeController.php'
+      - 'Modules/Cleaning/app/Providers/RouteServiceProvider.php'
+      - 'Modules/Cleaning/routes/sessions.php'
+      - 'Modules/Cleaning/database/migrations/*cleaning_booking_session*.php'
+      - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderEstimatePriceController.php'
+      - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderStoreController.php'
+      - 'Modules/User/app/Http/Controllers/API/UserCleaningOrderReviewController.php'
+      - 'Modules/User/app/Http/Controllers/API/UserCleaningPreviousWorkersController.php'
+      - 'Modules/User/app/Http/Requests/Concerns/ValidatesEventAssistanceSchedule.php'
+      - 'Modules/User/app/Http/Requests/UserCleaningOrderEstimatePriceRequest.php'
+      - 'Modules/User/app/Http/Requests/UserCleaningOrderStoreRequest.php'
+      - 'Modules/User/app/Http/Requests/UserCleaningOrderReviewRequest.php'
+      - 'Modules/User/app/Http/Requests/UserCleaningPreviousWorkersRequest.php'
+      - 'Modules/User/app/Services/EventAssistanceScheduleService.php'
+      - 'Modules/User/app/Services/RecurringCleaningScheduleService.php'
+      - 'Modules/User/app/Services/UserCleaningOrderService.php'
+      - 'tests/Feature/Cleaning/CleaningBookingSessionAcceptanceTest.php'
+      - 'tests/Feature/Cleaning/CleaningBookingSessionLifecycleTest.php'
+      - 'tests/Feature/Cleaning/CleaningBookingSessionLocationTest.php'
+      - 'tests/Feature/Cleaning/CleaningBookingSessionCancellationAndSosTest.php'
+      - 'tests/Feature/Cleaning/CleaningBookingSessionWorkerChangeTest.php'
+      - 'tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php'
+      - 'tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php'
+      - 'tests/Feature/UserModule/EventAssistancePreviousWorkersScheduleTest.php'
+      - 'tests/Feature/UserModule/EventAssistanceReviewTest.php'
+      - 'tests/Feature/UserModule/RecurringCleaningScheduleTest.php'
+      - '.github/workflows/cleaning-suite.yml'
+
+jobs:
+  session-foundation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, bcmath, intl, gd
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare application
+        run: |
+          cp .env.example .env
+          touch database/database.sqlite
+          php artisan key:generate
+
+      - name: Migrate database
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        run: php artisan migrate --force
+
+      - name: Check formatting
+        run: |
+          vendor/bin/pint --test \
+            app/Providers/AppServiceProvider.php \
+            config/notification_type_extensions.php \
+            Modules/Cleaning/app/Enums/CleaningBookingSessionStatus.php \
+            Modules/Cleaning/app/Enums/CleaningBookingSessionCoverageStatus.php \
+            Modules/Cleaning/app/Models/CleaningBooking.php \
+            Modules/Cleaning/app/Models/CleaningBookingSession.php \
+            Modules/Cleaning/app/Models/CleaningBookingSessionWorkerAssignment.php \
+            Modules/Cleaning/app/Models/CleaningBookingSessionFinancialPenalty.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionCoverageService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionSolvencyService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionWorkerPricingService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionWorkerEligibilityService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionAcceptanceService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionLifecycleService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionCancellationService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionParentStateService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionSosService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSessionWorkerChangeService.php \
+            Modules/Cleaning/app/Services/CleaningBookingSchedulePresenter.php \
+            Modules/Cleaning/app/Services/CleaningEventSessionNotificationService.php \
+            Modules/Cleaning/app/Services/CleaningBookingActionNotificationService.php \
+            Modules/Cleaning/app/Services/WorkerBookingScheduleConflictService.php \
+            Modules/Cleaning/app/Http/Controllers/API/CleaningBookingScheduleController.php \
+            Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionAcceptanceController.php \
+            Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLifecycleController.php \
+            Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionLocationController.php \
+            Modules/Cleaning/app/Http/Controllers/API/CleaningBookingSessionWorkerChangeController.php \
+            Modules/Cleaning/app/Providers/RouteServiceProvider.php \
+            Modules/Cleaning/routes/sessions.php \
+            Modules/Cleaning/database/migrations/2026_09_02_230500_create_cleaning_booking_sessions_table.php \
+            Modules/Cleaning/database/migrations/2026_09_02_230510_create_cleaning_booking_session_worker_assignments_table.php \
+            Modules/Cleaning/database/migrations/2026_09_03_001500_create_cleaning_booking_session_financial_penalties_table.php \
+            Modules/Cleaning/database/migrations/2026_09_03_090500_add_customer_completed_at_to_cleaning_booking_sessions_table.php \
+            Modules/User/app/Http/Controllers/API/UserCleaningOrderEstimatePriceController.php \
+            Modules/User/app/Http/Controllers/API/UserCleaningOrderStoreController.php \
+            Modules/User/app/Http/Controllers/API/UserCleaningOrderReviewController.php \
+            Modules/User/app/Http/Controllers/API/UserCleaningPreviousWorkersController.php \
+            Modules/User/app/Http/Requests/Concerns/ValidatesEventAssistanceSchedule.php \
+            Modules/User/app/Http/Requests/UserCleaningOrderEstimatePriceRequest.php \
+            Modules/User/app/Http/Requests/UserCleaningOrderStoreRequest.php \
+            Modules/User/app/Http/Requests/UserCleaningOrderReviewRequest.php \
+            Modules/User/app/Http/Requests/UserCleaningPreviousWorkersRequest.php \
+            Modules/User/app/Services/EventAssistanceScheduleService.php \
+            Modules/User/app/Services/RecurringCleaningScheduleService.php \
+            Modules/User/app/Services/UserCleaningOrderService.php \
+            app/Filament/Resources/CleaningBookings/CleaningBookingResource.php \
+            app/Filament/Resources/CleaningBookings/Tables/CleaningBookingsTable.php \
+            app/Filament/Resources/CleaningBookings/RelationManagers/SessionsRelationManager.php \
+            tests/Feature/Cleaning/CleaningBookingSessionAcceptanceTest.php \
+            tests/Feature/Cleaning/CleaningBookingSessionLifecycleTest.php \
+            tests/Feature/Cleaning/CleaningBookingSessionLocationTest.php \
+            tests/Feature/Cleaning/CleaningBookingSessionCancellationAndSosTest.php \
+            tests/Feature/Cleaning/CleaningBookingSessionWorkerChangeTest.php \
+            tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php \
+            tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php \
+            tests/Feature/UserModule/EventAssistancePreviousWorkersScheduleTest.php \
+            tests/Feature/UserModule/RecurringCleaningScheduleTest.php \
+            $(test -f tests/Feature/UserModule/EventAssistanceReviewTest.php && echo tests/Feature/UserModule/EventAssistanceReviewTest.php)
+
+      - name: Run cleaning suite tests
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        shell: bash
+        run: |
+          set -o pipefail
+          TESTS=(
+            tests/Feature/Cleaning/CleaningBookingSessionAcceptanceTest.php
+            tests/Feature/Cleaning/CleaningBookingSessionLifecycleTest.php
+            tests/Feature/Cleaning/CleaningBookingSessionLocationTest.php
+            tests/Feature/Cleaning/CleaningBookingSessionCancellationAndSosTest.php
+            tests/Feature/Cleaning/CleaningBookingSessionWorkerChangeTest.php
+            tests/Feature/Cleaning/RecurringCleaningWorkerContinuityTest.php
+            tests/Feature/Cleaning/WorkerAtomicCommissionCapacityTest.php
+            tests/Feature/Cleaning/WorkerDepositEligibilityTest.php
+            tests/Feature/UserModule/EventAssistanceMultiDayScheduleTest.php
+            tests/Feature/UserModule/EventAssistancePreviousWorkersScheduleTest.php
+            tests/Feature/UserModule/RecurringCleaningScheduleTest.php
+          )
+          if [ -f tests/Feature/UserModule/EventAssistanceReviewTest.php ]; then
+            TESTS+=(tests/Feature/UserModule/EventAssistanceReviewTest.php)
+          fi
+          php artisan test "${TESTS[@]}" 2>&1 | tee cleaning-suite-test.log
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cleaning-suite-diagnostics
+          path: cleaning-suite-test.log
+          if-no-files-found: ignore

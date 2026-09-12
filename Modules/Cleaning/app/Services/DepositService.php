@@ -14,6 +14,7 @@ use InvalidArgumentException;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingSession;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use RuntimeException;
 
@@ -142,6 +143,32 @@ final class DepositService
         return $this->recordCharge($worker, $amount, 'commission', $reference, null, $createdByAdminId);
     }
 
+    public function recordSessionAdminFeeDebit(
+        Worker $worker,
+        CleaningBooking $booking,
+        CleaningBookingSession $session,
+        float $amount,
+        ?int $createdByAdminId = null,
+    ): ?CleaningDepositTransaction {
+        if ($amount <= 0) {
+            return null;
+        }
+
+        if ((int) $session->cleaning_booking_id !== (int) $booking->id) {
+            throw new InvalidArgumentException('Session does not belong to this booking.');
+        }
+
+        $reference = CleaningDepositTransaction::AUTOMATIC_ADMIN_DEBT_REFERENCE_PREFIX.hash(
+            'sha256',
+            $worker->id.':'.$booking->id.':session:'.$session->id,
+        );
+        if (CleaningDepositTransaction::query()->where('worker_id', $worker->id)->where('reference', $reference)->exists()) {
+            return null;
+        }
+
+        return $this->recordCharge($worker, $amount, 'commission', $reference, null, $createdByAdminId);
+    }
+
     public function resolveLimits(Worker $worker): array
     {
         $worker->loadMissing('deposit');
@@ -182,7 +209,7 @@ final class DepositService
             ->where('cleaning_booking_worker_assignments.worker_id', $worker->id)
             ->where('cleaning_bookings.status', CleaningBookingStatus::Completed->value)
             ->whereIn('cleaning_booking_worker_assignments.status', CleaningBookingWorkerAssignmentStatus::acceptedValues())
-            ->sum(DB::raw('CASE WHEN COALESCE(cleaning_booking_worker_assignments.service_share_amount,0)+COALESCE(cleaning_booking_worker_assignments.travel_fee,0)-COALESCE(cleaning_booking_worker_assignments.admin_margin_amount,0) > 0 THEN COALESCE(cleaning_booking_worker_assignments.service_share_amount,0)+COALESCE(cleaning_booking_worker_assignments.travel_fee,0)-COALESCE(cleaning_booking_worker_assignments.admin_margin_amount,0) ELSE 0 END'));
+            ->sum(DB::raw('CASE WHEN COALESCE(cleaning_booking_worker_assignments.service_share_amount,0)+COALESCE(cleaning_booking_worker_assignments.travel_fee,0) > 0 THEN COALESCE(cleaning_booking_worker_assignments.service_share_amount,0)+COALESCE(cleaning_booking_worker_assignments.travel_fee,0) ELSE 0 END'));
         $configuredAllowance = (float) $allowance['configuredAllowedDebtLimit'];
         $usedAllowance = (float) $allowance['allowanceUsedAmount'];
 
