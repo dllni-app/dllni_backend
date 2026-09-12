@@ -22,16 +22,6 @@ final class SeederMedia
             return;
         }
 
-        if (! app()->runningUnitTests()) {
-            try {
-                $model->addMediaFromUrl($remoteUrl)->toMediaCollection($collection);
-
-                return;
-            } catch (Throwable) {
-                // Continue with local fallback.
-            }
-        }
-
         $tempPath = self::createLocalPlaceholder($seed);
         if ($tempPath === null) {
             return;

@@ -1054,25 +1054,14 @@ final class RestaurantSeeder extends Seeder
             $imageCount = fake()->numberBetween(2, 3);
             for ($i = 1; $i <= $imageCount; $i++) {
                 $imageSeed = "restaurant-{$seed}-product-{$product->id}-img{$i}";
-                $imageUrl = 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=800&q=80';
 
-                $this->attachProductImage($product, $imageUrl, $imageSeed);
+                $this->attachProductImage($product, $imageSeed);
             }
         }
     }
 
-    private function attachProductImage(Product $product, string $imageUrl, string $imageSeed): void
+    private function attachProductImage(Product $product, string $imageSeed): void
     {
-        if (! app()->runningUnitTests()) {
-            try {
-                $product->addMediaFromUrl($imageUrl)->toMediaCollection('images');
-
-                return;
-            } catch (Throwable) {
-                // Continue to local placeholder fallback.
-            }
-        }
-
         $tempPath = tempnam(sys_get_temp_dir(), 'seed-media-');
         if ($tempPath === false) {
             return;

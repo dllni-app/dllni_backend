@@ -68,8 +68,13 @@ return new class extends Migration
 
         Schema::create('cleaning_material_inventory_movements', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('cleaning_material_id')->constrained()->restrictOnDelete();
-            $table->foreignId('cleaning_booking_material_id')->nullable()->constrained()->nullOnDelete();
+            $table->foreignId('cleaning_material_id')
+                ->constrained(indexName: 'clean_mat_inv_move_material_fk')
+                ->restrictOnDelete();
+            $table->foreignId('cleaning_booking_material_id')
+                ->nullable()
+                ->constrained(indexName: 'clean_mat_inv_move_booking_mat_fk')
+                ->nullOnDelete();
             $table->string('movement_type', 24);
             $table->decimal('quantity_delta', 12, 3);
             $table->string('reference_type', 64)->nullable();

@@ -17,7 +17,9 @@ return new class extends Migration
 
         Schema::create('cleaning_material_type_quantity_rules', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('cleaning_material_type_id')->constrained('cleaning_material_types')->cascadeOnDelete();
+            $table->foreignId('cleaning_material_type_id')
+                ->constrained('cleaning_material_types', indexName: 'clean_mat_type_qty_rule_type_fk')
+                ->cascadeOnDelete();
             $table->string('room_type', 32)->nullable();
             $table->string('room_size', 32)->nullable();
             $table->string('cleaning_mode', 32)->nullable();
@@ -63,7 +65,8 @@ return new class extends Migration
 
         Schema::table('cleaning_special_services', function (Blueprint $table): void {
             $table->foreignId('cleaning_special_service_category_id')->nullable()->after('id')
-                ->constrained('cleaning_special_service_categories')->nullOnDelete();
+                ->constrained('cleaning_special_service_categories', indexName: 'clean_special_service_category_fk')
+                ->nullOnDelete();
             $table->text('description')->nullable()->after('name');
             $table->string('input_type', 32)->default('quantity')->after('pricing_unit');
             $table->string('unit_code', 32)->nullable()->after('input_type');
@@ -82,8 +85,12 @@ return new class extends Migration
 
         Schema::create('cleaning_special_service_dirtiness_levels', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('cleaning_special_service_id')->constrained('cleaning_special_services')->cascadeOnDelete();
-            $table->foreignId('cleaning_dirtiness_level_id')->constrained('cleaning_dirtiness_levels')->cascadeOnDelete();
+            $table->foreignId('cleaning_special_service_id')
+                ->constrained('cleaning_special_services', indexName: 'clean_special_dirt_service_fk')
+                ->cascadeOnDelete();
+            $table->foreignId('cleaning_dirtiness_level_id')
+                ->constrained('cleaning_dirtiness_levels', indexName: 'clean_special_dirt_level_fk')
+                ->cascadeOnDelete();
             $table->timestamps();
             $table->unique(['cleaning_special_service_id', 'cleaning_dirtiness_level_id'], 'clean_special_global_dirt_unique');
         });
@@ -99,7 +106,8 @@ return new class extends Migration
 
         Schema::table('cleaning_booking_special_services', function (Blueprint $table): void {
             $table->foreignId('cleaning_booking_session_id')->nullable()->after('cleaning_booking_id')
-                ->constrained('cleaning_booking_sessions')->nullOnDelete();
+                ->constrained('cleaning_booking_sessions', indexName: 'clean_book_special_session_fk')
+                ->nullOnDelete();
             $table->foreignId('assigned_worker_id')->nullable()->after('cleaning_special_service_id')
                 ->constrained('workers')->nullOnDelete();
             $table->string('execution_status', 24)->default('pending')->after('notes');
@@ -111,8 +119,13 @@ return new class extends Migration
 
         Schema::create('cleaning_booking_special_service_items', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('cleaning_booking_special_service_id')->constrained('cleaning_booking_special_services')->cascadeOnDelete();
-            $table->foreignId('cleaning_dirtiness_level_id')->nullable()->constrained('cleaning_dirtiness_levels')->nullOnDelete();
+            $table->foreignId('cleaning_booking_special_service_id')
+                ->constrained('cleaning_booking_special_services', indexName: 'clean_book_special_item_service_fk')
+                ->cascadeOnDelete();
+            $table->foreignId('cleaning_dirtiness_level_id')
+                ->nullable()
+                ->constrained('cleaning_dirtiness_levels', indexName: 'clean_book_special_item_dirt_fk')
+                ->nullOnDelete();
             $table->decimal('quantity', 12, 3);
             $table->string('dirtiness_level', 64)->nullable();
             $table->decimal('price_multiplier', 8, 3)->default(1);
@@ -126,8 +139,12 @@ return new class extends Migration
 
         Schema::create('cleaning_booking_special_service_sessions', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('cleaning_booking_special_service_id')->constrained('cleaning_booking_special_services')->cascadeOnDelete();
-            $table->foreignId('cleaning_booking_session_id')->constrained('cleaning_booking_sessions')->cascadeOnDelete();
+            $table->foreignId('cleaning_booking_special_service_id')
+                ->constrained('cleaning_booking_special_services', indexName: 'clean_book_special_session_service_fk')
+                ->cascadeOnDelete();
+            $table->foreignId('cleaning_booking_session_id')
+                ->constrained('cleaning_booking_sessions', indexName: 'clean_book_special_session_booking_fk')
+                ->cascadeOnDelete();
             $table->timestamps();
             $table->unique(['cleaning_booking_special_service_id', 'cleaning_booking_session_id'], 'clean_book_special_session_unique');
         });
@@ -135,7 +152,9 @@ return new class extends Migration
         Schema::create('cleaning_worker_special_service_skills', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('worker_id')->constrained('workers')->cascadeOnDelete();
-            $table->foreignId('cleaning_special_service_id')->constrained('cleaning_special_services')->cascadeOnDelete();
+            $table->foreignId('cleaning_special_service_id')
+                ->constrained('cleaning_special_services', indexName: 'clean_worker_special_skill_service_fk')
+                ->cascadeOnDelete();
             $table->boolean('is_active')->default(true);
             $table->unsignedBigInteger('approved_by_id')->nullable();
             $table->timestamp('approved_at')->nullable();
@@ -146,7 +165,9 @@ return new class extends Migration
         Schema::create('cleaning_worker_equipment_authorizations', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('worker_id')->constrained('workers')->cascadeOnDelete();
-            $table->foreignId('cleaning_special_service_equipment_id')->constrained('cleaning_special_service_equipment')->cascadeOnDelete();
+            $table->foreignId('cleaning_special_service_equipment_id')
+                ->constrained('cleaning_special_service_equipment', indexName: 'clean_worker_equipment_auth_equipment_fk')
+                ->cascadeOnDelete();
             $table->boolean('is_active')->default(true);
             $table->unsignedBigInteger('approved_by_id')->nullable();
             $table->timestamp('approved_at')->nullable();
@@ -156,9 +177,16 @@ return new class extends Migration
 
         Schema::create('cleaning_equipment_reservations', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('cleaning_special_service_equipment_id')->constrained('cleaning_special_service_equipment')->cascadeOnDelete();
-            $table->foreignId('cleaning_booking_special_service_id')->constrained('cleaning_booking_special_services')->cascadeOnDelete();
-            $table->foreignId('cleaning_booking_session_id')->nullable()->constrained('cleaning_booking_sessions')->nullOnDelete();
+            $table->foreignId('cleaning_special_service_equipment_id')
+                ->constrained('cleaning_special_service_equipment', indexName: 'clean_equipment_reservation_equipment_fk')
+                ->cascadeOnDelete();
+            $table->foreignId('cleaning_booking_special_service_id')
+                ->constrained('cleaning_booking_special_services', indexName: 'clean_equipment_reservation_service_fk')
+                ->cascadeOnDelete();
+            $table->foreignId('cleaning_booking_session_id')
+                ->nullable()
+                ->constrained('cleaning_booking_sessions', indexName: 'clean_equipment_reservation_session_fk')
+                ->nullOnDelete();
             $table->foreignId('worker_id')->nullable()->constrained('workers')->nullOnDelete();
             $table->timestamp('reserved_from');
             $table->timestamp('reserved_until');
@@ -196,8 +224,12 @@ return new class extends Migration
 
         Schema::create('cleaning_event_type_special_services', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('cleaning_event_type_id')->constrained('cleaning_event_types')->cascadeOnDelete();
-            $table->foreignId('cleaning_special_service_id')->constrained('cleaning_special_services')->cascadeOnDelete();
+            $table->foreignId('cleaning_event_type_id')
+                ->constrained('cleaning_event_types', indexName: 'clean_event_special_event_type_fk')
+                ->cascadeOnDelete();
+            $table->foreignId('cleaning_special_service_id')
+                ->constrained('cleaning_special_services', indexName: 'clean_event_special_service_fk')
+                ->cascadeOnDelete();
             $table->timestamps();
             $table->unique(['cleaning_event_type_id', 'cleaning_special_service_id'], 'clean_event_special_unique');
         });
@@ -233,7 +265,10 @@ return new class extends Migration
         Schema::create('cleaning_open_time_extensions', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('cleaning_booking_id')->constrained('cleaning_bookings')->cascadeOnDelete();
-            $table->foreignId('cleaning_booking_session_id')->nullable()->constrained('cleaning_booking_sessions')->nullOnDelete();
+            $table->foreignId('cleaning_booking_session_id')
+                ->nullable()
+                ->constrained('cleaning_booking_sessions', indexName: 'clean_open_extension_session_fk')
+                ->nullOnDelete();
             $table->foreignId('customer_id')->constrained('users')->cascadeOnDelete();
             $table->foreignId('worker_id')->nullable()->constrained('workers')->nullOnDelete();
             $table->unsignedSmallInteger('requested_minutes');
@@ -266,9 +301,12 @@ return new class extends Migration
 
         Schema::create('cleaning_schedule_change_decisions', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('cleaning_schedule_change_request_id')->constrained('cleaning_schedule_change_requests')->cascadeOnDelete();
+            $table->foreignId('cleaning_schedule_change_request_id')
+                ->constrained('cleaning_schedule_change_requests', indexName: 'clean_change_decision_request_fk')
+                ->cascadeOnDelete();
             $table->foreignId('cleaning_booking_session_worker_assignment_id')->nullable()
-                ->constrained('cleaning_booking_session_worker_assignments')->nullOnDelete();
+                ->constrained('cleaning_booking_session_worker_assignments', indexName: 'clean_change_decision_assignment_fk')
+                ->nullOnDelete();
             $table->foreignId('worker_id')->constrained('workers')->cascadeOnDelete();
             $table->string('decision', 16)->default('pending');
             $table->text('reason')->nullable();
@@ -292,6 +330,66 @@ return new class extends Migration
                 'open_time_extension_options' => json_encode([15, 30, 60], JSON_THROW_ON_ERROR),
                 'capability_schema_version' => 2,
             ]);
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('cleaning_schedule_change_decisions');
+        Schema::dropIfExists('cleaning_schedule_change_requests');
+        Schema::dropIfExists('cleaning_open_time_extensions');
+
+        Schema::table('cleaning_booking_sessions', function (Blueprint $table): void {
+            $table->dropColumn([
+                'open_time_expected_max_minutes', 'open_time_hard_max_minutes', 'open_time_ceiling_ends_at',
+                'open_time_end_requested_at', 'open_time_end_status', 'open_time_termination_reason',
+                'travel_fee_mode', 'travel_fee_value',
+            ]);
+        });
+        Schema::table('cleaning_bookings', function (Blueprint $table): void {
+            $table->dropConstrainedForeignId('cleaning_event_type_id');
+            $table->dropColumn([
+                'event_dynamic_answers', 'open_time_expected_max_minutes', 'open_time_hard_max_minutes',
+                'open_time_warning_minutes', 'open_time_extension_options', 'open_time_ceiling_ends_at',
+                'open_time_end_requested_at', 'open_time_end_status', 'open_time_terminated_at',
+                'open_time_terminated_by_id', 'open_time_termination_reason', 'capability_schema_version',
+            ]);
+        });
+
+        Schema::dropIfExists('cleaning_event_type_special_services');
+        Schema::dropIfExists('cleaning_event_type_fields');
+        Schema::dropIfExists('cleaning_event_types');
+        Schema::dropIfExists('cleaning_equipment_reservations');
+        Schema::dropIfExists('cleaning_worker_equipment_authorizations');
+        Schema::dropIfExists('cleaning_worker_special_service_skills');
+        Schema::dropIfExists('cleaning_booking_special_service_sessions');
+        Schema::dropIfExists('cleaning_booking_special_service_items');
+
+        Schema::table('cleaning_booking_special_services', function (Blueprint $table): void {
+            $table->dropForeign('clean_book_special_session_fk');
+            $table->dropColumn('cleaning_booking_session_id');
+            $table->dropConstrainedForeignId('assigned_worker_id');
+            $table->dropColumn(['execution_status', 'unable_reason', 'started_at', 'completed_at', 'financial_snapshot']);
+        });
+        Schema::table('cleaning_special_service_equipment', function (Blueprint $table): void {
+            $table->dropUnique(['asset_code']);
+            $table->dropColumn(['asset_code', 'status', 'buffer_before_minutes', 'buffer_after_minutes', 'last_handed_over_at', 'last_returned_at']);
+        });
+        Schema::dropIfExists('cleaning_special_service_dirtiness_levels');
+        Schema::table('cleaning_special_services', function (Blueprint $table): void {
+            $table->dropForeign('clean_special_service_category_fk');
+            $table->dropColumn('cleaning_special_service_category_id');
+            $table->dropColumn([
+                'description', 'input_type', 'unit_code', 'supports_dirtiness', 'gender_constraint',
+                'estimated_duration_minutes', 'worker_pay_mode', 'worker_pay_value', 'operating_cost_mode',
+                'operating_cost_value', 'travel_fee_mode', 'travel_fee_value', 'requires_before_image',
+                'requires_after_image',
+            ]);
+        });
+        Schema::dropIfExists('cleaning_dirtiness_levels');
+        Schema::dropIfExists('cleaning_special_service_categories');
+        Schema::dropIfExists('cleaning_booking_material_kits');
+        Schema::dropIfExists('cleaning_material_type_quantity_rules');
+        Schema::table('cleaning_materials', fn (Blueprint $table) => $table->dropColumn('image_path'));
     }
 
     private function backfillMaterialTypeRules(): void
@@ -429,63 +527,5 @@ return new class extends Migration
                     ->whereNull('cleaning_event_type_id')
                     ->update(['cleaning_event_type_id' => $eventTypeId]);
             });
-    }
-
-    public function down(): void
-    {
-        Schema::dropIfExists('cleaning_schedule_change_decisions');
-        Schema::dropIfExists('cleaning_schedule_change_requests');
-        Schema::dropIfExists('cleaning_open_time_extensions');
-
-        Schema::table('cleaning_booking_sessions', function (Blueprint $table): void {
-            $table->dropColumn([
-                'open_time_expected_max_minutes', 'open_time_hard_max_minutes', 'open_time_ceiling_ends_at',
-                'open_time_end_requested_at', 'open_time_end_status', 'open_time_termination_reason',
-                'travel_fee_mode', 'travel_fee_value',
-            ]);
-        });
-        Schema::table('cleaning_bookings', function (Blueprint $table): void {
-            $table->dropConstrainedForeignId('cleaning_event_type_id');
-            $table->dropColumn([
-                'event_dynamic_answers', 'open_time_expected_max_minutes', 'open_time_hard_max_minutes',
-                'open_time_warning_minutes', 'open_time_extension_options', 'open_time_ceiling_ends_at',
-                'open_time_end_requested_at', 'open_time_end_status', 'open_time_terminated_at',
-                'open_time_terminated_by_id', 'open_time_termination_reason', 'capability_schema_version',
-            ]);
-        });
-
-        Schema::dropIfExists('cleaning_event_type_special_services');
-        Schema::dropIfExists('cleaning_event_type_fields');
-        Schema::dropIfExists('cleaning_event_types');
-        Schema::dropIfExists('cleaning_equipment_reservations');
-        Schema::dropIfExists('cleaning_worker_equipment_authorizations');
-        Schema::dropIfExists('cleaning_worker_special_service_skills');
-        Schema::dropIfExists('cleaning_booking_special_service_sessions');
-        Schema::dropIfExists('cleaning_booking_special_service_items');
-
-        Schema::table('cleaning_booking_special_services', function (Blueprint $table): void {
-            $table->dropConstrainedForeignId('cleaning_booking_session_id');
-            $table->dropConstrainedForeignId('assigned_worker_id');
-            $table->dropColumn(['execution_status', 'unable_reason', 'started_at', 'completed_at', 'financial_snapshot']);
-        });
-        Schema::table('cleaning_special_service_equipment', function (Blueprint $table): void {
-            $table->dropUnique(['asset_code']);
-            $table->dropColumn(['asset_code', 'status', 'buffer_before_minutes', 'buffer_after_minutes', 'last_handed_over_at', 'last_returned_at']);
-        });
-        Schema::dropIfExists('cleaning_special_service_dirtiness_levels');
-        Schema::table('cleaning_special_services', function (Blueprint $table): void {
-            $table->dropConstrainedForeignId('cleaning_special_service_category_id');
-            $table->dropColumn([
-                'description', 'input_type', 'unit_code', 'supports_dirtiness', 'gender_constraint',
-                'estimated_duration_minutes', 'worker_pay_mode', 'worker_pay_value', 'operating_cost_mode',
-                'operating_cost_value', 'travel_fee_mode', 'travel_fee_value', 'requires_before_image',
-                'requires_after_image',
-            ]);
-        });
-        Schema::dropIfExists('cleaning_dirtiness_levels');
-        Schema::dropIfExists('cleaning_special_service_categories');
-        Schema::dropIfExists('cleaning_booking_material_kits');
-        Schema::dropIfExists('cleaning_material_type_quantity_rules');
-        Schema::table('cleaning_materials', fn (Blueprint $table) => $table->dropColumn('image_path'));
     }
 };
