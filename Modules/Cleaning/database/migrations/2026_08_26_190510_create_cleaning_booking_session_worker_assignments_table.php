@@ -10,11 +10,12 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // MySQL applies CREATE TABLE and foreign-key ALTER statements separately.
-        // If a previous attempt failed while adding a constraint, the new table
-        // can remain behind even though Laravel did not record this migration.
-        // This table belongs exclusively to this migration, so recreate it cleanly.
-        Schema::dropIfExists('cleaning_booking_session_worker_assignments');
+        // This migration can become newly pending after merging dev with V2 even
+        // when the V2 assignment table already exists. Never drop an existing
+        // table here: doing so would destroy live session-assignment data.
+        if (Schema::hasTable('cleaning_booking_session_worker_assignments')) {
+            return;
+        }
 
         Schema::create('cleaning_booking_session_worker_assignments', function (Blueprint $table): void {
             $table->id();
@@ -67,6 +68,16 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (! Schema::hasTable('cleaning_booking_session_worker_assignments')) {
+            return;
+        }
+
+        // accepted_at belongs to the richer V2 schema. Its presence means this
+        // migration may have been a no-op against an existing V2 table.
+        if (Schema::hasColumn('cleaning_booking_session_worker_assignments', 'accepted_at')) {
+            return;
+        }
+
         Schema::dropIfExists('cleaning_booking_session_worker_assignments');
     }
 };

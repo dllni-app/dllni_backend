@@ -10,6 +10,136 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (! Schema::hasTable('cleaning_booking_sessions')) {
+            $this->createV2Table();
+
+            return;
+        }
+
+        // dev already introduced a smaller session table on 2026-08-26. After
+        // merging V2, upgrade that table in place instead of trying to create it
+        // again. This also makes the migration safe for the production database
+        // that has already executed the August migration.
+        $this->addV2Columns();
+
+        if (! Schema::hasIndex('cleaning_booking_sessions', 'cleaning_booking_session_coverage_date_idx')) {
+            Schema::table('cleaning_booking_sessions', function (Blueprint $table): void {
+                $table->index(['coverage_status', 'scheduled_date'], 'cleaning_booking_session_coverage_date_idx');
+            });
+        }
+    }
+
+    public function down(): void
+    {
+        if (! Schema::hasTable('cleaning_booking_sessions')) {
+            return;
+        }
+
+        if (Schema::hasIndex('cleaning_booking_sessions', 'cleaning_booking_session_coverage_date_idx')) {
+            Schema::table('cleaning_booking_sessions', function (Blueprint $table): void {
+                $table->dropIndex('cleaning_booking_session_coverage_date_idx');
+            });
+        }
+
+        $columns = array_values(array_filter([
+            'session_type',
+            'calculation_mode',
+            'required_workers',
+            'coverage_status',
+            'addons_total',
+            'materials_total',
+            'special_services_total',
+            'pricing_snapshot',
+            'version',
+            'skipped_at',
+            'skip_source',
+            'skip_reason',
+        ], static fn (string $column): bool => Schema::hasColumn('cleaning_booking_sessions', $column)));
+
+        if ($columns !== []) {
+            Schema::table('cleaning_booking_sessions', function (Blueprint $table) use ($columns): void {
+                $table->dropColumn($columns);
+            });
+        }
+    }
+
+    private function addV2Columns(): void
+    {
+        if (! Schema::hasColumn('cleaning_booking_sessions', 'session_type')) {
+            Schema::table('cleaning_booking_sessions', function (Blueprint $table): void {
+                $table->string('session_type')->nullable();
+            });
+        }
+
+        if (! Schema::hasColumn('cleaning_booking_sessions', 'calculation_mode')) {
+            Schema::table('cleaning_booking_sessions', function (Blueprint $table): void {
+                $table->string('calculation_mode')->nullable();
+            });
+        }
+
+        if (! Schema::hasColumn('cleaning_booking_sessions', 'required_workers')) {
+            Schema::table('cleaning_booking_sessions', function (Blueprint $table): void {
+                $table->unsignedSmallInteger('required_workers')->default(1);
+            });
+        }
+
+        if (! Schema::hasColumn('cleaning_booking_sessions', 'coverage_status')) {
+            Schema::table('cleaning_booking_sessions', function (Blueprint $table): void {
+                $table->string('coverage_status')->default('searching');
+            });
+        }
+
+        if (! Schema::hasColumn('cleaning_booking_sessions', 'addons_total')) {
+            Schema::table('cleaning_booking_sessions', function (Blueprint $table): void {
+                $table->decimal('addons_total', 12, 2)->default(0);
+            });
+        }
+
+        if (! Schema::hasColumn('cleaning_booking_sessions', 'materials_total')) {
+            Schema::table('cleaning_booking_sessions', function (Blueprint $table): void {
+                $table->decimal('materials_total', 12, 2)->default(0);
+            });
+        }
+
+        if (! Schema::hasColumn('cleaning_booking_sessions', 'special_services_total')) {
+            Schema::table('cleaning_booking_sessions', function (Blueprint $table): void {
+                $table->decimal('special_services_total', 12, 2)->default(0);
+            });
+        }
+
+        if (! Schema::hasColumn('cleaning_booking_sessions', 'pricing_snapshot')) {
+            Schema::table('cleaning_booking_sessions', function (Blueprint $table): void {
+                $table->json('pricing_snapshot')->nullable();
+            });
+        }
+
+        if (! Schema::hasColumn('cleaning_booking_sessions', 'version')) {
+            Schema::table('cleaning_booking_sessions', function (Blueprint $table): void {
+                $table->unsignedInteger('version')->default(1);
+            });
+        }
+
+        if (! Schema::hasColumn('cleaning_booking_sessions', 'skipped_at')) {
+            Schema::table('cleaning_booking_sessions', function (Blueprint $table): void {
+                $table->timestamp('skipped_at')->nullable();
+            });
+        }
+
+        if (! Schema::hasColumn('cleaning_booking_sessions', 'skip_source')) {
+            Schema::table('cleaning_booking_sessions', function (Blueprint $table): void {
+                $table->string('skip_source')->nullable();
+            });
+        }
+
+        if (! Schema::hasColumn('cleaning_booking_sessions', 'skip_reason')) {
+            Schema::table('cleaning_booking_sessions', function (Blueprint $table): void {
+                $table->text('skip_reason')->nullable();
+            });
+        }
+    }
+
+    private function createV2Table(): void
+    {
         Schema::create('cleaning_booking_sessions', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('cleaning_booking_id')->constrained('cleaning_bookings')->cascadeOnDelete();
@@ -58,10 +188,5 @@ return new class extends Migration
             $table->index(['cleaning_booking_id', 'status'], 'cleaning_booking_session_booking_status_idx');
             $table->index(['coverage_status', 'scheduled_date'], 'cleaning_booking_session_coverage_date_idx');
         });
-    }
-
-    public function down(): void
-    {
-        Schema::dropIfExists('cleaning_booking_sessions');
     }
 };

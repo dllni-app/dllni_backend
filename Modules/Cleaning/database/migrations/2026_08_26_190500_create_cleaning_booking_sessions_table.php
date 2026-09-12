@@ -10,6 +10,14 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // This migration was introduced on dev before the V2 session migration.
+        // After the branches were merged, some databases may already contain the
+        // richer V2 table while this migration is still pending. Never recreate
+        // or replace an existing table in that case.
+        if (Schema::hasTable('cleaning_booking_sessions')) {
+            return;
+        }
+
         Schema::create('cleaning_booking_sessions', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('cleaning_booking_id')->constrained('cleaning_bookings')->cascadeOnDelete();
@@ -48,6 +56,16 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (! Schema::hasTable('cleaning_booking_sessions')) {
+            return;
+        }
+
+        // If the richer V2 signature is present, this migration may have been a
+        // no-op on an already-upgraded database. Do not delete that shared table.
+        if (Schema::hasColumn('cleaning_booking_sessions', 'session_type')) {
+            return;
+        }
+
         Schema::dropIfExists('cleaning_booking_sessions');
     }
 };

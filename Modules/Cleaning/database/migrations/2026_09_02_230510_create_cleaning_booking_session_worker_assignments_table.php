@@ -10,6 +10,85 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (! Schema::hasTable('cleaning_booking_session_worker_assignments')) {
+            $this->createV2Table();
+
+            return;
+        }
+
+        // The dev branch created this table first with the legacy session-team
+        // shape. Upgrade it in place and preserve any existing assignments.
+        $this->addV2Columns();
+
+        if (! Schema::hasIndex('cleaning_booking_session_worker_assignments', 'cleaning_session_assignment_status_idx')) {
+            Schema::table('cleaning_booking_session_worker_assignments', function (Blueprint $table): void {
+                $table->index(
+                    ['cleaning_booking_session_id', 'status'],
+                    'cleaning_session_assignment_status_idx'
+                );
+            });
+        }
+
+        if (! Schema::hasIndex('cleaning_booking_session_worker_assignments', 'cleaning_worker_session_status_idx')) {
+            Schema::table('cleaning_booking_session_worker_assignments', function (Blueprint $table): void {
+                $table->index(
+                    ['worker_id', 'status'],
+                    'cleaning_worker_session_status_idx'
+                );
+            });
+        }
+    }
+
+    public function down(): void
+    {
+        if (! Schema::hasTable('cleaning_booking_session_worker_assignments')) {
+            return;
+        }
+
+        foreach (['cleaning_session_assignment_status_idx', 'cleaning_worker_session_status_idx'] as $index) {
+            if (Schema::hasIndex('cleaning_booking_session_worker_assignments', $index)) {
+                Schema::table('cleaning_booking_session_worker_assignments', function (Blueprint $table) use ($index): void {
+                    $table->dropIndex($index);
+                });
+            }
+        }
+
+        $columns = array_values(array_filter([
+            'accepted_at',
+            'released_at',
+            'released_reason',
+        ], static fn (string $column): bool => Schema::hasColumn('cleaning_booking_session_worker_assignments', $column)));
+
+        if ($columns !== []) {
+            Schema::table('cleaning_booking_session_worker_assignments', function (Blueprint $table) use ($columns): void {
+                $table->dropColumn($columns);
+            });
+        }
+    }
+
+    private function addV2Columns(): void
+    {
+        if (! Schema::hasColumn('cleaning_booking_session_worker_assignments', 'accepted_at')) {
+            Schema::table('cleaning_booking_session_worker_assignments', function (Blueprint $table): void {
+                $table->timestamp('accepted_at')->nullable();
+            });
+        }
+
+        if (! Schema::hasColumn('cleaning_booking_session_worker_assignments', 'released_at')) {
+            Schema::table('cleaning_booking_session_worker_assignments', function (Blueprint $table): void {
+                $table->timestamp('released_at')->nullable();
+            });
+        }
+
+        if (! Schema::hasColumn('cleaning_booking_session_worker_assignments', 'released_reason')) {
+            Schema::table('cleaning_booking_session_worker_assignments', function (Blueprint $table): void {
+                $table->text('released_reason')->nullable();
+            });
+        }
+    }
+
+    private function createV2Table(): void
+    {
         Schema::create('cleaning_booking_session_worker_assignments', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('cleaning_booking_session_id')
@@ -51,10 +130,5 @@ return new class extends Migration
                 'cleaning_worker_session_status_idx'
             );
         });
-    }
-
-    public function down(): void
-    {
-        Schema::dropIfExists('cleaning_booking_session_worker_assignments');
     }
 };
