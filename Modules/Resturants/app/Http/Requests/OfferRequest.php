@@ -33,6 +33,14 @@ final class OfferRequest extends FormRequest
             'startsAt' => 'nullable|date',
             'endsAt' => 'nullable|date|after_or_equal:startsAt',
             'isActive' => 'nullable|boolean',
+            'productIds' => 'nullable|array',
+            'productIds.*' => [
+                'integer',
+                'distinct',
+                Rule::exists('products', 'id')->where(
+                    fn ($query) => $query->where('restaurant_id', $this->input('restaurantId'))
+                ),
+            ],
         ];
     }
 
@@ -51,6 +59,7 @@ final class OfferRequest extends FormRequest
             'startsAt' => $startsAt,
             'endsAt' => $endsAt,
             'isActive' => $this->input('isActive', $this->input('is_active')),
+            'productIds' => $this->input('productIds', $this->input('product_ids')),
         ]);
 
         if ($this->filled('restaurantId')) {
