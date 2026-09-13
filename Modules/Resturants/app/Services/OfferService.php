@@ -17,6 +17,11 @@ final class OfferService
     {
         return DB::transaction(function () use ($data) {
             $offer = Offer::create($data->onlyModelAttributes());
+
+            if ($data->productIds !== null) {
+                $offer->products()->sync($data->productIds);
+            }
+
             $this->activityLogService->logOfferCreated($offer, (int) $offer->restaurant_id);
 
             return $offer;
@@ -28,6 +33,11 @@ final class OfferService
         return DB::transaction(function () use ($data, $offer) {
             $oldAttributes = $offer->getAttributes();
             tap($offer)->update($data->onlyModelAttributes());
+
+            if ($data->productIds !== null) {
+                $offer->products()->sync($data->productIds);
+            }
+
             $this->activityLogService->logOfferUpdated($offer, (int) $offer->restaurant_id, $oldAttributes);
 
             return $offer;
