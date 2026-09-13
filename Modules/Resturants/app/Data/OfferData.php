@@ -23,5 +23,6 @@ final class OfferData extends Data
         public ?string $startsAt,
         public ?string $endsAt,
         public ?bool $isActive,
+        public ?array $productIds = null,
     ) {}
 }
