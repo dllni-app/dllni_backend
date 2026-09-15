@@ -92,6 +92,30 @@ it('notifies the user only about coupons that are currently available to them', 
     expect(Notification::sent($user, PlatformCouponAvailableNotification::class))->toHaveCount(2);
 });
 
+it('does not create duplicate coupon notifications when the dispatch job runs more than once', function (): void {
+    $user = User::factory()->create([
+        'is_active' => true,
+        'fcm_token' => null,
+    ]);
+
+    $coupon = PlatformCoupon::query()->create(newUserCouponData([
+        'code' => 'ONCE10',
+        'audience_type' => PlatformCoupon::AUDIENCE_ALL_USERS,
+    ]));
+
+    $job = new DispatchAvailablePlatformCouponNotificationsToUser($user->id);
+    $job->handle();
+    $job->handle();
+
+    $notifications = $user->fresh()
+        ->notifications()
+        ->where('type', PlatformCouponAvailableNotification::class)
+        ->get();
+
+    expect($notifications)->toHaveCount(1)
+        ->and(data_get($notifications->first()?->data, 'couponId'))->toBe($coupon->id);
+});
+
 /** @return array<string, mixed> */
 function newUserCouponData(array $overrides = []): array
 {
