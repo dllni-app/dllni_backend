@@ -132,7 +132,7 @@ it('updates trust score and the individual debt limit without writing user field
     Livewire::test(EditCleaningWorker::class, ['record' => $worker->getRouteKey()])
         ->fillForm([
             'gender' => 'female',
-            'trust_score' => 84,
+            'trust_score' => 145,
             'worker_debt_limit' => 900,
             'user_phone' => '+963922222222',
         ])
@@ -141,7 +141,7 @@ it('updates trust score and the individual debt limit without writing user field
 
     $worker->refresh();
     expect($worker->gender)->toBe('female')
-        ->and($worker->trust_score)->toBe(84)
+        ->and($worker->trust_score)->toBe(145)
         ->and((float) $worker->deposit()->value('max_negative_balance'))->toBe(900.0);
 
     $linkedUser->refresh();
@@ -151,8 +151,8 @@ it('updates trust score and the individual debt limit without writing user field
     $trustLog = WorkerTrustLog::query()->where('worker_id', $worker->id)->latest('id')->firstOrFail();
     expect($trustLog->reason)->toBe('admin_manual_adjustment')
         ->and($trustLog->score_before)->toBe(100)
-        ->and($trustLog->score_after)->toBe(84)
-        ->and($trustLog->score_delta)->toBe(-16);
+        ->and($trustLog->score_after)->toBe(145)
+        ->and($trustLog->score_delta)->toBe(45);
 });
 
 it('filters the cleaning worker table by gender', function (): void {

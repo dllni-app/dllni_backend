@@ -62,8 +62,8 @@ final class WorkerForm
                     ]),
                 Section::make(__('cleaning_admin.workers.sections.metrics'))
                     ->description(app()->isLocale('ar')
-                        ? 'يمكن تعديل درجة الثقة يدوياً من 0 إلى 100، وسيتم تسجيل التغيير في سجل الثقة.'
-                        : 'Trust score can be adjusted manually from 0 to 100. The change is recorded in the trust log.')
+                        ? 'يمكن للإدارة تعديل نقاط الثقة يدوياً، بما في ذلك رفعها فوق 100 عند الحاجة. يتم تسجيل كل تغيير في سجل الثقة.'
+                        : 'Trust score can be adjusted manually above 100 when needed. Every change is recorded in the trust log.')
                     ->columns(2)
                     ->visible(fn (string $operation): bool => $operation === 'edit')
                     ->schema([
@@ -71,7 +71,7 @@ final class WorkerForm
                             ->label(__('cleaning_admin.workers.fields.trust_score'))
                             ->numeric()
                             ->minValue(0)
-                            ->maxValue(100)
+                            ->suffix('نقطة')
                             ->required(),
                     ]),
                 Section::make(app()->isLocale('ar') ? 'الإعدادات المالية للعامل' : 'Worker financial settings')
