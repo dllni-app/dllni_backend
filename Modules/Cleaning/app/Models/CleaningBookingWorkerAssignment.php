@@ -57,6 +57,14 @@ final class CleaningBookingWorkerAssignment extends Model
         return $this->hasMany(CleaningBookingSessionWorkerAssignment::class, 'cleaning_booking_worker_assignment_id');
     }
 
+    public function locationPoints(): HasMany
+    {
+        return $this->hasMany(
+            CleaningBookingWorkerLocationPoint::class,
+            'cleaning_booking_worker_assignment_id',
+        )->orderBy('recorded_at');
+    }
+
     public function casts(): array
     {
         return [
