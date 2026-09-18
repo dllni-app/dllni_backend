@@ -89,7 +89,9 @@ final class User extends Authenticatable implements FilamentUser, HasMedia
     protected static function booted(): void
     {
         static::updated(function (self $user): void {
-            if (! $user->wasChanged('name') || $user->module_type !== UserModuleType::CleaningWorker) {
+            $moduleType = $user->getRawOriginal('module_type');
+
+            if (! $user->wasChanged('name') || $moduleType !== UserModuleType::CleaningWorker->value) {
                 return;
             }
 
