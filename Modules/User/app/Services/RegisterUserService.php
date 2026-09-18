@@ -6,6 +6,7 @@ namespace Modules\User\Services;
 
 use App\Jobs\Sms\SendRegistrationSmsJob;
 use App\Models\User;
+use App\Services\DashboardUserAccountNotificationService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Modules\User\Enums\OtpPurpose;
@@ -16,6 +17,7 @@ final class RegisterUserService
     public function __construct(
         private readonly OtpService $otpService,
         private readonly SmsMessageBuilder $smsMessageBuilder,
+        private readonly DashboardUserAccountNotificationService $dashboardNotificationService,
     ) {}
 
     public function register(array $data): CarbonImmutable
@@ -27,6 +29,8 @@ final class RegisterUserService
                 'phone' => $data['phone'],
                 'password' => $data['password'],
             ]);
+
+            $this->dashboardNotificationService->registered($user);
 
             $otp = $this->otpService->issue($user->phone, OtpPurpose::Register);
             $smsPayload = $this->smsMessageBuilder->registrationOtp(
