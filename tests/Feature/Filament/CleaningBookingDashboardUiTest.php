@@ -78,7 +78,7 @@ it('updates full cleaning booking information from the dashboard', function (): 
     expect($booking->number_of_workers)->toBe(3)
         ->and($booking->scheduled_date?->format('Y-m-d'))->toBe('2026-09-21')
         ->and((string) $booking->scheduled_time)->toStartWith('11:30')
-        ->and($booking->total_price)->toBe(155000)
+        ->and($booking->total_price)->toBe(155000.0)
         ->and(data_get($booking->property_details, 'notes'))->toBe('تم التعديل من لوحة التحكم')
         ->and(data_get($booking->cleaning_services, '0.name'))->toBe('تنظيف عميق');
 });
