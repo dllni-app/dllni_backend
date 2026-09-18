@@ -37,14 +37,11 @@ final class CleaningWorkersTable
                 TextColumn::make('user.phone')->label(__('cleaning_admin.workers.fields.phone'))->copyable(),
                 TextColumn::make('neighborhood_names')
                     ->label('الأحياء')
-                    ->state(fn (Worker $record): string => $record->zones
-                        ->map(fn ($zone): ?string => $zone->neighborhood?->name_ar ?: $zone->neighborhood?->name_en)
-                        ->filter()
-                        ->unique()
-                        ->values()
-                        ->join('، '))
+                    ->state(fn (Worker $record): string => self::neighborhoodSummary($record))
+                    ->tooltip(fn (Worker $record): ?string => self::neighborhoodTooltip($record))
                     ->placeholder('-')
                     ->wrap()
+                    ->extraAttributes(['style' => 'max-width:18rem'])
                     ->searchable(query: fn (Builder $query, string $search): Builder => self::applyNeighborhoodSearch($query, $search))
                     ->toggleable(),
                 TextColumn::make('gender')
@@ -218,6 +215,40 @@ final class CleaningWorkersTable
     private static function capacity(Worker $worker): array
     {
         return app(WorkerOrderSolvencyService::class)->workerCapacitySummary($worker);
+    }
+
+    private static function neighborhoodSummary(Worker $worker): string
+    {
+        $names = self::neighborhoodNames($worker);
+
+        if ($names === []) {
+            return '-';
+        }
+
+        $visible = array_slice($names, 0, 2);
+        $remaining = count($names) - count($visible);
+
+        return implode('، ', $visible).($remaining > 0 ? ' + '.$remaining.' أحياء' : '');
+    }
+
+    private static function neighborhoodTooltip(Worker $worker): ?string
+    {
+        $names = self::neighborhoodNames($worker);
+
+        return $names === [] ? null : implode('، ', $names);
+    }
+
+    /** @return list<string> */
+    private static function neighborhoodNames(Worker $worker): array
+    {
+        $worker->loadMissing('zones.neighborhood');
+
+        return $worker->zones
+            ->map(fn ($zone): ?string => $zone->neighborhood?->name_ar ?: $zone->neighborhood?->name_en)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
     }
 
     private static function applyNeighborhoodSearch(Builder $query, string $search): Builder
