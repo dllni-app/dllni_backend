@@ -201,6 +201,7 @@ it('distinguishes event assistance bookings and hides room information', functio
         ->assertSee('مساعدة مناسبة')
         ->assertSee('تفاصيل المناسبة')
         ->assertSee('عزاء')
+        ->assertDontSee('نوع المكان')
         ->assertDontSee('نوع العقار')
         ->assertDontSee('المساحة التقديرية')
         ->assertDontSee('تغطية الغرف')
