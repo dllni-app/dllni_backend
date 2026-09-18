@@ -209,7 +209,6 @@ it('distinguishes event assistance bookings and hides room information', functio
         ->assertDontSee('Living Room 1 - Medium');
 });
 
-
 it('shows Arabic room names final worker wages and the recorded worker route', function (): void {
     $workerUser = User::factory()->create(['name' => 'عامل المسار']);
     $worker = Worker::factory()->create([
