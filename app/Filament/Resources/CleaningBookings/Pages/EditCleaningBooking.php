@@ -8,25 +8,23 @@ use App\Filament\Resources\CleaningBookings\CleaningBookingResource;
 use Filament\Actions\ViewAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
+use Illuminate\Support\Facades\DB;
+use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningNeighborhood;
+use Modules\Cleaning\Support\WorkerRoomAssignmentPlanner;
 
 final class EditCleaningBooking extends EditRecord
 {
     protected static string $resource = CleaningBookingResource::class;
 
     /** @var list<string> */
-    private const JSON_FIELDS = [
-        'property_details',
-        'event_dynamic_answers',
-        'cleaning_services',
-        'open_time_extension_options',
-        'worker_finished_cleaning_services',
-        'worker_finished_property_rooms',
-    ];
+    private array $selectedRoomKeys = [];
+
+    private bool $shouldSyncSelectedRooms = false;
 
     public function getTitle(): string
     {
-        return 'تعديل كامل حجز التنظيف';
+        return 'تعديل حجز تنظيف';
     }
 
     protected function getHeaderActions(): array
@@ -38,18 +36,34 @@ final class EditCleaningBooking extends EditRecord
 
     protected function mutateFormDataBeforeFill(array $data): array
     {
-        foreach (self::JSON_FIELDS as $field) {
-            $data[$field.'_json'] = $this->encodeJson($data[$field] ?? []);
+        $roomKeys = $this->record->rooms()
+            ->orderBy('id')
+            ->pluck('room_key')
+            ->map(static fn (mixed $key): string => (string) $key)
+            ->all();
+
+        if ($roomKeys === []) {
+            $details = is_array($this->record->property_details) ? $this->record->property_details : [];
+            $roomKeys = array_values(array_map(
+                static fn (array $room): string => (string) $room['room_key'],
+                WorkerRoomAssignmentPlanner::generateRoomBlueprints($details),
+            ));
         }
+
+        $data['selected_room_keys'] = $roomKeys;
 
         return $data;
     }
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
-        foreach (self::JSON_FIELDS as $field) {
-            $data[$field] = $this->decodeJson($data[$field.'_json'] ?? null);
-            unset($data[$field.'_json']);
+        if (array_key_exists('selected_room_keys', $data)) {
+            $this->selectedRoomKeys = array_values(array_unique(array_map(
+                static fn (mixed $key): string => (string) $key,
+                (array) $data['selected_room_keys'],
+            )));
+            $this->shouldSyncSelectedRooms = true;
+            unset($data['selected_room_keys']);
         }
 
         if (filled($data['neighborhood_id'] ?? null)) {
@@ -63,30 +77,72 @@ final class EditCleaningBooking extends EditRecord
         return $data;
     }
 
+    protected function afterSave(): void
+    {
+        if (! $this->shouldSyncSelectedRooms || ! $this->record instanceof CleaningBooking) {
+            return;
+        }
+
+        $this->syncSelectedRooms($this->record);
+    }
+
     protected function getSavedNotification(): ?Notification
     {
         return Notification::make()
-            ->title('تم تحديث معلومات الحجز')
+            ->title('تم تحديث الحجز والغرف المختارة')
             ->success();
     }
 
-    private function encodeJson(mixed $value): string
+    private function syncSelectedRooms(CleaningBooking $booking): void
     {
-        return json_encode(
-            $value ?? [],
-            JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
-        ) ?: '[]';
-    }
+        $details = is_array($booking->property_details) ? $booking->property_details : [];
+        $blueprints = collect(WorkerRoomAssignmentPlanner::generateRoomBlueprints($details))
+            ->keyBy(fn (array $room): string => (string) $room['room_key']);
 
-    /** @return array<mixed> */
-    private function decodeJson(mixed $value): array
-    {
-        if (! is_string($value) || trim($value) === '') {
-            return [];
+        if ($blueprints->isEmpty()) {
+            return;
         }
 
-        $decoded = json_decode($value, true);
+        $selected = array_values(array_filter(
+            $this->selectedRoomKeys,
+            fn (string $key): bool => $blueprints->has($key),
+        ));
 
-        return is_array($decoded) ? $decoded : [];
+        if ($selected === []) {
+            return;
+        }
+
+        DB::transaction(function () use ($booking, $blueprints, $selected): void {
+            $booking->rooms()
+                ->whereNotIn('room_key', $selected)
+                ->delete();
+
+            $existing = $booking->rooms()
+                ->pluck('room_key')
+                ->map(static fn (mixed $key): string => (string) $key)
+                ->all();
+
+            foreach ($selected as $roomKey) {
+                if (in_array($roomKey, $existing, true)) {
+                    continue;
+                }
+
+                $room = $blueprints->get($roomKey);
+
+                if (! is_array($room)) {
+                    continue;
+                }
+
+                $booking->rooms()->create([
+                    'room_key' => (string) $room['room_key'],
+                    'room_type' => (string) $room['room_type'],
+                    'room_size' => (string) $room['room_size'],
+                    'display_label' => (string) $room['display_label'],
+                    'weight' => (float) $room['weight'],
+                ]);
+            }
+        });
+
+        $booking->unsetRelation('rooms');
     }
 }
