@@ -6,7 +6,6 @@ namespace App\Filament\Resources\CleaningWorkers\Pages;
 
 use App\Enums\UserModuleType;
 use App\Filament\Resources\CleaningWorkers\CleaningWorkerResource;
-use App\Filament\Resources\CleaningWorkers\Support\AdjustWorkerTrustScoreAction;
 use App\Filament\Resources\Workers\Actions\ChangeWorkerAvatarAction;
 use App\Filament\Resources\Workers\Pages\Concerns\SyncsWorkerDebtLimit;
 use App\Filament\Resources\Workers\Pages\Concerns\SyncsWorkerLinkedUser;
@@ -51,6 +50,15 @@ final class EditCleaningWorker extends EditRecord
         ])->saveQuietly();
     }
 
+    protected function getHeaderActions(): array
+    {
+        return [
+            ChangeWorkerAvatarAction::make(),
+            ViewAction::make()->label('عرض بيانات العامل'),
+            DeleteAction::make()->label('حذف العامل'),
+        ];
+    }
+
     private function logManualTrustScoreChange(): void
     {
         if ($this->trustScoreBeforeSave === null) {
@@ -70,15 +78,5 @@ final class EditCleaningWorker extends EditRecord
             'score_before' => $this->trustScoreBeforeSave,
             'score_after' => $scoreAfter,
         ]);
-    }
-
-    protected function getHeaderActions(): array
-    {
-        return [
-            AdjustWorkerTrustScoreAction::make(),
-            ChangeWorkerAvatarAction::make(),
-            ViewAction::make(),
-            DeleteAction::make(),
-        ];
     }
 }

@@ -8,6 +8,8 @@ use App\Enums\WorkerCustomerRatingType;
 use App\Filament\Resources\CleaningBookings\CleaningBookingResource;
 use App\Filament\Resources\Disputes\DisputeResource;
 use App\Models\WorkerCustomerRating;
+use BackedEnum;
+use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Infolists\Components\RepeatableEntry;
@@ -19,6 +21,7 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningTimeWarningResponse;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningTimeWarning;
+use Throwable;
 
 final class ViewCleaningBooking extends ViewRecord
 {
@@ -47,8 +50,10 @@ final class ViewCleaningBooking extends ViewRecord
 
         return $schema->components([
             ...$existingComponents,
-            Section::make('تقييم العميل ومراجعته')
-                ->description('يعرض تقييم العميل المرتبط بهذا الحجز وتعليقه لكل عامل تم تقييمه من تطبيق العميل.')
+            Section::make('تقييم العميل')
+                ->description('تقييم العميل وتعليقه على العامل بعد تنفيذ الحجز.')
+                ->collapsible()
+                ->collapsed()
                 ->schema([
                     RepeatableEntry::make('customer_worker_ratings')
                         ->hiddenLabel()
@@ -81,8 +86,10 @@ final class ViewCleaningBooking extends ViewRecord
                 ])
                 ->visible(fn (CleaningBooking $record): bool => self::customerWorkerRatings($record) !== [])
                 ->columnSpanFull(),
-            Section::make('تمديدات الوقت')
-                ->description('سجل طلبات تمديد وقت العمل والمدة المطلوبة والمبلغ ورد العامل، بنفس بيانات تطبيق العميل والعامل.')
+            Section::make('طلبات تمديد الوقت')
+                ->description('طلبات تمديد العمل ونتيجتها. جميع الأوقات بتوقيت سوريا - حلب.')
+                ->collapsible()
+                ->collapsed()
                 ->schema([
                     TextEntry::make('extension_fee_total')
                         ->label('إجمالي رسوم التمديد المضافة')
@@ -113,12 +120,6 @@ final class ViewCleaningBooking extends ViewRecord
                             TextEntry::make('worker.user.name')
                                 ->label('العامل')
                                 ->placeholder('-'),
-                            TextEntry::make('customer_response_display')
-                                ->label('قرار العميل')
-                                ->state(fn (CleaningTimeWarning $record): string => self::timeWarningResponseLabel(
-                                    $record->customer_response,
-                                    false,
-                                )),
                             TextEntry::make('worker_response_display')
                                 ->label('رد العامل')
                                 ->state(fn (CleaningTimeWarning $record): string => self::timeWarningResponseLabel(
@@ -127,16 +128,8 @@ final class ViewCleaningBooking extends ViewRecord
                                 )),
                             TextEntry::make('sent_at')
                                 ->label('وقت الطلب')
-                                ->dateTime('Y-m-d h:i A')
+                                ->formatStateUsing(fn ($state): string => self::localDateTime($state))
                                 ->placeholder('-'),
-                            TextEntry::make('worker_responded_at')
-                                ->label('وقت رد العامل')
-                                ->dateTime('Y-m-d h:i A')
-                                ->placeholder('بانتظار رد العامل'),
-                            TextEntry::make('price_applied_at')
-                                ->label('وقت إضافة الرسوم')
-                                ->dateTime('Y-m-d h:i A')
-                                ->placeholder('لم تتم إضافة الرسوم'),
                             TextEntry::make('worker_reject_message')
                                 ->label('سبب رفض العامل')
                                 ->placeholder('لا يوجد')
@@ -196,7 +189,7 @@ final class ViewCleaningBooking extends ViewRecord
                 'worker_name' => $rating->worker?->user?->name ?? $rating->worker?->first_name ?? '-',
                 'rating' => (int) $rating->rating,
                 'comment' => filled($rating->comment) ? (string) $rating->comment : null,
-                'created_at' => $rating->created_at?->format('Y-m-d h:i A') ?? '-',
+                'created_at' => self::localDateTime($rating->created_at),
             ])
             ->values()
             ->all();
@@ -276,7 +269,7 @@ final class ViewCleaningBooking extends ViewRecord
 
     private static function enumValue(mixed $value): ?string
     {
-        if ($value instanceof \BackedEnum) {
+        if ($value instanceof BackedEnum) {
             return (string) $value->value;
         }
 
@@ -287,6 +280,22 @@ final class ViewCleaningBooking extends ViewRecord
         return (string) $value;
     }
 
+    private static function localDateTime(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '-';
+        }
+
+        try {
+            $timezone = (string) config('app.dashboard_timezone', 'Asia/Damascus');
+            $formatted = Carbon::parse($value)->setTimezone($timezone)->format('Y-m-d h:i A');
+
+            return str_replace(['AM', 'PM'], ['ص', 'م'], $formatted);
+        } catch (Throwable) {
+            return (string) $value;
+        }
+    }
+
     private static function money(mixed $amount, ?string $currency): string
     {
         if ($amount === null || $amount === '') {
@@ -294,7 +303,7 @@ final class ViewCleaningBooking extends ViewRecord
         }
 
         $formatted = number_format((float) $amount, 0, '.', ',');
-        $currency = strtoupper(trim((string) $currency));
+        $currency = mb_strtoupper(mb_trim((string) $currency));
 
         return $currency === '' || $currency === 'SYP'
             ? $formatted.' ل.س'

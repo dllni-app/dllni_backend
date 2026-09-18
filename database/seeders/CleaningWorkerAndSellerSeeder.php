@@ -62,16 +62,17 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
     private function seedCleaningWorkerUser(): void
     {
         $user = User::firstOrCreate(
-            ['email' => self::CleaningWorkerEmail],
+            ['phone' => self::CleaningWorkerPhone],
             [
+                'email' => self::CleaningWorkerEmail,
                 'name' => 'Cleaning Worker',
-                'phone' => self::CleaningWorkerPhone,
                 'module_type' => UserModuleType::CleaningWorker,
                 'password' => bcrypt(self::Password),
                 'email_verified_at' => now(),
             ]
         );
         $user->forceFill([
+            'email' => self::CleaningWorkerEmail,
             'phone' => self::CleaningWorkerPhone,
             'module_type' => UserModuleType::CleaningWorker,
             'phone_verified_at' => now(),
@@ -213,16 +214,17 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
     private function seedRestaurantSellerUser(): void
     {
         $user = User::firstOrCreate(
-            ['email' => self::RestaurantSellerEmail],
+            ['phone' => self::RestaurantSellerPhone],
             [
+                'email' => self::RestaurantSellerEmail,
                 'name' => 'Restaurant Seller',
-                'phone' => self::RestaurantSellerPhone,
                 'module_type' => UserModuleType::RestaurantSeller,
                 'password' => bcrypt(self::Password),
                 'email_verified_at' => now(),
             ]
         );
         $user->forceFill([
+            'email' => self::RestaurantSellerEmail,
             'phone' => self::RestaurantSellerPhone,
             'module_type' => UserModuleType::RestaurantSeller,
             'phone_verified_at' => now(),
@@ -871,16 +873,17 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
     private function seedSupermarketSellerUser(): void
     {
         $user = User::firstOrCreate(
-            ['email' => self::SupermarketSellerEmail],
+            ['phone' => self::SupermarketSellerPhone],
             [
+                'email' => self::SupermarketSellerEmail,
                 'name' => 'Supermarket Seller',
-                'phone' => self::SupermarketSellerPhone,
                 'module_type' => UserModuleType::SupermarketSeller,
                 'password' => bcrypt(self::Password),
                 'email_verified_at' => now(),
             ]
         );
         $user->forceFill([
+            'email' => self::SupermarketSellerEmail,
             'phone' => self::SupermarketSellerPhone,
             'module_type' => UserModuleType::SupermarketSeller,
             'phone_verified_at' => now(),

@@ -33,9 +33,9 @@ final class CreateCleaningWorker extends CreateRecord
                 && (float) ($this->data['worker_debt_limit'] ?? 0) <= 0)
             ->modalIcon('heroicon-o-exclamation-triangle')
             ->modalIconColor('warning')
-            ->modalHeading(app()->isLocale('ar') ? 'إضافة العامل بدون سعة مالية؟' : 'Create worker without financial capacity?')
+            ->modalHeading(app()->isLocale('ar') ? 'إضافة العامل دون إيداع أو حد مسموح؟' : 'Create worker without financial capacity?')
             ->modalDescription(app()->isLocale('ar')
-                ? 'لم يتم تسجيل إيداع وحد السماح للعامل يساوي صفراً، لذلك لن تتوفر له سعة مالية لقبول الطلبات ذات العمولة. هل أنت متأكد؟'
+                ? 'لن يتمكن العامل من استقبال طلبات جديدة حتى يسجل إيداعاً أو تمنحه الإدارة حداً مسموحاً. هل تريد إضافته الآن؟'
                 : 'No deposit was recorded and the worker allowance limit is zero, so there will be no financial capacity for bookings with commission. Are you sure?')
             ->modalSubmitActionLabel(app()->isLocale('ar') ? 'إضافة العامل على أي حال' : 'Create worker anyway');
     }
@@ -117,7 +117,7 @@ final class CreateCleaningWorker extends CreateRecord
         if (! is_string($type) || $type !== 'deposit') {
             throw ValidationException::withMessages([
                 'data.initial_financial_transaction_type' => app()->isLocale('ar')
-                    ? 'لم يعد إنشاء دين إداري مدعوماً. اختر إيداعاً فقط أو استخدم حد السماح للعامل.'
+                    ? 'يمكن تسجيل إيداع فقط عند إنشاء العامل. إذا أردت السماح له بالعمل دون إيداع، استخدم الحد المسموح.'
                     : 'Administration loans are no longer supported. Select a deposit only or use the worker allowance limit.',
             ]);
         }
@@ -133,7 +133,7 @@ final class CreateCleaningWorker extends CreateRecord
         if ($hasDeposit && $allowanceLimit > 0) {
             throw ValidationException::withMessages([
                 'data.worker_debt_limit' => app()->isLocale('ar')
-                    ? 'لا يمكن منح حد سماح للعامل طالما لديه رصيد إيداع.'
+                    ? 'لا يمكن تحديد حد للعمل دون إيداع طالما لدى العامل رصيد إيداع موجب.'
                     : 'An allowance limit cannot be granted while the worker has a deposit balance.',
             ]);
         }
@@ -151,6 +151,6 @@ final class CreateCleaningWorker extends CreateRecord
         return (string) ($neighborhood->name_ar
             ?: $neighborhood->name_en
             ?: $neighborhood->normalized_name
-            ?: 'Neighborhood '.$neighborhood->id);
+            ?: 'حي #'.$neighborhood->id);
     }
 }

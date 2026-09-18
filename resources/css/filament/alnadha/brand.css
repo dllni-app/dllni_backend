@@ -107,3 +107,14 @@ textarea {
     background: rgb(66 196 182 / 0.16);
     color: #9ce3dc;
 }
+
+/* Phone values must remain readable inside the Arabic RTL dashboard. */
+[dir='rtl'] input[type='tel'],
+[dir='rtl'] input[name*='phone' i],
+[dir='rtl'] input[id*='phone' i],
+[dir='rtl'] a[href^='tel:'],
+[dir='rtl'] .fi-phone-ltr {
+    direction: ltr !important;
+    unicode-bidi: isolate;
+    text-align: left !important;
+}

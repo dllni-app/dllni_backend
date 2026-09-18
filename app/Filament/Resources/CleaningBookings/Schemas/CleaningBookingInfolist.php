@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\CleaningBookings\Schemas;
 
 use App\Models\PlatformCoupon;
+use BackedEnum;
 use Carbon\Carbon;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
@@ -16,6 +17,7 @@ use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Services\CleaningCouponPricingService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
+use Throwable;
 
 final class CleaningBookingInfolist
 {
@@ -33,7 +35,8 @@ final class CleaningBookingInfolist
                     ->schema([
                         Group::make()
                             ->schema([
-                                Section::make('الحجز')
+                                Section::make('ملخص الحجز')
+                                    ->description('المعلومات الأساسية للحجز. جميع الأوقات المعروضة بتوقيت سوريا - حلب.')
                                     ->schema([
                                         TextEntry::make('booking_number')->label('رقم الحجز'),
                                         TextEntry::make('status')
@@ -45,6 +48,9 @@ final class CleaningBookingInfolist
                                             ->state(fn ($record): string => $record->dashboardKindLabel())
                                             ->badge()
                                             ->color(fn ($record): string => $record->dashboardKindColor()),
+                                        TextEntry::make('customer.name')
+                                            ->label('العميل')
+                                            ->placeholder('-'),
                                         TextEntry::make('cancelled_at')
                                             ->label('وقت الإلغاء')
                                             ->formatStateUsing(fn ($state): string => self::dateTime($state))
@@ -64,22 +70,15 @@ final class CleaningBookingInfolist
                                         TextEntry::make('number_of_workers')
                                             ->label('عدد العاملين')
                                             ->formatStateUsing(fn ($state): string => self::integer($state)),
-                                        TextEntry::make('estimated_sqm')
-                                            ->label('المساحة التقديرية')
-                                            ->formatStateUsing(fn ($state): string => self::integer($state))
-                                            ->visible(fn ($record): bool => ! self::isEventAssistance($record)),
-                                        TextEntry::make('estimated_hours')
-                                            ->label('الساعات التقديرية')
-                                            ->formatStateUsing(fn ($state): string => self::integer($state)),
                                         TextEntry::make('scheduled_date')
-                                            ->label('التاريخ')
-                                            ->formatStateUsing(fn ($state): string => self::date($state)),
-                                        TextEntry::make('scheduled_time')
-                                            ->label('الوقت')
-                                            ->formatStateUsing(fn ($state): string => self::time($state)),
+                                            ->label('موعد الخدمة')
+                                            ->state(fn (CleaningBooking $record): string => self::appointmentLabel($record))
+                                            ->weight('bold'),
                                     ])
                                     ->columns(2),
                                 Section::make('تفاصيل المناسبة')
+                                    ->collapsible()
+                                    ->collapsed()
                                     ->schema([
                                         TextEntry::make('property_details.event_type')
                                             ->label('نوع المناسبة')
@@ -104,26 +103,43 @@ final class CleaningBookingInfolist
                                     ->columns(2)
                                     ->visible(fn ($record): bool => self::isEventAssistance($record)),
                                 Section::make('أوقات التنفيذ')
+                                    ->description('أوقات بدء وإنهاء العمل وتأكيد العميل بتوقيت سوريا - حلب.')
+                                    ->collapsible()
+                                    ->collapsed()
+                                    ->visible(fn (CleaningBooking $record): bool => filled($record->work_started_at) || filled($record->work_finished_at) || filled($record->customer_confirmed_at))
                                     ->schema([
                                         TextEntry::make('work_started_at')->label('بدأ العمل')->formatStateUsing(fn ($state): string => self::dateTime($state))->placeholder('-'),
                                         TextEntry::make('work_finished_at')->label('انتهى العمل')->formatStateUsing(fn ($state): string => self::dateTime($state))->placeholder('-'),
                                         TextEntry::make('customer_confirmed_at')->label('تأكيد العميل')->formatStateUsing(fn ($state): string => self::dateTime($state))->placeholder('-'),
                                     ])
                                     ->columns(3),
-                                Section::make('الفريق')
+                                Section::make('فريق العمل')
+                                    ->description('حالة اكتمال الفريق والعاملون الذين تم تأكيدهم لتنفيذ الحجز.')
                                     ->schema([
                                         TextEntry::make('worker_acceptance')
-                                            ->label('قبول العاملين')
-                                            ->state(fn ($record): string => sprintf('%d / %d', $record->acceptedWorkerCount(), max(1, (int) ($record->number_of_workers ?? 1)))),
+                                            ->label('الفريق المؤكد')
+                                            ->state(fn ($record): string => sprintf('%d من %d', $record->acceptedWorkerCount(), max(1, (int) ($record->number_of_workers ?? 1))))
+                                            ->badge()
+                                            ->color(fn ($record): string => $record->isTeamFulfilled() ? 'success' : 'warning'),
                                         TextEntry::make('remaining_workers')
-                                            ->label('العاملون المتبقون')
+                                            ->label('متبقٍ لإكمال الفريق')
                                             ->state(fn ($record): string => self::integer($record->remainingWorkerCount())),
-                                        TextEntry::make('room_coverage')
-                                            ->label('تغطية الغرف')
-                                            ->state(fn ($record): string => self::roomCoverageLabel($record))
-                                            ->visible(fn ($record): bool => ! self::isEventAssistance($record)),
+                                        TextEntry::make('confirmed_workers')
+                                            ->label('العاملون المؤكدون')
+                                            ->state(fn (CleaningBooking $record): array => self::acceptedWorkerNames($record))
+                                            ->badge()
+                                            ->color('success')
+                                            ->placeholder('لم يتم تأكيد أي عامل بعد')
+                                            ->columnSpanFull(),
+                                        TextEntry::make('preferred_workers')
+                                            ->label('العاملون المفضلون من العميل')
+                                            ->state(fn (CleaningBooking $record): array => self::preferredWorkerNames($record))
+                                            ->badge()
+                                            ->color('info')
+                                            ->visible(fn (CleaningBooking $record): bool => self::preferredWorkerNames($record) !== [])
+                                            ->columnSpanFull(),
                                     ])
-                                    ->columns(3),
+                                    ->columns(2),
 
                             ])
                             ->columnSpan([
@@ -164,7 +180,9 @@ final class CleaningBookingInfolist
                                     ])
                                     ->columns(2),
                                 Section::make('حصص العاملين')
-                                    ->description('القيم الفعلية المعتمدة لكل عامل في هذا الطلب.')
+                                    ->description('تفاصيل مستحق كل عامل في هذا الحجز.')
+                                    ->collapsible()
+                                    ->collapsed()
                                     ->schema([
                                         RepeatableEntry::make('acceptedWorkerAssignments')
                                             ->hiddenLabel()
@@ -195,20 +213,10 @@ final class CleaningBookingInfolist
                                             ->columns(3),
                                     ])
                                     ->visible(fn (CleaningBooking $record): bool => $record->acceptedWorkerAssignments()->exists()),
-                                Section::make('الأطراف')
-                                    ->schema([
-                                        TextEntry::make('customer.name')->label('العميل')->placeholder('-'),
-                                        TextEntry::make('worker.first_name')->label('العامل الأساسي')->placeholder('-'),
-                                        TextEntry::make('preferred_workers')
-                                            ->label('العاملون المفضلون')
-                                            ->state(fn ($record): array => self::preferredWorkerNames($record))
-                                            ->badge()
-                                            ->color('info')
-                                            ->placeholder('-')
-                                            ->columnSpanFull(),
-                                    ])
-                                    ->columns(2),
                                 Section::make('توزيع الغرف')
+                                    ->description('تفاصيل الغرف والعامل المعيّن لكل غرفة. افتح هذا القسم عند الحاجة.')
+                                    ->collapsible()
+                                    ->collapsed()
                                     ->schema([
                                         RepeatableEntry::make('rooms')
                                             ->label('الغرف')
@@ -216,9 +224,7 @@ final class CleaningBookingInfolist
                                                 TextEntry::make('display_label')->label('اسم الغرفة')->placeholder('-'),
                                                 TextEntry::make('room_type')->label('نوع الغرفة')->formatStateUsing(fn (?string $state): string => self::roomTypeLabel($state))->placeholder('-'),
                                                 TextEntry::make('room_size')->label('حجم الغرفة')->formatStateUsing(fn (?string $state): string => self::roomSizeLabel($state))->placeholder('-'),
-                                                TextEntry::make('weight')->label('وزن الغرفة')->formatStateUsing(fn ($state): string => self::integer($state))->placeholder('-'),
                                                 TextEntry::make('assignedWorker.first_name')->label('العامل المعيّن')->placeholder('-'),
-                                                TextEntry::make('assignment_source')->label('مصدر التعيين')->badge()->formatStateUsing(fn ($state): string => self::roomAssignmentSourceLabel($state)),
                                             ])
                                             ->columns(3),
                                     ])
@@ -335,6 +341,20 @@ final class CleaningBookingInfolist
         }
 
         return self::$platformCouponCache[$couponId];
+    }
+
+    private static function acceptedWorkerNames(CleaningBooking $record): array
+    {
+        $assignments = $record->relationLoaded('acceptedWorkerAssignments')
+            ? $record->acceptedWorkerAssignments
+            : $record->acceptedWorkerAssignments()->with('worker.user')->get();
+
+        return $assignments
+            ->map(fn (CleaningBookingWorkerAssignment $assignment): ?string => $assignment->worker?->first_name ?: $assignment->worker?->user?->name)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
     }
 
     private static function preferredWorkerNames(mixed $record): array
@@ -498,22 +518,24 @@ final class CleaningBookingInfolist
 
     private static function cancellationSourceLabel(mixed $state): string
     {
-        $value = $state instanceof \BackedEnum ? $state->value : $state;
+        $value = $state instanceof BackedEnum ? $state->value : $state;
 
         return match ((string) $value) {
             'customer' => 'ألغاه العميل',
             'worker' => 'ألغاه العامل',
+            'admin' => 'ألغته الإدارة',
             default => '-',
         };
     }
 
     private static function cancellationSourceColor(mixed $state): string
     {
-        $value = $state instanceof \BackedEnum ? $state->value : $state;
+        $value = $state instanceof BackedEnum ? $state->value : $state;
 
         return match ((string) $value) {
             'customer' => 'danger',
             'worker' => 'warning',
+            'admin' => 'info',
             default => 'gray',
         };
     }
@@ -525,7 +547,7 @@ final class CleaningBookingInfolist
 
     private static function decimal(float $value): string
     {
-        return rtrim(rtrim(number_format($value, 2, '.', ','), '0'), '.');
+        return mb_rtrim(mb_rtrim(number_format($value, 2, '.', ','), '0'), '.');
     }
 
     private static function integer(mixed $value): string
@@ -545,7 +567,7 @@ final class CleaningBookingInfolist
 
         try {
             return Carbon::parse($value)->format('Y-m-d');
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return (string) $value;
         }
     }
@@ -557,10 +579,15 @@ final class CleaningBookingInfolist
         }
 
         try {
-            return Carbon::parse((string) $value)->format('h:i A');
-        } catch (\Throwable) {
+            return self::arabicPeriod(Carbon::parse((string) $value)->format('h:i A'));
+        } catch (Throwable) {
             return (string) $value;
         }
+    }
+
+    private static function appointmentLabel(CleaningBooking $record): string
+    {
+        return self::date($record->scheduled_date).' • '.self::time($record->scheduled_time);
     }
 
     private static function dateTime(mixed $value): string
@@ -570,9 +597,16 @@ final class CleaningBookingInfolist
         }
 
         try {
-            return Carbon::parse($value)->format('Y-m-d h:i A');
-        } catch (\Throwable) {
+            $timezone = (string) config('app.dashboard_timezone', 'Asia/Damascus');
+
+            return self::arabicPeriod(Carbon::parse($value)->setTimezone($timezone)->format('Y-m-d h:i A'));
+        } catch (Throwable) {
             return (string) $value;
         }
+    }
+
+    private static function arabicPeriod(string $value): string
+    {
+        return str_replace(['AM', 'PM'], ['ص', 'م'], $value);
     }
 }

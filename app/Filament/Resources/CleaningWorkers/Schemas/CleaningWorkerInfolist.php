@@ -21,6 +21,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Collection;
+use Modules\Cleaning\Services\WorkerFinancialAccountStatusService;
 use Throwable;
 
 final class CleaningWorkerInfolist
@@ -30,8 +31,8 @@ final class CleaningWorkerInfolist
         return $schema->components([
             Grid::make(12)
                 ->schema([
-                    Section::make('ملخص العامل')
-                        ->description('البيانات الأساسية وحالة حساب العامل في تطبيق التنظيف.')
+                    Section::make('معلومات العامل')
+                        ->description('البيانات الأساسية التي تحتاجها الإدارة للتعرف على العامل والتواصل معه.')
                         ->schema([
                             Grid::make(4)
                                 ->schema([
@@ -56,13 +57,14 @@ final class CleaningWorkerInfolist
                                             TextEntry::make('user.phone')
                                                 ->label('رقم الهاتف')
                                                 ->placeholder('-')
-                                                ->copyable(),
+                                                ->copyable()
+                                                ->extraAttributes(['class' => 'fi-phone-ltr', 'dir' => 'ltr']),
                                             TextEntry::make('user.email')
                                                 ->label('البريد الإلكتروني')
                                                 ->placeholder('-')
                                                 ->copyable(),
                                             TextEntry::make('preferred_work_type_display')
-                                                ->label('نوع العمل المفضل')
+                                                ->label('الخدمات التي يعمل بها')
                                                 ->state(fn (Worker $record): string => self::preferredWorkTypeLabel($record))
                                                 ->badge()
                                                 ->color('info'),
@@ -76,8 +78,8 @@ final class CleaningWorkerInfolist
                         ])
                         ->columnSpanFull(),
 
-                    Section::make('إحصائيات')
-                        ->description('نفس مؤشرات الأداء المعروضة للعامل داخل cleaning_owner_app.')
+                    Section::make('ملخص العمل')
+                        ->description('أهم المعلومات التي تساعد الإدارة على معرفة وضع العامل الحالي بسرعة.')
                         ->schema([
                             TextEntry::make('statistics_total_completed_jobs')
                                 ->label('الطلبات المكتملة')
@@ -85,39 +87,29 @@ final class CleaningWorkerInfolist
                                 ->icon(Heroicon::OutlinedCheckCircle)
                                 ->weight('bold'),
                             TextEntry::make('statistics_average_rating')
-                                ->label('متوسط التقييم')
+                                ->label('متوسط تقييم العملاء')
                                 ->state(fn (Worker $record): string => self::formatStars(self::reviewsSummary($record)['average']))
                                 ->icon(Heroicon::OutlinedStar)
                                 ->weight('bold'),
-                            TextEntry::make('statistics_trust_score')
-                                ->label('درجة الثقة')
-                                ->state(fn (Worker $record): string => self::formatInteger($record->trust_score))
-                                ->suffix(' / 100')
-                                ->icon(Heroicon::OutlinedShieldCheck)
+                            TextEntry::make('statistics_reviews_count')
+                                ->label('عدد تقييمات العملاء')
+                                ->state(fn (Worker $record): string => self::formatInteger(self::reviewsSummary($record)['total']))
+                                ->icon(Heroicon::OutlinedChatBubbleLeftRight)
                                 ->weight('bold'),
-                            TextEntry::make('statistics_acceptance_rate')
-                                ->label('نسبة قبول الطلبات')
-                                ->state(fn (Worker $record): string => self::formatDecimal($record->acceptance_rate))
-                                ->suffix('%')
-                                ->icon(Heroicon::OutlinedArrowTrendingUp)
-                                ->weight('bold'),
-                            TextEntry::make('statistics_cancellation_rate')
-                                ->label('نسبة إلغاء الطلبات')
-                                ->state(fn (Worker $record): string => self::formatDecimal($record->cancellation_rate))
-                                ->suffix('%')
-                                ->icon(Heroicon::OutlinedArrowTrendingDown)
-                                ->weight('bold'),
-                            TextEntry::make('statistics_open_disputes_count')
-                                ->label('النزاعات المفتوحة')
-                                ->state(fn (Worker $record): string => self::formatInteger($record->open_disputes_count))
-                                ->icon(Heroicon::OutlinedExclamationTriangle)
-                                ->weight('bold'),
+                            TextEntry::make('statistics_booking_availability')
+                                ->label('استقبال طلبات جديدة')
+                                ->state(fn (Worker $record): string => app(WorkerFinancialAccountStatusService::class)->status($record))
+                                ->formatStateUsing(fn (mixed $state): string => self::workerAvailabilityLabel((string) $state))
+                                ->badge()
+                                ->color(fn (mixed $state): string => self::workerAvailabilityColor((string) $state)),
                         ])
-                        ->columns(3)
+                        ->columns(4)
                         ->columnSpanFull(),
 
-                    Section::make('التقييمات والتعليقات')
-                        ->description('يعرض ملخص التقييمات، ومن قام بالتقييم، وقيمة التقييم، والتعليق المرتبط به.')
+                    Section::make('تقييمات العملاء')
+                        ->description('التقييمات والتعليقات التي تركها العملاء بعد تنفيذ الطلبات.')
+                        ->collapsible()
+                        ->collapsed()
                         ->schema([
                             TextEntry::make('reviews_average')
                                 ->label('متوسط التقييم')
@@ -129,11 +121,6 @@ final class CleaningWorkerInfolist
                                 ->state(fn (Worker $record): string => self::formatInteger(self::reviewsSummary($record)['total']))
                                 ->icon(Heroicon::OutlinedChatBubbleLeftRight)
                                 ->weight('bold'),
-                            TextEntry::make('reviews_distribution')
-                                ->label('توزيع التقييمات')
-                                ->state(fn (Worker $record): array => self::ratingDistribution($record))
-                                ->listWithLineBreaks()
-                                ->placeholder('لا توجد تقييمات بعد.'),
                             TextEntry::make('reviews_empty_state')
                                 ->hiddenLabel()
                                 ->state('لا توجد تقييمات من العملاء حتى الآن.')
@@ -151,22 +138,19 @@ final class CleaningWorkerInfolist
                                     TextEntry::make('customer_phone')
                                         ->label('رقم العميل')
                                         ->placeholder('-')
-                                        ->copyable(),
+                                        ->copyable()
+                                        ->extraAttributes(['class' => 'fi-phone-ltr', 'dir' => 'ltr']),
                                     TextEntry::make('rating')
                                         ->label('التقييم')
                                         ->formatStateUsing(fn (mixed $state): string => self::formatStars((float) $state))
                                         ->badge()
                                         ->color(fn (mixed $state): string => self::ratingColor($state)),
-                                    TextEntry::make('rating_type')
-                                        ->label('نوع التقييم')
-                                        ->badge()
-                                        ->color('info'),
                                     TextEntry::make('booking_reference')
                                         ->label('الطلب'),
                                     TextEntry::make('created_at')
                                         ->label('تاريخ التقييم'),
                                     TextEntry::make('comment')
-                                        ->label('بماذا قيّم العامل؟')
+                                        ->label('تعليق العميل')
                                         ->placeholder('لم يكتب العميل تعليقاً.')
                                         ->columnSpanFull(),
                                 ])
@@ -178,6 +162,8 @@ final class CleaningWorkerInfolist
 
                     Section::make('أوقات العمل')
                         ->description('الأيام والفترات التي اختار العامل استقبال الطلبات خلالها داخل التطبيق.')
+                        ->collapsible()
+                        ->collapsed()
                         ->schema([
                             ViewEntry::make('worker_working_hours')
                                 ->hiddenLabel()
@@ -189,6 +175,8 @@ final class CleaningWorkerInfolist
 
                     Section::make('مناطق العمل')
                         ->description('الأحياء والمناطق التي اختار العامل استقبال طلبات التنظيف ضمنها.')
+                        ->collapsible()
+                        ->collapsed()
                         ->schema([
                             TextEntry::make('work_areas_empty_state')
                                 ->hiddenLabel()
@@ -253,6 +241,28 @@ final class CleaningWorkerInfolist
         };
     }
 
+    private static function workerAvailabilityLabel(string $status): string
+    {
+        return match ($status) {
+            WorkerFinancialAccountStatusService::ACTIVE => 'متاح لاستقبال الطلبات',
+            WorkerFinancialAccountStatusService::SUSPENDED => 'موقوف من الإدارة',
+            WorkerFinancialAccountStatusService::INSUFFICIENT_BALANCE => 'غير متاح - الرصيد غير كافٍ',
+            WorkerFinancialAccountStatusService::INACTIVE => 'غير نشط',
+            default => 'غير محدد',
+        };
+    }
+
+    private static function workerAvailabilityColor(string $status): string
+    {
+        return match ($status) {
+            WorkerFinancialAccountStatusService::ACTIVE => 'success',
+            WorkerFinancialAccountStatusService::SUSPENDED => 'warning',
+            WorkerFinancialAccountStatusService::INSUFFICIENT_BALANCE,
+            WorkerFinancialAccountStatusService::INACTIVE => 'danger',
+            default => 'gray',
+        };
+    }
+
     private static function preferredWorkTypeLabel(Worker $worker): string
     {
         $value = $worker->preferred_work_type instanceof WorkerPreferredWorkType
@@ -279,20 +289,11 @@ final class CleaningWorkerInfolist
     }
 
     /**
-     * @return array{average:float,total:int,counts:array<int, int>}
+     * @return array{average:float,total:int}
      */
     private static function reviewsSummary(Worker $worker): array
     {
         $reviews = self::customerReviews($worker);
-        $counts = array_fill(1, 5, 0);
-
-        foreach ($reviews as $review) {
-            $rating = (int) $review->rating;
-            if ($rating >= 1 && $rating <= 5) {
-                $counts[$rating]++;
-            }
-        }
-
         $average = $reviews->isNotEmpty()
             ? round((float) $reviews->avg('rating'), 1)
             : (float) ($worker->average_rating ?? 0);
@@ -300,27 +301,7 @@ final class CleaningWorkerInfolist
         return [
             'average' => $average,
             'total' => $reviews->count(),
-            'counts' => $counts,
         ];
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    private static function ratingDistribution(Worker $worker): array
-    {
-        $summary = self::reviewsSummary($worker);
-
-        if ($summary['total'] === 0) {
-            return [];
-        }
-
-        $distribution = [];
-        for ($rating = 5; $rating >= 1; $rating--) {
-            $distribution[] = $rating.' نجوم: '.($summary['counts'][$rating] ?? 0);
-        }
-
-        return $distribution;
     }
 
     /**
@@ -333,21 +314,11 @@ final class CleaningWorkerInfolist
                 'customer_name' => $review->customer?->name ?: 'مستخدم غير متاح',
                 'customer_phone' => $review->customer?->phone,
                 'rating' => (int) $review->rating,
-                'rating_type' => self::ratingTypeLabel($review->rating_type),
                 'booking_reference' => self::bookingReference($review),
                 'created_at' => $review->created_at?->format('Y-m-d H:i') ?: '-',
                 'comment' => $review->comment,
             ])
             ->all();
-    }
-
-    private static function ratingTypeLabel(mixed $ratingType): string
-    {
-        return match (self::enumValue($ratingType)) {
-            WorkerCustomerRatingType::CustomerToWorker->value => 'تقييم العميل للعامل',
-            WorkerCustomerRatingType::WorkerToCustomer->value => 'تقييم العامل للعميل',
-            default => 'غير محدد',
-        };
     }
 
     private static function bookingReference(WorkerCustomerRating $review): string

@@ -14,6 +14,7 @@ use App\Services\Notifications\CachedFcmService;
 use App\Services\Notifications\CachedFirebaseMessagingClient;
 use DevKandil\NotiFire\Contracts\FcmServiceInterface;
 use DevKandil\NotiFire\FcmService;
+use Filament\Support\Facades\FilamentTimezone;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
@@ -76,6 +77,7 @@ final class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->app->useLangPath(base_path('lang'));
+        FilamentTimezone::set((string) config('app.dashboard_timezone', 'Asia/Damascus'));
 
         RateLimiter::for('cleaning-start-verification', function (Request $request): Limit {
             $userId = $request->user()?->id ?? 'guest';

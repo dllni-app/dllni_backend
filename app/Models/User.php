@@ -86,25 +86,6 @@ final class User extends Authenticatable implements FilamentUser, HasMedia
         ];
     }
 
-    protected static function booted(): void
-    {
-        static::updated(function (self $user): void {
-            if (! $user->wasChanged('name') || $user->module_type !== UserModuleType::CleaningWorker) {
-                return;
-            }
-
-            $worker = $user->worker;
-
-            if (! $worker || $worker->first_name === $user->name) {
-                return;
-            }
-
-            $worker->forceFill([
-                'first_name' => $user->name,
-            ])->saveQuietly();
-        });
-    }
-
     public function worker(): HasOne
     {
         return $this->hasOne(Worker::class);
@@ -237,5 +218,26 @@ final class User extends Authenticatable implements FilamentUser, HasMedia
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection('primary-image')->singleFile();
+    }
+
+    protected static function booted(): void
+    {
+        self::updated(function (self $user): void {
+            $moduleType = $user->getRawOriginal('module_type');
+
+            if (! $user->wasChanged('name') || $moduleType !== UserModuleType::CleaningWorker->value) {
+                return;
+            }
+
+            $worker = $user->worker;
+
+            if (! $worker || $worker->first_name === $user->name) {
+                return;
+            }
+
+            $worker->forceFill([
+                'first_name' => $user->name,
+            ])->saveQuietly();
+        });
     }
 }

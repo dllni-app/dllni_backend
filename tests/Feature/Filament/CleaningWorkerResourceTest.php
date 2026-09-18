@@ -7,6 +7,7 @@ use App\Enums\WorkerPreferredWorkType;
 use App\Filament\Resources\CleaningWorkers\Pages\CreateCleaningWorker;
 use App\Filament\Resources\CleaningWorkers\Pages\EditCleaningWorker;
 use App\Filament\Resources\CleaningWorkers\Pages\ListCleaningWorkers;
+use App\Filament\Resources\CleaningWorkers\Pages\ViewCleaningWorker;
 use App\Models\CleaningWorkerDeposit;
 use App\Models\User;
 use App\Models\Worker;
@@ -132,7 +133,7 @@ it('updates trust score and the individual debt limit without writing user field
     Livewire::test(EditCleaningWorker::class, ['record' => $worker->getRouteKey()])
         ->fillForm([
             'gender' => 'female',
-            'trust_score' => 84,
+            'trust_score' => 145,
             'worker_debt_limit' => 900,
             'user_phone' => '+963922222222',
         ])
@@ -141,7 +142,7 @@ it('updates trust score and the individual debt limit without writing user field
 
     $worker->refresh();
     expect($worker->gender)->toBe('female')
-        ->and($worker->trust_score)->toBe(84)
+        ->and($worker->trust_score)->toBe(145)
         ->and((float) $worker->deposit()->value('max_negative_balance'))->toBe(900.0);
 
     $linkedUser->refresh();
@@ -151,8 +152,8 @@ it('updates trust score and the individual debt limit without writing user field
     $trustLog = WorkerTrustLog::query()->where('worker_id', $worker->id)->latest('id')->firstOrFail();
     expect($trustLog->reason)->toBe('admin_manual_adjustment')
         ->and($trustLog->score_before)->toBe(100)
-        ->and($trustLog->score_after)->toBe(84)
-        ->and($trustLog->score_delta)->toBe(-16);
+        ->and($trustLog->score_after)->toBe(145)
+        ->and($trustLog->score_delta)->toBe(45);
 });
 
 it('filters the cleaning worker table by gender', function (): void {
@@ -177,4 +178,70 @@ it('filters the cleaning worker table by gender', function (): void {
         ->assertCanSeeTableRecords([$femaleWorker])
         ->assertCanNotSeeTableRecords([$maleWorker])
         ->assertTableColumnStateSet('gender', 'female', record: $femaleWorker);
+});
+
+it('searches cleaning workers by worker name and phone', function (): void {
+    $firstUser = User::factory()->create([
+        'name' => 'عامل البحث الأول',
+        'phone' => '+963944444444',
+        'module_type' => UserModuleType::CleaningWorker->value,
+    ]);
+    $secondUser = User::factory()->create([
+        'name' => 'عامل آخر',
+        'phone' => '+963955555555',
+        'module_type' => UserModuleType::CleaningWorker->value,
+    ]);
+    $firstWorker = Worker::factory()->create(['user_id' => $firstUser->id, 'first_name' => 'Maher']);
+    $secondWorker = Worker::factory()->create(['user_id' => $secondUser->id, 'first_name' => 'Samer']);
+
+    Livewire::test(ListCleaningWorkers::class)
+        ->searchTable('عامل البحث الأول')
+        ->assertCanSeeTableRecords([$firstWorker])
+        ->assertCanNotSeeTableRecords([$secondWorker]);
+
+    Livewire::test(ListCleaningWorkers::class)
+        ->searchTable('+963955555555')
+        ->assertCanSeeTableRecords([$secondWorker])
+        ->assertCanNotSeeTableRecords([$firstWorker]);
+});
+
+it('filters cleaning workers by the services they work in', function (): void {
+    $cleaningUser = User::factory()->create(['module_type' => UserModuleType::CleaningWorker->value]);
+    $eventsUser = User::factory()->create(['module_type' => UserModuleType::CleaningWorker->value]);
+
+    $cleaningWorker = Worker::factory()->create([
+        'user_id' => $cleaningUser->id,
+        'preferred_work_type' => WorkerPreferredWorkType::Cleaning->value,
+    ]);
+    $eventsWorker = Worker::factory()->create([
+        'user_id' => $eventsUser->id,
+        'preferred_work_type' => WorkerPreferredWorkType::Events->value,
+    ]);
+
+    Livewire::test(ListCleaningWorkers::class)
+        ->filterTable('preferred_work_type', WorkerPreferredWorkType::Events->value)
+        ->assertCanSeeTableRecords([$eventsWorker])
+        ->assertCanNotSeeTableRecords([$cleaningWorker]);
+});
+
+it('renders the simplified Arabic worker details page', function (): void {
+    $user = User::factory()->create([
+        'name' => 'عامل تجريبي',
+        'phone' => '+963966666666',
+        'module_type' => UserModuleType::CleaningWorker->value,
+    ]);
+    $worker = Worker::factory()->create([
+        'user_id' => $user->id,
+        'first_name' => 'عامل تجريبي',
+        'preferred_work_type' => WorkerPreferredWorkType::Both->value,
+    ]);
+
+    Livewire::test(ViewCleaningWorker::class, ['record' => $worker->getRouteKey()])
+        ->assertOk()
+        ->assertSee('معلومات العامل')
+        ->assertSee('ملخص العمل')
+        ->assertSee('استقبال طلبات جديدة')
+        ->assertSee('تقييمات العملاء')
+        ->assertSee('أوقات العمل')
+        ->assertSee('مناطق العمل');
 });

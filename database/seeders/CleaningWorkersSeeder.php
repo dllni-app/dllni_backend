@@ -135,10 +135,10 @@ final class CleaningWorkersSeeder extends Seeder
     private function seedWorker(array $workerData, bool $isFeatured): void
     {
         $user = User::firstOrCreate(
-            ['email' => $workerData['email']],
+            ['phone' => $workerData['phone']],
             [
+                'email' => $workerData['email'],
                 'name' => $workerData['name'],
-                'phone' => $workerData['phone'],
                 'module_type' => UserModuleType::CleaningWorker,
                 'pass'.'word' => bcrypt(self::DemoCredential),
                 'email_verified_at' => now(),
@@ -146,6 +146,7 @@ final class CleaningWorkersSeeder extends Seeder
         );
 
         $user->forceFill([
+            'email' => $workerData['email'],
             'name' => $workerData['name'],
             'phone' => $workerData['phone'],
             'module_type' => UserModuleType::CleaningWorker,

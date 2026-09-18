@@ -69,6 +69,9 @@ return [
 
     'timezone' => 'UTC',
 
+    // Keep persistence/system time in UTC while rendering dashboard dates in Syria local time.
+    'dashboard_timezone' => env('APP_DASHBOARD_TIMEZONE', 'Asia/Damascus'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Locale Configuration
@@ -86,7 +89,6 @@ return [
 
     'faker_locale' => env('APP_FAKER_LOCALE', 'en_US'),
     'currency' => env('APP_CURRENCY', 'SYP'),
-
 
     /*
     |--------------------------------------------------------------------------

@@ -32,8 +32,7 @@ final class AdjustWorkerTrustScoreAction
                     ->numeric()
                     ->required()
                     ->minValue(0)
-                    ->maxValue(100)
-                    ->suffix('/ 100'),
+                    ->suffix('نقطة'),
                 Textarea::make('reason')
                     ->label('سبب التعديل (اختياري)')
                     ->rows(3)
@@ -41,7 +40,7 @@ final class AdjustWorkerTrustScoreAction
             ])
             ->action(function (Worker $record, array $data): void {
                 $scoreBefore = (int) $record->trust_score;
-                $scoreAfter = max(0, min(100, (int) $data['trust_score']));
+                $scoreAfter = max(0, (int) $data['trust_score']);
 
                 if ($scoreAfter === $scoreBefore) {
                     Notification::make()
@@ -52,7 +51,7 @@ final class AdjustWorkerTrustScoreAction
                     return;
                 }
 
-                $reasonNote = trim((string) ($data['reason'] ?? ''));
+                $reasonNote = mb_trim((string) ($data['reason'] ?? ''));
                 $reason = $reasonNote !== ''
                     ? 'admin_manual_adjustment: '.$reasonNote
                     : 'admin_manual_adjustment';

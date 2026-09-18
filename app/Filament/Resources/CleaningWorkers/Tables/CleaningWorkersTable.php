@@ -4,47 +4,45 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningWorkers\Tables;
 
+use App\Enums\WorkerCustomerRatingType;
+use App\Enums\WorkerPreferredWorkType;
 use App\Filament\Resources\CleaningWorkers\Support\WorkerDepositActions;
 use App\Filament\Resources\Workers\Support\WorkerSuspensionActions;
-use App\Filament\Support\ArabicDashboardLabels;
-use App\Enums\WorkerCustomerRatingType;
 use App\Models\CleaningDepositSetting;
 use App\Models\Worker;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
-use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
-use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Modules\Cleaning\Enums\CleaningBookingStatus;
-use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningNeighborhood;
 use Modules\Cleaning\Services\WorkerFinancialAccountStatusService;
-use Modules\Cleaning\Services\WorkerOrderSolvencyService;
 
 final class CleaningWorkersTable
 {
     public static function configure(Table $table): Table
     {
         return $table
-            ->searchPlaceholder('ابحث باسم العامل، المستخدم، رقم الهاتف أو الحي')
+            ->searchPlaceholder('ابحث باسم العامل، رقم الهاتف أو الحي')
             ->columns([
-                TextColumn::make('id')->label(__('cleaning_admin.workers.fields.id'))->sortable(),
-                TextColumn::make('first_name')->label(__('cleaning_admin.workers.fields.first_name'))->searchable()->wrap(),
-                TextColumn::make('user.name')->label(__('cleaning_admin.workers.fields.user_name'))->searchable()->wrap(),
-                TextColumn::make('user.phone')->label(__('cleaning_admin.workers.fields.phone'))->copyable(),
+                TextColumn::make('first_name')
+                    ->label('اسم العامل')
+                    ->state(fn (Worker $record): string => $record->user?->name ?: $record->first_name ?: '-')
+                    ->searchable(query: fn (Builder $query, string $search): Builder => self::applyWorkerNameSearch($query, $search))
+                    ->wrap(),
+                TextColumn::make('user.phone')
+                    ->label(__('cleaning_admin.workers.fields.phone'))
+                    ->searchable()
+                    ->copyable()
+                    ->extraAttributes(['class' => 'fi-phone-ltr', 'dir' => 'ltr', 'style' => 'unicode-bidi:isolate;text-align:left']),
                 TextColumn::make('neighborhood_names')
                     ->label('الأحياء')
-                    ->state(fn (Worker $record): string => $record->zones
-                        ->map(fn ($zone): ?string => $zone->neighborhood?->name_ar ?: $zone->neighborhood?->name_en)
-                        ->filter()
-                        ->unique()
-                        ->values()
-                        ->join('، '))
+                    ->state(fn (Worker $record): string => self::neighborhoodSummary($record))
+                    ->tooltip(fn (Worker $record): ?string => self::neighborhoodTooltip($record))
                     ->placeholder('-')
                     ->wrap()
+                    ->extraAttributes(['style' => 'max-width:18rem'])
                     ->searchable(query: fn (Builder $query, string $search): Builder => self::applyNeighborhoodSearch($query, $search))
                     ->toggleable(),
                 TextColumn::make('gender')
@@ -53,7 +51,12 @@ final class CleaningWorkersTable
                     ->badge()
                     ->color(fn (?string $state): string => self::genderColor($state))
                     ->sortable(),
-                TextColumn::make('trust_score')->label(__('cleaning_admin.workers.fields.trust_score'))->sortable(),
+                TextColumn::make('preferred_work_type')
+                    ->label('الخدمات التي يعمل بها')
+                    ->state(fn (Worker $record): string => self::preferredWorkTypeValue($record))
+                    ->formatStateUsing(fn (?string $state): string => WorkerPreferredWorkType::options()[$state] ?? '-')
+                    ->badge()
+                    ->color('info'),
                 TextColumn::make('average_rating')
                     ->label(__('cleaning_admin.workers.fields.average_rating'))
                     ->state(function (Worker $record): float {
@@ -76,48 +79,15 @@ final class CleaningWorkersTable
                     })
                     ->sortable()
                     ->toggleable(),
-                TextColumn::make('total_completed_jobs')->label(__('cleaning_admin.workers.fields.total_completed_jobs'))->sortable()->toggleable(),
-                TextColumn::make('deposit.current_balance')
-                    ->label('رصيد الإيداع')
-                    ->formatStateUsing(fn ($state): string => ArabicDashboardLabels::money(max(0, (float) ($state ?? 0))))
-                    ->alignEnd()
+                TextColumn::make('total_completed_jobs')
+                    ->label(__('cleaning_admin.workers.fields.total_completed_jobs'))
                     ->sortable(),
-                TextColumn::make('deposit.debt_balance')
-                    ->label('المديونية الحالية')
-                    ->formatStateUsing(fn ($state): string => ArabicDashboardLabels::money(max(0, (float) ($state ?? 0))))
-                    ->badge()
-                    ->color(fn ($state): string => (float) ($state ?? 0) > 0 ? 'danger' : 'success')
-                    ->alignEnd()
-                    ->sortable(),
-                TextColumn::make('deposit.max_negative_balance')
-                    ->label('حد السماح للعامل')
-                    ->formatStateUsing(fn ($state): string => ArabicDashboardLabels::money(max(0, (float) ($state ?? 0))))
-                    ->placeholder('0.00 ل.س')
-                    ->alignEnd()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('remaining_debt_capacity')
-                    ->label('حد السماح المتبقي')
-                    ->state(fn (Worker $record): float => self::capacity($record)['remainingDebtCapacity'])
-                    ->formatStateUsing(fn ($state): string => ArabicDashboardLabels::money($state))
-                    ->badge()
-                    ->color(fn (float $state): string => $state > 0 ? 'success' : 'danger')
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('available_commission_capacity')
-                    ->label('السعة المالية للطلبات')
-                    ->state(fn (Worker $record): float => self::capacity($record)['availableCommissionCapacity'])
-                    ->formatStateUsing(fn ($state): string => ArabicDashboardLabels::money($state))
-                    ->badge()
-                    ->color(fn (float $state): string => $state > 0 ? 'success' : 'danger')
-                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('financial_account_status')
-                    ->label('حالة مبلغ التأمين')
+                    ->label('استقبال طلبات جديدة')
                     ->state(fn (Worker $record): string => app(WorkerFinancialAccountStatusService::class)->status($record))
                     ->formatStateUsing(fn (?string $state): string => self::depositStatusLabel($state))
                     ->badge()
                     ->color(fn (?string $state): string => self::depositStatusColor($state)),
-                IconColumn::make('is_suspended')
-                    ->label(__('cleaning_admin.workers.fields.suspended'))
-                    ->boolean(),
             ])
             ->filters([
                 SelectFilter::make('gender')
@@ -126,6 +96,9 @@ final class CleaningWorkersTable
                         'male' => __('cleaning_admin.workers.gender_options.male'),
                         'female' => __('cleaning_admin.workers.gender_options.female'),
                     ]),
+                SelectFilter::make('preferred_work_type')
+                    ->label('الخدمات التي يعمل بها')
+                    ->options(WorkerPreferredWorkType::options()),
                 SelectFilter::make('neighborhood_id')
                     ->label('الحي')
                     ->searchable()
@@ -146,14 +119,13 @@ final class CleaningWorkersTable
                             ? $query->whereHas('zones', fn (Builder $zoneQuery): Builder => $zoneQuery->where('neighborhood_id', $neighborhoodId))
                             : $query;
                     }),
-                TernaryFilter::make('is_suspended')->label(__('cleaning_admin.workers.fields.suspended')),
                 SelectFilter::make('financial_account_status')
-                    ->label('حالة مبلغ التأمين')
+                    ->label('استقبال طلبات جديدة')
                     ->options([
-                        WorkerFinancialAccountStatusService::ACTIVE => 'نشط',
-                        WorkerFinancialAccountStatusService::INSUFFICIENT_BALANCE => 'غير نشط',
-                        WorkerFinancialAccountStatusService::SUSPENDED => 'موقوف',
-                        WorkerFinancialAccountStatusService::INACTIVE => 'غير نشط إدارياً',
+                        WorkerFinancialAccountStatusService::ACTIVE => 'متاح لاستقبال الطلبات',
+                        WorkerFinancialAccountStatusService::INSUFFICIENT_BALANCE => 'غير متاح - الرصيد غير كافٍ',
+                        WorkerFinancialAccountStatusService::SUSPENDED => 'موقوف من الإدارة',
+                        WorkerFinancialAccountStatusService::INACTIVE => 'غير نشط',
                     ])
                     ->query(function (Builder $query, array $data): Builder {
                         $status = $data['value'] ?? null;
@@ -162,48 +134,6 @@ final class CleaningWorkersTable
                             ? self::applyFinancialStatusFilter($query, $status)
                             : $query;
                     }),
-                TernaryFilter::make('financially_blocked')
-                    ->label('الحالة المالية')
-                    ->placeholder('جميع العاملين')
-                    ->trueLabel('محجوب مالياً')
-                    ->falseLabel('غير محجوب مالياً')
-                    ->queries(
-                        true: fn (Builder $query): Builder => self::applyFinancialBlockFilter($query, true),
-                        false: fn (Builder $query): Builder => self::applyFinancialBlockFilter($query, false),
-                        blank: fn (Builder $query): Builder => $query,
-                    ),
-                TernaryFilter::make('has_debt')
-                    ->label('المديونية')
-                    ->placeholder('جميع العاملين')
-                    ->trueLabel('لديه مديونية')
-                    ->falseLabel('لا توجد مديونية')
-                    ->queries(
-                        true: fn (Builder $query): Builder => $query->whereHas(
-                            'deposit',
-                            fn (Builder $deposit): Builder => $deposit->where('debt_balance', '>', 0),
-                        ),
-                        false: fn (Builder $query): Builder => $query->where(function (Builder $workerQuery): void {
-                            $workerQuery
-                                ->whereDoesntHave('deposit')
-                                ->orWhereHas('deposit', fn (Builder $deposit): Builder => $deposit
-                                    ->where(function (Builder $debtQuery): void {
-                                        $debtQuery
-                                            ->whereNull('debt_balance')
-                                            ->orWhere('debt_balance', '<=', 0);
-                                    }));
-                        }),
-                        blank: fn (Builder $query): Builder => $query,
-                    ),
-                TernaryFilter::make('has_reserved_active_commission')
-                    ->label('العمولات المحجوزة للطلبات النشطة')
-                    ->placeholder('جميع العاملين')
-                    ->trueLabel('لديه عمولات محجوزة')
-                    ->falseLabel('لا توجد عمولات محجوزة')
-                    ->queries(
-                        true: fn (Builder $query): Builder => self::applyReservedActiveCommissionFilter($query, true),
-                        false: fn (Builder $query): Builder => self::applyReservedActiveCommissionFilter($query, false),
-                        blank: fn (Builder $query): Builder => $query,
-                    ),
             ])
             ->persistFiltersInSession()
             ->recordActions([
@@ -214,15 +144,68 @@ final class CleaningWorkersTable
             ]);
     }
 
-    /** @return array<string, float> */
-    private static function capacity(Worker $worker): array
+    private static function applyWorkerNameSearch(Builder $query, string $search): Builder
     {
-        return app(WorkerOrderSolvencyService::class)->workerCapacitySummary($worker);
+        $term = mb_trim($search);
+        if ($term === '') {
+            return $query;
+        }
+
+        return $query->where(function (Builder $nameQuery) use ($term): void {
+            $nameQuery
+                ->where('first_name', 'like', "%{$term}%")
+                ->orWhereHas('user', fn (Builder $userQuery): Builder => $userQuery->where('name', 'like', "%{$term}%"));
+        });
+    }
+
+    private static function neighborhoodSummary(Worker $worker): string
+    {
+        $names = self::neighborhoodNames($worker);
+
+        if ($names === []) {
+            return '-';
+        }
+
+        $visible = array_slice($names, 0, 2);
+        $remaining = count($names) - count($visible);
+
+        return implode('، ', $visible).($remaining > 0 ? ' + '.$remaining.' أحياء' : '');
+    }
+
+    private static function neighborhoodTooltip(Worker $worker): ?string
+    {
+        $names = self::neighborhoodNames($worker);
+
+        return $names === [] ? null : implode('، ', $names);
+    }
+
+    /** @return list<string> */
+    private static function neighborhoodNames(Worker $worker): array
+    {
+        $worker->loadMissing('zones.neighborhood');
+
+        return $worker->zones
+            ->map(fn ($zone): ?string => $zone->neighborhood?->name_ar ?: $zone->neighborhood?->name_en)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private static function preferredWorkTypeValue(Worker $worker): string
+    {
+        if ($worker->preferred_work_type instanceof WorkerPreferredWorkType) {
+            return $worker->preferred_work_type->value;
+        }
+
+        return is_string($worker->preferred_work_type)
+            ? $worker->preferred_work_type
+            : WorkerPreferredWorkType::Both->value;
     }
 
     private static function applyNeighborhoodSearch(Builder $query, string $search): Builder
     {
-        $term = trim($search);
+        $term = mb_trim($search);
         if ($term === '') {
             return $query;
         }
@@ -258,19 +241,6 @@ final class CleaningWorkersTable
         };
     }
 
-    private static function applyFinancialBlockFilter(Builder $query, bool $blocked): Builder
-    {
-        if ($blocked) {
-            return $query->where(function (Builder $financialQuery): void {
-                $financialQuery
-                    ->whereDoesntHave('deposit')
-                    ->orWhereHas('deposit', fn (Builder $deposit): Builder => self::applyDepositCapacityFilter($deposit, false));
-            });
-        }
-
-        return $query->whereHas('deposit', fn (Builder $deposit): Builder => self::applyDepositCapacityFilter($deposit, true));
-    }
-
     private static function applyDepositCapacityFilter(Builder $deposit, bool $hasCapacity): Builder
     {
         $minimumRequired = max(0.0, (float) (CleaningDepositSetting::query()->value('minimum_deposit_amount') ?? 0));
@@ -287,7 +257,7 @@ final class CleaningWorkersTable
                                 $depositBalance->whereRaw('COALESCE(current_balance, 0) >= ?', [$minimumRequired]);
                             }
                         })
-                        ->orWhere(function (Builder $allowance) use ($minimumRequired): void {
+                        ->orWhere(function (Builder $allowance): void {
                             $allowance
                                 ->whereRaw('COALESCE(current_balance, 0) <= 0')
                                 ->whereRaw('COALESCE(debt_balance, 0) < COALESCE(max_negative_balance, 0)');
@@ -311,27 +281,6 @@ final class CleaningWorkersTable
         });
     }
 
-    private static function applyReservedActiveCommissionFilter(Builder $query, bool $hasReservedCommission): Builder
-    {
-        $workerIdsWithReservedCommission = function ($subQuery): void {
-            $subQuery
-                ->select('assignments.worker_id')
-                ->from('cleaning_booking_worker_assignments as assignments')
-                ->join('cleaning_bookings as bookings', 'bookings.id', '=', 'assignments.cleaning_booking_id')
-                ->whereIn('assignments.status', CleaningBookingWorkerAssignmentStatus::activeValues())
-                ->whereNotIn('bookings.status', [
-                    CleaningBookingStatus::Completed->value,
-                    CleaningBookingStatus::Cancelled->value,
-                ])
-                ->groupBy('assignments.worker_id')
-                ->havingRaw('COALESCE(SUM(assignments.admin_margin_amount), 0) > 0');
-        };
-
-        return $hasReservedCommission
-            ? $query->whereIn('workers.id', $workerIdsWithReservedCommission)
-            : $query->whereNotIn('workers.id', $workerIdsWithReservedCommission);
-    }
-
     private static function genderLabel(?string $gender): string
     {
         return match ($gender) {
@@ -353,10 +302,10 @@ final class CleaningWorkersTable
     private static function depositStatusLabel(?string $status): string
     {
         return match ($status) {
-            WorkerFinancialAccountStatusService::ACTIVE => 'نشط',
-            WorkerFinancialAccountStatusService::SUSPENDED => 'موقوف',
-            WorkerFinancialAccountStatusService::INACTIVE,
-            WorkerFinancialAccountStatusService::INSUFFICIENT_BALANCE => 'غير نشط',
+            WorkerFinancialAccountStatusService::ACTIVE => 'متاح لاستقبال الطلبات',
+            WorkerFinancialAccountStatusService::SUSPENDED => 'موقوف من الإدارة',
+            WorkerFinancialAccountStatusService::INACTIVE => 'غير نشط',
+            WorkerFinancialAccountStatusService::INSUFFICIENT_BALANCE => 'الرصيد غير كافٍ',
             default => 'غير محدد',
         };
     }

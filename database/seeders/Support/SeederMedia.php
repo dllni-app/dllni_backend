@@ -22,7 +22,9 @@ final class SeederMedia
             return;
         }
 
-        if (! app()->runningUnitTests()) {
+        $seedRemoteMedia = filter_var((string) env('SEED_REMOTE_MEDIA', false), FILTER_VALIDATE_BOOL);
+
+        if (! app()->runningUnitTests() && $seedRemoteMedia) {
             try {
                 $model->addMediaFromUrl($remoteUrl)->toMediaCollection($collection);
 

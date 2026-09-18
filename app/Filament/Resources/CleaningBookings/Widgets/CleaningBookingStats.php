@@ -18,23 +18,21 @@ final class CleaningBookingStats extends StatsOverviewWidget
     protected function getStats(): array
     {
         return [
-            Stat::make(__('cleaning_admin.booking.stats.total'), CleaningBooking::query()->count())
-                ->icon('heroicon-o-calendar-days')
+            Stat::make('حجوزات اليوم', CleaningBooking::query()->whereDate('scheduled_date', now((string) config('app.dashboard_timezone', 'Asia/Damascus'))->toDateString())->count())
+                ->description('الحجوزات المجدولة للتنفيذ اليوم')
+                ->icon('heroicon-o-calendar')
                 ->color('primary'),
-            Stat::make(__('cleaning_admin.booking.stats.pending'), $this->statusCount(CleaningBookingStatus::Pending))
-                ->icon('heroicon-o-clock')
-                ->color('warning'),
-            Stat::make(__('cleaning_admin.booking.stats.searching'), $this->searchingCount())
+            Stat::make('بانتظار اكتمال الفريق', $this->statusCount(CleaningBookingStatus::Pending))
+                ->description('حجوزات ما زالت بحاجة إلى عامل أو أكثر')
                 ->icon('heroicon-o-user-group')
-                ->color('info'),
-            Stat::make(__('cleaning_admin.booking.stats.assigned'), $this->statusCount(CleaningBookingStatus::WorkerAssigned))
-                ->icon('heroicon-o-user-plus')
-                ->color('info'),
-            Stat::make(__('cleaning_admin.booking.stats.in_progress'), $this->statusCount(CleaningBookingStatus::InProgress))
+                ->color('warning'),
+            Stat::make('قيد التنفيذ', $this->statusCount(CleaningBookingStatus::InProgress))
+                ->description('الحجوزات التي بدأ العمل بها الآن')
                 ->icon('heroicon-o-play')
                 ->color('success'),
-            Stat::make(__('cleaning_admin.booking.stats.today'), CleaningBooking::query()->whereDate('scheduled_date', today())->count())
-                ->icon('heroicon-o-calendar')
+            Stat::make('إجمالي الحجوزات', CleaningBooking::query()->count())
+                ->description('جميع حجوزات التنظيف المسجلة')
+                ->icon('heroicon-o-calendar-days')
                 ->color('gray'),
         ];
     }
@@ -42,13 +40,5 @@ final class CleaningBookingStats extends StatsOverviewWidget
     private function statusCount(CleaningBookingStatus $status): int
     {
         return CleaningBooking::query()->where('status', $status->value)->count();
-    }
-
-    private function searchingCount(): int
-    {
-        return CleaningBooking::query()
-            ->where('status', CleaningBookingStatus::Pending->value)
-            ->whereHas('acceptedWorkerAssignments')
-            ->count();
     }
 }

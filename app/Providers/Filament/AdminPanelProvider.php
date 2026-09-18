@@ -7,6 +7,7 @@ namespace App\Providers\Filament;
 use App\Filament\Pages\CleaningOverview;
 use App\Http\Middleware\SetCleaningAdminLocale;
 use App\Support\Filament\AlnadhaTheme;
+use App\Support\Filament\PhoneDirectionScript;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
@@ -50,6 +51,10 @@ final class AdminPanelProvider extends PanelProvider
             ->renderHook(
                 PanelsRenderHook::HEAD_START,
                 fn (): HtmlString => $this->forceLatinDigitsScript(),
+            )
+            ->renderHook(
+                PanelsRenderHook::HEAD_START,
+                fn (): HtmlString => PhoneDirectionScript::render(),
             )
             ->renderHook(
                 PanelsRenderHook::BODY_END,

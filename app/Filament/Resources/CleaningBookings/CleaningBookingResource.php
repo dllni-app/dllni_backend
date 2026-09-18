@@ -77,8 +77,11 @@ final class CleaningBookingResource extends Resource
         $existingComponents = $schema->getComponents(withHidden: true, withOriginalKeys: true);
 
         return $schema->components([
+            ...$existingComponents,
             Section::make('تتبع العاملين')
-                ->description('يعرض حالة كل عامل وآخر موقع محفوظ له أثناء التوجه إلى الطلب، بنفس بيانات التتبع المستخدمة في تطبيق العميل والعامل.')
+                ->description('افتح هذا القسم عند الحاجة لمتابعة موقع وحالة العاملين في هذا الحجز.')
+                ->collapsible()
+                ->collapsed()
                 ->schema([
                     ViewEntry::make('worker_tracking')
                         ->hiddenLabel()
@@ -87,7 +90,6 @@ final class CleaningBookingResource extends Resource
                         ->columnSpanFull(),
                 ])
                 ->columnSpanFull(),
-            ...$existingComponents,
         ]);
     }
 
@@ -121,7 +123,8 @@ final class CleaningBookingResource extends Resource
                     ->badge()
                     ->formatStateUsing(fn (string $state): string => $state === 'open' ? 'يوجد نزاع مفتوح' : 'لا يوجد نزاع مفتوح')
                     ->color(fn (string $state): string => $state === 'open' ? 'danger' : 'gray')
-                    ->icon(fn (string $state): string => $state === 'open' ? 'heroicon-o-exclamation-triangle' : 'heroicon-o-check-circle'),
+                    ->icon(fn (string $state): string => $state === 'open' ? 'heroicon-o-exclamation-triangle' : 'heroicon-o-check-circle')
+                    ->toggleable(isToggledHiddenByDefault: true),
             ]);
     }
 
@@ -170,22 +173,7 @@ final class CleaningBookingResource extends Resource
 
     public static function canEdit(Model $record): bool
     {
-        if (! self::hasPermission('bookings.update')) {
-            return false;
-        }
-
-        if (! $record instanceof CleaningBooking) {
-            return false;
-        }
-
-        $status = $record->status instanceof CleaningBookingStatus
-            ? $record->status
-            : CleaningBookingStatus::tryFrom((string) $record->status);
-
-        return ! in_array($status, [
-            CleaningBookingStatus::Completed,
-            CleaningBookingStatus::Cancelled,
-        ], true);
+        return self::hasPermission('bookings.update') && $record instanceof CleaningBooking;
     }
 
     public static function canDelete(Model $record): bool

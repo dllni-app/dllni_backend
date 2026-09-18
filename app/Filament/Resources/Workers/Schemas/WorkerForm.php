@@ -62,8 +62,10 @@ final class WorkerForm
                     ]),
                 Section::make(__('cleaning_admin.workers.sections.metrics'))
                     ->description(app()->isLocale('ar')
-                        ? 'يمكن تعديل درجة الثقة يدوياً من 0 إلى 100، وسيتم تسجيل التغيير في سجل الثقة.'
-                        : 'Trust score can be adjusted manually from 0 to 100. The change is recorded in the trust log.')
+                        ? 'إعداد متقدم يعبّر عن موثوقية العامل داخل النظام. يمكن للإدارة رفع النقاط فوق 100 عند الحاجة.'
+                        : 'Trust score can be adjusted manually above 100 when needed. The change is recorded in the trust log.')
+                    ->collapsible()
+                    ->collapsed()
                     ->columns(2)
                     ->visible(fn (string $operation): bool => $operation === 'edit')
                     ->schema([
@@ -71,19 +73,21 @@ final class WorkerForm
                             ->label(__('cleaning_admin.workers.fields.trust_score'))
                             ->numeric()
                             ->minValue(0)
-                            ->maxValue(100)
+                            ->suffix('نقطة')
                             ->required(),
                     ]),
-                Section::make(app()->isLocale('ar') ? 'الإعدادات المالية للعامل' : 'Worker financial settings')
+                Section::make(app()->isLocale('ar') ? 'السماح بالعمل دون إيداع' : 'Worker financial settings')
                     ->description(app()->isLocale('ar')
-                        ? 'حد السماح يحدد قدرة العامل على استقبال الطلبات عند عدم وجود إيداع فقط، ولا يضاف إلى رصيد الإيداع.'
+                        ? 'إعداد اختياري: استخدمه فقط إذا أردت السماح للعامل باستقبال طلبات قبل تسجيل إيداع.'
                         : 'The allowance limit controls booking capacity only when there is no deposit, and is not added to the deposit balance.')
+                    ->collapsible()
+                    ->collapsed()
                     ->columns(2)
                     ->schema([
                         TextInput::make('worker_debt_limit')
-                            ->label(app()->isLocale('ar') ? 'حد السماح للعامل' : 'Worker allowance limit')
+                            ->label(app()->isLocale('ar') ? 'الحد الأقصى المسموح دون إيداع' : 'Worker allowance limit')
                             ->helperText(app()->isLocale('ar')
-                                ? 'يستخدم فقط عندما يكون رصيد الإيداع صفراً. لا يمكن تعديله طالما لدى العامل رصيد إيداع موجب.'
+                                ? 'اتركه صفراً إذا كان يجب على العامل الإيداع قبل استقبال الطلبات. لا يمكن تغييره أثناء وجود رصيد إيداع موجب.'
                                 : 'Used only when the deposit balance is zero. It cannot be changed while the worker has a positive deposit balance.')
                             ->numeric()
                             ->minValue(0)
@@ -104,16 +108,18 @@ final class WorkerForm
                             ->maxLength(255)
                             ->columnSpanFull(),
                     ]),
-                Section::make(app()->isLocale('ar') ? 'المعاملة المالية الأولية' : 'Initial financial transaction')
+                Section::make(app()->isLocale('ar') ? 'الإيداع عند إضافة العامل (اختياري)' : 'Initial financial transaction')
                     ->description(app()->isLocale('ar')
-                        ? 'يمكن تسجيل إيداع أولي فقط. إذا أردت السماح للعامل بالعمل دون إيداع استخدم حد السماح أعلاه.'
+                        ? 'افتح هذا القسم فقط إذا أردت تسجيل إيداع للعامل أثناء إنشاء الحساب.'
                         : 'Only an initial deposit can be recorded. To let the worker operate without a deposit, use the allowance limit above.')
+                    ->collapsible()
+                    ->collapsed()
                     ->columns(2)
                     ->visible(fn (string $operation): bool => $operation === 'create')
                     ->schema([
                         Select::make('initial_financial_transaction_type')
-                            ->label(app()->isLocale('ar') ? 'نوع المعاملة المالية' : 'Financial transaction type')
-                            ->placeholder(app()->isLocale('ar') ? 'بدون معاملة مالية' : 'No financial transaction')
+                            ->label(app()->isLocale('ar') ? 'تسجيل إيداع عند إنشاء العامل' : 'Financial transaction type')
+                            ->placeholder(app()->isLocale('ar') ? 'بدون إيداع الآن' : 'No financial transaction')
                             ->options([
                                 'deposit' => __('cleaning_admin.workers.finance.deposit.label'),
                             ])
@@ -121,7 +127,7 @@ final class WorkerForm
                             ->live()
                             ->dehydrated(false),
                         TextInput::make('initial_financial_transaction_amount')
-                            ->label(__('cleaning_admin.workers.finance.fields.amount'))
+                            ->label(app()->isLocale('ar') ? 'مبلغ الإيداع' : __('cleaning_admin.workers.finance.fields.amount'))
                             ->numeric()
                             ->minValue(0.01)
                             ->required(fn (Get $get): bool => filled($get('initial_financial_transaction_type')))
@@ -138,10 +144,10 @@ final class WorkerForm
                             ->label(app()->isLocale('ar') ? 'تنبيه' : 'Warning')
                             ->content(fn (Get $get): string => (float) ($get('worker_debt_limit') ?? 0) > 0
                                 ? (app()->isLocale('ar')
-                                    ? 'سيبدأ رصيد الإيداع بصفر، ويمكن للعامل العمل ضمن حد السماح الفردي المحدد له.'
+                                    ? 'سيبدأ العامل دون إيداع، ويمكنه استقبال الطلبات ضمن الحد المسموح المحدد له.'
                                     : 'The deposit balance starts at zero, and the worker may operate within the configured individual allowance limit.')
                                 : (app()->isLocale('ar')
-                                    ? 'بدون إيداع ومع حد سماح يساوي صفراً، لن تتوفر سعة مالية لقبول طلبات ذات عمولة.'
+                                    ? 'لن يتمكن العامل من استقبال طلبات جديدة حتى يسجل إيداعاً أو تمنحه الإدارة حداً مسموحاً.'
                                     : 'Without a deposit and with a zero allowance limit, there is no financial capacity for bookings with commission.'))
                             ->visible(fn (Get $get): bool => blank($get('initial_financial_transaction_type')))
                             ->extraAttributes([

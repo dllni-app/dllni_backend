@@ -5,12 +5,17 @@ declare(strict_types=1);
 namespace Modules\User\Services;
 
 use App\Models\User;
+use App\Services\DashboardUserAccountNotificationService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Mrmarchone\LaravelAutoCrud\Helpers\MediaHelper;
 
 final class UserAccountService
 {
+    public function __construct(
+        private readonly DashboardUserAccountNotificationService $dashboardNotificationService,
+    ) {}
+
     /**
      * @param  array{name?: string, phone?: string}  $validated
      */
@@ -18,6 +23,7 @@ final class UserAccountService
     {
         return DB::transaction(function () use ($user, $validated, $primaryImage): User {
             $updates = [];
+            $previousName = (string) $user->name;
 
             if (array_key_exists('name', $validated)) {
                 $updates['name'] = $validated['name'];
@@ -33,6 +39,10 @@ final class UserAccountService
 
             if ($updates !== []) {
                 $user->update($updates);
+
+                if ($user->wasChanged('name')) {
+                    $this->dashboardNotificationService->nameChanged($user, $previousName);
+                }
             }
 
             if ($primaryImage !== null) {

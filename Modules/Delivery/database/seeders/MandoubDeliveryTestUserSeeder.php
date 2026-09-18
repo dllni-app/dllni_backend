@@ -129,10 +129,10 @@ final class MandoubDeliveryTestUserSeeder extends Seeder
 
         foreach (self::TEST_DRIVERS as $key => $profile) {
             $users[$key] = User::updateOrCreate(
-                ['email' => $profile['email']],
+                ['phone' => $profile['phone']],
                 [
+                    'email' => $profile['email'],
                     'name' => $profile['name'],
-                    'phone' => $profile['phone'],
                     'module_type' => UserModuleType::DeliveryDriver->value,
                     'password' => bcrypt(self::TEST_PASSWORD),
                     'email_verified_at' => now(),
