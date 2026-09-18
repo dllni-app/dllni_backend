@@ -92,10 +92,6 @@ final class CleaningBookingInfolist
                                             ->label('عدد الضيوف')
                                             ->formatStateUsing(fn ($state): string => self::integer($state))
                                             ->placeholder('-'),
-                                        TextEntry::make('property_details.venue_type')
-                                            ->label('نوع المكان')
-                                            ->formatStateUsing(fn (?string $state): string => self::propertyTypeLabel($state))
-                                            ->placeholder('-'),
                                         TextEntry::make('property_details.custom_service')->label('الخدمة المخصصة')->placeholder('-'),
                                         TextEntry::make('property_details.hours')
                                             ->label('عدد الساعات')
