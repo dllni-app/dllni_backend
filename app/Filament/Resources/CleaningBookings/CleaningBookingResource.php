@@ -31,6 +31,7 @@ use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
+use Modules\Cleaning\Models\CleaningBookingWorkerLocationPoint;
 use Throwable;
 
 final class CleaningBookingResource extends Resource
@@ -78,10 +79,9 @@ final class CleaningBookingResource extends Resource
 
         return $schema->components([
             ...$existingComponents,
-            Section::make('تتبع العاملين')
-                ->description('افتح هذا القسم عند الحاجة لمتابعة موقع وحالة العاملين في هذا الحجز.')
+            Section::make('الخريطة ومسار العاملين')
+                ->description('يعرض آخر موقع محفوظ لكل عامل والمسار الفعلي المسجل أثناء توجهه إلى موقع الحجز.')
                 ->collapsible()
-                ->collapsed()
                 ->schema([
                     ViewEntry::make('worker_tracking')
                         ->hiddenLabel()
@@ -209,6 +209,7 @@ final class CleaningBookingResource extends Resource
         $record->loadMissing([
             'worker.user',
             'acceptedWorkerAssignments.worker.user',
+            'acceptedWorkerAssignments.locationPoints',
         ]);
 
         $workers = $record->acceptedWorkerAssignments
@@ -234,6 +235,8 @@ final class CleaningBookingResource extends Resource
             'requiredWorkers' => $requiredWorkers,
             'acceptedWorkers' => count($workers),
             'activelyTrackedWorkers' => $activelyTrackedWorkers,
+            'destinationLatitude' => $record->address_latitude !== null ? (float) $record->address_latitude : null,
+            'destinationLongitude' => $record->address_longitude !== null ? (float) $record->address_longitude : null,
             'workers' => $workers,
         ];
     }
@@ -247,6 +250,18 @@ final class CleaningBookingResource extends Resource
             : (string) $assignment->status;
         $latitude = $assignment->last_latitude !== null ? (float) $assignment->last_latitude : null;
         $longitude = $assignment->last_longitude !== null ? (float) $assignment->last_longitude : null;
+        $routePoints = $assignment->locationPoints
+            ->map(fn (CleaningBookingWorkerLocationPoint $point): array => self::routePointState($point))
+            ->values()
+            ->all();
+
+        if ($routePoints === [] && $latitude !== null && $longitude !== null) {
+            $routePoints[] = [
+                'latitude' => $latitude,
+                'longitude' => $longitude,
+                'recordedAt' => self::dateTime($assignment->location_updated_at),
+            ];
+        }
 
         return [
             'assignmentId' => $assignment->id,
@@ -264,6 +279,8 @@ final class CleaningBookingResource extends Resource
             'latitude' => $latitude,
             'longitude' => $longitude,
             'hasCoordinates' => $latitude !== null && $longitude !== null,
+            'routePoints' => $routePoints,
+            'routePointsCount' => count($routePoints),
             'trackingLabel' => self::trackingLabel($status, $assignment->started_travel_at, $assignment->arrived_at, $latitude, $longitude),
             'trackingColor' => self::trackingColor($status, $assignment->started_travel_at, $assignment->arrived_at),
             'locationEmptyLabel' => self::locationEmptyLabel($status, $assignment->started_travel_at, $assignment->arrived_at),
@@ -283,6 +300,22 @@ final class CleaningBookingResource extends Resource
         $latitude = $latitudeValue !== null ? (float) $latitudeValue : null;
         $longitude = $longitudeValue !== null ? (float) $longitudeValue : null;
         $locationUpdatedAt = $record->getAttribute('worker_location_updated_at');
+        $routePoints = CleaningBookingWorkerLocationPoint::query()
+            ->where('cleaning_booking_id', $record->id)
+            ->where('worker_id', $record->worker_id)
+            ->orderBy('recorded_at')
+            ->get()
+            ->map(fn (CleaningBookingWorkerLocationPoint $point): array => self::routePointState($point))
+            ->values()
+            ->all();
+
+        if ($routePoints === [] && $latitude !== null && $longitude !== null) {
+            $routePoints[] = [
+                'latitude' => $latitude,
+                'longitude' => $longitude,
+                'recordedAt' => self::dateTime($locationUpdatedAt),
+            ];
+        }
 
         return [
             'assignmentId' => null,
@@ -300,10 +333,22 @@ final class CleaningBookingResource extends Resource
             'latitude' => $latitude,
             'longitude' => $longitude,
             'hasCoordinates' => $latitude !== null && $longitude !== null,
+            'routePoints' => $routePoints,
+            'routePointsCount' => count($routePoints),
             'trackingLabel' => self::trackingLabel($status, $record->started_travel_at, $record->arrived_at, $latitude, $longitude),
             'trackingColor' => self::trackingColor($status, $record->started_travel_at, $record->arrived_at),
             'locationEmptyLabel' => self::locationEmptyLabel($status, $record->started_travel_at, $record->arrived_at),
             'isTrackingActive' => self::isTrackingActive($status, $record->started_travel_at, $record->arrived_at),
+        ];
+    }
+
+    /** @return array{latitude:float,longitude:float,recordedAt:string} */
+    private static function routePointState(CleaningBookingWorkerLocationPoint $point): array
+    {
+        return [
+            'latitude' => (float) $point->latitude,
+            'longitude' => (float) $point->longitude,
+            'recordedAt' => self::dateTime($point->recorded_at),
         ];
     }
 
@@ -429,7 +474,10 @@ final class CleaningBookingResource extends Resource
         }
 
         try {
-            return Carbon::parse($value)->format('Y-m-d h:i A');
+            $timezone = (string) config('app.dashboard_timezone', 'Asia/Damascus');
+            $formatted = Carbon::parse($value)->setTimezone($timezone)->format('Y-m-d h:i A');
+
+            return str_replace(['AM', 'PM'], ['ص', 'م'], $formatted);
         } catch (Throwable) {
             return (string) $value;
         }

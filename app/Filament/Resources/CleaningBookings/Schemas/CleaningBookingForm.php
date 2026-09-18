@@ -7,19 +7,20 @@ namespace App\Filament\Resources\CleaningBookings\Schemas;
 use App\Enums\GenderPreference;
 use App\Models\User;
 use App\Models\Worker;
+use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\TimePicker;
-use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
 use Modules\Cleaning\Enums\CleaningAssignmentMode;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningNeighborhood;
+use Modules\Cleaning\Support\WorkerRoomAssignmentPlanner;
 
 final class CleaningBookingForm
 {
@@ -27,7 +28,7 @@ final class CleaningBookingForm
     {
         return $schema->components([
             Section::make('بيانات الحجز الأساسية')
-                ->description('يمكن تعديل معلومات الحجز الأساسية من لوحة التحكم مباشرة.')
+                ->description('تعديل بيانات الحجز التشغيلية فقط. التسعير والمساحة والقيم المحسوبة لا يتم تعديلها من هذه الصفحة.')
                 ->schema([
                     TextInput::make('booking_number')
                         ->label('رقم الحجز')
@@ -104,8 +105,9 @@ final class CleaningBookingForm
                 ])
                 ->columns(2)
                 ->columnSpanFull(),
+
             Section::make('اختيار العامل والفريق')
-                ->description('إعدادات متقدمة لاختيار العامل المفضل أو العامل الأساسي. إدارة الفريق اليومية تبقى من زر إدارة في قائمة الحجوزات.')
+                ->description('العامل المحدد مسبقاً هو العامل الذي يختاره العميل قبل بدء توزيع الطلب. العامل المعيّن فعلياً تتم إدارته من إجراءات الفريق في قائمة الحجوزات.')
                 ->collapsible()
                 ->collapsed()
                 ->schema([
@@ -113,10 +115,12 @@ final class CleaningBookingForm
                         ->label('طريقة اختيار العامل')
                         ->options([
                             CleaningAssignmentMode::OpenCount->value => 'طلب مفتوح للعمال',
-                            CleaningAssignmentMode::PreferredWorker->value => 'عامل مفضل',
-                        ]),
+                            CleaningAssignmentMode::PreferredWorker->value => 'عامل محدد مسبقاً',
+                        ])
+                        ->live(),
                     Select::make('preferred_worker_id')
-                        ->label('العامل المفضل')
+                        ->label('العامل المحدد مسبقاً')
+                        ->helperText('استخدم هذا الحقل فقط عندما يكون العميل قد اختار عاملاً بعينه قبل إرسال الطلب.')
                         ->relationship(
                             name: 'preferredWorker',
                             titleAttribute: 'first_name',
@@ -124,98 +128,25 @@ final class CleaningBookingForm
                         )
                         ->getOptionLabelFromRecordUsing(fn (Worker $record): string => $record->user?->name ?: $record->first_name ?: '#'.$record->id)
                         ->searchable()
-                        ->preload(),
-                    Select::make('worker_id')
-                        ->label('العامل الأساسي المحفوظ')
-                        ->relationship(
-                            name: 'worker',
-                            titleAttribute: 'first_name',
-                            modifyQueryUsing: fn (Builder $query): Builder => $query->where('is_active', true),
-                        )
-                        ->getOptionLabelFromRecordUsing(fn (Worker $record): string => $record->user?->name ?: $record->first_name ?: '#'.$record->id)
-                        ->searchable()
-                        ->preload(),
+                        ->preload()
+                        ->visible(fn (Get $get): bool => $get('assignment_mode') === CleaningAssignmentMode::PreferredWorker->value),
                 ])
                 ->columns(2)
                 ->columnSpanFull(),
-            Section::make('التقديرات والتسعير')
-                ->description('يمكن للإدارة تعديل القيم المالية والتقديرية المحفوظة للحجز.')
-                ->collapsible()
-                ->collapsed()
+
+            Section::make('الغرف المشمولة بالخدمة')
+                ->description('يمكن تعديل الغرف التي يشملها هذا الحجز فقط. لن يتم تغيير السعر أو المساحة أو التقديرات المحسوبة تلقائياً.')
                 ->schema([
-                    self::numeric('estimated_sqm', 'المساحة التقديرية'),
-                    self::numeric('estimated_hours', 'الساعات التقديرية'),
-                    self::numeric('total_hours', 'إجمالي الساعات'),
-                    self::money('base_price', 'السعر الأساسي'),
-                    self::money('addons_total', 'الإضافات'),
-                    self::money('extension_fee_total', 'رسوم تمديد الوقت'),
-                    self::money('travel_fee', 'رسوم التنقل'),
-                    self::numeric('travel_distance_km', 'مسافة التنقل (كم)', 0.001),
-                    self::money('admin_margin_amount', 'هامش الإدارة'),
-                    self::money('cancellation_fee', 'رسوم الإلغاء'),
-                    self::money('total_price', 'الإجمالي المطلوب من العميل'),
-                    Toggle::make('is_pricing_final')->label('التسعير نهائي'),
-                ])
-                ->columns(2)
-                ->columnSpanFull(),
-            Section::make('تفاصيل الخدمة')
-                ->description('هذه الحقول تحفظ التفاصيل الكاملة كما أرسلها التطبيق. استخدم JSON صالح عند التعديل.')
-                ->collapsible()
-                ->collapsed()
-                ->schema([
-                    Textarea::make('property_details_json')
-                        ->label('تفاصيل العقار أو المناسبة')
-                        ->rows(10)
-                        ->rules(['nullable', 'json'])
-                        ->dehydrated()
+                    CheckboxList::make('selected_room_keys')
+                        ->label('الغرف المختارة')
+                        ->options(fn (?CleaningBooking $record): array => self::roomOptions($record))
+                        ->columns(3)
+                        ->bulkToggleable()
+                        ->required(fn (?CleaningBooking $record): bool => self::hasRooms($record))
+                        ->visible(fn (?CleaningBooking $record): bool => self::hasRooms($record))
                         ->columnSpanFull(),
-                    Textarea::make('cleaning_services_json')
-                        ->label('تفاصيل خدمات التنظيف')
-                        ->rows(8)
-                        ->rules(['nullable', 'json'])
-                        ->dehydrated()
-                        ->columnSpanFull(),
-                    Toggle::make('terms_accepted')
-                        ->label('وافق العميل على الشروط'),
                 ])
-                ->columnSpanFull(),
-            Section::make('الإلغاء وملاحظات التنفيذ')
-                ->collapsible()
-                ->collapsed()
-                ->schema([
-                    Select::make('cancelled_by_role')
-                        ->label('جهة الإلغاء')
-                        ->options([
-                            'customer' => 'العميل',
-                            'worker' => 'العامل',
-                            'admin' => 'الإدارة',
-                        ]),
-                    Textarea::make('cancellation_reason')
-                        ->label('سبب الإلغاء')
-                        ->rows(3),
-                    Textarea::make('worker_completion_message')
-                        ->label('ملاحظة العامل عند إنهاء العمل')
-                        ->rows(3),
-                    Textarea::make('customer_completion_rejection_message')
-                        ->label('سبب رفض العميل إنهاء الطلب')
-                        ->rows(3),
-                ])
-                ->columns(2)
-                ->columnSpanFull(),
-            Section::make('أوقات التنفيذ')
-                ->description('جميع الأوقات المعروضة والمعدلة بتوقيت سوريا - حلب.')
-                ->collapsible()
-                ->collapsed()
-                ->schema([
-                    self::dateTime('started_travel_at', 'بدأ العامل بالتوجه'),
-                    self::dateTime('arrived_at', 'وصل العامل'),
-                    self::dateTime('work_started_at', 'بدأ العمل'),
-                    self::dateTime('work_finished_at', 'انتهى العمل'),
-                    self::dateTime('customer_confirmed_at', 'تأكيد العميل'),
-                    self::dateTime('completion_rejected_at', 'وقت رفض الإنهاء'),
-                    self::dateTime('cancelled_at', 'وقت الإلغاء'),
-                ])
-                ->columns(2)
+                ->visible(fn (?CleaningBooking $record): bool => self::hasRooms($record))
                 ->columnSpanFull(),
         ]);
     }
@@ -232,32 +163,71 @@ final class CleaningBookingForm
         ];
     }
 
-    private static function numeric(string $name, string $label, float $step = 0.01): TextInput
+    private static function hasRooms(?CleaningBooking $booking): bool
     {
-        return TextInput::make($name)
-            ->label($label)
-            ->numeric()
-            ->step($step)
-            ->minValue(0);
+        return self::roomOptions($booking) !== [];
     }
 
-    private static function money(string $name, string $label): TextInput
+    /** @return array<string, string> */
+    private static function roomOptions(?CleaningBooking $booking): array
     {
-        return TextInput::make($name)
-            ->label($label)
-            ->numeric()
-            ->minValue(0)
-            ->step(1)
-            ->suffix('ل.س');
+        if (! $booking instanceof CleaningBooking) {
+            return [];
+        }
+
+        $details = is_array($booking->property_details) ? $booking->property_details : [];
+        $rooms = WorkerRoomAssignmentPlanner::generateRoomBlueprints($details);
+
+        if ($rooms === []) {
+            $booking->loadMissing('rooms');
+            $rooms = $booking->rooms
+                ->map(fn ($room): array => [
+                    'room_key' => (string) $room->room_key,
+                    'room_type' => (string) $room->room_type,
+                    'room_size' => (string) $room->room_size,
+                    'display_label' => (string) $room->display_label,
+                ])
+                ->all();
+        }
+
+        $options = [];
+        foreach ($rooms as $room) {
+            $key = (string) ($room['room_key'] ?? '');
+            if ($key === '') {
+                continue;
+            }
+
+            $options[$key] = self::roomLabel(
+                $key,
+                (string) ($room['room_type'] ?? ''),
+                (string) ($room['room_size'] ?? ''),
+            );
+        }
+
+        return $options;
     }
 
-    private static function dateTime(string $name, string $label): DateTimePicker
+    private static function roomLabel(string $roomKey, string $roomType, string $roomSize): string
     {
-        return DateTimePicker::make($name)
-            ->label($label)
-            ->seconds(false)
-            ->timezone((string) config('app.dashboard_timezone', 'Asia/Damascus'))
-            ->displayFormat('Y-m-d H:i')
-            ->native(false);
+        $type = match ($roomType) {
+            'bedroom' => 'غرفة نوم',
+            'bathroom' => 'حمّام',
+            'toilet' => 'دورة مياه',
+            'kitchen' => 'مطبخ',
+            'living_room' => 'غرفة معيشة',
+            'balcony' => 'شرفة',
+            'corridor' => 'ممر',
+            'shed' => 'مستودع',
+            default => 'غرفة',
+        };
+
+        $size = match ($roomSize) {
+            'small' => 'صغيرة',
+            'medium' => 'متوسطة',
+            'large' => 'كبيرة',
+            default => null,
+        };
+
+        return $size !== null ? $type.' '.$size : $type;
     }
 }

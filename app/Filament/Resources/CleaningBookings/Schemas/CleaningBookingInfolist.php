@@ -14,6 +14,7 @@ use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Modules\Cleaning\Models\CleaningBooking;
+use Modules\Cleaning\Models\CleaningBookingRoom;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Services\CleaningCouponPricingService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
@@ -179,36 +180,26 @@ final class CleaningBookingInfolist
                                             ->weight('bold'),
                                     ])
                                     ->columns(2),
-                                Section::make('حصص العاملين')
-                                    ->description('تفاصيل مستحق كل عامل في هذا الحجز.')
-                                    ->collapsible()
-                                    ->collapsed()
+                                Section::make('أجور العاملين النهائية')
+                                    ->description('المبلغ النهائي المستحق لكل عامل في هذا الطلب بعد اعتماد توزيع الخدمة ورسوم التنقل.')
                                     ->schema([
                                         RepeatableEntry::make('acceptedWorkerAssignments')
                                             ->hiddenLabel()
                                             ->schema([
-                                                TextEntry::make('worker.first_name')
+                                                TextEntry::make('worker.user.name')
                                                     ->label('العامل')
-                                                    ->placeholder('-'),
+                                                    ->placeholder('-')
+                                                    ->weight('bold'),
+                                                TextEntry::make('worker_amount')
+                                                    ->label('الأجرة النهائية')
+                                                    ->state(fn (CleaningBookingWorkerAssignment $record): string => self::finalWorkerAmount($record))
+                                                    ->weight('bold')
+                                                    ->color('success'),
                                                 TextEntry::make('status')
-                                                    ->label('الحالة')
+                                                    ->label('حالة العامل')
                                                     ->badge()
                                                     ->formatStateUsing(fn ($state): string => self::workerAssignmentStatusLabel($state))
                                                     ->color(fn ($state): string => self::workerAssignmentStatusColor($state)),
-                                                TextEntry::make('service_share_amount')
-                                                    ->label('حصة الخدمة')
-                                                    ->formatStateUsing(fn ($state): string => self::money($state)),
-                                                TextEntry::make('travel_fee')
-                                                    ->label('رسوم التنقل')
-                                                    ->formatStateUsing(fn ($state): string => self::money($state))
-                                                    ->visible(fn (CleaningBookingWorkerAssignment $record): bool => (float) ($record->travel_fee ?? 0) > 0),
-                                                TextEntry::make('admin_margin_amount')
-                                                    ->label('هامش الإدارة (على العميل)')
-                                                    ->formatStateUsing(fn ($state): string => self::money($state)),
-                                                TextEntry::make('worker_amount')
-                                                    ->label('مستحق العامل')
-                                                    ->formatStateUsing(fn ($state): string => self::money($state))
-                                                    ->weight('bold'),
                                             ])
                                             ->columns(3),
                                     ])
@@ -221,12 +212,16 @@ final class CleaningBookingInfolist
                                         RepeatableEntry::make('rooms')
                                             ->label('الغرف')
                                             ->schema([
-                                                TextEntry::make('display_label')->label('اسم الغرفة')->placeholder('-'),
-                                                TextEntry::make('room_type')->label('نوع الغرفة')->formatStateUsing(fn (?string $state): string => self::roomTypeLabel($state))->placeholder('-'),
-                                                TextEntry::make('room_size')->label('حجم الغرفة')->formatStateUsing(fn (?string $state): string => self::roomSizeLabel($state))->placeholder('-'),
-                                                TextEntry::make('assignedWorker.first_name')->label('العامل المعيّن')->placeholder('-'),
+                                                TextEntry::make('display_label')
+                                                    ->label('اسم الغرفة')
+                                                    ->state(fn (CleaningBookingRoom $record): string => self::arabicRoomName($record))
+                                                    ->placeholder('-')
+                                                    ->weight('bold'),
+                                                TextEntry::make('assignedWorker.user.name')
+                                                    ->label('العامل المعيّن')
+                                                    ->placeholder('-'),
                                             ])
-                                            ->columns(3),
+                                            ->columns(2),
                                     ])
                                     ->visible(fn ($record): bool => ! self::isEventAssistance($record) && $record->rooms()->exists()),
                                 Section::make('النزاعات')
@@ -473,6 +468,42 @@ final class CleaningBookingInfolist
             null, '' => '-',
             default => $value,
         };
+    }
+
+    private static function finalWorkerAmount(CleaningBookingWorkerAssignment $assignment): string
+    {
+        $amount = $assignment->worker_amount;
+
+        if ($amount === null) {
+            $amount = (float) ($assignment->service_share_amount ?? 0)
+                + (float) ($assignment->travel_fee ?? 0);
+        }
+
+        return self::money($amount);
+    }
+
+    private static function arabicRoomName(CleaningBookingRoom $room): string
+    {
+        $type = match ((string) $room->room_type) {
+            'bedroom' => 'غرفة نوم',
+            'bathroom' => 'حمّام',
+            'toilet' => 'دورة مياه',
+            'kitchen' => 'مطبخ',
+            'living_room' => 'غرفة معيشة',
+            'balcony' => 'شرفة',
+            'corridor' => 'ممر',
+            'shed' => 'مستودع',
+            default => 'غرفة',
+        };
+
+        $size = match ((string) $room->room_size) {
+            'small' => 'صغيرة',
+            'medium' => 'متوسطة',
+            'large' => 'كبيرة',
+            default => null,
+        };
+
+        return $size !== null ? $type.' '.$size : $type;
     }
 
     private static function roomTypeLabel(?string $value): string

@@ -8,8 +8,11 @@ use App\Models\User;
 use App\Models\Worker;
 use Livewire\Livewire;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
+use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingRoom;
+use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
+use Modules\Cleaning\Models\CleaningBookingWorkerLocationPoint;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -43,32 +46,55 @@ it('allows admins to edit active and terminal bookings', function (): void {
     $this->get(CleaningBookingResource::getUrl('edit', ['record' => $pending], isAbsolute: false))
         ->assertSuccessful()
         ->assertSee('بيانات الحجز الأساسية')
-        ->assertSee('التقديرات والتسعير')
-        ->assertSee('تفاصيل الخدمة');
+        ->assertSee('العامل المحدد مسبقاً')
+        ->assertDontSee('التقديرات والتسعير')
+        ->assertDontSee('تفاصيل الخدمة')
+        ->assertDontSee('وافق العميل على الشروط')
+        ->assertDontSee('سبب الإلغاء')
+        ->assertDontSee('أوقات التنفيذ');
 
     $this->get(CleaningBookingResource::getUrl('edit', ['record' => $completed], isAbsolute: false))
         ->assertSuccessful();
 });
 
-it('updates full cleaning booking information from the dashboard', function (): void {
+it('updates operational booking fields and selected rooms without changing pricing or calculated details', function (): void {
+    $propertyDetails = [
+        'rooms' => 2,
+        'room_size_breakdown' => [
+            'bedroom' => ['small' => 1, 'medium' => 0, 'large' => 0],
+            'bathroom' => ['small' => 1, 'medium' => 0, 'large' => 0],
+            'kitchen' => ['small' => 0, 'medium' => 0, 'large' => 0],
+            'living_room' => ['small' => 0, 'medium' => 0, 'large' => 0],
+            'balcony' => ['small' => 0, 'medium' => 0, 'large' => 0],
+            'corridor' => ['small' => 0, 'medium' => 0, 'large' => 0],
+            'shed' => ['small' => 0, 'medium' => 0, 'large' => 0],
+        ],
+    ];
+
     $booking = CleaningBooking::factory()->create([
         'status' => CleaningBookingStatus::Pending,
         'number_of_workers' => 1,
         'scheduled_date' => '2026-09-20',
         'scheduled_time' => '09:00:00',
+        'estimated_sqm' => 181,
         'total_price' => 100000,
-        'property_details' => ['notes' => 'قبل التعديل'],
+        'property_details' => $propertyDetails,
         'cleaning_services' => [['name' => 'تنظيف عادي']],
     ]);
+
+    foreach ([
+        ['room_key' => 'bedroom.small.1', 'room_type' => 'bedroom', 'room_size' => 'small', 'display_label' => 'Bedroom 1 - Small', 'weight' => 1.0],
+        ['room_key' => 'bathroom.small.1', 'room_type' => 'bathroom', 'room_size' => 'small', 'display_label' => 'Bathroom 1 - Small', 'weight' => 0.8],
+    ] as $room) {
+        CleaningBookingRoom::query()->create(['cleaning_booking_id' => $booking->id, ...$room]);
+    }
 
     Livewire::test(EditCleaningBooking::class, ['record' => $booking->getRouteKey()])
         ->fillForm([
             'number_of_workers' => 3,
             'scheduled_date' => '2026-09-21',
             'scheduled_time' => '11:30:00',
-            'total_price' => 155000,
-            'property_details_json' => '{"notes":"تم التعديل من لوحة التحكم","floor":3}',
-            'cleaning_services_json' => '[{"name":"تنظيف عميق","quantity":2}]',
+            'selected_room_keys' => ['bedroom.small.1'],
         ])
         ->call('save')
         ->assertHasNoFormErrors();
@@ -77,9 +103,12 @@ it('updates full cleaning booking information from the dashboard', function (): 
     expect($booking->number_of_workers)->toBe(3)
         ->and($booking->scheduled_date?->format('Y-m-d'))->toBe('2026-09-21')
         ->and((string) $booking->scheduled_time)->toStartWith('11:30')
-        ->and($booking->total_price)->toBe(155000)
-        ->and(data_get($booking->property_details, 'notes'))->toBe('تم التعديل من لوحة التحكم')
-        ->and(data_get($booking->cleaning_services, '0.name'))->toBe('تنظيف عميق');
+        ->and((float) $booking->total_price)->toBe(100000.0)
+        ->and((float) $booking->estimated_sqm)->toBe(181.0)
+        ->and(data_get($booking->property_details, 'room_size_breakdown'))->toBe($propertyDetails['room_size_breakdown'])
+        ->and(data_get($booking->property_details, 'rooms'))->toBe(2)
+        ->and(data_get($booking->cleaning_services, '0.name'))->toBe('تنظيف عادي')
+        ->and($booking->rooms()->pluck('room_key')->all())->toBe(['bedroom.small.1']);
 });
 
 it('shows multiple preferred workers with Arabic labels and integer values', function (): void {
@@ -191,4 +220,71 @@ it('shows cleaning booking execution timestamps in Aleppo Syria time', function 
         ->assertSuccessful()
         ->assertSee('بتوقيت سوريا - حلب')
         ->assertSee('2026-09-18 09:00 ص');
+});
+
+it('shows Arabic room names final worker wages and the recorded worker route', function (): void {
+    $workerUser = User::factory()->create(['name' => 'عامل المسار']);
+    $worker = Worker::factory()->create([
+        'user_id' => $workerUser->id,
+        'first_name' => 'عامل المسار',
+    ]);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'number_of_workers' => 1,
+        'status' => CleaningBookingStatus::Completed,
+        'address_latitude' => 36.2020000,
+        'address_longitude' => 37.1340000,
+    ]);
+
+    $assignment = CleaningBookingWorkerAssignment::query()->create([
+        'cleaning_booking_id' => $booking->id,
+        'worker_id' => $worker->id,
+        'status' => CleaningBookingWorkerAssignmentStatus::Completed,
+        'accepted_at' => now()->subHours(2),
+        'started_travel_at' => now()->subHour(),
+        'arrived_at' => now()->subMinutes(30),
+        'last_latitude' => 36.2015000,
+        'last_longitude' => 37.1335000,
+        'location_updated_at' => now()->subMinutes(30),
+        'service_share_amount' => 900,
+        'travel_fee' => 60,
+        'admin_margin_amount' => 240,
+        'worker_amount' => 960,
+        'currency' => 'SYP',
+    ]);
+
+    CleaningBookingRoom::query()->create([
+        'cleaning_booking_id' => $booking->id,
+        'room_key' => 'balcony.medium.1',
+        'room_type' => 'balcony',
+        'room_size' => 'medium',
+        'display_label' => 'الشرفة 1',
+        'weight' => 1,
+        'assigned_worker_id' => $worker->id,
+    ]);
+
+    foreach ([
+        [36.1980000, 37.1290000, now()->subMinutes(55)],
+        [36.2015000, 37.1335000, now()->subMinutes(30)],
+    ] as [$latitude, $longitude, $recordedAt]) {
+        CleaningBookingWorkerLocationPoint::query()->create([
+            'cleaning_booking_id' => $booking->id,
+            'cleaning_booking_worker_assignment_id' => $assignment->id,
+            'worker_id' => $worker->id,
+            'latitude' => $latitude,
+            'longitude' => $longitude,
+            'recorded_at' => $recordedAt,
+        ]);
+    }
+
+    $this->get(CleaningBookingResource::getUrl('view', ['record' => $booking], isAbsolute: false))
+        ->assertSuccessful()
+        ->assertSee('شرفة متوسطة')
+        ->assertSee('أجور العاملين النهائية')
+        ->assertSee('عامل المسار')
+        ->assertSee('960 ل.س')
+        ->assertSee('الخريطة ومسار العاملين')
+        ->assertSee('2 نقطة مسجلة')
+        ->assertSee('data-cleaning-route-map', false);
 });
