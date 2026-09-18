@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\CleaningBookings\Schemas;
 
 use App\Models\PlatformCoupon;
+use BackedEnum;
 use Carbon\Carbon;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
@@ -17,6 +18,7 @@ use Modules\Cleaning\Models\CleaningBookingRoom;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Services\CleaningCouponPricingService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
+use Throwable;
 
 final class CleaningBookingInfolist
 {
@@ -529,7 +531,7 @@ final class CleaningBookingInfolist
 
     private static function cancellationSourceLabel(mixed $state): string
     {
-        $value = $state instanceof \BackedEnum ? $state->value : $state;
+        $value = $state instanceof BackedEnum ? $state->value : $state;
 
         return match ((string) $value) {
             'customer' => 'ألغاه العميل',
@@ -540,7 +542,7 @@ final class CleaningBookingInfolist
 
     private static function cancellationSourceColor(mixed $state): string
     {
-        $value = $state instanceof \BackedEnum ? $state->value : $state;
+        $value = $state instanceof BackedEnum ? $state->value : $state;
 
         return match ((string) $value) {
             'customer' => 'danger',
@@ -556,7 +558,7 @@ final class CleaningBookingInfolist
 
     private static function decimal(float $value): string
     {
-        return rtrim(rtrim(number_format($value, 2, '.', ','), '0'), '.');
+        return mb_rtrim(mb_rtrim(number_format($value, 2, '.', ','), '0'), '.');
     }
 
     private static function integer(mixed $value): string
@@ -576,7 +578,7 @@ final class CleaningBookingInfolist
 
         try {
             return Carbon::parse($value)->format('Y-m-d');
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return (string) $value;
         }
     }
@@ -589,7 +591,7 @@ final class CleaningBookingInfolist
 
         try {
             return Carbon::parse((string) $value)->format('h:i A');
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return (string) $value;
         }
     }
@@ -602,7 +604,7 @@ final class CleaningBookingInfolist
 
         try {
             return Carbon::parse($value)->format('Y-m-d h:i A');
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return (string) $value;
         }
     }
