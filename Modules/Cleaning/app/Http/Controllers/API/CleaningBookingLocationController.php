@@ -13,6 +13,7 @@ use Modules\Cleaning\Events\WorkerLocationUpdated;
 use Modules\Cleaning\Http\Requests\CleaningBookingLocationRequest;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
+use Modules\Cleaning\Models\CleaningBookingWorkerLocationPoint;
 
 final class CleaningBookingLocationController
 {
@@ -45,6 +46,15 @@ final class CleaningBookingLocationController
                 'location_updated_at' => $recordedAt,
             ])->save();
 
+            CleaningBookingWorkerLocationPoint::query()->create([
+                'cleaning_booking_id' => $cleaning_booking->id,
+                'cleaning_booking_worker_assignment_id' => $assignment->id,
+                'worker_id' => $worker->id,
+                'latitude' => $latitude,
+                'longitude' => $longitude,
+                'recorded_at' => $recordedAt,
+            ]);
+
             BroadcastAfterResponse::send(new WorkerLocationUpdated(
                 $cleaning_booking->id,
                 $latitude,
@@ -72,6 +82,15 @@ final class CleaningBookingLocationController
             'last_worker_longitude' => $longitude,
             'worker_location_updated_at' => $recordedAt,
         ])->save();
+
+        CleaningBookingWorkerLocationPoint::query()->create([
+            'cleaning_booking_id' => $cleaning_booking->id,
+            'cleaning_booking_worker_assignment_id' => null,
+            'worker_id' => $worker->id,
+            'latitude' => $latitude,
+            'longitude' => $longitude,
+            'recorded_at' => $recordedAt,
+        ]);
 
         BroadcastAfterResponse::send(new WorkerLocationUpdated(
             $cleaning_booking->id,
