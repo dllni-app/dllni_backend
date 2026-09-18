@@ -196,23 +196,11 @@ final class CleaningWorkerInfolist
                                 ->visible(fn (Worker $record): bool => self::workAreaEntries($record) === [])
                                 ->color('gray')
                                 ->columnSpanFull(),
-                            RepeatableEntry::make('work_areas')
+                            ViewEntry::make('work_areas')
                                 ->hiddenLabel()
                                 ->getStateUsing(fn (Worker $record): array => self::workAreaEntries($record))
                                 ->visible(fn (Worker $record): bool => self::workAreaEntries($record) !== [])
-                                ->schema([
-                                    TextEntry::make('name')
-                                        ->label('المنطقة')
-                                        ->weight('bold'),
-                                    TextEntry::make('city')
-                                        ->label('المدينة')
-                                        ->placeholder('-'),
-                                    TextEntry::make('status')
-                                        ->label('الحالة')
-                                        ->badge()
-                                        ->color(fn (mixed $state): string => (string) $state === 'نشطة' ? 'success' : 'gray'),
-                                ])
-                                ->columns(3)
+                                ->view('filament.resources.workers.infolists.work-areas')
                                 ->columnSpanFull(),
                         ])
                         ->columnSpanFull(),
