@@ -171,22 +171,7 @@ final class CleaningBookingResource extends Resource
 
     public static function canEdit(Model $record): bool
     {
-        if (! self::hasPermission('bookings.update')) {
-            return false;
-        }
-
-        if (! $record instanceof CleaningBooking) {
-            return false;
-        }
-
-        $status = $record->status instanceof CleaningBookingStatus
-            ? $record->status
-            : CleaningBookingStatus::tryFrom((string) $record->status);
-
-        return ! in_array($status, [
-            CleaningBookingStatus::Completed,
-            CleaningBookingStatus::Cancelled,
-        ], true);
+        return self::hasPermission('bookings.update') && $record instanceof CleaningBooking;
     }
 
     public static function canDelete(Model $record): bool

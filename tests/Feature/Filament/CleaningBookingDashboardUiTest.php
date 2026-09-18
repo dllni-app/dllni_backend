@@ -3,8 +3,10 @@
 declare(strict_types=1);
 
 use App\Filament\Resources\CleaningBookings\CleaningBookingResource;
+use App\Filament\Resources\CleaningBookings\Pages\EditCleaningBooking;
 use App\Models\User;
 use App\Models\Worker;
+use Livewire\Livewire;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingRoom;
@@ -23,7 +25,7 @@ beforeEach(function (): void {
     $this->actingAs($admin);
 });
 
-it('allows editing active bookings and blocks terminal bookings', function (): void {
+it('allows admins to edit active and terminal bookings', function (): void {
     $pending = CleaningBooking::factory()->create([
         'status' => CleaningBookingStatus::Pending,
     ]);
@@ -35,19 +37,50 @@ it('allows editing active bookings and blocks terminal bookings', function (): v
     ]);
 
     expect(CleaningBookingResource::canEdit($pending))->toBeTrue()
-        ->and(CleaningBookingResource::canEdit($completed))->toBeFalse()
-        ->and(CleaningBookingResource::canEdit($cancelled))->toBeFalse();
+        ->and(CleaningBookingResource::canEdit($completed))->toBeTrue()
+        ->and(CleaningBookingResource::canEdit($cancelled))->toBeTrue();
 
     $this->get(CleaningBookingResource::getUrl('edit', ['record' => $pending], isAbsolute: false))
         ->assertSuccessful()
-        ->assertDontSee('العامل المفضل')
-        ->assertDontSee('سياسة الفوترة')
-        ->assertDontSee('سياسة الإلغاء')
-        ->assertDontSee('تمت الموافقة على الشروط')
-        ->assertDontSee('تم تثبيت التسعير');
+        ->assertSee('بيانات الحجز الأساسية')
+        ->assertSee('التقديرات والتسعير')
+        ->assertSee('تفاصيل الخدمة والبيانات الديناميكية');
 
     $this->get(CleaningBookingResource::getUrl('edit', ['record' => $completed], isAbsolute: false))
-        ->assertForbidden();
+        ->assertSuccessful();
+});
+
+it('updates full cleaning booking information from the dashboard', function (): void {
+    $booking = CleaningBooking::factory()->create([
+        'status' => CleaningBookingStatus::Pending,
+        'number_of_workers' => 1,
+        'scheduled_date' => '2026-09-20',
+        'scheduled_time' => '09:00:00',
+        'total_price' => 100000,
+        'property_details' => ['notes' => 'قبل التعديل'],
+        'cleaning_services' => [['name' => 'تنظيف عادي']],
+    ]);
+
+    Livewire::test(EditCleaningBooking::class, ['record' => $booking->getRouteKey()])
+        ->fillForm([
+            'number_of_workers' => 3,
+            'scheduled_date' => '2026-09-21',
+            'scheduled_time' => '11:30:00',
+            'total_price' => 155000,
+            'property_details_json' => '{"notes":"تم التعديل من لوحة التحكم","floor":3}',
+            'cleaning_services_json' => '[{"name":"تنظيف عميق","quantity":2}]',
+        ])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $booking->refresh();
+
+    expect($booking->number_of_workers)->toBe(3)
+        ->and($booking->scheduled_date?->format('Y-m-d'))->toBe('2026-09-21')
+        ->and((string) $booking->scheduled_time)->toStartWith('11:30')
+        ->and($booking->total_price)->toBe(155000)
+        ->and(data_get($booking->property_details, 'notes'))->toBe('تم التعديل من لوحة التحكم')
+        ->and(data_get($booking->cleaning_services, '0.name'))->toBe('تنظيف عميق');
 });
 
 it('shows multiple preferred workers with Arabic labels and integer values', function (): void {

@@ -356,9 +356,8 @@ final class CleaningBookingsTable
                         Notification::make()->title('تم تعيين الغرف')->success()->send();
                     }),
                 EditAction::make()
-                    ->label('تعديل')
-                    ->visible(fn (CleaningBooking $record): bool => CleaningBookingResource::canEdit($record)
-                        && $record->property_type !== UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE),
+                    ->label('تعديل كامل الحجز')
+                    ->visible(fn (CleaningBooking $record): bool => CleaningBookingResource::canEdit($record)),
                 ViewAction::make()->label('عرض'),
             ]);
     }
