@@ -163,9 +163,8 @@ final class CleaningBookingForm
                     Select::make('work_environment_beneficiary_presence')
                         ->label('وجود المستفيد أثناء العمل')
                         ->options([
-                            'present' => 'موجود',
-                            'absent' => 'غير موجود',
-                            'unknown' => 'غير محدد',
+                            'female_present' => 'سيدة موجودة في المنزل',
+                            'male_alone' => 'رجل بمفرده',
                         ]),
                     Toggle::make('female_worker_safety_pledge_accepted')
                         ->label('تم قبول تعهد سلامة العاملات'),
