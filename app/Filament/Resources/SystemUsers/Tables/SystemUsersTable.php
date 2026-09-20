@@ -86,6 +86,26 @@ final class SystemUsersTable
             ])
             ->recordActions([
                 ViewAction::make()->label('عرض'),
+                Action::make('verifyAccount')
+                    ->label('توثيق الحساب')
+                    ->icon('heroicon-o-shield-check')
+                    ->color('success')
+                    ->visible(fn (User $record): bool => $record->phone_verified_at === null)
+                    ->requiresConfirmation()
+                    ->modalHeading(fn (User $record): string => "توثيق حساب {$record->name}")
+                    ->modalDescription('سيتم اعتبار رقم هاتف المستخدم موثّقاً وتسجيل وقت التوثيق الحالي. سيصبح بإمكانه متابعة تدفقات النظام التي تتطلب توثيق رقم الهاتف.')
+                    ->modalSubmitActionLabel('توثيق الحساب')
+                    ->action(function (User $record): void {
+                        $record->forceFill([
+                            'phone_verified_at' => now(),
+                        ])->save();
+
+                        Notification::make()
+                            ->title('تم توثيق الحساب')
+                            ->body('تم توثيق رقم هاتف المستخدم بنجاح.')
+                            ->success()
+                            ->send();
+                    }),
                 Action::make('deactivate')
                     ->label('إلغاء تفعيل الحساب')
                     ->icon('heroicon-o-no-symbol')
