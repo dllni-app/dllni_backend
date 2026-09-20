@@ -47,6 +47,11 @@ final class SystemUsersTable
                     ->badge()
                     ->formatStateUsing(fn (bool $state): string => $state ? 'فعال' : 'غير فعال')
                     ->color(fn (bool $state): string => $state ? 'success' : 'danger'),
+                TextColumn::make('phone_verified_at')
+                    ->label('حالة التوثيق')
+                    ->badge()
+                    ->state(fn (User $record): string => $record->phone_verified_at !== null ? 'موثّق' : 'غير موثّق')
+                    ->color(fn (User $record): string => $record->phone_verified_at !== null ? 'success' : 'warning'),
                 TextColumn::make('created_at')
                     ->label('تاريخ التسجيل')
                     ->dateTime('Y-m-d H:i')
