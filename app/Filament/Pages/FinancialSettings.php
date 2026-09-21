@@ -59,12 +59,14 @@ final class FinancialSettings extends Page
 
     public float $cleaningBaseUnitPrice = CleaningFinancialDefaults::BASE_UNIT_PRICE;
 
+    public float $cleaningMinimumOrderPrice = CleaningFinancialDefaults::MINIMUM_ORDER_PRICE;
+
     public float $cleaningDeepMultiplier = CleaningFinancialDefaults::DEEP_CLEANING_MULTIPLIER;
 
     public float $userCancellationFee = 0.0;
 
     /**
-     * @var array<string, array<string, array{pricingUnit: float, regularMinutes: int, deepMinutes: int}>>
+     * @var array<string, array<string, array{pricingUnit: float, deepMultiplier: float, regularMinutes: int, deepMinutes: int}>>
      */
     public array $roomPricingSettings = [];
 
@@ -148,6 +150,7 @@ final class FinancialSettings extends Page
                 ? round($this->extensionRatePer30Minutes * 2, 2)
                 : 400.0;
             $this->cleaningBaseUnitPrice = (float) ($setting->cleaning_base_unit_price ?? CleaningFinancialDefaults::BASE_UNIT_PRICE);
+            $this->cleaningMinimumOrderPrice = (float) ($setting->cleaning_minimum_order_price ?? CleaningFinancialDefaults::MINIMUM_ORDER_PRICE);
             $this->cleaningDeepMultiplier = (float) ($setting->cleaning_deep_multiplier ?? CleaningFinancialDefaults::DEEP_CLEANING_MULTIPLIER);
             $this->userCancellationFee = (float) ($setting->user_cancellation_fee ?? 0.0);
         }
@@ -185,11 +188,13 @@ final class FinancialSettings extends Page
             'trustRejectAfterAcceptPenalty' => ['required', 'integer', 'min:0'],
             'trustMinimumForDispatch' => ['required', 'integer', 'min:0', 'max:100'],
             'cleaningBaseUnitPrice' => ['required', 'numeric', 'min:0'],
+            'cleaningMinimumOrderPrice' => ['required', 'numeric', 'min:0'],
             'cleaningDeepMultiplier' => ['required', 'numeric', 'min:1'],
             'userCancellationFee' => ['required', 'numeric', 'min:0'],
             'roomPricingSettings' => ['required', 'array'],
             'roomPricingSettings.*' => ['required', 'array'],
             'roomPricingSettings.*.*.pricingUnit' => ['required', 'numeric', 'min:0'],
+            'roomPricingSettings.*.*.deepMultiplier' => ['required', 'numeric', 'min:1'],
             'roomPricingSettings.*.*.regularMinutes' => ['required', 'integer', 'min:1'],
             'roomPricingSettings.*.*.deepMinutes' => ['required', 'integer', 'min:1'],
         ]);
@@ -197,7 +202,7 @@ final class FinancialSettings extends Page
         $this->assertRoomPricingSettingsShape();
         $this->extensionRatePer30Minutes = round($this->eventAssistanceHourlyRatePerWorker / 2, 2);
 
-        [$roomPricingUnits, $roomTimeMinutes] = $this->roomPricingPayloads();
+        [$roomPricingUnits, $roomDeepMultipliers, $roomTimeMinutes] = $this->roomPricingPayloads();
 
         CleaningFinancialSetting::query()->updateOrCreate(
             ['id' => 1],
@@ -221,9 +226,11 @@ final class FinancialSettings extends Page
                     'price' => round((float) $range['price'], 2),
                 ], $this->extensionRanges),
                 'cleaning_base_unit_price' => $this->cleaningBaseUnitPrice,
+                'cleaning_minimum_order_price' => $this->cleaningMinimumOrderPrice,
                 'cleaning_deep_multiplier' => $this->cleaningDeepMultiplier,
                 'user_cancellation_fee' => $this->userCancellationFee,
                 'cleaning_room_pricing_units' => $roomPricingUnits,
+                'cleaning_room_deep_multipliers' => $roomDeepMultipliers,
                 'cleaning_room_time_minutes' => $roomTimeMinutes,
             ],
         );
@@ -259,11 +266,15 @@ final class FinancialSettings extends Page
     }
 
     /**
-     * @return array<string, array<string, array{pricingUnit: float, regularMinutes: int, deepMinutes: int}>>
+     * @return array<string, array<string, array{pricingUnit: float, deepMultiplier: float, regularMinutes: int, deepMinutes: int}>>
      */
     private function resolveRoomPricingSettings(?CleaningFinancialSetting $setting): array
     {
         $pricingUnits = $this->normalizedPricingUnits($setting?->cleaning_room_pricing_units);
+        $deepMultipliers = $this->normalizedDeepMultipliers(
+            $setting?->cleaning_room_deep_multipliers,
+            (float) ($setting?->cleaning_deep_multiplier ?? CleaningFinancialDefaults::DEEP_CLEANING_MULTIPLIER),
+        );
         $timeMinutes = $this->normalizedTimeMinutes($setting?->cleaning_room_time_minutes);
         $settings = [];
 
@@ -271,6 +282,7 @@ final class FinancialSettings extends Page
             foreach (CleaningFinancialDefaults::ROOM_SIZES as $roomSize) {
                 $settings[$roomType][$roomSize] = [
                     'pricingUnit' => (float) $pricingUnits[$roomType][$roomSize],
+                    'deepMultiplier' => (float) $deepMultipliers[$roomType][$roomSize],
                     'regularMinutes' => (int) $timeMinutes[$roomType][$roomSize]['regular'],
                     'deepMinutes' => (int) $timeMinutes[$roomType][$roomSize]['deep'],
                 ];
@@ -308,18 +320,23 @@ final class FinancialSettings extends Page
     }
 
     /**
-     * @return array{0: array<string, array<string, float>>, 1: array<string, array<string, array{regular: int, deep: int}>>}
+     * @return array{0: array<string, array<string, float>>, 1: array<string, array<string, float>>, 2: array<string, array<string, array{regular: int, deep: int}>>}
      */
     private function roomPricingPayloads(): array
     {
         $setting = CleaningFinancialSetting::query()->first();
         $pricingUnits = $this->normalizedPricingUnits($setting?->cleaning_room_pricing_units);
+        $deepMultipliers = $this->normalizedDeepMultipliers(
+            $setting?->cleaning_room_deep_multipliers,
+            (float) ($setting?->cleaning_deep_multiplier ?? CleaningFinancialDefaults::DEEP_CLEANING_MULTIPLIER),
+        );
         $timeMinutes = $this->normalizedTimeMinutes($setting?->cleaning_room_time_minutes);
 
         foreach (CleaningFinancialDefaults::APP_ROOM_TYPES as $roomType) {
             foreach (CleaningFinancialDefaults::ROOM_SIZES as $roomSize) {
                 $row = $this->roomPricingSettings[$roomType][$roomSize];
                 $pricingUnits[$roomType][$roomSize] = round((float) $row['pricingUnit'], 2);
+                $deepMultipliers[$roomType][$roomSize] = round(max(1.0, (float) $row['deepMultiplier']), 2);
                 $timeMinutes[$roomType][$roomSize] = [
                     'regular' => (int) $row['regularMinutes'],
                     'deep' => (int) $row['deepMinutes'],
@@ -327,7 +344,7 @@ final class FinancialSettings extends Page
             }
         }
 
-        return [$pricingUnits, $timeMinutes];
+        return [$pricingUnits, $deepMultipliers, $timeMinutes];
     }
 
     /** @return array<string, array<string, float>> */
@@ -341,6 +358,24 @@ final class FinancialSettings extends Page
                 $value = $saved[$roomType][$roomSize] ?? null;
                 if (is_numeric($value)) {
                     $values[$roomType][$roomSize] = max(0.0, (float) $value);
+                }
+            }
+        }
+
+        return $values;
+    }
+
+    /** @return array<string, array<string, float>> */
+    private function normalizedDeepMultipliers(mixed $savedValue, float $fallback): array
+    {
+        $values = CleaningFinancialDefaults::roomDeepMultipliers($fallback);
+        $saved = is_array($savedValue) ? $savedValue : [];
+
+        foreach (CleaningFinancialDefaults::ROOM_TYPES as $roomType) {
+            foreach (CleaningFinancialDefaults::ROOM_SIZES as $roomSize) {
+                $value = $saved[$roomType][$roomSize] ?? null;
+                if (is_numeric($value)) {
+                    $values[$roomType][$roomSize] = max(1.0, (float) $value);
                 }
             }
         }

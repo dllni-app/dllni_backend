@@ -11,16 +11,19 @@ return [
 
     'pricing' => [
         'section' => 'Room pricing and time',
-        'description' => 'Set the pricing unit and cleaning time for every room type and size used by the customer app.',
+        'description' => 'Set the base price, minimum order price, pricing unit, deep-cleaning multiplier, and cleaning time for every room type and size.',
         'base_unit_price' => 'Base unit price',
         'base_unit_price_hint' => 'The base amount multiplied by each room pricing unit.',
-        'deep_multiplier' => 'Deep cleaning multiplier',
-        'deep_multiplier_hint' => 'Applied to the room price when deep cleaning is selected.',
+        'minimum_order_price' => 'Minimum cleaning order price',
+        'minimum_order_price_hint' => 'If the summed room price is lower than this value, this value becomes the booking base price. The default is 150 and can be changed from the dashboard.',
+        'deep_multiplier' => 'Default deep cleaning multiplier',
+        'deep_multiplier_hint' => 'Legacy fallback; each room type and size can now have its own multiplier.',
         'room_size' => 'Room size',
+        'room_deep_multiplier' => 'Deep cleaning multiplier',
         'pricing_unit' => 'Pricing unit',
         'regular_minutes' => 'Regular cleaning time (minutes)',
         'deep_minutes' => 'Deep cleaning time (minutes)',
-        'formula_hint' => 'Room price = base unit price × pricing unit × cleaning mode multiplier. Total time is the sum of room times by type, size, and quantity.',
+        'formula_hint' => 'Room price = base unit price × pricing unit × that room\'s deep-cleaning multiplier when deep cleaning is selected. After room prices are summed, the minimum order price is applied when the sum is lower.',
     ],
 
     'room_types' => [

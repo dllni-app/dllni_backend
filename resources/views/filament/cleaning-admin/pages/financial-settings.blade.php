@@ -11,10 +11,10 @@
             </label>
 
             <label class="flex flex-col gap-1">
-                <span class="text-sm">{{ __('cleaning_settings.pricing.deep_multiplier') }}</span>
-                <input type="number" min="1" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="cleaningDeepMultiplier">
-                <span class="text-xs text-gray-500 dark:text-gray-400">{{ __('cleaning_settings.pricing.deep_multiplier_hint') }}</span>
-                @error('cleaningDeepMultiplier') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
+                <span class="text-sm">{{ __('cleaning_settings.pricing.minimum_order_price') }}</span>
+                <input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="cleaningMinimumOrderPrice">
+                <span class="text-xs text-gray-500 dark:text-gray-400">{{ __('cleaning_settings.pricing.minimum_order_price_hint') }}</span>
+                @error('cleaningMinimumOrderPrice') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
             </label>
         </div>
 
@@ -26,11 +26,12 @@
                     </div>
 
                     <div class="overflow-x-auto">
-                        <table class="w-full min-w-[760px] divide-y divide-gray-200 text-sm dark:divide-gray-700">
+                        <table class="w-full min-w-[920px] divide-y divide-gray-200 text-sm dark:divide-gray-700">
                             <thead class="bg-white dark:bg-gray-900">
                                 <tr>
                                     <th class="px-4 py-3 text-start font-medium text-gray-700 dark:text-gray-300">{{ __('cleaning_settings.pricing.room_size') }}</th>
                                     <th class="px-4 py-3 text-start font-medium text-gray-700 dark:text-gray-300">{{ __('cleaning_settings.pricing.pricing_unit') }}</th>
+                                    <th class="px-4 py-3 text-start font-medium text-gray-700 dark:text-gray-300">{{ __('cleaning_settings.pricing.room_deep_multiplier') }}</th>
                                     <th class="px-4 py-3 text-start font-medium text-gray-700 dark:text-gray-300">{{ __('cleaning_settings.pricing.regular_minutes') }}</th>
                                     <th class="px-4 py-3 text-start font-medium text-gray-700 dark:text-gray-300">{{ __('cleaning_settings.pricing.deep_minutes') }}</th>
                                 </tr>
@@ -42,6 +43,10 @@
                                         <td class="px-4 py-3">
                                             <input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="roomPricingSettings.{{ $roomType }}.{{ $roomSize }}.pricingUnit">
                                             @error('roomPricingSettings.'.$roomType.'.'.$roomSize.'.pricingUnit') <span class="mt-1 block text-xs text-danger-600">{{ $message }}</span> @enderror
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <input type="number" min="1" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="roomPricingSettings.{{ $roomType }}.{{ $roomSize }}.deepMultiplier">
+                                            @error('roomPricingSettings.'.$roomType.'.'.$roomSize.'.deepMultiplier') <span class="mt-1 block text-xs text-danger-600">{{ $message }}</span> @enderror
                                         </td>
                                         <td class="px-4 py-3">
                                             <input type="number" min="1" step="1" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="roomPricingSettings.{{ $roomType }}.{{ $roomSize }}.regularMinutes">

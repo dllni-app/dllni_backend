@@ -13,12 +13,18 @@ use Modules\Cleaning\Support\CleaningRuntimeSettings;
 
 final class UserCleaningOrderEstimationService
 {
-    public const ALGORITHM_VERSION = '2026-08-08-event-worker-hour-v3';
+    public const ALGORITHM_VERSION = '2026-09-21-minimum-per-room-deep-v4';
+
     public const EVENT_ASSISTANCE_PROPERTY_TYPE = 'event_assistance';
+
     public const CLEANING_MODES = ['regular', 'deep'];
+
     public const PROPERTY_TYPES = ['apartment', 'villa', 'house', 'office', 'studio', self::EVENT_ASSISTANCE_PROPERTY_TYPE];
+
     public const LIVING_ROOM_SIZES = ['small', 'medium', 'large', 'very_large'];
+
     public const EVENT_TYPES = ['family_dinner', 'birthday', 'large_gathering', 'funeral', 'other'];
+
     private const ROOM_SIZE_BREAKDOWN_TYPES = CleaningFinancialDefaults::ROOM_TYPES;
 
     public function __construct(private readonly CleaningPricingCalculator $pricingCalculator) {}
@@ -227,6 +233,9 @@ final class UserCleaningOrderEstimationService
             'roomPricingLines' => $regularCalculation['roomPricingLines'] ?? [],
             'pricingAlgorithm' => $regularCalculation !== null ? [
                 'baseUnitPrice' => $regularCalculation['baseUnitPrice'],
+                'minimumOrderPrice' => $regularCalculation['minimumOrderPrice'],
+                'calculatedBasePrice' => $regularCalculation['calculatedBasePrice'],
+                'minimumOrderApplied' => $regularCalculation['minimumOrderApplied'],
                 'deepCleaningMultiplier' => $regularCalculation['deepCleaningMultiplier'],
                 // Neutral legacy fields preserve the current response contract.
                 'areaMarginMultiplier' => 1.0,
@@ -245,9 +254,14 @@ final class UserCleaningOrderEstimationService
     {
         $setting = CleaningRuntimeSettings::financial();
         $baseUnitPrice = max(0.0, (float) $setting->cleaning_base_unit_price);
+        $minimumOrderPrice = max(0.0, (float) ($setting->cleaning_minimum_order_price ?? 0.0));
         $deepMultiplier = max(1.0, (float) $setting->cleaning_deep_multiplier);
         $roomSizeRanges = $this->normalizedRoomSizeRanges($setting->cleaning_room_size_ranges);
         $roomPricingUnits = $this->normalizedRoomPricingUnits($setting->cleaning_room_pricing_units);
+        $roomDeepMultipliers = $this->normalizedRoomDeepMultipliers(
+            $setting->cleaning_room_deep_multipliers,
+            $deepMultiplier,
+        );
         $roomTimeMinutes = $this->normalizedRoomTimeMinutes($setting->cleaning_room_time_minutes);
         $roomBreakdown = is_array($normalizedDetails['room_size_breakdown'] ?? null)
             ? $this->normalizeRoomSizeBreakdown($normalizedDetails['room_size_breakdown'])
@@ -270,8 +284,10 @@ final class UserCleaningOrderEstimationService
 
                 $averageSqm = (float) ($roomSizeRanges[$roomType][$roomSize]['average'] ?? 0.0);
                 $unitCount = (float) ($roomPricingUnits[$roomType][$roomSize] ?? 0.0);
+                $roomDeepMultiplier = max(1.0, (float) ($roomDeepMultipliers[$roomType][$roomSize] ?? $deepMultiplier));
+                $roomModeMultiplier = $cleaningMode === 'deep' ? $roomDeepMultiplier : 1.0;
                 $minutesPerRoom = (int) ($roomTimeMinutes[$roomType][$roomSize][$minuteMode] ?? 1);
-                $unitPrice = $this->pricingCalculator->roundMoney($baseUnitPrice * $unitCount * $modeMultiplier);
+                $unitPrice = $this->pricingCalculator->roundMoney($baseUnitPrice * $unitCount * $roomModeMultiplier);
                 $lineTotal = $this->pricingCalculator->roundMoney($unitPrice * $count);
                 $lineSqm = round($averageSqm * $count, 2);
                 $lineMinutes = $minutesPerRoom * $count;
@@ -285,7 +301,8 @@ final class UserCleaningOrderEstimationService
                     'count' => $count,
                     'unitCount' => round($unitCount, 2),
                     'baseUnitPrice' => $baseUnitPrice,
-                    'modeMultiplier' => $modeMultiplier,
+                    'deepMultiplier' => $roomDeepMultiplier,
+                    'modeMultiplier' => $roomModeMultiplier,
                     'unitPrice' => $unitPrice,
                     'totalPrice' => $lineTotal,
                     'averageSqm' => $averageSqm,
@@ -296,10 +313,17 @@ final class UserCleaningOrderEstimationService
             }
         }
 
+        $calculatedBasePrice = $this->pricingCalculator->roundMoney($basePrice);
+        $minimumOrderPrice = $this->pricingCalculator->roundMoney($minimumOrderPrice);
+        $minimumOrderApplied = $minimumOrderPrice > 0.0 && $calculatedBasePrice < $minimumOrderPrice;
+        $basePrice = $minimumOrderApplied ? $minimumOrderPrice : $calculatedBasePrice;
         $estimatedSqm = round(max(25.0, $rawSqm), 2);
 
         return [
-            'basePrice' => $this->pricingCalculator->roundMoney($basePrice),
+            'basePrice' => $basePrice,
+            'calculatedBasePrice' => $calculatedBasePrice,
+            'minimumOrderPrice' => $minimumOrderPrice,
+            'minimumOrderApplied' => $minimumOrderApplied,
             'estimatedSqm' => $estimatedSqm,
             'estimatedHours' => max(1.0, $this->roundToHalfHour($rawMinutes / 60)),
             'estimatedRawMinutes' => $rawMinutes,
@@ -495,6 +519,23 @@ final class UserCleaningOrderEstimationService
                 $savedValue = $saved[$type][$size] ?? null;
                 $defaults[$type][$size] = is_numeric($savedValue)
                     ? max(0.0, (float) $savedValue)
+                    : $defaults[$type][$size];
+            }
+        }
+
+        return $defaults;
+    }
+
+    private function normalizedRoomDeepMultipliers(mixed $value, float $fallback): array
+    {
+        $defaults = CleaningFinancialDefaults::roomDeepMultipliers($fallback);
+        $saved = is_array($value) ? $value : [];
+
+        foreach (self::ROOM_SIZE_BREAKDOWN_TYPES as $type) {
+            foreach (CleaningFinancialDefaults::ROOM_SIZES as $size) {
+                $savedValue = $saved[$type][$size] ?? null;
+                $defaults[$type][$size] = is_numeric($savedValue)
+                    ? max(1.0, (float) $savedValue)
                     : $defaults[$type][$size];
             }
         }

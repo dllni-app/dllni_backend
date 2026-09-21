@@ -27,6 +27,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Schema as DatabaseSchema;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Models\CleaningBooking;
@@ -206,11 +207,16 @@ final class CleaningBookingResource extends Resource
      */
     private static function workerTrackingState(CleaningBooking $record): array
     {
-        $record->loadMissing([
+        $relations = [
             'worker.user',
             'acceptedWorkerAssignments.worker.user',
-            'acceptedWorkerAssignments.locationPoints',
-        ]);
+        ];
+
+        if (DatabaseSchema::hasTable('cleaning_booking_worker_location_points')) {
+            $relations[] = 'acceptedWorkerAssignments.locationPoints';
+        }
+
+        $record->loadMissing($relations);
 
         $workers = $record->acceptedWorkerAssignments
             ->map(fn (CleaningBookingWorkerAssignment $assignment): array => self::assignmentTrackingState($assignment))
@@ -248,18 +254,32 @@ final class CleaningBookingResource extends Resource
         $status = $assignment->status instanceof CleaningBookingWorkerAssignmentStatus
             ? $assignment->status->value
             : (string) $assignment->status;
-        $latitude = $assignment->last_latitude !== null ? (float) $assignment->last_latitude : null;
-        $longitude = $assignment->last_longitude !== null ? (float) $assignment->last_longitude : null;
-        $routePoints = $assignment->locationPoints
+        $attributes = $assignment->getAttributes();
+        $latitudeValue = $attributes['last_latitude'] ?? null;
+        $longitudeValue = $attributes['last_longitude'] ?? null;
+        $latitude = $latitudeValue !== null ? (float) $latitudeValue : null;
+        $longitude = $longitudeValue !== null ? (float) $longitudeValue : null;
+        $locationUpdatedAt = $attributes['location_updated_at'] ?? null;
+        $locationPoints = $assignment->relationLoaded('locationPoints')
+            ? $assignment->locationPoints
+            : collect();
+        $routePoints = $locationPoints
             ->map(fn (CleaningBookingWorkerLocationPoint $point): array => self::routePointState($point))
             ->values()
             ->all();
+
+        $latestPoint = $locationPoints->last();
+        if (($latitude === null || $longitude === null) && $latestPoint instanceof CleaningBookingWorkerLocationPoint) {
+            $latitude = (float) $latestPoint->latitude;
+            $longitude = (float) $latestPoint->longitude;
+            $locationUpdatedAt = $latestPoint->recorded_at;
+        }
 
         if ($routePoints === [] && $latitude !== null && $longitude !== null) {
             $routePoints[] = [
                 'latitude' => $latitude,
                 'longitude' => $longitude,
-                'recordedAt' => self::dateTime($assignment->location_updated_at),
+                'recordedAt' => self::dateTime($locationUpdatedAt),
             ];
         }
 
@@ -275,7 +295,7 @@ final class CleaningBookingResource extends Resource
             'acceptedAt' => self::dateTime($assignment->accepted_at),
             'startedTravelAt' => self::dateTime($assignment->started_travel_at),
             'arrivedAt' => self::dateTime($assignment->arrived_at),
-            'locationUpdatedAt' => self::dateTime($assignment->location_updated_at),
+            'locationUpdatedAt' => self::dateTime($locationUpdatedAt),
             'latitude' => $latitude,
             'longitude' => $longitude,
             'hasCoordinates' => $latitude !== null && $longitude !== null,
@@ -295,19 +315,30 @@ final class CleaningBookingResource extends Resource
         $status = $record->status instanceof CleaningBookingStatus
             ? $record->status->value
             : (string) $record->status;
-        $latitudeValue = $record->getAttribute('last_worker_latitude');
-        $longitudeValue = $record->getAttribute('last_worker_longitude');
+        $attributes = $record->getAttributes();
+        $latitudeValue = $attributes['last_worker_latitude'] ?? null;
+        $longitudeValue = $attributes['last_worker_longitude'] ?? null;
         $latitude = $latitudeValue !== null ? (float) $latitudeValue : null;
         $longitude = $longitudeValue !== null ? (float) $longitudeValue : null;
-        $locationUpdatedAt = $record->getAttribute('worker_location_updated_at');
-        $routePoints = CleaningBookingWorkerLocationPoint::query()
-            ->where('cleaning_booking_id', $record->id)
-            ->where('worker_id', $record->worker_id)
-            ->orderBy('recorded_at')
-            ->get()
+        $locationUpdatedAt = $attributes['worker_location_updated_at'] ?? null;
+        $locationPoints = DatabaseSchema::hasTable('cleaning_booking_worker_location_points')
+            ? CleaningBookingWorkerLocationPoint::query()
+                ->where('cleaning_booking_id', $record->id)
+                ->where('worker_id', $record->worker_id)
+                ->orderBy('recorded_at')
+                ->get()
+            : collect();
+        $routePoints = $locationPoints
             ->map(fn (CleaningBookingWorkerLocationPoint $point): array => self::routePointState($point))
             ->values()
             ->all();
+
+        $latestPoint = $locationPoints->last();
+        if (($latitude === null || $longitude === null) && $latestPoint instanceof CleaningBookingWorkerLocationPoint) {
+            $latitude = (float) $latestPoint->latitude;
+            $longitude = (float) $latestPoint->longitude;
+            $locationUpdatedAt = $latestPoint->recorded_at;
+        }
 
         if ($routePoints === [] && $latitude !== null && $longitude !== null) {
             $routePoints[] = [

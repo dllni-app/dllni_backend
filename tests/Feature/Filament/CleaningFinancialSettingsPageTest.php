@@ -40,6 +40,8 @@ it('removes global worker finance controls and persists only shared trust settin
 
     $this->get(FinancialSettings::getUrl([], isAbsolute: false))
         ->assertSuccessful()
+        ->assertSee('الحد الأدنى لسعر طلب التنظيف')
+        ->assertSee('معامل التنظيف العميق')
         ->assertSee('سعر الساعة للعامل الواحد')
         ->assertDontSee('الدين الإداري يضاف إلى رصيد الإيداع')
         ->assertDontSee('تفعيل قواعد مالية العاملين')
@@ -77,7 +79,7 @@ it('removes global worker finance controls and persists only shared trust settin
     ]);
 });
 
-it('persists unit and regular and deep time for every app room size', function (): void {
+it('persists minimum order price and room pricing, deep multiplier, and times', function (): void {
     CleaningFinancialSetting::query()->create([
         'default_commission_rate' => 5,
         'vat_rate' => 10,
@@ -89,11 +91,14 @@ it('persists unit and regular and deep time for every app room size', function (
         'time_billing_mode' => 'actual',
         'extension_rate_per_30_minutes' => 0,
         'cleaning_room_pricing_units' => CleaningFinancialDefaults::roomPricingUnits(),
+        'cleaning_room_deep_multipliers' => CleaningFinancialDefaults::roomDeepMultipliers(),
         'cleaning_room_time_minutes' => CleaningFinancialDefaults::roomTimeMinutes(),
     ]);
 
     Livewire::test(FinancialSettings::class)
+        ->set('cleaningMinimumOrderPrice', 150)
         ->set('roomPricingSettings.bedroom.small.pricingUnit', 1.25)
+        ->set('roomPricingSettings.bedroom.small.deepMultiplier', 2.75)
         ->set('roomPricingSettings.bedroom.small.regularMinutes', 31)
         ->set('roomPricingSettings.bedroom.small.deepMinutes', 62)
         ->call('save')
@@ -101,7 +106,9 @@ it('persists unit and regular and deep time for every app room size', function (
 
     $setting = CleaningFinancialSetting::query()->findOrFail(1);
 
-    expect((float) data_get($setting->cleaning_room_pricing_units, 'bedroom.small'))->toBe(1.25)
+    expect((float) $setting->cleaning_minimum_order_price)->toBe(150.0)
+        ->and((float) data_get($setting->cleaning_room_pricing_units, 'bedroom.small'))->toBe(1.25)
+        ->and((float) data_get($setting->cleaning_room_deep_multipliers, 'bedroom.small'))->toBe(2.75)
         ->and((int) data_get($setting->cleaning_room_time_minutes, 'bedroom.small.regular'))->toBe(31)
         ->and((int) data_get($setting->cleaning_room_time_minutes, 'bedroom.small.deep'))->toBe(62);
 });
@@ -118,6 +125,7 @@ it('persists the user cancellation fee from financial settings', function (): vo
         'time_billing_mode' => 'actual',
         'extension_rate_per_30_minutes' => 0,
         'cleaning_room_pricing_units' => CleaningFinancialDefaults::roomPricingUnits(),
+        'cleaning_room_deep_multipliers' => CleaningFinancialDefaults::roomDeepMultipliers(),
         'cleaning_room_time_minutes' => CleaningFinancialDefaults::roomTimeMinutes(),
     ]);
 

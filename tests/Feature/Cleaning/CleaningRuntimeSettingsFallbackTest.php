@@ -23,6 +23,8 @@ it('uses hard-coded operational defaults without inserting configuration rows', 
         ->and((int) $financial->extension_rate_per_30_minutes)->toBe(200)
         ->and($financial->extension_ranges)->toBe(CleaningRuntimeSettings::extensionRanges())
         ->and((int) $financial->cleaning_base_unit_price)->toBe(50)
+        ->and((float) $financial->cleaning_minimum_order_price)->toBe(150.0)
+        ->and($financial->cleaning_room_deep_multipliers)->toEqual(Modules\Cleaning\Support\CleaningFinancialDefaults::roomDeepMultipliers())
         ->and((float) $financial->cleaning_deep_multiplier)->toBe(4.0)
         ->and((float) $deposit->minimum_deposit_amount)->toBe(0.0)
         ->and((float) $deposit->allowance_warning_threshold_percent)->toBe(10.0)
@@ -47,7 +49,9 @@ it('keeps database configuration authoritative when a row exists', function (): 
             ['start' => 0, 'end' => 15, 'price' => 99],
         ],
         'cleaning_base_unit_price' => 75,
+        'cleaning_minimum_order_price' => 150,
         'cleaning_deep_multiplier' => 3,
+        'cleaning_room_deep_multipliers' => ['kitchen' => ['small' => 2.5]],
     ]);
 
     $financial = CleaningRuntimeSettings::financial();
@@ -56,6 +60,8 @@ it('keeps database configuration authoritative when a row exists', function (): 
         ->and((int) $financial->travel_per_km)->toBe(42)
         ->and((int) $financial->extension_rate_per_30_minutes)->toBe(350)
         ->and((int) $financial->cleaning_base_unit_price)->toBe(75)
+        ->and((float) $financial->cleaning_minimum_order_price)->toBe(150.0)
+        ->and(data_get($financial->cleaning_room_deep_multipliers, 'kitchen.small'))->toBe(2.5)
         ->and((float) $financial->cleaning_deep_multiplier)->toBe(3.0)
         ->and($financial->coverage_thresholds)->toBe(['low' => 5, 'ok' => 9]);
 });
