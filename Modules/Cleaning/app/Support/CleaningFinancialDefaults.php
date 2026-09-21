@@ -17,9 +17,15 @@ final class CleaningFinancialDefaults
     public const APP_ROOM_TYPES = ['bedroom', 'bathroom', 'kitchen', 'living_room', 'balcony', 'corridor', 'shed'];
 
     public const ROOM_SIZES = ['small', 'medium', 'large'];
-    public const BASE_UNIT_PRICE = 50;
+
+    public const BASE_UNIT_PRICE = 50.0;
+
+    public const MINIMUM_ORDER_PRICE = 150.0;
+
     public const DEEP_CLEANING_MULTIPLIER = 4.00;
+
     public const AREA_MARGIN_MULTIPLIER = 1.18;
+
     public const SETUP_BUFFER_MINUTES = 22;
 
     public static function roomSizeRanges(): array
@@ -48,6 +54,20 @@ final class CleaningFinancialDefaults
             'corridor' => ['small' => 0.25, 'medium' => 0.5, 'large' => 0.75],
             'shed' => ['small' => 1.0, 'medium' => 1.5, 'large' => 2.0],
         ];
+    }
+
+    public static function roomDeepMultipliers(float $default = self::DEEP_CLEANING_MULTIPLIER): array
+    {
+        $multiplier = max(1.0, $default);
+        $values = [];
+
+        foreach (self::ROOM_TYPES as $roomType) {
+            foreach (self::ROOM_SIZES as $roomSize) {
+                $values[$roomType][$roomSize] = $multiplier;
+            }
+        }
+
+        return $values;
     }
 
     public static function roomTimeMinutes(): array

@@ -61,11 +61,13 @@ final class CleaningFinancialSettingsSeeder extends Seeder
                 'extension_rate_per_30_minutes' => self::EXTENSION_RATE_PER_30_MINUTES,
                 'extension_ranges' => self::EXTENSION_RANGES,
                 'cleaning_base_unit_price' => CleaningFinancialDefaults::BASE_UNIT_PRICE,
+                'cleaning_minimum_order_price' => CleaningFinancialDefaults::MINIMUM_ORDER_PRICE,
                 'cleaning_deep_multiplier' => CleaningFinancialDefaults::DEEP_CLEANING_MULTIPLIER,
                 'cleaning_area_margin_multiplier' => CleaningFinancialDefaults::AREA_MARGIN_MULTIPLIER,
                 'cleaning_setup_buffer_minutes' => CleaningFinancialDefaults::SETUP_BUFFER_MINUTES,
                 'cleaning_room_size_ranges' => CleaningFinancialDefaults::roomSizeRanges(),
                 'cleaning_room_pricing_units' => CleaningFinancialDefaults::roomPricingUnits(),
+                'cleaning_room_deep_multipliers' => CleaningFinancialDefaults::roomDeepMultipliers(),
                 'cleaning_room_time_minutes' => CleaningFinancialDefaults::roomTimeMinutes(),
             ],
         );

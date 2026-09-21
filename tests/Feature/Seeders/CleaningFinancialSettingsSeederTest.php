@@ -18,6 +18,8 @@ it('seeds cleaning financial settings with the event hourly rate and new SYP pri
     expect((float) $setting->extension_rate_per_30_minutes)->toBe(200.0);
     expect((float) $setting->travel_per_km)->toBe(10.0);
     expect((float) $setting->cleaning_base_unit_price)->toBe(50.0);
+    expect((float) $setting->cleaning_minimum_order_price)->toBe(CleaningFinancialDefaults::MINIMUM_ORDER_PRICE);
+    expect($setting->cleaning_room_deep_multipliers)->toEqual(CleaningFinancialDefaults::roomDeepMultipliers());
     expect(CleaningFinancialDefaults::BASE_UNIT_PRICE)->toBe(50.0);
     expect((float) $setting->default_commission_rate)->toBe(10.0);
 });

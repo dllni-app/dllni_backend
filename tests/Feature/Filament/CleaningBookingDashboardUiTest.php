@@ -113,8 +113,8 @@ it('updates operational booking fields and selected rooms without changing prici
 });
 
 it('shows multiple preferred workers with Arabic labels and integer values', function (): void {
-    $firstWorker = Worker::factory()->create(['first_name' => 'أحمد']);
-    $secondWorker = Worker::factory()->create(['first_name' => 'سارة']);
+    $firstWorker = Worker::factory()->financiallyEligible()->create(['first_name' => 'أحمد']);
+    $secondWorker = Worker::factory()->financiallyEligible()->create(['first_name' => 'سارة']);
 
     $booking = CleaningBooking::factory()->create([
         'status' => CleaningBookingStatus::Pending,
@@ -275,4 +275,52 @@ it('shows Arabic room names final worker wages and the recorded worker route', f
         ->assertSee('الخريطة ومسار العاملين')
         ->assertSee('2 نقطة مسجلة')
         ->assertSee('data-cleaning-route-map', false);
+});
+
+it('keeps legacy worker tracking readable when booking snapshot columns are not selected', function (): void {
+    $workerUser = User::factory()->create(['name' => 'عامل قديم']);
+    $worker = Worker::factory()->create([
+        'user_id' => $workerUser->id,
+        'first_name' => 'عامل قديم',
+    ]);
+
+    $booking = CleaningBooking::factory()->create([
+        'worker_id' => $worker->id,
+        'number_of_workers' => 1,
+        'status' => CleaningBookingStatus::WorkerAssigned,
+        'started_travel_at' => now()->subHour(),
+        'arrived_at' => null,
+        'address_latitude' => 36.2020000,
+        'address_longitude' => 37.1340000,
+    ]);
+
+    CleaningBookingWorkerLocationPoint::query()->create([
+        'cleaning_booking_id' => $booking->id,
+        'cleaning_booking_worker_assignment_id' => null,
+        'worker_id' => $worker->id,
+        'latitude' => 36.2015000,
+        'longitude' => 37.1335000,
+        'recorded_at' => now()->subMinutes(5),
+    ]);
+
+    $partialRecord = CleaningBooking::query()
+        ->select([
+            'id',
+            'worker_id',
+            'number_of_workers',
+            'status',
+            'started_travel_at',
+            'arrived_at',
+            'address_latitude',
+            'address_longitude',
+        ])
+        ->findOrFail($booking->id);
+
+    $method = new ReflectionMethod(CleaningBookingResource::class, 'workerTrackingState');
+    $state = $method->invoke(null, $partialRecord);
+
+    expect($state['workers'])->toHaveCount(1)
+        ->and($state['workers'][0]['latitude'])->toBe(36.2015)
+        ->and($state['workers'][0]['longitude'])->toBe(37.1335)
+        ->and($state['workers'][0]['routePointsCount'])->toBe(1);
 });

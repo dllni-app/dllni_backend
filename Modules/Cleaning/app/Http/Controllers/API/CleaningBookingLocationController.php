@@ -7,6 +7,7 @@ namespace Modules\Cleaning\Http\Controllers\API;
 use App\Models\Worker;
 use App\Support\Broadcast\BroadcastAfterResponse;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Schema;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Events\WorkerLocationUpdated;
@@ -77,11 +78,17 @@ final class CleaningBookingLocationController
             return $this->ignoredResponse();
         }
 
-        $cleaning_booking->forceFill([
-            'last_worker_latitude' => $latitude,
-            'last_worker_longitude' => $longitude,
-            'worker_location_updated_at' => $recordedAt,
-        ])->save();
+        if (Schema::hasColumns('cleaning_bookings', [
+            'last_worker_latitude',
+            'last_worker_longitude',
+            'worker_location_updated_at',
+        ])) {
+            $cleaning_booking->forceFill([
+                'last_worker_latitude' => $latitude,
+                'last_worker_longitude' => $longitude,
+                'worker_location_updated_at' => $recordedAt,
+            ])->save();
+        }
 
         CleaningBookingWorkerLocationPoint::query()->create([
             'cleaning_booking_id' => $cleaning_booking->id,
