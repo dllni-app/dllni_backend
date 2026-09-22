@@ -18,22 +18,26 @@ final class CleaningPricingCalculator
      */
     private const SYRIAN_CASH_INCREMENT = 1.0;
 
-    public function provisional(float $basePrice, float $addonsTotal = 0.0, bool $adminMarginIncluded = false): array
+    public function provisional(float $basePrice, float $addonsTotal = 0.0, float $includedAdminMarginBase = 0.0): array
     {
         $basePrice = $this->roundMoney($basePrice);
         $addonsTotal = $this->roundMoney($addonsTotal);
         $serviceSubtotal = $this->roundMoney($basePrice + $addonsTotal);
         $financial = CleaningRuntimeSettings::financial();
         $adminMargin = $this->adminMargin($serviceSubtotal, $financial);
-        if ($adminMarginIncluded) {
-            $adminMargin = min($serviceSubtotal, $adminMargin);
-        }
+        $includedAdminMargin = $this->includedAdminMargin(
+            $serviceSubtotal,
+            $includedAdminMarginBase,
+            $financial,
+            $adminMargin,
+        );
 
         return [
             'travelFee' => 0.0,
             'distanceKm' => null,
             'adminMargin' => $adminMargin,
-            'totalPrice' => $this->roundMoney($serviceSubtotal + ($adminMarginIncluded ? 0.0 : $adminMargin)),
+            'includedAdminMargin' => $includedAdminMargin,
+            'totalPrice' => $this->roundMoney($serviceSubtotal + max(0.0, $adminMargin - $includedAdminMargin)),
             'isPricingFinal' => false,
         ];
     }
@@ -44,7 +48,7 @@ final class CleaningPricingCalculator
         ?float $a,
         ?float $b,
         Worker $worker,
-        bool $adminMarginIncluded = false,
+        float $includedAdminMarginBase = 0.0,
     ): array
     {
         $addr = 'home_'.'address';
@@ -62,7 +66,7 @@ final class CleaningPricingCalculator
             $b,
             (float) $worker->{$x},
             (float) $worker->{$y},
-            $adminMarginIncluded,
+            $includedAdminMarginBase,
         );
     }
 
@@ -73,7 +77,7 @@ final class CleaningPricingCalculator
         ?float $b,
         float $c,
         float $d,
-        bool $adminMarginIncluded = false,
+        float $includedAdminMarginBase = 0.0,
     ): array
     {
         if ($a === null || $b === null) {
@@ -95,33 +99,40 @@ final class CleaningPricingCalculator
             ? max($this->roundMoney($travelPerKm), $calculatedTravelFee)
             : 0.0;
         $adminMargin = $this->adminMargin($serviceSubtotal, $financial);
-        if ($adminMarginIncluded) {
-            $adminMargin = min($serviceSubtotal, $adminMargin);
-        }
+        $includedAdminMargin = $this->includedAdminMargin(
+            $serviceSubtotal,
+            $includedAdminMarginBase,
+            $financial,
+            $adminMargin,
+        );
 
         return [
             'travelFee' => $travelFee,
             'distanceKm' => $distanceKm,
             'adminMargin' => $adminMargin,
+            'includedAdminMargin' => $includedAdminMargin,
             'totalPrice' => $this->roundMoney(
-                $serviceSubtotal + $travelFee + ($adminMarginIncluded ? 0.0 : $adminMargin)
+                $serviceSubtotal + $travelFee + max(0.0, $adminMargin - $includedAdminMargin)
             ),
             'isPricingFinal' => true,
         ];
     }
 
-    public function minimumOrderIncludesAdminMargin(float $basePrice, string $propertyType): bool
+    public function minimumOrderAdminMarginBase(float $basePrice, string $propertyType): float
     {
         if ($propertyType === 'event_assistance') {
-            return false;
+            return 0.0;
         }
 
+        $basePrice = $this->roundMoney(max(0.0, $basePrice));
         $minimumOrderPrice = $this->roundMoney(max(
             0.0,
             (float) (CleaningRuntimeSettings::financial()->cleaning_minimum_order_price ?? 0.0),
         ));
 
-        return $minimumOrderPrice > 0.0 && $this->roundMoney($basePrice) <= $minimumOrderPrice;
+        return $minimumOrderPrice > 0.0 && $basePrice <= $minimumOrderPrice
+            ? $basePrice
+            : 0.0;
     }
 
     public function roundMoney(float $amount): float
@@ -131,6 +142,24 @@ final class CleaningPricingCalculator
         }
 
         return (float) (ceil($amount / self::SYRIAN_CASH_INCREMENT) * self::SYRIAN_CASH_INCREMENT);
+    }
+
+    private function includedAdminMargin(
+        float $serviceSubtotal,
+        float $includedAdminMarginBase,
+        CleaningFinancialSetting $financial,
+        float $adminMargin,
+    ): float {
+        $includedBase = min(
+            $serviceSubtotal,
+            $this->roundMoney(max(0.0, $includedAdminMarginBase)),
+        );
+
+        if ($includedBase <= 0.0 || $adminMargin <= 0.0) {
+            return 0.0;
+        }
+
+        return min($adminMargin, $this->adminMargin($includedBase, $financial));
     }
 
     private function adminMargin(float $serviceSubtotal, CleaningFinancialSetting $financial): float
