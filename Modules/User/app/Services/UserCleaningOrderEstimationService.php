@@ -203,10 +203,12 @@ final class UserCleaningOrderEstimationService
             $addonsTotal = 0.0;
         }
 
-        $adminMarginIncluded = (bool) ($regularCalculation['minimumOrderApplied'] ?? false);
+        $includedAdminMarginBase = (bool) ($regularCalculation['minimumOrderApplied'] ?? false)
+            ? $basePrice
+            : 0.0;
 
         if ($input['preferredWorkerId'] === null) {
-            $pricing = $this->pricingCalculator->provisional($basePrice, $addonsTotal, $adminMarginIncluded);
+            $pricing = $this->pricingCalculator->provisional($basePrice, $addonsTotal, $includedAdminMarginBase);
         } else {
             $worker = Worker::query()->find($input['preferredWorkerId']);
             if (! $worker) {
@@ -219,7 +221,7 @@ final class UserCleaningOrderEstimationService
                 $input['addressLatitude'],
                 $input['addressLongitude'],
                 $worker,
-                $adminMarginIncluded,
+                $includedAdminMarginBase,
             );
         }
 
