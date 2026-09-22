@@ -18,24 +18,34 @@ final class CleaningPricingCalculator
      */
     private const SYRIAN_CASH_INCREMENT = 1.0;
 
-    public function provisional(float $basePrice, float $addonsTotal = 0.0): array
+    public function provisional(float $basePrice, float $addonsTotal = 0.0, bool $adminMarginIncluded = false): array
     {
         $basePrice = $this->roundMoney($basePrice);
         $addonsTotal = $this->roundMoney($addonsTotal);
         $serviceSubtotal = $this->roundMoney($basePrice + $addonsTotal);
         $financial = CleaningRuntimeSettings::financial();
         $adminMargin = $this->adminMargin($serviceSubtotal, $financial);
+        if ($adminMarginIncluded) {
+            $adminMargin = min($serviceSubtotal, $adminMargin);
+        }
 
         return [
             'travelFee' => 0.0,
             'distanceKm' => null,
             'adminMargin' => $adminMargin,
-            'totalPrice' => $this->roundMoney($serviceSubtotal + $adminMargin),
+            'totalPrice' => $this->roundMoney($serviceSubtotal + ($adminMarginIncluded ? 0.0 : $adminMargin)),
             'isPricingFinal' => false,
         ];
     }
 
-    public function finalizedForWorker(float $basePrice, float $addonsTotal, ?float $a, ?float $b, Worker $worker): array
+    public function finalizedForWorker(
+        float $basePrice,
+        float $addonsTotal,
+        ?float $a,
+        ?float $b,
+        Worker $worker,
+        bool $adminMarginIncluded = false,
+    ): array
     {
         $addr = 'home_'.'address';
         $x = 'home_'.'latitude';
@@ -45,10 +55,26 @@ final class CleaningPricingCalculator
             throw new InvalidArgumentException('Required pricing data is incomplete.');
         }
 
-        return $this->finalizedForCoordinates($basePrice, $addonsTotal, $a, $b, (float) $worker->{$x}, (float) $worker->{$y});
+        return $this->finalizedForCoordinates(
+            $basePrice,
+            $addonsTotal,
+            $a,
+            $b,
+            (float) $worker->{$x},
+            (float) $worker->{$y},
+            $adminMarginIncluded,
+        );
     }
 
-    public function finalizedForCoordinates(float $basePrice, float $addonsTotal, ?float $a, ?float $b, float $c, float $d): array
+    public function finalizedForCoordinates(
+        float $basePrice,
+        float $addonsTotal,
+        ?float $a,
+        ?float $b,
+        float $c,
+        float $d,
+        bool $adminMarginIncluded = false,
+    ): array
     {
         if ($a === null || $b === null) {
             throw new InvalidArgumentException('Required pricing data is incomplete.');
@@ -69,14 +95,33 @@ final class CleaningPricingCalculator
             ? max($this->roundMoney($travelPerKm), $calculatedTravelFee)
             : 0.0;
         $adminMargin = $this->adminMargin($serviceSubtotal, $financial);
+        if ($adminMarginIncluded) {
+            $adminMargin = min($serviceSubtotal, $adminMargin);
+        }
 
         return [
             'travelFee' => $travelFee,
             'distanceKm' => $distanceKm,
             'adminMargin' => $adminMargin,
-            'totalPrice' => $this->roundMoney($serviceSubtotal + $travelFee + $adminMargin),
+            'totalPrice' => $this->roundMoney(
+                $serviceSubtotal + $travelFee + ($adminMarginIncluded ? 0.0 : $adminMargin)
+            ),
             'isPricingFinal' => true,
         ];
+    }
+
+    public function minimumOrderIncludesAdminMargin(float $basePrice, string $propertyType): bool
+    {
+        if ($propertyType === 'event_assistance') {
+            return false;
+        }
+
+        $minimumOrderPrice = $this->roundMoney(max(
+            0.0,
+            (float) (CleaningRuntimeSettings::financial()->cleaning_minimum_order_price ?? 0.0),
+        ));
+
+        return $minimumOrderPrice > 0.0 && $this->roundMoney($basePrice) <= $minimumOrderPrice;
     }
 
     public function roundMoney(float $amount): float
