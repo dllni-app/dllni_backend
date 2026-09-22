@@ -87,3 +87,29 @@ it('uses the deep-cleaning multiplier configured for each room type and size', f
         ->and((float) $lines['kitchen']['modeMultiplier'])->toBe(3.0)
         ->and((float) $lines['kitchen']['totalPrice'])->toBe(150.0);
 });
+
+
+it('treats the configured minimum as the final customer service price including commission', function (): void {
+    CleaningFinancialSetting::query()->updateOrCreate(['id' => 1], [
+        'default_commission_rate' => 25,
+        'commission_type' => 'percent',
+        'commission_fixed_amount' => null,
+        'cleaning_base_unit_price' => 500,
+        'cleaning_minimum_order_price' => 1500,
+        'cleaning_deep_multiplier' => 4,
+        'cleaning_room_pricing_units' => CleaningFinancialDefaults::roomPricingUnits(),
+        'cleaning_room_deep_multipliers' => CleaningFinancialDefaults::roomDeepMultipliers(),
+        'cleaning_room_time_minutes' => CleaningFinancialDefaults::roomTimeMinutes(),
+    ]);
+
+    $pricing = app(UserCleaningOrderEstimationService::class)->price('apartment', [
+        'room_size_breakdown' => [
+            'kitchen' => ['small' => 1],
+        ],
+    ], null, null);
+
+    expect($pricing['pricingAlgorithm']['minimumOrderApplied'])->toBeTrue()
+        ->and($pricing['basePrice'])->toBe(1500.0)
+        ->and($pricing['adminMargin'])->toBe(375.0)
+        ->and($pricing['totalPrice'])->toBe(1500.0);
+});
