@@ -84,7 +84,12 @@ final class CleaningCustomerPricingObserver
             2,
         );
 
-        $pricing = app(CleaningPricingCalculator::class)->provisional($serviceSubtotal, 0.0);
+        $pricingCalculator = app(CleaningPricingCalculator::class);
+        $adminMarginIncluded = $pricingCalculator->minimumOrderIncludesAdminMargin(
+            (float) ($booking->base_price ?? 0),
+            (string) $booking->property_type,
+        );
+        $pricing = $pricingCalculator->provisional($serviceSubtotal, 0.0, $adminMarginIncluded);
         $adminMargin = (float) $pricing['adminMargin'];
         $isPricingFinal = (bool) $booking->is_pricing_final;
         $travelFee = $isPricingFinal
@@ -93,7 +98,7 @@ final class CleaningCustomerPricingObserver
 
         $booking->travel_fee = $travelFee;
         $booking->admin_margin_amount = $adminMargin;
-        $booking->total_price = round($serviceSubtotal + $travelFee + $adminMargin, 2);
+        $booking->total_price = round((float) $pricing['totalPrice'] + $travelFee, 2);
 
         if (! $isPricingFinal) {
             $booking->travel_distance_km = null;
@@ -124,6 +129,10 @@ final class CleaningCustomerPricingObserver
 
         $targetMargin = round(max(0.0, (float) ($booking->admin_margin_amount ?? 0)), 2);
         $isEventAssistance = (string) $booking->property_type === 'event_assistance';
+        $adminMarginIncluded = app(CleaningPricingCalculator::class)->minimumOrderIncludesAdminMargin(
+            (float) ($booking->base_price ?? 0),
+            (string) $booking->property_type,
+        );
         $serviceSubtotal = round(
             max(0.0, (float) ($booking->base_price ?? 0))
             + max(0.0, (float) ($booking->addons_total ?? 0)),
@@ -171,7 +180,10 @@ final class CleaningCustomerPricingObserver
 
             $values = [
                 'admin_margin_amount' => $margin,
-                'worker_amount' => max(0.0, round($serviceShare + $travelFee, 2)),
+                'worker_amount' => max(
+                    0.0,
+                    round($serviceShare + $travelFee - ($adminMarginIncluded ? $margin : 0.0), 2),
+                ),
             ];
 
             if ($isEventAssistance) {
