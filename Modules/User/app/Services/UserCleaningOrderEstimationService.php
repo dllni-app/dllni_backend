@@ -17,7 +17,7 @@ use Modules\Cleaning\Support\CleaningRuntimeSettings;
 
 final class UserCleaningOrderEstimationService
 {
-    public const ALGORITHM_VERSION = '2026-09-21-minimum-per-room-deep-v4';
+    public const ALGORITHM_VERSION = '2026-09-23-minimum-includes-commission-v5';
 
     public const EVENT_ASSISTANCE_PROPERTY_TYPE = 'event_assistance';
 
@@ -221,8 +221,12 @@ final class UserCleaningOrderEstimationService
             $addonsTotal = (float) $materialQuote['total'] + (float) $specialServiceQuote['total'];
         }
 
+        $includedAdminMarginBase = (bool) ($regularCalculation['minimumOrderApplied'] ?? false)
+            ? $basePrice
+            : 0.0;
+
         if ($input['preferredWorkerId'] === null) {
-            $pricing = $this->pricingCalculator->provisional($basePrice, $addonsTotal);
+            $pricing = $this->pricingCalculator->provisional($basePrice, $addonsTotal, $includedAdminMarginBase);
         } else {
             $worker = Worker::query()->find($input['preferredWorkerId']);
             if (! $worker) {
@@ -235,6 +239,7 @@ final class UserCleaningOrderEstimationService
                 $input['addressLatitude'],
                 $input['addressLongitude'],
                 $worker,
+                $includedAdminMarginBase,
             );
         }
 
