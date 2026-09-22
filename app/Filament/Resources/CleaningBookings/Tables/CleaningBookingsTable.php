@@ -219,15 +219,32 @@ final class CleaningBookingsTable
                     )),
                 Filter::make('scheduled_today')
                     ->label('مجدول اليوم')
-                    ->query(fn (Builder $query): Builder => $query->whereDate('scheduled_date', today())),
+                    ->query(fn (Builder $query): Builder => $query->scheduledOn(today())),
+                Filter::make('multi_day_event')
+                    ->label('مناسبة متعددة الأيام')
+                    ->query(fn (Builder $query): Builder => $query
+                        ->where('property_type', UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE)
+                        ->has('sessions', '>', 1)),
+                Filter::make('partially_completed')
+                    ->label('منفذ جزئياً')
+                    ->query(fn (Builder $query): Builder => $query->where('status', CleaningBookingStatus::PartiallyCompleted->value)),
+                Filter::make('has_cancelled_sessions')
+                    ->label('يوجد أيام ملغاة')
+                    ->query(fn (Builder $query): Builder => $query->whereHas(
+                        'sessions',
+                        fn (Builder $sessions): Builder => $sessions->where('status', CleaningBookingSessionStatus::Cancelled->value),
+                    )),
                 Filter::make('partial_team')
                     ->label('فريق جزئي')
                     ->query(fn (Builder $query): Builder => $query
-                        ->where('status', CleaningBookingStatus::Pending->value)
+                        ->whereIn('status', [CleaningBookingStatus::Pending->value, CleaningBookingStatus::PartiallyCompleted->value])
                         ->whereHas('acceptedWorkerAssignments')),
                 Filter::make('fulfilled_team')
                     ->label('فريق مكتمل')
-                    ->query(fn (Builder $query): Builder => $query->where('status', CleaningBookingStatus::WorkerAssigned->value)),
+                    ->query(fn (Builder $query): Builder => $query->whereIn('status', [
+                        CleaningBookingStatus::WorkerAssigned->value,
+                        CleaningBookingStatus::PartiallyCompleted->value,
+                    ])),
                 Filter::make('unassigned_rooms')
                     ->label('غرف غير مخصصة')
                     ->query(fn (Builder $query): Builder => $query

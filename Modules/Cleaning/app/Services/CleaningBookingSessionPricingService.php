@@ -149,12 +149,20 @@ final class CleaningBookingSessionPricingService
 
                 if ($acceptedWorkerIds === []) {
                     $session->workerAssignments()
-                        ->whereNotIn('status', [CleaningBookingWorkerAssignmentStatus::Completed->value])
+                        ->whereNotIn('status', [
+                            CleaningBookingWorkerAssignmentStatus::Completed->value,
+                            CleaningBookingWorkerAssignmentStatus::Rejected->value,
+                            CleaningBookingWorkerAssignmentStatus::Cancelled->value,
+                        ])
                         ->update(['status' => CleaningBookingWorkerAssignmentStatus::Withdrawn->value, 'updated_at' => now()]);
                 } else {
                     $session->workerAssignments()
                         ->whereNotIn('worker_id', $acceptedWorkerIds)
-                        ->whereNotIn('status', [CleaningBookingWorkerAssignmentStatus::Completed->value])
+                        ->whereNotIn('status', [
+                            CleaningBookingWorkerAssignmentStatus::Completed->value,
+                            CleaningBookingWorkerAssignmentStatus::Rejected->value,
+                            CleaningBookingWorkerAssignmentStatus::Cancelled->value,
+                        ])
                         ->update(['status' => CleaningBookingWorkerAssignmentStatus::Withdrawn->value, 'updated_at' => now()]);
                 }
 

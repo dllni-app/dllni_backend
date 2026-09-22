@@ -22,6 +22,16 @@ final class CleaningBookingSchedulePresenter
     ) {}
 
     /** @return array<string, mixed> */
+    public function forBooking(CleaningBooking $booking, ?int $workerId = null): array
+    {
+        $viewerWorker = $workerId !== null
+            ? Worker::query()->find($workerId)
+            : null;
+
+        return $this->present($booking, $viewerWorker);
+    }
+
+    /** @return array<string, mixed> */
     public function present(CleaningBooking $booking, ?Worker $viewerWorker = null): array
     {
         $sessions = CleaningBookingSession::query()

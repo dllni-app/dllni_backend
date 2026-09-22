@@ -20,6 +20,17 @@ final class NormalizeCleaningMultiDayScheduleRequest
             return $next($request);
         }
 
+        $propertyType = mb_strtolower((string) $request->input('propertyType'));
+        if ($propertyType === '' && is_numeric($request->route('order'))) {
+            $propertyType = mb_strtolower((string) CleaningBooking::query()
+                ->whereKey((int) $request->route('order'))
+                ->value('property_type'));
+        }
+
+        if ($propertyType !== UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE) {
+            return $next($request);
+        }
+
         $validator = Validator::make($request->all(), [
             'schedule' => ['required', 'array:mode,sessions'],
             'schedule.mode' => ['nullable', 'string', 'in:single_day,multi_day'],
@@ -30,20 +41,6 @@ final class NormalizeCleaningMultiDayScheduleRequest
             'schedule.sessions.*.hours' => ['required', 'numeric', 'min:1', 'max:24'],
         ]);
         $validated = $validator->validate();
-
-        $propertyType = mb_strtolower((string) $request->input('propertyType'));
-        if ($propertyType === '' && is_numeric($request->route('order'))) {
-            $propertyType = mb_strtolower((string) CleaningBooking::query()
-                ->whereKey((int) $request->route('order'))
-                ->value('property_type'));
-        }
-
-        $isPreviousWorkers = $request->is('api/v1/user/cleaning/orders/previous-workers');
-        if ($propertyType !== UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE && ! $isPreviousWorkers) {
-            throw ValidationException::withMessages([
-                'schedule' => ['Multi-day scheduling is available for event assistance bookings only.'],
-            ]);
-        }
 
         $sessions = array_map(static fn (array $session): array => [
             'date' => (string) $session['date'],

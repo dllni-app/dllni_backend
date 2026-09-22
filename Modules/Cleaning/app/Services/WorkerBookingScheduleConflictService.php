@@ -25,7 +25,7 @@ final class WorkerBookingScheduleConflictService
     }
 
     /**
-     * @return array<int, array{sessionId:?int,start:string,end:string,conflictingBookingId:int,conflictingSessionId:?int}>
+     * @return array<int, array{sessionId:?int,date:string,start:string,end:string,conflictingBookingId:int,conflictingSessionId:?int}>
      */
     public function conflictsForBooking(Worker $worker, CleaningBooking $candidate): array
     {
@@ -43,7 +43,7 @@ final class WorkerBookingScheduleConflictService
     }
 
     /**
-     * @return array<int, array{sessionId:?int,start:string,end:string,conflictingBookingId:int,conflictingSessionId:?int}>
+     * @return array<int, array{sessionId:?int,date:string,start:string,end:string,conflictingBookingId:int,conflictingSessionId:?int}>
      */
     public function conflictsForSession(Worker $worker, CleaningBookingSession $candidate): array
     {
@@ -71,7 +71,7 @@ final class WorkerBookingScheduleConflictService
 
     /**
      * @param  array<int, array{date:string,time:string,hours:float|int}>  $definitions
-     * @return array<int, array{sessionId:?int,start:string,end:string,conflictingBookingId:int,conflictingSessionId:?int}>
+     * @return array<int, array{sessionId:?int,date:string,start:string,end:string,conflictingBookingId:int,conflictingSessionId:?int}>
      */
     public function conflictsForDefinitions(Worker $worker, array $definitions, ?int $excludeBookingId = null): array
     {
@@ -104,7 +104,7 @@ final class WorkerBookingScheduleConflictService
 
     /**
      * @param  array<int, array{bookingId:int,sessionId:?int,start:CarbonImmutable,end:CarbonImmutable}>  $candidateIntervals
-     * @return array<int, array{sessionId:?int,start:string,end:string,conflictingBookingId:int,conflictingSessionId:?int}>
+     * @return array<int, array{sessionId:?int,date:string,start:string,end:string,conflictingBookingId:int,conflictingSessionId:?int}>
      */
     private function conflictsForIntervals(
         Worker $worker,
@@ -130,6 +130,7 @@ final class WorkerBookingScheduleConflictService
                 if ($candidate['start']->lt($busy['end']) && $candidate['end']->gt($busy['start'])) {
                     $conflicts[] = [
                         'sessionId' => $candidate['sessionId'],
+                        'date' => $candidate['start']->toDateString(),
                         'start' => $candidate['start']->toIso8601String(),
                         'end' => $candidate['end']->toIso8601String(),
                         'conflictingBookingId' => $busy['bookingId'],
@@ -149,56 +150,8 @@ final class WorkerBookingScheduleConflictService
     private function busyIntervalsFor(Worker $worker): array
     {
         $workerId = (int) $worker->id;
-
-        $sessionBookingIds = [];
-        if (Schema::hasTable('cleaning_booking_sessions')) {
-            $sessionBookingIds = CleaningBookingSession::query()
-                ->distinct()
-                ->pluck('cleaning_booking_id')
-                ->map(static fn (mixed $id): int => (int) $id)
-                ->all();
-        }
-
-        $bookings = CleaningBooking::query()
-            ->whereNotIn('status', [
-                CleaningBookingStatus::Completed->value,
-                CleaningBookingStatus::Cancelled->value,
-            ])
-            ->when(
-                $sessionBookingIds !== [],
-                fn (Builder $query): Builder => $query->whereNotIn('id', $sessionBookingIds),
-            )
-            ->where(function (Builder $assigned) use ($workerId): void {
-                $assigned
-                    ->where(function (Builder $directAssignment) use ($workerId): void {
-                        $directAssignment
-                            ->where('worker_id', $workerId)
-                            ->where('status', '!=', CleaningBookingStatus::Pending->value);
-                    })
-                    ->orWhereHas('workerAssignments', function (Builder $workerAssignments) use ($workerId): void {
-                        $workerAssignments
-                            ->where('worker_id', $workerId)
-                            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::activeValues());
-                    });
-            })
-            ->get([
-                'id',
-                'scheduled_date',
-                'scheduled_time',
-                'total_hours',
-                'estimated_hours',
-                'booking_kind',
-                'open_time_expected_max_minutes',
-            ]);
-
         $intervals = [];
-
-        foreach ($bookings as $booking) {
-            $interval = $this->intervalForBookingParent($booking);
-            if ($interval !== null) {
-                $intervals[] = $interval;
-            }
-        }
+        $sessionAssignedBookingIds = [];
 
         if (Schema::hasTable('cleaning_booking_session_worker_assignments')) {
             $sessionAssignments = CleaningBookingSessionWorkerAssignment::query()
@@ -213,6 +166,8 @@ final class WorkerBookingScheduleConflictService
                     continue;
                 }
 
+                $sessionAssignedBookingIds[(int) $session->cleaning_booking_id] = true;
+
                 if (in_array(
                     (string) ($session->status?->value ?? $session->status),
                     CleaningBookingSessionStatus::terminalValues(),
@@ -225,6 +180,57 @@ final class WorkerBookingScheduleConflictService
                 if ($interval !== null) {
                     $intervals[] = $interval;
                 }
+            }
+        }
+
+        $bookings = CleaningBooking::query()
+            ->with('sessions')
+            ->whereNotIn('status', [
+                CleaningBookingStatus::Completed->value,
+                CleaningBookingStatus::Cancelled->value,
+            ])
+            ->where(function (Builder $assigned) use ($workerId): void {
+                $assigned
+                    ->where(function (Builder $directAssignment) use ($workerId): void {
+                        $directAssignment
+                            ->where('worker_id', $workerId)
+                            ->where('status', '!=', CleaningBookingStatus::Pending->value);
+                    })
+                    ->orWhereHas('workerAssignments', function (Builder $workerAssignments) use ($workerId): void {
+                        $workerAssignments
+                            ->where('worker_id', $workerId)
+                            ->whereIn('status', CleaningBookingWorkerAssignmentStatus::activeValues());
+                    });
+            })
+            ->get();
+
+        foreach ($bookings as $booking) {
+            if (isset($sessionAssignedBookingIds[(int) $booking->id])) {
+                continue;
+            }
+
+            if ($booking->sessions->isNotEmpty()) {
+                foreach ($booking->sessions as $session) {
+                    if (in_array(
+                        (string) ($session->status?->value ?? $session->status),
+                        CleaningBookingSessionStatus::terminalValues(),
+                        true,
+                    )) {
+                        continue;
+                    }
+
+                    $interval = $this->intervalForSession($session);
+                    if ($interval !== null) {
+                        $intervals[] = $interval;
+                    }
+                }
+
+                continue;
+            }
+
+            $interval = $this->intervalForBookingParent($booking);
+            if ($interval !== null) {
+                $intervals[] = $interval;
             }
         }
 

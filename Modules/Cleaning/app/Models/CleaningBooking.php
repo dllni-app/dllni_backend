@@ -13,6 +13,7 @@ use App\Models\Worker;
 use App\Models\WorkerCustomerRating;
 use Database\Factories\CleaningBookingFactory;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -21,6 +22,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Modules\Cleaning\Enums\CleaningAssignmentMode;
+use Modules\Cleaning\Enums\CleaningBookingSessionStatus;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
 use Modules\Cleaning\Observers\CleaningBookingObserver;
@@ -477,6 +479,57 @@ final class CleaningBooking extends Model
     public function notStartApprovedWorkerCount(): int
     {
         return max(0, $this->acceptedWorkerCount() - $this->startApprovedWorkerCount());
+    }
+
+    public function sessionsCount(): int
+    {
+        return $this->relationLoaded('sessions')
+            ? $this->sessions->count()
+            : $this->sessions()->count();
+    }
+
+    public function completedSessionsCount(): int
+    {
+        if ($this->relationLoaded('sessions')) {
+            return $this->sessions
+                ->filter(fn (CleaningBookingSession $session): bool => $session->status === CleaningBookingSessionStatus::Completed)
+                ->count();
+        }
+
+        return $this->sessions()
+            ->where('status', CleaningBookingSessionStatus::Completed->value)
+            ->count();
+    }
+
+    public function cancelledSessionsCount(): int
+    {
+        if ($this->relationLoaded('sessions')) {
+            return $this->sessions
+                ->filter(fn (CleaningBookingSession $session): bool => $session->status === CleaningBookingSessionStatus::Cancelled)
+                ->count();
+        }
+
+        return $this->sessions()
+            ->where('status', CleaningBookingSessionStatus::Cancelled->value)
+            ->count();
+    }
+
+    public function remainingSessionsCount(): int
+    {
+        return max(0, $this->sessionsCount() - $this->completedSessionsCount() - $this->cancelledSessionsCount());
+    }
+
+    public function scopeScheduledOn(Builder $query, mixed $date): Builder
+    {
+        return $query->where(function (Builder $scheduleQuery) use ($date): void {
+            $scheduleQuery
+                ->whereHas('sessions', fn (Builder $sessionQuery): Builder => $sessionQuery->whereDate('scheduled_date', $date))
+                ->orWhere(function (Builder $legacyQuery) use ($date): void {
+                    $legacyQuery
+                        ->whereDoesntHave('sessions')
+                        ->whereDate('scheduled_date', $date);
+                });
+        });
     }
 
     protected static function newFactory(): CleaningBookingFactory
