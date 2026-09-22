@@ -379,7 +379,7 @@ final class CleaningBookingTeamService
 
         $subtotal = round(((float) ($booking->base_price ?? 0)) + ((float) ($booking->addons_total ?? 0)), 2);
         $isEventAssistance = (string) $booking->property_type === 'event_assistance';
-        $adminMarginIncluded = $this->pricingCalculator->minimumOrderIncludesAdminMargin(
+        $includedAdminMarginBase = $this->pricingCalculator->minimumOrderAdminMarginBase(
             (float) ($booking->base_price ?? 0),
             (string) $booking->property_type,
         );
@@ -404,6 +404,9 @@ final class CleaningBookingTeamService
                         ? round($subtotal / $requiredWorkers, 2)
                         : 0.0));
 
+            $workerIncludedAdminMarginBase = $includedAdminMarginBase > 0.0 && $subtotal > 0.0
+                ? round($includedAdminMarginBase * ($serviceShare / $subtotal), 2)
+                : 0.0;
             $worker = $assignment->relationLoaded('worker') ? $assignment->worker : Worker::query()->find($assignment->worker_id);
 
             $travelFee = 0.0;
@@ -417,14 +420,14 @@ final class CleaningBookingTeamService
                     (float) $booking->address_latitude,
                     (float) $booking->address_longitude,
                     $worker,
-                    $adminMarginIncluded,
+                    $workerIncludedAdminMarginBase,
                 );
 
                 $travelFee = (float) $pricing['travelFee'];
                 $adminMargin = (float) $pricing['adminMargin'];
                 $workerAmount = max(
                     0.0,
-                    round($serviceShare + $travelFee - ($adminMarginIncluded ? $adminMargin : 0.0), 2),
+                    round($serviceShare + $travelFee - (float) ($pricing['includedAdminMargin'] ?? 0.0), 2),
                 );
             }
 
@@ -468,7 +471,7 @@ final class CleaningBookingTeamService
             $provisionalPricing = $this->pricingCalculator->provisional(
                 $subtotal,
                 0.0,
-                $adminMarginIncluded,
+                $includedAdminMarginBase,
             );
 
             $booking->forceFill([
