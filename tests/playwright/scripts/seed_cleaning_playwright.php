@@ -82,10 +82,15 @@ try {
         'module_type' => UserModuleType::CleaningWorker->value,
     ]);
 
-    $worker = WorkerFactory::new()->create([
+    $worker = WorkerFactory::new()->financiallyEligible()->create([
         'user_id' => $workerUser->id,
         'first_name' => 'PW Worker '.$runSuffix,
         'is_active' => true,
+        'is_suspended' => false,
+        'trust_score' => 100,
+        'home_address' => 'Damascus - Playwright worker home',
+        'home_latitude' => 33.5138,
+        'home_longitude' => 36.2765,
     ]);
     $worker->zones()->createMany([
         ['name' => 'PW Damascus '.$runSuffix, 'is_active' => true],
@@ -103,10 +108,15 @@ try {
         'email' => "pw-cleaning-outsider-worker-{$runSuffix}@example.test",
         'module_type' => UserModuleType::CleaningWorker->value,
     ]);
-    $outsiderWorker = WorkerFactory::new()->create([
+    $outsiderWorker = WorkerFactory::new()->financiallyEligible()->create([
         'user_id' => $outsiderWorkerUser->id,
         'first_name' => 'PW Outsider '.$runSuffix,
         'is_active' => true,
+        'is_suspended' => false,
+        'trust_score' => 100,
+        'home_address' => 'Damascus - Playwright outsider home',
+        'home_latitude' => 33.5200,
+        'home_longitude' => 36.2800,
     ]);
 
     $completedWithWorker = CleaningBookingFactory::new()->create([

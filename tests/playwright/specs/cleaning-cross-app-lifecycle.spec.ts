@@ -47,7 +47,11 @@ test.describe('Cleaning cross-app lifecycle + critical negatives', () => {
 
     const confirmedStart = await flow.userApi.confirmStartVerification(bookingId, securityCode);
     expect(confirmedStart.response.status()).toBe(200);
-    expect(bookingStatus(confirmedStart.body)).toBe('in_progress');
+    expect(bookingStatus(confirmedStart.body)).toBe('awaiting_worker_start_confirmation');
+
+    const startedWork = await flow.workerApi.startWork(bookingId);
+    expect(startedWork.response.status()).toBe(200);
+    expect(bookingStatus(startedWork.body)).toBe('in_progress');
 
     const completedByWorker = await flow.workerApi.complete(bookingId);
     expect(completedByWorker.response.status()).toBe(200);

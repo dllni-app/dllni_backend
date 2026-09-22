@@ -163,19 +163,19 @@ test.describe('Cleaning User API contract scenarios', () => {
     expect(patch.response.status()).toBe(422);
   });
 
-  test('Contract gap: review endpoint is currently missing in backend routes', async ({
+  test('U-CL-08: completed booking review uses the current review contract', async ({
     roleRequests,
     seed,
   }) => {
     const userApi = new CleaningApiClient(roleRequests.user);
-    const created = await userApi.createOrder(seed.runId);
-    expect(created.response.status()).toBe(201);
-    const orderId = requireOrderId(created.body);
 
-    const review = await userApi.postReview(orderId, {
+    const review = await userApi.postReview(seed.fixtures.bookings.completedWithWorker, {
+      workerId: seed.actors.worker.workerId,
       rating: 5,
       comment: 'Excellent service',
     });
-    expect(review.response.status()).toBe(404);
+
+    expect(review.response.status()).toBe(200);
+    expect(((review.body as Record<string, unknown>)?.data as Record<string, unknown>)?.ok).toBe(true);
   });
 });

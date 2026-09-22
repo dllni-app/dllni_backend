@@ -374,6 +374,7 @@ export class CleaningFlowHarness {
     }
 
     await this.userApi.confirmStartVerification(orderId, securityCode);
+    await this.workerApi.startWork(orderId);
     return securityCode;
   }
 

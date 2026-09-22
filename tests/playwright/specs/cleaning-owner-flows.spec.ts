@@ -170,7 +170,7 @@ test.describe('Cleaning Owner/Worker API contract scenarios', () => {
     const workerUpdate = await workerApi.updateWorkerAvailability(seed.actors.worker.workerId, {
       userId: seed.actors.worker.userId,
       firstName: `Worker-${seed.runId}`,
-      isActive: false,
+      isActive: true,
     });
     expect(workerUpdate.response.status()).toBe(200);
     const workerPayload = (workerUpdate.body as Record<string, unknown>)?.data as Record<string, unknown>;
@@ -195,7 +195,7 @@ test.describe('Cleaning Owner/Worker API contract scenarios', () => {
   test('N-CL-09: unsupported booking status filter is rejected', async ({ roleRequests }) => {
     const workerApi = new CleaningApiClient(roleRequests.worker);
     const response = await workerApi.listCleaningBookings({
-      'filter[status]': 'awaiting_customer_completion',
+      'filter[status]': 'definitely_not_a_status',
     });
     expect(response.response.status()).toBe(422);
   });
