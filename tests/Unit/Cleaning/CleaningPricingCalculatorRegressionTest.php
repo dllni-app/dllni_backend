@@ -33,3 +33,20 @@ it('includes the configured percent commission in provisional pricing', function
     expect($eventAssistance['adminMargin'])->toBe(240.0);
     expect($eventAssistance['totalPrice'])->toBe(1200.0);
 });
+
+
+it('keeps commission inside the customer total when the minimum price includes it', function (): void {
+    CleaningFinancialSetting::query()->updateOrCreate(
+        ['id' => 1],
+        [
+            'default_commission_rate' => 25,
+            'commission_type' => 'percent',
+            'commission_fixed_amount' => null,
+        ],
+    );
+
+    $pricing = app(CleaningPricingCalculator::class)->provisional(1500, 0, true);
+
+    expect($pricing['adminMargin'])->toBe(375.0)
+        ->and($pricing['totalPrice'])->toBe(1500.0);
+});
