@@ -45,8 +45,26 @@ it('keeps commission inside the customer total when the minimum price includes i
         ],
     );
 
-    $pricing = app(CleaningPricingCalculator::class)->provisional(1500, 0, true);
+    $pricing = app(CleaningPricingCalculator::class)->provisional(1500, 0, 1500);
 
     expect($pricing['adminMargin'])->toBe(375.0)
         ->and($pricing['totalPrice'])->toBe(1500.0);
+});
+
+
+it('adds commission only for amounts above the commission-inclusive minimum base', function (): void {
+    CleaningFinancialSetting::query()->updateOrCreate(
+        ['id' => 1],
+        [
+            'default_commission_rate' => 25,
+            'commission_type' => 'percent',
+            'commission_fixed_amount' => null,
+        ],
+    );
+
+    $pricing = app(CleaningPricingCalculator::class)->provisional(1500, 200, 1500);
+
+    expect($pricing['adminMargin'])->toBe(425.0)
+        ->and($pricing['includedAdminMargin'])->toBe(375.0)
+        ->and($pricing['totalPrice'])->toBe(1750.0);
 });
