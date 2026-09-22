@@ -84,7 +84,12 @@ final class CleaningCustomerPricingObserver
             2,
         );
 
-        $pricing = app(CleaningPricingCalculator::class)->provisional($serviceSubtotal, 0.0);
+        $pricingCalculator = app(CleaningPricingCalculator::class);
+        $includedAdminMarginBase = $pricingCalculator->minimumOrderAdminMarginBase(
+            (float) ($booking->base_price ?? 0),
+            (string) $booking->property_type,
+        );
+        $pricing = $pricingCalculator->provisional($serviceSubtotal, 0.0, $includedAdminMarginBase);
         $adminMargin = (float) $pricing['adminMargin'];
         $isPricingFinal = (bool) $booking->is_pricing_final;
         $travelFee = $isPricingFinal
@@ -93,7 +98,7 @@ final class CleaningCustomerPricingObserver
 
         $booking->travel_fee = $travelFee;
         $booking->admin_margin_amount = $adminMargin;
-        $booking->total_price = round($serviceSubtotal + $travelFee + $adminMargin, 2);
+        $booking->total_price = round((float) $pricing['totalPrice'] + $travelFee, 2);
 
         if (! $isPricingFinal) {
             $booking->travel_distance_km = null;
@@ -124,6 +129,11 @@ final class CleaningCustomerPricingObserver
 
         $targetMargin = round(max(0.0, (float) ($booking->admin_margin_amount ?? 0)), 2);
         $isEventAssistance = (string) $booking->property_type === 'event_assistance';
+        $pricingCalculator = app(CleaningPricingCalculator::class);
+        $includedAdminMarginBase = $pricingCalculator->minimumOrderAdminMarginBase(
+            (float) ($booking->base_price ?? 0),
+            (string) $booking->property_type,
+        );
         $serviceSubtotal = round(
             max(0.0, (float) ($booking->base_price ?? 0))
             + max(0.0, (float) ($booking->addons_total ?? 0)),
@@ -140,7 +150,16 @@ final class CleaningCustomerPricingObserver
                 ),
                 2,
             );
+        $targetIncludedMargin = min(
+            $targetMargin,
+            (float) $pricingCalculator->provisional(
+                $serviceSubtotal,
+                0.0,
+                $includedAdminMarginBase,
+            )['includedAdminMargin'],
+        );
         $remainingMargin = $targetMargin;
+        $remainingIncludedMargin = $targetIncludedMargin;
         $remainingEventServiceShare = $serviceSubtotal;
         $count = $assignments->count();
 
@@ -169,9 +188,24 @@ final class CleaningCustomerPricingObserver
 
             $remainingMargin = round($remainingMargin - $margin, 2);
 
+            if ($isLast) {
+                $includedMargin = round(max(0.0, $remainingIncludedMargin), 2);
+            } else {
+                $ratio = $totalServiceShare > 0.0
+                    ? $serviceShare / $totalServiceShare
+                    : 1 / $count;
+                $includedMargin = (float) round($targetIncludedMargin * $ratio, 0, PHP_ROUND_HALF_UP);
+                $includedMargin = min($includedMargin, max(0.0, $remainingIncludedMargin));
+            }
+
+            $remainingIncludedMargin = round($remainingIncludedMargin - $includedMargin, 2);
+
             $values = [
                 'admin_margin_amount' => $margin,
-                'worker_amount' => max(0.0, round($serviceShare + $travelFee, 2)),
+                'worker_amount' => max(
+                    0.0,
+                    round($serviceShare + $travelFee - $includedMargin, 2),
+                ),
             ];
 
             if ($isEventAssistance) {
