@@ -379,6 +379,10 @@ final class CleaningBookingTeamService
 
         $subtotal = round(((float) ($booking->base_price ?? 0)) + ((float) ($booking->addons_total ?? 0)), 2);
         $isEventAssistance = (string) $booking->property_type === 'event_assistance';
+        $adminMarginIncluded = $this->pricingCalculator->minimumOrderIncludesAdminMargin(
+            (float) ($booking->base_price ?? 0),
+            (string) $booking->property_type,
+        );
         $requiredWorkers = max(1, (int) ($booking->number_of_workers ?? 1));
         $totalTravelFee = 0.0;
         $totalAdminMargin = 0.0;
@@ -413,11 +417,15 @@ final class CleaningBookingTeamService
                     (float) $booking->address_latitude,
                     (float) $booking->address_longitude,
                     $worker,
+                    $adminMarginIncluded,
                 );
 
                 $travelFee = (float) $pricing['travelFee'];
                 $adminMargin = (float) $pricing['adminMargin'];
-                $workerAmount = max(0.0, round($serviceShare + $travelFee, 2));
+                $workerAmount = max(
+                    0.0,
+                    round($serviceShare + $travelFee - ($adminMarginIncluded ? $adminMargin : 0.0), 2),
+                );
             }
 
             $assignment->forceFill([
@@ -449,19 +457,26 @@ final class CleaningBookingTeamService
                 'worker_id' => $primaryWorkerId,
                 'travel_fee' => round($totalTravelFee, 2),
                 'admin_margin_amount' => round($totalAdminMargin, 2),
-                'total_price' => round($acceptedAssignments->sum(fn (CleaningBookingWorkerAssignment $assignment): float => (float) $assignment->service_share_amount + (float) $assignment->travel_fee + (float) $assignment->admin_margin_amount), 2),
+                'total_price' => round($acceptedAssignments->sum(
+                    fn (CleaningBookingWorkerAssignment $assignment): float =>
+                        (float) $assignment->worker_amount + (float) $assignment->admin_margin_amount
+                ), 2),
                 'travel_distance_km' => null,
                 'is_pricing_final' => true,
             ])->save();
         } else {
-            $provisionalAdminMargin = (float) $this->pricingCalculator->provisional($subtotal, 0.0)['adminMargin'];
+            $provisionalPricing = $this->pricingCalculator->provisional(
+                $subtotal,
+                0.0,
+                $adminMarginIncluded,
+            );
 
             $booking->forceFill([
                 'status' => CleaningBookingStatus::Pending,
                 'worker_id' => null,
                 'travel_fee' => 0,
-                'admin_margin_amount' => round($provisionalAdminMargin, 2),
-                'total_price' => round($subtotal + $provisionalAdminMargin, 2),
+                'admin_margin_amount' => round((float) $provisionalPricing['adminMargin'], 2),
+                'total_price' => round((float) $provisionalPricing['totalPrice'], 2),
                 'travel_distance_km' => null,
                 'is_pricing_final' => false,
             ])->save();
