@@ -98,13 +98,15 @@ final class UserCleaningOrderEstimatePriceController
             );
         }
 
+        $clientPricing = $this->legacyMinimumPriceCompatibility($pricing);
+
         return response()->json([
             'size' => [
                 'estimatedSqm' => $estimation['estimatedSqm'],
                 'estimatedHours' => $estimation['estimatedHours'],
                 'sizeTier' => $estimation['sizeTier'],
             ],
-            'pricing' => $pricing,
+            'pricing' => $clientPricing,
             'assignmentMode' => $assignmentMode,
             ...$capacity,
             'workerAcceptance' => [
@@ -125,6 +127,37 @@ final class UserCleaningOrderEstimatePriceController
      * @param  array<string, mixed>  $validated
      * @return array{0: mixed, 1: mixed}
      */
+    /**
+     * Temporary compatibility layer for the currently published Flutter app.
+     *
+     * The released app renders "service value" as basePrice + adminMargin.
+     * When the configured minimum already includes the administration margin,
+     * returning the real margin makes the app add it a second time. Keep the
+     * real backend pricing untouched and reshape only the user-facing estimate
+     * payload until the fixed app version is released.
+     *
+     * @param  array<string, mixed>  $pricing
+     * @return array<string, mixed>
+     */
+    private function legacyMinimumPriceCompatibility(array $pricing): array
+    {
+        if (! (bool) ($pricing['pricingAlgorithm']['minimumOrderApplied'] ?? false)) {
+            return $pricing;
+        }
+
+        $actualAdminMargin = max(0.0, (float) ($pricing['adminMargin'] ?? 0));
+        $basePrice = max(0.0, (float) ($pricing['basePrice'] ?? 0));
+        $travelFee = max(0.0, (float) ($pricing['travelFee'] ?? 0));
+        $totalPrice = max(0.0, (float) ($pricing['totalPrice'] ?? 0));
+        $customerServicePrice = max(0.0, round($totalPrice - $travelFee, 2));
+
+        $pricing['actualAdminMargin'] = $actualAdminMargin;
+        $pricing['adminMargin'] = max(0.0, round($customerServicePrice - $basePrice, 2));
+        $pricing['legacyMinimumPriceCompatibility'] = true;
+
+        return $pricing;
+    }
+
     private function resolveAddressCoordinates(array $validated, int $userId): array
     {
         $addressId = $validated['addressId'] ?? null;
