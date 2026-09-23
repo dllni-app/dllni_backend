@@ -12,6 +12,7 @@ use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingMaterial;
 use Modules\Cleaning\Models\CleaningBookingSpecialService;
 use Modules\Cleaning\Services\CleaningOpenTimeBillingService;
+use Modules\Cleaning\Services\CleaningPricingCalculator;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 /** @mixin CleaningBooking */
@@ -25,9 +26,30 @@ final class UserCleaningBookingResource extends JsonResource
         $extensionFeeTotal = max(0.0, (float) ($this->extension_fee_total ?? 0));
         $bookingBasePrice = max(0.0, (float) ($this->base_price ?? 0));
         $bookingAdminMargin = max(0.0, (float) ($this->admin_margin_amount ?? 0));
+        $legacyMinimumPriceCompatibility = (string) ($this->booking_kind ?? 'standard') === 'standard'
+            && app(CleaningPricingCalculator::class)->minimumOrderAdminMarginBase(
+                $bookingBasePrice,
+                (string) $this->property_type,
+            ) > 0.0;
 
+        // Temporary compatibility for the currently published Flutter app.
+        // That app historically expects basePrice to already be the displayed
+        // service value on order details. For a commission-inclusive minimum,
+        // use the authoritative customer total minus travel and expose the real
+        // margin separately so backend accounting remains unchanged.
         if ($discountAmount <= 0.0 && $extensionFeeTotal <= 0.0) {
-            $displayServicePrice = round($bookingBasePrice + $bookingAdminMargin, 2);
+            if ($legacyMinimumPriceCompatibility) {
+                $displayServicePrice = round(max(
+                    0.0,
+                    (float) ($payload['totalPrice'] ?? 0) - (float) ($payload['travelFee'] ?? 0),
+                ), 2);
+                $payload['actualAdminMargin'] = $bookingAdminMargin;
+                $payload['adminMargin'] = 0.0;
+                $payload['legacyMinimumPriceCompatibility'] = true;
+            } else {
+                $displayServicePrice = round($bookingBasePrice + $bookingAdminMargin, 2);
+            }
+
             $payload['basePrice'] = $displayServicePrice;
             $payload['servicePrice'] = $displayServicePrice;
             $payload['service_price'] = $displayServicePrice;
