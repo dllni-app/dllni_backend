@@ -123,6 +123,7 @@ final class EventAssistanceScheduleService
                 null,
                 $requestMaterials && $sessionIndex === 0,
                 $this->specialServicesForSession($specialServices, (int) $session['sequence']),
+                max(1, $requiredWorkers),
             );
 
             $sessionBase = (float) ($pricing['basePrice'] ?? 0);

@@ -551,6 +551,7 @@ return [
             'commission_fixed' => 'Fixed amount',
             'travel_fixed' => 'Fixed amount',
             'travel_percent' => 'Percentage',
+            'travel_worker_allowance' => 'Transport allowance',
             'worker_home' => 'Worker home location',
             'time_billing_full_booked' => 'Full booked time',
             'time_billing_actual' => 'Actual working time',

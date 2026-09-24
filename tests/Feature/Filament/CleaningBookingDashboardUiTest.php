@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Filament\Resources\CleaningBookings\CleaningBookingResource;
 use App\Filament\Resources\CleaningBookings\Pages\EditCleaningBooking;
+use App\Filament\Resources\CleaningBookings\Pages\ViewCleaningBooking;
 use App\Models\User;
 use App\Models\Worker;
 use Livewire\Livewire;
@@ -55,6 +56,56 @@ it('allows admins to edit active and terminal bookings', function (): void {
 
     $this->get(CleaningBookingResource::getUrl('edit', ['record' => $completed], isAbsolute: false))
         ->assertSuccessful();
+});
+
+it('shows customer phone mission time and coupon application details', function (): void {
+    $customer = User::factory()->create([
+        'name' => 'عميل الاختبار',
+        'phone' => '0991234567',
+    ]);
+
+    $booking = CleaningBooking::factory()->create([
+        'customer_id' => $customer->id,
+        'status' => CleaningBookingStatus::Pending,
+        'scheduled_time' => '14:30:00',
+        'platform_coupon_code' => 'SAVE10',
+        'discount_amount' => 120,
+        'subtotal_before_discount' => 1200,
+        'total_price' => 1080,
+    ]);
+
+    $this->get(CleaningBookingResource::getUrl('view', ['record' => $booking], isAbsolute: false))
+        ->assertSuccessful()
+        ->assertSee('رقم العميل')
+        ->assertSee('0991234567')
+        ->assertSee('وقت المهمة')
+        ->assertSee('02:30 PM')
+        ->assertSee('تم تطبيق كوبون؟')
+        ->assertSee('نعم')
+        ->assertSee('قيمة خصم الكوبون')
+        ->assertSee('120 ل.س');
+});
+
+it('allows an admin to cancel a booking from its dashboard details', function (): void {
+    $booking = CleaningBooking::factory()->create([
+        'status' => CleaningBookingStatus::Pending,
+        'cancellation_fee' => 75,
+    ]);
+
+    Livewire::test(ViewCleaningBooking::class, ['record' => $booking->getRouteKey()])
+        ->assertActionExists('cancel_booking')
+        ->callAction('cancel_booking', data: [
+            'reason' => 'إلغاء إداري للاختبار',
+        ])
+        ->assertHasNoActionErrors();
+
+    $booking->refresh();
+
+    expect($booking->status)->toBe(CleaningBookingStatus::Cancelled)
+        ->and($booking->cancelled_by_role)->toBe('admin')
+        ->and($booking->cancellation_reason)->toBe('إلغاء إداري للاختبار')
+        ->and((float) $booking->cancellation_fee)->toBe(0.0)
+        ->and($booking->cancelled_at)->not->toBeNull();
 });
 
 it('updates operational booking fields and selected rooms without changing pricing or calculated details', function (): void {

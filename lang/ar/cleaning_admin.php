@@ -578,6 +578,7 @@ return [
             'commission_fixed' => 'مبلغ ثابت',
             'travel_fixed' => 'مبلغ ثابت',
             'travel_percent' => 'نسبة مئوية',
+            'travel_worker_allowance' => 'بدل مواصلات',
             'worker_home' => 'موقع منزل العامل',
             'time_billing_full_booked' => 'الوقت المحجوز بالكامل',
             'time_billing_actual' => 'وقت العمل الفعلي',

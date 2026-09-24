@@ -12,8 +12,8 @@ use Modules\Cleaning\Support\WorkerRoomAssignmentPlanner;
 use Modules\User\Http\Requests\UserCleaningOrderEstimatePriceRequest;
 use Modules\User\Models\UserAddress;
 use Modules\User\Services\EventAssistanceScheduleService;
-use Modules\User\Services\OpenTimeScheduleService;
 use Modules\User\Services\FemaleWorkerSafetyPolicyService;
+use Modules\User\Services\OpenTimeScheduleService;
 use Modules\User\Services\RecurringCleaningScheduleService;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 use Modules\User\Support\CleaningWorkerCapacity;
@@ -153,6 +153,7 @@ final class UserCleaningOrderEstimatePriceController
                             isset($validated['serviceIds']) ? (array) $validated['serviceIds'] : null,
                             (bool) ($validated['requestMaterials'] ?? false),
                             is_array($validated['specialServices'] ?? null) ? $validated['specialServices'] : [],
+                            $requestedWorkers,
                         ));
 
                 if ($isOpenTime && $openTimePlan !== null) {
