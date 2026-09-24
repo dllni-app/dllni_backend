@@ -67,6 +67,7 @@ final class UserCleaningOrderEstimatePriceController
                 $addressLongitude,
                 $assignmentMode === 'preferred_worker' ? ($validated['preferredWorkerId'] ?? null) : null,
                 isset($validated['serviceIds']) ? (array) $validated['serviceIds'] : null,
+                $requestedWorkers,
             );
         } catch (InvalidArgumentException $exception) {
             throw ValidationException::withMessages([

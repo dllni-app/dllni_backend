@@ -89,16 +89,25 @@ final class CleaningCustomerPricingObserver
             (float) ($booking->base_price ?? 0),
             (string) $booking->property_type,
         );
-        $pricing = $pricingCalculator->provisional($serviceSubtotal, 0.0, $includedAdminMarginBase);
+        $pricing = $pricingCalculator->provisional(
+            $serviceSubtotal,
+            0.0,
+            $includedAdminMarginBase,
+            max(1, (int) ($booking->number_of_workers ?? 1)),
+        );
         $adminMargin = (float) $pricing['adminMargin'];
+        $provisionalTravelFee = round(max(0.0, (float) ($pricing['travelFee'] ?? 0)), 2);
         $isPricingFinal = (bool) $booking->is_pricing_final;
         $travelFee = $isPricingFinal
             ? round(max(0.0, (float) ($booking->travel_fee ?? 0)), 2)
-            : 0.0;
+            : $provisionalTravelFee;
 
         $booking->travel_fee = $travelFee;
         $booking->admin_margin_amount = $adminMargin;
-        $booking->total_price = round((float) $pricing['totalPrice'] + $travelFee, 2);
+        $booking->total_price = round(
+            (float) $pricing['totalPrice'] - $provisionalTravelFee + $travelFee,
+            2,
+        );
 
         if (! $isPricingFinal) {
             $booking->travel_distance_km = null;

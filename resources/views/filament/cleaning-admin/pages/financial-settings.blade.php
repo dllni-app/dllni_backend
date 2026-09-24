@@ -82,7 +82,26 @@
 
     <x-filament::section :heading="__('cleaning_admin.financial.sections.travel_costs')">
         <div class="grid gap-4 md:grid-cols-2">
-            <div class="flex flex-col gap-1"><span class="text-sm">{{ __('cleaning_admin.financial.fields.travel_markup_type') }}</span><div class="flex items-center rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-600 dark:border-gray-600 dark:bg-gray-800/60 dark:text-gray-300">{{ __('cleaning_admin.financial.options.travel_fixed') }}</div></div>
+            <label class="flex flex-col gap-1">
+                <span class="text-sm">{{ __('cleaning_admin.financial.fields.travel_markup_type') }}</span>
+                <select class="fi-select block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="travelMarkupType">
+                    <option value="fixed">{{ __('cleaning_admin.financial.options.travel_fixed') }}</option>
+                    <option value="percent">{{ __('cleaning_admin.financial.options.travel_percent') }}</option>
+                    <option value="worker_allowance">{{ __('cleaning_admin.financial.options.travel_worker_allowance') }}</option>
+                </select>
+                @error('travelMarkupType') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
+            </label>
+            <label class="flex flex-col gap-1">
+                <span class="text-sm">{{ $travelMarkupType === 'worker_allowance' ? (app()->isLocale('ar') ? 'قيمة بدل المواصلات لكل عامل' : 'Transport allowance per worker') : __('cleaning_admin.financial.fields.travel_markup_value') }}</span>
+                <div class="flex items-center gap-2">
+                    <input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="travelMarkupValue">
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ $travelMarkupType === 'percent' ? '%' : __('SYP') }}</span>
+                </div>
+                @if($travelMarkupType === 'worker_allowance')
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ app()->isLocale('ar') ? 'يُحتسب بدل المواصلات تلقائياً لكل عامل ضمن تسعير الطلب، ويعاد احتسابه عند تثبيت العامل.' : 'The allowance is calculated automatically for every worker in the order estimate and recalculated when the worker is finalized.' }}</span>
+                @endif
+                @error('travelMarkupValue') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
+            </label>
             <label class="flex flex-col gap-1">
                 <span class="text-sm">{{ __('cleaning_admin.financial.fields.travel_per_km') }}</span>
                 <input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="travelPerKm">

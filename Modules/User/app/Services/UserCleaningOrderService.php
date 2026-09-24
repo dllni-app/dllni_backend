@@ -71,12 +71,22 @@ final class UserCleaningOrderService
                     $normalizedInput['propertyType'],
                     $normalizedInput['propertyDetails'],
                 );
+                $suggestedWorkers = (int) ($estimation['recommendation']['suggestedTeamSize'] ?? 1);
+                $requestedWorkers = $this->resolveRequestedWorkers(
+                    $validated,
+                    $normalizedPropertyType,
+                    $suggestedWorkers,
+                    $resolvedAssignmentMode
+                );
+
                 $pricing = $this->estimationService->price(
                     $normalizedInput['propertyType'],
                     $normalizedInput['propertyDetails'],
                     $normalizedInput['addressLatitude'],
                     $normalizedInput['addressLongitude'],
                     $pricingPreferredWorkerId,
+                    null,
+                    $requestedWorkers,
                 );
             } catch (InvalidArgumentException $exception) {
                 throw ValidationException::withMessages([
@@ -84,13 +94,6 @@ final class UserCleaningOrderService
                 ]);
             }
 
-            $suggestedWorkers = (int) ($estimation['recommendation']['suggestedTeamSize'] ?? 1);
-            $requestedWorkers = $this->resolveRequestedWorkers(
-                $validated,
-                $normalizedPropertyType,
-                $suggestedWorkers,
-                $resolvedAssignmentMode
-            );
             $plannedWorkerRoomAssignments = $this->plannedWorkerRoomAssignments(
                 $normalizedPropertyType,
                 $normalizedPropertyDetails,

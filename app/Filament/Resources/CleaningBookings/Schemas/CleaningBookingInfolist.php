@@ -52,6 +52,10 @@ final class CleaningBookingInfolist
                                         TextEntry::make('customer.name')
                                             ->label('العميل')
                                             ->placeholder('-'),
+                                        TextEntry::make('customer.phone')
+                                            ->label('رقم العميل')
+                                            ->placeholder('-')
+                                            ->copyable(),
                                         TextEntry::make('cancelled_at')
                                             ->label('وقت الإلغاء')
                                             ->formatStateUsing(fn ($state): string => self::dateTime($state))
@@ -75,6 +79,9 @@ final class CleaningBookingInfolist
                                             ->label('موعد الخدمة')
                                             ->state(fn (CleaningBooking $record): string => self::appointmentLabel($record))
                                             ->weight('bold'),
+                                        TextEntry::make('scheduled_time')
+                                            ->label('وقت المهمة')
+                                            ->formatStateUsing(fn ($state): string => self::time($state)),
                                     ])
                                     ->columns(2),
                                 Section::make('تفاصيل المناسبة')
@@ -158,8 +165,17 @@ final class CleaningBookingInfolist
                                         TextEntry::make('financial_admin')
                                             ->label('هامش الإدارة')
                                             ->state(fn (CleaningBooking $record): string => self::financialAdminSummary($record)),
+                                        TextEntry::make('coupon_applied')
+                                            ->label('تم تطبيق كوبون؟')
+                                            ->state(fn (CleaningBooking $record): string => self::couponUsed($record) ? 'نعم' : 'لا')
+                                            ->badge()
+                                            ->color(fn (CleaningBooking $record): string => self::couponUsed($record) ? 'success' : 'gray'),
+                                        TextEntry::make('coupon_discount_value')
+                                            ->label('قيمة خصم الكوبون')
+                                            ->state(fn (CleaningBooking $record): string => self::money(self::couponDiscountAmount($record)))
+                                            ->visible(fn (CleaningBooking $record): bool => self::couponUsed($record)),
                                         TextEntry::make('financial_coupon')
-                                            ->label('الكوبون')
+                                            ->label('تفاصيل الكوبون')
                                             ->state(fn (CleaningBooking $record): string => self::financialCouponSummary($record))
                                             ->visible(fn (CleaningBooking $record): bool => self::couponUsed($record)),
                                         TextEntry::make('financial_before_coupon')
@@ -296,6 +312,15 @@ final class CleaningBookingInfolist
             ?? 0);
 
         return sprintf('%s • %s • خصم %s', self::couponCode($record), $value, self::money($discount));
+    }
+
+    private static function couponDiscountAmount(CleaningBooking $record): float
+    {
+        return max(0.0, (float) (
+            self::couponBreakdown($record)['discountAmount']
+            ?? $record->discount_amount
+            ?? 0
+        ));
     }
 
     private static function priceBeforeCoupon(CleaningBooking $record): float

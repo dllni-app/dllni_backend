@@ -79,6 +79,24 @@ it('removes global worker finance controls and persists only shared trust settin
     ]);
 });
 
+it('persists the per-worker transport allowance travel markup option', function (): void {
+    $this->get(FinancialSettings::getUrl([], isAbsolute: false))
+        ->assertSuccessful()
+        ->assertSee('بدل مواصلات');
+
+    Livewire::test(FinancialSettings::class)
+        ->set('travelMarkupType', 'worker_allowance')
+        ->set('travelMarkupValue', 125)
+        ->set('travelPerKm', 10)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $setting = CleaningFinancialSetting::query()->findOrFail(1);
+
+    expect($setting->travel_markup_type)->toBe('worker_allowance')
+        ->and((float) $setting->travel_markup_value)->toBe(125.0);
+});
+
 it('persists minimum order price and room pricing, deep multiplier, and times', function (): void {
     CleaningFinancialSetting::query()->create([
         'default_commission_rate' => 5,

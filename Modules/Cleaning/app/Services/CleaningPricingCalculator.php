@@ -18,8 +18,12 @@ final class CleaningPricingCalculator
      */
     private const SYRIAN_CASH_INCREMENT = 1.0;
 
-    public function provisional(float $basePrice, float $addonsTotal = 0.0, float $includedAdminMarginBase = 0.0): array
-    {
+    public function provisional(
+        float $basePrice,
+        float $addonsTotal = 0.0,
+        float $includedAdminMarginBase = 0.0,
+        int $workerCount = 1,
+    ): array {
         $basePrice = $this->roundMoney($basePrice);
         $addonsTotal = $this->roundMoney($addonsTotal);
         $serviceSubtotal = $this->roundMoney($basePrice + $addonsTotal);
@@ -31,13 +35,16 @@ final class CleaningPricingCalculator
             $financial,
             $adminMargin,
         );
+        $travelFee = $this->workerTransportAllowance($financial, $workerCount);
 
         return [
-            'travelFee' => 0.0,
+            'travelFee' => $travelFee,
             'distanceKm' => null,
             'adminMargin' => $adminMargin,
             'includedAdminMargin' => $includedAdminMargin,
-            'totalPrice' => $this->roundMoney($serviceSubtotal + max(0.0, $adminMargin - $includedAdminMargin)),
+            'totalPrice' => $this->roundMoney(
+                $serviceSubtotal + $travelFee + max(0.0, $adminMargin - $includedAdminMargin)
+            ),
             'isPricingFinal' => false,
         ];
     }
@@ -49,8 +56,7 @@ final class CleaningPricingCalculator
         ?float $b,
         Worker $worker,
         float $includedAdminMarginBase = 0.0,
-    ): array
-    {
+    ): array {
         $addr = 'home_'.'address';
         $x = 'home_'.'latitude';
         $y = 'home_'.'longitude';
@@ -78,8 +84,7 @@ final class CleaningPricingCalculator
         float $c,
         float $d,
         float $includedAdminMarginBase = 0.0,
-    ): array
-    {
+    ): array {
         if ($a === null || $b === null) {
             throw new InvalidArgumentException('Required pricing data is incomplete.');
         }
@@ -95,9 +100,12 @@ final class CleaningPricingCalculator
         $calculatedTravelFee = $this->roundMoney($exactDistanceKm * $travelPerKm);
         // The configured per-kilometre value is also the minimum transport fee.
         // This prevents very short routes from producing values such as 1 SYP.
-        $travelFee = $travelPerKm > 0.0
+        $distanceTravelFee = $travelPerKm > 0.0
             ? max($this->roundMoney($travelPerKm), $calculatedTravelFee)
             : 0.0;
+        $travelFee = $this->roundMoney(
+            $distanceTravelFee + $this->workerTransportAllowance($financial, 1)
+        );
         $adminMargin = $this->adminMargin($serviceSubtotal, $financial);
         $includedAdminMargin = $this->includedAdminMargin(
             $serviceSubtotal,
@@ -171,6 +179,17 @@ final class CleaningPricingCalculator
             : $this->roundMoney(
                 $serviceSubtotal * (max(0.0, (float) $financial->default_commission_rate) / 100)
             );
+    }
+
+    private function workerTransportAllowance(CleaningFinancialSetting $financial, int $workerCount): float
+    {
+        if ((string) $financial->travel_markup_type !== 'worker_allowance') {
+            return 0.0;
+        }
+
+        return $this->roundMoney(
+            max(0.0, (float) $financial->travel_markup_value) * max(1, $workerCount)
+        );
     }
 
     private function measureKm(float $a, float $b, float $c, float $d): float

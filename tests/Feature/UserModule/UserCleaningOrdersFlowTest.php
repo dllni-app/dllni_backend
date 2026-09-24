@@ -23,8 +23,8 @@ use Modules\Cleaning\Models\CleaningBillingPolicy;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningBookingWorkerAssignment;
 use Modules\Cleaning\Models\CleaningService;
-use Modules\Cleaning\Services\CleaningPricingCalculator;
 use Modules\Cleaning\Models\ServicePricing;
+use Modules\Cleaning\Services\CleaningPricingCalculator;
 use Modules\User\Services\UserCleaningOrderEstimationService;
 
 use function Pest\Laravel\getJson;
@@ -114,6 +114,59 @@ it('creates a cleaning order for authenticated user', function (): void {
         'price' => 4500.0,
         'currency' => 'SYP',
     ]);
+});
+
+it('applies transport allowance for each requested worker before and after booking creation', function (): void {
+    CleaningFinancialSetting::query()->updateOrCreate(
+        ['id' => 1],
+        [
+            'default_commission_rate' => 0,
+            'commission_type' => 'percent',
+            'commission_fixed_amount' => null,
+            'travel_markup_type' => 'worker_allowance',
+            'travel_markup_value' => 75,
+            'travel_per_km' => 10,
+            'travel_distance_start_point' => 'worker_home',
+        ],
+    );
+
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $propertyDetails = [
+        'address' => 'Damascus - Mazzeh',
+        'location_name' => 'Home',
+        'rooms' => 2,
+        'bedrooms' => 1,
+        'bathrooms' => 1,
+        'living_room_size' => 'small',
+    ];
+
+    $estimate = postJson('/api/v1/user/cleaning/orders/estimate-price', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => $propertyDetails,
+        'addressLatitude' => 33.5138,
+        'addressLongitude' => 36.2765,
+        'numberOfWorkers' => 3,
+    ])->assertOk();
+
+    expect((float) $estimate->json('pricing.travelFee'))->toBe(225.0)
+        ->and((int) $estimate->json('workerAcceptance.required'))->toBe(3);
+
+    $created = postJson('/api/v1/user/cleaning/orders', [
+        'propertyType' => 'apartment',
+        'propertyDetails' => $propertyDetails,
+        'scheduledDate' => now()->addDay()->format('Y-m-d'),
+        'scheduledTime' => '09:00',
+        'addressLatitude' => 33.5138,
+        'addressLongitude' => 36.2765,
+        'numberOfWorkers' => 3,
+        'termsAccepted' => true,
+    ])->assertCreated();
+
+    expect((float) $created->json('order.travelFee'))->toBe(225.0)
+        ->and((int) $created->json('order.numberOfWorkers'))->toBe(3)
+        ->and((float) $created->json('order.totalPrice'))->toBe((float) $estimate->json('pricing.totalPrice'));
 });
 
 it('creates an open cleaning order with coupon deducted from provisional admin margin before worker share', function (): void {

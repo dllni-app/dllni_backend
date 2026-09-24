@@ -8,19 +8,25 @@ use App\Enums\WorkerCustomerRatingType;
 use App\Filament\Resources\CleaningBookings\CleaningBookingResource;
 use App\Filament\Resources\Disputes\DisputeResource;
 use App\Models\WorkerCustomerRating;
+use App\Support\Broadcast\BroadcastAfterResponse;
 use BackedEnum;
 use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Textarea;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Facades\DB;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningTimeWarningResponse;
+use Modules\Cleaning\Events\CleaningBookingTrackingUpdated;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\CleaningTimeWarning;
+use Modules\Cleaning\Services\CleaningLifecycleNotificationService;
 use Throwable;
 
 final class ViewCleaningBooking extends ViewRecord
@@ -160,6 +166,89 @@ final class ViewCleaningBooking extends ViewRecord
                     ? DisputeResource::getUrl('view', ['record' => $this->record->disputes()->first()])
                     : '#')
                 ->visible(fn (): bool => $this->record->disputes()->exists()),
+            Action::make('cancel_booking')
+                ->label('إلغاء الحجز')
+                ->icon('heroicon-o-x-circle')
+                ->color('danger')
+                ->visible(fn (): bool => ! in_array($this->record->status, [
+                    CleaningBookingStatus::Completed,
+                    CleaningBookingStatus::Cancelled,
+                    CleaningBookingStatus::UnderDispute,
+                ], true))
+                ->requiresConfirmation()
+                ->modalHeading('إلغاء الحجز')
+                ->modalDescription('سيتم إلغاء الحجز وإبلاغ العميل والعاملين المرتبطين به. لا يتم تطبيق غرامة تلقائية على العميل أو العامل عند الإلغاء الإداري.')
+                ->form([
+                    Textarea::make('reason')
+                        ->label('سبب الإلغاء')
+                        ->required()
+                        ->maxLength(1000),
+                ])
+                ->action(function (array $data): void {
+                    $fromStatus = (string) ($this->record->status?->value ?? $this->record->status);
+
+                    $cancelled = DB::transaction(function () use ($data): CleaningBooking {
+                        $booking = CleaningBooking::query()
+                            ->whereKey($this->record->getKey())
+                            ->lockForUpdate()
+                            ->firstOrFail();
+
+                        if (in_array($booking->status, [
+                            CleaningBookingStatus::Completed,
+                            CleaningBookingStatus::Cancelled,
+                            CleaningBookingStatus::UnderDispute,
+                        ], true)) {
+                            return $booking;
+                        }
+
+                        $booking->forceFill([
+                            'status' => CleaningBookingStatus::Cancelled,
+                            'cancelled_at' => now(),
+                            'cancellation_reason' => mb_trim((string) $data['reason']),
+                            'cancelled_by_role' => 'admin',
+                            'cancellation_fee' => 0,
+                        ])->save();
+
+                        return $booking->fresh();
+                    });
+
+                    if ($cancelled->status !== CleaningBookingStatus::Cancelled) {
+                        Notification::make()
+                            ->title('تعذر إلغاء الحجز في حالته الحالية')
+                            ->danger()
+                            ->send();
+
+                        return;
+                    }
+
+                    app(CleaningLifecycleNotificationService::class)->notifyCustomer(
+                        booking: $cancelled,
+                        canonicalType: 'cleaning.booking.order_cancelled',
+                        action: 'admin_cancelled',
+                        actorRole: 'admin',
+                        fromStatus: $fromStatus,
+                        occurredAt: $cancelled->cancelled_at?->toIso8601String(),
+                        extraData: [
+                            'cancellationReason' => $cancelled->cancellation_reason,
+                            'cancellation_reason' => $cancelled->cancellation_reason,
+                        ],
+                    );
+
+                    $this->dispatchTrackingUpdate($cancelled);
+                    $this->record = $cancelled;
+                    $this->refreshFormData([
+                        'status',
+                        'cancelled_at',
+                        'cancellation_reason',
+                        'cancelled_by_role',
+                        'cancellation_fee',
+                    ]);
+
+                    Notification::make()
+                        ->title('تم إلغاء الحجز بنجاح')
+                        ->success()
+                        ->send();
+                }),
             EditAction::make()
                 ->label('تعديل')
                 ->visible(fn (): bool => CleaningBookingResource::canEdit($this->record)),
@@ -308,5 +397,28 @@ final class ViewCleaningBooking extends ViewRecord
         return $currency === '' || $currency === 'SYP'
             ? $formatted.' ل.س'
             : $formatted.' '.$currency;
+    }
+
+    private function dispatchTrackingUpdate(CleaningBooking $booking): void
+    {
+        BroadcastAfterResponse::send(new CleaningBookingTrackingUpdated($booking->id, [
+            'cleaningBookingId' => $booking->id,
+            'status' => $booking->status?->value,
+            'workerId' => $booking->worker_id,
+            'assignmentMode' => $booking->resolvedAssignmentMode(),
+            'requiredWorkers' => max(1, (int) ($booking->number_of_workers ?? 1)),
+            'acceptedWorkers' => $booking->acceptedWorkerCount(),
+            'remainingWorkers' => $booking->remainingWorkerCount(),
+            'startApprovedWorkers' => $booking->startApprovedWorkerCount(),
+            'notStartApprovedWorkers' => $booking->notStartApprovedWorkerCount(),
+            'isTeamFulfilled' => $booking->isTeamFulfilled(),
+            'startedTravelAt' => $booking->started_travel_at?->toIso8601String(),
+            'arrivedAt' => $booking->arrived_at?->toIso8601String(),
+            'workStartedAt' => $booking->work_started_at?->toIso8601String(),
+            'workFinishedAt' => $booking->work_finished_at?->toIso8601String(),
+            'customerConfirmedAt' => $booking->customer_confirmed_at?->toIso8601String(),
+            'cancelledAt' => $booking->cancelled_at?->toIso8601String(),
+            'updatedAt' => now()->toIso8601String(),
+        ]));
     }
 }

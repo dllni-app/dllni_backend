@@ -172,6 +172,7 @@ final class UserCleaningOrderEstimationService
         mixed $addressLongitude,
         mixed $preferredWorkerId = null,
         ?array $serviceIds = null,
+        int $workerCount = 1,
     ): array {
         $input = $this->pricingSnapshotInput(
             $propertyType,
@@ -208,7 +209,12 @@ final class UserCleaningOrderEstimationService
             : 0.0;
 
         if ($input['preferredWorkerId'] === null) {
-            $pricing = $this->pricingCalculator->provisional($basePrice, $addonsTotal, $includedAdminMarginBase);
+            $pricing = $this->pricingCalculator->provisional(
+                $basePrice,
+                $addonsTotal,
+                $includedAdminMarginBase,
+                $workerCount,
+            );
         } else {
             $worker = Worker::query()->find($input['preferredWorkerId']);
             if (! $worker) {
