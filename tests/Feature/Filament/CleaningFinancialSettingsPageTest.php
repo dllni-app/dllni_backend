@@ -82,19 +82,28 @@ it('removes global worker finance controls and persists only shared trust settin
 it('persists the per-worker transport allowance travel markup option', function (): void {
     $this->get(FinancialSettings::getUrl([], isAbsolute: false))
         ->assertSuccessful()
-        ->assertSee('بدل مواصلات');
+        ->assertSee('رسوم حسب المسافة')
+        ->assertSee('بدل مواصلات لكل عامل');
 
     Livewire::test(FinancialSettings::class)
         ->set('travelMarkupType', 'worker_allowance')
+        ->assertSee('يُحتسب بدل المواصلات تلقائياً لكل عامل ضمن تسعير الطلب،')
+        ->assertDontSee('رسوم التنقل لكل كيلومتر')
         ->set('travelMarkupValue', 125)
-        ->set('travelPerKm', 10)
+        ->set('travelPerKm', 999)
         ->call('save')
         ->assertHasNoErrors();
 
     $setting = CleaningFinancialSetting::query()->findOrFail(1);
 
     expect($setting->travel_markup_type)->toBe('worker_allowance')
-        ->and((float) $setting->travel_markup_value)->toBe(125.0);
+        ->and((float) $setting->travel_markup_value)->toBe(125.0)
+        ->and((float) $setting->travel_per_km)->toBe(0.0);
+
+    Livewire::test(FinancialSettings::class)
+        ->set('travelMarkupType', 'percent')
+        ->call('save')
+        ->assertHasErrors(['travelMarkupType']);
 });
 
 it('persists minimum order price and room pricing, deep multiplier, and times', function (): void {

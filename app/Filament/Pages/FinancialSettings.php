@@ -136,7 +136,10 @@ final class FinancialSettings extends Page
             $this->vatRate = (float) $setting->vat_rate;
             $this->commissionType = (string) ($setting->commission_type ?? 'percent');
             $this->commissionFixedAmount = $setting->commission_fixed_amount !== null ? (float) $setting->commission_fixed_amount : null;
-            $this->travelMarkupType = (string) $setting->travel_markup_type;
+            $storedTravelMarkupType = (string) $setting->travel_markup_type;
+            $this->travelMarkupType = in_array($storedTravelMarkupType, ['fixed', 'worker_allowance'], true)
+                ? $storedTravelMarkupType
+                : 'fixed';
             $this->travelMarkupValue = (float) $setting->travel_markup_value;
             $this->travelPerKm = (float) ($setting->travel_per_km ?? 0.0);
             $this->travelDistanceStartPoint = 'worker_home';
@@ -171,9 +174,9 @@ final class FinancialSettings extends Page
             'vatRate' => ['required', 'numeric', 'min:0'],
             'commissionType' => ['required', 'in:percent,fixed'],
             'commissionFixedAmount' => ['nullable', 'numeric', 'min:0', 'required_if:commissionType,fixed'],
-            'travelMarkupType' => ['required', 'in:fixed,percent,worker_allowance'],
-            'travelMarkupValue' => ['required', 'numeric', 'min:0'],
-            'travelPerKm' => ['required', 'numeric', 'min:0'],
+            'travelMarkupType' => ['required', 'in:fixed,worker_allowance'],
+            'travelMarkupValue' => ['nullable', 'numeric', 'min:0', 'required_if:travelMarkupType,worker_allowance'],
+            'travelPerKm' => ['nullable', 'numeric', 'min:0', 'required_if:travelMarkupType,fixed'],
             'coverageLow' => ['required', 'integer', 'min:0'],
             'coverageOk' => ['required', 'integer', 'gte:coverageLow'],
             'timeBillingMode' => ['required', 'in:full_booked,actual'],
@@ -212,8 +215,8 @@ final class FinancialSettings extends Page
                 'commission_type' => $this->commissionType,
                 'commission_fixed_amount' => $this->commissionType === 'fixed' ? $this->commissionFixedAmount : null,
                 'travel_markup_type' => $this->travelMarkupType,
-                'travel_markup_value' => $this->travelMarkupValue,
-                'travel_per_km' => $this->travelPerKm,
+                'travel_markup_value' => $this->travelMarkupType === 'worker_allowance' ? $this->travelMarkupValue : 0,
+                'travel_per_km' => $this->travelMarkupType === 'fixed' ? $this->travelPerKm : 0,
                 'travel_distance_start_point' => 'worker_home',
                 'coverage_thresholds' => ['low' => $this->coverageLow, 'ok' => $this->coverageOk],
                 'time_billing_mode' => $this->timeBillingMode,
