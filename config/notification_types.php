@@ -278,6 +278,23 @@ return [
                 ],
             ],
         ],
+        'cleaning.booking.admin_cancelled' => [
+            'legacy_type' => 'admin_cancelled',
+            'module' => 'cleaning',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'تم إلغاء الحجز',
+                    'body' => 'تم إلغاء الحجز رقم :booking_number من قبل الإدارة.',
+                ],
+                'en' => [
+                    'title' => 'Booking cancelled',
+                    'body' => 'Booking :booking_number was cancelled by the administration.',
+                ],
+            ],
+        ],
         'supermarket.smart_list.scheduled_order_sent' => [
             'legacy_type' => 'smart_list_scheduled_order_sent',
             'module' => 'supermarket',

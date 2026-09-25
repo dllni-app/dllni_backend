@@ -15,6 +15,7 @@ use Filament\Actions\ViewAction;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Support\Enums\FontWeight;
 use Filament\Tables\Columns\TextColumn;
@@ -22,6 +23,7 @@ use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\HtmlString;
 use InvalidArgumentException;
 use Modules\Cleaning\Enums\CleaningAssignmentMode;
@@ -290,6 +292,83 @@ final class CleaningBookingsTable
                             );
 
                             Notification::make()->title('تم تعيين الغرف')->success()->send();
+                        }),
+                    Action::make('cancel_booking')
+                        ->label('إلغاء الحجز')
+                        ->icon('heroicon-o-x-circle')
+                        ->color('danger')
+                        ->visible(fn (CleaningBooking $record): bool => ! in_array($record->status, [
+                            CleaningBookingStatus::Completed,
+                            CleaningBookingStatus::Cancelled,
+                            CleaningBookingStatus::UnderDispute,
+                        ], true))
+                        ->requiresConfirmation()
+                        ->modalHeading('إلغاء الحجز')
+                        ->modalDescription('سيتم إلغاء الحجز وإرسال إشعار للعميل بأن الحجز تم إلغاؤه من قبل الإدارة.')
+                        ->form([
+                            Textarea::make('reason')
+                                ->label('سبب الإلغاء')
+                                ->required()
+                                ->maxLength(1000),
+                        ])
+                        ->action(function (CleaningBooking $record, array $data): void {
+                            $fromStatus = $record->status instanceof BackedEnum
+                                ? (string) $record->status->value
+                                : (string) $record->status;
+
+                            $cancelled = DB::transaction(function () use ($record, $data): CleaningBooking {
+                                $booking = CleaningBooking::query()
+                                    ->whereKey($record->getKey())
+                                    ->lockForUpdate()
+                                    ->firstOrFail();
+
+                                if (in_array($booking->status, [
+                                    CleaningBookingStatus::Completed,
+                                    CleaningBookingStatus::Cancelled,
+                                    CleaningBookingStatus::UnderDispute,
+                                ], true)) {
+                                    return $booking;
+                                }
+
+                                $booking->forceFill([
+                                    'status' => CleaningBookingStatus::Cancelled,
+                                    'cancelled_at' => now(),
+                                    'cancellation_reason' => mb_trim((string) $data['reason']),
+                                    'cancelled_by_role' => 'admin',
+                                    'cancellation_fee' => 0,
+                                ])->save();
+
+                                return $booking->fresh();
+                            });
+
+                            if ($cancelled->status !== CleaningBookingStatus::Cancelled) {
+                                Notification::make()
+                                    ->title('تعذر إلغاء الحجز في حالته الحالية')
+                                    ->danger()
+                                    ->send();
+
+                                return;
+                            }
+
+                            app(CleaningLifecycleNotificationService::class)->notifyCustomer(
+                                booking: $cancelled,
+                                canonicalType: 'cleaning.booking.admin_cancelled',
+                                action: 'admin_cancelled',
+                                actorRole: 'admin',
+                                fromStatus: $fromStatus,
+                                occurredAt: $cancelled->cancelled_at?->toIso8601String(),
+                                extraData: [
+                                    'cancellationReason' => $cancelled->cancellation_reason,
+                                    'cancellation_reason' => $cancelled->cancellation_reason,
+                                ],
+                            );
+
+                            $record->setRawAttributes($cancelled->getAttributes(), true);
+
+                            Notification::make()
+                                ->title('تم إلغاء الحجز بنجاح')
+                                ->success()
+                                ->send();
                         }),
                     EditAction::make()
                         ->label('تعديل كامل الحجز')
