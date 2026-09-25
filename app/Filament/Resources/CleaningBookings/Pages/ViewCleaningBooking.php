@@ -304,7 +304,7 @@ final class ViewCleaningBooking extends ViewRecord
 
                     app(CleaningLifecycleNotificationService::class)->notifyCustomer(
                         booking: $cancelled,
-                        canonicalType: 'cleaning.booking.order_cancelled',
+                        canonicalType: 'cleaning.booking.admin_cancelled',
                         action: 'admin_cancelled',
                         actorRole: 'admin',
                         fromStatus: $fromStatus,

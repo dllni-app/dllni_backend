@@ -6,7 +6,9 @@ use App\Filament\Resources\CleaningBookings\CleaningBookingResource;
 use App\Filament\Resources\CleaningBookings\Pages\EditCleaningBooking;
 use App\Filament\Resources\CleaningBookings\Pages\ViewCleaningBooking;
 use App\Models\User;
+use App\Notifications\Cleaning\BookingLifecycleNotification;
 use App\Models\Worker;
+use Illuminate\Support\Facades\Notification;
 use Livewire\Livewire;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\CleaningBookingWorkerAssignmentStatus;
@@ -86,8 +88,12 @@ it('shows customer phone mission time and coupon application details', function 
         ->assertSee('120 ل.س');
 });
 
-it('allows an admin to cancel a booking from its dashboard details', function (): void {
+it('allows an admin to cancel a booking and notifies the customer that administration cancelled it', function (): void {
+    Notification::fake();
+
+    $customer = User::factory()->create();
     $booking = CleaningBooking::factory()->create([
+        'customer_id' => $customer->id,
         'status' => CleaningBookingStatus::Pending,
         'cancellation_fee' => 75,
     ]);
@@ -106,6 +112,18 @@ it('allows an admin to cancel a booking from its dashboard details', function ()
         ->and($booking->cancellation_reason)->toBe('إلغاء إداري للاختبار')
         ->and((float) $booking->cancellation_fee)->toBe(0.0)
         ->and($booking->cancelled_at)->not->toBeNull();
+
+    Notification::assertSentTo(
+        $customer,
+        BookingLifecycleNotification::class,
+        function (BookingLifecycleNotification $notification) use ($customer, $booking): bool {
+            $payload = $notification->toArray($customer);
+
+            return ($payload['canonical_type'] ?? null) === 'cleaning.booking.admin_cancelled'
+                && ($payload['title'] ?? null) === 'تم إلغاء الحجز'
+                && ($payload['body'] ?? null) === 'تم إلغاء الحجز رقم '.$booking->booking_number.' من قبل الإدارة.';
+        },
+    );
 });
 
 it('updates operational booking fields and selected rooms without changing pricing or calculated details', function (): void {
