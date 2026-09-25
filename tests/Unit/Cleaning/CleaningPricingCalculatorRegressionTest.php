@@ -44,7 +44,7 @@ it('adds the configured transport allowance for every worker before and after wo
             'commission_fixed_amount' => null,
             'travel_markup_type' => 'worker_allowance',
             'travel_markup_value' => 75,
-            'travel_per_km' => 10,
+            'travel_per_km' => 999,
         ],
     );
 
@@ -63,8 +63,9 @@ it('adds the configured transport allowance for every worker before and after wo
         37.1,
     );
 
-    expect($final['travelFee'])->toBe(85.0)
-        ->and($final['totalPrice'])->toBe(1085.0)
+    expect($final['travelFee'])->toBe(75.0)
+        ->and($final['distanceKm'])->toBeNull()
+        ->and($final['totalPrice'])->toBe(1075.0)
         ->and($final['isPricingFinal'])->toBeTrue();
 
     $booking = CleaningBooking::factory()->create([

@@ -58,6 +58,19 @@ final class CleaningPricingCalculator
         Worker $worker,
         float $includedAdminMarginBase = 0.0,
     ): array {
+        $financial = CleaningRuntimeSettings::financial();
+
+        if ((string) $financial->travel_markup_type === 'worker_allowance') {
+            return $this->finalizedPricing(
+                $basePrice,
+                $addonsTotal,
+                $this->workerTransportAllowance($financial, 1),
+                null,
+                $includedAdminMarginBase,
+                $financial,
+            );
+        }
+
         $addr = 'home_'.'address';
         $x = 'home_'.'latitude';
         $y = 'home_'.'longitude';
@@ -86,27 +99,56 @@ final class CleaningPricingCalculator
         float $d,
         float $includedAdminMarginBase = 0.0,
     ): array {
+        $financial = CleaningRuntimeSettings::financial();
+
+        if ((string) $financial->travel_markup_type === 'worker_allowance') {
+            return $this->finalizedPricing(
+                $basePrice,
+                $addonsTotal,
+                $this->workerTransportAllowance($financial, 1),
+                null,
+                $includedAdminMarginBase,
+                $financial,
+            );
+        }
+
         if ($a === null || $b === null) {
             throw new InvalidArgumentException('Required pricing data is incomplete.');
         }
 
+        $exactDistanceKm = $this->measureKm((float) $a, (float) $b, $c, $d);
+        $distanceKm = round($exactDistanceKm, 3);
+        $travelPerKm = max(0.0, (float) $financial->travel_per_km);
+        $calculatedTravelFee = $this->roundMoney($exactDistanceKm * $travelPerKm);
+
+        // The configured per-kilometre value is also the minimum transport fee.
+        // This prevents very short routes from producing values such as 1 SYP.
+        $travelFee = $travelPerKm > 0.0
+            ? max($this->roundMoney($travelPerKm), $calculatedTravelFee)
+            : 0.0;
+
+        return $this->finalizedPricing(
+            $basePrice,
+            $addonsTotal,
+            $travelFee,
+            $distanceKm,
+            $includedAdminMarginBase,
+            $financial,
+        );
+    }
+
+    private function finalizedPricing(
+        float $basePrice,
+        float $addonsTotal,
+        float $travelFee,
+        ?float $distanceKm,
+        float $includedAdminMarginBase,
+        CleaningFinancialSetting $financial,
+    ): array {
         $basePrice = $this->roundMoney($basePrice);
         $addonsTotal = $this->roundMoney($addonsTotal);
         $serviceSubtotal = $this->roundMoney($basePrice + $addonsTotal);
-        $exactDistanceKm = $this->measureKm((float) $a, (float) $b, $c, $d);
-        $distanceKm = round($exactDistanceKm, 3);
-
-        $financial = CleaningRuntimeSettings::financial();
-        $travelPerKm = max(0.0, (float) $financial->travel_per_km);
-        $calculatedTravelFee = $this->roundMoney($exactDistanceKm * $travelPerKm);
-        // The configured per-kilometre value is also the minimum transport fee.
-        // This prevents very short routes from producing values such as 1 SYP.
-        $distanceTravelFee = $travelPerKm > 0.0
-            ? max($this->roundMoney($travelPerKm), $calculatedTravelFee)
-            : 0.0;
-        $travelFee = $this->roundMoney(
-            $distanceTravelFee + $this->workerTransportAllowance($financial, 1)
-        );
+        $travelFee = $this->roundMoney(max(0.0, $travelFee));
         $adminMargin = $this->adminMargin($serviceSubtotal, $financial);
         $includedAdminMargin = $this->includedAdminMargin(
             $serviceSubtotal,
