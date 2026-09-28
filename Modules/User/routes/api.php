@@ -43,6 +43,7 @@ use Modules\User\Http\Controllers\API\SmProductsSearchController;
 use Modules\User\Http\Controllers\API\SmStoreShowController;
 use Modules\User\Http\Controllers\API\SmStoresIndexController;
 use Modules\User\Http\Controllers\API\UserAccountPasswordController;
+use Modules\User\Http\Controllers\API\UserAccountDestroyController;
 use Modules\User\Http\Controllers\API\UserAccountShowController;
 use Modules\User\Http\Controllers\API\UserAccountUpdateController;
 use Modules\User\Http\Controllers\API\UserAddressDestroyController;
@@ -205,6 +206,7 @@ Route::prefix('v1/user')->group(function (): void {
         Route::get('account', UserAccountShowController::class);
         Route::patch('account', UserAccountUpdateController::class);
         Route::put('account/password', UserAccountPasswordController::class);
+        Route::delete('account', UserAccountDestroyController::class);
 
         Route::get('notifications', UserNotificationsIndexController::class);
         Route::patch('notifications/read-all', UserNotificationsMarkAllAsReadController::class);
