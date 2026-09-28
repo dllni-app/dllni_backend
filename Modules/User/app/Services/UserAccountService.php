@@ -77,6 +77,14 @@ final class UserAccountService
             $user->notifications()->delete();
             $user->addresses()->delete();
             $user->favorites()->delete();
+            $user->carts()->delete();
+            $user->smCarts()->delete();
+            $user->smSmartLists()->delete();
+            $user->smRecurringOrders()->delete();
+            $user->smAssistantQueries()->delete();
+            $user->reviews()->delete();
+            $user->smsMessages()->delete();
+            $user->syncRoles([]);
 
             if (is_string($originalPhone) && $originalPhone !== '') {
                 UserOtp::query()->where('phone', $originalPhone)->delete();
@@ -100,6 +108,7 @@ final class UserAccountService
                 'phone_verified_at' => null,
                 'fcm_token' => null,
                 'remember_token' => null,
+                'module_type' => null,
                 'is_active' => false,
                 'password' => Str::random(64),
             ])->saveQuietly();
