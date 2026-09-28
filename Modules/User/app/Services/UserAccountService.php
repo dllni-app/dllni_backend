@@ -8,6 +8,8 @@ use App\Models\User;
 use App\Services\DashboardUserAccountNotificationService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Modules\User\Models\UserOtp;
 use Mrmarchone\LaravelAutoCrud\Helpers\MediaHelper;
 
 final class UserAccountService
@@ -58,5 +60,49 @@ final class UserAccountService
         $user->update([
             'password' => $newPasswordPlain,
         ]);
+    }
+
+    /**
+     * Permanently removes the user's personal account data while retaining only
+     * anonymized transactional references that may be required for accounting,
+     * fraud prevention, or other legal obligations.
+     */
+    public function deleteAccount(User $user): void
+    {
+        DB::transaction(function () use ($user): void {
+            $originalEmail = $user->email;
+            $originalPhone = $user->phone;
+
+            $user->tokens()->delete();
+            $user->notifications()->delete();
+            $user->addresses()->delete();
+            $user->favorites()->delete();
+
+            if (is_string($originalPhone) && $originalPhone !== '') {
+                UserOtp::query()->where('phone', $originalPhone)->delete();
+            }
+
+            if (is_string($originalEmail) && $originalEmail !== '') {
+                DB::table('password_reset_tokens')
+                    ->where('email', $originalEmail)
+                    ->delete();
+            }
+
+            DB::table('sessions')->where('user_id', $user->id)->delete();
+
+            $user->clearMediaCollection('primary-image');
+
+            $user->forceFill([
+                'name' => 'Deleted User',
+                'email' => null,
+                'phone' => null,
+                'email_verified_at' => null,
+                'phone_verified_at' => null,
+                'fcm_token' => null,
+                'remember_token' => null,
+                'is_active' => false,
+                'password' => Str::random(64),
+            ])->saveQuietly();
+        });
     }
 }
