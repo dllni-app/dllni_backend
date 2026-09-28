@@ -50,6 +50,7 @@ it('requires authentication for account routes', function (): void {
         'newPassword' => 'yyyyyyyy',
         'newPasswordConfirmation' => 'yyyyyyyy',
     ])->assertUnauthorized();
+    $this->deleteJson('/api/v1/user/account', ['confirmed' => true])->assertUnauthorized();
 });
 
 it('updates account name', function (): void {
@@ -140,4 +141,51 @@ it('rejects password update when current password is wrong', function (): void {
     ]);
 
     $response->assertUnprocessable();
+});
+
+
+it('requires explicit confirmation before deleting an account', function (): void {
+    $user = User::factory()->create([
+        'phone' => '+963966666660',
+        'is_active' => true,
+    ]);
+    Sanctum::actingAs($user);
+
+    $this->deleteJson('/api/v1/user/account')
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['confirmed']);
+
+    expect(User::query()->findOrFail($user->id)->is_active)->toBeTrue();
+});
+
+it('deletes personal account data and revokes stored access tokens', function (): void {
+    $user = User::factory()->create([
+        'name' => 'Delete Me',
+        'email' => 'delete-me@example.com',
+        'phone' => '+963966666661',
+        'phone_verified_at' => Carbon::now(),
+        'is_active' => true,
+        'fcm_token' => 'test-fcm-token',
+    ]);
+    $user->createToken('user-api');
+
+    Sanctum::actingAs($user);
+
+    $response = $this->deleteJson('/api/v1/user/account', [
+        'confirmed' => true,
+    ]);
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('message', 'Account deleted successfully.');
+
+    $fresh = User::query()->findOrFail($user->id);
+
+    expect($fresh->name)->toBe('Deleted User')
+        ->and($fresh->email)->toBeNull()
+        ->and($fresh->phone)->toBeNull()
+        ->and($fresh->phone_verified_at)->toBeNull()
+        ->and($fresh->fcm_token)->toBeNull()
+        ->and($fresh->is_active)->toBeFalse()
+        ->and($fresh->tokens()->count())->toBe(0);
 });
