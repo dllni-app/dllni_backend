@@ -14,6 +14,8 @@ enum DeliveryOrderStatus: string
     case Accepted = 'accepted';
     case InProgress = 'in_progress';
     case PickedUp = 'picked_up';
+    case ReturningToMerchant = 'returning_to_merchant';
+    case ReturnedToMerchant = 'returned_to_merchant';
     case Delivered = 'delivered';
     case Completed = 'completed';
     case Rejected = 'rejected';

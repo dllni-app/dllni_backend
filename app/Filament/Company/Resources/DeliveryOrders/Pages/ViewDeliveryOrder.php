@@ -67,6 +67,8 @@ final class ViewDeliveryOrder extends ViewRecord
                     && $this->record instanceof DeliveryOrder
                     && ! in_array($this->record->status, [
                         DeliveryOrderStatus::PickedUp->value,
+                        DeliveryOrderStatus::ReturningToMerchant->value,
+                        DeliveryOrderStatus::ReturnedToMerchant->value,
                         DeliveryOrderStatus::Delivered->value,
                         DeliveryOrderStatus::Completed->value,
                         DeliveryOrderStatus::Cancelled->value,

@@ -38,6 +38,8 @@ Route::prefix('v1/delivery/driver')->group(function (): void {
         Route::get('orders/current', [DriverOrderController::class, 'current']);
         Route::post('orders/{order}/start', [DriverOrderController::class, 'start'])->whereNumber('order');
         Route::post('orders/{order}/pickup', [DriverOrderController::class, 'pickup'])->whereNumber('order');
+        Route::post('orders/{order}/delivery-failed', [DriverOrderController::class, 'deliveryFailed'])->whereNumber('order');
+        Route::post('orders/{order}/returned-to-merchant', [DriverOrderController::class, 'returnedToMerchant'])->whereNumber('order');
         Route::post('orders/{order}/deliver', [DriverOrderController::class, 'deliver'])->whereNumber('order');
 
         Route::get('financial/summary', DriverFinancialController::class);

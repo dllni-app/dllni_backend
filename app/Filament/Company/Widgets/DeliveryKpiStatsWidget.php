@@ -32,6 +32,7 @@ final class DeliveryKpiStatsWidget extends StatsOverviewWidget
             DeliveryOrderStatus::Accepted->value,
             DeliveryOrderStatus::InProgress->value,
             DeliveryOrderStatus::PickedUp->value,
+            DeliveryOrderStatus::ReturningToMerchant->value,
         ];
         $dispatchAttentionStatuses = [
             DeliveryOrderStatus::SearchingForDriver->value,
@@ -66,6 +67,13 @@ final class DeliveryKpiStatsWidget extends StatsOverviewWidget
                 ->icon('heroicon-o-map-pin')
                 ->color($staleDrivers > 0 ? 'danger' : 'success')
                 ->url(DeliveryDriverResource::getUrl('index', panel: 'company')),
+            Stat::make(
+                __('delivery_company.orders.stats.returning'),
+                (clone $baseQuery)->where('status', DeliveryOrderStatus::ReturningToMerchant->value)->count(),
+            )
+                ->icon('heroicon-o-arrow-uturn-left')
+                ->color('warning')
+                ->url(DeliveryOrderResource::getUrl('index', panel: 'company')),
             Stat::make(__('delivery_company.orders.stats.stopped'), (clone $baseQuery)->where('status', DeliveryOrderStatus::Stopped->value)->count())
                 ->icon('heroicon-o-pause-circle')
                 ->color('warning')

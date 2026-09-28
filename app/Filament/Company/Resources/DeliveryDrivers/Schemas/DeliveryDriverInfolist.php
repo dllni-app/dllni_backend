@@ -64,14 +64,14 @@ final class DeliveryDriverInfolist
                         TextEntry::make('active_order_number')
                             ->label(__('delivery_company.drivers.fields.active_order'))
                             ->state(fn ($record) => $record->orders()
-                                ->whereIn('status', ['accepted', 'in_progress', 'picked_up'])
+                                ->whereIn('status', ['accepted', 'in_progress', 'picked_up', 'returning_to_merchant'])
                                 ->latest('updated_at')
                                 ->value('order_number'))
                             ->placeholder('—'),
                         TextEntry::make('active_order_status')
                             ->label(__('delivery_company.drivers.fields.active_order_status'))
                             ->state(fn ($record) => $record->orders()
-                                ->whereIn('status', ['accepted', 'in_progress', 'picked_up'])
+                                ->whereIn('status', ['accepted', 'in_progress', 'picked_up', 'returning_to_merchant'])
                                 ->latest('updated_at')
                                 ->value('status'))
                             ->formatStateUsing(fn (?string $state): string => $state

@@ -55,7 +55,11 @@ final class DriverUiOrderResource extends JsonResource
                 'picked_up_at' => optional($this->picked_up_at)->toIso8601String(),
                 'delivered_at' => optional($this->delivered_at)->toIso8601String(),
                 'completed_at' => optional($this->completed_at)->toIso8601String(),
+                'delivery_failed_at' => optional($this->delivery_failed_at)->toIso8601String(),
+                'returned_to_merchant_at' => optional($this->returned_to_merchant_at)->toIso8601String(),
             ],
+            'delivery_failure_code' => $this->delivery_failure_code,
+            'delivery_failure_reason' => $this->delivery_failure_reason,
             'next_allowed_actions' => $this->nextActions((string) $this->status, $arrivedPickup, $arrivedDropoff),
             'arrived_pickup' => $arrivedPickup,
             'arrived_dropoff' => $arrivedDropoff,
@@ -68,9 +72,11 @@ final class DriverUiOrderResource extends JsonResource
             DeliveryOrderStatus::Offered->value => 'WAITING_ACCEPTANCE',
             DeliveryOrderStatus::Accepted->value,
             DeliveryOrderStatus::InProgress->value,
-            DeliveryOrderStatus::PickedUp->value => 'ACTIVE',
+            DeliveryOrderStatus::PickedUp->value,
+            DeliveryOrderStatus::ReturningToMerchant->value => 'ACTIVE',
             DeliveryOrderStatus::Completed->value,
-            DeliveryOrderStatus::Delivered->value => 'COMPLETED',
+            DeliveryOrderStatus::Delivered->value,
+            DeliveryOrderStatus::ReturnedToMerchant->value => 'COMPLETED',
             DeliveryOrderStatus::Rejected->value => 'REJECTED',
             default => mb_strtoupper($status),
         };
@@ -88,8 +94,9 @@ final class DriverUiOrderResource extends JsonResource
                 ? ['PICKUP_CONFIRMED']
                 : ['ARRIVED_PICKUP', 'PICKUP_CONFIRMED'],
             DeliveryOrderStatus::PickedUp->value => $arrivedDropoff
-                ? ['DELIVERED_CONFIRMED']
-                : ['GO_TO_DELIVERY', 'ARRIVED_DROPOFF', 'DELIVERED_CONFIRMED'],
+                ? ['DELIVERED_CONFIRMED', 'DELIVERY_FAILED']
+                : ['GO_TO_DELIVERY', 'ARRIVED_DROPOFF', 'DELIVERED_CONFIRMED', 'DELIVERY_FAILED'],
+            DeliveryOrderStatus::ReturningToMerchant->value => ['RETURNED_TO_MERCHANT'],
             default => [],
         };
     }

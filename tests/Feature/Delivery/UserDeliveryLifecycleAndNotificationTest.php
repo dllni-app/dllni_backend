@@ -114,3 +114,62 @@ it('sends user delivery notification payload with tracking deep link', function 
             && (int) ($payload['data']['orderId'] ?? 0) === (int) $deliveryOrder->id;
     });
 });
+
+it('keeps restaurant source picked up while returning and cancels only after merchant return', function (): void {
+    $user = User::factory()->create();
+    $order = Order::factory()->create([
+        'user_id' => $user->id,
+        'order_type' => OrderType::Delivery->value,
+        'status' => OrderStatus::PickedUp->value,
+        'picked_up_at' => now(),
+    ]);
+    $deliveryOrder = DeliveryOrder::factory()->create([
+        'created_by_user_id' => $user->id,
+        'source_type' => DeliveryOrderCreationService::SOURCE_RESTAURANT_ORDER,
+        'source_id' => $order->id,
+    ]);
+
+    app(DeliverySourceOrderSyncService::class)->sync(
+        $deliveryOrder,
+        DeliveryOrderStatus::ReturningToMerchant,
+        'Customer unavailable',
+    );
+    expect($order->fresh()->status->value)->toBe(OrderStatus::PickedUp->value);
+
+    app(DeliverySourceOrderSyncService::class)->sync(
+        $deliveryOrder,
+        DeliveryOrderStatus::ReturnedToMerchant,
+        'Returned after failed delivery',
+    );
+    expect($order->fresh()->status->value)->toBe(OrderStatus::Cancelled->value)
+        ->and($order->fresh()->cancelled_at)->not->toBeNull();
+});
+
+it('keeps supermarket source picked up while returning and cancels only after merchant return', function (): void {
+    $user = User::factory()->create();
+    $order = SmOrder::factory()->create([
+        'customer_id' => $user->id,
+        'status' => SmOrderStatus::PickedUp->value,
+        'picked_up_at' => now(),
+    ]);
+    $deliveryOrder = DeliveryOrder::factory()->create([
+        'created_by_user_id' => $user->id,
+        'source_type' => DeliveryOrderCreationService::SOURCE_SUPERMARKET_ORDER,
+        'source_id' => $order->id,
+    ]);
+
+    app(DeliverySourceOrderSyncService::class)->sync(
+        $deliveryOrder,
+        DeliveryOrderStatus::ReturningToMerchant,
+        'Customer refused',
+    );
+    expect($order->fresh()->status->value)->toBe(SmOrderStatus::PickedUp->value);
+
+    app(DeliverySourceOrderSyncService::class)->sync(
+        $deliveryOrder,
+        DeliveryOrderStatus::ReturnedToMerchant,
+        'Returned after failed delivery',
+    );
+    expect($order->fresh()->status->value)->toBe(SmOrderStatus::Cancelled->value)
+        ->and($order->fresh()->cancelled_at)->not->toBeNull();
+});

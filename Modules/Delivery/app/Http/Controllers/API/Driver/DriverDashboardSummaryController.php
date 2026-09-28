@@ -29,6 +29,7 @@ final class DriverDashboardSummaryController
                 DeliveryOrderStatus::Accepted->value,
                 DeliveryOrderStatus::InProgress->value,
                 DeliveryOrderStatus::PickedUp->value,
+                DeliveryOrderStatus::ReturningToMerchant->value,
             ])
             ->count();
 

@@ -23,6 +23,7 @@ final class DeliverySourceOrderSyncService
 
         if ($source instanceof Order) {
             $this->syncRestaurantOrder($source, $deliveryStatus, $note);
+
             return;
         }
 
@@ -90,6 +91,11 @@ final class DeliverySourceOrderSyncService
                 'completed_at' => $order->completed_at ?? now(),
                 'customer_pickup_confirmed_at' => $order->customer_pickup_confirmed_at ?? now(),
             ],
+            DeliveryOrderStatus::ReturnedToMerchant => [
+                'status' => OrderStatus::Cancelled->value,
+                'cancelled_at' => $order->cancelled_at ?? now(),
+                'cancellation_reason' => $note ?? 'Delivery returned to merchant.',
+            ],
             DeliveryOrderStatus::Cancelled => [
                 'status' => OrderStatus::Cancelled->value,
                 'cancelled_at' => $order->cancelled_at ?? now(),
@@ -111,6 +117,11 @@ final class DeliverySourceOrderSyncService
             DeliveryOrderStatus::Completed => [
                 'status' => SmOrderStatus::Completed->value,
                 'customer_pickup_confirmed_at' => $order->customer_pickup_confirmed_at ?? now(),
+            ],
+            DeliveryOrderStatus::ReturnedToMerchant => [
+                'status' => SmOrderStatus::Cancelled->value,
+                'cancelled_at' => $order->cancelled_at ?? now(),
+                'cancellation_reason' => $note ?? 'Delivery returned to merchant.',
             ],
             DeliveryOrderStatus::Cancelled => [
                 'status' => SmOrderStatus::Cancelled->value,

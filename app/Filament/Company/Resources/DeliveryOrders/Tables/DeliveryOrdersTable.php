@@ -120,6 +120,8 @@ final class DeliveryOrdersTable
                     ->visible(fn (DeliveryOrder $record): bool => auth()->user()?->can('cancel', $record) === true
                         && ! in_array($record->status, [
                             DeliveryOrderStatus::PickedUp->value,
+                            DeliveryOrderStatus::ReturningToMerchant->value,
+                            DeliveryOrderStatus::ReturnedToMerchant->value,
                             DeliveryOrderStatus::Delivered->value,
                             DeliveryOrderStatus::Completed->value,
                             DeliveryOrderStatus::Cancelled->value,

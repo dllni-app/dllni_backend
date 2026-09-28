@@ -159,6 +159,29 @@ final class DeliveryOrderInfolist
                         TextEntry::make('cancelled_at')->label(__('delivery_company.orders.fields.cancelled_at'))->dateTime('Y-m-d H:i')->placeholder('—'),
                     ])
                     ->columns(3),
+                Section::make(__('delivery_company.orders.sections.return'))
+                    ->schema([
+                        TextEntry::make('delivery_failure_code')
+                            ->label(__('delivery_company.orders.fields.delivery_failure_code'))
+                            ->badge()
+                            ->placeholder('—'),
+                        TextEntry::make('delivery_failure_reason')
+                            ->label(__('delivery_company.orders.fields.delivery_failure_reason'))
+                            ->placeholder('—'),
+                        TextEntry::make('delivery_failed_at')
+                            ->label(__('delivery_company.orders.fields.delivery_failed_at'))
+                            ->dateTime('Y-m-d H:i')
+                            ->placeholder('—'),
+                        TextEntry::make('returned_to_merchant_at')
+                            ->label(__('delivery_company.orders.fields.returned_to_merchant_at'))
+                            ->dateTime('Y-m-d H:i')
+                            ->placeholder('—'),
+                    ])
+                    ->columns(2)
+                    ->visible(fn ($record): bool => filled($record->delivery_failure_code)
+                        || filled($record->delivery_failure_reason)
+                        || $record->delivery_failed_at !== null
+                        || $record->returned_to_merchant_at !== null),
                 Section::make(__('delivery_company.orders.sections.timeline'))
                     ->schema([
                         RepeatableEntry::make('events')

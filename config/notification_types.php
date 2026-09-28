@@ -686,6 +686,40 @@ return [
                 ],
             ],
         ],
+        'delivery.order.delivery_failed' => [
+            'legacy_type' => 'delivery_order_delivery_failed',
+            'module' => 'delivery',
+            'category' => 'orders',
+            'priority' => 'high',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'تعذر تسليم الطلب',
+                    'body' => 'تعذر تسليم الطلب :order_number وبدأت إعادته إلى المتجر.',
+                ],
+                'en' => [
+                    'title' => 'Delivery failed',
+                    'body' => 'Delivery of order :order_number failed and the return to merchant has started.',
+                ],
+            ],
+        ],
+        'delivery.order.returned_to_merchant' => [
+            'legacy_type' => 'delivery_order_returned_to_merchant',
+            'module' => 'delivery',
+            'category' => 'orders',
+            'priority' => 'normal',
+            'channels' => ['database', 'push'],
+            'templates' => [
+                'ar' => [
+                    'title' => 'تمت إعادة الطلب للمتجر',
+                    'body' => 'تمت إعادة الطلب :order_number إلى المتجر بعد تعذر التسليم.',
+                ],
+                'en' => [
+                    'title' => 'Order returned to merchant',
+                    'body' => 'Order :order_number was returned to the merchant after a failed delivery.',
+                ],
+            ],
+        ],
         'delivery.driver.trust_changed' => [
             'legacy_type' => 'delivery_driver_trust_changed',
             'module' => 'delivery',

@@ -169,7 +169,7 @@ final class DeliveryOrderService
             $order = DeliveryOrder::query()->lockForUpdate()->findOrFail($order->id);
             $currentStatus = DeliveryOrderStatus::tryFrom((string) $order->status);
 
-            if (in_array($currentStatus, [DeliveryOrderStatus::SearchingForDriver, DeliveryOrderStatus::Dispatching, DeliveryOrderStatus::Offered, DeliveryOrderStatus::Accepted, DeliveryOrderStatus::InProgress, DeliveryOrderStatus::PickedUp, DeliveryOrderStatus::Delivered, DeliveryOrderStatus::Completed, DeliveryOrderStatus::Cancelled], true)) {
+            if (in_array($currentStatus, [DeliveryOrderStatus::SearchingForDriver, DeliveryOrderStatus::Dispatching, DeliveryOrderStatus::Offered, DeliveryOrderStatus::Accepted, DeliveryOrderStatus::InProgress, DeliveryOrderStatus::PickedUp, DeliveryOrderStatus::ReturningToMerchant, DeliveryOrderStatus::ReturnedToMerchant, DeliveryOrderStatus::Delivered, DeliveryOrderStatus::Completed, DeliveryOrderStatus::Cancelled], true)) {
                 return $order->fresh();
             }
 
@@ -209,7 +209,7 @@ final class DeliveryOrderService
 
         $status = DeliveryOrderStatus::tryFrom((string) $order->status);
 
-        if (in_array($status, [DeliveryOrderStatus::Delivered, DeliveryOrderStatus::Completed, DeliveryOrderStatus::Cancelled], true)) {
+        if (in_array($status, [DeliveryOrderStatus::ReturnedToMerchant, DeliveryOrderStatus::Delivered, DeliveryOrderStatus::Completed, DeliveryOrderStatus::Cancelled], true)) {
             return $order;
         }
 
@@ -256,6 +256,79 @@ final class DeliveryOrderService
             $order = $order->fresh(['company', 'driver.user', 'createdBy']);
             $this->notifications->notifyOrderPickedUp($order);
             $this->userNotifications->notifyPickedUp($order);
+
+            return $order;
+        });
+    }
+
+    public function reportDeliveryFailure(
+        DeliveryOrder $order,
+        int $driverId,
+        string $reasonCode,
+        ?string $reason = null,
+    ): DeliveryOrder {
+        return DB::transaction(function () use ($order, $driverId, $reasonCode, $reason): DeliveryOrder {
+            $order = DeliveryOrder::query()->lockForUpdate()->findOrFail($order->id);
+            $this->assertAssignedDriver($order, $driverId);
+
+            if ($order->status === DeliveryOrderStatus::ReturningToMerchant->value) {
+                return $order->fresh(['company', 'driver.user', 'createdBy']);
+            }
+
+            $this->assertCurrentStatus($order, DeliveryOrderStatus::PickedUp);
+            $note = filled($reason) ? (string) $reason : $reasonCode;
+
+            $this->applyStatus($order, DeliveryOrderStatus::ReturningToMerchant, [
+                'timestampColumn' => 'delivery_failed_at',
+                'note' => 'تعذر تسليم الطلب: '.$note,
+                'actorType' => 'delivery_driver',
+                'actorId' => $driverId,
+                'extraAttributes' => [
+                    'delivery_failure_code' => $reasonCode,
+                    'delivery_failure_reason' => $reason,
+                ],
+                'payload' => [
+                    'action' => 'DELIVERY_FAILED',
+                    'reasonCode' => $reasonCode,
+                    'reason' => $reason,
+                ],
+            ]);
+
+            $order = $order->fresh(['company', 'driver.user', 'createdBy']);
+            $this->notifications->notifyOrderDeliveryFailed($order);
+            $this->userNotifications->notifyDeliveryFailed($order, $note);
+
+            return $order;
+        });
+    }
+
+    public function confirmReturnedToMerchant(DeliveryOrder $order, int $driverId): DeliveryOrder
+    {
+        return DB::transaction(function () use ($order, $driverId): DeliveryOrder {
+            $order = DeliveryOrder::query()->lockForUpdate()->findOrFail($order->id);
+            $this->assertAssignedDriver($order, $driverId);
+
+            if ($order->status === DeliveryOrderStatus::ReturnedToMerchant->value) {
+                return $order->fresh(['company', 'driver.user', 'createdBy']);
+            }
+
+            $this->assertCurrentStatus($order, DeliveryOrderStatus::ReturningToMerchant);
+
+            $this->applyStatus($order, DeliveryOrderStatus::ReturnedToMerchant, [
+                'timestampColumn' => 'returned_to_merchant_at',
+                'note' => 'تمت إعادة الطلب إلى المتجر بعد تعذر التسليم',
+                'actorType' => 'delivery_driver',
+                'actorId' => $driverId,
+                'payload' => ['action' => 'RETURNED_TO_MERCHANT'],
+            ]);
+
+            DeliveryDriver::query()
+                ->where('id', $driverId)
+                ->update(['availability_status' => DeliveryDriverAvailabilityStatus::Available->value]);
+
+            $order = $order->fresh(['company', 'driver.user', 'createdBy']);
+            $this->notifications->notifyOrderReturnedToMerchant($order);
+            $this->userNotifications->notifyReturnedToMerchant($order);
 
             return $order;
         });
@@ -334,11 +407,15 @@ final class DeliveryOrderService
             $order = DeliveryOrder::query()->lockForUpdate()->findOrFail($order->id);
             $currentStatus = DeliveryOrderStatus::tryFrom((string) $order->status);
 
-            if ($currentStatus === DeliveryOrderStatus::PickedUp) {
-                throw new InvalidArgumentException('لا يمكن إلغاء طلب بعد استلامه من المتجر.');
+            if (in_array($currentStatus, [
+                DeliveryOrderStatus::PickedUp,
+                DeliveryOrderStatus::ReturningToMerchant,
+            ], true)) {
+                throw new InvalidArgumentException('لا يمكن إلغاء طلب بعد استلامه من المتجر. استخدم مسار الإرجاع.');
             }
 
             if (in_array($currentStatus, [
+                DeliveryOrderStatus::ReturnedToMerchant,
                 DeliveryOrderStatus::Delivered,
                 DeliveryOrderStatus::Completed,
                 DeliveryOrderStatus::Cancelled,
@@ -381,6 +458,8 @@ final class DeliveryOrderService
             $currentStatus = DeliveryOrderStatus::tryFrom((string) $order->status);
 
             if (in_array($currentStatus, [
+                DeliveryOrderStatus::ReturningToMerchant,
+                DeliveryOrderStatus::ReturnedToMerchant,
                 DeliveryOrderStatus::Delivered,
                 DeliveryOrderStatus::Completed,
                 DeliveryOrderStatus::Cancelled,

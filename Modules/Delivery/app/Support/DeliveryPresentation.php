@@ -10,6 +10,7 @@ use Modules\Delivery\Models\DeliveryDriver;
 use Modules\Delivery\Models\DeliveryDriverLocation;
 use Modules\Delivery\Models\DeliveryOrder;
 use Modules\Delivery\Services\DriverLocationService;
+use UnitEnum;
 
 final class DeliveryPresentation
 {
@@ -20,6 +21,8 @@ final class DeliveryPresentation
         DeliveryOrderStatus::Accepted->value => 'تم قبول الطلب',
         DeliveryOrderStatus::InProgress->value => 'السائق في الطريق إلى نقطة الاستلام',
         DeliveryOrderStatus::PickedUp->value => 'تم استلام الطلب',
+        DeliveryOrderStatus::ReturningToMerchant->value => 'تعذر التسليم — إعادة الطلب إلى المتجر',
+        DeliveryOrderStatus::ReturnedToMerchant->value => 'تمت إعادة الطلب إلى المتجر',
         DeliveryOrderStatus::Delivered->value => 'تم التسليم',
         DeliveryOrderStatus::Completed->value => 'مكتمل',
         DeliveryOrderStatus::Rejected->value => 'مرفوض',
@@ -186,6 +189,19 @@ final class DeliveryPresentation
             $referenceDistanceKm = (float) $order->distance_km;
             $minutes = max(5, (int) ceil(($referenceDistanceKm / 28) * 60));
             $text = 'في الطريق إلى الوجهة';
+        } elseif ($status === DeliveryOrderStatus::ReturningToMerchant->value) {
+            if ($latestLocation !== null) {
+                $referenceDistanceKm = self::distanceKm(
+                    (float) $latestLocation->latitude,
+                    (float) $latestLocation->longitude,
+                    (float) $order->pickup_latitude,
+                    (float) $order->pickup_longitude,
+                );
+                $minutes = max(3, (int) ceil(($referenceDistanceKm / 25) * 60));
+            }
+            $text = 'المندوب يعيد الطلب إلى المتجر';
+        } elseif ($status === DeliveryOrderStatus::ReturnedToMerchant->value) {
+            $text = 'تمت إعادة الطلب إلى المتجر';
         } elseif (in_array($status, [DeliveryOrderStatus::Delivered->value, DeliveryOrderStatus::Completed->value], true)) {
             $text = 'تم التسليم';
         } elseif (in_array($status, [DeliveryOrderStatus::Rejected->value, DeliveryOrderStatus::Stopped->value, DeliveryOrderStatus::Cancelled->value], true)) {
@@ -248,6 +264,8 @@ final class DeliveryPresentation
         $acceptedAt = self::formatDate($order->accepted_at);
         $startedAt = self::formatDate($order->started_at);
         $pickedUpAt = self::formatDate($order->picked_up_at);
+        $deliveryFailedAt = self::formatDate($order->delivery_failed_at);
+        $returnedToMerchantAt = self::formatDate($order->returned_to_merchant_at);
         $deliveredAt = self::formatDate($order->delivered_at);
         $completedAt = self::formatDate($order->completed_at);
         $stoppedAt = self::formatDate($order->stopped_at);
@@ -261,6 +279,8 @@ final class DeliveryPresentation
                 DeliveryOrderStatus::Accepted->value,
                 DeliveryOrderStatus::InProgress->value,
                 DeliveryOrderStatus::PickedUp->value,
+                DeliveryOrderStatus::ReturningToMerchant->value,
+                DeliveryOrderStatus::ReturnedToMerchant->value,
                 DeliveryOrderStatus::Delivered->value,
                 DeliveryOrderStatus::Completed->value,
             ], true), $status === DeliveryOrderStatus::Dispatching->value || $status === DeliveryOrderStatus::Offered->value),
@@ -268,20 +288,31 @@ final class DeliveryPresentation
                 DeliveryOrderStatus::Accepted->value,
                 DeliveryOrderStatus::InProgress->value,
                 DeliveryOrderStatus::PickedUp->value,
+                DeliveryOrderStatus::ReturningToMerchant->value,
+                DeliveryOrderStatus::ReturnedToMerchant->value,
                 DeliveryOrderStatus::Delivered->value,
                 DeliveryOrderStatus::Completed->value,
             ], true), $status === DeliveryOrderStatus::Accepted->value),
             self::stage('arrived_pickup', $startedAt, in_array($status, [
                 DeliveryOrderStatus::InProgress->value,
                 DeliveryOrderStatus::PickedUp->value,
+                DeliveryOrderStatus::ReturningToMerchant->value,
+                DeliveryOrderStatus::ReturnedToMerchant->value,
                 DeliveryOrderStatus::Delivered->value,
                 DeliveryOrderStatus::Completed->value,
             ], true), $status === DeliveryOrderStatus::InProgress->value),
             self::stage('handover_complete', $pickedUpAt, in_array($status, [
                 DeliveryOrderStatus::PickedUp->value,
+                DeliveryOrderStatus::ReturningToMerchant->value,
+                DeliveryOrderStatus::ReturnedToMerchant->value,
                 DeliveryOrderStatus::Delivered->value,
                 DeliveryOrderStatus::Completed->value,
             ], true), $status === DeliveryOrderStatus::PickedUp->value),
+            self::stage('returning_to_merchant', $deliveryFailedAt, in_array($status, [
+                DeliveryOrderStatus::ReturningToMerchant->value,
+                DeliveryOrderStatus::ReturnedToMerchant->value,
+            ], true), $status === DeliveryOrderStatus::ReturningToMerchant->value),
+            self::stage('returned_to_merchant', $returnedToMerchantAt, $status === DeliveryOrderStatus::ReturnedToMerchant->value, $status === DeliveryOrderStatus::ReturnedToMerchant->value),
             self::stage('delivered', $deliveredAt, in_array($status, [
                 DeliveryOrderStatus::Delivered->value,
                 DeliveryOrderStatus::Completed->value,
@@ -387,6 +418,7 @@ final class DeliveryPresentation
 
         if ($driver->relationLoaded('latestLocation')) {
             $location = $driver->getRelation('latestLocation');
+
             return $location instanceof DeliveryDriverLocation ? $location : null;
         }
 
@@ -401,6 +433,7 @@ final class DeliveryPresentation
         }
 
         $displayName = self::stringValue($driver->first_name);
+
         return $displayName !== '' ? $displayName : null;
     }
 
@@ -434,7 +467,7 @@ final class DeliveryPresentation
             return $value->toIso8601String();
         }
 
-        if (is_string($value) && trim($value) !== '') {
+        if (is_string($value) && mb_trim($value) !== '') {
             return Carbon::parse($value)->toIso8601String();
         }
 
@@ -443,7 +476,7 @@ final class DeliveryPresentation
 
     private static function normalizeStatus(mixed $value): ?string
     {
-        if ($value instanceof \UnitEnum) {
+        if ($value instanceof UnitEnum) {
             return (string) $value->value;
         }
 
@@ -452,7 +485,7 @@ final class DeliveryPresentation
         }
 
         if (is_string($value) || is_int($value) || is_float($value)) {
-            $value = trim((string) $value);
+            $value = mb_trim((string) $value);
 
             return $value === '' ? null : mb_strtolower($value);
         }
@@ -480,11 +513,11 @@ final class DeliveryPresentation
         }
 
         if (is_string($value)) {
-            return trim($value);
+            return mb_trim($value);
         }
 
         if (is_scalar($value)) {
-            return trim((string) $value);
+            return mb_trim((string) $value);
         }
 
         return null;

@@ -10,7 +10,6 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Modules\Delivery\Enums\DeliveryAssignmentAttemptStatus;
-use Modules\Delivery\Enums\DeliveryDriverAvailabilityStatus;
 use Modules\Delivery\Enums\DeliveryOrderStatus;
 use Modules\Delivery\Http\Requests\Driver\DriverCallEventRequest;
 use Modules\Delivery\Http\Requests\Driver\DriverOrderIndexRequest;
@@ -26,7 +25,6 @@ use Modules\Delivery\Models\DeliveryOrder;
 use Modules\Delivery\Services\DeliveryOrderService;
 use Modules\Delivery\Services\DriverDispatchService;
 use Modules\Delivery\Services\FinancialLedgerService;
-use RuntimeException;
 
 final class DriverUiController
 {
@@ -259,12 +257,17 @@ final class DriverUiController
                 DeliveryOrderStatus::Accepted->value,
                 DeliveryOrderStatus::InProgress->value,
                 DeliveryOrderStatus::PickedUp->value,
+                DeliveryOrderStatus::ReturningToMerchant->value,
             ])
             ->count();
 
         $completed = DeliveryOrder::query()
             ->where('driver_id', $driver->id)
-            ->whereIn('status', [DeliveryOrderStatus::Delivered->value, DeliveryOrderStatus::Completed->value])
+            ->whereIn('status', [
+                DeliveryOrderStatus::ReturnedToMerchant->value,
+                DeliveryOrderStatus::Delivered->value,
+                DeliveryOrderStatus::Completed->value,
+            ])
             ->count();
 
         $waitingAcceptance = DeliveryAssignmentAttempt::query()
@@ -462,9 +465,14 @@ final class DriverUiController
                 DeliveryOrderStatus::Accepted->value,
                 DeliveryOrderStatus::InProgress->value,
                 DeliveryOrderStatus::PickedUp->value,
+                DeliveryOrderStatus::ReturningToMerchant->value,
             ]);
         } elseif ($status === 'COMPLETED') {
-            $query->whereIn('status', [DeliveryOrderStatus::Delivered->value, DeliveryOrderStatus::Completed->value]);
+            $query->whereIn('status', [
+                DeliveryOrderStatus::ReturnedToMerchant->value,
+                DeliveryOrderStatus::Delivered->value,
+                DeliveryOrderStatus::Completed->value,
+            ]);
         }
 
         return $query->paginate($perPage);
@@ -482,4 +490,3 @@ final class DriverUiController
         ], $status);
     }
 }
-
