@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\UserModuleType;
 use App\Models\User;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
@@ -9,12 +10,19 @@ use Modules\Resturants\Models\Category;
 use Modules\Resturants\Models\Restaurant;
 
 beforeEach(function () {
-    Sanctum::actingAs(User::factory()->create());
+    $owner = User::factory()->create([
+        'module_type' => UserModuleType::RestaurantSeller->value,
+    ]);
+
+    $this->restaurant = Restaurant::factory()->create([
+        'user_id' => $owner->id,
+    ]);
+
+    Sanctum::actingAs($owner);
 });
 
 it('lists categories', function () {
-    $restaurant = Restaurant::factory()->create();
-    Category::factory()->count(3)->create(['restaurant_id' => $restaurant->id]);
+    Category::factory()->count(3)->create(['restaurant_id' => $this->restaurant->id]);
 
     $response = $this->getJson('/api/v1/categories');
 
@@ -23,10 +31,8 @@ it('lists categories', function () {
 });
 
 it('creates a category', function () {
-    $restaurant = Restaurant::factory()->create();
-
     $payload = [
-        'restaurantId' => $restaurant->id,
+        'restaurantId' => $this->restaurant->id,
         'name' => 'Desserts',
         'slug' => 'desserts-'.Str::random(4),
         'sortOrder' => 5,
@@ -37,12 +43,15 @@ it('creates a category', function () {
     $response->assertCreated();
     $this->assertDatabaseHas('categories', [
         'name' => 'Desserts',
-        'restaurant_id' => $restaurant->id,
+        'restaurant_id' => $this->restaurant->id,
     ]);
 });
 
 it('shows a category', function () {
-    $category = Category::factory()->create(['name' => 'Main Course']);
+    $category = Category::factory()->create([
+        'restaurant_id' => $this->restaurant->id,
+        'name' => 'Main Course',
+    ]);
 
     $response = $this->getJson("/api/v1/categories/{$category->id}");
 
@@ -52,10 +61,13 @@ it('shows a category', function () {
 });
 
 it('updates a category', function () {
-    $category = Category::factory()->create(['name' => 'Old Name']);
+    $category = Category::factory()->create([
+        'restaurant_id' => $this->restaurant->id,
+        'name' => 'Old Name',
+    ]);
 
     $response = $this->putJson("/api/v1/categories/{$category->id}", [
-        'restaurantId' => $category->restaurant_id,
+        'restaurantId' => $this->restaurant->id,
         'name' => 'Updated Category',
         'slug' => $category->slug,
         'sortOrder' => 10,
@@ -65,11 +77,14 @@ it('updates a category', function () {
     $this->assertDatabaseHas('categories', [
         'id' => $category->id,
         'name' => 'Updated Category',
+        'restaurant_id' => $this->restaurant->id,
     ]);
 });
 
 it('deletes a category', function () {
-    $category = Category::factory()->create();
+    $category = Category::factory()->create([
+        'restaurant_id' => $this->restaurant->id,
+    ]);
 
     $response = $this->deleteJson("/api/v1/categories/{$category->id}");
 

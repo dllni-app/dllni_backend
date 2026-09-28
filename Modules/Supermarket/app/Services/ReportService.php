@@ -31,61 +31,113 @@ final class ReportService
         ?int $storeId = null,
         ?string $status = null,
     ): array {
-        // Revenue overview
-        $ordersQuery = SmOrder::whereBetween('created_at', [$startDate, $endDate]);
+        $ordersQuery = SmOrder::query()
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->when($storeId, fn ($query) => $query->where('store_id', $storeId))
+            ->when($status, fn ($query) => $query->where('status', $status));
 
-        if ($storeId) {
-            $ordersQuery->where('store_id', $storeId);
-        }
+        $orders = (clone $ordersQuery)->get();
 
-        if ($status) {
-            $ordersQuery->where('status', $status);
-        }
+        $totalRevenue = (float) $orders->sum('total_amount');
+        $serviceFees = (float) $orders->sum('service_fee');
+        $commissions = (float) $orders->sum('commission_amount');
+        $cancellationFees = (float) $orders->sum('cancellation_fee_amount');
+        $storeNetPayable = (float) $orders->sum('merchant_net_amount');
+        $platformCouponCost = (float) $orders->sum('platform_coupon_cost');
+        $merchantCouponFunding = (float) $orders->sum('coupon_merchant_funded_amount');
+        $platformNetRevenue = (float) $orders->sum('platform_net_revenue');
+        $unsnapshottedOrders = $orders->whereNull('financial_snapshot')->count();
 
-        $orders = $ordersQuery->get();
-
-        $totalRevenue = $orders->sum('total_amount');
-        $serviceFees = $orders->sum('service_fee');
-        $commissions = $orders->sum('commission_amount');
-        $cancellationFees = $orders->sum('cancellation_fee_amount');
-
-        // Revenue by store
-        $revenueByStore = SmOrder::selectRaw('sm_stores.id, sm_stores.name, COUNT(sm_orders.id) as total_orders, SUM(sm_orders.total_amount) as gross_sales')
+        $revenueByStore = SmOrder::query()
+            ->selectRaw('sm_stores.id, sm_stores.name')
+            ->selectRaw('COUNT(sm_orders.id) as total_orders')
+            ->selectRaw('COALESCE(SUM(sm_orders.total_amount), 0) as total_revenue')
+            ->selectRaw('COALESCE(SUM(sm_orders.service_fee), 0) as total_service_fees')
+            ->selectRaw('COALESCE(SUM(sm_orders.commission_amount), 0) as total_commissions')
+            ->selectRaw('COALESCE(SUM(sm_orders.cancellation_fee_amount), 0) as total_cancellation_fees')
+            ->selectRaw('COALESCE(SUM(sm_orders.merchant_net_amount), 0) as store_net_payable')
+            ->selectRaw('COALESCE(SUM(sm_orders.platform_coupon_cost), 0) as platform_coupon_cost')
+            ->selectRaw('COALESCE(SUM(sm_orders.coupon_merchant_funded_amount), 0) as merchant_coupon_funding')
+            ->selectRaw('COALESCE(SUM(sm_orders.platform_net_revenue), 0) as platform_net_revenue')
+            ->selectRaw('SUM(CASE WHEN sm_orders.financial_snapshot IS NULL THEN 1 ELSE 0 END) as unsnapshotted_orders')
             ->leftJoin('sm_stores', 'sm_orders.store_id', '=', 'sm_stores.id')
             ->whereBetween('sm_orders.created_at', [$startDate, $endDate])
-            ->when($status, fn ($q) => $q->where('sm_orders.status', $status))
+            ->when($storeId, fn ($query) => $query->where('sm_orders.store_id', $storeId))
+            ->when($status, fn ($query) => $query->where('sm_orders.status', $status))
             ->groupBy('sm_stores.id', 'sm_stores.name')
             ->get()
-            ->map(fn ($row) => [
-                'store_id' => $row->id,
-                'store_name' => $row->name,
-                'total_orders' => $row->total_orders,
-                'gross_sales' => (float) $row->gross_sales,
-                'commission_deducted' => 0, // TODO: implement when commission structure is defined
-                'net_payable' => (float) $row->gross_sales,
-            ])
+            ->map(function ($row): array {
+                $ordersCount = (int) $row->total_orders;
+                $revenue = (float) $row->total_revenue;
+                $commission = (float) $row->total_commissions;
+                $net = (float) $row->store_net_payable;
+
+                return [
+                    'store_id' => $row->id,
+                    'store_name' => $row->name,
+                    'total_orders' => $ordersCount,
+                    'order_count' => $ordersCount,
+                    'total_revenue' => $revenue,
+                    'gross_sales' => $revenue,
+                    'total_service_fees' => (float) $row->total_service_fees,
+                    'total_commissions' => $commission,
+                    'commission_deducted' => $commission,
+                    'total_cancellation_fees' => (float) $row->total_cancellation_fees,
+                    'store_net_payable' => $net,
+                    'net_payable' => $net,
+                    'platform_coupon_cost' => (float) $row->platform_coupon_cost,
+                    'merchant_coupon_funding' => (float) $row->merchant_coupon_funding,
+                    'platform_net_revenue' => (float) $row->platform_net_revenue,
+                    'average_order_value' => $ordersCount > 0 ? round($revenue / $ordersCount, 2) : 0.0,
+                    'unsnapshotted_orders' => (int) $row->unsnapshotted_orders,
+                ];
+            })
             ->values();
 
-        // Revenue by date
-        $revenueByDate = SmStoreDailyStat::selectRaw('date, SUM(orders_revenue) as revenue, SUM(orders_count) as orders_count')
-            ->whereBetween('date', [$startDate, $endDate])
-            ->when($storeId, fn ($q) => $q->where('store_id', $storeId))
-            ->groupBy('date')
+        $revenueByDate = SmOrder::query()
+            ->selectRaw('DATE(created_at) as date')
+            ->selectRaw('COUNT(id) as order_count')
+            ->selectRaw('COALESCE(SUM(total_amount), 0) as total_revenue')
+            ->selectRaw('COALESCE(SUM(service_fee), 0) as total_service_fees')
+            ->selectRaw('COALESCE(SUM(commission_amount), 0) as total_commissions')
+            ->selectRaw('COALESCE(SUM(merchant_net_amount), 0) as store_net_payable')
+            ->selectRaw('COALESCE(SUM(platform_coupon_cost), 0) as platform_coupon_cost')
+            ->selectRaw('COALESCE(SUM(coupon_merchant_funded_amount), 0) as merchant_coupon_funding')
+            ->selectRaw('COALESCE(SUM(platform_net_revenue), 0) as platform_net_revenue')
+            ->selectRaw('SUM(CASE WHEN financial_snapshot IS NULL THEN 1 ELSE 0 END) as unsnapshotted_orders')
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->when($storeId, fn ($query) => $query->where('store_id', $storeId))
+            ->when($status, fn ($query) => $query->where('status', $status))
+            ->groupByRaw('DATE(created_at)')
             ->orderBy('date')
             ->get()
-            ->map(fn ($row) => [
+            ->map(fn ($row): array => [
                 'date' => $row->date,
-                'revenue' => (float) $row->revenue,
-                'orders_count' => (int) $row->orders_count,
+                'revenue' => (float) $row->total_revenue,
+                'total_revenue' => (float) $row->total_revenue,
+                'total_service_fees' => (float) $row->total_service_fees,
+                'total_commissions' => (float) $row->total_commissions,
+                'store_net_payable' => (float) $row->store_net_payable,
+                'platform_coupon_cost' => (float) $row->platform_coupon_cost,
+                'merchant_coupon_funding' => (float) $row->merchant_coupon_funding,
+                'platform_net_revenue' => (float) $row->platform_net_revenue,
+                'orders_count' => (int) $row->order_count,
+                'order_count' => (int) $row->order_count,
+                'unsnapshotted_orders' => (int) $row->unsnapshotted_orders,
             ])
             ->values();
 
         return [
             'overview' => [
-                'total_revenue' => (float) $totalRevenue,
-                'total_service_fees' => (float) $serviceFees,
-                'total_commissions' => (float) $commissions,
-                'total_cancellation_fees' => (float) $cancellationFees,
+                'total_revenue' => $totalRevenue,
+                'total_service_fees' => $serviceFees,
+                'total_commissions' => $commissions,
+                'total_cancellation_fees' => $cancellationFees,
+                'store_net_payable' => $storeNetPayable,
+                'platform_coupon_cost' => $platformCouponCost,
+                'merchant_coupon_funding' => $merchantCouponFunding,
+                'platform_net_revenue' => $platformNetRevenue,
+                'unsnapshotted_orders' => $unsnapshottedOrders,
                 'period' => [
                     'start_date' => $startDate->toDateString(),
                     'end_date' => $endDate->toDateString(),
@@ -198,14 +250,15 @@ final class ReportService
      */
     public function getDashboardData(): array
     {
-        $today = Carbon::today();
-        $thisWeek = Carbon::today()->startOfWeek();
-        $thisMonth = Carbon::today()->startOfMonth();
+        $now = Carbon::now();
+        $today = $now->copy()->startOfDay();
+        $thisWeek = $now->copy()->startOfWeek();
+        $thisMonth = $now->copy()->startOfMonth();
 
-        // Sales summary - current periods
+        // Sales summary - current periods (inclusive of the current moment)
         $todayOrders = SmOrder::whereDate('created_at', $today)->get();
-        $weekOrders = SmOrder::whereBetween('created_at', [$thisWeek, Carbon::today()])->get();
-        $monthOrders = SmOrder::whereBetween('created_at', [$thisMonth, Carbon::today()])->get();
+        $weekOrders = SmOrder::whereBetween('created_at', [$thisWeek, $now])->get();
+        $monthOrders = SmOrder::whereBetween('created_at', [$thisMonth, $now])->get();
 
         // Sales summary - yesterday comparison
         $yesterday = Carbon::yesterday();
@@ -260,6 +313,7 @@ final class ReportService
                 'this_month' => $thisMonthSales,
                 'total_commission_revenue' => (float) $monthOrders->sum('commission_amount'),
                 'total_service_fees' => (float) $monthOrders->sum('service_fee'),
+                'unsnapshotted_orders' => $monthOrders->whereNull('commission_snapshot')->count(),
             ],
             'activity_metrics' => [
                 'total_orders' => SmOrder::count(),

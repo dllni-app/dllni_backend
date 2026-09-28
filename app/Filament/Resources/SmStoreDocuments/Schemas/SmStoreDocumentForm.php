@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\SmStoreDocuments\Schemas;
 
+use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Schemas\Schema;
@@ -14,7 +15,7 @@ final class SmStoreDocumentForm
     public static function configure(Schema $schema): Schema
     {
         $documentTypeOptions = collect(SmDocumentType::cases())->mapWithKeys(
-            fn(SmDocumentType $c) => [$c->value => __('supermarket_admin.enums.document_type.' . $c->value)]
+            fn (SmDocumentType $c) => [$c->value => __('supermarket_admin.enums.document_type.'.$c->value)]
         )->all();
 
         $verificationOptions = [
@@ -35,13 +36,16 @@ final class SmStoreDocumentForm
                     ->options($verificationOptions)
                     ->required()
                     ->native(false),
+                DateTimePicker::make('expires_at')
+                    ->label('تاريخ انتهاء الوثيقة')
+                    ->nullable(),
                 Textarea::make('rejection_reason')
                     ->label(__('supermarket_admin.form.rejection_reason'))
                     ->rows(3)
-                    ->required(fn($get) => $get('verification_status') === 'rejected')
-                    ->dehydrated(fn($get) => $get('verification_status') === 'rejected')
+                    ->required(fn ($get) => $get('verification_status') === 'rejected')
+                    ->dehydrated(fn ($get) => $get('verification_status') === 'rejected')
                     ->maxLength(1000)
-                    ->visible(fn($get) => $get('verification_status') === 'rejected'),
+                    ->visible(fn ($get) => $get('verification_status') === 'rejected'),
             ]);
     }
 }

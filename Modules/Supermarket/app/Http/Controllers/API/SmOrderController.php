@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Modules\Supermarket\Http\Controllers\API;
 
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Modules\Supermarket\Data\SmOrderData;
 use Modules\Supermarket\Http\Requests\SmOrderRequest;
@@ -15,12 +15,14 @@ use Modules\Supermarket\Http\Resources\SmOrderResource;
 use Modules\Supermarket\Models\SmOrder;
 use Modules\Supermarket\Services\SmOrderNotificationService;
 use Modules\Supermarket\Services\SmOrderService;
+use Modules\Supermarket\Services\StoreOwnerContextService;
 
 final class SmOrderController
 {
     public function __construct(
         private SmOrderService $service,
         private SmOrderNotificationService $notifications,
+        private StoreOwnerContextService $context,
     ) {}
 
     public function index(SmOrderFilterRequest $request): AnonymousResourceCollection
@@ -50,6 +52,8 @@ final class SmOrderController
 
     public function show(SmOrder $smOrder): SmOrderResource
     {
+        $this->context->store((int) $smOrder->store_id);
+
         return SmOrderResource::make($smOrder->load(['customer', 'store', 'coupon', 'items.product.media', 'statusLogs', 'disputes', 'deliveryOrder.driver.user', 'deliveryOrder.driver.latestLocation', 'deliveryOrder.events']));
     }
 

@@ -69,6 +69,59 @@ final class PlatformCouponForm
                         ->visible(fn (Get $get): bool => $get('discount_type') === PlatformCoupon::DISCOUNT_PERCENTAGE),
                     TextInput::make('min_order_amount')->label('الحد الأدنى للطلب')->numeric()->minValue(0),
                 ]),
+            Section::make('تمويل الخصم')
+                ->description('يطبق هذا التمويل على طلبات المطاعم والسوبرماركت فقط. تنظيفات تستمر بمنطق هامش الإدارة الحالي. الافتراضي: المنصة تتحمل كامل الخصم.')
+                ->columns(2)
+                ->visible(fn (Get $get): bool => in_array($get('section'), [
+                    PlatformCoupon::SECTION_RESTAURANT,
+                    PlatformCoupon::SECTION_SUPERMARKET,
+                    PlatformCoupon::SECTION_ALL,
+                ], true))
+                ->schema([
+                    Select::make('funding_type')
+                        ->label('مصدر تمويل الخصم')
+                        ->required()
+                        ->native(false)
+                        ->live()
+                        ->default(PlatformCoupon::FUNDING_PLATFORM)
+                        ->options([
+                            PlatformCoupon::FUNDING_PLATFORM => 'المنصة 100%',
+                            PlatformCoupon::FUNDING_SHARED => 'مشترك بين المنصة وصاحب العمل',
+                            PlatformCoupon::FUNDING_MERCHANT => 'صاحب العمل 100%',
+                        ]),
+                    TextInput::make('platform_funding_percent')
+                        ->label('نسبة تحمل المنصة')
+                        ->numeric()
+                        ->minValue(0)
+                        ->maxValue(100)
+                        ->suffix('%')
+                        ->default(100)
+                        ->live(onBlur: true)
+                        ->afterStateUpdated(function (Set $set, mixed $state): void {
+                            $platform = max(0.0, min(100.0, (float) $state));
+                            $set('merchant_funding_percent', round(100 - $platform, 2));
+                        })
+                        ->visible(fn (Get $get): bool => $get('funding_type') === PlatformCoupon::FUNDING_SHARED),
+                    TextInput::make('merchant_funding_percent')
+                        ->label('نسبة تحمل صاحب العمل')
+                        ->numeric()
+                        ->suffix('%')
+                        ->default(0)
+                        ->disabled()
+                        ->dehydrated(false)
+                        ->visible(fn (Get $get): bool => $get('funding_type') === PlatformCoupon::FUNDING_SHARED),
+                    TextInput::make('max_platform_funding_amount')
+                        ->label('الحد الأقصى الذي تتحمله المنصة من الطلب')
+                        ->numeric()
+                        ->minValue(0)
+                        ->helperText('اختياري. إذا كان أقل من حصة المنصة، يتحمل صاحب العمل الفرق.')
+                        ->visible(fn (Get $get): bool => $get('funding_type') !== PlatformCoupon::FUNDING_MERCHANT),
+                    Toggle::make('cap_platform_funding_to_revenue')
+                        ->label('لا تسمح أن تتجاوز حصة المنصة إيرادها من الطلب')
+                        ->helperText('عند التفعيل، ينتقل الجزء الزائد من الخصم إلى صاحب العمل ويظهر ذلك بوضوح في الـ snapshot.')
+                        ->default(false)
+                        ->visible(fn (Get $get): bool => $get('funding_type') !== PlatformCoupon::FUNDING_MERCHANT),
+                ]),
             Section::make('المستخدمون والحدود')
                 ->columns(2)
                 ->schema([

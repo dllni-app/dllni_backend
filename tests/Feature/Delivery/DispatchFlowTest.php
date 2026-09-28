@@ -281,3 +281,41 @@ it('retries dispatch after a stopped order', function (): void {
     expect($retried->status)->toBe(DeliveryOrderStatus::SearchingForDriver->value);
     Queue::assertPushed(DispatchDeliveryOrderJob::class);
 });
+
+it('blocks suspended drivers from login and authenticated delivery endpoints', function (): void {
+    $company = DeliveryCompany::factory()->create();
+    $driver = DeliveryDriver::factory()->create(['company_id' => $company->id]);
+    $driver->user->forceFill([
+        'phone' => '+963900009999',
+        'password' => 'secret123',
+    ])->save();
+    $driver->forceFill(['is_suspended' => true])->save();
+
+    $this->postJson('/api/v1/delivery/driver/auth/login', [
+        'phone' => '+963900009999',
+        'password' => 'secret123',
+    ])->assertForbidden();
+
+    Sanctum::actingAs($driver->user->fresh());
+    $this->getJson('/api/v1/delivery/driver/me')->assertForbidden();
+});
+
+it('preserves dispatch attempt history when retrying a stopped order', function (): void {
+    Queue::fake();
+    $company = DeliveryCompany::factory()->create();
+    createDeliveryDriverWithLocation($company);
+
+    $order = app(DeliveryOrderService::class)->create($company, deliveryOrderPayload());
+    app(DriverDispatchService::class)->dispatchByOrderId($order->id);
+    $attempt = DeliveryAssignmentAttempt::query()->where('order_id', $order->id)->firstOrFail();
+    $attempt->forceFill([
+        'status' => DeliveryAssignmentAttemptStatus::Rejected->value,
+        'responded_at' => now(),
+    ])->save();
+    app(DeliveryOrderService::class)->markStopped($order->fresh(), 'Manual stop for retry.');
+
+    app(DeliveryOrderService::class)->retryDispatch($order->fresh());
+
+    expect(DeliveryAssignmentAttempt::query()->whereKey($attempt->id)->exists())->toBeTrue()
+        ->and($attempt->fresh()->status)->toBe(DeliveryAssignmentAttemptStatus::Rejected->value);
+});

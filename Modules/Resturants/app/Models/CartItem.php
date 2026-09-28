@@ -23,8 +23,8 @@ final class CartItem extends Model
 
     protected $casts = [
         'quantity' => 'integer',
-        'unit_price' => 'integer',
-        'total_price' => 'integer',
+        'unit_price' => 'decimal:2',
+        'total_price' => 'decimal:2',
     ];
 
     public function cart(): BelongsTo

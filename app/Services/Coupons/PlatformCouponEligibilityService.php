@@ -45,7 +45,10 @@ final class PlatformCouponEligibilityService
         }
 
         if ($coupon->per_user_usage_limit !== null) {
-            $redemptions = $coupon->redemptions()->where('user_id', $userId)->count();
+            $redemptions = $coupon->redemptions()
+                ->where('user_id', $userId)
+                ->whereNull('reversed_at')
+                ->count();
             if ($redemptions >= $coupon->per_user_usage_limit) {
                 return $this->invalid('user_usage_limit_reached');
             }

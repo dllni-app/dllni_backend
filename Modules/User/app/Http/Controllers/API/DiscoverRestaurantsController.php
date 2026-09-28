@@ -7,9 +7,9 @@ namespace Modules\User\Http\Controllers\API;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Str;
-use Modules\Resturants\Http\Resources\RestaurantResource;
 use Modules\Resturants\Models\Restaurant;
 use Modules\User\Http\Requests\DiscoverRestaurantsRequest;
+use Modules\User\Http\Resources\UserRestaurantResource;
 use Modules\User\Services\UserPopularSearchService;
 
 final class DiscoverRestaurantsController
@@ -50,6 +50,22 @@ final class DiscoverRestaurantsController
                 ->where(fn ($q) => $q->whereNull('ends_at')->orWhere('ends_at', '>=', $now)));
         }
 
+        $preparationTimeMin = $request->input('filter.preparationTimeMin');
+        if (is_numeric($preparationTimeMin)) {
+            $query->whereRaw(
+                'COALESCE(estimated_preparation_time_min, estimated_preparation_time) >= ?',
+                [(int) $preparationTimeMin],
+            );
+        }
+
+        $preparationTimeMax = $request->input('filter.preparationTimeMax');
+        if (is_numeric($preparationTimeMax)) {
+            $query->whereRaw(
+                'COALESCE(estimated_preparation_time_max, estimated_preparation_time) <= ?',
+                [(int) $preparationTimeMax],
+            );
+        }
+
         if ($request->boolean('filter.openNow')) {
             $dayOfWeek = Str::lower($now->englishDayOfWeek);
             $time = $now->format('H:i:s');
@@ -70,13 +86,15 @@ final class DiscoverRestaurantsController
 
         match ($sort) {
             'nearest' => $this->applyNearestSort($query, $request),
-            'fastest' => $query->orderBy('estimated_preparation_time'),
+            'fastest' => $query
+                ->orderByRaw('COALESCE(estimated_preparation_time_max, estimated_preparation_time) asc')
+                ->orderByRaw('COALESCE(estimated_preparation_time_min, estimated_preparation_time) asc'),
             default => $query->orderByDesc('average_rating')->orderByDesc('is_featured'),
         };
 
         $restaurants = $query->paginate($request->integer('perPage', 10));
 
-        return RestaurantResource::collection($restaurants);
+        return UserRestaurantResource::collection($restaurants);
     }
 
     private function applyNearestSort($query, DiscoverRestaurantsRequest $request): void

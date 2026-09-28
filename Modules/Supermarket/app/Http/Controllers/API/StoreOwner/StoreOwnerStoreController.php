@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Modules\Supermarket\Http\Controllers\API\StoreOwner;
 
 use Modules\Supermarket\Data\SmStoreData;
-use Modules\Supermarket\Http\Requests\SmStoreRequest;
+use Modules\Supermarket\Http\Requests\StoreOwnerStoreUpdateRequest;
 use Modules\Supermarket\Http\Resources\SmStoreResource;
 use Modules\Supermarket\Services\SmStoreService;
 use Modules\Supermarket\Services\StoreOwnerContextService;
@@ -24,7 +24,7 @@ final class StoreOwnerStoreController
         return SmStoreResource::make($store->load('owner'));
     }
 
-    public function update(SmStoreRequest $request): SmStoreResource
+    public function update(StoreOwnerStoreUpdateRequest $request): SmStoreResource
     {
         $store = $this->context->ownedStore();
 

@@ -12,17 +12,20 @@ use Modules\Resturants\Http\Requests\CategoryRequests\CategoryFilterRequest;
 use Modules\Resturants\Http\Resources\CategoryResource;
 use Modules\Resturants\Models\Category;
 use Modules\Resturants\Services\CategoryService;
+use Modules\Resturants\Support\RestaurantOwnerContext;
 use Throwable;
 
 final class CategoryController
 {
     public function __construct(
-        private CategoryService $categoryService
+        private CategoryService $categoryService,
+        private RestaurantOwnerContext $ownerContext,
     ) {}
 
     public function index(CategoryFilterRequest $request): AnonymousResourceCollection
     {
         $categories = Category::getQuery()
+            ->where('restaurant_id', $this->ownerContext->restaurantId())
             ->with(['restaurant', 'products'])
             ->paginate($request->get('perPage', 10));
 
@@ -33,7 +36,10 @@ final class CategoryController
     public function store(CategoryRequest $request): CategoryResource
     {
         $category = $this->categoryService->store(
-            CategoryData::from($request->validated())
+            CategoryData::from([
+                ...$request->validated(),
+                'restaurantId' => $this->ownerContext->restaurantId(),
+            ])
         );
 
         return CategoryResource::make($category->load(['restaurant', 'products']));
@@ -41,6 +47,7 @@ final class CategoryController
 
     public function show(Category $category): CategoryResource
     {
+        abort_unless($this->ownerContext->modelBelongsToRestaurant($category, $this->ownerContext->restaurantId()), Response::HTTP_NOT_FOUND);
         $category->load(['restaurant', 'products']);
 
         return CategoryResource::make($category);
@@ -49,8 +56,13 @@ final class CategoryController
     /** @throws Throwable */
     public function update(CategoryRequest $request, Category $category): CategoryResource
     {
+        abort_unless($this->ownerContext->modelBelongsToRestaurant($category, $this->ownerContext->restaurantId()), Response::HTTP_NOT_FOUND);
+
         $updated = $this->categoryService->update(
-            CategoryData::from($request->validated()),
+            CategoryData::from([
+                ...$request->validated(),
+                'restaurantId' => $this->ownerContext->restaurantId(),
+            ]),
             $category
         );
 
@@ -59,6 +71,7 @@ final class CategoryController
 
     public function destroy(Category $category): Response
     {
+        abort_unless($this->ownerContext->modelBelongsToRestaurant($category, $this->ownerContext->restaurantId()), Response::HTTP_NOT_FOUND);
         $category->delete();
 
         return response()->noContent();

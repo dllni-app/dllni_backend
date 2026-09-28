@@ -78,7 +78,7 @@ it('adds a product to restaurant cart for authenticated user', function (): void
     ]);
 });
 
-it('preserves items from all restaurants in the same cart', function (): void {
+it('keeps separate carts for different restaurants', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
@@ -101,27 +101,24 @@ it('preserves items from all restaurants in the same cart', function (): void {
         'quantity' => 1,
     ])->assertCreated();
 
-    $firstCartId = (int) $firstAddResponse->json('cartId');
-
     $secondAddResponse = $this->postJson('/api/v1/user/restaurants/cart/items', [
         'productId' => $secondProduct->id,
         'quantity' => 2,
     ])->assertCreated();
 
-    // Same cart is reused
-    expect($secondAddResponse->json('cartId'))->toBe($firstCartId);
+    $firstCartId = (int) $firstAddResponse->json('cartId');
+    $secondCartId = (int) $secondAddResponse->json('cartId');
 
-    // Only one cart exists
-    $this->assertDatabaseCount('carts', 1);
+    expect($secondCartId)->not->toBe($firstCartId);
+    $this->assertDatabaseCount('carts', 2);
 
-    // Both items are present
     $this->assertDatabaseHas('cart_items', [
         'cart_id' => $firstCartId,
         'product_id' => $firstProduct->id,
         'quantity' => 1,
     ]);
     $this->assertDatabaseHas('cart_items', [
-        'cart_id' => $firstCartId,
+        'cart_id' => $secondCartId,
         'product_id' => $secondProduct->id,
         'quantity' => 2,
     ]);
@@ -278,7 +275,7 @@ it('preserves modifiers when patching only restaurant cart item quantity', funct
         'modifierIds' => [$modifier->id],
     ])->assertCreated();
 
-    $this->patchJson('/api/v1/user/restaurants/cart/items/'.$addResponse->json('itemId'), [
+    $this->patchJson('/api/v1/user/restaurants/carts/'.$addResponse->json('cartId').'/items/'.$addResponse->json('itemId'), [
         'quantity' => 7,
     ])->assertOk();
 

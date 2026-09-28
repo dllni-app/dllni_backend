@@ -125,13 +125,11 @@ final class SmOrderStatusController
     public function courierHandover(SmOrder $order): JsonResponse|JsonResource
     {
         $this->context->store((int) $order->store_id);
-        $previousStatus = $this->statusValue($order);
 
         try {
             $updated = $this->orderService->handOverToCourier($order, $this->context->owner()->id);
-            $this->notifications->notifyStatusChanged($updated, $previousStatus, $this->statusValue($updated), 'owner');
 
-            return $this->resource($updated, 'Order handed to courier successfully.');
+            return $this->resource($updated, 'Store handover confirmed. Pickup status is controlled by the delivery lifecycle.');
         } catch (Exception $e) {
             return response()->json([
                 'message' => $e->getMessage(),
@@ -149,7 +147,7 @@ final class SmOrderStatusController
 
         try {
             $data = SmOrderRejectStatusData::from($request->validated());
-            $rejectedOrder = $this->orderService->rejectOrder($order, $data);
+            $rejectedOrder = $this->orderService->rejectOrder($order, $data, $this->context->owner()->id);
             $this->activityLogService->logSmOrderRejected((int) $order->id, $order->order_number, (int) $order->store_id);
             $this->notifications->notifyStatusChanged($rejectedOrder, $previousStatus, $this->statusValue($rejectedOrder), 'owner');
 

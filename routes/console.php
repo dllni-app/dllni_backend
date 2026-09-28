@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use App\Services\RestaurantSystemAlertGenerator;
+use App\Services\SupermarketSystemAlertGenerator;
+use App\Services\DeliverySystemAlertGenerator;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
 use Modules\Cleaning\Models\CleaningBooking;
@@ -23,6 +25,23 @@ Artisan::command('restaurant:generate-system-alerts', function (RestaurantSystem
 })->purpose('Generate proactive system alerts for restaurant operations');
 
 Schedule::command('restaurant:generate-system-alerts')->everyFiveMinutes();
+
+
+Artisan::command('supermarket:generate-system-alerts', function (SupermarketSystemAlertGenerator $generator): int {
+    $count = $generator->handle();
+    $this->info("Supermarket alerts generated: {$count}");
+    return 0;
+})->purpose('Generate proactive system alerts for supermarket operations');
+
+Schedule::command('supermarket:generate-system-alerts')->everyFiveMinutes();
+
+Artisan::command('delivery:generate-system-alerts', function (DeliverySystemAlertGenerator $generator): int {
+    $count = $generator->handle();
+    $this->info("Delivery alerts generated: {$count}");
+    return 0;
+})->purpose('Generate proactive system alerts for delivery operations');
+
+Schedule::command('delivery:generate-system-alerts')->everyFiveMinutes();
 
 Artisan::command('supermarket:process-smart-list-schedules', function (): int {
     DispatchDueSmartListSchedulesJob::dispatch();

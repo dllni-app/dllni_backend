@@ -175,8 +175,8 @@ final class Product extends Model implements HasMedia
     protected function casts(): array
     {
         return [
-            'price' => 'integer',
-            'discounted_price' => 'integer',
+            'price' => 'decimal:2',
+            'discounted_price' => 'decimal:2',
             'is_available' => 'boolean',
             'unavailable_until' => 'datetime',
             'availability_note' => 'string',

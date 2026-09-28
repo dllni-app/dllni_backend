@@ -28,7 +28,13 @@ final class RestaurantOwnerDashboardService
         $confirmedOrdersCount = (clone $ordersQuery)->where('status', OrderStatus::Accepted)->count();
         $completedOrdersCount = (clone $ordersQuery)->where('status', OrderStatus::Completed)->count();
         $cancelledOrders = (clone $ordersQuery)->where('status', OrderStatus::Cancelled)->count();
-        $totalRevenue = (float) (clone $ordersQuery)->where('status', OrderStatus::Completed)->sum('total_amount');
+        $completedOrdersQuery = (clone $ordersQuery)->where('status', OrderStatus::Completed);
+        $totalRevenue = (float) (clone $completedOrdersQuery)->sum('total_amount');
+        $merchantGrossRevenue = (float) (clone $completedOrdersQuery)->sum('merchant_gross_amount');
+        $merchantNetRevenue = (float) (clone $completedOrdersQuery)->sum('merchant_net_amount');
+        $platformCommission = (float) (clone $completedOrdersQuery)->sum('commission_amount');
+        $merchantCouponFunding = (float) (clone $completedOrdersQuery)->sum('coupon_merchant_funded_amount');
+        $unsnapshottedOrders = (clone $completedOrdersQuery)->whereNull('financial_snapshot')->count();
         $averageOrderValue = $completedOrdersCount > 0 ? round($totalRevenue / $completedOrdersCount, 2) : 0.0;
         $cancellationRate = $totalOrders > 0 ? round(($cancelledOrders / $totalOrders) * 100, 2) : 0.0;
 
@@ -143,6 +149,11 @@ final class RestaurantOwnerDashboardService
                 'totalRevenue' => $totalRevenue,
                 'averageOrderValue' => $averageOrderValue,
                 'cancellationRatePercent' => $cancellationRate,
+                'merchantGrossRevenue' => $merchantGrossRevenue,
+                'merchantNetRevenue' => $merchantNetRevenue,
+                'platformCommission' => $platformCommission,
+                'merchantCouponFunding' => $merchantCouponFunding,
+                'unsnapshottedOrders' => $unsnapshottedOrders,
             ],
             'topProducts' => $topProducts,
             'fulfillment' => [

@@ -71,6 +71,15 @@ final class RestaurantOwnerOrderPayload
                 'discount' => $discount,
                 'total' => $total,
             ],
+            'merchantSettlement' => [
+                'available' => $order->financial_snapshot !== null,
+                'merchantGrossAmount' => $order->merchant_gross_amount !== null ? (float) $order->merchant_gross_amount : null,
+                'commissionAmount' => $order->commission_amount !== null ? (float) $order->commission_amount : null,
+                'merchantNetAmount' => $order->merchant_net_amount !== null ? (float) $order->merchant_net_amount : null,
+                'platformCouponFundedAmount' => $order->coupon_platform_funded_amount !== null ? (float) $order->coupon_platform_funded_amount : null,
+                'merchantCouponFundedAmount' => $order->coupon_merchant_funded_amount !== null ? (float) $order->coupon_merchant_funded_amount : null,
+                'reversedAt' => $order->financial_reversed_at?->toIso8601String(),
+            ],
         ];
     }
 

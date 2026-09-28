@@ -2,19 +2,30 @@
 
 declare(strict_types=1);
 
+use App\Enums\UserModuleType;
 use App\Models\User;
-use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Models\Order;
 use Modules\Resturants\Models\Restaurant;
 
 beforeEach(function () {
-    Sanctum::actingAs(User::factory()->create());
+    $this->owner = User::factory()->create([
+        'module_type' => UserModuleType::RestaurantSeller->value,
+    ]);
+
+    $this->restaurant = Restaurant::factory()->create([
+        'user_id' => $this->owner->id,
+    ]);
+
+    Sanctum::actingAs($this->owner);
 });
 
-it('lists orders', function () {
-    Order::factory()->count(3)->create();
+it('lists only orders for the authenticated restaurant', function () {
+    Order::factory()->count(3)->create([
+        'restaurant_id' => $this->restaurant->id,
+    ]);
+    Order::factory()->create();
 
     $response = $this->getJson('/api/v1/orders');
 
@@ -22,66 +33,50 @@ it('lists orders', function () {
     expect($response->json('data'))->toBeArray()->toHaveCount(3);
 });
 
-it('creates an order', function () {
-    $customer = User::factory()->create(['email' => 'customer@example.com']);
-    $restaurant = Restaurant::factory()->create();
-
-    $payload = [
-        'userId' => $customer->id,
-        'restaurantId' => $restaurant->id,
-        'orderNumber' => 'ORD-'.mb_strtoupper(Str::random(8)).'-'.fake()->unique()->randomNumber(4),
+it('does not expose generic order creation', function () {
+    $this->postJson('/api/v1/orders', [
         'status' => OrderStatus::Pending->value,
-        'orderType' => 'pickup',
-        'pickupMode' => 'immediate_pickup',
-        'subtotal' => 50,
-        'totalAmount' => 55,
-    ];
-
-    $response = $this->postJson('/api/v1/orders', $payload);
-
-    $response->assertCreated();
-    $this->assertDatabaseHas('orders', [
-        'user_id' => $customer->id,
-        'restaurant_id' => $restaurant->id,
-    ]);
+    ])->assertMethodNotAllowed();
 });
 
-it('shows an order', function () {
-    $order = Order::factory()->create(['order_number' => 'ORD-SHOW-1234']);
+it('shows an owned order', function () {
+    $order = Order::factory()->create([
+        'restaurant_id' => $this->restaurant->id,
+        'order_number' => 'ORD-SHOW-1234',
+    ]);
 
     $response = $this->getJson("/api/v1/orders/{$order->id}");
 
     $response->assertOk();
-    expect($response->json('data.id'))->toBe($order->id);
-    expect($response->json('data.orderNumber'))->toBe('ORD-SHOW-1234');
+    expect($response->json('data.id'))->toBe($order->id)
+        ->and($response->json('data.orderNumber'))->toBe('ORD-SHOW-1234');
 });
 
-it('updates an order', function () {
-    $order = Order::factory()->create(['status' => OrderStatus::Pending->value]);
-
-    $response = $this->putJson("/api/v1/orders/{$order->id}", [
-        'userId' => $order->user_id,
-        'restaurantId' => $order->restaurant_id,
-        'orderNumber' => $order->order_number,
-        'status' => OrderStatus::Accepted->value,
-        'orderType' => $order->order_type->value,
-        'pickupMode' => $order->pickup_mode->value,
-        'subtotal' => (float) $order->subtotal,
-        'totalAmount' => (float) $order->total_amount,
-    ]);
-
-    $response->assertOk();
-    $this->assertDatabaseHas('orders', [
-        'id' => $order->id,
-        'status' => OrderStatus::Accepted->value,
-    ]);
-});
-
-it('deletes an order', function () {
+it('forbids reading another restaurant order', function () {
     $order = Order::factory()->create();
 
-    $response = $this->deleteJson("/api/v1/orders/{$order->id}");
+    $this->getJson("/api/v1/orders/{$order->id}")
+        ->assertForbidden();
+});
 
-    $response->assertNoContent();
-    $this->assertDatabaseMissing('orders', ['id' => $order->id]);
+it('does not expose generic order update', function () {
+    $order = Order::factory()->create([
+        'restaurant_id' => $this->restaurant->id,
+        'status' => OrderStatus::Pending->value,
+    ]);
+
+    $this->putJson("/api/v1/orders/{$order->id}", [
+        'status' => OrderStatus::Accepted->value,
+    ])->assertMethodNotAllowed();
+});
+
+it('does not expose generic order deletion', function () {
+    $order = Order::factory()->create([
+        'restaurant_id' => $this->restaurant->id,
+    ]);
+
+    $this->deleteJson("/api/v1/orders/{$order->id}")
+        ->assertMethodNotAllowed();
+
+    $this->assertDatabaseHas('orders', ['id' => $order->id]);
 });

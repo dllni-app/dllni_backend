@@ -17,10 +17,12 @@ use Modules\User\Models\UserAddress;
 final class DeliveryOrderCreationService
 {
     public const SOURCE_RESTAURANT_ORDER = 'restaurant_order';
+
     public const SOURCE_SUPERMARKET_ORDER = 'supermarket_order';
 
     public function __construct(
         private readonly DeliveryOrderService $deliveryOrders,
+        private readonly DriverLocationService $locationService,
     ) {}
 
     public function createForRestaurantOrder(Order $order): DeliveryOrder
@@ -39,18 +41,23 @@ final class DeliveryOrderCreationService
             throw ValidationException::withMessages(['addressId' => ['Please choose a valid delivery address.']]);
         }
 
+        $pickupLatitude = $this->requiredCoordinate($order->restaurant->latitude, 'pickupLatitude');
+        $pickupLongitude = $this->requiredCoordinate($order->restaurant->longitude, 'pickupLongitude');
+        $dropoffLatitude = $this->requiredCoordinate($order->userAddress->latitude, 'dropoffLatitude');
+        $dropoffLongitude = $this->requiredCoordinate($order->userAddress->longitude, 'dropoffLongitude');
+
         return $this->deliveryOrders->create(
-            company: $this->resolveCompany(),
+            company: $this->resolveCompany($pickupLatitude, $pickupLongitude),
             payload: [
                 'customerName' => (string) ($order->user?->name ?? 'Dllni Customer'),
                 'customerPhone' => $order->userAddress->mobile ?? $order->user?->phone,
                 'customerNotes' => $order->special_instructions,
                 'pickupAddress' => $this->merchantAddress(address: $order->restaurant->address, city: $order->restaurant->city, area: $order->restaurant->district, fallback: $order->restaurant->name),
-                'pickupLatitude' => $this->requiredCoordinate($order->restaurant->latitude, 'pickupLatitude'),
-                'pickupLongitude' => $this->requiredCoordinate($order->restaurant->longitude, 'pickupLongitude'),
+                'pickupLatitude' => $pickupLatitude,
+                'pickupLongitude' => $pickupLongitude,
                 'dropoffAddress' => $this->userAddressText($order->userAddress),
-                'dropoffLatitude' => $this->requiredCoordinate($order->userAddress->latitude, 'dropoffLatitude'),
-                'dropoffLongitude' => $this->requiredCoordinate($order->userAddress->longitude, 'dropoffLongitude'),
+                'dropoffLatitude' => $dropoffLatitude,
+                'dropoffLongitude' => $dropoffLongitude,
                 'currency' => 'SYP',
                 'sourceType' => self::SOURCE_RESTAURANT_ORDER,
                 'sourceId' => (int) $order->id,
@@ -73,18 +80,23 @@ final class DeliveryOrderCreationService
             throw ValidationException::withMessages(['store' => ['Cannot create delivery order without a linked supermarket store.']]);
         }
 
+        $pickupLatitude = $this->requiredCoordinate($order->store->latitude, 'pickupLatitude');
+        $pickupLongitude = $this->requiredCoordinate($order->store->longitude, 'pickupLongitude');
+        $dropoffLatitude = $this->requiredCoordinate($address->latitude, 'dropoffLatitude');
+        $dropoffLongitude = $this->requiredCoordinate($address->longitude, 'dropoffLongitude');
+
         return $this->deliveryOrders->create(
-            company: $this->resolveCompany(),
+            company: $this->resolveCompany($pickupLatitude, $pickupLongitude),
             payload: [
                 'customerName' => (string) ($order->customer?->name ?? 'Dllni Customer'),
                 'customerPhone' => $address->mobile ?? $order->customer?->phone,
                 'customerNotes' => $order->special_instructions,
                 'pickupAddress' => $this->merchantAddress(address: $order->store->address, city: $order->store->city, area: $order->store->neighborhood, fallback: $order->store->name),
-                'pickupLatitude' => $this->requiredCoordinate($order->store->latitude, 'pickupLatitude'),
-                'pickupLongitude' => $this->requiredCoordinate($order->store->longitude, 'pickupLongitude'),
+                'pickupLatitude' => $pickupLatitude,
+                'pickupLongitude' => $pickupLongitude,
                 'dropoffAddress' => $this->userAddressText($address),
-                'dropoffLatitude' => $this->requiredCoordinate($address->latitude, 'dropoffLatitude'),
-                'dropoffLongitude' => $this->requiredCoordinate($address->longitude, 'dropoffLongitude'),
+                'dropoffLatitude' => $dropoffLatitude,
+                'dropoffLongitude' => $dropoffLongitude,
                 'currency' => 'SYP',
                 'sourceType' => self::SOURCE_SUPERMARKET_ORDER,
                 'sourceId' => (int) $order->id,
@@ -112,9 +124,9 @@ final class DeliveryOrderCreationService
             ->first();
     }
 
-    private function resolveCompany(): DeliveryCompany
+    private function resolveCompany(float $pickupLatitude, float $pickupLongitude): DeliveryCompany
     {
-        $company = DeliveryCompany::query()
+        $companies = DeliveryCompany::query()
             ->where('is_active', true)
             ->where('is_suspended', false)
             ->withCount([
@@ -126,9 +138,36 @@ final class DeliveryOrderCreationService
                     ->where('is_active', true)
                     ->where('is_suspended', false),
             ])
-            ->orderByDesc('available_drivers_count')
-            ->orderByDesc('active_drivers_count')
-            ->oldest('id')
+            ->get();
+
+        $company = $companies
+            ->sort(function (DeliveryCompany $left, DeliveryCompany $right) use ($pickupLatitude, $pickupLongitude): int {
+                $leftTier = $this->companyAvailabilityTier($left);
+                $rightTier = $this->companyAvailabilityTier($right);
+
+                if ($leftTier !== $rightTier) {
+                    return $leftTier <=> $rightTier;
+                }
+
+                $leftDistance = $this->companyDistanceFromPickup($left, $pickupLatitude, $pickupLongitude);
+                $rightDistance = $this->companyDistanceFromPickup($right, $pickupLatitude, $pickupLongitude);
+                $distanceComparison = $leftDistance <=> $rightDistance;
+
+                if ($distanceComparison !== 0) {
+                    return $distanceComparison;
+                }
+
+                $availableComparison = ((int) $right->available_drivers_count) <=> ((int) $left->available_drivers_count);
+                if ($availableComparison !== 0) {
+                    return $availableComparison;
+                }
+
+                $activeComparison = ((int) $right->active_drivers_count) <=> ((int) $left->active_drivers_count);
+
+                return $activeComparison !== 0
+                    ? $activeComparison
+                    : ((int) $left->id <=> (int) $right->id);
+            })
             ->first();
 
         if (! $company instanceof DeliveryCompany) {
@@ -136,6 +175,32 @@ final class DeliveryOrderCreationService
         }
 
         return $company;
+    }
+
+    private function companyAvailabilityTier(DeliveryCompany $company): int
+    {
+        if ((int) $company->available_drivers_count > 0) {
+            return 0;
+        }
+
+        return (int) $company->active_drivers_count > 0 ? 1 : 2;
+    }
+
+    private function companyDistanceFromPickup(
+        DeliveryCompany $company,
+        float $pickupLatitude,
+        float $pickupLongitude,
+    ): float {
+        if ($company->latitude === null || $company->longitude === null) {
+            return PHP_FLOAT_MAX;
+        }
+
+        return $this->locationService->calculateHaversineDistance(
+            (float) $company->latitude,
+            (float) $company->longitude,
+            $pickupLatitude,
+            $pickupLongitude,
+        );
     }
 
     private function requiredCoordinate(mixed $value, string $field): float
@@ -152,14 +217,14 @@ final class DeliveryOrderCreationService
 
     private function merchantAddress(?string $address, ?string $city, ?string $area, ?string $fallback): string
     {
-        $parts = array_values(array_filter([$fallback, $city, $area, $address], fn (?string $value): bool => is_string($value) && trim($value) !== ''));
+        $parts = array_values(array_filter([$fallback, $city, $area, $address], fn (?string $value): bool => is_string($value) && mb_trim($value) !== ''));
 
         return implode(' - ', $parts) ?: 'Pickup point';
     }
 
     private function userAddressText(UserAddress $address): string
     {
-        $parts = array_values(array_filter([$address->label, $address->city, $address->neighborhood, $address->street, $address->building, $address->floor, $address->directions], fn (?string $value): bool => is_string($value) && trim($value) !== ''));
+        $parts = array_values(array_filter([$address->label, $address->city, $address->neighborhood, $address->street, $address->building, $address->floor, $address->directions], fn (?string $value): bool => is_string($value) && mb_trim($value) !== ''));
 
         return implode(' - ', $parts) ?: 'Customer address';
     }

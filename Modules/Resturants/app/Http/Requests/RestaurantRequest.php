@@ -35,6 +35,8 @@ final class RestaurantRequest extends FormRequest
 
         $isCreate = $this->isMethod('post');
         $requiredOnCreate = $isCreate ? 'required' : 'sometimes';
+        $isOwnerProfileRequest = str_contains($this->path(), 'api/v1/restaurant-owner/restaurant')
+            && ! str_contains($this->path(), 'operating-hours');
 
         return [
             'userId' => [$requiredOnCreate, 'integer', 'exists:users,id'],
@@ -52,19 +54,19 @@ final class RestaurantRequest extends FormRequest
             'email' => 'nullable|email|max:255',
             'instagramUsername' => 'nullable|string|max:100',
             'facebookPageName' => 'nullable|string|max:100',
-            'averageRating' => 'nullable|numeric|min:0|max:5',
-            'totalReviews' => 'nullable|integer|min:0',
+            'averageRating' => $isOwnerProfileRequest ? 'prohibited' : 'nullable|numeric|min:0|max:5',
+            'totalReviews' => $isOwnerProfileRequest ? 'prohibited' : 'nullable|integer|min:0',
             'estimatedPreparationTime' => 'nullable|integer|min:0',
             'minimumOrderAmount' => 'nullable|numeric|min:0',
             'priceRange' => 'nullable|string|in:low,medium,high,premium',
-            'reputationScore' => 'nullable|integer|min:0|max:100',
-            'warningCount' => 'nullable|integer|min:0',
-            'visibilityScore' => 'nullable|integer|min:0',
-            'manualVisibilityOverride' => 'nullable|boolean',
-            'isActive' => 'nullable|boolean',
-            'isFeatured' => 'nullable|boolean',
-            'isTemporarilyClosed' => 'nullable|boolean',
-            'suspensionUntil' => 'nullable|date',
+            'reputationScore' => $isOwnerProfileRequest ? 'prohibited' : 'nullable|integer|min:0|max:100',
+            'warningCount' => $isOwnerProfileRequest ? 'prohibited' : 'nullable|integer|min:0',
+            'visibilityScore' => $isOwnerProfileRequest ? 'prohibited' : 'nullable|integer|min:0',
+            'manualVisibilityOverride' => $isOwnerProfileRequest ? 'prohibited' : 'nullable|boolean',
+            'isActive' => $isOwnerProfileRequest ? 'prohibited' : 'nullable|boolean',
+            'isFeatured' => $isOwnerProfileRequest ? 'prohibited' : 'nullable|boolean',
+            'isTemporarilyClosed' => $isOwnerProfileRequest ? 'prohibited' : 'nullable|boolean',
+            'suspensionUntil' => $isOwnerProfileRequest ? 'prohibited' : 'nullable|date',
             'primaryImage' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:2048',
             'image' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:2048',
             'bannerImage' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:2048',
@@ -85,11 +87,11 @@ final class RestaurantRequest extends FormRequest
         $name = $this->input('name', $ownerRestaurant?->name);
         $slug = $this->input('slug');
 
-        if (! is_string($slug) || trim($slug) === '') {
-            $slug = is_string($name) && trim($name) !== '' ? Str::slug($name) : null;
+        if (! is_string($slug) || mb_trim($slug) === '') {
+            $slug = is_string($name) && mb_trim($name) !== '' ? Str::slug($name) : null;
         }
 
-        if (! is_string($slug) || trim($slug) === '') {
+        if (! is_string($slug) || mb_trim($slug) === '') {
             $slug = $ownerRestaurant?->slug ?: 'restaurant-'.($ownerRestaurant?->id ?? Str::lower(Str::random(8)));
         }
 

@@ -37,6 +37,14 @@ final class DeliveryOrdersTable
                 TextColumn::make('customer_name')
                     ->label(__('delivery_company.orders.fields.customer_name'))
                     ->searchable(),
+                TextColumn::make('source_type')
+                    ->label(__('delivery_company.orders.fields.source_type'))
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => match ($state) {
+                        'restaurant_order' => __('delivery_company.orders.sources.restaurant'),
+                        'supermarket_order' => __('delivery_company.orders.sources.supermarket'),
+                        default => __('delivery_company.orders.sources.manual'),
+                    }),
                 TextColumn::make('status')
                     ->label(__('delivery_company.orders.fields.status'))
                     ->badge()
@@ -61,6 +69,12 @@ final class DeliveryOrdersTable
                 SelectFilter::make('status')
                     ->label(__('delivery_company.orders.fields.status'))
                     ->options($statusOptions),
+                SelectFilter::make('source_type')
+                    ->label(__('delivery_company.orders.fields.source_type'))
+                    ->options([
+                        'restaurant_order' => __('delivery_company.orders.sources.restaurant'),
+                        'supermarket_order' => __('delivery_company.orders.sources.supermarket'),
+                    ]),
             ])
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('driver'))
             ->recordActions([
@@ -79,7 +93,10 @@ final class DeliveryOrdersTable
                     ->visible(fn (DeliveryOrder $record): bool => auth()->user()?->can('retryDispatch', $record) === true
                         && in_array($record->status, [
                             DeliveryOrderStatus::Stopped->value,
+                            DeliveryOrderStatus::WaitingMerchantReady->value,
+                            DeliveryOrderStatus::SearchingForDriver->value,
                             DeliveryOrderStatus::Dispatching->value,
+                            DeliveryOrderStatus::Offered->value,
                         ], true))
                     ->requiresConfirmation()
                     ->action(function (DeliveryOrder $record): void {
@@ -102,6 +119,7 @@ final class DeliveryOrdersTable
                     ->color('danger')
                     ->visible(fn (DeliveryOrder $record): bool => auth()->user()?->can('cancel', $record) === true
                         && ! in_array($record->status, [
+                            DeliveryOrderStatus::PickedUp->value,
                             DeliveryOrderStatus::Delivered->value,
                             DeliveryOrderStatus::Completed->value,
                             DeliveryOrderStatus::Cancelled->value,

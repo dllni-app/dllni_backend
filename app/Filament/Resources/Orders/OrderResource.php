@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Orders;
 
+use App\Filament\Concerns\AuthorizesPlatformAdminResource;
 use App\Filament\Resources\Orders\Pages\ListOrders;
 use App\Filament\Resources\Orders\Pages\ViewOrder;
 use App\Filament\Resources\Orders\Schemas\OrderInfolist;
@@ -13,11 +14,14 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 use Modules\Resturants\Models\Order;
 use UnitEnum;
 
 final class OrderResource extends Resource
 {
+    use AuthorizesPlatformAdminResource;
+
     protected static ?string $model = Order::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentList;
@@ -48,16 +52,36 @@ final class OrderResource extends Resource
         return OrdersTable::configure($table);
     }
 
+    public static function canViewAny(): bool
+    {
+        return self::dashboardAllowed('restaurant_orders.view');
+    }
+
+    public static function canView(Model $record): bool
+    {
+        return self::dashboardAllowed('restaurant_orders.view');
+    }
+
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return false;
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return false;
+    }
+
     public static function getPages(): array
     {
         return [
             'index' => ListOrders::route('/'),
             'view' => ViewOrder::route('/{record}'),
         ];
-    }
-
-    public static function canCreate(): bool
-    {
-        return false;
     }
 }

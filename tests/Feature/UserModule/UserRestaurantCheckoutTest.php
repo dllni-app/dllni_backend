@@ -64,19 +64,19 @@ it('creates a single order from cart and clears the cart', function (): void {
     expect($cart)->not->toBeNull();
 
     // Act
-    $response = $this->postJson('/api/v1/user/restaurants/checkout', [
-        'orderType' => 'pickup',
-        'promoCode' => $promo->code,
-        'specialInstructions' => 'Ring the bell',
+    $response = $this->postJson("/api/v1/user/restaurants/carts/{$cart->id}/orders", [
+        'fulfillmentType' => 'pickup',
+        'receiveMode' => 'immediate',
+        'couponCode' => $promo->code,
+        'note' => 'Ring the bell',
     ]);
 
     // Assert
     $response->assertCreated()->assertJsonStructure([
-        'message',
-        'order' => ['id', 'restaurantId', 'orderNumber', 'status', 'subtotal', 'discountAmount', 'totalAmount'],
+        'data' => ['id', 'restaurantId', 'orderNumber', 'status', 'subtotal', 'discountAmount', 'totalAmount'],
     ]);
 
-    $orderId = $response->json('order.id');
+    $orderId = $response->json('data.id');
     $this->assertDatabaseHas('orders', [
         'id' => $orderId,
         'user_id' => $user->id,
@@ -88,7 +88,7 @@ it('creates a single order from cart and clears the cart', function (): void {
     $this->assertDatabaseCount('orders', 1);
 });
 
-it('creates ONE order even when cart has items from multiple restaurants', function (): void {
+it('keeps carts restaurant scoped and checks out only the selected restaurant cart', function (): void {
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
@@ -106,37 +106,38 @@ it('creates ONE order even when cart has items from multiple restaurants', funct
         'price' => 15,
     ]);
 
-    $this->postJson('/api/v1/user/restaurants/cart/items', [
+    $cartAResponse = $this->postJson('/api/v1/user/restaurants/cart/items', [
         'productId' => $productA->id,
         'quantity' => 1,
     ])->assertCreated();
 
-    $this->postJson('/api/v1/user/restaurants/cart/items', [
+    $cartBResponse = $this->postJson('/api/v1/user/restaurants/cart/items', [
         'productId' => $productB->id,
         'quantity' => 2,
     ])->assertCreated();
 
-    // Act
-    $response = $this->postJson('/api/v1/user/restaurants/checkout', [
-        'orderType' => 'pickup',
+    $cartAId = (int) $cartAResponse->json('cartId');
+    $cartBId = (int) $cartBResponse->json('cartId');
+
+    expect($cartAId)->not->toBe($cartBId);
+
+    $response = $this->postJson("/api/v1/user/restaurants/carts/{$cartAId}/orders", [
+        'fulfillmentType' => 'pickup',
+        'receiveMode' => 'immediate',
     ]);
 
-    // Assert: single order
     $response->assertCreated()->assertJsonStructure([
-        'message',
-        'order' => ['id', 'orderNumber', 'status', 'subtotal', 'totalAmount'],
+        'data' => ['id', 'orderNumber', 'status', 'subtotal', 'totalAmount'],
     ]);
 
     $this->assertDatabaseCount('orders', 1);
-    $this->assertDatabaseCount('order_items', 2);
-    $this->assertDatabaseCount('carts', 0);
-    $this->assertDatabaseCount('cart_items', 0);
-
-    // restaurant_id is null because items span multiple merchants
-    $orderId = $response->json('order.id');
     $this->assertDatabaseHas('orders', [
-        'id' => $orderId,
+        'id' => $response->json('data.id'),
         'user_id' => $user->id,
-        'restaurant_id' => null,
+        'restaurant_id' => $restaurantA->id,
     ]);
+
+    $this->assertDatabaseMissing('carts', ['id' => $cartAId]);
+    $this->assertDatabaseHas('carts', ['id' => $cartBId, 'restaurant_id' => $restaurantB->id]);
+    $this->assertDatabaseHas('cart_items', ['cart_id' => $cartBId, 'product_id' => $productB->id]);
 });

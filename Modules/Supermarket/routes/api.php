@@ -73,6 +73,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', InjectStoreIdFromOwnerContext::
         ->middleware($ordersPermission)
         ->name('sm-orders.hourly-count');
     Route::apiResource('sm-orders', SmOrderController::class)
+        ->only(['index', 'show'])
         ->middleware($ordersPermission)
         ->names('sm-orders');
 

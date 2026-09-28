@@ -8,9 +8,9 @@ use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Modules\Resturants\Models\Favorite;
-use Modules\Supermarket\Http\Resources\SmStoreResource;
 use Modules\Supermarket\Models\SmProduct;
 use Modules\Supermarket\Models\SmStore;
+use Modules\User\Http\Resources\UserSupermarketStoreResource;
 use Modules\User\Services\UserSupermarketCartService;
 
 final class SmStoreShowController
@@ -29,10 +29,12 @@ final class SmStoreShowController
                 ->whereNull('suspension_until')
                 ->orWhere('suspension_until', '<=', $now))
             ->with([
-                'owner',
                 'highestDiscountOffer',
                 'storeHours',
-                'categories',
+                'categories' => fn ($query) => $query
+                    ->where('is_active', true)
+                    ->orderBy('sort_order')
+                    ->orderBy('name'),
                 'products' => fn ($query) => $query
                     ->where('is_available', true)
                     ->latest('id')
@@ -42,16 +44,14 @@ final class SmStoreShowController
                         'media',
                         'offerProducts.offer',
                     ]),
-                'offers',
-                'coupons',
-                'orders',
-                'documents',
-                'trustLogs',
-                'dailyStats',
-                'commissionRules',
-                'assistantQueries',
-                'recurringOrders',
-                //  'staff.user',
+                'offers' => fn ($query) => $query
+                    ->where('is_active', true)
+                    ->where(fn ($validity) => $validity->whereNull('starts_at')->orWhere('starts_at', '<=', $now))
+                    ->where(fn ($validity) => $validity->whereNull('ends_at')->orWhere('ends_at', '>=', $now)),
+                'coupons' => fn ($query) => $query
+                    ->where('is_active', true)
+                    ->where(fn ($validity) => $validity->whereNull('starts_at')->orWhere('starts_at', '<=', $now))
+                    ->where(fn ($validity) => $validity->whereNull('ends_at')->orWhere('ends_at', '>=', $now)),
             ])
             ->findOrFail($store);
 
@@ -93,7 +93,7 @@ final class SmStoreShowController
         }
 
         return response()->json([
-            'store' => SmStoreResource::make($model),
+            'store' => UserSupermarketStoreResource::make($model),
             'cart' => $cartPayload,
         ]);
     }

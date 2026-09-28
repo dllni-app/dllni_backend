@@ -6,8 +6,8 @@ namespace Modules\User\Http\Controllers\API;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Modules\Supermarket\Http\Resources\SmStoreResource;
 use Modules\Supermarket\Models\SmStore;
+use Modules\User\Http\Resources\UserSupermarketStoreResource;
 use Modules\User\Services\UserFavoriteService;
 
 final class UserSupermarketStoreFavoriteStoreController
@@ -20,11 +20,11 @@ final class UserSupermarketStoreFavoriteStoreController
 
         $favorite = $favoriteService->addSupermarketStoreFavorite($request->user(), $store);
 
-        $store->load('owner', 'highestDiscountOffer');
+        $store->load('highestDiscountOffer');
         $store->setAttribute('isFavoritedByUser', true);
 
         return response()->json([
-            'store' => SmStoreResource::make($store),
+            'store' => UserSupermarketStoreResource::make($store),
         ], $favorite->wasRecentlyCreated ? 201 : 200);
     }
 }

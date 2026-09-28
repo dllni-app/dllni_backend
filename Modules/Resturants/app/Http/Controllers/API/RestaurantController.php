@@ -25,6 +25,7 @@ final class RestaurantController
     public function index(RestaurantFilterRequest $request): AnonymousResourceCollection
     {
         $restaurants = Restaurant::getQuery()
+            ->whereKey($this->ownerContext->restaurantId())
             ->with(['media', 'user', 'cuisineTypes'])
             ->paginate($request->get('perPage', 20));
 

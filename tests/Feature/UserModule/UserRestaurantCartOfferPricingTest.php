@@ -35,9 +35,9 @@ it('applies an active restaurant product offer to cart prices', function (): voi
     $cart = $result['cart'];
     expect($cart['items'][0]['unitPrice'])->toBe(8.5)
         ->and($cart['items'][0]['originalUnitPrice'])->toBe(10.0)
-        ->and($cart['items'][0]['discountAmount'])->toBe(1.5)
-        ->and($cart['amounts']['subtotal'])->toBe(10.0)
-        ->and($cart['amounts']['discount'])->toBe(1.5)
+        ->and($cart['items'][0]['originalTotalPrice'])->toBe(10.0)
+        ->and($cart['items'][0]['hasDiscount'])->toBeTrue()
+        ->and($cart['amounts']['subtotal'])->toBe(8.5)
         ->and($cart['amounts']['total'])->toBe(8.5);
 });
 
@@ -49,7 +49,7 @@ it('refreshes existing cart item prices when an offer becomes active', function 
     ]);
 
     $service = app(UserRestaurantCartService::class);
-    $service->addItem(
+    $addResult = $service->addItem(
         userId: (int) $user->id,
         productId: (int) $product->id,
         quantity: 1,
@@ -66,11 +66,11 @@ it('refreshes existing cart item prices when an offer becomes active', function 
     ]);
     $offer->products()->attach($product->id);
 
-    $cart = $service->show((int) $user->id);
+    $cart = $service->show((int) $user->id, (int) $addResult['cartId']);
 
     expect($cart['items'][0]['unitPrice'])->toBe(8.0)
-        ->and($cart['items'][0]['discountAmount'])->toBe(2.0)
-        ->and($cart['amounts']['subtotal'])->toBe(10.0)
-        ->and($cart['amounts']['discount'])->toBe(2.0)
+        ->and($cart['items'][0]['originalUnitPrice'])->toBe(10.0)
+        ->and($cart['items'][0]['hasDiscount'])->toBeTrue()
+        ->and($cart['amounts']['subtotal'])->toBe(8.0)
         ->and($cart['amounts']['total'])->toBe(8.0);
 });

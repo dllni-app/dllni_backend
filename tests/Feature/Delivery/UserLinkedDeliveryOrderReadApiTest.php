@@ -45,8 +45,8 @@ it('returns linked delivery data and real tracking for restaurant orders', funct
 
     $this->getJson('/api/v1/user/orders/restaurant/'.$order->id.'/tracking')
         ->assertOk()
-        ->assertJsonPath('deliveryOrderId', $deliveryOrder->id)
-        ->assertJsonStructure(['delivery', 'eta', 'map', 'timeline', 'merchant', 'actions']);
+        ->assertJsonPath('data.deliveryOrderId', $deliveryOrder->id)
+        ->assertJsonStructure(['data' => ['delivery', 'eta', 'map', 'timeline', 'merchant', 'actions']]);
 });
 
 it('returns linked delivery data and real tracking for supermarket orders', function (): void {
@@ -80,8 +80,8 @@ it('returns linked delivery data and real tracking for supermarket orders', func
 
     $this->getJson('/api/v1/user/orders/supermarket/'.$order->id.'/tracking')
         ->assertOk()
-        ->assertJsonPath('deliveryOrderId', $deliveryOrder->id)
-        ->assertJsonStructure(['delivery', 'eta', 'map', 'timeline', 'merchant', 'actions']);
+        ->assertJsonPath('data.deliveryOrderId', $deliveryOrder->id)
+        ->assertJsonStructure(['data' => ['delivery', 'eta', 'map', 'timeline', 'merchant', 'actions']]);
 });
 
 it('returns legacy source-linked delivery orders when explicit owner is missing', function (): void {

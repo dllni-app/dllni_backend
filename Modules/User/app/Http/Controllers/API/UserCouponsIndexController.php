@@ -24,7 +24,7 @@ final class UserCouponsIndexController
             ->where(function ($query) use ($userId): void {
                 $query->whereNull('per_user_usage_limit')
                     ->orWhereRaw(
-                        '(select count(*) from platform_coupon_redemptions where platform_coupon_redemptions.platform_coupon_id = platform_coupons.id and platform_coupon_redemptions.user_id = ?) < platform_coupons.per_user_usage_limit',
+                        '(select count(*) from platform_coupon_redemptions where platform_coupon_redemptions.platform_coupon_id = platform_coupons.id and platform_coupon_redemptions.user_id = ? and platform_coupon_redemptions.reversed_at is null) < platform_coupons.per_user_usage_limit',
                         [$userId]
                     );
             })

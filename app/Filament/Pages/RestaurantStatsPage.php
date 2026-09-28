@@ -4,20 +4,29 @@ declare(strict_types=1);
 
 namespace App\Filament\Pages;
 
-use App\Filament\Support\AdminUiFormatter;
+use App\Filament\Concerns\AuthorizesPlatformAdminResource;
 use App\Filament\Resources\Orders\OrderResource;
 use App\Filament\Resources\Restaurants\RestaurantResource;
+use App\Filament\Support\AdminUiFormatter;
 use BackedEnum;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Contracts\Support\Htmlable;
-use Illuminate\Database\Eloquent\Builder;
-use Modules\Resturants\Models\RestaurantDailyStat;
-use Modules\Resturants\Models\RestaurantMonthlyStat;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Fluent;
 use UnitEnum;
 
 final class RestaurantStatsPage extends Page
 {
+    use AuthorizesPlatformAdminResource;
+
+    public string $search = '';
+
+    public string $dateRange = '30';
+
+    public string $revenueState = 'all';
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChartBar;
 
     protected static string|UnitEnum|null $navigationGroup = null;
@@ -28,11 +37,10 @@ final class RestaurantStatsPage extends Page
 
     protected string $view = 'filament.cleaning-admin.pages.restaurant-stats';
 
-    public string $search = '';
-
-    public string $dateRange = '30';
-
-    public string $revenueState = 'all';
+    public static function canAccess(): bool
+    {
+        return self::dashboardAllowed('restaurant_orders.view');
+    }
 
     public static function getNavigationGroup(): string|UnitEnum|null
     {
@@ -56,55 +64,65 @@ final class RestaurantStatsPage extends Page
 
     public function getViewData(): array
     {
-        $search = trim($this->search);
+        $search = mb_trim($this->search);
         $days = max(7, (int) $this->dateRange);
-        $fromDate = now()->subDays($days - 1)->toDateString();
+        $from = now()->subDays($days - 1)->startOfDay();
+        $to = now();
 
-        $dailyStats = RestaurantDailyStat::query()
-            ->with('restaurant:id,name')
-            ->whereDate('stat_date', '>=', $fromDate)
-            ->when($search !== '', function (Builder $query) use ($search): void {
-                $query->whereHas('restaurant', function (Builder $restaurantQuery) use ($search): void {
-                    $restaurantQuery->where('name', 'like', '%' . $search . '%');
-                });
-            })
-            ->when($this->revenueState !== 'all', function (Builder $query): void {
-                if ($this->revenueState === 'with_revenue') {
-                    $query->where('revenue', '>', 0);
+        $dailyQuery = DB::table('orders')
+            ->join('restaurants', 'restaurants.id', '=', 'orders.restaurant_id')
+            ->whereBetween('orders.created_at', [$from, $to])
+            ->where('orders.status', 'completed')
+            ->when($search !== '', fn ($query) => $query->where('restaurants.name', 'like', '%'.$search.'%'))
+            ->selectRaw('orders.restaurant_id, restaurants.name as restaurant_name, DATE(orders.created_at) as stat_date')
+            ->selectRaw('COUNT(*) as orders_count')
+            ->selectRaw('COALESCE(SUM(orders.total_amount), 0) as revenue')
+            ->selectRaw('COALESCE(AVG(orders.total_amount), 0) as average_order_value')
+            ->groupBy('orders.restaurant_id', 'restaurants.name', DB::raw('DATE(orders.created_at)'));
 
-                    return;
-                }
+        $this->applyRevenueFilter($dailyQuery, 'SUM(orders.total_amount)');
 
-                $query->where(function (Builder $inner): void {
-                    $inner
-                        ->whereNull('revenue')
-                        ->orWhere('revenue', '<=', 0);
-                });
-            })
+        $allDailyStats = $dailyQuery
             ->orderByDesc('stat_date')
-            ->limit(100)
+            ->orderBy('restaurant_name')
             ->get();
+        $dailyStats = $allDailyStats
+            ->take(100)
+            ->map(fn ($row): Fluent => new Fluent([
+                'restaurant_id' => (int) $row->restaurant_id,
+                'restaurant' => new Fluent(['name' => $row->restaurant_name]),
+                'stat_date' => Carbon::parse($row->stat_date),
+                'orders_count' => (int) $row->orders_count,
+                'revenue' => (float) $row->revenue,
+                'average_order_value' => (float) $row->average_order_value,
+            ]))
+            ->values();
 
-        $monthlyStats = RestaurantMonthlyStat::query()
-            ->with('restaurant:id,name')
-            ->when($search !== '', function (Builder $query) use ($search): void {
-                $query->whereHas('restaurant', function (Builder $restaurantQuery) use ($search): void {
-                    $restaurantQuery->where('name', 'like', '%' . $search . '%');
-                });
+        $monthlyStats = $allDailyStats
+            ->groupBy(fn ($row): string => $row->restaurant_id.'|'.mb_substr((string) $row->stat_date, 0, 7))
+            ->map(function ($rows): Fluent {
+                $first = $rows->first();
+                [$year, $month] = array_map('intval', explode('-', mb_substr((string) $first->stat_date, 0, 7)));
+                $ordersCount = (int) $rows->sum(fn ($row): int => (int) $row->orders_count);
+                $revenue = (float) $rows->sum(fn ($row): float => (float) $row->revenue);
+
+                return new Fluent([
+                    'restaurant_id' => (int) $first->restaurant_id,
+                    'restaurant' => new Fluent(['name' => $first->restaurant_name]),
+                    'stat_year' => $year,
+                    'stat_month' => $month,
+                    'orders_count' => $ordersCount,
+                    'revenue' => $revenue,
+                    'average_order_value' => $ordersCount > 0 ? $revenue / $ordersCount : 0.0,
+                ]);
             })
-            ->orderByDesc('stat_year')
-            ->orderByDesc('stat_month')
-            ->limit(100)
-            ->get();
-
-        $totalOrders = (int) $dailyStats->sum('orders_count');
-        $totalRevenue = (float) $dailyStats->sum(fn ($row) => (float) ($row->revenue ?? 0));
-        $averageOrderValue = (float) $dailyStats->avg(fn ($row) => (float) ($row->average_order_value ?? 0));
-        $trackedRestaurants = (int) $dailyStats
-            ->pluck('restaurant_id')
-            ->filter()
-            ->unique()
-            ->count();
+            ->sortByDesc(fn (Fluent $row): string => sprintf('%04d-%02d', $row->stat_year, $row->stat_month))
+            ->take(100)
+            ->values();
+        $totalOrders = (int) $allDailyStats->sum(fn ($row): int => (int) $row->orders_count);
+        $totalRevenue = (float) $allDailyStats->sum(fn ($row): float => (float) $row->revenue);
+        $averageOrderValue = $totalOrders > 0 ? $totalRevenue / $totalOrders : 0.0;
+        $trackedRestaurants = $allDailyStats->pluck('restaurant_id')->unique()->count();
 
         return [
             'dailyStats' => $dailyStats,
@@ -135,5 +153,17 @@ final class RestaurantStatsPage extends Page
                 'hub' => RestaurantSectionHub::getUrl(),
             ],
         ];
+    }
+
+    private function applyRevenueFilter($query, string $sumExpression): void
+    {
+        if ($this->revenueState === 'with_revenue') {
+            $query->havingRaw('COALESCE('.$sumExpression.', 0) > 0');
+
+            return;
+        }
+        if ($this->revenueState === 'without_revenue') {
+            $query->havingRaw('COALESCE('.$sumExpression.', 0) <= 0');
+        }
     }
 }

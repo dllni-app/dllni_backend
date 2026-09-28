@@ -79,7 +79,7 @@ final class RestaurantSystemAlertGenerator
         foreach ($orders as $order) {
             $created += $this->createAlertIfMissing(
                 bookingId: $order->id,
-                alertType: AlertType::FrozenGPS,
+                alertType: AlertType::StalledProgress,
                 severity: AlertSeverity::High,
                 payload: [
                     'order_number' => $order->order_number,
@@ -201,7 +201,7 @@ final class RestaurantSystemAlertGenerator
     {
         $exists = SystemAlert::query()
             ->where('booking_id', $bookingId)
-            ->where('booking_type', Order::class)
+            ->whereIn('booking_type', ['restaurant_order', Order::class])
             ->where('alert_type', $alertType->value)
             ->whereIn('status', [SystemAlertStatus::New->value, SystemAlertStatus::Acknowledged->value])
             ->exists();
@@ -212,7 +212,7 @@ final class RestaurantSystemAlertGenerator
 
         SystemAlert::query()->create([
             'booking_id' => $bookingId,
-            'booking_type' => Order::class,
+            'booking_type' => 'restaurant_order',
             'alert_type' => $alertType->value,
             'severity' => $severity->value,
             'status' => SystemAlertStatus::New->value,

@@ -23,7 +23,7 @@ test.describe('Cleaning Owner/Worker API contract scenarios', () => {
     const bookingId = requireOrderId(created.body);
 
     const accepted = await workerApi.acceptBooking(bookingId);
-    expect(accepted.response.status()).toBe(200);
+    expect(accepted.response.status(), JSON.stringify(accepted.body)).toBe(200);
     expect(bookingStatus(accepted.body)).toBe('worker_assigned');
 
     const booking = extractBooking(accepted.body);
@@ -159,8 +159,8 @@ test.describe('Cleaning Owner/Worker API contract scenarios', () => {
 
     const workAreas = await workerApi.updateWorkerWorkAreas({
       zones: [
-        { name: `Damascus-${seed.runId}`, isActive: true },
-        { name: `Homs-${seed.runId}`, isActive: true },
+        { neighborhoodId: seed.fixtures.neighborhoods.damascus, isActive: true },
+        { neighborhoodId: seed.fixtures.neighborhoods.homs, isActive: true },
       ],
     });
     expect(workAreas.response.status()).toBe(200);

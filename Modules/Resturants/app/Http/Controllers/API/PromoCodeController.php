@@ -18,12 +18,14 @@ use Throwable;
 final class PromoCodeController
 {
     public function __construct(
-        private PromoCodeService $promoCodeService
+        private PromoCodeService $promoCodeService,
+        private RestaurantOwnerContext $ownerContext,
     ) {}
 
-    public function index(PromoCodeFilterRequest $request): AnonymousResourceCollection
+    public function index(PromoCodeFilterRequest $request, RestaurantOwnerContext $ownerContext): AnonymousResourceCollection
     {
         $promoCodes = PromoCode::getQuery()
+            ->where('restaurant_id', $ownerContext->restaurantId())
             ->with(['restaurant'])
             ->paginate($request->get('perPage', 10));
 
@@ -45,8 +47,9 @@ final class PromoCodeController
         return PromoCodeResource::make($promoCode->load(['restaurant']));
     }
 
-    public function show(PromoCode $promoCode): PromoCodeResource
+    public function show(PromoCode $promoCode, RestaurantOwnerContext $ownerContext): PromoCodeResource
     {
+        abort_unless($ownerContext->modelBelongsToRestaurant($promoCode, $ownerContext->restaurantId()), Response::HTTP_NOT_FOUND);
         $promoCode->load(['restaurant']);
 
         return PromoCodeResource::make($promoCode);
@@ -56,6 +59,7 @@ final class PromoCodeController
     public function update(PromoCodeRequest $request, PromoCode $promoCode, RestaurantOwnerContext $ownerContext): PromoCodeResource
     {
         $restaurant = $ownerContext->restaurant();
+        abort_unless($ownerContext->modelBelongsToRestaurant($promoCode, (int) $restaurant->id), Response::HTTP_NOT_FOUND);
 
         $updated = $this->promoCodeService->update(
             PromoCodeData::from([
@@ -68,8 +72,9 @@ final class PromoCodeController
         return PromoCodeResource::make($updated->load(['restaurant']));
     }
 
-    public function destroy(PromoCode $promoCode): Response
+    public function destroy(PromoCode $promoCode, RestaurantOwnerContext $ownerContext): Response
     {
+        abort_unless($ownerContext->modelBelongsToRestaurant($promoCode, $ownerContext->restaurantId()), Response::HTTP_NOT_FOUND);
         $promoCode->delete();
 
         return response()->noContent();

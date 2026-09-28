@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Schema;
 use Modules\Cleaning\Enums\CleaningBillingMode;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
+use Modules\Cleaning\Models\CleaningNeighborhood;
 use Modules\Cleaning\Models\CleaningTimeWarning;
 
 require __DIR__.'/../../../vendor/autoload.php';
@@ -92,9 +93,21 @@ try {
         'home_latitude' => 33.5138,
         'home_longitude' => 36.2765,
     ]);
+
+    $damascusNeighborhood = CleaningNeighborhood::factory()->create([
+        'name_ar' => 'PW Damascus '.$runSuffix,
+        'name_en' => 'PW Damascus '.$runSuffix,
+        'is_active' => true,
+    ]);
+    $homsNeighborhood = CleaningNeighborhood::factory()->create([
+        'name_ar' => 'PW Homs '.$runSuffix,
+        'name_en' => 'PW Homs '.$runSuffix,
+        'is_active' => true,
+    ]);
+
     $worker->zones()->createMany([
-        ['name' => 'PW Damascus '.$runSuffix, 'is_active' => true],
-        ['name' => 'PW Homs '.$runSuffix, 'is_active' => true],
+        ['neighborhood_id' => $damascusNeighborhood->id, 'name' => $damascusNeighborhood->name_ar, 'is_active' => true],
+        ['neighborhood_id' => $homsNeighborhood->id, 'name' => $homsNeighborhood->name_ar, 'is_active' => true],
     ]);
 
     $wrongRole = User::factory()->create([
@@ -199,6 +212,10 @@ try {
             ],
         ],
         'fixtures' => [
+            'neighborhoods' => [
+                'damascus' => $damascusNeighborhood->id,
+                'homs' => $homsNeighborhood->id,
+            ],
             'policies' => [
                 'cancellationId' => $cancellationPolicy->id,
                 'billingId' => $billingPolicy->id,

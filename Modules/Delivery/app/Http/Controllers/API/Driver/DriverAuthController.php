@@ -43,6 +43,18 @@ final class DriverAuthController
             ], 403);
         }
 
+        if (! $driver->is_active || $driver->is_suspended) {
+            return response()->json([
+                'message' => 'This delivery driver account is inactive or suspended.',
+            ], 403);
+        }
+
+        if (! $driver->company?->is_active || $driver->company?->is_suspended) {
+            return response()->json([
+                'message' => 'This delivery company is inactive or suspended.',
+            ], 403);
+        }
+
         $fcmToken = $request->validated('fcmToken');
         if (is_string($fcmToken) && $fcmToken !== '') {
             $user->forceFill(['fcm_token' => $fcmToken])->saveQuietly();

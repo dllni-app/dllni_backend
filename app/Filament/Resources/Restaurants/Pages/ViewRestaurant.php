@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Restaurants\Pages;
 
+use App\Filament\Resources\Merchants\Support\MerchantGovernanceActions;
 use App\Filament\Resources\Restaurants\RestaurantResource;
 use Filament\Actions\EditAction;
 use Filament\Resources\Pages\ViewRecord;
@@ -15,7 +16,8 @@ final class ViewRestaurant extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            EditAction::make(),
+            EditAction::make()->label('تعديل البيانات الأساسية'),
+            MerchantGovernanceActions::restaurant(),
         ];
     }
 }

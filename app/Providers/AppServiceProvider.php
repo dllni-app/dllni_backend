@@ -7,6 +7,7 @@ namespace App\Providers;
 use App\Models\CleaningWorkerDeposit;
 use App\Models\Dispute;
 use App\Models\MasterProduct;
+use App\Models\SystemAlert;
 use App\Models\User;
 use App\Models\Worker;
 use App\Observers\CleaningWorkerDepositObserver;
@@ -192,6 +193,7 @@ final class AppServiceProvider extends ServiceProvider
             'offer' => Offer::class,
             'product' => Product::class,
             'restaurant' => Restaurant::class,
+            'sm_store' => SmStore::class,
             'sm_product' => SmProduct::class,
             'sm_offer' => SmOffer::class,
             'marketing_offer' => MarketingOffer::class,
@@ -201,10 +203,12 @@ final class AppServiceProvider extends ServiceProvider
             'delivery_company' => DeliveryCompany::class,
             'delivery_driver' => DeliveryDriver::class,
             'delivery_order' => DeliveryOrder::class,
+            'system_alert' => SystemAlert::class,
             'cleaning_worker_deposit' => CleaningWorkerDeposit::class,
             'cleaning_deposit_transaction' => \App\Models\CleaningDepositTransaction::class,
             'cleaning_deposit_setting' => \App\Models\CleaningDepositSetting::class,
             'cleaning_financial_setting' => \App\Models\CleaningFinancialSetting::class,
+            'restaurant_financial_setting' => \App\Models\RestaurantFinancialSetting::class,
         ]);
     }
 

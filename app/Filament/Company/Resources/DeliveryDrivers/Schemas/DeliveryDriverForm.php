@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Company\Resources\DeliveryDrivers\Schemas;
 
+use App\Enums\UserModuleType;
 use App\Models\User;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -25,6 +26,42 @@ final class DeliveryDriverForm
                             ->searchable()
                             ->required()
                             ->options(fn (): array => self::eligibleUserOptions())
+                            ->createOptionForm([
+                                TextInput::make('name')
+                                    ->label(__('delivery_company.drivers.fields.account_name'))
+                                    ->required()
+                                    ->maxLength(255),
+                                TextInput::make('phone')
+                                    ->label(__('delivery_company.drivers.fields.phone'))
+                                    ->tel()
+                                    ->required()
+                                    ->unique(User::class, 'phone')
+                                    ->maxLength(50),
+                                TextInput::make('email')
+                                    ->label(__('delivery_company.drivers.fields.email'))
+                                    ->email()
+                                    ->unique(User::class, 'email')
+                                    ->maxLength(255),
+                                TextInput::make('temporary_password')
+                                    ->label(__('delivery_company.drivers.fields.initial_password'))
+                                    ->password()
+                                    ->required()
+                                    ->minLength(8)
+                                    ->maxLength(255),
+                            ])
+                            ->createOptionUsing(function (array $data): int {
+                                $user = User::query()->create([
+                                    'name' => (string) $data['name'],
+                                    'phone' => (string) $data['phone'],
+                                    'email' => filled($data['email'] ?? null) ? (string) $data['email'] : null,
+                                    'password' => (string) $data['temporary_password'],
+                                    'module_type' => UserModuleType::DeliveryDriver->value,
+                                    'is_active' => true,
+                                ]);
+
+                                return (int) $user->getKey();
+                            })
+                            ->createOptionModalHeading(__('delivery_company.drivers.actions.create_account'))
                             ->disabledOn('edit'),
                         TextInput::make('first_name')
                             ->label(__('delivery_company.drivers.fields.first_name'))
@@ -53,11 +90,13 @@ final class DeliveryDriverForm
         $assignedUserIds = DeliveryDriver::query()->pluck('user_id');
 
         return User::query()
+            ->where('module_type', UserModuleType::DeliveryDriver->value)
+            ->where('is_active', true)
             ->when($assignedUserIds->isNotEmpty(), fn (Builder $query): Builder => $query->whereNotIn('id', $assignedUserIds))
             ->orderBy('name')
             ->get()
             ->mapWithKeys(fn (User $user): array => [
-                $user->id => mb_trim($user->name.' ('.$user->email.')'),
+                $user->id => mb_trim($user->name.' ('.($user->phone ?: $user->email).')'),
             ])
             ->all();
     }

@@ -10,13 +10,13 @@ use Illuminate\Support\Collection;
 use Modules\Resturants\Http\Resources\CategoryResource;
 use Modules\Resturants\Http\Resources\OfferResource;
 use Modules\Resturants\Http\Resources\ProductResource;
-use Modules\Resturants\Http\Resources\RestaurantResource;
 use Modules\Resturants\Http\Resources\ReviewResource;
 use Modules\Resturants\Models\Offer;
 use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
 use Modules\Resturants\Models\Review;
 use Modules\User\Http\Requests\RestaurantDetailsRequest;
+use Modules\User\Http\Resources\UserRestaurantResource;
 
 final class UserRestaurantDetailsController
 {
@@ -34,7 +34,6 @@ final class UserRestaurantDetailsController
 
         $model->load([
             'media',
-            'user',
             'operatingHours',
             'cuisineTypes',
         ]);
@@ -58,7 +57,7 @@ final class UserRestaurantDetailsController
 
         $categories = $model->categories()
             ->orderBy('sort_order')
-            ->with(['products' => fn($q) => $q
+            ->with(['products' => fn ($q) => $q
                 ->where('is_available', true)
                 ->with(['media', 'offers'])
                 ->orderByDesc('is_featured')
@@ -78,9 +77,9 @@ final class UserRestaurantDetailsController
             ->selectRaw('rating, count(*) as aggregate')
             ->groupBy('rating')
             ->get()
-            ->map(fn($row) => ['rating' => (int) $row->rating, 'aggregate' => (int) $row->aggregate]);
+            ->map(fn ($row) => ['rating' => (int) $row->rating, 'aggregate' => (int) $row->aggregate]);
 
-        $ratingsByValue = $ratingCounts->keyBy('rating')->map(fn($row) => $row['aggregate']);
+        $ratingsByValue = $ratingCounts->keyBy('rating')->map(fn ($row) => $row['aggregate']);
         $totalReviews = (int) $ratingCounts->sum('aggregate');
 
         $averageRating = (float) (Review::query()
@@ -88,7 +87,7 @@ final class UserRestaurantDetailsController
             ->avg('rating') ?? 0);
 
         return response()->json([
-            'restaurant' => RestaurantResource::make($model),
+            'restaurant' => UserRestaurantResource::make($model),
             'shareUrl' => $this->deepLinkGenerator->restaurant((string) $model->slug),
             'offers' => OfferResource::collection($offers),
             'popularProducts' => ProductResource::collection($popularProducts),

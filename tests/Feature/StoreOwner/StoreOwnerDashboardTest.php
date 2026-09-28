@@ -272,3 +272,30 @@ it('calculates percentage with decimal precision', function (): void {
     // (135.79 - 123.45) / 123.45 * 100 ≈ 10.00%
     expect($response->json('data.salesPercentageChange'))->toEqual(10.0);
 });
+
+it('exposes merchant settlement totals without changing the existing sales workflow', function (): void {
+    $order = SmOrderFactory::new()->create([
+        'store_id' => $this->store->id,
+        'status' => SmOrderStatus::Completed,
+        'total_amount' => 900,
+        'created_at' => now(),
+    ]);
+
+    $order->forceFill([
+        'merchant_gross_amount' => 1000,
+        'commission_amount' => 100,
+        'merchant_net_amount' => 875,
+        'coupon_merchant_funded_amount' => 25,
+        'financial_snapshot' => ['version' => 1, 'source' => 'test'],
+    ])->saveQuietly();
+
+    $response = $this->getJson('/api/v1/store-owner/dashboard');
+
+    $response->assertOk()
+        ->assertJsonPath('data.totalSales', 900)
+        ->assertJsonPath('data.merchantGrossSales', 1000)
+        ->assertJsonPath('data.merchantNetSales', 875)
+        ->assertJsonPath('data.platformCommission', 100)
+        ->assertJsonPath('data.merchantCouponFunding', 25)
+        ->assertJsonPath('data.unsnapshottedOrders', 0);
+});

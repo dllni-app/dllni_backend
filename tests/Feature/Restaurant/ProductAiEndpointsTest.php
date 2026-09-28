@@ -2,12 +2,22 @@
 
 declare(strict_types=1);
 
+use App\Enums\UserModuleType;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Laravel\Sanctum\Sanctum;
+use Modules\Resturants\Models\Restaurant;
 
 beforeEach(function (): void {
-    Sanctum::actingAs(User::factory()->create());
+    $owner = User::factory()->create([
+        'module_type' => UserModuleType::RestaurantSeller->value,
+    ]);
+
+    Restaurant::factory()->create([
+        'user_id' => $owner->id,
+    ]);
+
+    Sanctum::actingAs($owner);
 });
 
 it('extracts product data from image for restaurant products', function (): void {

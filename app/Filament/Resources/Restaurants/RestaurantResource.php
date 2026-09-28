@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Restaurants;
 
+use App\Filament\Concerns\AuthorizesPlatformAdminResource;
 use App\Filament\Resources\Restaurants\Pages\EditRestaurant;
 use App\Filament\Resources\Restaurants\Pages\ListRestaurants;
 use App\Filament\Resources\Restaurants\Pages\ViewRestaurant;
@@ -22,11 +23,14 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 use Modules\Resturants\Models\Restaurant;
 use UnitEnum;
 
 final class RestaurantResource extends Resource
 {
+    use AuthorizesPlatformAdminResource;
+
     protected static ?string $model = Restaurant::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBuildingStorefront;
@@ -55,6 +59,36 @@ final class RestaurantResource extends Resource
     public static function table(Table $table): Table
     {
         return RestaurantsTable::configure($table);
+    }
+
+    public static function canViewAny(): bool
+    {
+        return self::dashboardAllowed('restaurants.view');
+    }
+
+    public static function canView(Model $record): bool
+    {
+        return self::dashboardAllowed('restaurants.view');
+    }
+
+    public static function canCreate(): bool
+    {
+        return self::dashboardAllowed('restaurants.create');
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return self::dashboardAllowed('restaurants.update');
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return self::dashboardAllowed('restaurants.delete');
+    }
+
+    public static function canManageGovernance(): bool
+    {
+        return self::dashboardAllowed('restaurants.update');
     }
 
     public static function getRelations(): array

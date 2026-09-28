@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\RestaurantOwners;
 
 use App\Enums\UserModuleType;
+use App\Filament\Concerns\AuthorizesPlatformAdminResource;
 use App\Filament\Resources\RestaurantOwners\Pages\CreateRestaurantOwner;
 use App\Filament\Resources\RestaurantOwners\Pages\EditRestaurantOwner;
 use App\Filament\Resources\RestaurantOwners\Pages\ListRestaurantOwners;
@@ -19,52 +20,30 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 
 final class RestaurantOwnerResource extends Resource
 {
-    protected static ?string $model = User::class;
+    use AuthorizesPlatformAdminResource;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBuildingStorefront;
+    protected static ?string $model=User::class;
+    protected static string|BackedEnum|null $navigationIcon=Heroicon::OutlinedBuildingStorefront;
+    protected static ?int $navigationSort=31;
 
-    protected static ?int $navigationSort = 31;
+    public static function getNavigationGroup():?string{return 'قسم المطاعم';}
+    public static function getNavigationLabel():string{return 'مالكو المطاعم';}
+    public static function form(Schema $schema):Schema{return RestaurantOwnerForm::configure($schema);}
+    public static function infolist(Schema $schema):Schema{return UserInfolist::configure($schema);}
+    public static function table(Table $table):Table{return UsersTable::configure($table);}
+    public static function getEloquentQuery():Builder{return parent::getEloquentQuery()->where('module_type',UserModuleType::RestaurantSeller);}
+    public static function canViewAny():bool{return self::dashboardAllowed('restaurants.view');}
+    public static function canView(Model $record):bool{return self::dashboardAllowed('restaurants.view');}
+    public static function canCreate():bool{return self::dashboardAllowed('restaurants.create');}
+    public static function canEdit(Model $record):bool{return self::dashboardAllowed('restaurants.update');}
+    public static function canDelete(Model $record):bool{return self::dashboardAllowed('restaurants.delete');}
 
-    public static function getNavigationGroup(): ?string
+    public static function getPages():array
     {
-        return 'قسم المطاعم';
-    }
-
-    public static function getNavigationLabel(): string
-    {
-        return 'مالكو المطاعم';
-    }
-
-    public static function form(Schema $schema): Schema
-    {
-        return RestaurantOwnerForm::configure($schema);
-    }
-
-    public static function infolist(Schema $schema): Schema
-    {
-        return UserInfolist::configure($schema);
-    }
-
-    public static function table(Table $table): Table
-    {
-        return UsersTable::configure($table);
-    }
-
-    public static function getEloquentQuery(): Builder
-    {
-        return parent::getEloquentQuery()->where('module_type', UserModuleType::RestaurantSeller);
-    }
-
-    public static function getPages(): array
-    {
-        return [
-            'index' => ListRestaurantOwners::route('/'),
-            'create' => CreateRestaurantOwner::route('/create'),
-            'view' => ViewRestaurantOwner::route('/{record}'),
-            'edit' => EditRestaurantOwner::route('/{record}/edit'),
-        ];
+        return ['index'=>ListRestaurantOwners::route('/'),'create'=>CreateRestaurantOwner::route('/create'),'view'=>ViewRestaurantOwner::route('/{record}'),'edit'=>EditRestaurantOwner::route('/{record}/edit')];
     }
 }

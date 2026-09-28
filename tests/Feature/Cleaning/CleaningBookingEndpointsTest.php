@@ -830,7 +830,7 @@ it('returns worker homepage chart and amount summary blocks for the owner dashbo
     $response = $this->getJson('/api/v1/cleaning/worker/homepage');
 
     $response->assertOk();
-    expect((float) $response->json('amountSummary.workerAmount'))->toBe(1000.0);
+    expect((float) $response->json('amountSummary.workerAmount'))->toBe(800.0);
     expect((float) $response->json('amountSummary.adminAmount'))->toBe(200.0);
     expect((float) $response->json('amountSummary.grossInvoicesAmount'))->toBe(1000.0);
 

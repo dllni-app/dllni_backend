@@ -38,6 +38,12 @@ final class SmStoreDocumentsTable
                     ->badge()
                     ->sortable(),
                 TextColumn::make('verified_at')->label(__('supermarket_admin.form.verified_at'))->dateTime('Y-m-d H:i')->placeholder('—')->sortable(),
+                TextColumn::make('expires_at')
+                    ->label('تاريخ الانتهاء')
+                    ->dateTime('Y-m-d H:i')
+                    ->placeholder('بدون انتهاء')
+                    ->color(fn ($state): string => $state !== null && now()->greaterThan($state) ? 'danger' : 'gray')
+                    ->sortable(),
             ])
             ->modifyQueryUsing(fn ($query) => $query->with('store'))
             ->filters([

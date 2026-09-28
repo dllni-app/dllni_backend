@@ -6,6 +6,7 @@ namespace Modules\Supermarket\Models;
 
 use App\Models\CancellationPolicy;
 use App\Models\PlatformCoupon;
+use App\Models\SupportCase;
 use App\Models\User;
 use Database\Factories\SmOrderFactory;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
@@ -16,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Modules\Delivery\Models\DeliveryOrder;
+use Modules\Supermarket\Enums\SmInventoryLogType;
 use Modules\Supermarket\Enums\SmOrderStatus;
 use Modules\Supermarket\Enums\SmPickupMode;
 use Modules\Supermarket\Observers\SmOrderObserver;
@@ -43,10 +45,26 @@ final class SmOrder extends Model
         'estimated_ready_at',
         'ready_for_pickup_at',
         'picked_up_at',
+        'store_handover_confirmed_at',
+        'store_handover_confirmed_by_user_id',
         'customer_pickup_confirmed_at',
         'subtotal',
         'discount_amount',
         'service_fee',
+        'commission_rule_id',
+        'commission_base_amount',
+        'merchant_gross_amount',
+        'commission_amount',
+        'store_net_amount',
+        'merchant_net_amount',
+        'coupon_platform_funded_amount',
+        'coupon_merchant_funded_amount',
+        'platform_gross_revenue',
+        'platform_coupon_cost',
+        'platform_net_revenue',
+        'commission_snapshot',
+        'financial_snapshot',
+        'financial_reversed_at',
         'total_amount',
         'cancellation_fee_amount',
         'cancellation_policy_snapshot',
@@ -85,6 +103,11 @@ final class SmOrder extends Model
         return $this->belongsTo(CancellationPolicy::class, 'cancellation_policy_id');
     }
 
+    public function commissionRule(): BelongsTo
+    {
+        return $this->belongsTo(SmCommissionRule::class, 'commission_rule_id');
+    }
+
     public function items(): HasMany
     {
         return $this->hasMany(SmOrderItem::class, 'order_id');
@@ -98,6 +121,21 @@ final class SmOrder extends Model
     public function disputes(): HasMany
     {
         return $this->hasMany(SmOrderDispute::class, 'order_id');
+    }
+
+    public function supportCases(): HasMany
+    {
+        return $this->hasMany(SupportCase::class, 'booking_id')
+            ->whereIn('booking_type', [self::class, 'supermarket_order'])
+            ->oldest('created_at');
+    }
+
+    public function returnInventoryLogs(): HasMany
+    {
+        return $this->hasMany(SmInventoryLog::class, 'reference_id')
+            ->where('reference_type', self::class)
+            ->where('type', SmInventoryLogType::Return->value)
+            ->latest('created_at');
     }
 
     protected static function newFactory(): Factory
@@ -115,10 +153,24 @@ final class SmOrder extends Model
             'estimated_ready_at' => 'datetime',
             'ready_for_pickup_at' => 'datetime',
             'picked_up_at' => 'datetime',
+            'store_handover_confirmed_at' => 'datetime',
             'customer_pickup_confirmed_at' => 'datetime',
             'subtotal' => 'integer',
             'discount_amount' => 'integer',
             'service_fee' => 'integer',
+            'commission_base_amount' => 'decimal:2',
+            'merchant_gross_amount' => 'decimal:2',
+            'commission_amount' => 'decimal:2',
+            'store_net_amount' => 'decimal:2',
+            'merchant_net_amount' => 'decimal:2',
+            'coupon_platform_funded_amount' => 'decimal:2',
+            'coupon_merchant_funded_amount' => 'decimal:2',
+            'platform_gross_revenue' => 'decimal:2',
+            'platform_coupon_cost' => 'decimal:2',
+            'platform_net_revenue' => 'decimal:2',
+            'commission_snapshot' => 'array',
+            'financial_snapshot' => 'array',
+            'financial_reversed_at' => 'datetime',
             'total_amount' => 'integer',
             'cancellation_fee_amount' => 'integer',
             'cancellation_policy_snapshot' => 'array',

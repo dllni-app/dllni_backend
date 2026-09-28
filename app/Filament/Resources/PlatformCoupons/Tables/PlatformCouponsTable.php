@@ -15,6 +15,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 final class PlatformCouponsTable
 {
@@ -39,11 +40,36 @@ final class PlatformCouponsTable
                 TextColumn::make('audience_type')->label('المستفيدون')->badge()->formatStateUsing(
                     fn (string $state): string => $state === PlatformCoupon::AUDIENCE_ALL_USERS ? 'جميع المستخدمين' : 'محددون'
                 ),
-                TextColumn::make('used_count')->label('الاستخدامات')->sortable(),
+                TextColumn::make('funding_type')
+                    ->label('تمويل الخصم')
+                    ->badge()
+                    ->formatStateUsing(fn (string $state, PlatformCoupon $record): string => $record->section === PlatformCoupon::SECTION_CLEANING
+                        ? 'منطق التنظيفات الحالي'
+                        : match ($state) {
+                            PlatformCoupon::FUNDING_SHARED => 'مشترك',
+                            PlatformCoupon::FUNDING_MERCHANT => 'صاحب العمل',
+                            default => 'المنصة',
+                        }),
+                TextColumn::make('used_count')->label('الاستخدامات النشطة')->sortable(),
+                TextColumn::make('active_platform_funded_amount')
+                    ->label('تكلفة المنصة')
+                    ->formatStateUsing(fn ($state): string => number_format((float) ($state ?? 0), 2).' ل.س')
+                    ->toggleable(),
+                TextColumn::make('active_merchant_funded_amount')
+                    ->label('تكلفة أصحاب الأعمال')
+                    ->formatStateUsing(fn ($state): string => number_format((float) ($state ?? 0), 2).' ل.س')
+                    ->toggleable(),
                 TextColumn::make('expires_at')->label('تاريخ الانتهاء')->dateTime('Y-m-d H:i')->placeholder('بدون انتهاء')->sortable(),
                 TextColumn::make('notification_sent_at')->label('آخر إرسال')->dateTime('Y-m-d H:i')->placeholder('لم يرسل')->toggleable(),
                 IconColumn::make('is_active')->label('فعال')->boolean(),
             ])
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query
+                ->withSum([
+                    'redemptions as active_platform_funded_amount' => fn (Builder $redemptions): Builder => $redemptions->whereNull('reversed_at'),
+                ], 'platform_funded_amount')
+                ->withSum([
+                    'redemptions as active_merchant_funded_amount' => fn (Builder $redemptions): Builder => $redemptions->whereNull('reversed_at'),
+                ], 'merchant_funded_amount'))
             ->defaultSort('id', 'desc')
             ->filters([
                 SelectFilter::make('section')->label('القسم')->options([

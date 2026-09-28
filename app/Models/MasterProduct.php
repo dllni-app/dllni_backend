@@ -8,6 +8,7 @@ use App\Enums\MasterProductUnit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Modules\Supermarket\Models\SmProduct;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
@@ -19,52 +20,33 @@ final class MasterProduct extends Model implements HasMedia
     public const IMAGE_COLLECTION = 'master-product-image';
 
     protected $fillable = [
-        'name',
-        'category_id',
-        'barcode',
-        'unit',
-        'brand',
-        'description',
-        'is_active',
-        'openfoodfacts_url',
-        'openfoodfacts_last_modified_at',
-        'openfoodfacts_imported_at',
-        'openfoodfacts_payload_hash',
-        'openfoodfacts_countries_tags',
+        'name','category_id','barcode','unit','brand','description','is_active',
+        'openfoodfacts_url','openfoodfacts_last_modified_at','openfoodfacts_imported_at',
+        'openfoodfacts_payload_hash','openfoodfacts_countries_tags',
     ];
 
-    public function aliases(): HasMany
-    {
-        return $this->hasMany(MasterProductAlias::class);
-    }
-
-    public function category(): BelongsTo
-    {
-        return $this->belongsTo(MasterProductCategory::class, 'category_id');
-    }
+    public function aliases(): HasMany { return $this->hasMany(MasterProductAlias::class); }
+    public function category(): BelongsTo { return $this->belongsTo(MasterProductCategory::class, 'category_id'); }
+    public function storeProducts(): HasMany { return $this->hasMany(SmProduct::class, 'master_product_id'); }
 
     public function registerMediaCollections(): void
     {
-        $this->addMediaCollection(self::IMAGE_COLLECTION)
-            ->acceptsMimeTypes(['image/jpeg', 'image/png', 'image/webp']);
+        $this->addMediaCollection(self::IMAGE_COLLECTION)->acceptsMimeTypes(['image/jpeg','image/png','image/webp']);
     }
 
     public function registerMediaConversions(?Media $media = null): void
     {
-        $this->addMediaConversion('thumb')
-            ->width(300)
-            ->height(300)
-            ->sharpen(10);
+        $this->addMediaConversion('thumb')->width(300)->height(300)->sharpen(10);
     }
 
     public function casts(): array
     {
         return [
-            'unit' => MasterProductUnit::class,
-            'is_active' => 'boolean',
-            'openfoodfacts_last_modified_at' => 'datetime',
-            'openfoodfacts_imported_at' => 'datetime',
-            'openfoodfacts_countries_tags' => 'array',
+            'unit'=>MasterProductUnit::class,
+            'is_active'=>'boolean',
+            'openfoodfacts_last_modified_at'=>'datetime',
+            'openfoodfacts_imported_at'=>'datetime',
+            'openfoodfacts_countries_tags'=>'array',
         ];
     }
 }

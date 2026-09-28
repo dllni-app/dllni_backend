@@ -24,6 +24,12 @@ final class StoreOwnerDashboardPerformanceService
             ->whereBetween('created_at', [$start, $end]);
 
         $totalOrders = (clone $ordersQuery)->count();
+        $completedOrders = (clone $ordersQuery)->where('status', SmOrderStatus::Completed->value);
+        $merchantGrossRevenue = (float) (clone $completedOrders)->sum('merchant_gross_amount');
+        $merchantNetRevenue = (float) (clone $completedOrders)->sum('merchant_net_amount');
+        $platformCommission = (float) (clone $completedOrders)->sum('commission_amount');
+        $merchantCouponFunding = (float) (clone $completedOrders)->sum('coupon_merchant_funded_amount');
+        $unsnapshottedOrders = (clone $completedOrders)->whereNull('financial_snapshot')->count();
 
         $topProductRows = SmOrderItem::query()
             ->selectRaw('sm_products.id as product_id, sm_products.name as product_name, SUM(sm_order_items.quantity) as quantity_sold, SUM(sm_order_items.total_price) as revenue')
@@ -167,6 +173,13 @@ final class StoreOwnerDashboardPerformanceService
                 'to' => $end->toDateString(),
             ],
             'topProducts' => $topProducts,
+            'settlement' => [
+                'merchantGrossRevenue' => $merchantGrossRevenue,
+                'merchantNetRevenue' => $merchantNetRevenue,
+                'platformCommission' => $platformCommission,
+                'merchantCouponFunding' => $merchantCouponFunding,
+                'unsnapshottedOrders' => $unsnapshottedOrders,
+            ],
             'offersImpact' => [
                 // Primary keys expected by the owner performance cards.
                 'ordersUsedOffers' => $ordersUsedOffers,

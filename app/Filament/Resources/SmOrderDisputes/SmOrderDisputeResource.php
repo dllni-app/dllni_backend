@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\SmOrderDisputes;
 
+use App\Filament\Concerns\AuthorizesPlatformAdminResource;
 use App\Filament\Concerns\ResolvesSupermarketNavigationGroup;
 use App\Filament\Resources\SmOrderDisputes\Pages\EditSmOrderDispute;
 use App\Filament\Resources\SmOrderDisputes\Pages\ListSmOrderDisputes;
@@ -17,10 +18,12 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 use Modules\Supermarket\Models\SmOrderDispute;
 
 final class SmOrderDisputeResource extends Resource
 {
+    use AuthorizesPlatformAdminResource;
     use ResolvesSupermarketNavigationGroup;
 
     protected static ?string $model = SmOrderDispute::class;
@@ -58,6 +61,31 @@ final class SmOrderDisputeResource extends Resource
         return SmOrderDisputesTable::configure($table);
     }
 
+    public static function canViewAny(): bool
+    {
+        return self::dashboardAllowed('supermarket_disputes.view');
+    }
+
+    public static function canView(Model $record): bool
+    {
+        return self::dashboardAllowed('supermarket_disputes.view');
+    }
+
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return self::dashboardAllowed('supermarket_disputes.update');
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return false;
+    }
+
     public static function getRelations(): array
     {
         return [
@@ -72,10 +100,5 @@ final class SmOrderDisputeResource extends Resource
             'view' => ViewSmOrderDispute::route('/{record}'),
             'edit' => EditSmOrderDispute::route('/{record}/edit'),
         ];
-    }
-
-    public static function canCreate(): bool
-    {
-        return false;
     }
 }

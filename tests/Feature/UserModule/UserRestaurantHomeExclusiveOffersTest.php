@@ -31,7 +31,8 @@ it('returns exclusive restaurant offers for the home section', function (): void
     $response->assertJsonPath('exclusiveOffers.0.offerBadgeText', '50%');
     $response->assertJsonPath('exclusiveOffers.0.discountType', 'percentage');
     $response->assertJsonPath('exclusiveOffers.0.discountValue', 50);
-    $response->assertJsonPath('exclusiveOffers.0.urgencyTag', 'limited_time');
+    $response->assertJsonPath('exclusiveOffers.0.urgencyTagKey', 'limited_time');
+    $response->assertJsonPath('exclusiveOffers.0.urgencyTag', 'لفترة محدودة');
     expect($response->json('exclusiveOffers.0.offerId'))->toBeInt();
     expect($response->json('exclusiveOffers.0.restaurantId'))->toBe($restaurant->id);
 });

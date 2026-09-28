@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\SmProducts;
 
+use App\Filament\Concerns\AuthorizesPlatformAdminResource;
 use App\Filament\Concerns\ResolvesSupermarketNavigationGroup;
 use App\Filament\Resources\SmProducts\Pages\EditSmProduct;
 use App\Filament\Resources\SmProducts\Pages\ListSmProducts;
@@ -16,10 +17,12 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 use Modules\Supermarket\Models\SmProduct;
 
 final class SmProductResource extends Resource
 {
+    use AuthorizesPlatformAdminResource;
     use ResolvesSupermarketNavigationGroup;
 
     protected static ?string $model = SmProduct::class;
@@ -57,6 +60,36 @@ final class SmProductResource extends Resource
         return SmProductsTable::configure($table);
     }
 
+    public static function canViewAny(): bool
+    {
+        return self::dashboardAllowed('supermarket_catalog.view');
+    }
+
+    public static function canView(Model $record): bool
+    {
+        return self::dashboardAllowed('supermarket_catalog.view');
+    }
+
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return false;
+    }
+
+    public static function canModerate(): bool
+    {
+        return self::dashboardAllowed('supermarket_catalog.update');
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return false;
+    }
+
     public static function getPages(): array
     {
         return [
@@ -64,10 +97,5 @@ final class SmProductResource extends Resource
             'view' => ViewSmProduct::route('/{record}'),
             'edit' => EditSmProduct::route('/{record}/edit'),
         ];
-    }
-
-    public static function canCreate(): bool
-    {
-        return false;
     }
 }

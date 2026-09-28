@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Supermarket\Models;
 
 use App\Models\MasterProduct;
+use Database\Factories\SmProductFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -105,7 +106,7 @@ final class SmProduct extends Model implements HasMedia
             }
 
             $candidate = $basePrice;
-            $type = strtolower(trim((string) $offer->offer_type));
+            $type = mb_strtolower(mb_trim((string) $offer->offer_type));
 
             if ($type === 'percent') {
                 $percent = min(100.0, max(0.0, (float) ($offer->discount_percent ?? 0)));
@@ -173,6 +174,11 @@ final class SmProduct extends Model implements HasMedia
             ->width(300)
             ->height(300)
             ->sharpen(10);
+    }
+
+    protected static function newFactory(): SmProductFactory
+    {
+        return SmProductFactory::new();
     }
 
     protected function casts(): array

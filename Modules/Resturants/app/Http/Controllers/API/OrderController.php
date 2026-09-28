@@ -26,7 +26,7 @@ final class OrderController
         $filters = $request->input('filter', []);
         $sort = $request->input('sort', '-created_at');
         $sortDirection = str_starts_with($sort, '-') ? 'desc' : 'asc';
-        $sortColumn = ltrim($sort, '-');
+        $sortColumn = mb_ltrim($sort, '-');
 
         $orders = Order::query()
             ->when(
@@ -52,6 +52,8 @@ final class OrderController
     /** @throws Throwable */
     public function store(OrderRequest $request): OrderResource
     {
+        $this->abortIfRestaurantSellerMutation();
+
         $order = $this->orderService->store(
             OrderData::from($request->validated())
         );
@@ -76,6 +78,7 @@ final class OrderController
     public function update(OrderRequest $request, Order $order): OrderResource
     {
         $this->abortIfRestaurantSellerCannotAccess($order);
+        $this->abortIfRestaurantSellerMutation();
 
         $updated = $this->orderService->update(
             OrderData::from($request->validated()),
@@ -90,6 +93,7 @@ final class OrderController
     public function destroy(Order $order): Response
     {
         $this->abortIfRestaurantSellerCannotAccess($order);
+        $this->abortIfRestaurantSellerMutation();
 
         $order->delete();
 
@@ -120,5 +124,14 @@ final class OrderController
         }
 
         abort_if((int) $order->restaurant_id !== $restaurantId, 403, 'You do not have access to this order.');
+    }
+
+    private function abortIfRestaurantSellerMutation(): void
+    {
+        abort_if(
+            auth()->user()?->module_type === UserModuleType::RestaurantSeller,
+            403,
+            'Use the restaurant owner order lifecycle endpoints for order changes.'
+        );
     }
 }

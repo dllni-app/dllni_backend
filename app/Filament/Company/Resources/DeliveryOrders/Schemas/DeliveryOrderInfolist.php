@@ -44,6 +44,42 @@ final class DeliveryOrderInfolist
                             ->dateTime('Y-m-d H:i'),
                     ])
                     ->columns(2),
+                Section::make(__('delivery_company.orders.sections.source'))
+                    ->schema([
+                        TextEntry::make('source_type')
+                            ->label(__('delivery_company.orders.fields.source_type'))
+                            ->formatStateUsing(fn (?string $state): string => match ($state) {
+                                'restaurant_order' => __('delivery_company.orders.sources.restaurant'),
+                                'supermarket_order' => __('delivery_company.orders.sources.supermarket'),
+                                default => __('delivery_company.orders.sources.manual'),
+                            }),
+                        TextEntry::make('source_id')
+                            ->label(__('delivery_company.orders.fields.source_id'))
+                            ->placeholder('—'),
+                        TextEntry::make('merchant_status')
+                            ->label(__('delivery_company.orders.fields.merchant_status'))
+                            ->placeholder('—'),
+                        TextEntry::make('estimated_preparation_minutes')
+                            ->label(__('delivery_company.orders.fields.estimated_preparation_minutes'))
+                            ->suffix(' min')
+                            ->placeholder('—'),
+                        TextEntry::make('estimated_ready_at')
+                            ->label(__('delivery_company.orders.fields.estimated_ready_at'))
+                            ->dateTime('Y-m-d H:i')
+                            ->placeholder('—'),
+                        TextEntry::make('merchant_ready_at')
+                            ->label(__('delivery_company.orders.fields.merchant_ready_at'))
+                            ->dateTime('Y-m-d H:i')
+                            ->placeholder('—'),
+                    ])
+                    ->columns(2),
+                Section::make(__('delivery_company.orders.sections.dispatch'))
+                    ->schema([
+                        TextEntry::make('dispatch_wave')->label(__('delivery_company.orders.fields.dispatch_wave')),
+                        TextEntry::make('search_radius_km')->label(__('delivery_company.orders.fields.search_radius_km'))->suffix(' km')->placeholder('—'),
+                        TextEntry::make('dispatch_phase')->label(__('delivery_company.orders.fields.dispatch_phase'))->placeholder('—'),
+                    ])
+                    ->columns(3),
                 Section::make(__('delivery_company.orders.sections.customer'))
                     ->schema([
                         TextEntry::make('customer_name')
@@ -79,6 +115,50 @@ final class DeliveryOrderInfolist
                             ->label(__('delivery_company.orders.fields.dropoff_longitude')),
                     ])
                     ->columns(2),
+                Section::make(__('delivery_company.orders.sections.driver_tracking'))
+                    ->schema([
+                        TextEntry::make('driver.first_name')
+                            ->label(__('delivery_company.orders.fields.driver'))
+                            ->placeholder('—'),
+                        TextEntry::make('driver.last_seen_at')
+                            ->label(__('delivery_company.drivers.fields.last_seen_at'))
+                            ->dateTime('Y-m-d H:i:s')
+                            ->placeholder('—'),
+                        TextEntry::make('driver.latestLocation.latitude')
+                            ->label(__('delivery_company.drivers.fields.latitude'))
+                            ->placeholder('—'),
+                        TextEntry::make('driver.latestLocation.longitude')
+                            ->label(__('delivery_company.drivers.fields.longitude'))
+                            ->placeholder('—'),
+                        TextEntry::make('driver.latestLocation.recorded_at')
+                            ->label(__('delivery_company.orders.fields.location_recorded_at'))
+                            ->dateTime('Y-m-d H:i:s')
+                            ->placeholder('—'),
+                        TextEntry::make('driver_map')
+                            ->label(__('delivery_company.orders.fields.driver_map'))
+                            ->state(fn ($record): string => __('delivery_company.orders.actions.open_map'))
+                            ->url(function ($record): ?string {
+                                $location = $record->driver?->latestLocation;
+                                if (! $location) {
+                                    return null;
+                                }
+
+                                return 'https://www.google.com/maps?q='.$location->latitude.','.$location->longitude;
+                            })
+                            ->openUrlInNewTab(),
+                    ])
+                    ->columns(2)
+                    ->visible(fn ($record): bool => $record->driver_id !== null),
+                Section::make(__('delivery_company.orders.sections.lifecycle'))
+                    ->schema([
+                        TextEntry::make('accepted_at')->label(__('delivery_company.orders.fields.accepted_at'))->dateTime('Y-m-d H:i')->placeholder('—'),
+                        TextEntry::make('started_at')->label(__('delivery_company.orders.fields.started_at'))->dateTime('Y-m-d H:i')->placeholder('—'),
+                        TextEntry::make('picked_up_at')->label(__('delivery_company.orders.fields.picked_up_at'))->dateTime('Y-m-d H:i')->placeholder('—'),
+                        TextEntry::make('delivered_at')->label(__('delivery_company.orders.fields.delivered_at'))->dateTime('Y-m-d H:i')->placeholder('—'),
+                        TextEntry::make('completed_at')->label(__('delivery_company.orders.fields.completed_at'))->dateTime('Y-m-d H:i')->placeholder('—'),
+                        TextEntry::make('cancelled_at')->label(__('delivery_company.orders.fields.cancelled_at'))->dateTime('Y-m-d H:i')->placeholder('—'),
+                    ])
+                    ->columns(3),
                 Section::make(__('delivery_company.orders.sections.timeline'))
                     ->schema([
                         RepeatableEntry::make('events')

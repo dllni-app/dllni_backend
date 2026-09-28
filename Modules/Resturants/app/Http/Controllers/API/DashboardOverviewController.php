@@ -11,7 +11,6 @@ use Modules\Resturants\Enums\RestaurantDisputeStatus;
 use Modules\Resturants\Http\Requests\DashboardOverviewRequest;
 use Modules\Resturants\Models\Order;
 use Modules\Resturants\Models\Product;
-use Modules\Resturants\Models\Restaurant;
 use Modules\Resturants\Models\RestaurantOrderDispute;
 use Modules\Resturants\Support\RestaurantOwnerContext;
 
@@ -19,10 +18,12 @@ final class DashboardOverviewController
 {
     public function __invoke(DashboardOverviewRequest $request, RestaurantOwnerContext $context): JsonResponse
     {
-        $restaurant = $request->has('restaurantId')
-            ? Restaurant::query()->findOrFail($request->validated('restaurantId'))
-            : $context->restaurant();
+        $restaurant = $context->restaurant();
         $restaurantId = (int) $restaurant->id;
+
+        if ($request->filled('restaurantId')) {
+            abort_if((int) $request->validated('restaurantId') !== $restaurantId, 404);
+        }
         $today = Carbon::today();
         $yesterday = Carbon::yesterday();
 

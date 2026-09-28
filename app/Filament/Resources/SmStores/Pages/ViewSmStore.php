@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\SmStores\Pages;
 
+use App\Filament\Resources\Merchants\Support\MerchantGovernanceActions;
 use App\Filament\Resources\SmStores\SmStoreResource;
-use Filament\Actions\EditAction;
 use Filament\Resources\Pages\ViewRecord;
 
 final class ViewSmStore extends ViewRecord
@@ -15,7 +15,7 @@ final class ViewSmStore extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            EditAction::make(),
+            MerchantGovernanceActions::store(),
         ];
     }
 }

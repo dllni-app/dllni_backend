@@ -8,18 +8,18 @@ use App\Models\BookingStatusLog;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
-use Modules\Delivery\Exceptions\MerchantNotReadyException;
 use Modules\Delivery\Enums\DeliveryDriverAvailabilityStatus;
 use Modules\Delivery\Enums\DeliveryOrderStatus;
+use Modules\Delivery\Exceptions\MerchantNotReadyException;
 use Modules\Delivery\Jobs\DispatchDeliveryOrderJob;
 use Modules\Delivery\Models\DeliveryCompany;
 use Modules\Delivery\Models\DeliveryDriver;
 use Modules\Delivery\Models\DeliveryOrder;
 use Modules\Delivery\Models\DeliveryOrderEvent;
-use Modules\Supermarket\Enums\SmOrderStatus;
-use Modules\Supermarket\Models\SmOrder;
 use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Models\Order;
+use Modules\Supermarket\Enums\SmOrderStatus;
+use Modules\Supermarket\Models\SmOrder;
 
 final class DeliveryOrderService
 {
@@ -129,9 +129,14 @@ final class DeliveryOrderService
                 throw new InvalidArgumentException('لا يمكن إعادة محاولة توزيع الطلب من حالته الحالية.');
             }
 
+            // Preserve the complete dispatch history for audit and operational review.
+            // Only open offers are invalidated before starting a fresh dispatch cycle.
             $order->assignmentAttempts()
-                ->whereIn('status', ['open', 'rejected', 'timed_out', 'cancelled'])
-                ->delete();
+                ->where('status', 'open')
+                ->update([
+                    'status' => 'cancelled',
+                    'responded_at' => now(),
+                ]);
 
             $from = DeliveryOrderStatus::tryFrom((string) $order->status);
             $order->forceFill([
@@ -328,6 +333,10 @@ final class DeliveryOrderService
         return DB::transaction(function () use ($order, $reason, $cancelledByUserId): DeliveryOrder {
             $order = DeliveryOrder::query()->lockForUpdate()->findOrFail($order->id);
             $currentStatus = DeliveryOrderStatus::tryFrom((string) $order->status);
+
+            if ($currentStatus === DeliveryOrderStatus::PickedUp) {
+                throw new InvalidArgumentException('لا يمكن إلغاء طلب بعد استلامه من المتجر.');
+            }
 
             if (in_array($currentStatus, [
                 DeliveryOrderStatus::Delivered,
