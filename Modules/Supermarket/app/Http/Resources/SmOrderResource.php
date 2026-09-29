@@ -51,6 +51,7 @@ final class SmOrderResource extends JsonResource
             'subtotal' => $this->subtotal,
             'discountAmount' => $this->discount_amount,
             'serviceFee' => $this->service_fee,
+            'deliveryFee' => $this->delivery_fee,
             'totalAmount' => $this->total_amount,
             'cancellationFeeAmount' => $this->cancellation_fee_amount,
             'cancellationPolicySnapshot' => $this->cancellation_policy_snapshot,

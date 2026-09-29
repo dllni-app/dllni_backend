@@ -122,8 +122,8 @@ it('returns cart list payloads with store data and item data', function (): void
         ->assertJsonPath('data.0.merchant.id', $store->id)
         ->assertJsonPath('data.0.items', [])
         ->assertJsonPath('data.0.productsCount', 0)
-        ->assertJsonPath('data.0.amounts.subtotal', 0.0)
-        ->assertJsonPath('data.0.amounts.total', 0.0);
+        ->assertJsonPath('data.0.amounts.subtotal', 0)
+        ->assertJsonPath('data.0.amounts.total', 0);
 });
 
 it('increments quantity when the same supermarket product is added again', function (): void {

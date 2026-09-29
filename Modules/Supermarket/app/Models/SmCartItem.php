@@ -19,6 +19,9 @@ final class SmCartItem extends Model
         'product_id',
         'quantity',
         'unit_price',
+        'modifier_ids',
+        'substitute_product_id',
+        'note',
     ];
 
     public function cart(): BelongsTo
@@ -35,6 +38,8 @@ final class SmCartItem extends Model
     {
         return [
             'unit_price' => 'integer',
+            'modifier_ids' => 'array',
+            'substitute_product_id' => 'integer',
         ];
     }
 }

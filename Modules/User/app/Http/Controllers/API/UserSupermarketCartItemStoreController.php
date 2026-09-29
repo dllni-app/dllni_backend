@@ -21,6 +21,9 @@ final class UserSupermarketCartItemStoreController
                 userId: (int) $request->user()->id,
                 productId: (int) $request->integer('productId'),
                 quantity: (int) $request->integer('quantity'),
+                modifierIds: array_values(array_map('intval', $request->input('modifierIds', []))),
+                substituteProductId: $request->integer('substituteProductId') ?: null,
+                note: $request->input('note'),
             ),
         ], 201);
     }
