@@ -54,7 +54,7 @@ final class SmOrderController
     {
         $this->context->store((int) $smOrder->store_id);
 
-        return SmOrderResource::make($smOrder->load(['customer', 'store', 'coupon', 'items.product.media', 'statusLogs', 'disputes', 'deliveryOrder.driver.user', 'deliveryOrder.driver.latestLocation', 'deliveryOrder.events']));
+        return SmOrderResource::make($smOrder->load(['customer', 'store', 'coupon', 'items.product.media', 'items.substituteProduct.media', 'statusLogs', 'disputes', 'deliveryOrder.driver.user', 'deliveryOrder.driver.latestLocation', 'deliveryOrder.events']));
     }
 
     public function update(SmOrderRequest $request, SmOrder $smOrder): SmOrderResource
@@ -76,6 +76,6 @@ final class SmOrderController
 
     private function eagerLoads(): array
     {
-        return ['items.product', 'statusLogs', 'deliveryOrder.driver.user', 'deliveryOrder.driver.latestLocation', 'deliveryOrder.events'];
+        return ['items.product', 'items.substituteProduct', 'statusLogs', 'deliveryOrder.driver.user', 'deliveryOrder.driver.latestLocation', 'deliveryOrder.events'];
     }
 }
