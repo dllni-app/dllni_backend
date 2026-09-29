@@ -123,7 +123,7 @@ final class UserSupermarketCheckoutPipelineService
                     'unit_price' => $item->unit_price,
                     'total_price' => (float) ($item->unit_price ?? 0) * (int) $item->quantity,
                     'product_name' => $item->product?->name,
-                    'modifier_snapshot' => $item->modifier_ids ?? [],
+                    'modifier_snapshot' => $this->modifierSnapshot($item->modifier_ids ?? []),
                     'substitute_product_id' => $item->substitute_product_id,
                     'note' => $item->note,
                 ]);
@@ -354,4 +354,40 @@ final class UserSupermarketCheckoutPipelineService
     {
         return ['id' => $address->id, 'label' => $address->label, 'mobile' => $address->mobile, 'city' => $address->city, 'neighborhood' => $address->neighborhood, 'street' => $address->street, 'building' => $address->building, 'floor' => $address->floor, 'directions' => $address->directions, 'latitude' => $address->latitude !== null ? (float) $address->latitude : null, 'longitude' => $address->longitude !== null ? (float) $address->longitude : null];
     }
+
+    /**
+     * Freeze modifier labels and prices at checkout so historical orders remain
+     * understandable even when the store edits or deletes an option later.
+     *
+     * @param  array<int, mixed>  $modifierIds
+     * @return array<int, array<string, mixed>>
+     */
+    private function modifierSnapshot(array $modifierIds): array
+    {
+        $ids = collect($modifierIds)
+            ->filter(fn ($id): bool => is_numeric($id))
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return [];
+        }
+
+        return SmModifier::query()
+            ->whereIn('id', $ids)
+            ->with('modifierGroup:id,name')
+            ->get()
+            ->sortBy(fn (SmModifier $modifier): int => (int) $ids->search((int) $modifier->id))
+            ->map(static fn (SmModifier $modifier): array => [
+                'id' => (int) $modifier->id,
+                'modifierGroupId' => (int) $modifier->modifier_group_id,
+                'groupName' => $modifier->modifierGroup?->name,
+                'name' => $modifier->name,
+                'price' => (int) $modifier->price,
+            ])
+            ->values()
+            ->all();
+    }
+
 }
