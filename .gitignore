@@ -25,3 +25,8 @@ yarn-error.log
 /tmp
 /storage/firebase.json
 /storage/media-library/
+
+/qa-video/artifacts/
+/test-results/
+/playwright-report/
+/.cursor/plans/
