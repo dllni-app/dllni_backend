@@ -15,6 +15,7 @@ use Modules\Delivery\Models\DeliveryCompany;
 use Modules\Delivery\Services\DeliveryOrderCreationService;
 use Modules\Supermarket\Enums\RejectionType;
 use Modules\Supermarket\Enums\SmOrderStatus;
+use Modules\Supermarket\Enums\SmPickupMode;
 use Modules\Supermarket\Models\SmOrderStatusLog;
 
 beforeEach(function (): void {
@@ -277,6 +278,85 @@ it('courier handover is idempotent when already picked_up', function (): void {
     expect($response->json('data.status'))->toBe('picked_up');
 
     expect(SmOrderStatusLog::query()->where('order_id', $order->id)->count())->toBe($beforeCount);
+});
+
+// ============ CUSTOMER PICKUP COMPLETION TESTS ============
+
+it('completes an immediate in-store pickup without a delivery order', function (): void {
+    $order = SmOrderFactory::new()->readyForPickup()->create([
+        'store_id' => $this->store->id,
+        'pickup_mode' => SmPickupMode::ImmediatePickup,
+        'customer_pickup_confirmed_at' => null,
+    ]);
+
+    $response = $this->postJson("/api/v1/store-owner/orders/{$order->id}/customer-pickup-complete");
+
+    $response->assertOk();
+    expect($response->json('message'))->toBe('Customer pickup completed successfully.');
+    expect($response->json('data.status'))->toBe(SmOrderStatus::Completed->value);
+    expect($response->json('data.fulfillmentType'))->toBe('pickup');
+    expect($response->json('data.customerPickupConfirmedAt'))->not->toBeNull();
+
+    $order->refresh();
+    expect($order->status)->toBe(SmOrderStatus::Completed);
+    expect($order->customer_pickup_confirmed_at)->not->toBeNull();
+    expect($order->deliveryOrder()->exists())->toBeFalse();
+
+    $this->assertDatabaseHas('sm_order_status_logs', [
+        'order_id' => $order->id,
+        'from_status' => SmOrderStatus::ReadyForPickup->value,
+        'to_status' => SmOrderStatus::Completed->value,
+        'changed_by_user_id' => $this->user->id,
+    ]);
+});
+
+it('completes a scheduled in-store pickup without a delivery order', function (): void {
+    $order = SmOrderFactory::new()->readyForPickup()->create([
+        'store_id' => $this->store->id,
+        'pickup_mode' => SmPickupMode::ScheduledPickup,
+        'pickup_scheduled_for' => now()->addHour(),
+        'customer_pickup_confirmed_at' => null,
+    ]);
+
+    $this->postJson("/api/v1/store-owner/orders/{$order->id}/customer-pickup-complete")
+        ->assertOk()
+        ->assertJsonPath('data.status', SmOrderStatus::Completed->value)
+        ->assertJsonPath('data.fulfillmentType', 'pickup');
+
+    expect($order->fresh()->customer_pickup_confirmed_at)->not->toBeNull();
+});
+
+it('keeps customer pickup completion idempotent after success', function (): void {
+    $order = SmOrderFactory::new()->readyForPickup()->create([
+        'store_id' => $this->store->id,
+        'customer_pickup_confirmed_at' => null,
+    ]);
+
+    $this->postJson("/api/v1/store-owner/orders/{$order->id}/customer-pickup-complete")
+        ->assertOk();
+
+    $beforeCount = SmOrderStatusLog::query()->where('order_id', $order->id)->count();
+
+    $this->postJson("/api/v1/store-owner/orders/{$order->id}/customer-pickup-complete")
+        ->assertOk()
+        ->assertJsonPath('data.status', SmOrderStatus::Completed->value);
+
+    expect(SmOrderStatusLog::query()->where('order_id', $order->id)->count())->toBe($beforeCount);
+});
+
+it('rejects customer pickup completion for delivery orders', function (): void {
+    $order = SmOrderFactory::new()->readyForPickup()->create([
+        'store_id' => $this->store->id,
+        'customer_pickup_confirmed_at' => null,
+    ]);
+    createLinkedSupermarketDeliveryOrder($order);
+
+    $response = $this->postJson("/api/v1/store-owner/orders/{$order->id}/customer-pickup-complete");
+
+    $response->assertStatus(400);
+    expect($response->json('message'))->toContain('only available for pickup orders');
+    expect($order->fresh()->status)->toBe(SmOrderStatus::ReadyForPickup);
+    expect($order->fresh()->customer_pickup_confirmed_at)->toBeNull();
 });
 
 // ============ REJECT ORDER TESTS ============
