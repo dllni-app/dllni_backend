@@ -76,6 +76,7 @@ final class SmProductResource extends JsonResource
                     'minSelections' => (int) $group->min_selections,
                     'maxSelections' => (int) $group->max_selections,
                     'sortOrder' => (int) $group->sort_order,
+                    'isActive' => (bool) $group->is_active,
                     'modifiers' => $group->modifiers
                         ->values()
                         ->map(fn ($modifier): array => [
