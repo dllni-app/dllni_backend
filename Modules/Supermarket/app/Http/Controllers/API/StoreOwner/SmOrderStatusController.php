@@ -150,12 +150,15 @@ final class SmOrderStatusController
                 $order,
                 $this->context->owner()->id,
             );
-            $this->notifications->notifyStatusChanged(
-                $updated,
-                $previousStatus,
-                $this->statusValue($updated),
-                'owner',
-            );
+            $currentStatus = $this->statusValue($updated);
+            if ($previousStatus !== $currentStatus) {
+                $this->notifications->notifyStatusChanged(
+                    $updated,
+                    $previousStatus,
+                    $currentStatus,
+                    'owner',
+                );
+            }
 
             return $this->resource($updated, 'Customer pickup completed successfully.');
         } catch (Exception $e) {
