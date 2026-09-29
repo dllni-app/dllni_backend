@@ -12,6 +12,7 @@ use Laravel\Sanctum\Sanctum;
 use Modules\Delivery\Enums\DeliveryOrderStatus;
 use Modules\Delivery\Jobs\DispatchDeliveryOrderJob;
 use Modules\Delivery\Models\DeliveryCompany;
+use Modules\Delivery\Models\DeliveryDriver;
 use Modules\Delivery\Services\DeliveryOrderCreationService;
 use Modules\Supermarket\Enums\RejectionType;
 use Modules\Supermarket\Enums\SmOrderStatus;
@@ -155,28 +156,34 @@ it('rejects preparing transition when order is not accepted', function (): void 
 
 // ============ COURIER HANDOVER TESTS ============
 
-it('hands over a ready_for_pickup order to courier', function (): void {
+it('confirms courier handover without replacing the driver pickup lifecycle', function (): void {
     $order = SmOrderFactory::new()->readyForPickup()->create([
         'store_id' => $this->store->id,
         'picked_up_at' => null,
+        'store_handover_confirmed_at' => null,
     ]);
+    $deliveryOrder = createLinkedSupermarketDeliveryOrder($order, [
+        'status' => DeliveryOrderStatus::Accepted->value,
+    ]);
+    $driver = DeliveryDriver::factory()->create([
+        'company_id' => $deliveryOrder->company_id,
+    ]);
+    $deliveryOrder->update(['driver_id' => $driver->id]);
+    $beforeCount = SmOrderStatusLog::query()->where('order_id', $order->id)->count();
 
     $response = $this->postJson("/api/v1/store-owner/orders/{$order->id}/courier-handover");
 
     $response->assertOk();
-    expect($response->json('message'))->toBe('Order handed to courier successfully.');
-    expect($response->json('data.status'))->toBe('picked_up');
-    expect($response->json('data.pickedUpAt'))->not->toBeNull();
+    expect($response->json('message'))->toBe('Store handover confirmed. Pickup status is controlled by the delivery lifecycle.');
+    expect($response->json('data.status'))->toBe(SmOrderStatus::ReadyForPickup->value);
+    expect($response->json('data.storeHandoverConfirmedAt'))->not->toBeNull();
 
     $order->refresh();
-    expect($order->status)->toBe(SmOrderStatus::PickedUp);
-    expect($order->picked_up_at)->not->toBeNull();
-
-    $this->assertDatabaseHas('sm_order_status_logs', [
-        'order_id' => $order->id,
-        'from_status' => SmOrderStatus::ReadyForPickup->value,
-        'to_status' => SmOrderStatus::PickedUp->value,
-    ]);
+    expect($order->status)->toBe(SmOrderStatus::ReadyForPickup);
+    expect($order->picked_up_at)->toBeNull();
+    expect($order->store_handover_confirmed_at)->not->toBeNull();
+    expect($order->store_handover_confirmed_by_user_id)->toBe($this->user->id);
+    expect(SmOrderStatusLog::query()->where('order_id', $order->id)->count())->toBe($beforeCount);
 });
 
 it('marks an accepted order ready for pickup and starts linked delivery dispatch', function (): void {
@@ -259,7 +266,7 @@ it('rejects courier handover when order is not ready_for_pickup', function (): v
     $response = $this->postJson("/api/v1/store-owner/orders/{$order->id}/courier-handover");
 
     $response->assertStatus(400);
-    expect($response->json('message'))->toContain('Cannot hand over order');
+    expect($response->json('message'))->toContain('Cannot confirm courier handover');
 });
 
 it('courier handover is idempotent when already picked_up', function (): void {
@@ -268,6 +275,8 @@ it('courier handover is idempotent when already picked_up', function (): void {
         'status' => SmOrderStatus::PickedUp,
         'ready_for_pickup_at' => now()->subHour(),
         'picked_up_at' => now()->subMinutes(30),
+        'store_handover_confirmed_at' => now()->subMinutes(31),
+        'store_handover_confirmed_by_user_id' => $this->user->id,
     ]);
 
     $beforeCount = SmOrderStatusLog::query()->where('order_id', $order->id)->count();
