@@ -138,6 +138,34 @@ final class SmOrderStatusController
     }
 
     /**
+     * Complete an in-store pickup after the customer receives the order.
+     */
+    public function customerPickupComplete(SmOrder $order): JsonResponse|JsonResource
+    {
+        $this->context->store((int) $order->store_id);
+        $previousStatus = $this->statusValue($order);
+
+        try {
+            $updated = $this->orderService->completeCustomerPickup(
+                $order,
+                $this->context->owner()->id,
+            );
+            $this->notifications->notifyStatusChanged(
+                $updated,
+                $previousStatus,
+                $this->statusValue($updated),
+                'owner',
+            );
+
+            return $this->resource($updated, 'Customer pickup completed successfully.');
+        } catch (Exception $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    /**
      * Reject a pending order with reason and type.
      */
     public function reject(SmOrderRejectStatusRequest $request, SmOrder $order): JsonResponse|JsonResource
