@@ -166,6 +166,7 @@ final class SmOrderStatusController
             'store',
             'coupon',
             'items.product',
+            'items.substituteProduct',
             'statusLogs',
             'disputes',
             'deliveryOrder.driver.user',
