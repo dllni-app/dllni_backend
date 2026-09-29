@@ -174,6 +174,12 @@ it('persists supermarket customizations as separate lines and snapshots them to 
     $snapshotted = $order->items
         ->firstWhere('substitute_product_id', $substitute->id);
     expect($snapshotted)->not->toBeNull()
-        ->and($snapshotted->modifier_snapshot)->toBe([$firstModifier->id])
+        ->and($snapshotted->modifier_snapshot)->toBe([[
+            'id' => $firstModifier->id,
+            'modifierGroupId' => $group->id,
+            'groupName' => 'الحجم',
+            'name' => 'كبير',
+            'price' => 500,
+        ]])
         ->and($snapshotted->note)->toBe('عبوة حديثة');
 });
