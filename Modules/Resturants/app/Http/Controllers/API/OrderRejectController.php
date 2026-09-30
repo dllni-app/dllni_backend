@@ -6,12 +6,14 @@ namespace Modules\Resturants\Http\Controllers\API;
 
 use App\Services\ActivityLogService;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Validation\ValidationException;
+use Modules\Delivery\Services\MerchantOrderDeliveryService;
 use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Http\Requests\OrderRejectRequest;
 use Modules\Resturants\Http\Resources\OrderResource;
 use Modules\Resturants\Models\Order;
 use Modules\Resturants\Services\RestaurantOrderNotificationService;
-use Modules\Delivery\Services\MerchantOrderDeliveryService;
+use Modules\Resturants\Support\RestaurantOwnerContext;
 
 final class OrderRejectController
 {
@@ -19,10 +21,20 @@ final class OrderRejectController
         private ActivityLogService $activityLogService,
         private RestaurantOrderNotificationService $notifications,
         private MerchantOrderDeliveryService $merchantDelivery,
+        private RestaurantOwnerContext $ownerContext,
     ) {}
 
+    /** @throws ValidationException */
     public function __invoke(OrderRejectRequest $request, Order $order): JsonResource
     {
+        $this->ownerContext->ensureOwnedOrder($order);
+
+        if ($order->status !== OrderStatus::Pending) {
+            throw ValidationException::withMessages([
+                'order' => 'Only pending restaurant orders can be rejected from this endpoint.',
+            ]);
+        }
+
         $validated = $request->validated();
         $previousStatus = $order->status?->value ?? (string) $order->status;
 
