@@ -2,7 +2,7 @@ name: Restaurant Owner Verification
 
 on:
   push:
-    branches: [main]
+    branches: [dev]
     paths:
       - 'Modules/Resturants/**'
       - 'app/Http/Middleware/EnsureSellerPermission.php'
