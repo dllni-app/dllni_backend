@@ -3,8 +3,11 @@
 declare(strict_types=1);
 
 use App\Filament\Resources\SystemAlerts\SystemAlertResource;
+use App\Filament\Resources\Users\Pages\CreateUser;
 use App\Filament\Resources\Users\UserResource;
 use App\Models\User;
+use Filament\Forms\Components\Select;
+use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -43,7 +46,7 @@ it('shows the system managers page in Arabic with role instead of phone', functi
 });
 
 it('translates the create system manager page and role options', function (): void {
-    Role::findOrCreate('Cleaning Ops Manager', 'web');
+    $role = Role::findOrCreate('Cleaning Ops Manager', 'web');
 
     $this->get(UserResource::getUrl('create', [], isAbsolute: false))
         ->assertSuccessful()
@@ -52,6 +55,11 @@ it('translates the create system manager page and role options', function (): vo
         ->assertSee('البريد الإلكتروني')
         ->assertSee('رقم الهاتف')
         ->assertSee('الدور')
-        ->assertSee('مدير عمليات التنظيف')
         ->assertSee('كلمة المرور');
+
+    Livewire::test(CreateUser::class)
+        ->assertSchemaComponentExists('role_id', 'form', function ($component) use ($role): bool {
+            return $component instanceof Select
+                && ($component->getOptions()[$role->id] ?? null) === 'مدير عمليات التنظيف';
+        });
 });

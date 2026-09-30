@@ -18,6 +18,7 @@ final class SmOrderFactory extends Factory
         $subtotal = fake()->randomFloat(2, 10, 200);
         $serviceFee = fake()->randomFloat(2, 0, 20);
         $discount = fake()->randomFloat(2, 0, 20);
+        $pickupMode = fake()->randomElement(['immediate_pickup', 'scheduled_pickup']);
 
         return [
             'customer_id' => User::factory(),
@@ -26,8 +27,10 @@ final class SmOrderFactory extends Factory
             'cancellation_policy_id' => null,
             'order_number' => mb_strtoupper(fake()->unique()->bothify('ORD-####-????')),
             'status' => SmOrderStatus::Pending->value,
-            'pickup_mode' => fake()->randomElement(['immediate_pickup', 'scheduled_pickup']),
-            'pickup_scheduled_for' => fake()->numberBetween(5, 30),
+            'pickup_mode' => $pickupMode,
+            'pickup_scheduled_for' => $pickupMode === 'scheduled_pickup'
+                ? fake()->dateTimeBetween('+1 hour', '+2 weeks')
+                : null,
             'ready_for_pickup_at' => fake()->optional()->dateTimeBetween('now', '+2 weeks'),
             'picked_up_at' => null,
             'customer_pickup_confirmed_at' => null,

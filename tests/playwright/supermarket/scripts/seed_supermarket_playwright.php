@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Enums\UserModuleType;
 use App\Models\MasterProduct;
 use App\Models\User;
+use Database\Factories\DeliveryOrderFactory;
 use Database\Factories\MasterProductFactory;
 use Database\Factories\SmCategoryFactory;
 use Database\Factories\SmOfferFactory;
@@ -15,6 +16,10 @@ use Database\Factories\SmProductFactory;
 use Database\Factories\SmStoreFactory;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
+use Modules\Delivery\Enums\DeliveryOrderStatus;
+use Modules\Delivery\Models\DeliveryCompany;
+use Modules\Delivery\Models\DeliveryDriver;
+use Modules\Delivery\Services\DeliveryOrderCreationService;
 use Modules\Supermarket\Enums\SmOrderStatus;
 use Modules\Supermarket\Models\SmStore;
 
@@ -89,7 +94,7 @@ $availableProduct = SmProductFactory::new()->create([
 $similarProduct = SmProductFactory::new()->create([
     'store_id' => $ownerStore->id,
     'category_id' => $category->id,
-    'name' => 'PW Available Milk 1L '.$runSuffix,
+    'name' => 'PW Available Milk '.$runSuffix.' 1L',
     'price' => 8.25,
     'stock_quantity' => 25,
     'is_available' => true,
@@ -183,6 +188,30 @@ $pendingOrderForReject = SmOrderFactory::new()->pending()->create([
 $readyForPickupOrder = SmOrderFactory::new()->readyForPickup()->create([
     'store_id' => $ownerStore->id,
     'customer_id' => $user->id,
+]);
+
+$deliveryOwner = User::factory()->create([
+    'name' => 'PW Delivery Owner '.$runSuffix,
+    'email' => "pw-sm-delivery-owner-{$runSuffix}@example.test",
+]);
+$deliveryDriverUser = User::factory()->create([
+    'name' => 'PW Delivery Driver '.$runSuffix,
+    'email' => "pw-sm-delivery-driver-{$runSuffix}@example.test",
+    'module_type' => UserModuleType::DeliveryDriver->value,
+]);
+$deliveryCompany = DeliveryCompany::factory()->create([
+    'owner_user_id' => $deliveryOwner->id,
+]);
+$deliveryDriver = DeliveryDriver::factory()->create([
+    'company_id' => $deliveryCompany->id,
+    'user_id' => $deliveryDriverUser->id,
+]);
+DeliveryOrderFactory::new()->create([
+    'company_id' => $deliveryCompany->id,
+    'driver_id' => $deliveryDriver->id,
+    'status' => DeliveryOrderStatus::Accepted->value,
+    'source_type' => DeliveryOrderCreationService::SOURCE_SUPERMARKET_ORDER,
+    'source_id' => $readyForPickupOrder->id,
 ]);
 
 $nonReadyOrder = SmOrderFactory::new()->accepted()->create([

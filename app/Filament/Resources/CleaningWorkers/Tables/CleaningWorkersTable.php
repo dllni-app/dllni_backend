@@ -312,7 +312,9 @@ final class CleaningWorkersTable
                 ->where(function (Builder $capacity) use ($minimumRequired): void {
                     $capacity
                         ->where(function (Builder $depositBalance) use ($minimumRequired): void {
-                            $depositBalance->whereRaw('COALESCE(current_balance, 0) > 0');
+                            $depositBalance
+                                ->whereRaw('COALESCE(current_balance, 0) > 0')
+                                ->whereRaw('COALESCE(debt_balance, 0) <= COALESCE(max_negative_balance, 0)');
 
                             if ($minimumRequired > 0) {
                                 $depositBalance->whereRaw('COALESCE(current_balance, 0) >= ?', [$minimumRequired]);
@@ -329,6 +331,7 @@ final class CleaningWorkersTable
         return $deposit->where(function (Builder $capacity) use ($minimumRequired): void {
             $capacity
                 ->where('is_active', false)
+                ->orWhereRaw('COALESCE(debt_balance, 0) > COALESCE(max_negative_balance, 0)')
                 ->orWhere(function (Builder $depositBalance) use ($minimumRequired): void {
                     $depositBalance
                         ->whereRaw('COALESCE(current_balance, 0) > 0')

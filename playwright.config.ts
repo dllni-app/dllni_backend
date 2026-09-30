@@ -23,7 +23,7 @@ export default defineConfig({
     baseURL,
     ignoreHTTPSErrors: true,
     extraHTTPHeaders: {
-      Accept: 'application/js on',
+      Accept: 'application/json',
     },
   },
   webServer: shouldStartLocalServer
@@ -32,6 +32,13 @@ export default defineConfig({
         url: 'http://127.0.0.1:8000',
         reuseExistingServer: true,
         timeout: 120_000,
+        env: {
+          PUSHER_HOST: '127.0.0.1',
+          PUSHER_PORT: '1',
+          PUSHER_SCHEME: 'http',
+          PUSHER_HTTP_TIMEOUT: '0.2',
+          PUSHER_HTTP_CONNECT_TIMEOUT: '0.2',
+        },
       }
     : undefined,
 });

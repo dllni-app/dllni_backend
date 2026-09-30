@@ -271,8 +271,8 @@ it('shows a supermarket product by id', function (): void {
 
     $response->assertOk()
         ->assertJsonPath('data.id', $product->id)
-        ->assertJsonPath('data.originalPrice', '40.00')
-        ->assertJsonPath('data.finalPrice', '25.00')
+        ->assertJsonPath('data.originalPrice', 40)
+        ->assertJsonPath('data.finalPrice', 25)
         ->assertJsonPath('data.hasDiscount', true)
         ->assertJsonPath('product.id', $product->id)
         ->assertJsonPath('product.name', 'Showcase Product')

@@ -24,6 +24,8 @@ export type ApiCallResult<TBody = unknown> = {
   body: TBody;
 };
 
+let createOrderSequence = 0;
+
 export function futureDate(daysAhead = 1): string {
   const value = new Date();
   value.setHours(12, 0, 0, 0);
@@ -299,6 +301,9 @@ export class CleaningApiClient {
     socketId = '9999.9999',
   ): Promise<ApiCallResult> {
     const response = await this.request.post('/broadcasting/auth', {
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+      },
       form: {
         channel_name: channelName,
         socket_id: socketId,

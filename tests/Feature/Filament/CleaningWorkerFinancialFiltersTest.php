@@ -34,17 +34,18 @@ it('filters financially blocked workers independently from administrative suspen
     createFinancialFilterDeposit($availableWorker, currentBalance: 0, debtBalance: 25, debtLimit: 50);
 
     $suspendedButFinanciallyAvailableWorker = createFinancialFilterWorker(['is_suspended' => true]);
-    createFinancialFilterDeposit($suspendedButFinanciallyAvailableWorker, currentBalance: 0, debtBalance: 0, debtLimit: 0);
+    createFinancialFilterDeposit($suspendedButFinanciallyAvailableWorker, currentBalance: 0, debtBalance: 0, debtLimit: 50);
 
+    // A worker without a financial account has zero allowance under the current
+    // per-worker financial model, so the worker is financially blocked.
     $workerWithoutDeposit = createFinancialFilterWorker();
 
     Livewire::test(ListCleaningWorkers::class)
         ->filterTable('financially_blocked', true)
-        ->assertCanSeeTableRecords([$blockedWorker])
+        ->assertCanSeeTableRecords([$blockedWorker, $workerWithoutDeposit])
         ->assertCanNotSeeTableRecords([
             $availableWorker,
             $suspendedButFinanciallyAvailableWorker,
-            $workerWithoutDeposit,
         ]);
 
     Livewire::test(ListCleaningWorkers::class)
@@ -52,9 +53,8 @@ it('filters financially blocked workers independently from administrative suspen
         ->assertCanSeeTableRecords([
             $availableWorker,
             $suspendedButFinanciallyAvailableWorker,
-            $workerWithoutDeposit,
         ])
-        ->assertCanNotSeeTableRecords([$blockedWorker]);
+        ->assertCanNotSeeTableRecords([$blockedWorker, $workerWithoutDeposit]);
 });
 
 it('filters workers by whether their current debt is greater than zero', function (): void {

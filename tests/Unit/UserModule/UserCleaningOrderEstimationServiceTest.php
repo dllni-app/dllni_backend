@@ -9,7 +9,7 @@ use Modules\Cleaning\Enums\ServiceCategory;
 use Modules\Cleaning\Models\CleaningService;
 use Modules\Cleaning\Models\ServicePricing;
 
-it('computes deterministic cleaning size, duration, and tier', function (): void {
+it('computes deterministic cleaning size, duration, and tier from configured room-size defaults', function (): void {
     $service = app(UserCleaningOrderEstimationService::class);
 
     $estimation = $service->estimate('house', [
@@ -19,9 +19,9 @@ it('computes deterministic cleaning size, duration, and tier', function (): void
         'living_room_size' => 'medium',
     ]);
 
-    expect($estimation['estimatedSqm'])->toBe(171.0);
-    expect($estimation['estimatedHours'])->toBe(5.5);
-    expect($estimation['sizeTier'])->toBe('large');
+    expect($estimation['estimatedSqm'])->toBe(72.5);
+    expect($estimation['estimatedHours'])->toBe(3.0);
+    expect($estimation['sizeTier'])->toBe('small');
 });
 
 it('computes distance-based pricing with percent admin margin', function (): void {

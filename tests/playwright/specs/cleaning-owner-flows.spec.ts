@@ -62,7 +62,7 @@ test.describe('Cleaning Owner/Worker API contract scenarios', () => {
     expect(bookingStatus(arrived.body)).toBe('awaiting_start_verification');
   });
 
-  test('O-CL-04: legacy direct start-work from worker_assigned is accepted', async ({
+  test('O-CL-04: direct start-work before start verification is rejected', async ({
     roleRequests,
     seed,
   }) => {
@@ -73,8 +73,7 @@ test.describe('Cleaning Owner/Worker API contract scenarios', () => {
     await flow.workerApi.acceptBooking(bookingId);
     const started = await flow.workerApi.startWork(bookingId);
 
-    expect(started.response.status()).toBe(200);
-    expect(bookingStatus(started.body)).toBe('in_progress');
+    expect(started.response.status()).toBe(422);
   });
 
   test('O-CL-05: complete booking transitions to awaiting_customer_completion', async ({
@@ -85,8 +84,7 @@ test.describe('Cleaning Owner/Worker API contract scenarios', () => {
     const created = await flow.createPendingOrder();
     const bookingId = created.orderId;
 
-    await flow.workerApi.acceptBooking(bookingId);
-    await flow.workerApi.startWork(bookingId);
+    await flow.moveToInProgress(bookingId);
     const completed = await flow.workerApi.complete(bookingId);
 
     expect(completed.response.status()).toBe(200);

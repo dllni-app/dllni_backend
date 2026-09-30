@@ -80,7 +80,7 @@ final class CleaningBookingResource extends JsonResource
             ? $this->finishedSnapshot($pendingCompletionAssignment->worker_finished_property_rooms, 'room')
             : $this->finishedSnapshot($this->worker_finished_property_rooms, 'room');
         $urgency = app(CleaningOrderUrgencyService::class);
-        $baseTitle = ($this->property_type === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE ? 'Event assistance order' : 'Cleaning order').' #'.$this->booking_number;
+        $baseTitle = ($this->property_type === UserCleaningOrderEstimationService::EVENT_ASSISTANCE_PROPERTY_TYPE ? 'طلب مناسبة' : 'طلب تنظيف').' #'.$this->booking_number;
         $displayTitle = $urgency->displayTitle($baseTitle, $this->scheduled_date);
         $isHotOrder = $urgency->isHotOrder($this->scheduled_date);
         $bookingHours = (float) ($this->total_hours ?? 0);
