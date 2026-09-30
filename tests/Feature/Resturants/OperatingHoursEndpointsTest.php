@@ -87,7 +87,7 @@ it('preserves weekly operating hours when toggling temporary closure only', func
     ])
         ->assertOk()
         ->assertJsonPath('data.isTemporarilyClosed', true)
-        ->assertJsonPath('data.dailyHours.1.isEnabled', true);
+        ->assertJsonPath('data.dailyHours.0.isEnabled', true);
 
     $this->assertDatabaseHas('operating_hours', [
         'restaurant_id' => $restaurant->id,
