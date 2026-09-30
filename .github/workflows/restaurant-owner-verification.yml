@@ -61,4 +61,9 @@ jobs:
         env:
           DB_CONNECTION: sqlite
           DB_DATABASE: database/database.sqlite
-        run: php artisan test tests/Feature/Resturants tests/Feature/RestaurantOwner
+        run: >-
+          php artisan test
+          tests/Feature/Resturants/InventoryItemsEndpointsTest.php
+          tests/Feature/Resturants/OperatingHoursEndpointsTest.php
+          tests/Feature/RestaurantOwner/RestaurantOwnerOrderScopeTest.php
+          tests/Feature/RestaurantOwner/RestaurantOwnerOrderStatusTest.php
