@@ -489,6 +489,7 @@ final class UserSupermarketCartService
             'productsCount' => 0,
             'amounts' => [
                 'subtotal' => 0.0,
+                'discount' => 0.0,
                 'total' => 0.0,
             ],
         ];
@@ -509,6 +510,12 @@ final class UserSupermarketCartService
 
         $mappedItems = $items->map(fn (SmCartItem $item): array => $this->itemPayload($item))->values();
         $subtotal = (float) $mappedItems->sum('totalPrice');
+        $discount = (float) $mappedItems->sum(
+            fn (array $item): float => max(
+                0.0,
+                (float) ($item['originalTotalPrice'] ?? $item['totalPrice']) - (float) $item['totalPrice'],
+            ),
+        );
         $store = $cart->relationLoaded('store') ? $cart->store : null;
 
         if ($store === null) {
@@ -530,6 +537,7 @@ final class UserSupermarketCartService
             'productsCount' => (int) $mappedItems->sum('quantity'),
             'amounts' => [
                 'subtotal' => round($subtotal, 2),
+                'discount' => round($discount, 2),
                 'total' => round($subtotal, 2),
             ],
         ];
@@ -544,6 +552,14 @@ final class UserSupermarketCartService
         $productImages = $this->productImages($product);
         $options = $this->productOptionsPayload($product);
         $merchant = $this->merchantPayload($product?->store, $product?->store_id !== null ? (int) $product->store_id : null);
+        $quantity = (int) $item->quantity;
+        $unitPrice = (float) ($item->unit_price ?? 0);
+        $finalProductPrice = (float) ($product?->discounted_price ?? $product?->price ?? $unitPrice);
+        $originalProductPrice = (float) ($product?->price ?? $finalProductPrice);
+        $modifierAmount = max(0.0, $unitPrice - $finalProductPrice);
+        $originalUnitPrice = $originalProductPrice + $modifierAmount;
+        $totalPrice = round($unitPrice * $quantity, 2);
+        $originalTotalPrice = round($originalUnitPrice * $quantity, 2);
 
         return [
             'id' => $item->id,
@@ -556,9 +572,14 @@ final class UserSupermarketCartService
             'primaryImage' => $productImages['primaryImageUrl'],
             'images' => $productImages['imageUrls'],
             'imageUrls' => $productImages['imageUrls'],
-            'quantity' => (int) $item->quantity,
-            'unitPrice' => (float) ($item->unit_price ?? 0),
-            'totalPrice' => round((float) ($item->unit_price ?? 0) * (int) $item->quantity, 2),
+            'quantity' => $quantity,
+            'unitPrice' => $unitPrice,
+            'totalPrice' => $totalPrice,
+            'originalUnitPrice' => round($originalUnitPrice, 2),
+            'originalTotalPrice' => $originalTotalPrice,
+            'productPrice' => round($finalProductPrice, 2),
+            'originalProductPrice' => round($originalProductPrice, 2),
+            'hasDiscount' => $originalUnitPrice > $unitPrice,
             'modifierIds' => $item->modifier_ids ?? [],
             'modifiers' => SmModifier::query()
                 ->whereIn('id', $item->modifier_ids ?? [])

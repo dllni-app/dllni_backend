@@ -45,7 +45,7 @@ final class SmProductController
         }
 
         $productsQuery = SmProduct::getQuery()
-            ->with('store', 'category', 'media', 'offerProducts.offer', 'masterProduct.media')
+            ->with('store', 'category', 'media', 'offerProducts.offer', 'masterProduct.media', 'modifierGroups.modifiers')
         ;
 
         if ($ownedStoreId !== null) {
@@ -59,7 +59,9 @@ final class SmProductController
 
     public function availableCount(): JsonResponse
     {
+        $storeId = (int) $this->storeOwnerContext->ownedStore()->id;
         $availableProductsCount = SmProduct::query()
+            ->where('store_id', $storeId)
             ->where('is_available', true)
             ->count();
 
@@ -75,7 +77,7 @@ final class SmProductController
             $this->extractImages($request)
         );
 
-        return SmProductResource::make($product->load('store', 'category', 'media', 'offerProducts.offer', 'masterProduct.media'));
+        return SmProductResource::make($product->load('store', 'category', 'media', 'offerProducts.offer', 'masterProduct.media', 'modifierGroups.modifiers'));
     }
 
     public function import(SmProductImportRequest $request): JsonResponse
@@ -94,7 +96,7 @@ final class SmProductController
         $resolved = $this->resolveBoundProduct($smProduct, $product);
         $this->assertStoreOwnerProductBelongsToOwner($resolved);
 
-        return SmProductResource::make($resolved->load('store', 'category', 'media', 'offerProducts.offer', 'masterProduct.media'));
+        return SmProductResource::make($resolved->load('store', 'category', 'media', 'offerProducts.offer', 'masterProduct.media', 'modifierGroups.modifiers'));
     }
 
     public function update(SmProductRequest $request, ?SmProduct $smProduct = null, ?SmProduct $product = null): SmProductResource
@@ -108,7 +110,7 @@ final class SmProductController
             $this->extractImages($request)
         );
 
-        return SmProductResource::make($updatedProduct->load('store', 'category', 'media', 'offerProducts.offer', 'masterProduct.media'));
+        return SmProductResource::make($updatedProduct->load('store', 'category', 'media', 'offerProducts.offer', 'masterProduct.media', 'modifierGroups.modifiers'));
     }
 
     public function destroy(?SmProduct $smProduct = null, ?SmProduct $product = null): Response
@@ -225,7 +227,7 @@ final class SmProductController
 
         $products = SmProduct::query()
             ->whereIn('id', $ids)
-            ->with('store', 'category', 'media', 'offerProducts.offer', 'masterProduct.media')
+            ->with('store', 'category', 'media', 'offerProducts.offer', 'masterProduct.media', 'modifierGroups.modifiers')
             ->get()
             ->keyBy('id');
 

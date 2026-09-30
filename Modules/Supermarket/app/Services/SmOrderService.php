@@ -332,6 +332,46 @@ final class SmOrderService
         });
     }
 
+    public function completeCustomerPickup(SmOrder $order, ?int $actorUserId): SmOrder
+    {
+        return DB::transaction(function () use ($order, $actorUserId): SmOrder {
+            $lockedOrder = SmOrder::query()->lockForUpdate()->findOrFail($order->id);
+
+            if (
+                $lockedOrder->status === SmOrderStatus::Completed
+                && $lockedOrder->customer_pickup_confirmed_at !== null
+            ) {
+                return $lockedOrder->refresh();
+            }
+
+            if ($lockedOrder->deliveryOrder()->exists()) {
+                throw new Exception('Customer pickup completion is only available for pickup orders.');
+            }
+
+            if ($lockedOrder->status !== SmOrderStatus::ReadyForPickup) {
+                throw new Exception(
+                    "Cannot complete customer pickup for order {$lockedOrder->order_number}. Order must be ready_for_pickup, currently in {$lockedOrder->status->value}"
+                );
+            }
+
+            $completedAt = now();
+            $lockedOrder->forceFill([
+                'status' => SmOrderStatus::Completed,
+                'customer_pickup_confirmed_at' => $completedAt,
+            ])->save();
+
+            $this->logStatus(
+                $lockedOrder,
+                SmOrderStatus::ReadyForPickup,
+                SmOrderStatus::Completed,
+                'Order picked up by customer at store.',
+                $actorUserId,
+            );
+
+            return $lockedOrder->refresh();
+        });
+    }
+
     public function rejectOrder(SmOrder $order, SmOrderRejectStatusData $data, ?int $actorUserId = null): SmOrder
     {
         $cancelled = DB::transaction(function () use ($order, $data, $actorUserId): SmOrder {

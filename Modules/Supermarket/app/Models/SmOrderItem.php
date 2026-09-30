@@ -36,6 +36,11 @@ final class SmOrderItem extends Model
         return $this->belongsTo(SmProduct::class, 'product_id');
     }
 
+    public function substituteProduct(): BelongsTo
+    {
+        return $this->belongsTo(SmProduct::class, 'substitute_product_id');
+    }
+
     protected function casts(): array
     {
         return [

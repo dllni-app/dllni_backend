@@ -208,3 +208,34 @@ it('deletes a full supermarket cart by id', function (): void {
         'cart_id' => $cartId,
     ]);
 });
+
+it('returns supermarket product discounts explicitly in cart totals', function (): void {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $store = SmStoreFactory::new()->create();
+    $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+    $product = SmProductFactory::new()->create([
+        'store_id' => $store->id,
+        'category_id' => $category->id,
+        'is_available' => true,
+        'price' => 1000,
+        'discounted_price' => 800,
+    ]);
+
+    $response = $this->postJson('/api/v1/user/supermarket/cart/items', [
+        'productId' => $product->id,
+        'quantity' => 2,
+    ])->assertCreated();
+
+    $response
+        ->assertJsonPath('data.amounts.subtotal', 1600)
+        ->assertJsonPath('data.amounts.discount', 400)
+        ->assertJsonPath('data.amounts.total', 1600)
+        ->assertJsonPath('data.items.0.unitPrice', 800)
+        ->assertJsonPath('data.items.0.totalPrice', 1600)
+        ->assertJsonPath('data.items.0.originalUnitPrice', 1000)
+        ->assertJsonPath('data.items.0.originalTotalPrice', 2000)
+        ->assertJsonPath('data.items.0.hasDiscount', true);
+});
+
