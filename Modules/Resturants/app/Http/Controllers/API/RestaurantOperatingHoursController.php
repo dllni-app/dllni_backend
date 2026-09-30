@@ -52,13 +52,19 @@ final class RestaurantOperatingHoursController
 
         $validated = $request->validated();
 
-        $restaurant->update([
-            'is_temporarily_closed' => $validated['isTemporarilyClosed'] ?? false,
-        ]);
+        if (array_key_exists('isTemporarilyClosed', $validated)) {
+            $restaurant->update([
+                'is_temporarily_closed' => (bool) $validated['isTemporarilyClosed'],
+            ]);
+        }
+
+        if (! array_key_exists('dailyHours', $validated)) {
+            return $this->show($context);
+        }
 
         OperatingHour::query()->where('restaurant_id', $restaurant->id)->delete();
 
-        foreach ($validated['dailyHours'] ?? [] as $dayConfig) {
+        foreach ($validated['dailyHours'] as $dayConfig) {
             $dayOfWeek = $dayConfig['dayOfWeek'] ?? null;
             $isEnabled = $dayConfig['isEnabled'] ?? false;
             $timeSlots = $dayConfig['timeSlots'] ?? [];
