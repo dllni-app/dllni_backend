@@ -16,7 +16,7 @@ final class OwnerNotificationsIndexRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'tab' => 'sometimes|string|in:all,orders,offers,system',
+            'tab' => 'sometimes|string|in:all,orders,inventory,offers,system',
             'unreadOnly' => 'sometimes|boolean',
             'perPage' => 'sometimes|integer|min:1|max:100',
             'page' => 'sometimes|integer|min:1',
