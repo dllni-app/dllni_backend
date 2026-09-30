@@ -201,6 +201,10 @@ final class RestaurantOwnerNotificationService
             return 'offers';
         }
 
+        if (str_contains($type, 'inventory') || str_contains($type, 'stock')) {
+            return 'inventory';
+        }
+
         if (str_contains($type, 'order')) {
             return 'orders';
         }
@@ -214,6 +218,7 @@ final class RestaurantOwnerNotificationService
         $tabCounts = [
             'all' => $items->count(),
             'orders' => $items->where('category', 'orders')->count(),
+            'inventory' => $items->where('category', 'inventory')->count(),
             'offers' => $items->where('category', 'offers')->count(),
             'system' => $items->where('category', 'system')->count(),
         ];
