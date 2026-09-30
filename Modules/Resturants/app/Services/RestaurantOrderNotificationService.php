@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Resturants\Services;
 
+use App\Models\User;
 use Illuminate\Support\Facades\Log;
 use Modules\Resturants\Models\Order;
 use Modules\Resturants\Notifications\RestaurantOrderLifecycleNotification;
@@ -13,7 +14,7 @@ final class RestaurantOrderNotificationService
 {
     public function notifyCreated(Order $order): void
     {
-        $order->loadMissing(['user', 'restaurant.user']);
+        $order->loadMissing(['user', 'restaurant.user', 'restaurant.staff.user']);
 
         $this->notifySafely(
             $order->user,
@@ -27,16 +28,12 @@ final class RestaurantOrderNotificationService
             'restaurant customer order-created notification'
         );
 
-        $this->notifySafely(
-            $order->restaurant?->user,
-            new RestaurantOrderLifecycleNotification(
-                order: $order,
-                targetRole: 'owner',
-                event: 'created',
-                toStatus: $this->statusValue($order),
-                actorRole: 'customer',
-            ),
-            'restaurant owner order-created notification'
+        $this->notifyRestaurantRecipients(
+            $order,
+            event: 'created',
+            fromStatus: null,
+            toStatus: $this->statusValue($order),
+            actorRole: 'customer',
         );
     }
 
@@ -46,7 +43,7 @@ final class RestaurantOrderNotificationService
             return;
         }
 
-        $order->loadMissing(['user', 'restaurant.user']);
+        $order->loadMissing(['user', 'restaurant.user', 'restaurant.staff.user']);
 
         $this->notifySafely(
             $order->user,
@@ -62,17 +59,60 @@ final class RestaurantOrderNotificationService
         );
 
         if ($actorRole !== 'owner') {
+            $this->notifyRestaurantRecipients(
+                $order,
+                event: 'status_changed',
+                fromStatus: $fromStatus,
+                toStatus: $toStatus,
+                actorRole: $actorRole,
+            );
+        }
+    }
+
+    private function notifyRestaurantRecipients(
+        Order $order,
+        string $event,
+        ?string $fromStatus,
+        string $toStatus,
+        string $actorRole,
+    ): void {
+        $restaurant = $order->restaurant;
+        if ($restaurant === null) {
+            return;
+        }
+
+        $owner = $restaurant->user;
+        $recipients = collect();
+
+        if ($owner instanceof User) {
+            $recipients->push($owner);
+        }
+
+        foreach ($restaurant->staff->where('is_active', true) as $staff) {
+            $staffUser = $staff->user;
+            if (! $staffUser instanceof User) {
+                continue;
+            }
+
+            if (! $staffUser->getAllPermissions()->pluck('name')->contains('ro.orders')) {
+                continue;
+            }
+
+            $recipients->push($staffUser);
+        }
+
+        foreach ($recipients->unique('id') as $recipient) {
             $this->notifySafely(
-                $order->restaurant?->user,
+                $recipient,
                 new RestaurantOrderLifecycleNotification(
                     order: $order,
                     targetRole: 'owner',
-                    event: 'status_changed',
+                    event: $event,
                     fromStatus: $fromStatus,
                     toStatus: $toStatus,
                     actorRole: $actorRole,
                 ),
-                'restaurant owner order-status notification'
+                'restaurant owner/staff order notification'
             );
         }
     }
