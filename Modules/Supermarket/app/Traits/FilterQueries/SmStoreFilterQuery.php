@@ -27,6 +27,7 @@ trait SmStoreFilterQuery
                 AllowedFilter::scope('trustScoreMin'),
                 AllowedFilter::scope('trustScoreMax'),
                 AllowedFilter::scope('openNow'),
+                AllowedFilter::scope('averageRatingMin'),
                 AllowedFilter::scope('search'),
             ])
             ->allowedSorts([
@@ -86,6 +87,15 @@ trait SmStoreFilterQuery
         }
 
         return $query->where('trust_score', '<=', $maxScore);
+    }
+
+    public function scopeAverageRatingMin(Builder $query, mixed $minimumRating): Builder
+    {
+        if ($minimumRating === null || ! is_numeric($minimumRating)) {
+            return $query;
+        }
+
+        return $query->where('average_rating', '>=', (float) $minimumRating);
     }
 
     public function scopeSearch(Builder $query, mixed $search): Builder
