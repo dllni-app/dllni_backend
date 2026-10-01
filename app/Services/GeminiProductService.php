@@ -217,26 +217,142 @@ final class GeminiProductService
         ];
     }
 
+    /**
+     * Interpret free-form user language into a structured smart-search intent.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function interpretSmartSearch(string $section, string $query, ?string $locale = 'ar'): ?array
+    {
+        $section = $section === 'restaurant' ? 'restaurant' : 'supermarket';
+
+        return $this->generateStructuredTextResponse(
+            prompt: $this->buildSmartSearchIntentPrompt($section, $locale),
+            responseSchema: $section === 'restaurant'
+                ? $this->restaurantSmartSearchResponseSchema()
+                : $this->supermarketSmartSearchResponseSchema(),
+            inputText: $query,
+            operation: __FUNCTION__,
+        );
+    }
+
+    private function buildSmartSearchIntentPrompt(string $section, ?string $locale): string
+    {
+        $language = $locale === 'en' ? 'English' : 'Arabic, including colloquial Levantine/Syrian Arabic';
+
+        if ($section === 'restaurant') {
+            return 'You are an intent parser for restaurant food search. Understand meaning, not keywords. '
+                .'Separate filler conversation from useful constraints. Preserve the requested food type: a meal is not '
+                .'a sandwich, a drink is not a dessert, and alternatives must not be promoted as exact matches. '
+                .'Extract negative constraints, restaurant/cuisine mentions, explicit numeric limits, and soft preferences. '
+                .'Use itemType values meal,sandwich,burger,pizza,dish,combo,family_meal,appetizer,side,salad,dessert,drink,breakfast,other or empty string. '
+                .'Use goal values find_food,find_restaurant,find_similar_food,browse. '
+                .'Return searchText containing only the meaningful food concepts, not filler. '
+                .'fastPreparation/lowPrice/highRating/nearby are soft preferences unless an explicit numeric constraint exists. '
+                .'Write normalized concepts in the user source language. Input language is '.$language.'.';
+        }
+
+        return 'You are an intent parser for supermarket shopping. Understand whether the user asks for direct products, '
+            .'a multi-product basket, ingredients to prepare a recipe/meal, a context basket, or a store. '
+            .'Do not treat "I want to prepare lasagna" as a request for ready-made lasagna; use goal prepare_recipe. '
+            .'Use goal values direct_product_search,multi_product_search,prepare_recipe,prepare_context,find_store,browse. '
+            .'For each explicitly requested product extract query, quantity and canonical unit when stated. '
+            .'Canonical units: kg,g,l,ml,piece,pack. Use 0 and empty string when quantity/unit are not stated. '
+            .'A store mention is preferred by default; storeStrict is true only for wording equivalent to "only from this store". '
+            .'sameStoreRequired is true only when the user requires everything from one store. '
+            .'For prepare_recipe, set recipeName and also provide inferredIngredients when you know the recipe; '
+            .'these are a fallback and a server recipe catalog remains authoritative. '
+            .'For prepare_context (breakfast, barbecue, party, school lunch, weekly stock, etc.), set contextName '
+            .'and provide a compact core basket in inferredIngredients, normally 5-10 useful items rather than an excessive list. '
+            .'Respect already-have and excluded ingredient statements. Input language is '.$language.'.';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function restaurantSmartSearchResponseSchema(): array
+    {
+        return [
+            'type' => 'OBJECT',
+            'properties' => [
+                'goal' => ['type' => 'STRING'],
+                'searchText' => ['type' => 'STRING'],
+                'itemType' => ['type' => 'STRING'],
+                'concepts' => ['type' => 'ARRAY', 'items' => ['type' => 'STRING']],
+                'attributes' => ['type' => 'ARRAY', 'items' => ['type' => 'STRING']],
+                'excludedAttributes' => ['type' => 'ARRAY', 'items' => ['type' => 'STRING']],
+                'excludedItemTypes' => ['type' => 'ARRAY', 'items' => ['type' => 'STRING']],
+                'restaurantName' => ['type' => 'STRING'],
+                'cuisine' => ['type' => 'STRING'],
+                'maxPrice' => ['type' => 'NUMBER'],
+                'maxPreparationMinutes' => ['type' => 'INTEGER'],
+                'minimumRating' => ['type' => 'NUMBER'],
+                'fastPreparation' => ['type' => 'BOOLEAN'],
+                'lowPrice' => ['type' => 'BOOLEAN'],
+                'highRating' => ['type' => 'BOOLEAN'],
+                'nearby' => ['type' => 'BOOLEAN'],
+                'confidence' => ['type' => 'NUMBER'],
+            ],
+            'required' => ['goal', 'searchText', 'concepts', 'attributes', 'excludedAttributes', 'excludedItemTypes', 'fastPreparation', 'lowPrice', 'highRating', 'nearby', 'confidence'],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function supermarketSmartSearchResponseSchema(): array
+    {
+        $item = [
+            'type' => 'OBJECT',
+            'properties' => [
+                'query' => ['type' => 'STRING'],
+                'quantity' => ['type' => 'NUMBER'],
+                'unit' => ['type' => 'STRING'],
+            ],
+            'required' => ['query', 'quantity', 'unit'],
+        ];
+
+        return [
+            'type' => 'OBJECT',
+            'properties' => [
+                'goal' => ['type' => 'STRING'],
+                'searchText' => ['type' => 'STRING'],
+                'preferredStoreName' => ['type' => 'STRING'],
+                'storeStrict' => ['type' => 'BOOLEAN'],
+                'sameStoreRequired' => ['type' => 'BOOLEAN'],
+                'recipeName' => ['type' => 'STRING'],
+                'contextName' => ['type' => 'STRING'],
+                'servings' => ['type' => 'INTEGER'],
+                'alreadyHave' => ['type' => 'ARRAY', 'items' => ['type' => 'STRING']],
+                'excludedIngredients' => ['type' => 'ARRAY', 'items' => ['type' => 'STRING']],
+                'items' => ['type' => 'ARRAY', 'items' => $item],
+                'inferredIngredients' => ['type' => 'ARRAY', 'items' => $item],
+                'confidence' => ['type' => 'NUMBER'],
+            ],
+            'required' => ['goal', 'searchText', 'storeStrict', 'sameStoreRequired', 'alreadyHave', 'excludedIngredients', 'items', 'inferredIngredients', 'confidence'],
+        ];
+    }
+
     private function buildProductPrompt(?string $locale): string
     {
         return 'You are a product catalog assistant. Analyze this product image and return a JSON object '
-            . 'with exactly two fields: "title" and "description". '
-            . 'The title should be short and suitable for use in a product list. '
-            . 'The description should be a concise marketing description in '
-            . ($locale === 'ar' ? 'Arabic' : 'the main language of the packaging')
-            . '. Do not include prices, sizes, or ingredients unless they are essential.';
+            .'with exactly two fields: "title" and "description". '
+            .'The title should be short and suitable for use in a product list. '
+            .'The description should be a concise marketing description in '
+            .($locale === 'ar' ? 'Arabic' : 'the main language of the packaging')
+            .'. Do not include prices, sizes, or ingredients unless they are essential.';
     }
 
     private function buildMenuPrompt(?string $locale): string
     {
         return 'You are digitizing a restaurant or supermarket menu from a photo. '
-            . 'Identify individual products or dishes and return them as structured JSON. '
-            . 'Return an object with a single field "items", which is an array of objects with '
-            . '"title" and "description" fields. '
-            . 'Do not include prices, allergens, or categories. '
-            . 'Write titles and descriptions in '
-            . ($locale === 'ar' ? 'Arabic' : 'the main language of the menu')
-            . '.';
+            .'Identify individual products or dishes and return them as structured JSON. '
+            .'Return an object with a single field "items", which is an array of objects with '
+            .'"title" and "description" fields. '
+            .'Do not include prices, allergens, or categories. '
+            .'Write titles and descriptions in '
+            .($locale === 'ar' ? 'Arabic' : 'the main language of the menu')
+            .'.';
     }
 
     private function buildImagePrompt(string $title, ?string $description): string
@@ -253,32 +369,32 @@ final class GeminiProductService
         }
 
         $promptLines[] = 'Create a simple compressed 512x512 catalog thumbnail style image. '
-            . 'Use one centered product only, a plain light studio background, soft lighting, minimal texture, '
-            . 'minimal shadows, and no extra props or decorative elements. '
-            . 'Avoid ultra-high detail, complex backgrounds, dense patterns, text, logos, and watermarks. '
-            . 'Prioritize a small file size and clear product recognition over poster-quality detail. '
-            . 'Use exact 1:1 aspect ratio.';
+            .'Use one centered product only, a plain light studio background, soft lighting, minimal texture, '
+            .'minimal shadows, and no extra props or decorative elements. '
+            .'Avoid ultra-high detail, complex backgrounds, dense patterns, text, logos, and watermarks. '
+            .'Prioritize a small file size and clear product recognition over poster-quality detail. '
+            .'Use exact 1:1 aspect ratio.';
 
         return implode(' ', $promptLines);
     }
 
     private function buildTextNormalizationPrompt(?string $locale, string $module): string
     {
-        $moduleInstruction = $module === 'resturant'
+        $moduleInstruction = in_array($module, ['restaurant', 'resturant'], true)
             ? 'Restaurant module: return prepared dishes or menu items exactly as a customer would order them. For example, "Grilled chicken" should remain "Grilled chicken". '
             : 'Supermarket module: return purchasable grocery products. When the input names a prepared dish or meal, expand it into the ingredients and preparation-kit products needed to make it instead of returning the dish name. For example, "Grilled chicken" should become items such as chicken, grilling spices, cooking oil, and relevant preparation products. ';
 
         return 'You normalize grocery and restaurant product text. '
-            . $moduleInstruction
-            . 'Given noisy free-form input, extract only product names and return canonical names as JSON. '
-            . 'Return one object with exactly one field: "items" (array of strings). '
-            . 'Remove quantities, units, numbers, and filler words. '
-            . 'Fix obvious misspellings when confidence is high. '
-            . 'Keep original language; for Arabic normalize variants to common market wording when possible. '
-            . 'Do not include duplicates and keep input order. '
-            . 'Output language should be '
-            . ($locale === 'en' ? 'English where source is English, otherwise source language' : 'source language, especially Arabic when input is Arabic')
-            . '.';
+            .$moduleInstruction
+            .'Given noisy free-form input, extract only product names and return canonical names as JSON. '
+            .'Return one object with exactly one field: "items" (array of strings). '
+            .'Remove quantities, units, numbers, and filler words. '
+            .'Fix obvious misspellings when confidence is high. '
+            .'Keep original language; for Arabic normalize variants to common market wording when possible. '
+            .'Do not include duplicates and keep input order. '
+            .'Output language should be '
+            .($locale === 'en' ? 'English where source is English, otherwise source language' : 'source language, especially Arabic when input is Arabic')
+            .'.';
     }
 
     /**
@@ -580,7 +696,7 @@ final class GeminiProductService
                 return $base64Image;
             }
 
-            if (strlen($optimizedBinary) >= strlen($binary)) {
+            if (mb_strlen($optimizedBinary) >= mb_strlen($binary)) {
                 return $base64Image;
             }
 
@@ -702,7 +818,7 @@ final class GeminiProductService
 
         if ($response->failed()) {
             throw new GeminiApiException(
-                "Gemini API error [{$response->status()}]: " . $response->body(),
+                "Gemini API error [{$response->status()}]: ".$response->body(),
                 $response->status(),
             );
         }

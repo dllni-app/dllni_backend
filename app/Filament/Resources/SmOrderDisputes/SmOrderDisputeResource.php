@@ -36,9 +36,24 @@ final class SmOrderDisputeResource extends Resource
 
     protected static bool $shouldRegisterNavigation = true;
 
+    public static function getNavigationGroup(): ?string
+    {
+        return \App\Filament\Support\AdminNavigationGroup::supermarkets();
+    }
+
     public static function getNavigationLabel(): string
     {
         return __('supermarket_admin.disputes');
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('admin_resources.supermarket_dispute.singular');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('admin_resources.supermarket_dispute.plural');
     }
 
     public static function getNavigationTooltip(): ?string

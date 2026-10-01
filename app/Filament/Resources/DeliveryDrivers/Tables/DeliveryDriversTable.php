@@ -34,6 +34,9 @@ final class DeliveryDriversTable
                 TextColumn::make('availability_status')
                     ->label('التوفر')
                     ->badge()
+                    ->formatStateUsing(fn (?string $state): string => $state !== null
+                        ? __('delivery_company.drivers.enums.availability.'.$state)
+                        : '—')
                     ->sortable(),
                 IconColumn::make('is_active')
                     ->label('نشط')
@@ -63,9 +66,10 @@ final class DeliveryDriversTable
                 SelectFilter::make('availability_status')
                     ->label('التوفر')
                     ->options([
-                        'online' => 'متصل',
-                        'offline' => 'غير متصل',
-                        'busy' => 'مشغول',
+                        'online' => __('delivery_company.drivers.enums.availability.online'),
+                        'available' => __('delivery_company.drivers.enums.availability.available'),
+                        'offline' => __('delivery_company.drivers.enums.availability.offline'),
+                        'busy' => __('delivery_company.drivers.enums.availability.busy'),
                     ]),
                 TernaryFilter::make('is_active')->label('نشط'),
                 TernaryFilter::make('is_suspended')->label('موقوف'),

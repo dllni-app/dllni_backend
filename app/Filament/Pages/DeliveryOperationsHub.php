@@ -10,6 +10,7 @@ use App\Filament\Resources\DeliveryCompanies\DeliveryCompanyResource;
 use App\Filament\Resources\DeliveryDisputes\DeliveryDisputeResource;
 use App\Filament\Resources\DeliveryDrivers\DeliveryDriverResource;
 use App\Filament\Resources\DeliveryOrders\DeliveryOrderResource;
+use App\Filament\Support\AdminDeliveryLabels;
 use App\Models\Dispute;
 use BackedEnum;
 use Filament\Pages\Page;
@@ -17,7 +18,6 @@ use Filament\Support\Icons\Heroicon;
 use Modules\Delivery\Enums\DeliveryOrderStatus;
 use Modules\Delivery\Models\DeliveryDriver;
 use Modules\Delivery\Models\DeliveryOrder;
-use UnitEnum;
 
 final class DeliveryOperationsHub extends Page
 {
@@ -27,11 +27,14 @@ final class DeliveryOperationsHub extends Page
 
     protected static ?string $navigationLabel = 'مركز عمليات التوصيل';
 
-    protected static string|UnitEnum|null $navigationGroup = 'قسم التوصيل';
-
     protected static ?int $navigationSort = 1;
 
     protected string $view = 'filament.pages.delivery-operations-hub';
+
+    public static function getNavigationGroup(): ?string
+    {
+        return \App\Filament\Support\AdminNavigationGroup::delivery();
+    }
 
     public static function canAccess(): bool
     {
@@ -110,7 +113,7 @@ final class DeliveryOperationsHub extends Page
             ->get()
             ->map(fn (DeliveryOrder $order): array => [
                 'label' => $order->order_number.' — '.($order->company?->name ?? 'بدون شركة'),
-                'meta' => 'مرحلة الإسناد: '.($order->dispatch_phase ?: '—'),
+                'meta' => 'مرحلة الإسناد: '.AdminDeliveryLabels::dispatchPhase($order->dispatch_phase),
                 'url' => DeliveryOrderResource::getUrl('view', ['record' => $order]),
                 'tone' => 'warning',
             ])

@@ -35,7 +35,7 @@ final class CreateDeliveryOrder extends CreateRecord
             ], auth()->id());
         } catch (InvalidArgumentException $exception) {
             Notification::make()
-                ->title($exception->getMessage())
+                ->title(\App\Filament\Support\AdminExceptionMessage::forUser($exception))
                 ->danger()
                 ->send();
 

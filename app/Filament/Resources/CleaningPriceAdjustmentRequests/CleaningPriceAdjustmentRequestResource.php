@@ -25,11 +25,11 @@ final class CleaningPriceAdjustmentRequestResource extends Resource
 
     protected static bool $shouldRegisterNavigation = false;
 
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 19;
 
     public static function getNavigationGroup(): ?string
     {
-        return __('cleaning_admin.nav_groups.operations');
+        return \App\Filament\Support\AdminNavigationGroup::cleaning();
     }
 
     public static function getNavigationLabel(): string

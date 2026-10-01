@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    'units' => [
+        'minutes' => 'min',
+        'kilometers' => 'km',
+    ],
     'nav_groups' => [
         'dashboard' => 'Dashboard',
         'operations' => 'Operations',
@@ -77,6 +81,11 @@ return [
             'delivery_failure_reason' => 'Delivery failure reason',
             'delivery_failed_at' => 'Return started at',
             'returned_to_merchant_at' => 'Returned to merchant at',
+            'attempt_no' => 'Attempt number',
+            'offered_at' => 'Offered at',
+            'expires_at' => 'Offer expires at',
+            'reject_reason' => 'Rejection reason',
+            'note' => 'Note',
         ],
         'actions' => [
             'create' => 'New order',
@@ -124,6 +133,24 @@ return [
                 'timed_out' => 'Timed out',
                 'cancelled' => 'Cancelled',
             ],
+            'dispatch_phase' => [
+                'radius' => 'Radius-based search',
+                'fallback' => 'Fallback driver search',
+            ],
+            'failure_code' => [
+                'CUSTOMER_UNAVAILABLE' => 'Customer unavailable',
+                'CUSTOMER_REFUSED' => 'Customer refused delivery',
+                'WRONG_ADDRESS' => 'Wrong address',
+                'PAYMENT_ISSUE' => 'Payment issue',
+                'UNSAFE_LOCATION' => 'Unsafe location',
+                'OTHER' => 'Other reason',
+            ],
+        ],
+        'system_notes' => [
+            'no_eligible_drivers' => 'No eligible drivers are currently available.',
+            'driver_pool_exhausted' => 'All eligible drivers rejected or timed out.',
+            'no_drivers_in_radius' => 'No drivers in the current radius; expanding search.',
+            'company_suspended' => 'Delivery company is suspended.',
         ],
     ],
     'drivers' => [
@@ -182,9 +209,14 @@ return [
         ],
         'enums' => [
             'availability' => [
+                'online' => 'Online',
                 'available' => 'Available',
                 'busy' => 'Busy',
                 'offline' => 'Offline',
+            ],
+            'vehicle_type' => [
+                'car' => 'Car',
+                'motorbike' => 'Motorbike',
             ],
         ],
     ],

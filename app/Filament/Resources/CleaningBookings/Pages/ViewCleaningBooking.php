@@ -267,7 +267,7 @@ final class ViewCleaningBooking extends ViewRecord
                                 ->update([
                                     'status' => CleaningBookingWorkerAssignmentStatus::Cancelled->value,
                                     'released_at' => $cancelledAt,
-                                    'released_reason' => 'Admin cancelled booking: '.$reason,
+                                    'released_reason' => 'ألغت الإدارة الحجز: '.$reason,
                                 ]);
 
                             $booking->sessions()

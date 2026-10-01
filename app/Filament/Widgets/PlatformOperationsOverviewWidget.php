@@ -49,7 +49,7 @@ final class PlatformOperationsOverviewWidget extends Widget
             $sections[] = [
                 'title' => 'المطاعم', 'tone' => 'primary', 'url' => RestaurantSectionHub::getUrl(),
                 'metrics' => [
-                    ['label' => 'طلبات pending', 'value' => $pending],
+                    ['label' => __('restaurant_admin.hub.kpis.pending_orders'), 'value' => $pending],
                     ['label' => 'تحضير متأخر', 'value' => $late],
                     ['label' => 'نزاعات مفتوحة', 'value' => $disputes],
                 ],

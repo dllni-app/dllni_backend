@@ -108,7 +108,7 @@ final class DeliveryOrdersTable
                                 ->send();
                         } catch (InvalidArgumentException $exception) {
                             Notification::make()
-                                ->title($exception->getMessage())
+                                ->title(\App\Filament\Support\AdminExceptionMessage::forUser($exception))
                                 ->danger()
                                 ->send();
                         }
@@ -146,7 +146,7 @@ final class DeliveryOrdersTable
                                 ->send();
                         } catch (InvalidArgumentException $exception) {
                             Notification::make()
-                                ->title($exception->getMessage())
+                                ->title(\App\Filament\Support\AdminExceptionMessage::forUser($exception))
                                 ->danger()
                                 ->send();
                         }

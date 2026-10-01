@@ -7,7 +7,6 @@ namespace Modules\Cleaning\Database\Seeders;
 use App\Models\CancellationPolicy;
 use App\Models\User;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Str;
 use Modules\Cleaning\Enums\EventBookingStatus;
 use Modules\Cleaning\Enums\EventType;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
@@ -20,9 +19,11 @@ final class EventBookingSeeder extends Seeder
         $customer = User::firstOrCreate(
             ['email' => 'event.customer@dllni.sy'],
             [
-                'name' => 'عميل المناسبات',
+                'name' => 'سارة عثمان',
+                'phone' => '+963944120191',
                 'password' => bcrypt('password'),
                 'email_verified_at' => now(),
+                'phone_verified_at' => now(),
             ]
         );
 
@@ -48,24 +49,19 @@ final class EventBookingSeeder extends Seeder
         $basePrices = [100.00, 200.00, 500.00];
         $travelFees = [10.00, 25.00, 50.00];
 
-        for ($i = 0; $i < 3; $i++) {
-            $scheduledDate = now()->addDays($i + 7);
+        foreach ($eventTypes as $i => $eventType) {
+            $scheduledDate = now()->startOfDay()->addDays($i + 7);
             $basePrice = $basePrices[$i];
             $travelFee = $travelFees[$i];
             $totalPrice = $basePrice + $travelFee;
 
-            $bookingNumber = 'EVT-'.mb_strtoupper(Str::random(6)).'-'.$i;
-            if (EventBooking::where('booking_number', $bookingNumber)->exists()) {
-                continue;
-            }
-
-            EventBooking::create([
+            EventBooking::updateOrCreate(['booking_number' => 'EVT-QA-'.mb_str_pad((string) ($i + 2001), 4, '0', STR_PAD_LEFT)], [
                 'customer_id' => $customer->id,
                 'cancellation_policy_id' => $cancellationPolicy?->id,
                 'billing_policy_id' => $billingPolicy->id,
-                'booking_number' => $bookingNumber,
+                'booking_number' => 'EVT-QA-'.mb_str_pad((string) ($i + 2001), 4, '0', STR_PAD_LEFT),
                 'status' => $statuses[$i],
-                'event_type' => $eventTypes[$i],
+                'event_type' => $eventType,
                 'guest_count_min' => $i === 0 ? 10 : 20,
                 'guest_count_max' => $i === 0 ? 25 : 50,
                 'gender_preference' => 'any',

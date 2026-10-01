@@ -1,0 +1,35 @@
+<?php
+
+declare(strict_types=1);
+
+return [
+    'cleaning_automation_rule' => ['singular' => 'Automation rule', 'plural' => 'Automation rules'],
+    'cleaning_billing_policy' => ['singular' => 'Billing policy', 'plural' => 'Billing policies'],
+    'cleaning_deposit_setting' => ['singular' => 'Deposit setting', 'plural' => 'Deposit settings', 'navigation' => 'Deposit settings'],
+    'cleaning_time_warning' => ['singular' => 'Time-end warning', 'plural' => 'Time-end warnings'],
+    'delivery_dispute' => ['singular' => 'Delivery dispute', 'plural' => 'Delivery disputes'],
+    'delivery_driver' => ['singular' => 'Delivery driver', 'plural' => 'Delivery drivers'],
+    'delivery_order' => ['singular' => 'Delivery order', 'plural' => 'Delivery orders'],
+    'event_booking' => ['singular' => 'Event booking', 'plural' => 'Event bookings'],
+    'master_product_category' => ['singular' => 'Master product category', 'plural' => 'Master product categories'],
+    'master_product' => ['singular' => 'Master product', 'plural' => 'Master products'],
+    'restaurant_order' => ['singular' => 'Restaurant order', 'plural' => 'Restaurant orders'],
+    'restaurant_dispute' => ['singular' => 'Restaurant order dispute', 'plural' => 'Restaurant disputes'],
+    'restaurant_inventory_item' => ['singular' => 'Restaurant inventory item', 'plural' => 'Restaurant inventory'],
+    'restaurant_offer' => ['singular' => 'Restaurant offer', 'plural' => 'Restaurant offers'],
+    'restaurant_owner' => ['singular' => 'Restaurant owner', 'plural' => 'Restaurant owners'],
+    'restaurant_product' => ['singular' => 'Restaurant product', 'plural' => 'Restaurant products'],
+    'restaurant_promo_code' => ['singular' => 'Restaurant promo code', 'plural' => 'Restaurant promo codes'],
+    'restaurant' => ['singular' => 'Restaurant', 'plural' => 'Restaurants'],
+    'supermarket_category' => ['singular' => 'Supermarket category', 'plural' => 'Supermarket categories'],
+    'supermarket_coupon' => ['singular' => 'Supermarket coupon', 'plural' => 'Supermarket coupons'],
+    'supermarket_offer' => ['singular' => 'Supermarket offer', 'plural' => 'Supermarket offers'],
+    'supermarket_dispute' => ['singular' => 'Supermarket order dispute', 'plural' => 'Supermarket disputes'],
+    'supermarket_product' => ['singular' => 'Supermarket product', 'plural' => 'Supermarket products'],
+    'supermarket_daily_stat' => ['singular' => 'Store daily statistic', 'plural' => 'Store daily statistics'],
+    'supermarket_document' => ['singular' => 'Store document', 'plural' => 'Store documents'],
+    'supermarket_trust_log' => ['singular' => 'Store trust log', 'plural' => 'Store trust logs'],
+    'supermarket_store' => ['singular' => 'Store', 'plural' => 'Stores'],
+    'supermarket_owner' => ['singular' => 'Supermarket owner', 'plural' => 'Supermarket owners'],
+    'travel_cost_config' => ['singular' => 'Travel cost rule', 'plural' => 'Travel cost rules'],
+];

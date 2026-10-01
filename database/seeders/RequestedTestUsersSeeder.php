@@ -20,28 +20,28 @@ final class RequestedTestUsersSeeder extends Seeder
      */
     private const USERS = [
         [
-            'name' => 'Cleaning Test User',
+            'name' => 'سليم حمدان',
             'phone' => '+963944100001',
             'email' => 'cleaning.worker@dllni.sy',
             'password' => 'password',
             'module_type' => UserModuleType::CleaningWorker,
         ],
         [
-            'name' => 'Restaurant Test User',
+            'name' => 'ميساء منصور',
             'phone' => '+963944100002',
             'email' => 'seller@dllni.sy',
             'password' => 'password',
             'module_type' => UserModuleType::RestaurantSeller,
         ],
         [
-            'name' => 'Supermarket Test User',
+            'name' => 'نادر الأطرش',
             'phone' => '+963944100003',
             'email' => 'supermarket.seller@dllni.sy',
             'password' => 'password',
             'module_type' => UserModuleType::SupermarketSeller,
         ],
         [
-            'name' => 'Delivery Test User',
+            'name' => 'فادي خليل',
             'phone' => self::DELIVERY_PHONE,
             'email' => 'mandoub.test@dllni.sy',
             'password' => 'secret123',
@@ -91,8 +91,8 @@ final class RequestedTestUsersSeeder extends Seeder
         $company = DeliveryCompany::updateOrCreate(
             ['owner_user_id' => $deliveryUser->id],
             [
-                'name' => 'Dllni Delivery',
-                'legal_name' => 'Dllni Delivery',
+                'name' => 'دليلني للتوصيل',
+                'legal_name' => 'شركة دليلني للتوصيل',
                 'phone' => self::DELIVERY_PHONE,
                 'is_active' => true,
                 'is_suspended' => false,
@@ -104,7 +104,7 @@ final class RequestedTestUsersSeeder extends Seeder
         DeliveryDriver::create([
             'user_id' => $deliveryUser->id,
             'company_id' => $company->id,
-            'first_name' => 'Delivery Test User',
+            'first_name' => 'فادي',
             'phone' => self::DELIVERY_PHONE,
             'availability_status' => DeliveryDriverAvailabilityStatus::Available->value,
             'is_active' => true,

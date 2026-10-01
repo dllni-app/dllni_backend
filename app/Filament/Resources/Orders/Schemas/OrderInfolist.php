@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Orders\Schemas;
 
 use App\Filament\Resources\DeliveryOrders\DeliveryOrderResource;
+use App\Filament\Support\AdminDeliveryLabels;
 use App\Filament\Support\AdminDeliveryTracking;
 use App\Filament\Support\SupportCaseInfolistSection;
 use Filament\Infolists\Components\RepeatableEntry;
@@ -203,9 +204,12 @@ final class OrderInfolist
                                 : '—'),
                         TextEntry::make('deliveryOrder.company.name')->label('شركة التوصيل')->placeholder('—'),
                         TextEntry::make('deliveryOrder.driver.first_name')->label('المندوب')->placeholder('غير معيّن'),
-                        TextEntry::make('deliveryOrder.dispatch_phase')->label('مرحلة الإسناد')->placeholder('—'),
+                        TextEntry::make('deliveryOrder.dispatch_phase')
+                            ->label('مرحلة الإسناد')
+                            ->formatStateUsing(fn (?string $state): string => AdminDeliveryLabels::dispatchPhase($state))
+                            ->placeholder('—'),
                         TextEntry::make('delivery_tracking_eta')
-                            ->label('ETA المستخدم')
+                            ->label('الوقت المتوقع للوصول المعتمد')
                             ->state(fn (Order $record): string => AdminDeliveryTracking::etaText($record->deliveryOrder))
                             ->badge()
                             ->color('info'),

@@ -43,7 +43,7 @@ final class CleaningWorkerArabicDataSeeder extends Seeder
         ],
         [
             'location_name' => 'شقة الفراتي',
-            'address' => 'الفراتي، بناء ٥',
+            'address' => 'الفراتي، بناء 5',
             'latitude' => 36.2021,
             'longitude' => 37.1343,
         ],
@@ -456,7 +456,7 @@ final class CleaningWorkerArabicDataSeeder extends Seeder
                     'dispute_id' => $dispute->id,
                     'sender_id' => $customerUser?->id ?? $worker->user_id,
                     'sender_type' => $customerUser ? 'customer' : 'worker',
-                    'body' => 'ا�"خد�.ة �"�. ت�f�? با�"�.ست�^�? ا�"�.ت�^�,ع�O �Sرج�? ا�"�.ساعدة ف�S ح�" ا�"�.ش�f�"ة.',
+                    'body' => 'الخدمة لم تكن بالمستوى المتوقع، أرجو مراجعة الصور والمساعدة في حل المشكلة.',
                 ]);
             }
 
@@ -475,19 +475,24 @@ final class CleaningWorkerArabicDataSeeder extends Seeder
     private function ensureArabicCustomers(): array
     {
         $users = [];
-        foreach (self::ARABIC_CUSTOMERS as $data) {
+        foreach (self::ARABIC_CUSTOMERS as $index => $data) {
+            $phone = '+9639443100'.mb_str_pad((string) ($index + 1), 2, '0', STR_PAD_LEFT);
+
             $user = User::firstOrCreate(
                 ['email' => $data['email']],
                 [
                     'name' => $data['name'],
-                    'phone' => '+9639'.mb_str_pad((string) fake()->unique()->numberBetween(1000000, 9999999), 7, '0'),
+                    'phone' => $phone,
                     'password' => bcrypt('password'),
                     'email_verified_at' => now(),
+                    'phone_verified_at' => now(),
                 ]
             );
 
             $user->forceFill([
                 'name' => $data['name'],
+                'phone' => $phone,
+                'phone_verified_at' => $user->phone_verified_at ?? now(),
             ])->save();
 
             SeederMedia::ensureSingleMedia(

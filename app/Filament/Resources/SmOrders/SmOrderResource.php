@@ -33,6 +33,11 @@ final class SmOrderResource extends Resource
 
     protected static bool $shouldRegisterNavigation = true;
 
+    public static function getNavigationGroup(): ?string
+    {
+        return \App\Filament\Support\AdminNavigationGroup::supermarkets();
+    }
+
     public static function getNavigationLabel(): string
     {
         return __('supermarket_admin.orders');

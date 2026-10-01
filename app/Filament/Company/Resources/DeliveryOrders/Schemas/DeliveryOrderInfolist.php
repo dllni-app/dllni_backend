@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Company\Resources\DeliveryOrders\Schemas;
 
+use App\Filament\Support\AdminDeliveryLabels;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
@@ -22,7 +23,7 @@ final class DeliveryOrderInfolist
                         TextEntry::make('status')
                             ->label(__('delivery_company.orders.fields.status'))
                             ->badge()
-                            ->formatStateUsing(fn (?string $state): string => self::statusLabel($state)),
+                            ->formatStateUsing(fn (?string $state): string => AdminDeliveryLabels::orderStatus($state)),
                         TextEntry::make('driver.first_name')
                             ->label(__('delivery_company.orders.fields.driver'))
                             ->placeholder('—'),
@@ -58,10 +59,11 @@ final class DeliveryOrderInfolist
                             ->placeholder('—'),
                         TextEntry::make('merchant_status')
                             ->label(__('delivery_company.orders.fields.merchant_status'))
+                            ->formatStateUsing(fn (?string $state, $record): string => AdminDeliveryLabels::merchantStatus($state, $record->source_type))
                             ->placeholder('—'),
                         TextEntry::make('estimated_preparation_minutes')
                             ->label(__('delivery_company.orders.fields.estimated_preparation_minutes'))
-                            ->suffix(' min')
+                            ->suffix(' '.__('delivery_company.units.minutes'))
                             ->placeholder('—'),
                         TextEntry::make('estimated_ready_at')
                             ->label(__('delivery_company.orders.fields.estimated_ready_at'))
@@ -76,8 +78,11 @@ final class DeliveryOrderInfolist
                 Section::make(__('delivery_company.orders.sections.dispatch'))
                     ->schema([
                         TextEntry::make('dispatch_wave')->label(__('delivery_company.orders.fields.dispatch_wave')),
-                        TextEntry::make('search_radius_km')->label(__('delivery_company.orders.fields.search_radius_km'))->suffix(' km')->placeholder('—'),
-                        TextEntry::make('dispatch_phase')->label(__('delivery_company.orders.fields.dispatch_phase'))->placeholder('—'),
+                        TextEntry::make('search_radius_km')->label(__('delivery_company.orders.fields.search_radius_km'))->suffix(' '.__('delivery_company.units.kilometers'))->placeholder('—'),
+                        TextEntry::make('dispatch_phase')
+                            ->label(__('delivery_company.orders.fields.dispatch_phase'))
+                            ->formatStateUsing(fn (?string $state): string => AdminDeliveryLabels::dispatchPhase($state))
+                            ->placeholder('—'),
                     ])
                     ->columns(3),
                 Section::make(__('delivery_company.orders.sections.customer'))
@@ -164,6 +169,7 @@ final class DeliveryOrderInfolist
                         TextEntry::make('delivery_failure_code')
                             ->label(__('delivery_company.orders.fields.delivery_failure_code'))
                             ->badge()
+                            ->formatStateUsing(fn (?string $state): string => AdminDeliveryLabels::failureCode($state))
                             ->placeholder('—'),
                         TextEntry::make('delivery_failure_reason')
                             ->label(__('delivery_company.orders.fields.delivery_failure_reason'))
@@ -189,9 +195,14 @@ final class DeliveryOrderInfolist
                             ->schema([
                                 TextEntry::make('to_status')
                                     ->label(__('delivery_company.orders.fields.status'))
-                                    ->formatStateUsing(fn (?string $state): string => self::statusLabel($state)),
-                                TextEntry::make('note')->placeholder('—'),
-                                TextEntry::make('created_at')->dateTime('Y-m-d H:i'),
+                                    ->formatStateUsing(fn (?string $state): string => AdminDeliveryLabels::orderStatus($state)),
+                                TextEntry::make('note')
+                                    ->label(__('delivery_company.orders.fields.note'))
+                                    ->formatStateUsing(fn (?string $state): string => AdminDeliveryLabels::note($state))
+                                    ->placeholder('—'),
+                                TextEntry::make('created_at')
+                                    ->label(__('delivery_company.orders.fields.created_at'))
+                                    ->dateTime('Y-m-d H:i'),
                             ])
                             ->columns(3),
                     ])
@@ -205,30 +216,21 @@ final class DeliveryOrderInfolist
                                     ->label(__('delivery_company.orders.fields.driver'))
                                     ->placeholder('—'),
                                 TextEntry::make('status')
+                                    ->label(__('delivery_company.orders.fields.status'))
                                     ->badge()
-                                    ->formatStateUsing(fn (?string $state): string => $state
-                                        ? __('delivery_company.orders.enums.attempt_status.'.$state)
-                                        : '—'),
-                                TextEntry::make('attempt_no')->label('#'),
+                                    ->formatStateUsing(fn (?string $state): string => AdminDeliveryLabels::attemptStatus($state)),
+                                TextEntry::make('attempt_no')->label(__('delivery_company.orders.fields.attempt_no')),
                                 TextEntry::make('distance_to_pickup_km')->label(__('delivery_company.orders.fields.distance_to_pickup_km')),
-                                TextEntry::make('offered_at')->dateTime('Y-m-d H:i')->placeholder('—'),
-                                TextEntry::make('expires_at')->dateTime('Y-m-d H:i')->placeholder('—'),
-                                TextEntry::make('reject_reason')->placeholder('—'),
+                                TextEntry::make('offered_at')->label(__('delivery_company.orders.fields.offered_at'))->dateTime('Y-m-d H:i')->placeholder('—'),
+                                TextEntry::make('expires_at')->label(__('delivery_company.orders.fields.expires_at'))->dateTime('Y-m-d H:i')->placeholder('—'),
+                                TextEntry::make('reject_reason')
+                                    ->label(__('delivery_company.orders.fields.reject_reason'))
+                                    ->formatStateUsing(fn (?string $state): string => AdminDeliveryLabels::note($state))
+                                    ->placeholder('—'),
                             ])
                             ->columns(3),
                     ])
                     ->visible(fn ($record): bool => $record->assignmentAttempts()->exists()),
             ]);
-    }
-
-    private static function statusLabel(?string $status): string
-    {
-        if ($status === null) {
-            return '—';
-        }
-
-        $key = 'delivery_company.orders.enums.status.'.$status;
-
-        return __($key) === $key ? $status : __($key);
     }
 }

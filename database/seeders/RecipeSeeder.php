@@ -6,6 +6,7 @@ namespace Database\Seeders;
 
 use App\Enums\MasterProductUnit;
 use App\Models\Recipe;
+use App\Models\RecipeAlias;
 use App\Models\RecipeIngredient;
 use Illuminate\Database\Seeder;
 
@@ -18,6 +19,7 @@ final class RecipeSeeder extends Seeder
             ['id' => 2, 'name' => 'كبسة دجاج', 'slug' => 'kabsa-chicken', 'description' => 'طبق أرز مع دجاج وتوابل', 'servings' => 5, 'is_active' => true],
             ['id' => 3, 'name' => 'سلطة خضار', 'slug' => 'vegetable-salad', 'description' => 'سلطة طازجة صحية', 'servings' => 2, 'is_active' => true],
             ['id' => 4, 'name' => 'معكرونة بالصلصة', 'slug' => 'pasta-red-sauce', 'description' => 'معكرونة بصلصة الطماطم', 'servings' => 3, 'is_active' => true],
+            ['id' => 5, 'name' => 'لازانيا باللحمة', 'slug' => 'lasagna-beef', 'description' => 'لازانيا منزلية باللحمة والجبنة وصلصة الطماطم', 'servings' => 6, 'is_active' => true],
         ];
 
         foreach ($recipes as $recipeData) {
@@ -37,7 +39,32 @@ final class RecipeSeeder extends Seeder
             ['id' => 7, 'recipe_id' => 3, 'master_product_id' => 7, 'quantity' => 200, 'unit' => MasterProductUnit::Gram, 'is_optional' => false],
             ['id' => 8, 'recipe_id' => 4, 'master_product_id' => 10, 'quantity' => 500, 'unit' => MasterProductUnit::Gram, 'is_optional' => false],
             ['id' => 9, 'recipe_id' => 4, 'master_product_id' => 6, 'quantity' => 250, 'unit' => MasterProductUnit::Gram, 'is_optional' => false],
+            ['id' => 10, 'recipe_id' => 5, 'master_product_id' => 23, 'quantity' => 500, 'unit' => MasterProductUnit::Gram, 'is_optional' => false],
+            ['id' => 11, 'recipe_id' => 5, 'master_product_id' => 24, 'quantity' => 0.75, 'unit' => MasterProductUnit::Kilogram, 'is_optional' => false],
+            ['id' => 12, 'recipe_id' => 5, 'master_product_id' => 25, 'quantity' => 680, 'unit' => MasterProductUnit::Gram, 'is_optional' => false],
+            ['id' => 13, 'recipe_id' => 5, 'master_product_id' => 26, 'quantity' => 0.25, 'unit' => MasterProductUnit::Kilogram, 'is_optional' => false],
+            ['id' => 14, 'recipe_id' => 5, 'master_product_id' => 8, 'quantity' => 400, 'unit' => MasterProductUnit::Gram, 'is_optional' => false],
+            ['id' => 15, 'recipe_id' => 5, 'master_product_id' => 1, 'quantity' => 1, 'unit' => MasterProductUnit::Liter, 'is_optional' => false],
+            ['id' => 16, 'recipe_id' => 5, 'master_product_id' => 22, 'quantity' => 100, 'unit' => MasterProductUnit::Gram, 'is_optional' => true],
+            ['id' => 17, 'recipe_id' => 5, 'master_product_id' => 27, 'quantity' => 100, 'unit' => MasterProductUnit::Gram, 'is_optional' => true],
         ];
+
+        $aliases = [
+            1 => ['بيتزا مارجريتا', 'مارغريتا', 'margherita pizza'],
+            2 => ['كبسة', 'كبسة دجاج', 'chicken kabsa'],
+            3 => ['سلطة', 'سلطة خضار'],
+            4 => ['معكرونة بالصلصة', 'باستا بالصلصة'],
+            5 => ['لازانيا', 'لزانية', 'لازانيا باللحمة', 'lasagna'],
+        ];
+
+        foreach ($aliases as $recipeId => $names) {
+            foreach ($names as $alias) {
+                RecipeAlias::firstOrCreate([
+                    'recipe_id' => $recipeId,
+                    'alias' => $alias,
+                ]);
+            }
+        }
 
         foreach ($ingredients as $ingredient) {
             RecipeIngredient::updateOrCreate(

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\DeliveryDrivers\Schemas;
 
+use App\Filament\Support\AdminDeliveryLabels;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
@@ -21,14 +22,20 @@ final class DeliveryDriverInfolist
                     TextEntry::make('phone')->label('الهاتف')->copyable()->placeholder('—'),
                     TextEntry::make('user.email')->label('البريد')->placeholder('—'),
                     TextEntry::make('company.name')->label('شركة التوصيل')->placeholder('—'),
-                    TextEntry::make('vehicle_type')->label('نوع المركبة')->placeholder('—'),
+                    TextEntry::make('vehicle_type')
+                        ->label('نوع المركبة')
+                        ->formatStateUsing(fn (?string $state): string => AdminDeliveryLabels::vehicleType($state))
+                        ->placeholder('—'),
                     TextEntry::make('plate_number')->label('رقم اللوحة')->placeholder('—'),
                 ])
                 ->columns(3),
 
             Section::make('الحالة والثقة')
                 ->schema([
-                    TextEntry::make('availability_status')->label('حالة التوفر')->badge(),
+                    TextEntry::make('availability_status')
+                        ->label('حالة التوفر')
+                        ->badge()
+                        ->formatStateUsing(fn (?string $state): string => AdminDeliveryLabels::driverAvailability($state)),
                     TextEntry::make('is_active')->label('نشط')->formatStateUsing(fn ($state): string => $state ? 'نعم' : 'لا'),
                     TextEntry::make('is_suspended')->label('موقوف')->formatStateUsing(fn ($state): string => $state ? 'نعم' : 'لا'),
                     TextEntry::make('suspension_reason')->label('سبب الإيقاف')->placeholder('—'),
@@ -69,7 +76,10 @@ final class DeliveryDriverInfolist
                         ->label('')
                         ->schema([
                             TextEntry::make('order_number')->label('الطلب'),
-                            TextEntry::make('status')->label('الحالة')->badge(),
+                            TextEntry::make('status')
+                                ->label('الحالة')
+                                ->badge()
+                                ->formatStateUsing(fn (?string $state): string => AdminDeliveryLabels::orderStatus($state)),
                             TextEntry::make('customer_name')->label('العميل'),
                             TextEntry::make('created_at')->label('الوقت')->dateTime('Y-m-d H:i'),
                         ])

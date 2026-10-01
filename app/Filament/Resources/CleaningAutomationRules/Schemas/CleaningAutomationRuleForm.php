@@ -16,23 +16,23 @@ final class CleaningAutomationRuleForm
     {
         return $schema
             ->components([
-                TextInput::make('name')->label('Name')->required(),
+                TextInput::make('name')->label(__('cleaning_admin.automation.fields.name'))->required(),
                 Select::make('type')
-                    ->label('Type')
+                    ->label(__('cleaning_admin.automation.fields.type'))
                     ->options([
-                        'suspend' => 'Suspend',
-                        'reward' => 'Reward',
+                        'suspend' => __('cleaning_admin.automation.types.suspend'),
+                        'reward' => __('cleaning_admin.automation.types.reward'),
                     ])
                     ->required(),
-                Toggle::make('is_active')->label('Active')->default(true),
+                Toggle::make('is_active')->label(__('cleaning_admin.automation.fields.is_active'))->default(true),
                 KeyValue::make('conditions')
-                    ->label('Conditions')
-                    ->keyLabel('Key')
-                    ->valueLabel('Value'),
+                    ->label(__('cleaning_admin.automation.fields.conditions'))
+                    ->keyLabel(__('cleaning_admin.automation.fields.key'))
+                    ->valueLabel(__('cleaning_admin.automation.fields.value')),
                 KeyValue::make('actions')
-                    ->label('Actions')
-                    ->keyLabel('Key')
-                    ->valueLabel('Value'),
+                    ->label(__('cleaning_admin.automation.fields.actions'))
+                    ->keyLabel(__('cleaning_admin.automation.fields.key'))
+                    ->valueLabel(__('cleaning_admin.automation.fields.value')),
             ]);
     }
 }

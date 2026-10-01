@@ -54,7 +54,7 @@ final class ViewDeliveryOrder extends ViewRecord
                             ->send();
                     } catch (InvalidArgumentException $exception) {
                         Notification::make()
-                            ->title($exception->getMessage())
+                            ->title(\App\Filament\Support\AdminExceptionMessage::forUser($exception))
                             ->danger()
                             ->send();
                     }
@@ -94,7 +94,7 @@ final class ViewDeliveryOrder extends ViewRecord
                             ->send();
                     } catch (InvalidArgumentException $exception) {
                         Notification::make()
-                            ->title($exception->getMessage())
+                            ->title(\App\Filament\Support\AdminExceptionMessage::forUser($exception))
                             ->danger()
                             ->send();
                     }

@@ -96,16 +96,16 @@
                     <span class="text-sm">{{ __('cleaning_admin.financial.fields.travel_markup_value') }}</span>
                     <div class="flex items-center gap-2">
                         <input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="travelMarkupValue">
-                        <span class="text-xs text-gray-500 dark:text-gray-400">{{ __('SYP') }}</span>
+                        <span class="text-xs text-gray-500 dark:text-gray-400">{{ __('cleaning_admin.financial.currency.syp') }}</span>
                     </div>
-                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ app()->isLocale('ar') ? 'يُحتسب بدل المواصلات تلقائياً لكل عامل ضمن تسعير الطلب،' : 'Transport allowance is calculated automatically for each worker in the order price.' }}</span>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ __('cleaning_admin.financial.hints.travel_worker_allowance') }}</span>
                     @error('travelMarkupValue') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
                 </label>
             @else
                 <label class="flex flex-col gap-1">
                     <span class="text-sm">{{ __('cleaning_admin.financial.fields.travel_per_km') }}</span>
                     <input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="travelPerKm">
-                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ app()->isLocale('ar') ? 'هذه القيمة هي أيضاً الحد الأدنى لرسوم التنقل؛ إذا كان حساب المسافة أقل منها يتم اعتماد هذه القيمة كحد أدنى.' : 'This value is also the minimum travel fee; shorter-distance calculations are raised to this minimum.' }}</span>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ __('cleaning_admin.financial.hints.travel_fixed_minimum') }}</span>
                     @error('travelPerKm') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
                 </label>
                 <div class="flex flex-col gap-1">
@@ -124,20 +124,18 @@
         </div>
     </x-filament::section>
 
-    <x-filament::section :heading="app()->isLocale('ar') ? 'تسعير المناسبات' : 'Event assistance pricing'">
+    <x-filament::section :heading="__('cleaning_admin.financial.sections.event_assistance')">
         <p class="mb-4 text-sm text-gray-500 dark:text-gray-400">
-            {{ app()->isLocale('ar')
-                ? 'حدد سعر الساعة للعامل الواحد في طلبات المناسبات. يحسب السعر الأساسي بضرب هذا السعر في عدد الساعات وعدد العاملين.'
-                : 'Set the hourly rate per worker for event assistance. Base price is this rate multiplied by booked hours and worker count.' }}
+            {{ __('cleaning_admin.financial.hints.event_assistance') }}
         </p>
         <div class="grid gap-4 md:grid-cols-2">
             <label class="flex flex-col gap-1">
-                <span class="text-sm">{{ app()->isLocale('ar') ? 'سعر الساعة للعامل الواحد' : 'Hourly rate per worker' }}</span>
+                <span class="text-sm">{{ __('cleaning_admin.financial.fields.event_assistance_hourly_rate_per_worker') }}</span>
                 <div class="flex items-center gap-2">
                     <input type="number" min="0.01" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="eventAssistanceHourlyRatePerWorker">
-                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ __('SYP') }}</span>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ __('cleaning_admin.financial.currency.syp') }}</span>
                 </div>
-                <span class="text-xs text-gray-500 dark:text-gray-400">{{ app()->isLocale('ar') ? 'القيمة الافتراضية 400 ل.س لكل عامل عن كل ساعة.' : 'Default: 400 SYP for each worker per booked hour.' }}</span>
+                <span class="text-xs text-gray-500 dark:text-gray-400">{{ __('cleaning_admin.financial.hints.event_assistance_default') }}</span>
                 @error('eventAssistanceHourlyRatePerWorker') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
             </label>
         </div>
@@ -147,7 +145,7 @@
         <p class="mb-4 text-sm text-gray-500 dark:text-gray-400">{{ __('cleaning_admin.financial.hints.time_extension') }}</p>
         <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             @foreach ($extensionRanges as $i => $range)
-                <label class="flex flex-col gap-1 rounded-xl border border-gray-200 p-3 dark:border-gray-700"><span class="text-sm font-medium">{{ __('cleaning_admin.financial.extension.range_label', ['start' => $range['start'], 'end' => $range['end']]) }}</span><div class="flex items-center gap-2"><input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="extensionRanges.{{ $i }}.price"><span class="text-xs text-gray-500 dark:text-gray-400">{{ __('SYP') }}</span></div>@error('extensionRanges.'.$i.'.price') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror</label>
+                <label class="flex flex-col gap-1 rounded-xl border border-gray-200 p-3 dark:border-gray-700"><span class="text-sm font-medium">{{ __('cleaning_admin.financial.extension.range_label', ['start' => $range['start'], 'end' => $range['end']]) }}</span><div class="flex items-center gap-2"><input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="extensionRanges.{{ $i }}.price"><span class="text-xs text-gray-500 dark:text-gray-400">{{ __('cleaning_admin.financial.currency.syp') }}</span></div>@error('extensionRanges.'.$i.'.price') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror</label>
             @endforeach
         </div>
     </x-filament::section>
@@ -158,7 +156,7 @@
                 <span class="text-sm">{{ __('cleaning_admin.financial.fields.user_cancellation_fee') }}</span>
                 <div class="flex items-center gap-2">
                     <input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="userCancellationFee">
-                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ __('SYP') }}</span>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ __('cleaning_admin.financial.currency.syp') }}</span>
                 </div>
                 <span class="text-xs text-gray-500 dark:text-gray-400">{{ __('cleaning_admin.financial.hints.user_cancellation_fee') }}</span>
                 @error('userCancellationFee') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror
@@ -168,10 +166,10 @@
 
     <x-filament::section :heading="__('cleaning_admin.financial.sections.worker_finance')">
         <div class="grid gap-4 md:grid-cols-2">
-            <label class="flex flex-col gap-1"><span class="text-sm">{{ app()->isLocale('ar') ? 'الحد الأدنى المطلوب للإيداع' : 'Minimum required deposit' }}</span><input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="minimumDepositAmount"><span class="text-xs text-gray-500 dark:text-gray-400">{{ app()->isLocale('ar') ? 'القيمة التي يجب أن يمتلكها العامل في رصيد الإيداع حتى يكون حسابه فعالاً عند العمل بالإيداع.' : 'The deposit balance required for workers who operate using their own deposit.' }}</span>@error('minimumDepositAmount') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror</label>
-            <label class="flex flex-col gap-1"><span class="text-sm">{{ app()->isLocale('ar') ? 'نسبة تحذير حد السماح' : 'Allowance warning threshold (%)' }}</span><input type="number" min="0" max="100" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="allowanceWarningThresholdPercent"><span class="text-xs text-gray-500 dark:text-gray-400">{{ app()->isLocale('ar') ? 'تظهر رسالة تحذير للعامل عندما يتبقى من حد السماح هذه النسبة أو أقل. القيمة الافتراضية 10%.' : 'Warn workers when their remaining allowance reaches this percentage or less. Default is 10%.' }}</span>@error('allowanceWarningThresholdPercent') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror</label>
+            <label class="flex flex-col gap-1"><span class="text-sm">{{ __('cleaning_admin.financial.fields.minimum_deposit_amount') }}</span><input type="number" min="0" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="minimumDepositAmount"><span class="text-xs text-gray-500 dark:text-gray-400">{{ __('cleaning_admin.financial.hints.minimum_deposit_amount') }}</span>@error('minimumDepositAmount') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror</label>
+            <label class="flex flex-col gap-1"><span class="text-sm">{{ __('cleaning_admin.financial.fields.allowance_warning_threshold_percent') }}</span><input type="number" min="0" max="100" step="0.01" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="allowanceWarningThresholdPercent"><span class="text-xs text-gray-500 dark:text-gray-400">{{ __('cleaning_admin.financial.hints.allowance_warning_threshold_percent') }}</span>@error('allowanceWarningThresholdPercent') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror</label>
             <label class="flex flex-col gap-1"><span class="text-sm">{{ __('cleaning_admin.financial.fields.trust_reject_after_accept_penalty') }}</span><input type="number" min="0" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="trustRejectAfterAcceptPenalty"><span class="text-xs text-gray-500 dark:text-gray-400">{{ __('cleaning_admin.financial.hints.trust_reject_after_accept_penalty') }}</span>@error('trustRejectAfterAcceptPenalty') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror</label>
-            <label class="flex flex-col gap-1"><span class="text-sm">{{ __('cleaning_admin.financial.fields.trust_minimum_for_dispatch') }}</span><input type="number" min="0" max="100" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="trustMinimumForDispatch"><span class="text-xs text-gray-500 dark:text-gray-400">أدنى درجة ثقة يجب أن يملكها العامل حتى يدخل ضمن قائمة العاملين المؤهلين لإرسال الطلبات.</span>@error('trustMinimumForDispatch') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror</label>
+            <label class="flex flex-col gap-1"><span class="text-sm">{{ __('cleaning_admin.financial.fields.trust_minimum_for_dispatch') }}</span><input type="number" min="0" max="100" class="fi-input block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800" wire:model.live="trustMinimumForDispatch"><span class="text-xs text-gray-500 dark:text-gray-400">{{ __('cleaning_admin.financial.hints.trust_minimum_for_dispatch') }}</span>@error('trustMinimumForDispatch') <span class="text-xs text-danger-600">{{ $message }}</span> @enderror</label>
         </div>
     </x-filament::section>
 

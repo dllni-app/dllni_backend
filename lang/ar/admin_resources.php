@@ -1,0 +1,35 @@
+<?php
+
+declare(strict_types=1);
+
+return [
+    'cleaning_automation_rule' => ['singular' => 'قاعدة أتمتة', 'plural' => 'قواعد الأتمتة'],
+    'cleaning_billing_policy' => ['singular' => 'سياسة فوترة', 'plural' => 'سياسات الفوترة'],
+    'cleaning_deposit_setting' => ['singular' => 'إعداد تأمين', 'plural' => 'إعدادات التأمينات', 'navigation' => 'إعدادات التأمينات'],
+    'cleaning_time_warning' => ['singular' => 'تنبيه نهاية وقت', 'plural' => 'تنبيهات نهاية الوقت'],
+    'delivery_dispute' => ['singular' => 'نزاع توصيل', 'plural' => 'نزاعات التوصيل'],
+    'delivery_driver' => ['singular' => 'مندوب توصيل', 'plural' => 'مناديب التوصيل'],
+    'delivery_order' => ['singular' => 'طلب توصيل', 'plural' => 'طلبات التوصيل'],
+    'event_booking' => ['singular' => 'حجز مناسبة', 'plural' => 'حجوزات المناسبات'],
+    'master_product_category' => ['singular' => 'تصنيف منتج مرجعي', 'plural' => 'تصنيفات المنتجات المرجعية'],
+    'master_product' => ['singular' => 'منتج مرجعي', 'plural' => 'المنتجات المرجعية'],
+    'restaurant_order' => ['singular' => 'طلب مطعم', 'plural' => 'طلبات المطاعم'],
+    'restaurant_dispute' => ['singular' => 'نزاع طلب مطعم', 'plural' => 'نزاعات المطاعم'],
+    'restaurant_inventory_item' => ['singular' => 'عنصر مخزون مطعم', 'plural' => 'مخزون المطاعم'],
+    'restaurant_offer' => ['singular' => 'عرض مطعم', 'plural' => 'عروض المطاعم'],
+    'restaurant_owner' => ['singular' => 'مالك مطعم', 'plural' => 'مالكو المطاعم'],
+    'restaurant_product' => ['singular' => 'منتج مطعم', 'plural' => 'منتجات المطاعم'],
+    'restaurant_promo_code' => ['singular' => 'كوبون مطعم', 'plural' => 'كوبونات المطاعم'],
+    'restaurant' => ['singular' => 'مطعم', 'plural' => 'المطاعم'],
+    'supermarket_category' => ['singular' => 'تصنيف سوبرماركت', 'plural' => 'تصنيفات السوبرماركت'],
+    'supermarket_coupon' => ['singular' => 'كوبون سوبرماركت', 'plural' => 'كوبونات السوبرماركت'],
+    'supermarket_offer' => ['singular' => 'عرض سوبرماركت', 'plural' => 'عروض السوبرماركت'],
+    'supermarket_dispute' => ['singular' => 'نزاع طلب سوبرماركت', 'plural' => 'نزاعات السوبرماركت'],
+    'supermarket_product' => ['singular' => 'منتج سوبرماركت', 'plural' => 'منتجات السوبرماركت'],
+    'supermarket_daily_stat' => ['singular' => 'إحصائية يومية للمتجر', 'plural' => 'الإحصاءات اليومية للمتاجر'],
+    'supermarket_document' => ['singular' => 'وثيقة متجر', 'plural' => 'وثائق المتاجر'],
+    'supermarket_trust_log' => ['singular' => 'سجل ثقة متجر', 'plural' => 'سجل ثقة المتاجر'],
+    'supermarket_store' => ['singular' => 'متجر', 'plural' => 'المتاجر'],
+    'supermarket_owner' => ['singular' => 'مالك سوبرماركت', 'plural' => 'مالكو السوبرماركت'],
+    'travel_cost_config' => ['singular' => 'قاعدة تكلفة تنقل', 'plural' => 'قواعد تكلفة التنقل'],
+];

@@ -16,9 +16,14 @@ final class UserNormalizeProductTextController
 
     public function __invoke(UserNormalizeProductTextRequest $request): JsonResponse
     {
+        $module = (string) $request->validated('module');
+        if ($module === 'resturant') {
+            $module = 'restaurant';
+        }
+
         $normalized = $this->gemini->normalizeProductListText(
             inputText: (string) $request->validated('text'),
-            module: (string) $request->validated('module'),
+            module: $module,
             locale: $request->validated('locale'),
         );
 

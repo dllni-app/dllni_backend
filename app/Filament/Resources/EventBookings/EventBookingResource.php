@@ -30,12 +30,22 @@ final class EventBookingResource extends Resource
 
     public static function getNavigationGroup(): ?string
     {
-        return __('cleaning_admin.nav_groups.operations');
+        return \App\Filament\Support\AdminNavigationGroup::cleaning();
     }
 
     public static function getNavigationLabel(): string
     {
         return __('cleaning_admin.event_bookings.nav_label');
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('admin_resources.event_booking.singular');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('admin_resources.event_booking.plural');
     }
 
     public static function getNavigationTooltip(): ?string

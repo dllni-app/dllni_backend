@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\DeliveryOrders\Tables;
 
+use App\Filament\Support\AdminDeliveryLabels;
 use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Textarea;
@@ -63,6 +64,7 @@ final class DeliveryOrdersTable
                 TextColumn::make('dispatch_phase')
                     ->label('مرحلة الإسناد')
                     ->badge()
+                    ->formatStateUsing(fn (?string $state): string => AdminDeliveryLabels::dispatchPhase($state))
                     ->placeholder('—')
                     ->toggleable(),
                 TextColumn::make('distance_km')
@@ -131,7 +133,7 @@ final class DeliveryOrdersTable
                                 ->send();
                         } catch (InvalidArgumentException $exception) {
                             Notification::make()
-                                ->title($exception->getMessage())
+                                ->title(\App\Filament\Support\AdminExceptionMessage::forUser($exception))
                                 ->danger()
                                 ->send();
                         }
@@ -166,7 +168,7 @@ final class DeliveryOrdersTable
                                 ->send();
                         } catch (InvalidArgumentException $exception) {
                             Notification::make()
-                                ->title($exception->getMessage())
+                                ->title(\App\Filament\Support\AdminExceptionMessage::forUser($exception))
                                 ->danger()
                                 ->send();
                         }

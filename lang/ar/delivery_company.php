@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    'units' => [
+        'minutes' => 'دقيقة',
+        'kilometers' => 'كم',
+    ],
     'nav_groups' => [
         'dashboard' => 'لوحة التحكم',
         'operations' => 'العمليات',
@@ -77,6 +81,11 @@ return [
             'delivery_failure_reason' => 'سبب تعذر التسليم',
             'delivery_failed_at' => 'وقت بدء الإرجاع',
             'returned_to_merchant_at' => 'وقت إعادة الطلب للمتجر',
+            'attempt_no' => 'رقم المحاولة',
+            'offered_at' => 'وقت العرض',
+            'expires_at' => 'انتهاء العرض',
+            'reject_reason' => 'سبب الرفض',
+            'note' => 'الملاحظة',
         ],
         'actions' => [
             'create' => 'طلب جديد',
@@ -124,6 +133,24 @@ return [
                 'timed_out' => 'انتهى الوقت',
                 'cancelled' => 'ملغى',
             ],
+            'dispatch_phase' => [
+                'radius' => 'بحث حسب النطاق الجغرافي',
+                'fallback' => 'بحث احتياطي عن مندوب',
+            ],
+            'failure_code' => [
+                'CUSTOMER_UNAVAILABLE' => 'العميل غير متاح',
+                'CUSTOMER_REFUSED' => 'العميل رفض الاستلام',
+                'WRONG_ADDRESS' => 'العنوان غير صحيح',
+                'PAYMENT_ISSUE' => 'مشكلة في الدفع',
+                'UNSAFE_LOCATION' => 'موقع التسليم غير آمن',
+                'OTHER' => 'سبب آخر',
+            ],
+        ],
+        'system_notes' => [
+            'no_eligible_drivers' => 'لا يوجد مناديب مؤهلون متاحون حالياً.',
+            'driver_pool_exhausted' => 'رفض جميع المندوبين المؤهلين العرض أو انتهت مهلة الرد.',
+            'no_drivers_in_radius' => 'لا يوجد مناديب ضمن نطاق البحث الحالي؛ جارٍ توسيع النطاق.',
+            'company_suspended' => 'شركة التوصيل موقوفة.',
         ],
     ],
     'drivers' => [
@@ -182,9 +209,14 @@ return [
         ],
         'enums' => [
             'availability' => [
+                'online' => 'متصل',
                 'available' => 'متاح',
                 'busy' => 'مشغول',
                 'offline' => 'غير متصل',
+            ],
+            'vehicle_type' => [
+                'car' => 'سيارة',
+                'motorbike' => 'دراجة نارية',
             ],
         ],
     ],

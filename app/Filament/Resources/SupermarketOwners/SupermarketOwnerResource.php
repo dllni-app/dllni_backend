@@ -35,12 +35,22 @@ final class SupermarketOwnerResource extends Resource
 
     public static function getNavigationGroup(): ?string
     {
-        return 'قسم المتاجر';
+        return \App\Filament\Support\AdminNavigationGroup::supermarkets();
     }
 
     public static function getNavigationLabel(): string
     {
         return 'مالكو المتاجر';
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('admin_resources.supermarket_owner.singular');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('admin_resources.supermarket_owner.plural');
     }
 
     public static function form(Schema $schema): Schema

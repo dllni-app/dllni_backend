@@ -25,21 +25,35 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Modules\Resturants\Models\Product;
-use UnitEnum;
 
 final class RestaurantProductResource extends Resource
 {
     use AuthorizesPlatformAdminResource;
 
+    protected static ?int $navigationSort = 5;
+
     protected static ?string $model = Product::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCube;
 
-    protected static string|UnitEnum|null $navigationGroup = 'قسم المطاعم';
-
     protected static ?string $navigationLabel = 'منتجات المطاعم';
 
     protected static bool $shouldRegisterNavigation = false;
+
+    public static function getNavigationGroup(): ?string
+    {
+        return \App\Filament\Support\AdminNavigationGroup::restaurants();
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('admin_resources.restaurant_product.singular');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('admin_resources.restaurant_product.plural');
+    }
 
     public static function table(Table $table): Table
     {

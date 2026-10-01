@@ -35,6 +35,7 @@ final class NotificationPayloadBuilder
         $normalizedExtraData = $this->normalizeExtraData($extraData);
 
         return [
+            ...$normalizedExtraData,
             'type' => $legacyType,
             'canonical_type' => $canonicalType,
             'canonicalType' => $canonicalType,
@@ -46,7 +47,6 @@ final class NotificationPayloadBuilder
             'body' => $copy['body'],
             'message' => $copy['body'],
             'data' => $normalizedExtraData,
-            ...$normalizedExtraData,
         ];
     }
 

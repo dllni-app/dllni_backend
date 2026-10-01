@@ -26,24 +26,79 @@ final class RestaurantOwnerResource extends Resource
 {
     use AuthorizesPlatformAdminResource;
 
-    protected static ?string $model=User::class;
-    protected static string|BackedEnum|null $navigationIcon=Heroicon::OutlinedBuildingStorefront;
-    protected static ?int $navigationSort=31;
+    protected static ?string $model = User::class;
 
-    public static function getNavigationGroup():?string{return 'قسم المطاعم';}
-    public static function getNavigationLabel():string{return 'مالكو المطاعم';}
-    public static function form(Schema $schema):Schema{return RestaurantOwnerForm::configure($schema);}
-    public static function infolist(Schema $schema):Schema{return UserInfolist::configure($schema);}
-    public static function table(Table $table):Table{return UsersTable::configure($table);}
-    public static function getEloquentQuery():Builder{return parent::getEloquentQuery()->where('module_type',UserModuleType::RestaurantSeller);}
-    public static function canViewAny():bool{return self::dashboardAllowed('restaurants.view');}
-    public static function canView(Model $record):bool{return self::dashboardAllowed('restaurants.view');}
-    public static function canCreate():bool{return self::dashboardAllowed('restaurants.create');}
-    public static function canEdit(Model $record):bool{return self::dashboardAllowed('restaurants.update');}
-    public static function canDelete(Model $record):bool{return self::dashboardAllowed('restaurants.delete');}
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBuildingStorefront;
 
-    public static function getPages():array
+    protected static ?int $navigationSort = 31;
+
+    public static function getNavigationGroup(): ?string
     {
-        return ['index'=>ListRestaurantOwners::route('/'),'create'=>CreateRestaurantOwner::route('/create'),'view'=>ViewRestaurantOwner::route('/{record}'),'edit'=>EditRestaurantOwner::route('/{record}/edit')];
+        return \App\Filament\Support\AdminNavigationGroup::restaurants();
+    }
+
+    public static function getNavigationLabel(): string
+    {
+        return 'مالكو المطاعم';
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('admin_resources.restaurant_owner.singular');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('admin_resources.restaurant_owner.plural');
+    }
+
+    public static function form(Schema $schema): Schema
+    {
+        return RestaurantOwnerForm::configure($schema);
+    }
+
+    public static function infolist(Schema $schema): Schema
+    {
+        return UserInfolist::configure($schema);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return UsersTable::configure($table);
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->where('module_type', UserModuleType::RestaurantSeller);
+    }
+
+    public static function canViewAny(): bool
+    {
+        return self::dashboardAllowed('restaurants.view');
+    }
+
+    public static function canView(Model $record): bool
+    {
+        return self::dashboardAllowed('restaurants.view');
+    }
+
+    public static function canCreate(): bool
+    {
+        return self::dashboardAllowed('restaurants.create');
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return self::dashboardAllowed('restaurants.update');
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return self::dashboardAllowed('restaurants.delete');
+    }
+
+    public static function getPages(): array
+    {
+        return ['index' => ListRestaurantOwners::route('/'), 'create' => CreateRestaurantOwner::route('/create'), 'view' => ViewRestaurantOwner::route('/{record}'), 'edit' => EditRestaurantOwner::route('/{record}/edit')];
     }
 }

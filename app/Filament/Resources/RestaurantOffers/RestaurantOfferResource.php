@@ -24,21 +24,35 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Modules\Resturants\Enums\DiscountType;
 use Modules\Resturants\Models\Offer;
-use UnitEnum;
 
 final class RestaurantOfferResource extends Resource
 {
     use AuthorizesPlatformAdminResource;
 
+    protected static ?int $navigationSort = 7;
+
     protected static ?string $model = Offer::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTag;
 
-    protected static string|UnitEnum|null $navigationGroup = 'قسم المطاعم';
-
     protected static ?string $navigationLabel = 'عروض المطاعم';
 
     protected static bool $shouldRegisterNavigation = false;
+
+    public static function getNavigationGroup(): ?string
+    {
+        return \App\Filament\Support\AdminNavigationGroup::restaurants();
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('admin_resources.restaurant_offer.singular');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('admin_resources.restaurant_offer.plural');
+    }
 
     public static function table(Table $table): Table
     {

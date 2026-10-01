@@ -2,10 +2,11 @@
 
 declare(strict_types=1);
 
-use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\AppDownloadController;
+use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\CancellationPolicyController;
 use App\Http\Controllers\API\DisputeController;
+use App\Http\Controllers\API\InternalAiCatalogController;
 use App\Http\Controllers\API\ServiceAddonController;
 use App\Http\Controllers\API\SupportCaseController;
 use App\Http\Controllers\API\SystemAlertController;
@@ -17,10 +18,21 @@ use App\Http\Controllers\API\WorkerController;
 use App\Http\Controllers\DeepLinks\OpenDeepLinkController;
 use App\Http\Controllers\DeepLinks\ResolveDeepLinkController;
 use App\Http\Controllers\DeepLinks\TrackDeepLinkEventController;
+use App\Http\Middleware\EnsureDallelniAiToken;
 use Illuminate\Support\Facades\Route;
 use Modules\User\Http\Controllers\API\UserPopularSearchesController;
 
 Route::post('login', [UserAuthController::class, 'login']);
+
+Route::middleware(EnsureDallelniAiToken::class)
+    ->prefix('internal/ai/catalog')
+    ->group(function (): void {
+        Route::get('restaurants', [InternalAiCatalogController::class, 'restaurants']);
+        Route::get('restaurant-products', [InternalAiCatalogController::class, 'restaurantProducts']);
+        Route::get('supermarket-stores', [InternalAiCatalogController::class, 'supermarketStores']);
+        Route::get('supermarket-products', [InternalAiCatalogController::class, 'supermarketProducts']);
+    });
+
 Route::middleware(['auth:sanctum'])->post('logout', [UserAuthController::class, 'logout']);
 
 Route::prefix('dashboard')->group(function (): void {

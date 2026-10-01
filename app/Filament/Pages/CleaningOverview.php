@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Filament\Pages;
 
-use App\Enums\DisputeStatus;
 use App\Enums\AlertType;
+use App\Enums\DisputeStatus;
 use App\Enums\SOSStatus;
 use App\Enums\SystemAlertStatus;
 use App\Filament\Resources\CleaningBanners\CleaningBannerResource;
@@ -19,10 +19,10 @@ use App\Models\SystemAlert;
 use BackedEnum;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
-use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Modules\Cleaning\Enums\CleaningBookingStatus;
 use Modules\Cleaning\Enums\EventBookingStatus;
 use Modules\Cleaning\Models\CleaningBanner;
@@ -43,7 +43,7 @@ final class CleaningOverview extends Page
 
     public static function getNavigationGroup(): ?string
     {
-        return __('cleaning_admin.nav_groups.operations');
+        return \App\Filament\Support\AdminNavigationGroup::cleaning();
     }
 
     public static function getNavigationLabel(): string
@@ -317,9 +317,18 @@ final class CleaningOverview extends Page
         ];
     }
 
+    public function resolveAlert(int $id): void
+    {
+        $alert = SystemAlert::query()->find($id);
+        if ($alert) {
+            $alert->update(['status' => SystemAlertStatus::Resolved]);
+            Notification::make()->title(__('cleaning_admin.overview_alerts.resolved'))->success()->send();
+        }
+    }
+
     private function translateEnumValue(string $translationPrefix, string $key): string
     {
-        $translationKey = $translationPrefix . $key;
+        $translationKey = $translationPrefix.$key;
         $translated = __($translationKey);
 
         if ($translated === $translationKey) {
@@ -425,14 +434,5 @@ final class CleaningOverview extends Page
             'max' => max(1, $maxBookings, $maxAlerts),
             'days' => $days->all(),
         ];
-    }
-
-    public function resolveAlert(int $id): void
-    {
-        $alert = SystemAlert::query()->find($id);
-        if ($alert) {
-            $alert->update(['status' => \App\Enums\SystemAlertStatus::Resolved]);
-            Notification::make()->title(__('cleaning_admin.overview_alerts.resolved'))->success()->send();
-        }
     }
 }

@@ -23,21 +23,35 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Modules\Resturants\Enums\DiscountType;
 use Modules\Resturants\Models\PromoCode;
-use UnitEnum;
 
 final class RestaurantPromoCodeResource extends Resource
 {
     use AuthorizesPlatformAdminResource;
 
+    protected static ?int $navigationSort = 8;
+
     protected static ?string $model = PromoCode::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTicket;
 
-    protected static string|UnitEnum|null $navigationGroup = 'قسم المطاعم';
-
     protected static ?string $navigationLabel = 'كوبونات المطاعم';
 
     protected static bool $shouldRegisterNavigation = false;
+
+    public static function getNavigationGroup(): ?string
+    {
+        return \App\Filament\Support\AdminNavigationGroup::restaurants();
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('admin_resources.restaurant_promo_code.singular');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('admin_resources.restaurant_promo_code.plural');
+    }
 
     public static function table(Table $table): Table
     {

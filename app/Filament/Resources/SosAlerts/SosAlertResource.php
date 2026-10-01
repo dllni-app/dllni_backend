@@ -25,7 +25,7 @@ final class SosAlertResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedExclamationTriangle;
 
-    protected static ?int $navigationSort = 5;
+    protected static ?int $navigationSort = 6;
 
     public static function shouldRegisterNavigation(): bool
     {
@@ -34,7 +34,7 @@ final class SosAlertResource extends Resource
 
     public static function getNavigationGroup(): ?string
     {
-        return __('cleaning_admin.nav_groups.operations');
+        return \App\Filament\Support\AdminNavigationGroup::cleaning();
     }
 
     public static function getNavigationLabel(): string

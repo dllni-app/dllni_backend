@@ -25,18 +25,28 @@ final class TravelCostConfigResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTruck;
 
-    protected static ?int $navigationSort = 24;
+    protected static ?int $navigationSort = 20;
 
     protected static bool $shouldRegisterNavigation = false;
 
     public static function getNavigationGroup(): ?string
     {
-        return __('cleaning_admin.nav_groups.operations');
+        return \App\Filament\Support\AdminNavigationGroup::cleaning();
     }
 
     public static function getNavigationLabel(): string
     {
         return __('cleaning_admin.travel_cost_configs.nav_label');
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('admin_resources.travel_cost_config.singular');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('admin_resources.travel_cost_config.plural');
     }
 
     public static function getNavigationTooltip(): ?string

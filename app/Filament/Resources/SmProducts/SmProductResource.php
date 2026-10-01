@@ -31,13 +31,28 @@ final class SmProductResource extends Resource
 
     protected static ?string $navigationLabel = null;
 
-    protected static ?int $navigationSort = 5;
+    protected static ?int $navigationSort = 7;
 
     protected static bool $shouldRegisterNavigation = false;
+
+    public static function getNavigationGroup(): ?string
+    {
+        return \App\Filament\Support\AdminNavigationGroup::supermarkets();
+    }
 
     public static function getNavigationLabel(): string
     {
         return __('supermarket_admin.products');
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('admin_resources.supermarket_product.singular');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('admin_resources.supermarket_product.plural');
     }
 
     public static function getNavigationTooltip(): ?string

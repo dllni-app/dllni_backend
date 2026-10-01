@@ -54,6 +54,11 @@ final class SupermarketSectionHub extends Page
 
     protected string $view = 'filament.supermarket-admin.pages.supermarket-section-hub';
 
+    public static function getNavigationGroup(): ?string
+    {
+        return \App\Filament\Support\AdminNavigationGroup::supermarkets();
+    }
+
     public static function canAccess(): bool
     {
         return self::dashboardAllowed('supermarket_orders.view')

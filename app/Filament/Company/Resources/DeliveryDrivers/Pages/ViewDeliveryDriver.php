@@ -49,7 +49,7 @@ final class ViewDeliveryDriver extends ViewRecord
                         $this->refreshFormData(['is_suspended', 'suspension_reason', 'suspended_until', 'availability_status']);
                         Notification::make()->title(__('delivery_company.drivers.actions.suspend'))->success()->send();
                     } catch (InvalidArgumentException $exception) {
-                        Notification::make()->title($exception->getMessage())->danger()->send();
+                        Notification::make()->title(\App\Filament\Support\AdminExceptionMessage::forUser($exception))->danger()->send();
                     }
                 }),
             Action::make('unsuspend')
@@ -67,7 +67,7 @@ final class ViewDeliveryDriver extends ViewRecord
                         $this->refreshFormData(['is_suspended', 'suspension_reason', 'suspended_until', 'availability_status']);
                         Notification::make()->title(__('delivery_company.drivers.actions.unsuspend'))->success()->send();
                     } catch (InvalidArgumentException $exception) {
-                        Notification::make()->title($exception->getMessage())->danger()->send();
+                        Notification::make()->title(\App\Filament\Support\AdminExceptionMessage::forUser($exception))->danger()->send();
                     }
                 }),
             Action::make('activate')
@@ -84,7 +84,7 @@ final class ViewDeliveryDriver extends ViewRecord
                         $this->refreshFormData(['is_active', 'availability_status']);
                         Notification::make()->title(__('delivery_company.drivers.actions.activate'))->success()->send();
                     } catch (InvalidArgumentException $exception) {
-                        Notification::make()->title($exception->getMessage())->danger()->send();
+                        Notification::make()->title(\App\Filament\Support\AdminExceptionMessage::forUser($exception))->danger()->send();
                     }
                 }),
             Action::make('deactivate')
@@ -101,7 +101,7 @@ final class ViewDeliveryDriver extends ViewRecord
                         $this->refreshFormData(['is_active', 'availability_status']);
                         Notification::make()->title(__('delivery_company.drivers.actions.deactivate'))->success()->send();
                     } catch (InvalidArgumentException $exception) {
-                        Notification::make()->title($exception->getMessage())->danger()->send();
+                        Notification::make()->title(\App\Filament\Support\AdminExceptionMessage::forUser($exception))->danger()->send();
                     }
                 }),
         ];

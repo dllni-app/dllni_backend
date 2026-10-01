@@ -112,7 +112,7 @@ final class SmOrderSeeder extends Seeder
 
                 if ($status === SmOrderStatus::Cancelled) {
                     $cancelledAt = $baseTime->copy()->addMinutes(10);
-                    $cancellationReason = 'Customer changed pickup time';
+                    $cancellationReason = 'طلب العميل تغيير وقت الاستلام.';
                 }
 
                 $order = SmOrder::updateOrCreate(

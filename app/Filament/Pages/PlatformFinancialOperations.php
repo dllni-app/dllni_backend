@@ -19,7 +19,6 @@ use Modules\Resturants\Enums\OrderStatus;
 use Modules\Resturants\Models\Order;
 use Modules\Supermarket\Enums\SmOrderStatus;
 use Modules\Supermarket\Models\SmOrder;
-use UnitEnum;
 
 final class PlatformFinancialOperations extends Page
 {
@@ -29,13 +28,16 @@ final class PlatformFinancialOperations extends Page
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBanknotes;
 
-    protected static string|UnitEnum|null $navigationGroup = 'الماليات';
-
     protected static ?string $navigationLabel = 'ماليات المنصة';
 
     protected static ?int $navigationSort = 1;
 
     protected string $view = 'filament.pages.platform-financial-operations';
+
+    public static function getNavigationGroup(): ?string
+    {
+        return \App\Filament\Support\AdminNavigationGroup::general();
+    }
 
     public static function canAccess(): bool
     {

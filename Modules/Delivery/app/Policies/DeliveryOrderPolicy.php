@@ -60,6 +60,10 @@ final class DeliveryOrderPolicy
 
     private function belongsToUserCompany(User $user, DeliveryOrder $deliveryOrder): bool
     {
+        if ($user->hasAnyRole(['admin', 'Super Admin'])) {
+            return true;
+        }
+
         $companyId = app(DeliveryCompanyContextService::class)->companyIdForUser($user);
 
         return (int) $deliveryOrder->company_id === $companyId;

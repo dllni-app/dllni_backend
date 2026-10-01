@@ -1,0 +1,62 @@
+<?php
+
+declare(strict_types=1);
+
+return [
+    'navigation' => 'Special Services',
+    'model' => 'Special Cleaning Service',
+    'fields' => [
+        'name' => 'Service name',
+        'description' => 'Description',
+        'category' => 'Category',
+        'image' => 'Service image',
+        'fallback_image_url' => 'Fallback external image URL',
+        'fallback_image_help' => 'Optional legacy fallback. An uploaded image takes precedence.',
+        'image_help' => 'Upload a clear service image up to 5 MB.',
+        'pricing_unit' => 'Pricing unit',
+        'input_type' => 'Measurement type',
+        'unit_code' => 'Unit code',
+        'base_unit_price' => 'Base unit price',
+        'supports_dirtiness' => 'Supports dirtiness levels',
+        'dirtiness_levels' => 'Allowed dirtiness levels',
+        'gender_constraint' => 'Required worker gender',
+        'duration' => 'Estimated duration',
+        'worker_pay_mode' => 'Worker pay calculation',
+        'worker_pay_value' => 'Worker pay value',
+        'operating_cost_mode' => 'Operating cost calculation',
+        'operating_cost_value' => 'Operating cost value',
+        'travel_fee_mode' => 'Travel fee calculation',
+        'travel_fee_value' => 'Travel fee value',
+        'requires_before_image' => 'Require before image',
+        'requires_after_image' => 'Require after image',
+        'is_active' => 'Service available',
+        'equipment' => 'Required equipment',
+        'duration_short' => 'min',
+    ],
+    'pricing_units' => [
+        'piece' => 'Piece',
+        'sqm' => 'Square meter',
+        'linear_meter' => 'Linear meter',
+        'device' => 'Device',
+        'sofa' => 'Sofa',
+        'chair' => 'Chair',
+        'carpet' => 'Carpet',
+        'solar_panel' => 'Solar panel',
+    ],
+    'input_types' => [
+        'quantity' => 'Quantity',
+        'decimal' => 'Decimal measurement',
+        'area' => 'Area',
+        'length' => 'Length',
+    ],
+    'gender_constraints' => [
+        'male' => 'Male worker',
+        'female' => 'Female worker',
+    ],
+    'pay_modes' => [
+        'flat' => 'Flat',
+        'percentage' => 'Percentage',
+        'per_unit' => 'Per unit',
+        'per_km' => 'Per km',
+    ],
+];

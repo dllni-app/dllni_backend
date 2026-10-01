@@ -7,6 +7,7 @@ namespace App\Filament\Resources\DeliveryOrders\Schemas;
 use App\Filament\Resources\DeliveryDisputes\DeliveryDisputeResource;
 use App\Filament\Resources\Orders\OrderResource;
 use App\Filament\Resources\SmOrders\SmOrderResource;
+use App\Filament\Support\AdminDeliveryLabels;
 use App\Filament\Support\SupportCaseInfolistSection;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
@@ -27,12 +28,13 @@ final class DeliveryOrderInfolist
                     TextEntry::make('status')
                         ->label('الحالة')
                         ->badge()
-                        ->formatStateUsing(fn (?string $state): string => $state
-                            ? __('delivery_company.orders.enums.status.'.$state)
-                            : '—'),
+                        ->formatStateUsing(fn (?string $state): string => AdminDeliveryLabels::orderStatus($state)),
                     TextEntry::make('company.name')->label('شركة التوصيل')->placeholder('—'),
                     TextEntry::make('driver.first_name')->label('المندوب')->placeholder('غير معيّن'),
-                    TextEntry::make('dispatch_phase')->label('مرحلة الإسناد')->placeholder('—'),
+                    TextEntry::make('dispatch_phase')
+                        ->label('مرحلة الإسناد')
+                        ->formatStateUsing(fn (?string $state): string => AdminDeliveryLabels::dispatchPhase($state))
+                        ->placeholder('—'),
                     TextEntry::make('dispatch_wave')->label('موجة الإسناد')->placeholder('—'),
                     TextEntry::make('search_radius_km')->label('نطاق البحث')->suffix(' كم')->placeholder('—'),
                     TextEntry::make('distance_km')->label('المسافة')->suffix(' كم')->placeholder('—'),
@@ -57,7 +59,10 @@ final class DeliveryOrderInfolist
                         ->label('رقم الطلب الأصلي')
                         ->state(fn (DeliveryOrder $record): string => (string) ($record->source?->order_number ?? '—'))
                         ->url(fn (DeliveryOrder $record): ?string => self::sourceUrl($record)),
-                    TextEntry::make('merchant_status')->label('حالة التاجر')->placeholder('—'),
+                    TextEntry::make('merchant_status')
+                        ->label('حالة التاجر')
+                        ->formatStateUsing(fn (?string $state, DeliveryOrder $record): string => AdminDeliveryLabels::merchantStatus($state, $record->source_type))
+                        ->placeholder('—'),
                     TextEntry::make('estimated_preparation_minutes')->label('وقت التحضير المتوقع')->suffix(' دقيقة')->placeholder('—'),
                     TextEntry::make('estimated_ready_at')->label('الجاهزية المتوقعة')->dateTime('Y-m-d H:i')->placeholder('—'),
                     TextEntry::make('merchant_ready_at')->label('وقت جاهزية التاجر')->dateTime('Y-m-d H:i')->placeholder('—'),
@@ -87,7 +92,11 @@ final class DeliveryOrderInfolist
             Section::make('المندوب والتتبع')
                 ->schema([
                     TextEntry::make('driver.company.name')->label('شركة المندوب')->placeholder('—'),
-                    TextEntry::make('driver.availability_status')->label('حالة المندوب')->badge()->placeholder('—'),
+                    TextEntry::make('driver.availability_status')
+                        ->label('حالة المندوب')
+                        ->badge()
+                        ->formatStateUsing(fn (?string $state): string => AdminDeliveryLabels::driverAvailability($state))
+                        ->placeholder('—'),
                     TextEntry::make('driver.last_seen_at')->label('آخر ظهور')->dateTime('Y-m-d H:i')->placeholder('—'),
                     TextEntry::make('driver.latestLocation.latitude')->label('آخر خط عرض')->copyable()->placeholder('—'),
                     TextEntry::make('driver.latestLocation.longitude')->label('آخر خط طول')->copyable()->placeholder('—'),
@@ -101,8 +110,13 @@ final class DeliveryOrderInfolist
                     RepeatableEntry::make('events')
                         ->label('')
                         ->schema([
-                            TextEntry::make('to_status')->label('الحالة'),
-                            TextEntry::make('note')->label('الملاحظة')->placeholder('—'),
+                            TextEntry::make('to_status')
+                                ->label('الحالة')
+                                ->formatStateUsing(fn (?string $state): string => AdminDeliveryLabels::orderStatus($state)),
+                            TextEntry::make('note')
+                                ->label('الملاحظة')
+                                ->formatStateUsing(fn (?string $state): string => AdminDeliveryLabels::note($state))
+                                ->placeholder('—'),
                             TextEntry::make('created_at')->label('الوقت')->dateTime('Y-m-d H:i'),
                         ])
                         ->columns(3),
@@ -115,12 +129,18 @@ final class DeliveryOrderInfolist
                         ->label('')
                         ->schema([
                             TextEntry::make('driver.first_name')->label('المندوب')->placeholder('—'),
-                            TextEntry::make('status')->label('الحالة')->badge(),
+                            TextEntry::make('status')
+                                ->label('الحالة')
+                                ->badge()
+                                ->formatStateUsing(fn (?string $state): string => AdminDeliveryLabels::attemptStatus($state)),
                             TextEntry::make('attempt_no')->label('المحاولة'),
                             TextEntry::make('distance_to_pickup_km')->label('المسافة للاستلام')->suffix(' كم')->placeholder('—'),
                             TextEntry::make('offered_at')->label('وقت العرض')->dateTime('Y-m-d H:i')->placeholder('—'),
                             TextEntry::make('expires_at')->label('انتهاء العرض')->dateTime('Y-m-d H:i')->placeholder('—'),
-                            TextEntry::make('reject_reason')->label('سبب الرفض')->placeholder('—'),
+                            TextEntry::make('reject_reason')
+                                ->label('سبب الرفض')
+                                ->formatStateUsing(fn (?string $state): string => AdminDeliveryLabels::note($state))
+                                ->placeholder('—'),
                         ])
                         ->columns(3),
                 ])
@@ -154,7 +174,10 @@ final class DeliveryOrderInfolist
 
             Section::make('التوقف أو الإلغاء')
                 ->schema([
-                    TextEntry::make('stop_reason')->label('سبب التوقف')->placeholder('—'),
+                    TextEntry::make('stop_reason')
+                        ->label('سبب التوقف')
+                        ->formatStateUsing(fn (?string $state): string => AdminDeliveryLabels::note($state))
+                        ->placeholder('—'),
                     TextEntry::make('stopped_at')->label('وقت التوقف')->dateTime('Y-m-d H:i')->placeholder('—'),
                     TextEntry::make('cancel_reason')->label('سبب الإلغاء')->placeholder('—'),
                     TextEntry::make('cancelled_at')->label('وقت الإلغاء')->dateTime('Y-m-d H:i')->placeholder('—'),

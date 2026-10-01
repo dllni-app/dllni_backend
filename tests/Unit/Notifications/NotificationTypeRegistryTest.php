@@ -87,3 +87,26 @@ it('falls back to notification config files when loaded config is stale or incom
         ->and($registry->definition('cleaning.booking.legacy_cached_type')['legacy_type'])
         ->toBe('legacy_cached_type');
 });
+
+it('keeps canonical Arabic notification copy authoritative over extra data collisions', function (): void {
+    $payload = app(NotificationPayloadBuilder::class)->makeDatabasePayload(
+        canonicalType: 'supermarket.order.rejected',
+        templateContext: ['order_number' => 'SM-QA-001'],
+        extraData: [
+            'order_id' => 1,
+            'message' => 'English text that must not override the canonical Arabic copy.',
+            'title' => 'English title',
+            'body' => 'English body',
+            'type' => 'wrong_type',
+        ],
+    );
+
+    expect($payload['type'])->toBe('supermarket_order_rejected')
+        ->and($payload['canonical_type'])->toBe('supermarket.order.rejected')
+        ->and($payload['module'])->toBe('supermarket')
+        ->and(preg_match('/\p{Arabic}/u', (string) $payload['title']))->toBe(1)
+        ->and(preg_match('/\p{Arabic}/u', (string) $payload['body']))->toBe(1)
+        ->and($payload['message'])->toBe($payload['body'])
+        ->and($payload['title'])->not->toBe('English title')
+        ->and($payload['body'])->not->toBe('English body');
+});

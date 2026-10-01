@@ -62,11 +62,11 @@ final class MandoubPrimaryOfferScenarioSeeder extends Seeder
         DeliveryDriverLocation::query()->updateOrCreate(
             [
                 'driver_id' => $driver->id,
-                'recorded_at' => now()->subMinute()->startOfMinute(),
-            ],
-            [
                 'latitude' => 36.20230000,
                 'longitude' => 37.13440000,
+            ],
+            [
+                'recorded_at' => now()->subMinute()->startOfMinute(),
                 'accuracy' => 2.8,
                 'speed' => 12.0,
                 'heading' => 90,
@@ -115,7 +115,7 @@ final class MandoubPrimaryOfferScenarioSeeder extends Seeder
             $attempt->forceFill([
                 'status' => DeliveryAssignmentAttemptStatus::Cancelled->value,
                 'responded_at' => $attempt->responded_at ?? now(),
-                'reject_reason' => 'Seed scenario reassigned the active order to the nearby driver.',
+                'reject_reason' => 'أعيد إسناد الطلب التجريبي إلى المندوب الأقرب.',
             ])->save();
         }
     }

@@ -167,8 +167,10 @@ final class RestaurantOwnerNotificationService
             'canonical_type' => 'restaurant.owner.system_announcement',
             'priority' => 'high',
             'icon' => url('/images/notifications/restaurant.svg'),
-            'title' => 'System alert',
-            'body' => $orderNumber ? 'Order '.$orderNumber.' requires attention.' : 'A system alert requires attention.',
+            'title' => __('restaurant_admin.order_notification.system_alert_title'),
+            'body' => $orderNumber
+                ? __('restaurant_admin.order_notification.system_alert_order_body', ['order' => $orderNumber])
+                : __('restaurant_admin.order_notification.system_alert_generic_body'),
             'data' => [
                 'alertType' => $alert->alert_type?->value ?? $alert->alert_type,
                 'severity' => $alert->severity?->value ?? $alert->severity,

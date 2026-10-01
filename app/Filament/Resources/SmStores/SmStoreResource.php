@@ -35,9 +35,24 @@ final class SmStoreResource extends Resource
 
     protected static bool $shouldRegisterNavigation = true;
 
+    public static function getNavigationGroup(): ?string
+    {
+        return \App\Filament\Support\AdminNavigationGroup::supermarkets();
+    }
+
     public static function getNavigationLabel(): string
     {
         return __('supermarket_admin.stores');
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('admin_resources.supermarket_store.singular');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('admin_resources.supermarket_store.plural');
     }
 
     public static function getNavigationTooltip(): ?string

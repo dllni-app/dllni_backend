@@ -15,7 +15,6 @@ use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Fluent;
-use UnitEnum;
 
 final class RestaurantStatsPage extends Page
 {
@@ -29,11 +28,9 @@ final class RestaurantStatsPage extends Page
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChartBar;
 
-    protected static string|UnitEnum|null $navigationGroup = null;
-
     protected static ?string $navigationLabel = null;
 
-    protected static ?int $navigationSort = 6;
+    protected static ?int $navigationSort = 9;
 
     protected string $view = 'filament.cleaning-admin.pages.restaurant-stats';
 
@@ -42,9 +39,9 @@ final class RestaurantStatsPage extends Page
         return self::dashboardAllowed('restaurant_orders.view');
     }
 
-    public static function getNavigationGroup(): string|UnitEnum|null
+    public static function getNavigationGroup(): ?string
     {
-        return __('restaurant_admin.section');
+        return \App\Filament\Support\AdminNavigationGroup::restaurants();
     }
 
     public static function getNavigationLabel(): string

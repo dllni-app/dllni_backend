@@ -23,18 +23,28 @@ final class CleaningTimeWarningResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClock;
 
-    protected static ?int $navigationSort = 8;
+    protected static ?int $navigationSort = 7;
 
     protected static bool $shouldRegisterNavigation = false;
 
     public static function getNavigationGroup(): ?string
     {
-        return __('cleaning_admin.nav_groups.operations');
+        return \App\Filament\Support\AdminNavigationGroup::cleaning();
     }
 
     public static function getNavigationLabel(): string
     {
         return __('cleaning_admin.time_warnings.nav_label');
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('admin_resources.cleaning_time_warning.singular');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('admin_resources.cleaning_time_warning.plural');
     }
 
     public static function getNavigationTooltip(): ?string

@@ -15,6 +15,11 @@ final class PlatformOperationsDashboard extends Dashboard
 
     protected static ?int $navigationSort = -10;
 
+    public static function getNavigationGroup(): ?string
+    {
+        return \App\Filament\Support\AdminNavigationGroup::general();
+    }
+
     public static function getNavigationLabel(): string
     {
         return 'مركز عمليات المنصة';

@@ -30,7 +30,6 @@ use Modules\Resturants\Models\Product;
 use Modules\Resturants\Models\Restaurant;
 use Modules\Resturants\Models\RestaurantDocument;
 use Modules\Resturants\Models\RestaurantOrderDispute;
-use UnitEnum;
 
 final class RestaurantSectionHub extends Page
 {
@@ -46,8 +45,6 @@ final class RestaurantSectionHub extends Page
 
     protected static ?string $title = null;
 
-    protected static string|UnitEnum|null $navigationGroup = null;
-
     protected static ?int $navigationSort = 1;
 
     protected static bool $shouldRegisterNavigation = true;
@@ -62,9 +59,9 @@ final class RestaurantSectionHub extends Page
             || self::dashboardAllowed('restaurant_catalog.view');
     }
 
-    public static function getNavigationGroup(): string|UnitEnum|null
+    public static function getNavigationGroup(): ?string
     {
-        return __('restaurant_admin.section');
+        return \App\Filament\Support\AdminNavigationGroup::restaurants();
     }
 
     public static function getNavigationLabel(): string

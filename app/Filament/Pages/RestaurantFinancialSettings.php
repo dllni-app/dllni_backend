@@ -11,7 +11,6 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Arr;
-use UnitEnum;
 
 final class RestaurantFinancialSettings extends Page
 {
@@ -23,13 +22,16 @@ final class RestaurantFinancialSettings extends Page
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedReceiptPercent;
 
-    protected static string|UnitEnum|null $navigationGroup = 'الماليات';
-
     protected static ?string $navigationLabel = 'عمولة المطاعم';
 
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 30;
 
     protected string $view = 'filament.pages.restaurant-financial-settings';
+
+    public static function getNavigationGroup(): ?string
+    {
+        return \App\Filament\Support\AdminNavigationGroup::restaurants();
+    }
 
     public static function canAccess(): bool
     {

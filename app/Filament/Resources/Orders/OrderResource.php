@@ -16,7 +16,6 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
 use Modules\Resturants\Models\Order;
-use UnitEnum;
 
 final class OrderResource extends Resource
 {
@@ -28,9 +27,22 @@ final class OrderResource extends Resource
 
     protected static ?string $navigationLabel = 'الطلبات';
 
-    protected static string|UnitEnum|null $navigationGroup = 'قسم المطاعم';
-
     protected static ?int $navigationSort = 3;
+
+    public static function getNavigationGroup(): ?string
+    {
+        return \App\Filament\Support\AdminNavigationGroup::restaurants();
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('admin_resources.restaurant_order.singular');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('admin_resources.restaurant_order.plural');
+    }
 
     public static function getNavigationTooltip(): ?string
     {

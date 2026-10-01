@@ -33,7 +33,6 @@ final class StoreTrustWarningNotification extends Notification
                 'store_id' => (int) $this->store->id,
                 'store_name' => (string) $this->store->name,
                 'trust_score' => $this->newTrustScore,
-                'message' => "Your store's trust score has dropped to {$this->newTrustScore}. Please review recent order rejections.",
             ],
         );
     }

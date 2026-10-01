@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Modules\Supermarket\Database\Seeders;
 
+use App\Models\MasterProduct;
 use Database\Seeders\Support\SeederMedia;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Collection;
 use Modules\Supermarket\Enums\SmProductSource;
 use Modules\Supermarket\Models\SmCategory;
 use Modules\Supermarket\Models\SmProduct;
@@ -35,9 +36,9 @@ final class SmProductSeeder extends Seeder
             ->get()
             ->groupBy('store_id');
 
-        $masterProductIds = DB::table('master_products')->pluck('id')->all();
-        $masterCount = count($masterProductIds);
-        $masterCursor = 0;
+        $masterProducts = MasterProduct::query()
+            ->with('aliases')
+            ->get();
 
         $seededProductIds = [];
         $storeBlueprints = $this->productBlueprints($stores->keys()->all());
@@ -62,10 +63,10 @@ final class SmProductSeeder extends Seeder
                 }
 
                 foreach ($products as $productData) {
-                    $masterProductId = $masterCount > 0
-                        ? $masterProductIds[$masterCursor % $masterCount]
-                        : null;
-                    $masterCursor++;
+                    $masterProductId = $this->resolveMasterProductId(
+                        (string) $productData['name'],
+                        $masterProducts,
+                    );
 
                     $expiresInDays = $productData['expires_in_days'] ?? null;
                     $expiresAt = is_numeric($expiresInDays)
@@ -262,6 +263,99 @@ final class SmProductSeeder extends Seeder
         }
 
         return $blueprints;
+    }
+
+    /**
+     * @param  Collection<int, MasterProduct>  $masterProducts
+     */
+    private function resolveMasterProductId(string $productName, Collection $masterProducts): ?int
+    {
+        $normalizedProduct = $this->normalizeCatalogText($productName);
+        if ($normalizedProduct === '') {
+            return null;
+        }
+
+        $matches = $masterProducts
+            ->map(function (MasterProduct $masterProduct) use ($normalizedProduct): ?array {
+                $normalizedMasterName = $this->normalizeCatalogText((string) $masterProduct->name);
+                $score = 0.0;
+
+                if ($normalizedMasterName !== '') {
+                    if ($normalizedProduct === $normalizedMasterName) {
+                        $score = 1.0;
+                    } elseif ($this->containsPhrase($normalizedProduct, $normalizedMasterName)) {
+                        $score = 0.95;
+                    }
+                }
+
+                foreach ($masterProduct->aliases as $alias) {
+                    $normalizedAlias = $this->normalizeCatalogText((string) $alias->alias);
+                    if ($normalizedAlias === '') {
+                        continue;
+                    }
+
+                    if ($normalizedProduct === $normalizedAlias) {
+                        $score = max($score, 0.90);
+
+                        continue;
+                    }
+
+                    $aliasTokens = preg_split('/\s+/u', $normalizedAlias) ?: [];
+                    if (count($aliasTokens) >= 2 && $this->containsPhrase($normalizedProduct, $normalizedAlias)) {
+                        $score = max($score, 0.85);
+                    }
+                }
+
+                return $score > 0
+                    ? ['id' => (int) $masterProduct->id, 'score' => $score]
+                    : null;
+            })
+            ->filter()
+            ->sortByDesc('score')
+            ->values();
+
+        $best = $matches->first();
+        if (! is_array($best)) {
+            return null;
+        }
+
+        $runnerUp = $matches->get(1);
+        if (is_array($runnerUp) && abs((float) $best['score'] - (float) $runnerUp['score']) < 0.02) {
+            return null;
+        }
+
+        return (int) $best['id'];
+    }
+
+    private function containsPhrase(string $haystack, string $needle): bool
+    {
+        if ($needle === '') {
+            return false;
+        }
+
+        return str_contains(' '.$haystack.' ', ' '.$needle.' ');
+    }
+
+    private function normalizeCatalogText(string $text): string
+    {
+        $normalized = mb_strtolower($text);
+        $normalized = strtr($normalized, [
+            'أ' => 'ا',
+            'إ' => 'ا',
+            'آ' => 'ا',
+            'ٱ' => 'ا',
+            'ى' => 'ي',
+            'ة' => 'ه',
+            'ؤ' => 'و',
+            'ئ' => 'ي',
+            'ک' => 'ك',
+            'ی' => 'ي',
+        ]);
+        $normalized = preg_replace('/[\x{0610}-\x{061A}\x{064B}-\x{065F}\x{0670}\x{06D6}-\x{06ED}]/u', '', $normalized) ?? $normalized;
+        $normalized = preg_replace('/[^\p{L}\p{N}]+/u', ' ', $normalized) ?? $normalized;
+        $normalized = preg_replace('/\s+/u', ' ', $normalized) ?? $normalized;
+
+        return mb_trim($normalized);
     }
 
     /**

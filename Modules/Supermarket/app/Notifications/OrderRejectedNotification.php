@@ -33,7 +33,6 @@ final class OrderRejectedNotification extends Notification
                 'order_id' => (int) $this->order->id,
                 'order_number' => (string) $this->order->order_number,
                 'reason' => $this->reason,
-                'message' => "Your order {$this->order->order_number} has been rejected.",
             ],
         );
     }

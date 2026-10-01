@@ -126,7 +126,7 @@ final class CleaningFinancialPenaltiesTable
                             app(CleaningCancellationFinancialPenaltyService::class)->markReviewed($record, auth()->id());
                             Notification::make()->title('تم تحديث الغرامة إلى تمت مراجعتها')->success()->send();
                         } catch (InvalidArgumentException $exception) {
-                            Notification::make()->title('تعذر تحديث الغرامة')->body($exception->getMessage())->danger()->send();
+                            Notification::make()->title('تعذر تحديث الغرامة')->body(\App\Filament\Support\AdminExceptionMessage::forUser($exception))->danger()->send();
                         }
                     }),
                 Action::make('mark_needs_review')
@@ -140,7 +140,7 @@ final class CleaningFinancialPenaltiesTable
                             app(CleaningCancellationFinancialPenaltyService::class)->markNeedsReview($record);
                             Notification::make()->title('تمت إعادة الغرامة إلى تحتاج مراجعة')->success()->send();
                         } catch (InvalidArgumentException $exception) {
-                            Notification::make()->title('تعذر تحديث الغرامة')->body($exception->getMessage())->danger()->send();
+                            Notification::make()->title('تعذر تحديث الغرامة')->body(\App\Filament\Support\AdminExceptionMessage::forUser($exception))->danger()->send();
                         }
                     }),
                 Action::make('cancel_penalty')

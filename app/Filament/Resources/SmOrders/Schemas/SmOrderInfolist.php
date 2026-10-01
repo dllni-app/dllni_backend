@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\SmOrders\Schemas;
 
 use App\Filament\Resources\DeliveryOrders\DeliveryOrderResource;
+use App\Filament\Support\AdminDeliveryLabels;
 use App\Filament\Support\AdminDeliveryTracking;
 use App\Filament\Support\ArabicDashboardLabels;
 use App\Filament\Support\SupportCaseInfolistSection;
@@ -218,9 +219,12 @@ final class SmOrderInfolist
                                 : '—'),
                         TextEntry::make('deliveryOrder.company.name')->label('شركة التوصيل')->placeholder('—'),
                         TextEntry::make('deliveryOrder.driver.first_name')->label('المندوب')->placeholder('غير معيّن'),
-                        TextEntry::make('deliveryOrder.dispatch_phase')->label('مرحلة الإسناد')->placeholder('—'),
+                        TextEntry::make('deliveryOrder.dispatch_phase')
+                            ->label('مرحلة الإسناد')
+                            ->formatStateUsing(fn (?string $state): string => AdminDeliveryLabels::dispatchPhase($state))
+                            ->placeholder('—'),
                         TextEntry::make('delivery_tracking_eta')
-                            ->label('ETA المستخدم')
+                            ->label('الوقت المتوقع للوصول المعتمد')
                             ->state(fn (SmOrder $record): string => AdminDeliveryTracking::etaText($record->deliveryOrder))
                             ->badge()
                             ->color('info'),

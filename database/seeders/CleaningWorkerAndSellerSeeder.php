@@ -64,7 +64,7 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
         $user = User::firstOrCreate(
             ['email' => self::CleaningWorkerEmail],
             [
-                'name' => 'Cleaning Worker',
+                'name' => 'ماهر الدرويش',
                 'phone' => self::CleaningWorkerPhone,
                 'module_type' => UserModuleType::CleaningWorker,
                 'password' => bcrypt(self::Password),
@@ -80,9 +80,9 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
         $worker = Worker::firstOrCreate(
             ['user_id' => $user->id],
             [
-                'first_name' => 'Cleaning',
+                'first_name' => 'ماهر',
                 'gender' => GenderPreference::Male->value,
-                'bio' => 'Cleaning worker for API testing.',
+                'bio' => 'عامل تنظيف تجريبي لاختبار مسارات التشغيل والتطبيق.',
                 'average_rating' => 4.5,
                 'total_completed_jobs' => 100,
                 'trust_score' => 90,
@@ -112,9 +112,9 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
         ]);
 
         $workerUpdates = [
-            'first_name' => 'Cleaning',
+            'first_name' => 'ماهر',
             'gender' => GenderPreference::Male->value,
-            'bio' => 'Cleaning worker for API testing.',
+            'bio' => 'عامل تنظيف بخبرة في الشقق والمكاتب ضمن أحياء حلب.',
             'average_rating' => 4.5,
             'total_completed_jobs' => 100,
             'trust_score' => 90,
@@ -215,7 +215,7 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
         $user = User::firstOrCreate(
             ['email' => self::RestaurantSellerEmail],
             [
-                'name' => 'Restaurant Seller',
+                'name' => 'ميساء منصور',
                 'phone' => self::RestaurantSellerPhone,
                 'module_type' => UserModuleType::RestaurantSeller,
                 'password' => bcrypt(self::Password),
@@ -232,9 +232,9 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
         $restaurant = Restaurant::firstOrCreate(
             ['user_id' => $user->id],
             [
-                'name' => 'Seller Restaurant',
+                'name' => 'مطعم مذاق حلب',
                 'slug' => $slug,
-                'description' => 'Restaurant owned by seller user for API testing.',
+                'description' => 'مطعم تجريبي للأطباق الحلبية والوجبات المنزلية.',
                 'address' => 'حلب - الفرقان - شارع القصر البلدي',
                 'latitude' => 36.2021,
                 'longitude' => 37.1343,
@@ -253,7 +253,7 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
         );
 
         $restaurant->forceFill([
-            'name' => 'Seller Restaurant',
+            'name' => 'مطعم مذاق حلب',
             'slug' => $slug,
             'description' => 'مطعم حلبي متوسطي يقدم المشاوي الطازجة والأكلات الشرقية والعروض اليومية.',
             'address' => 'حلب - حي الفرقان - شارع عبد القادر الصالح',
@@ -873,7 +873,7 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
         $user = User::firstOrCreate(
             ['email' => self::SupermarketSellerEmail],
             [
-                'name' => 'Supermarket Seller',
+                'name' => 'نادر الأطرش',
                 'phone' => self::SupermarketSellerPhone,
                 'module_type' => UserModuleType::SupermarketSeller,
                 'password' => bcrypt(self::Password),
@@ -892,9 +892,9 @@ final class CleaningWorkerAndSellerSeeder extends Seeder
 
         SmStore::create([
             'owner_user_id' => $user->id,
-            'name' => 'Seller Supermarket',
+            'name' => 'متجر الأطرش للمواد الغذائية',
             'slug' => 'seller-supermarket-'.mb_substr(hash('sha256', (string) $user->id), 0, 8),
-            'description' => 'Supermarket owned by seller user for API testing.',
+            'description' => 'متجر تجريبي للمواد الغذائية والاحتياجات المنزلية في حلب.',
             'address' => 'حلب - السريان الجديدة - شارع تشرين',
             'city' => 'حلب',
             'neighborhood' => 'السريان الجديدة',

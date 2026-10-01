@@ -218,6 +218,29 @@ return [
             'completed' => 'مكتمل',
             'cancelled' => 'ملغي',
         ],
+        'availability_mode' => [
+            'available' => 'متاح',
+            'sold_out_today' => 'نفد اليوم',
+            'manual_unavailable' => 'غير متاح يدوياً',
+        ],
+        'discount_type' => [
+            'percentage' => 'نسبة مئوية',
+            'fixed_amount' => 'مبلغ ثابت',
+        ],
+        'offer_urgency' => [
+            'active' => 'نشط',
+            'expired' => 'منتهي',
+            'limited_time' => 'لفترة محدودة',
+            'ending_soon' => 'ينتهي قريباً',
+            'todays_offer' => 'عرض اليوم',
+        ],
+        'inventory_unit' => [
+            'kg' => 'كيلوغرام',
+            'g' => 'غرام',
+            'l' => 'لتر',
+            'ml' => 'مل',
+            'piece' => 'قطعة',
+        ],
         'dispute_status' => [
             'open' => 'مفتوح',
             'under_review' => 'قيد المراجعة',
@@ -320,5 +343,8 @@ return [
         'created_title' => 'طلب مطعم جديد',
         'created_body' => 'تم إنشاء طلب جديد (:order).',
         'view' => 'عرض الطلب',
+        'system_alert_title' => 'تنبيه نظام',
+        'system_alert_order_body' => 'الطلب :order يحتاج إلى متابعة.',
+        'system_alert_generic_body' => 'يوجد تنبيه نظام يحتاج إلى متابعة.',
     ],
 ];

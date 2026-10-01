@@ -16,7 +16,6 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use UnitEnum;
 use Modules\Delivery\Models\DeliveryDriver;
 
 final class DeliveryDriverResource extends Resource
@@ -29,9 +28,22 @@ final class DeliveryDriverResource extends Resource
 
     protected static ?string $navigationLabel = 'مندوبي التوصيل';
 
-    protected static string|UnitEnum|null $navigationGroup = 'قسم التوصيل';
-
     protected static ?int $navigationSort = 3;
+
+    public static function getNavigationGroup(): ?string
+    {
+        return \App\Filament\Support\AdminNavigationGroup::delivery();
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('admin_resources.delivery_driver.singular');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('admin_resources.delivery_driver.plural');
+    }
 
     public static function getNavigationTooltip(): ?string
     {

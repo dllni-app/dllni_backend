@@ -55,6 +55,26 @@ return [
             'resolve' => 'Resolve / close',
             'booking_ref' => 'Booking #:number',
         ],
+        'live_now' => 'Live now',
+        'operator_brief' => 'Start here: today\'s bookings, requests waiting for assignment, active jobs, then alerts that need attention.',
+        'today_focus' => 'Today\'s focus',
+        'today_focus_hint' => 'This summary helps the operator decide what needs attention before opening detailed pages.',
+        'sections' => [
+            'activity_trend' => 'Activity trend',
+            'activity_trend_hint' => 'Quick comparison of bookings and alerts over the past seven days.',
+            'booking_statuses' => 'Booking statuses',
+            'booking_statuses_hint' => 'Distribution of cleaning bookings by current status.',
+            'alert_types' => 'Alert types',
+            'alert_types_hint' => 'Distribution of system alerts over the past seven days.',
+            'alert_lifecycle' => 'Alert lifecycle',
+            'alert_lifecycle_hint' => 'Current lifecycle state of system alerts in the command center.',
+            'alert_queue_hint' => 'General alert queue that needs follow-up.',
+            'sos_hint' => 'Critical alerts that need immediate action.',
+        ],
+        'labels' => [
+            'bookings' => 'Bookings',
+            'alerts' => 'Alerts',
+        ],
         'workload' => [
             'today_cleaning' => 'Cleaning bookings today',
             'today_cleaning_hint' => 'All cleaning bookings scheduled for today.',
@@ -97,6 +117,7 @@ return [
             'performance' => 'Performance Stats',
             'preferred_zones' => 'Preferred Work Zones',
             'availability' => 'Availability Schedule',
+            'special_qualifications' => 'Special-service qualifications',
         ],
         'fields' => [
             'name' => 'Name',
@@ -146,6 +167,10 @@ return [
             'is_active' => 'Active',
             'suspended' => 'Suspended',
             'id' => 'ID',
+            'customer' => 'Customer',
+            'approved_special_services' => 'Approved special services',
+            'authorized_equipment' => 'Authorized equipment',
+            'special_qualifications_help' => 'Only workers approved here can receive special services or controlled equipment.',
         ],
         'deposit_status_options' => [
             'active' => 'Active',
@@ -169,9 +194,15 @@ return [
         'customer_ratings' => 'Worker Ratings of Customers',
         'reviews_fields' => [
             'booking_number' => 'Booking #',
+            'date' => 'Date',
             'rating' => 'Rating',
             'comment' => 'Comment',
             'rating_type' => 'Type',
+        ],
+        'customer_rating_fields' => [
+            'rating' => 'Rating',
+            'type' => 'Type',
+            'date' => 'Date',
         ],
         'availability_fields' => [
             'date' => 'Date',
@@ -233,6 +264,7 @@ return [
         'fields' => [
             'ticket_number' => 'Ticket Number',
             'description' => 'Problem Details',
+            'booking_type' => 'Booking type',
             'category' => 'Category',
             'status' => 'Status',
             'resolution' => 'Resolution',
@@ -279,6 +311,9 @@ return [
             'severity' => 'Severity',
             'status' => 'Status',
             'booking_type' => 'Booking type',
+            'user' => 'User',
+            'order' => 'Order',
+            'message' => 'Message',
             'created_at' => 'Created at',
         ],
         'stats' => [
@@ -299,11 +334,33 @@ return [
     'time_warnings' => [
         'nav_label' => 'Time-End Warnings',
         'tooltip' => 'Log of time-end warnings: booking #, type (cleaning/event), sent at, customer response (extend/commit/finish early), worker response.',
+        'fields' => [
+            'booking_type' => 'Booking type',
+            'booking_id' => 'Booking ID',
+            'sent_at' => 'Sent at',
+            'customer_response' => 'Customer response',
+            'worker_response' => 'Worker response',
+            'additional_minutes' => 'Additional minutes',
+            'worker_reject_message' => 'Worker rejection message',
+        ],
     ],
 
     'automation' => [
         'nav_label' => 'Automation Rules',
         'tooltip' => 'Service automation rules: auto suspend by trust score, featured badge or commission reduction for top performers, conditions and actions.',
+        'fields' => [
+            'name' => 'Rule name',
+            'type' => 'Rule type',
+            'is_active' => 'Active',
+            'conditions' => 'Conditions',
+            'actions' => 'Actions',
+            'key' => 'Key',
+            'value' => 'Value',
+        ],
+        'types' => [
+            'suspend' => 'Suspend worker',
+            'reward' => 'Reward worker',
+        ],
     ],
 
     'cleaning_bookings' => [
@@ -345,6 +402,9 @@ return [
             'quantity' => 'Quantity',
             'unit_price' => 'Unit price',
             'service_total_price' => 'Service total',
+        ],
+        'filters' => [
+            'has_dispute' => 'Has dispute',
         ],
         'tooltip' => 'View and manage event bookings: booking #, customer, event type, date and time, status, team size, total price.',
         'tooltip_full' => 'View and manage event bookings: family dinner, birthday, large gathering, funeral; guest range, team size, status and price.',
@@ -505,6 +565,7 @@ return [
             'coverage_thresholds' => 'Coverage Thresholds',
             'time_extension' => 'Time Extension',
             'user_cancellation' => 'User cancellation fee',
+            'event_assistance' => 'Event assistance pricing',
             'worker_finance' => 'Worker Finance',
         ],
         'fields' => [
@@ -527,7 +588,9 @@ return [
             'extension_rate_per_30_minutes' => 'Extension rate per 30 minutes',
             'coverage_low' => 'Low coverage threshold',
             'coverage_ok' => 'Normal coverage threshold',
+            'event_assistance_hourly_rate_per_worker' => 'Hourly rate per worker',
             'minimum_deposit_amount' => 'Minimum deposit to start work',
+            'allowance_warning_threshold_percent' => 'Allowance warning threshold (%)',
             'default_max_negative_balance' => 'Default max negative balance',
             'restriction_threshold_percent' => 'Worker restriction threshold (% of deposit)',
             'trust_reject_after_accept_penalty' => 'Reject-after-accept trust penalty',
@@ -537,10 +600,17 @@ return [
         'hints' => [
             'restriction_threshold_percent' => 'A worker is automatically restricted once the commission owed reaches this share of their deposit.',
             'trust_reject_after_accept_penalty' => 'Number of points deducted from a worker\'s trust score when they reject a booking after having accepted it. A higher value penalizes such rejections more heavily.',
+            'trust_minimum_for_dispatch' => 'Minimum trust score a worker must have to be included in the dispatch-eligible worker list.',
             'user_cancellation_fee' => 'Fixed amount shown to the user when cancelling a cleaning order. Stored on the booking at cancel time without automatic wallet deduction.',
             'coverage_thresholds' => 'An operational setting that classifies how many workers are available in an area (not a price). Used to decide whether an area\'s coverage is weak or acceptable.',
             'coverage_low' => 'If available workers are at or below around this number, coverage is considered weak.',
             'coverage_ok' => 'Once available workers reach around this number, coverage is considered acceptable.',
+            'travel_worker_allowance' => 'Transport allowance is calculated automatically for each worker in the order price.',
+            'travel_fixed_minimum' => 'This value is also the minimum travel fee; shorter-distance calculations are raised to this minimum.',
+            'event_assistance' => 'Set the hourly rate per worker for event assistance. Base price is this rate multiplied by booked hours and worker count.',
+            'event_assistance_default' => 'Default: 400 SYP for each worker per booked hour.',
+            'minimum_deposit_amount' => 'The deposit balance required for workers who operate using their own deposit.',
+            'allowance_warning_threshold_percent' => 'Warn workers when their remaining allowance reaches this percentage or less. Default is 10%.',
             'time_extension' => 'Set the time-extension price for each block (every 15 minutes). The price is charged based on the block the extra minutes fall into.',
         ],
         'extension' => [
@@ -559,6 +629,9 @@ return [
             'min_billable_minutes' => 'e.g. 30',
             'time_warning_minutes_before_end' => 'e.g. 15',
             'extension_rate_per_30_minutes' => 'e.g. 4500',
+        ],
+        'currency' => [
+            'syp' => 'SYP',
         ],
         'actions' => [
             'save' => 'Save settings',

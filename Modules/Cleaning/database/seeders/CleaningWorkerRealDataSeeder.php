@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Modules\Cleaning\Database\Seeders;
 
+use App\Enums\GenderPreference;
 use App\Models\CancellationPolicy;
 use App\Models\User;
 use App\Models\Worker;
 use App\Models\WorkerAvailability;
 use App\Models\WorkerZone;
-use App\Enums\GenderPreference;
 use Database\Seeders\Support\SeederMedia;
 use Illuminate\Database\Seeder;
 use Modules\Cleaning\Models\CleaningBillingPolicy;
@@ -28,7 +28,7 @@ final class CleaningWorkerRealDataSeeder extends Seeder
         $user = User::firstOrCreate(
             ['email' => self::WorkerEmail],
             [
-                'name' => 'Cleaning Worker 2',
+                'name' => 'ليلى الدرويش',
                 'phone' => self::WorkerPhone,
                 'password' => bcrypt(self::Password),
                 'email_verified_at' => now(),
@@ -114,8 +114,8 @@ final class CleaningWorkerRealDataSeeder extends Seeder
         $cancellationPolicy = CancellationPolicy::where('module', 'cleaning')->where('is_default', true)->first();
 
         $customers = [
-            ['name' => 'Samir Haddad', 'email' => 'samir.haddad@dllni.sy', 'phone' => '+963944130001'],
-            ['name' => 'Maya Youssef', 'email' => 'maya.youssef@dllni.sy', 'phone' => '+963944130002'],
+            ['name' => 'سامر حداد', 'email' => 'samir.haddad@dllni.sy', 'phone' => '+963944130001'],
+            ['name' => 'مايا يوسف', 'email' => 'maya.youssef@dllni.sy', 'phone' => '+963944130002'],
         ];
 
         foreach ($customers as $idx => $c) {
@@ -129,7 +129,7 @@ final class CleaningWorkerRealDataSeeder extends Seeder
                 ]
             );
 
-            $bookingNumber = 'CLN-REAL-' . str_pad((string) ($idx + 1), 4, '0', STR_PAD_LEFT);
+            $bookingNumber = 'CLN-REAL-'.mb_str_pad((string) ($idx + 1), 4, '0', STR_PAD_LEFT);
             if (! CleaningBooking::where('booking_number', $bookingNumber)->exists()) {
                 $basePrice = 100.00;
                 $travelFee = 10.00;
@@ -143,8 +143,8 @@ final class CleaningWorkerRealDataSeeder extends Seeder
                     'status' => 'pending',
                     'property_type' => 'apartment',
                     'property_details' => [
-                        'location_name' => 'شقة الضيف',
-                        'address' => 'قرب السوق المركزي',
+                        'location_name' => 'شقة سكنية في الجميلية',
+                        'address' => 'حلب، الجميلية، شارع القوتلي',
                         'bedrooms' => 2,
                         'rooms' => 3,
                         'bathrooms' => 1,
@@ -152,7 +152,7 @@ final class CleaningWorkerRealDataSeeder extends Seeder
                     ],
                     'estimated_sqm' => 80,
                     'estimated_hours' => 3,
-                    'scheduled_date' => now()->addDays($idx + 1),
+                    'scheduled_date' => now()->startOfDay()->addDays($idx + 1),
                     'scheduled_time' => '10:00',
                     'total_hours' => 3,
                     'base_price' => $basePrice,

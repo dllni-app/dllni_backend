@@ -156,6 +156,8 @@ return [
         'is_active' => 'Active',
         'is_featured' => 'Featured',
         'suspension_until' => 'Suspended until',
+        'document_type' => 'Document type',
+        'verification_status' => 'Verification status',
         'rejection_reason' => 'Rejection reason',
         'status' => 'Status',
         'verified_at' => 'Verified at',

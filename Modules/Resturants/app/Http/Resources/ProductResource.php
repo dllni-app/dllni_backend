@@ -23,8 +23,10 @@ final class ProductResource extends JsonResource
             'id' => $this->id,
             'restaurantId' => $this->restaurant_id,
             'categoryId' => $this->category_id,
+            'itemType' => $this->item_type,
             'name' => $this->name,
             'description' => $this->description,
+            'searchTags' => $this->search_tags ?? [],
             'price' => $originalPrice,
             'discountedPrice' => $effectiveDiscountedPrice,
             'displayPrice' => $originalPrice !== null ? $this->effectivePrice() : null,
@@ -43,6 +45,10 @@ final class ProductResource extends JsonResource
             'restaurant' => $this->whenLoaded('restaurant', fn () => [
                 'id' => $this->restaurant->id,
                 'name' => $this->restaurant->name,
+                'preparationTimeMin' => $this->restaurant->estimated_preparation_time_min,
+                'preparationTimeMax' => $this->restaurant->estimated_preparation_time_max ?? $this->restaurant->estimated_preparation_time,
+                'averageRating' => (float) ($this->restaurant->average_rating ?? 0),
+                'reputationScore' => (float) ($this->restaurant->reputation_score ?? 0),
             ]),
             'category' => $this->whenLoaded('category', fn () => [
                 'id' => $this->category->id,

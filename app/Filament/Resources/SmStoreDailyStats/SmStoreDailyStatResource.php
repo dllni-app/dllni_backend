@@ -23,20 +23,78 @@ final class SmStoreDailyStatResource extends Resource
     use AuthorizesPlatformAdminResource;
     use ResolvesSupermarketNavigationGroup;
 
-    protected static ?string $model=SmStoreDailyStat::class;
-    protected static string|BackedEnum|null $navigationIcon=Heroicon::OutlinedChartBar;
-    protected static ?string $navigationLabel=null;
-    protected static ?int $navigationSort=10;
-    protected static bool $shouldRegisterNavigation=false;
+    protected static ?string $model = SmStoreDailyStat::class;
 
-    public static function getNavigationLabel():string{return __('supermarket_admin.daily_stats');}
-    public static function getNavigationTooltip():?string{return __('supermarket_admin.tooltips.daily_stats');}
-    public static function infolist(Schema $schema):Schema{return SmStoreDailyStatInfolist::configure($schema);}
-    public static function table(Table $table):Table{return SmStoreDailyStatsTable::configure($table);}
-    public static function canViewAny():bool{return self::dashboardAllowed('supermarket_orders.view');}
-    public static function canView(Model $record):bool{return self::dashboardAllowed('supermarket_orders.view');}
-    public static function canCreate():bool{return false;}
-    public static function canEdit(Model $record):bool{return false;}
-    public static function canDelete(Model $record):bool{return false;}
-    public static function getPages():array{return ['index'=>ListSmStoreDailyStats::route('/'),'view'=>ViewSmStoreDailyStat::route('/{record}')];}
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChartBar;
+
+    protected static ?string $navigationLabel = null;
+
+    protected static ?int $navigationSort = 13;
+
+    protected static bool $shouldRegisterNavigation = false;
+
+    public static function getNavigationGroup(): ?string
+    {
+        return \App\Filament\Support\AdminNavigationGroup::supermarkets();
+    }
+
+    public static function getNavigationLabel(): string
+    {
+        return __('supermarket_admin.daily_stats');
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('admin_resources.supermarket_daily_stat.singular');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('admin_resources.supermarket_daily_stat.plural');
+    }
+
+    public static function getNavigationTooltip(): ?string
+    {
+        return __('supermarket_admin.tooltips.daily_stats');
+    }
+
+    public static function infolist(Schema $schema): Schema
+    {
+        return SmStoreDailyStatInfolist::configure($schema);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return SmStoreDailyStatsTable::configure($table);
+    }
+
+    public static function canViewAny(): bool
+    {
+        return self::dashboardAllowed('supermarket_orders.view');
+    }
+
+    public static function canView(Model $record): bool
+    {
+        return self::dashboardAllowed('supermarket_orders.view');
+    }
+
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return false;
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return false;
+    }
+
+    public static function getPages(): array
+    {
+        return ['index' => ListSmStoreDailyStats::route('/'), 'view' => ViewSmStoreDailyStat::route('/{record}')];
+    }
 }

@@ -23,21 +23,78 @@ final class SmStoreTrustLogResource extends Resource
     use AuthorizesPlatformAdminResource;
     use ResolvesSupermarketNavigationGroup;
 
-    protected static ?string $model=SmStoreTrustLog::class;
-    protected static string|BackedEnum|null $navigationIcon=Heroicon::OutlinedClipboardDocumentList;
-    protected static ?string $navigationLabel=null;
-    protected static ?int $navigationSort=4;
-    protected static bool $shouldRegisterNavigation=false;
+    protected static ?string $model = SmStoreTrustLog::class;
 
-    public static function getNavigationLabel():string{return __('supermarket_admin.trust_logs');}
-    public static function getNavigationTooltip():?string{return __('supermarket_admin.tooltips.trust_logs');}
-    public static function infolist(Schema $schema):Schema{return SmStoreTrustLogInfolist::configure($schema);}
-    public static function table(Table $table):Table{return SmStoreTrustLogsTable::configure($table);}
-    public static function canViewAny():bool{return self::dashboardAllowed('supermarket_stores.view');}
-    public static function canView(Model $record):bool{return self::dashboardAllowed('supermarket_stores.view');}
-    public static function canCreate():bool{return false;}
-    public static function canEdit(Model $record):bool{return false;}
-    public static function canDelete(Model $record):bool{return false;}
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentList;
 
-    public static function getPages():array{return ['index'=>ListSmStoreTrustLogs::route('/'),'view'=>ViewSmStoreTrustLog::route('/{record}')];}
+    protected static ?string $navigationLabel = null;
+
+    protected static ?int $navigationSort = 6;
+
+    protected static bool $shouldRegisterNavigation = false;
+
+    public static function getNavigationGroup(): ?string
+    {
+        return \App\Filament\Support\AdminNavigationGroup::supermarkets();
+    }
+
+    public static function getNavigationLabel(): string
+    {
+        return __('supermarket_admin.trust_logs');
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('admin_resources.supermarket_trust_log.singular');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('admin_resources.supermarket_trust_log.plural');
+    }
+
+    public static function getNavigationTooltip(): ?string
+    {
+        return __('supermarket_admin.tooltips.trust_logs');
+    }
+
+    public static function infolist(Schema $schema): Schema
+    {
+        return SmStoreTrustLogInfolist::configure($schema);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return SmStoreTrustLogsTable::configure($table);
+    }
+
+    public static function canViewAny(): bool
+    {
+        return self::dashboardAllowed('supermarket_stores.view');
+    }
+
+    public static function canView(Model $record): bool
+    {
+        return self::dashboardAllowed('supermarket_stores.view');
+    }
+
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return false;
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return false;
+    }
+
+    public static function getPages(): array
+    {
+        return ['index' => ListSmStoreTrustLogs::route('/'), 'view' => ViewSmStoreTrustLog::route('/{record}')];
+    }
 }

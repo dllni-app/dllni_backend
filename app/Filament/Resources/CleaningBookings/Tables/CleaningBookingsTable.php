@@ -13,8 +13,8 @@ use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Support\Enums\FontWeight;
 use Filament\Tables\Columns\TextColumn;
@@ -431,7 +431,7 @@ final class CleaningBookingsTable
                                     ->update([
                                         'status' => CleaningBookingWorkerAssignmentStatus::Cancelled->value,
                                         'released_at' => $cancelledAt,
-                                        'released_reason' => 'Admin cancelled booking: '.$reason,
+                                        'released_reason' => 'ألغت الإدارة الحجز: '.$reason,
                                     ]);
 
                                 $booking->sessions()

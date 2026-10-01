@@ -30,9 +30,14 @@ final class SupermarketStatsPage extends Page
 
     protected static ?string $navigationLabel = null;
 
-    protected static ?int $navigationSort = 7;
+    protected static ?int $navigationSort = 14;
 
     protected string $view = 'filament.supermarket-admin.pages.supermarket-stats';
+
+    public static function getNavigationGroup(): ?string
+    {
+        return \App\Filament\Support\AdminNavigationGroup::supermarkets();
+    }
 
     public static function canAccess(): bool
     {
