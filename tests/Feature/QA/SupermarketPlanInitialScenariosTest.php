@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 use App\Enums\UserModuleType;
 use App\Models\User;
+use Database\Factories\DeliveryDriverFactory;
+use Database\Factories\DeliveryOrderFactory;
 use Database\Factories\MasterProductFactory;
+use Database\Factories\SmCartFactory;
 use Database\Factories\SmCategoryFactory;
 use Database\Factories\SmOfferFactory;
 use Database\Factories\SmOfferProductFactory;
@@ -12,6 +15,7 @@ use Database\Factories\SmOrderFactory;
 use Database\Factories\SmProductFactory;
 use Database\Factories\SmStoreFactory;
 use Laravel\Sanctum\Sanctum;
+use Modules\Delivery\Enums\DeliveryOrderStatus;
 use Modules\Resturants\Models\Favorite;
 use Modules\Supermarket\Enums\DayOfWeek;
 use Modules\Supermarket\Enums\SmOrderStatus;
@@ -156,17 +160,18 @@ it('USR-SM-07 adds updates and deletes a supermarket cart item', function (): vo
     $create->assertCreated()
         ->assertJsonPath('data.items.0.quantity', 1);
 
+    $cartId = (int) $create->json('data.id');
     $itemId = (int) $create->json('data.items.0.id');
 
-    patchJson("/api/v1/user/supermarket/cart/items/{$itemId}", [
+    patchJson("/api/v1/user/supermarket/carts/{$cartId}/items/{$itemId}", [
         'quantity' => 3,
     ])->assertOk()->assertJsonPath('data.items.0.quantity', 3);
 
-    $this->deleteJson("/api/v1/user/supermarket/cart/items/{$itemId}")
+    $this->deleteJson("/api/v1/user/supermarket/carts/{$cartId}/items/{$itemId}")
         ->assertStatus(200);
 
-    $cart = getJson('/api/v1/user/supermarket/cart');
-    $cart->assertOk()->assertJsonPath('data.items', []);
+    $carts = getJson('/api/v1/user/supermarket/carts');
+    $carts->assertOk()->assertJsonPath('data', []);
 });
 
 it('USR-SM-08 creates a shopping list and adds it to the supermarket cart', function (): void {
@@ -200,7 +205,7 @@ it('USR-SM-08 creates a shopping list and adds it to the supermarket cart', func
     $addToCart = postJson("/api/v1/user/supermarket/shopping-lists/{$listId}/add-to-cart", []);
 
     $addToCart->assertCreated()
-        ->assertJsonPath('data.merchantGroups.0.merchant.id', $store->id);
+        ->assertJsonPath('data.merchant.id', $store->id);
 });
 
 it('USR-SM-09 places a supermarket order and clears the cart', function (): void {
@@ -216,13 +221,15 @@ it('USR-SM-09 places a supermarket order and clears the cart', function (): void
         'price' => 12,
     ]);
 
-    postJson('/api/v1/user/supermarket/cart/items', [
+    $cartResponse = postJson('/api/v1/user/supermarket/cart/items', [
         'productId' => $product->id,
         'quantity' => 2,
     ])->assertCreated();
 
-    $response = postJson('/api/v1/user/supermarket/orders', [
-        'fulfillmentType' => 'delivery',
+    $cartId = (int) $cartResponse->json('data.id');
+
+    $response = postJson("/api/v1/user/supermarket/carts/{$cartId}/orders", [
+        'fulfillmentType' => 'pickup',
         'receiveMode' => 'immediate',
         'note' => 'Leave at the front desk',
     ]);
@@ -230,9 +237,9 @@ it('USR-SM-09 places a supermarket order and clears the cart', function (): void
     $response->assertCreated()
         ->assertJsonPath('data.status', 'pending');
 
-    $this->getJson('/api/v1/user/supermarket/cart')
+    $this->getJson('/api/v1/user/supermarket/carts')
         ->assertOk()
-        ->assertJsonPath('data.items', []);
+        ->assertJsonPath('data', []);
 });
 
 it('USR-SM-10 tracks a supermarket order', function (): void {
@@ -284,7 +291,7 @@ it('USR-SM-12 shows supermarket product details', function (): void {
 });
 
 it('USR-SM-14 rejects unauthenticated supermarket cart access', function (): void {
-    $this->getJson('/api/v1/user/supermarket/cart')->assertUnauthorized();
+    $this->getJson('/api/v1/user/supermarket/carts')->assertUnauthorized();
 });
 
 it('USR-SM-15 updates and deletes a shopping list', function (): void {
@@ -350,8 +357,10 @@ it('USR-SM-19 rejects supermarket order placement when cart is empty', function 
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
-    $response = postJson('/api/v1/user/supermarket/orders', [
-        'fulfillmentType' => 'delivery',
+    $cart = SmCartFactory::new()->create(['user_id' => $user->id]);
+
+    $response = postJson("/api/v1/user/supermarket/carts/{$cart->id}/orders", [
+        'fulfillmentType' => 'pickup',
         'receiveMode' => 'immediate',
     ]);
 
@@ -363,8 +372,23 @@ it('USR-SM-20 rejects invalid scheduledAt during supermarket order placement', f
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
-    $response = postJson('/api/v1/user/supermarket/orders', [
-        'fulfillmentType' => 'delivery',
+    $store = SmStore::factory()->create(['is_active' => true]);
+    $category = SmCategoryFactory::new()->create(['store_id' => $store->id]);
+    $product = SmProductFactory::new()->create([
+        'store_id' => $store->id,
+        'category_id' => $category->id,
+        'is_available' => true,
+    ]);
+
+    $cartResponse = postJson('/api/v1/user/supermarket/cart/items', [
+        'productId' => $product->id,
+        'quantity' => 1,
+    ])->assertCreated();
+
+    $cartId = (int) $cartResponse->json('data.id');
+
+    $response = postJson("/api/v1/user/supermarket/carts/{$cartId}/orders", [
+        'fulfillmentType' => 'pickup',
         'receiveMode' => 'scheduled',
         'scheduledAt' => now()->subHour()->toIso8601String(),
     ]);
@@ -377,8 +401,10 @@ it('USR-SM-25 rejects supermarket checkout preview when cart is empty', function
     $user = User::factory()->create();
     Sanctum::actingAs($user);
 
-    $response = postJson('/api/v1/user/supermarket/checkout/preview', [
-        'fulfillmentType' => 'delivery',
+    $cart = SmCartFactory::new()->create(['user_id' => $user->id]);
+
+    $response = postJson("/api/v1/user/supermarket/carts/{$cart->id}/checkout/preview", [
+        'fulfillmentType' => 'pickup',
         'receiveMode' => 'immediate',
     ]);
 
@@ -608,10 +634,21 @@ it('OWN-SM-05 hands over a ready order to the courier', function (): void {
         'picked_up_at' => null,
     ]);
 
+    $driver = DeliveryDriverFactory::new()->create();
+    DeliveryOrderFactory::new()->create([
+        'company_id' => $driver->company_id,
+        'driver_id' => $driver->id,
+        'source_type' => $order->getMorphClass(),
+        'source_id' => $order->id,
+        'status' => DeliveryOrderStatus::Accepted->value,
+    ]);
+
     $response = postJson("/api/v1/store-owner/orders/{$order->id}/courier-handover");
 
     $response->assertOk()
-        ->assertJsonPath('data.status', 'picked_up');
+        ->assertJsonPath('data.status', SmOrderStatus::ReadyForPickup->value);
+
+    expect($order->fresh()->store_handover_confirmed_at)->not->toBeNull();
 });
 
 it('OWN-SM-09 returns inventory summary for the store owner', function (): void {

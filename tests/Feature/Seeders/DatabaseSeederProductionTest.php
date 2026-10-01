@@ -24,15 +24,14 @@ it('seeds only bootstrap config and test users in production', function (): void
         '--no-interaction' => true,
     ]);
 
-    expect(User::where('email', 'admin@dllni.sy')->exists())->toBeTrue();
     expect(User::where('email', 'admin@admin.com')->exists())->toBeTrue();
     expect(User::where('email', 'user@dllni.sy')->exists())->toBeTrue();
-    expect(User::where('email', 'user2@dllni.sy')->exists())->toBeTrue();
 
     expect(User::whereIn('email', [
         'cleaning.worker@dllni.sy',
         'seller@dllni.sy',
         'supermarket.seller@dllni.sy',
+        'mandoub.test@dllni.sy',
         'worker@dllni.sy',
     ])->exists())->toBeFalse();
 

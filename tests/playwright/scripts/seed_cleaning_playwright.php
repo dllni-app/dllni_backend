@@ -148,6 +148,8 @@ try {
         'worker_id' => $worker->id,
         'billing_policy_id' => $billingPolicy->id,
         'status' => CleaningBookingStatus::InProgress->value,
+        'scheduled_date' => now()->subDays(3)->format('Y-m-d'),
+        'scheduled_time' => '08:00',
     ]);
 
     $warningBookingForOutsider = CleaningBookingFactory::new()->create([
@@ -155,6 +157,8 @@ try {
         'worker_id' => $outsiderWorker->id,
         'billing_policy_id' => $billingPolicy->id,
         'status' => CleaningBookingStatus::InProgress->value,
+        'scheduled_date' => now()->subDays(2)->format('Y-m-d'),
+        'scheduled_time' => '08:00',
     ]);
 
     $pendingAcceptWarning = CleaningTimeWarning::create([
@@ -235,7 +239,7 @@ try {
     ];
 
     echo json_encode($payload, JSON_THROW_ON_ERROR);
-} catch (\Throwable $throwable) {
+} catch (Throwable $throwable) {
     fwrite(STDERR, (string) $throwable);
     exit(1);
 }

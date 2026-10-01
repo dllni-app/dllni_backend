@@ -45,7 +45,14 @@ final class EnsureSellerPermission
 
     private function isOwner(User $user): bool
     {
-        return match ($user->module_type) {
+        $rawModuleType = $user->getAttributes()['module_type']
+            ?? User::query()->whereKey($user->getKey())->value('module_type');
+
+        $moduleType = $rawModuleType instanceof UserModuleType
+            ? $rawModuleType
+            : (is_string($rawModuleType) ? UserModuleType::tryFrom($rawModuleType) : null);
+
+        return match ($moduleType) {
             UserModuleType::RestaurantSeller => $user->restaurants()->exists(),
             UserModuleType::SupermarketSeller => $user->smStores()->exists(),
             default => false,

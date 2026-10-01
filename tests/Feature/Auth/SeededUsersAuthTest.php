@@ -14,6 +14,7 @@ it('user login with seeded cleaning worker phone returns user and token', functi
     $response = $this->postJson('/api/login', [
         'phone' => '+963944100001',
         'password' => 'password',
+        'module' => 'cleaning_worker',
     ]);
 
     $response->assertOk()
@@ -28,6 +29,7 @@ it('user login with seeded seller phone returns user and token', function (): vo
     $response = $this->postJson('/api/login', [
         'phone' => '+963944100002',
         'password' => 'password',
+        'module' => 'restaurant_seller',
     ]);
 
     $response->assertOk()
@@ -42,6 +44,7 @@ it('user login fails for seeded cleaning worker with wrong password', function (
     $response = $this->postJson('/api/login', [
         'phone' => '+963944100001',
         'password' => 'wrong-password',
+        'module' => 'cleaning_worker',
     ]);
 
     $response->assertUnprocessable()

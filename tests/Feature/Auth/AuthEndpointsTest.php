@@ -134,6 +134,7 @@ it('user: logs in with phone and password and returns user and token', function 
     $response = $this->postJson('/api/login', [
         'phone' => '+962791234567',
         'password' => 'secret',
+        'module' => 'user',
     ]);
 
     $response->assertOk()
@@ -145,6 +146,23 @@ it('user: logs in with phone and password and returns user and token', function 
     expect($response->json('token'))->toBeString();
 });
 
+it('user: rejects a specialized account when the customer app module is requested', function (): void {
+    User::factory()->create([
+        'phone' => '+962791234570',
+        'password' => bcrypt('secret'),
+        'module_type' => UserModuleType::CleaningWorker->value,
+    ]);
+
+    $response = $this->postJson('/api/login', [
+        'phone' => '+962791234570',
+        'password' => 'secret',
+        'module' => 'user',
+    ]);
+
+    $response->assertUnprocessable()
+        ->assertJsonValidationErrors(['phone']);
+});
+
 it('user: stores fcm token during login', function (): void {
     $user = User::factory()->create([
         'phone' => '+962791234568',
@@ -154,6 +172,7 @@ it('user: stores fcm token during login', function (): void {
     $response = $this->postJson('/api/login', [
         'phone' => '+962791234568',
         'password' => 'secret',
+        'module' => 'user',
         'fcm_token' => 'user_fcm_token_1234567890',
     ]);
 
@@ -172,6 +191,7 @@ it('user: stores fcm token from fcm-token header during login', function (): voi
     ])->postJson('/api/login', [
         'phone' => '+962791234569',
         'password' => 'secret',
+        'module' => 'user',
     ]);
 
     $response->assertOk();
@@ -189,6 +209,7 @@ it('user: cleaning worker login includes workerId for realtime channels', functi
     $response = $this->postJson('/api/login', [
         'phone' => '+962799900000',
         'password' => 'secret',
+        'module' => UserModuleType::CleaningWorker->value,
     ]);
 
     $response->assertOk()
@@ -202,6 +223,7 @@ it('user: returns validation error when login credentials are invalid', function
     $response = $this->postJson('/api/login', [
         'phone' => '+962791234567',
         'password' => 'wrong-password',
+        'module' => 'user',
     ]);
 
     $response->assertUnprocessable()
@@ -237,6 +259,7 @@ it('user: restaurant seller owner login returns role and restaurant_owner permis
     $response = $this->postJson('/api/login', [
         'phone' => '+962791111111',
         'password' => 'secret',
+        'module' => UserModuleType::RestaurantSeller->value,
     ]);
 
     $response->assertOk()
@@ -287,6 +310,7 @@ it('user: restaurant seller staff login returns restaurant role and assigned per
     $response = $this->postJson('/api/login', [
         'phone' => '+962792222222',
         'password' => 'secret',
+        'module' => UserModuleType::RestaurantSeller->value,
     ]);
 
     $response->assertOk()

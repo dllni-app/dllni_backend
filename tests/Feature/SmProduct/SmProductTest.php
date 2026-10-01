@@ -13,6 +13,7 @@ beforeEach(function (): void {
     $context = actingAsSupermarketSeller();
     $this->user = $context->user;
     $this->store = $context->store;
+    $this->masterProduct = MasterProductFactory::new()->create();
 });
 
 it('lists products', function (): void {
@@ -40,6 +41,7 @@ it('creates a product', function (): void {
     $payload = [
         'storeId' => $this->store->id,
         'categoryId' => $category->id,
+        'masterProductId' => $this->masterProduct->id,
         'name' => 'Test Product',
         'sourceType' => 'manual',
         'price' => 9.99,
@@ -138,6 +140,7 @@ it('creates a product with multiple images', function (): void {
     $response = $this->post('/api/v1/sm-products', [
         'storeId' => $this->store->id,
         'categoryId' => $category->id,
+        'masterProductId' => $this->masterProduct->id,
         'name' => 'Product With Image',
         'sourceType' => 'manual',
         'price' => 7.25,

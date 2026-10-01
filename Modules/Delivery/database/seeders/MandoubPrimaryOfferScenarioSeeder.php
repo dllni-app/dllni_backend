@@ -90,10 +90,34 @@ final class MandoubPrimaryOfferScenarioSeeder extends Seeder
 
         $activeOrder->forceFill(['driver_id' => $nearbyDriver->id])->save();
 
-        DeliveryAssignmentAttempt::query()
+        $primaryAttempts = DeliveryAssignmentAttempt::query()
             ->where('order_id', $activeOrder->id)
             ->where('driver_id', $primaryDriver->id)
-            ->update(['driver_id' => $nearbyDriver->id]);
+            ->get();
+
+        foreach ($primaryAttempts as $attempt) {
+            DeliveryAssignmentAttempt::query()->updateOrCreate(
+                [
+                    'order_id' => $activeOrder->id,
+                    'driver_id' => $nearbyDriver->id,
+                    'attempt_no' => $attempt->attempt_no,
+                ],
+                [
+                    'status' => DeliveryAssignmentAttemptStatus::Accepted->value,
+                    'distance_to_pickup_km' => $attempt->distance_to_pickup_km,
+                    'offered_at' => $attempt->offered_at,
+                    'expires_at' => $attempt->expires_at,
+                    'responded_at' => $attempt->responded_at ?? now(),
+                    'reject_reason' => null,
+                ],
+            );
+
+            $attempt->forceFill([
+                'status' => DeliveryAssignmentAttemptStatus::Cancelled->value,
+                'responded_at' => $attempt->responded_at ?? now(),
+                'reject_reason' => 'Seed scenario reassigned the active order to the nearby driver.',
+            ])->save();
+        }
     }
 
     private function openOfferForPrimary(DeliveryDriver $primaryDriver): void

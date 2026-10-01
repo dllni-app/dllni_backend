@@ -346,7 +346,7 @@ final class CleaningBookingObserver
     {
         DB::afterCommit(static function () use ($bookingId): void {
             try {
-                NotifyEligibleWorkersNewOrderJob::dispatchSync($bookingId);
+                NotifyEligibleWorkersNewOrderJob::dispatch($bookingId);
             } catch (Throwable $exception) {
                 report($exception);
             }

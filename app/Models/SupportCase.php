@@ -19,6 +19,8 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Modules\Cleaning\Models\CleaningBooking;
 use Modules\Cleaning\Models\EventBooking;
 use Modules\Delivery\Models\DeliveryOrder;
+use Modules\Resturants\Models\Order;
+use Modules\Supermarket\Models\SmOrder;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 
@@ -95,6 +97,8 @@ final class SupportCase extends Model implements HasMedia
                 CleaningBooking::class => 'cleaning_booking',
                 EventBooking::class => 'event_booking',
                 DeliveryOrder::class => 'delivery_order',
+                Order::class => 'restaurant_order',
+                SmOrder::class => 'supermarket_order',
                 default => $value,
             },
         );

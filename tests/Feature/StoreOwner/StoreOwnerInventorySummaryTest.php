@@ -57,5 +57,5 @@ it('returns 403 when authenticated owner has no store', function (): void {
     $response = $this->getJson('/api/v1/store-owner/inventory/summary');
 
     $response->assertForbidden()
-        ->assertJsonPath('message', 'No store found for the authenticated store owner.');
+        ->assertJsonPath('message', 'No store found for the authenticated supermarket seller.');
 });

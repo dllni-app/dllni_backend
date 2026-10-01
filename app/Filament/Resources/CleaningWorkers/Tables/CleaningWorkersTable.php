@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CleaningWorkers\Tables;
 
+use App\Enums\WorkerCustomerRatingType;
 use App\Filament\Resources\CleaningWorkers\Support\WorkerDepositActions;
 use App\Filament\Resources\Workers\Support\WorkerSuspensionActions;
 use App\Filament\Support\ArabicDashboardLabels;
-use App\Enums\WorkerCustomerRatingType;
 use App\Models\CleaningDepositSetting;
 use App\Models\Worker;
 use Filament\Actions\EditAction;
@@ -253,7 +253,7 @@ final class CleaningWorkersTable
 
     private static function applyNeighborhoodSearch(Builder $query, string $search): Builder
     {
-        $term = trim($search);
+        $term = mb_trim($search);
         if ($term === '') {
             return $query;
         }
@@ -320,7 +320,7 @@ final class CleaningWorkersTable
                                 $depositBalance->whereRaw('COALESCE(current_balance, 0) >= ?', [$minimumRequired]);
                             }
                         })
-                        ->orWhere(function (Builder $allowance) use ($minimumRequired): void {
+                        ->orWhere(function (Builder $allowance): void {
                             $allowance
                                 ->whereRaw('COALESCE(current_balance, 0) <= 0')
                                 ->whereRaw('COALESCE(debt_balance, 0) < COALESCE(max_negative_balance, 0)');
